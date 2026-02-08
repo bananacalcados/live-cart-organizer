@@ -132,10 +132,10 @@ export async function storefrontApiRequest(query: string, variables: Record<stri
   return data;
 }
 
-export async function fetchProducts(limit: number = 50, searchQuery?: string): Promise<ShopifyProduct[]> {
+export async function fetchProducts(limit: number = 250, searchQuery?: string): Promise<ShopifyProduct[]> {
   try {
     const data = await storefrontApiRequest(STOREFRONT_QUERY, { 
-      first: limit,
+      first: Math.min(limit, 250), // Shopify max is 250 per request
       query: searchQuery || null
     });
     return data?.data?.products?.edges || [];
