@@ -26,54 +26,48 @@ function getMessageText(payload: AnyPayload): string | null {
 
 /**
  * Normalize phone number for storage and matching.
- * Handles different formats:
+ * Always stores in format: 55XXXXXXXXXXX (country code + phone)
+ * Handles different Z-API formats:
  * - Regular phone: "5511999999999" -> "5511999999999"
- * - @lid format: "260318001422585@lid" -> extract from connectedPhone/phone field
- * - Group format: "120363405872786701-group" or "120363405872786701@g.us" -> keep as-is for groups
+ * - @lid format: Uses the phone field which should contain the real number
+ * - Group format: "120363405872786701-group" -> keep as-is for groups
  */
 function normalizePhone(payload: AnyPayload): { phone: string; isGroup: boolean } {
   const rawPhone = asString(payload.phone) || '';
   const chatLid = asString(payload.chatLid);
-  const connectedPhone = asString(payload.connectedPhone);
   
   // Check if it's a group
   const isGroup = rawPhone.includes('-group') || rawPhone.includes('@g.us') || 
                   chatLid?.includes('-group') || chatLid?.includes('@g.us') ||
                   Boolean(payload.isGroup);
   
-  // For groups, use the raw phone as-is (just normalize digits if needed)
+  // For groups, keep the group ID
   if (isGroup) {
-    return { phone: rawPhone.replace('@g.us', '').replace('-group', ''), isGroup: true };
+    const groupId = rawPhone.replace('@g.us', '').replace('-group', '').replace(/\D/g, '');
+    return { phone: groupId, isGroup: true };
   }
   
-  // Handle @lid format - try to get the actual phone number
-  if (rawPhone.includes('@lid') || chatLid?.includes('@lid')) {
-    // Z-API provides the actual phone in the 'phone' field for regular chats
-    // If the phone itself is @lid, look for alternatives
-    
-    // Sometimes Z-API sends the real phone in a different format
-    // The phone number might be in the format that starts with country code
-    const phoneMatch = rawPhone.match(/^(\d+)@lid$/);
-    if (phoneMatch) {
-      // This is a @lid identifier, not a real phone number
-      // We need to use it as-is for internal matching
-      return { phone: phoneMatch[1], isGroup: false };
-    }
-    
-    // If we have a phone that's NOT @lid, use it
-    if (rawPhone && !rawPhone.includes('@')) {
-      return { phone: rawPhone.replace(/\D/g, ''), isGroup: false };
-    }
-    
-    // Fallback: use the lid identifier for internal matching
-    const lidMatch = (chatLid || rawPhone).match(/^(\d+)@lid$/);
-    if (lidMatch) {
-      return { phone: lidMatch[1], isGroup: false };
-    }
+  // For regular chats: extract digits only
+  let phone = rawPhone.replace(/\D/g, '');
+  
+  // Handle @lid format in the phone field - Z-API still provides real phone in 'phone' field
+  // The @lid is usually in chatLid, the 'phone' field should have the actual number
+  
+  // If phone looks like a @lid identifier (no country code pattern), it's invalid
+  // Brazilian phones: 55 + DDD(2) + phone(8-9) = 12-13 digits
+  if (phone.length > 13 || phone.length < 10) {
+    // This might be a lid identifier, not a real phone
+    // Log it but still store it for matching purposes
+    console.log(`Unusual phone format detected: ${rawPhone} -> ${phone}`);
   }
   
-  // Regular phone number - just remove non-digits
-  return { phone: rawPhone.replace(/\D/g, ''), isGroup: false };
+  // Ensure it has country code 55 for Brazil
+  if (phone.length >= 10 && phone.length <= 11) {
+    // Missing country code, add 55
+    phone = '55' + phone;
+  }
+  
+  return { phone, isGroup: false };
 }
 
 serve(async (req) => {
