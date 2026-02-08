@@ -1,8 +1,10 @@
-import { Instagram, Phone, Package, Trash2, Edit2 } from "lucide-react";
+import { useState } from "react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle } from "lucide-react";
 import { Order, STAGES } from "@/types/order";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
 
 interface OrderCardProps {
   order: Order;
@@ -12,6 +14,8 @@ interface OrderCardProps {
 }
 
 export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProps) {
+  const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
+  
   const stage = STAGES.find((s) => s.id === order.stage);
   const totalValue = order.products.reduce(
     (sum, p) => sum + p.price * p.quantity,
@@ -65,16 +69,30 @@ export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProp
       </div>
 
       {order.whatsapp && (
+        <div className="flex items-center gap-2 mb-3">
           <a
-          href={`https://wa.me/${order.whatsapp.replace(/\D/g, "")}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-xs text-stage-paid hover:underline mb-3"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Phone className="h-3 w-3" />
-          {order.whatsapp}
-        </a>
+            href={`https://wa.me/${order.whatsapp.replace(/\D/g, "")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-xs text-stage-paid hover:underline flex-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Phone className="h-3 w-3" />
+            {order.whatsapp}
+          </a>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-stage-paid hover:text-stage-paid/80 hover:bg-stage-paid/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowWhatsAppDialog(true);
+            }}
+            title="Enviar mensagem via Z-API"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       )}
 
       {order.products.length > 0 ? (
@@ -127,6 +145,12 @@ export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProp
           "{order.notes}"
         </p>
       )}
+
+      <SendWhatsAppDialog
+        open={showWhatsAppDialog}
+        onOpenChange={setShowWhatsAppDialog}
+        order={order}
+      />
     </div>
   );
 }
