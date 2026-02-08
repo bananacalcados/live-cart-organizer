@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useZapi } from "@/hooks/useZapi";
 import { cn } from "@/lib/utils";
@@ -10,11 +9,15 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Order, OrderStage, STAGES } from "@/types/order";
 import { useOrderStore } from "@/stores/orderStore";
+import { useTemplateStore, applyTemplateVariables } from "@/stores/templateStore";
+import { EmojiPickerButton } from "./EmojiPickerButton";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 
 interface Message {
@@ -54,8 +57,10 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { sendMessage, isLoading: isSending } = useZapi();
   const { moveOrder } = useOrderStore();
+  const { getTemplatesByStage, templates } = useTemplateStore();
 
   const phone = order.whatsapp || '';
   const contactName = order.instagramHandle;
@@ -65,6 +70,23 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const formattedPhone = phone.replace(/\D/g, '').startsWith('55') 
     ? phone.replace(/\D/g, '') 
     : '55' + phone.replace(/\D/g, '');
+
+  // Get template variables from order
+  const getTemplateVariables = () => {
+    const totalValue = order.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
+    const productsList = order.products
+      .map((p) => `• ${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`)
+      .join('\n');
+
+    return {
+      nome: order.instagramHandle.replace('@', ''),
+      instagram: order.instagramHandle,
+      whatsapp: order.whatsapp || '',
+      link_carrinho: order.cartLink || '',
+      total: totalValue.toFixed(2),
+      produtos: productsList || 'Nenhum produto',
+    };
+  };
 
   // Load messages from database
   const loadMessages = async () => {
@@ -116,6 +138,18 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
   const handleStageChange = (newStage: OrderStage) => {
     moveOrder(order.id, newStage);
+  };
+
+  const handleEmojiSelect = (emoji: string) => {
+    setNewMessage((prev) => prev + emoji);
+    inputRef.current?.focus();
+  };
+
+  const handleTemplateSelect = (templateMessage: string) => {
+    const variables = getTemplateVariables();
+    const filledMessage = applyTemplateVariables(templateMessage, variables);
+    setNewMessage(filledMessage);
+    inputRef.current?.focus();
   };
 
   const handleSend = async () => {
@@ -179,6 +213,10 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     };
     return colors[stageId];
   };
+
+  // Get templates for current stage
+  const stageTemplates = getTemplatesByStage(order.stage);
+  const allTemplates = templates;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -319,7 +357,60 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
       {/* Input Area - WhatsApp style */}
       <div className="flex items-center gap-2 px-3 py-2 bg-[#F0F0F0]">
+        {/* Emoji Picker */}
+        <EmojiPickerButton onEmojiSelect={handleEmojiSelect} />
+
+        {/* Template Picker */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+            >
+              <FileText className="h-5 w-5 text-gray-500" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-64 max-h-72 overflow-y-auto">
+            {stageTemplates.length > 0 && (
+              <>
+                <DropdownMenuLabel className="text-xs">
+                  Para esta etapa ({currentStage?.title})
+                </DropdownMenuLabel>
+                {stageTemplates.map((t) => (
+                  <DropdownMenuItem
+                    key={t.id}
+                    onClick={() => handleTemplateSelect(t.message)}
+                    className="flex-col items-start gap-0.5 cursor-pointer"
+                  >
+                    <span className="font-medium text-sm">{t.name}</span>
+                    <span className="text-xs text-muted-foreground line-clamp-1">
+                      {t.message.substring(0, 50)}...
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuLabel className="text-xs">Todos os templates</DropdownMenuLabel>
+            {allTemplates.map((t) => (
+              <DropdownMenuItem
+                key={t.id}
+                onClick={() => handleTemplateSelect(t.message)}
+                className="flex-col items-start gap-0.5 cursor-pointer"
+              >
+                <span className="font-medium text-sm">{t.name}</span>
+                <span className="text-xs text-muted-foreground line-clamp-1">
+                  {t.message.substring(0, 50)}...
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Input
+          ref={inputRef}
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={handleKeyPress}

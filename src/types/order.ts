@@ -21,6 +21,7 @@ export interface Order {
   id: string;
   instagramHandle: string;
   whatsapp?: string;
+  cartLink?: string;
   products: OrderProduct[];
   stage: OrderStage;
   notes?: string;
