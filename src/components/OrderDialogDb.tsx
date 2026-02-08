@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -66,6 +66,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [discountValue, setDiscountValue] = useState<number>(0);
   const [freeShipping, setFreeShipping] = useState(false);
   const [hasGift, setHasGift] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
 
   // Check for existing customer by Instagram as user types
   const existingCustomer = useMemo(() => {
@@ -97,6 +98,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       setDiscountValue(editingOrder.discount_value || 0);
       setFreeShipping(editingOrder.free_shipping || false);
       setHasGift(editingOrder.has_gift || false);
+      setCouponCode(editingOrder.coupon_code || "");
     } else {
       resetForm();
     }
@@ -123,6 +125,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     setDiscountValue(0);
     setFreeShipping(false);
     setHasGift(false);
+    setCouponCode("");
   };
 
   const handleAddLocalProduct = (product: DbOrderProduct) => {
@@ -187,6 +190,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         discountType: discountType || undefined,
         discountValue: discountValue || undefined,
         freeShipping: freeShipping,
+        couponCode: couponCode || undefined,
       });
       if (link) {
         setCartLink(link);
@@ -199,7 +203,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     } finally {
       setIsGeneratingYampiLink(false);
     }
-  }, [localProducts, editingOrder?.id, whatsapp, discountType, discountValue, freeShipping]);
+  }, [localProducts, editingOrder?.id, whatsapp, discountType, discountValue, freeShipping, couponCode]);
 
   const handleBanCustomer = async () => {
     if (editingOrder?.customer) {
@@ -237,6 +241,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         discount_value: discountValue || undefined,
         free_shipping: freeShipping,
         has_gift: hasGift,
+        coupon_code: couponCode || undefined,
       });
 
       // Refresh orders to reflect updated joined customer data (e.g. whatsapp) in the cards/chat buttons
@@ -542,6 +547,22 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                     Desconto de R$ {discountAmount.toFixed(2)} aplicado
                   </p>
                 )}
+              </div>
+
+              {/* Coupon Code */}
+              <div className="space-y-3 pt-4 border-t">
+                <Label className="flex items-center gap-2">
+                  <Tag className="h-4 w-4" />
+                  Cupom de Desconto (Yampi)
+                </Label>
+                <Input
+                  placeholder="Código do cupom (ex: DESCONTO20)"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                />
+                <p className="text-xs text-muted-foreground">
+                  O cupom será aplicado ao link Yampi. Deve estar criado na Yampi.
+                </p>
               </div>
 
               {/* Free Shipping & Gift */}

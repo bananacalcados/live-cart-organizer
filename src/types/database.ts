@@ -49,6 +49,7 @@ export interface DbOrder {
   discount_value?: number;
   free_shipping?: boolean;
   has_gift?: boolean;
+  coupon_code?: string;
   created_at: string;
   updated_at: string;
   // Joined data
