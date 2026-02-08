@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Instagram, Phone, StickyNote, X } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +34,7 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
 
   const [instagramHandle, setInstagramHandle] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [cartLink, setCartLink] = useState("");
   const [notes, setNotes] = useState("");
   const [stage, setStage] = useState<OrderStage>("new");
   const [localProducts, setLocalProducts] = useState<OrderProduct[]>([]);
@@ -42,6 +43,7 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
     if (editingOrder) {
       setInstagramHandle(editingOrder.instagramHandle);
       setWhatsapp(editingOrder.whatsapp || "");
+      setCartLink(editingOrder.cartLink || "");
       setNotes(editingOrder.notes || "");
       setStage(editingOrder.stage);
       setLocalProducts([...editingOrder.products]);
@@ -53,6 +55,7 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
   const resetForm = () => {
     setInstagramHandle("");
     setWhatsapp("");
+    setCartLink("");
     setNotes("");
     setStage("new");
     setLocalProducts([]);
@@ -96,6 +99,7 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
           ? instagramHandle
           : `@${instagramHandle}`,
         whatsapp: whatsapp || undefined,
+        cartLink: cartLink || undefined,
         notes: notes || undefined,
         stage,
         products: localProducts,
@@ -157,6 +161,19 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
                 onChange={(e) => setWhatsapp(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cartLink" className="flex items-center gap-2">
+              <Link className="h-4 w-4" />
+              Link do Carrinho
+            </Label>
+            <Input
+              id="cartLink"
+              placeholder="https://..."
+              value={cartLink}
+              onChange={(e) => setCartLink(e.target.value)}
+            />
           </div>
 
           {editingOrder && (

@@ -1,5 +1,6 @@
 import { Instagram, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TemplateManager } from "./TemplateManager";
 
 interface HeaderProps {
   onNewOrder: () => void;
@@ -19,10 +20,13 @@ export function Header({ onNewOrder }: HeaderProps) {
           </div>
         </div>
         
-        <Button onClick={onNewOrder} className="btn-accent gap-2">
-          <Plus className="h-4 w-4" />
-          Novo Pedido
-        </Button>
+        <div className="flex items-center gap-3">
+          <TemplateManager />
+          <Button onClick={onNewOrder} className="btn-accent gap-2">
+            <Plus className="h-4 w-4" />
+            Novo Pedido
+          </Button>
+        </div>
       </div>
     </header>
   );
