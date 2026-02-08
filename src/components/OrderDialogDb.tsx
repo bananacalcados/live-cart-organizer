@@ -476,20 +476,22 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                       R$ {finalValue.toFixed(2)}
                     </span>
                   </div>
-                  <div className="mt-2 space-y-1 pt-2 border-t">
+                  <div className="mt-2 space-y-2 pt-2 border-t">
                     {localProducts.map((p) => (
                       <div
                         key={p.id}
-                        className="flex items-center justify-between text-sm text-muted-foreground"
+                        className="flex items-start justify-between text-sm text-muted-foreground gap-2"
                       >
-                        <span className="flex-1 truncate">
-                          {p.quantity}x {p.title}
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate">
+                            {p.quantity}x {p.title}
+                          </p>
                           {p.variant && (
-                            <span className="text-xs ml-1 text-accent">
-                              ({p.variant})
-                            </span>
+                            <p className="text-xs text-accent font-medium">
+                              {p.variant}
+                            </p>
                           )}
-                        </span>
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"
