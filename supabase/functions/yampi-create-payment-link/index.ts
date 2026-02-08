@@ -254,9 +254,17 @@ serve(async (req) => {
       throw new Error("No items could be resolved to Yampi SKUs");
     }
 
-    // Build Yampi API request
+    // Build Yampi API request - Payment Link format requires: name, active, skus
+    const skusPayload = resolvedItems.map(item => ({
+      id: item.sku_id,  // Yampi uses 'id' not 'sku_id' in the skus array
+      quantity: item.quantity,
+      ...(item.price !== undefined && { customized_price: item.price }),
+    }));
+
     const yampiPayload: Record<string, unknown> = {
-      items: resolvedItems,
+      name: `Pedido ${body.order_id || new Date().toISOString()}`,
+      active: true,
+      skus: skusPayload,
     };
 
     // Add customer info if provided
@@ -279,13 +287,6 @@ serve(async (req) => {
     // Add free shipping if enabled
     if (body.free_shipping) {
       yampiPayload.free_shipping = true;
-    }
-
-    // Add metadata for tracking
-    if (body.order_id) {
-      yampiPayload.metadata = {
-        order_id: body.order_id,
-      };
     }
 
     console.log("Yampi API payload:", JSON.stringify(yampiPayload, null, 2));
@@ -311,14 +312,16 @@ serve(async (req) => {
       throw new Error(`Yampi API error [${yampiResponse.status}]: ${JSON.stringify(yampiData)}`);
     }
 
-    // Extract the payment link URL from response
-    const paymentLink = yampiData?.data?.url || yampiData?.data?.checkout_url || null;
+    // Extract the payment link URL from response (Yampi uses 'link_url')
+    const paymentLink = yampiData?.data?.link_url || yampiData?.data?.url || yampiData?.data?.checkout_url || null;
     const paymentLinkId = yampiData?.data?.id || null;
 
     if (!paymentLink) {
       console.error("No payment link in response:", yampiData);
       throw new Error("Payment link not found in Yampi response");
     }
+
+    console.log("Payment link created successfully:", paymentLink);
 
     return new Response(
       JSON.stringify({
