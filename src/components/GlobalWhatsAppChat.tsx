@@ -92,20 +92,30 @@ export function GlobalWhatsAppChat() {
 
     loadConversations();
 
-    // Subscribe to realtime
+    // Subscribe to realtime with insert focus
     const channel = supabase
-      .channel('global-whatsapp-chat')
+      .channel('global-whatsapp-chat-realtime')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'whatsapp_messages' },
-        () => {
+        { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' },
+        (payload) => {
+          console.log('[Chat] New message received:', payload);
           loadConversations();
           if (selectedPhone) {
             loadMessages(selectedPhone);
           }
         }
       )
-      .subscribe();
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'whatsapp_messages' },
+        () => {
+          loadConversations();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Chat] Realtime subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);

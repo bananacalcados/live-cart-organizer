@@ -491,13 +491,18 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                         key={p.id}
                         className="flex items-center justify-between text-sm text-muted-foreground"
                       >
-                        <span>
+                        <span className="flex-1 truncate">
                           {p.quantity}x {p.title}
+                          {p.variant && (
+                            <span className="text-xs ml-1 text-accent">
+                              ({p.variant})
+                            </span>
+                          )}
                         </span>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6"
+                          className="h-6 w-6 flex-shrink-0"
                           onClick={() => handleRemoveLocalProduct(p.id)}
                         >
                           <X className="h-3 w-3" />
