@@ -122,11 +122,26 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const contactName = order.instagramHandle;
   const currentStage = STAGES.find(s => s.id === order.stage);
 
-  // Normalize phone for database queries - try multiple formats
+  // Normalize phone for database queries - create all possible variations
   const rawPhone = phone.replace(/\D/g, '');
-  const formattedPhone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone;
-  // Also try without country code for matching
+  
+  // Create normalized versions for storage and querying
+  const normalizedPhone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone;
   const phoneWithoutCountry = rawPhone.startsWith('55') ? rawPhone.slice(2) : rawPhone;
+  
+  // For 9-digit mobile numbers, also try without the 9
+  const phoneWithout9 = phoneWithoutCountry.length === 11 && phoneWithoutCountry.charAt(2) === '9'
+    ? phoneWithoutCountry.slice(0, 2) + phoneWithoutCountry.slice(3)
+    : null;
+  
+  // Build all phone variations for matching
+  const phoneVariations = [
+    normalizedPhone,
+    rawPhone,
+    phoneWithoutCountry,
+    phoneWithout9,
+    phoneWithout9 ? '55' + phoneWithout9 : null,
+  ].filter(Boolean) as string[];
 
   const getTemplateVariables = () => {
     const totalValue = order.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
@@ -145,9 +160,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   };
 
   const loadMessages = async () => {
-    // Try to find messages matching any phone format variation
-    const phoneVariations = [formattedPhone, rawPhone, phoneWithoutCountry].filter(Boolean);
-    
+    // Load messages matching any phone variation
     const { data, error } = await supabase
       .from('whatsapp_messages')
       .select('*')
@@ -167,39 +180,39 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     // Mark messages as read when chat is opened
     setHasUnreadMessages(order.id, false);
 
-    // Subscribe to realtime for all phone variations
-    const phoneVariations = [formattedPhone, rawPhone, phoneWithoutCountry].filter(Boolean);
-    const channels = phoneVariations.map((phoneVar, idx) => 
-      supabase
-        .channel(`whatsapp-messages-${phoneVar}-${idx}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'whatsapp_messages',
-            filter: `phone=eq.${phoneVar}`,
-          },
-          (payload) => {
-            const newMsg = payload.new as Message;
-            setMessages((prev) => {
-              // Avoid duplicates
-              if (prev.some(m => m.id === newMsg.id)) return prev;
-              return [...prev, newMsg];
-            });
-            // If incoming message, mark as read immediately since chat is open
-            if (newMsg.direction === 'incoming') {
-              setHasUnreadMessages(order.id, false);
-            }
+    // Subscribe to realtime for the main normalized phone
+    // Using a single channel with OR filter is more efficient
+    const channel = supabase
+      .channel(`whatsapp-messages-${normalizedPhone}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'whatsapp_messages',
+        },
+        (payload) => {
+          const newMsg = payload.new as Message;
+          // Check if this message is for our phone (any variation)
+          if (!phoneVariations.includes(newMsg.phone)) return;
+          
+          setMessages((prev) => {
+            // Avoid duplicates
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+          // If incoming message, mark as read immediately since chat is open
+          if (newMsg.direction === 'incoming') {
+            setHasUnreadMessages(order.id, false);
           }
-        )
-        .subscribe()
-    );
+        }
+      )
+      .subscribe();
 
     return () => {
-      channels.forEach(channel => supabase.removeChannel(channel));
+      supabase.removeChannel(channel);
     };
-  }, [formattedPhone, rawPhone, phoneWithoutCountry, order.id, setHasUnreadMessages]);
+  }, [normalizedPhone, order.id, setHasUnreadMessages]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -254,7 +267,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       const tempId = `temp-${Date.now()}`;
       const tempMessage: Message = {
         id: tempId,
-        phone: formattedPhone,
+        phone: normalizedPhone,
         message: newMessage.trim() || '',
         direction: 'outgoing',
         message_id: null,
@@ -269,7 +282,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
       if (result.success) {
         await supabase.from('whatsapp_messages').insert({
-          phone: formattedPhone,
+          phone: normalizedPhone,
           message: newMessage.trim() || `[${selectedMedia.type}]`,
           direction: 'outgoing',
           status: 'sent',
@@ -301,7 +314,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     const tempId = `temp-${Date.now()}`;
     const tempMessage: Message = {
       id: tempId,
-      phone: formattedPhone,
+      phone: normalizedPhone,
       message: messageText,
       direction: 'outgoing',
       message_id: null,
@@ -314,7 +327,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
     if (result.success) {
       await supabase.from('whatsapp_messages').insert({
-        phone: formattedPhone,
+        phone: normalizedPhone,
         message: messageText,
         direction: 'outgoing',
         status: 'sent',
