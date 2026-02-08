@@ -423,6 +423,20 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 Shopify (↻) ou Yampi (🛍️) - clique para gerar o link
               </p>
             )}
+            <div className="flex items-center justify-between mt-3 p-3 bg-secondary/50 rounded-lg">
+              <Label htmlFor="paidExternally" className="flex items-center gap-2 cursor-pointer">
+                <Wallet className="h-4 w-4 text-primary" />
+                <div>
+                  <span>Pago Fora (Yampi/Shopify)</span>
+                  <p className="text-xs text-muted-foreground font-normal">PIX direto, dinheiro, etc.</p>
+                </div>
+              </Label>
+              <Switch
+                id="paidExternally"
+                checked={paidExternally}
+                onCheckedChange={setPaidExternally}
+              />
+            </div>
           </div>
 
           {editingOrder && (
@@ -594,21 +608,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="paidExternally" className="flex items-center gap-2 cursor-pointer">
-                    <Wallet className="h-4 w-4 text-primary" />
-                    Pago Fora (Yampi/Shopify)
-                  </Label>
-                  <Switch
-                    id="paidExternally"
-                    checked={paidExternally}
-                    onCheckedChange={setPaidExternally}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground -mt-1">
-                  Marque se o pagamento foi feito fora da Yampi/Shopify (PIX direto, dinheiro, etc.)
-                </p>
-                
-                <div className="flex items-center justify-between pt-2">
                   <Label htmlFor="hasGift" className="flex items-center gap-2 cursor-pointer">
                     <Gift className="h-4 w-4 text-accent" />
                     Incluir Brinde
