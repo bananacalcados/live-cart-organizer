@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Order, OrderStage, OrderProduct } from '@/types/order';
+import { toast } from 'sonner';
 
 interface OrderStore {
   orders: Order[];
@@ -12,16 +13,47 @@ interface OrderStore {
   removeProductFromOrder: (orderId: string, productId: string) => void;
   updateProductQuantity: (orderId: string, productId: string, quantity: number) => void;
   getOrdersByStage: (stage: OrderStage) => Order[];
+  findOrderByInstagram: (instagramHandle: string) => Order | undefined;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
+
+// Normalize Instagram handle for comparison
+const normalizeInstagram = (handle: string): string => {
+  return handle.toLowerCase().replace(/^@/, '').trim();
+};
 
 export const useOrderStore = create<OrderStore>()(
   persist(
     (set, get) => ({
       orders: [],
 
+      findOrderByInstagram: (instagramHandle: string) => {
+        const normalized = normalizeInstagram(instagramHandle);
+        return get().orders.find(
+          (order) => normalizeInstagram(order.instagramHandle) === normalized
+        );
+      },
+
       addOrder: (instagramHandle, whatsapp) => {
+        const normalized = normalizeInstagram(instagramHandle);
+        const existing = get().findOrderByInstagram(instagramHandle);
+
+        if (existing) {
+          // Update existing order with new whatsapp if provided
+          if (whatsapp && !existing.whatsapp) {
+            set((state) => ({
+              orders: state.orders.map((order) =>
+                order.id === existing.id
+                  ? { ...order, whatsapp, updatedAt: new Date() }
+                  : order
+              ),
+            }));
+          }
+          toast.info(`Pedido existente encontrado para ${instagramHandle}`);
+          return existing.id;
+        }
+
         const id = generateId();
         const now = new Date();
         const newOrder: Order = {
