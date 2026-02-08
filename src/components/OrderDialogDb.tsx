@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
+import { createYampiPaymentLinkFromOrder } from "@/lib/yampi";
 import {
   Select,
   SelectContent,
@@ -57,6 +58,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [stage, setStage] = useState<OrderStage>("new");
   const [localProducts, setLocalProducts] = useState<DbOrderProduct[]>([]);
   const [isGeneratingCartLink, setIsGeneratingCartLink] = useState(false);
+  const [isGeneratingYampiLink, setIsGeneratingYampiLink] = useState(false);
   const [banReason, setBanReason] = useState("");
   
   // Discount and extras
@@ -170,6 +172,42 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       setIsGeneratingCartLink(false);
     }
   }, [localProducts]);
+
+  const generateYampiLink = useCallback(async () => {
+    if (localProducts.length === 0) {
+      toast.error("Adicione produtos antes de gerar o link");
+      return;
+    }
+
+    // Check if all products have SKU
+    const productsWithoutSku = localProducts.filter(p => !p.sku);
+    if (productsWithoutSku.length > 0) {
+      toast.error(`Produtos sem SKU: ${productsWithoutSku.map(p => p.title).join(", ")}`);
+      return;
+    }
+
+    setIsGeneratingYampiLink(true);
+    try {
+      const link = await createYampiPaymentLinkFromOrder(localProducts, {
+        orderId: editingOrder?.id,
+        customerPhone: whatsapp || undefined,
+        discountType: discountType || undefined,
+        discountValue: discountValue || undefined,
+        freeShipping: freeShipping,
+      });
+      if (link) {
+        setCartLink(link);
+        toast.success("Link de pagamento Yampi gerado!");
+      } else {
+        toast.error("Erro ao gerar link Yampi - verifique os SKUs");
+      }
+    } catch (error) {
+      console.error("Error generating Yampi link:", error);
+      toast.error("Erro ao gerar link Yampi");
+    } finally {
+      setIsGeneratingYampiLink(false);
+    }
+  }, [localProducts, editingOrder?.id, whatsapp, discountType, discountValue, freeShipping]);
 
   const handleBanCustomer = async () => {
     if (editingOrder?.customer) {
@@ -346,8 +384,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 variant="outline"
                 size="icon"
                 onClick={generateCartLink}
-                disabled={isGeneratingCartLink || localProducts.length === 0}
-                title="Gerar link do carrinho automaticamente"
+                disabled={isGeneratingCartLink || isGeneratingYampiLink || localProducts.length === 0}
+                title="Gerar link Shopify"
               >
                 {isGeneratingCartLink ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -355,10 +393,25 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                   <RefreshCw className="h-4 w-4" />
                 )}
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={generateYampiLink}
+                disabled={isGeneratingCartLink || isGeneratingYampiLink || localProducts.length === 0}
+                title="Gerar link Yampi"
+                className="text-[#7C3AED] hover:text-[#7C3AED] hover:bg-[#7C3AED]/10"
+              >
+                {isGeneratingYampiLink ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShoppingBag className="h-4 w-4" />
+                )}
+              </Button>
             </div>
             {localProducts.length > 0 && !cartLink && (
               <p className="text-xs text-muted-foreground">
-                Clique no ícone para gerar o link automaticamente
+                Shopify (↻) ou Yampi (🛍️) - clique para gerar o link
               </p>
             )}
           </div>
