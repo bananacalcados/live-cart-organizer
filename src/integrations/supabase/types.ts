@@ -182,6 +182,33 @@ export type Database = {
           },
         ]
       }
+      shopify_yampi_mapping: {
+        Row: {
+          created_at: string
+          id: string
+          shopify_sku: string | null
+          shopify_variant_id: string
+          updated_at: string
+          yampi_sku_id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          shopify_sku?: string | null
+          shopify_variant_id: string
+          updated_at?: string
+          yampi_sku_id: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          shopify_sku?: string | null
+          shopify_variant_id?: string
+          updated_at?: string
+          yampi_sku_id?: number
+        }
+        Relationships: []
+      }
       whatsapp_messages: {
         Row: {
           created_at: string
