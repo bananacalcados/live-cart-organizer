@@ -188,26 +188,31 @@ export function GlobalWhatsAppChat() {
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b bg-stage-paid text-white">
         <div className="flex items-center gap-2">
-          {selectedPhone && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-white hover:bg-white/20"
-              onClick={() => setSelectedPhone(null)}
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-          )}
-          {selectedConversation?.isGroup ? (
-            <Users className="h-5 w-5" />
+          {selectedPhone ? (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-white hover:bg-white/20 flex-shrink-0"
+                onClick={() => setSelectedPhone(null)}
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              {selectedConversation?.isGroup ? (
+                <Users className="h-5 w-5" />
+              ) : (
+                <Phone className="h-5 w-5" />
+              )}
+              <span className="font-semibold truncate">
+                {selectedConversation?.customerName || selectedPhone}
+              </span>
+            </>
           ) : (
-            <MessageCircle className="h-5 w-5" />
+            <>
+              <MessageCircle className="h-5 w-5" />
+              <span className="font-semibold">WhatsApp</span>
+            </>
           )}
-          <span className="font-semibold">
-            {selectedPhone 
-              ? selectedConversation?.customerName || selectedPhone 
-              : 'WhatsApp'}
-          </span>
         </div>
         <Button
           variant="ghost"
