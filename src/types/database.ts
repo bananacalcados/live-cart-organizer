@@ -21,6 +21,7 @@ export interface DbCustomer {
 export interface DbOrderProduct {
   id: string;
   shopifyId: string;
+  sku?: string;
   title: string;
   variant: string;
   price: number;
