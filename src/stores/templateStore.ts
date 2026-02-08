@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { supabase } from '@/integrations/supabase/client';
 import { OrderStage } from '@/types/order';
 
 export interface MessageTemplate {
@@ -7,96 +7,111 @@ export interface MessageTemplate {
   name: string;
   message: string;
   stage: OrderStage | 'all';
-  createdAt: Date;
+  created_at: string;
+  updated_at: string;
 }
 
 interface TemplateStore {
   templates: MessageTemplate[];
-  addTemplate: (template: Omit<MessageTemplate, 'id' | 'createdAt'>) => void;
-  updateTemplate: (id: string, updates: Partial<MessageTemplate>) => void;
-  deleteTemplate: (id: string) => void;
+  isLoading: boolean;
+  fetchTemplates: () => Promise<void>;
+  addTemplate: (template: Omit<MessageTemplate, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  updateTemplate: (id: string, updates: Partial<MessageTemplate>) => Promise<void>;
+  deleteTemplate: (id: string) => Promise<void>;
   getTemplatesByStage: (stage: OrderStage) => MessageTemplate[];
 }
 
-const generateId = () => Math.random().toString(36).substring(2, 15);
+export const useTemplateStore = create<TemplateStore>((set, get) => ({
+  templates: [],
+  isLoading: false,
 
-// Default templates with useful variables
-const defaultTemplates: MessageTemplate[] = [
-  {
-    id: 'default-1',
-    name: 'Boas-vindas',
-    message: 'Olá {{nome}}! 👋\n\nVi seu interesse nos nossos produtos. Como posso ajudar?',
-    stage: 'new',
-    createdAt: new Date(),
-  },
-  {
-    id: 'default-2',
-    name: 'Enviar Link do Carrinho',
-    message: 'Oi {{nome}}! 🛒\n\nSeu carrinho está pronto! Acesse aqui:\n{{link_carrinho}}\n\nTotal: R$ {{total}}\n\nQualquer dúvida estou à disposição!',
-    stage: 'link_sent',
-    createdAt: new Date(),
-  },
-  {
-    id: 'default-3',
-    name: 'Lembrete de Pagamento',
-    message: 'Oi {{nome}}! 😊\n\nPassando para lembrar do seu pedido:\n{{produtos}}\n\nTotal: R$ {{total}}\n\nPosso ajudar com algo?',
-    stage: 'awaiting_payment',
-    createdAt: new Date(),
-  },
-  {
-    id: 'default-4',
-    name: 'Confirmação de Pagamento',
-    message: 'Oba, {{nome}}! 🎉\n\nPagamento confirmado! Seu pedido já está sendo preparado.\n\nObrigado pela compra!',
-    stage: 'paid',
-    createdAt: new Date(),
-  },
-  {
-    id: 'default-5',
-    name: 'Pedido Enviado',
-    message: 'Oi {{nome}}! 📦\n\nSeu pedido foi enviado!\n\nEm breve você receberá o código de rastreio.\n\nObrigado pela preferência!',
-    stage: 'shipped',
-    createdAt: new Date(),
-  },
-];
+  fetchTemplates: async () => {
+    set({ isLoading: true });
+    try {
+      const { data, error } = await supabase
+        .from('message_templates')
+        .select('*')
+        .order('created_at', { ascending: true });
 
-export const useTemplateStore = create<TemplateStore>()(
-  persist(
-    (set, get) => ({
-      templates: defaultTemplates,
-
-      addTemplate: (template) => {
-        const newTemplate: MessageTemplate = {
-          ...template,
-          id: generateId(),
-          createdAt: new Date(),
-        };
-        set((state) => ({ templates: [...state.templates, newTemplate] }));
-      },
-
-      updateTemplate: (id, updates) => {
-        set((state) => ({
-          templates: state.templates.map((t) =>
-            t.id === id ? { ...t, ...updates } : t
-          ),
-        }));
-      },
-
-      deleteTemplate: (id) => {
-        set((state) => ({
-          templates: state.templates.filter((t) => t.id !== id),
-        }));
-      },
-
-      getTemplatesByStage: (stage) => {
-        return get().templates.filter((t) => t.stage === stage || t.stage === 'all');
-      },
-    }),
-    {
-      name: 'live-crm-templates',
-      storage: createJSONStorage(() => localStorage),
+      if (error) throw error;
+      
+      set({ templates: data as MessageTemplate[] });
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    } finally {
+      set({ isLoading: false });
     }
-  )
-);
+  },
+
+  addTemplate: async (template) => {
+    try {
+      const { data, error } = await supabase
+        .from('message_templates')
+        .insert({
+          name: template.name,
+          message: template.message,
+          stage: template.stage,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set((state) => ({ 
+        templates: [...state.templates, data as MessageTemplate] 
+      }));
+    } catch (error) {
+      console.error('Error adding template:', error);
+      throw error;
+    }
+  },
+
+  updateTemplate: async (id, updates) => {
+    try {
+      const { error } = await supabase
+        .from('message_templates')
+        .update({
+          name: updates.name,
+          message: updates.message,
+          stage: updates.stage,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      set((state) => ({
+        templates: state.templates.map((t) =>
+          t.id === id ? { ...t, ...updates } : t
+        ),
+      }));
+    } catch (error) {
+      console.error('Error updating template:', error);
+      throw error;
+    }
+  },
+
+  deleteTemplate: async (id) => {
+    try {
+      const { error } = await supabase
+        .from('message_templates')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      set((state) => ({
+        templates: state.templates.filter((t) => t.id !== id),
+      }));
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      throw error;
+    }
+  },
+
+  getTemplatesByStage: (stage) => {
+    return get().templates.filter((t) => t.stage === stage || t.stage === 'all');
+  },
+}));
 
 // Helper function to replace variables in a template
 export function applyTemplateVariables(
