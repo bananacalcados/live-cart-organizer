@@ -107,13 +107,26 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
     return STAGES.find(s => s.id === stageId)?.color || 'bg-muted';
   };
 
-  const variables = [
+  const dataVariables = [
     { name: '{{nome}}', desc: 'Nome do cliente (Instagram sem @)' },
     { name: '{{instagram}}', desc: 'Instagram com @' },
     { name: '{{whatsapp}}', desc: 'Número do WhatsApp' },
     { name: '{{link_carrinho}}', desc: 'Link do carrinho' },
     { name: '{{total}}', desc: 'Valor total do pedido' },
     { name: '{{produtos}}', desc: 'Lista de produtos' },
+  ];
+
+  const emojiVariables = [
+    { name: '{{emoji_ola}}', desc: 'Saudação (👋 🙋 ✌️)', preview: '👋' },
+    { name: '{{emoji_feliz}}', desc: 'Feliz (😊 😄 🤗)', preview: '😊' },
+    { name: '{{emoji_comemoracao}}', desc: 'Comemoração (🎉 🥳 ✨)', preview: '🎉' },
+    { name: '{{emoji_amor}}', desc: 'Amor (❤️ 💕 🥰)', preview: '❤️' },
+    { name: '{{emoji_ok}}', desc: 'Confirmação (👍 ✅ 👌)', preview: '👍' },
+    { name: '{{emoji_dinheiro}}', desc: 'Dinheiro (💰 💵 🤑)', preview: '💰' },
+    { name: '{{emoji_envio}}', desc: 'Envio (📦 🚚 ✈️)', preview: '📦' },
+    { name: '{{emoji_urgente}}', desc: 'Urgente (⚡ 🔥 ⏰)', preview: '⚡' },
+    { name: '{{emoji_agradecimento}}', desc: 'Agradecimento (🙏 💐 🌟)', preview: '🙏' },
+    { name: '{{emoji_triste}}', desc: 'Triste (😢 😔 🥺)', preview: '😢' },
   ];
 
   return (
@@ -245,20 +258,42 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Variáveis disponíveis:</Label>
-                <div className="flex flex-wrap gap-1">
-                  {variables.map((v) => (
-                    <Badge
-                      key={v.name}
-                      variant="outline"
-                      className="text-xs cursor-pointer hover:bg-secondary"
-                      onClick={() => setMessage((prev) => prev + v.name)}
-                      title={v.desc}
-                    >
-                      {v.name}
-                    </Badge>
-                  ))}
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Variáveis de dados:</Label>
+                  <div className="flex flex-wrap gap-1">
+                    {dataVariables.map((v) => (
+                      <Badge
+                        key={v.name}
+                        variant="outline"
+                        className="text-xs cursor-pointer hover:bg-secondary"
+                        onClick={() => setMessage((prev) => prev + v.name)}
+                        title={v.desc}
+                      >
+                        {v.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">
+                    🎲 Emojis automáticos (variam a cada envio):
+                  </Label>
+                  <div className="flex flex-wrap gap-1">
+                    {emojiVariables.map((v) => (
+                      <Badge
+                        key={v.name}
+                        variant="secondary"
+                        className="text-xs cursor-pointer hover:bg-primary/20 gap-1"
+                        onClick={() => setMessage((prev) => prev + v.name)}
+                        title={v.desc}
+                      >
+                        <span>{v.preview}</span>
+                        <span className="opacity-70">{v.name.replace(/\{\{|\}\}/g, '')}</span>
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               </div>
 

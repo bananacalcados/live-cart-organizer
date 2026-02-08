@@ -113,6 +113,26 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
   },
 }));
 
+// Emoji categories for automatic variation
+export const EMOJI_CATEGORIES = {
+  feliz: ['😊', '😄', '🙂', '😁', '☺️', '😃', '🤗', '😀'],
+  triste: ['😢', '😔', '🥺', '😞', '😿', '💔', '😥', '🙁'],
+  comemoracao: ['🎉', '🥳', '🎊', '✨', '🎈', '🎁', '🙌', '💫', '🎇'],
+  amor: ['❤️', '💕', '💖', '💗', '💓', '🥰', '😍', '💘'],
+  ok: ['👍', '✅', '👌', '💪', '🤝', '✔️', '🙏', '👏'],
+  ola: ['👋', '🙋', '🙋‍♀️', '🙋‍♂️', '✌️', '🤙', '💁', '👐'],
+  dinheiro: ['💰', '💵', '💸', '🤑', '💲', '💳', '🏦', '💎'],
+  envio: ['📦', '🚚', '✈️', '🛒', '📬', '📮', '🎁', '🚀'],
+  urgente: ['⚡', '🔥', '⏰', '🚨', '⚠️', '❗', '‼️', '📢'],
+  agradecimento: ['🙏', '💐', '🌟', '⭐', '🌹', '💝', '🤩', '😇'],
+};
+
+// Get random emoji from category
+function getRandomEmoji(category: keyof typeof EMOJI_CATEGORIES): string {
+  const emojis = EMOJI_CATEGORIES[category];
+  return emojis[Math.floor(Math.random() * emojis.length)];
+}
+
 // Helper function to replace variables in a template
 export function applyTemplateVariables(
   template: string,
@@ -127,6 +147,19 @@ export function applyTemplateVariables(
 ): string {
   let result = template;
   
+  // Replace emoji variables first (with random selection)
+  result = result.replace(/\{\{emoji_feliz\}\}/gi, () => getRandomEmoji('feliz'));
+  result = result.replace(/\{\{emoji_triste\}\}/gi, () => getRandomEmoji('triste'));
+  result = result.replace(/\{\{emoji_comemoracao\}\}/gi, () => getRandomEmoji('comemoracao'));
+  result = result.replace(/\{\{emoji_amor\}\}/gi, () => getRandomEmoji('amor'));
+  result = result.replace(/\{\{emoji_ok\}\}/gi, () => getRandomEmoji('ok'));
+  result = result.replace(/\{\{emoji_ola\}\}/gi, () => getRandomEmoji('ola'));
+  result = result.replace(/\{\{emoji_dinheiro\}\}/gi, () => getRandomEmoji('dinheiro'));
+  result = result.replace(/\{\{emoji_envio\}\}/gi, () => getRandomEmoji('envio'));
+  result = result.replace(/\{\{emoji_urgente\}\}/gi, () => getRandomEmoji('urgente'));
+  result = result.replace(/\{\{emoji_agradecimento\}\}/gi, () => getRandomEmoji('agradecimento'));
+  
+  // Replace regular variables
   if (variables.nome) {
     result = result.replace(/\{\{nome\}\}/gi, variables.nome);
   }
