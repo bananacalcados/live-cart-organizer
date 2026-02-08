@@ -262,20 +262,42 @@ serve(async (req) => {
       ? `Pedido ${body.order_id.slice(0, 8)}-${uniqueId}`
       : `Link ${uniqueId}`;
 
-    // Calculate discount per item if discount is provided
-    // Yampi might not support global discount, so we apply it via customized_price
-    let totalOriginalPrice = 0;
-    const skusForPriceCalc = resolvedItems.map(item => {
-      // We'll need to apply the discount to individual items
-      return { sku_id: item.sku_id, quantity: item.quantity, price: item.price };
-    });
+    // Calculate discount and apply via customized_price if discount is provided
+    const hasDiscount = body.discount_type && body.discount_value && body.discount_value > 0;
+    
+    // Calculate total original price for percentage distribution
+    const totalOriginalPrice = resolvedItems.reduce((sum, item) => {
+      return sum + (item.price || 0) * item.quantity;
+    }, 0);
 
-    const skusPayload = resolvedItems.map(item => ({
-      id: item.sku_id,  // Yampi uses 'id' not 'sku_id' in the skus array
-      quantity: item.quantity,
-      // Don't set customized_price here - it may override promotions
-      // If there's a discount, it should be applied via the discount field
-    }));
+    const skusPayload = resolvedItems.map(item => {
+      const basePayload: { id: number; quantity: number; customized_price?: number } = {
+        id: item.sku_id,  // Yampi uses 'id' not 'sku_id' in the skus array
+        quantity: item.quantity,
+      };
+
+      // Apply discount via customized_price if discount is configured
+      if (hasDiscount && item.price !== undefined && item.price > 0) {
+        let discountedPrice = item.price;
+
+        if (body.discount_type === 'percentage') {
+          // Apply percentage discount directly to item price
+          discountedPrice = item.price * (1 - (body.discount_value! / 100));
+        } else if (body.discount_type === 'fixed' && totalOriginalPrice > 0) {
+          // Distribute fixed discount proportionally across items
+          const itemTotal = item.price * item.quantity;
+          const proportion = itemTotal / totalOriginalPrice;
+          const itemDiscount = (body.discount_value! * proportion) / item.quantity;
+          discountedPrice = item.price - itemDiscount;
+        }
+
+        // Ensure price doesn't go below 0.01 (minimum valid price)
+        basePayload.customized_price = Math.max(0.01, Math.round(discountedPrice * 100) / 100);
+        console.log(`Applied discount to SKU ${item.sku_id}: ${item.price} -> ${basePayload.customized_price}`);
+      }
+
+      return basePayload;
+    });
 
     const yampiPayload: Record<string, unknown> = {
       name: linkName,
@@ -292,15 +314,18 @@ serve(async (req) => {
       };
     }
 
-    // NOTE: Yampi Payment Link API does NOT support inline discounts.
-    // Discounts must be created as coupons in the Yampi dashboard,
-    // then applied via URL parameter (?cupom=CODE) after link generation.
-    // The discount_type and discount_value fields are ignored here.
-    // To apply a discount, pass coupon_code in the request.
+    // Discounts are now applied via customized_price above.
+    // Coupon codes can still be added via URL parameter if provided.
 
-    // Add free shipping if enabled (this may or may not be supported)
+    // Add free shipping if enabled
     if (body.free_shipping) {
       yampiPayload.free_shipping = true;
+    }
+
+    // Log discount info for debugging
+    if (hasDiscount) {
+      console.log(`Discount applied: ${body.discount_type} = ${body.discount_value}${body.discount_type === 'percentage' ? '%' : ' BRL'}`);
+      console.log(`Original total: ${totalOriginalPrice}, SKUs with customized prices:`, skusPayload);
     }
 
     console.log("Yampi API payload:", JSON.stringify(yampiPayload, null, 2));
@@ -350,11 +375,12 @@ serve(async (req) => {
 
     console.log("Payment link created successfully:", paymentLink);
 
-    // Include warning if discount was requested but coupon wasn't used
-    const warnings: string[] = [];
-    if (body.discount_type && body.discount_value && !body.coupon_code) {
-      warnings.push("Desconto solicitado mas nenhum código de cupom foi fornecido. Os descontos na Yampi devem ser criados como cupons no painel e o código deve ser passado.");
-    }
+    // Build response with discount info
+    const discountInfo = hasDiscount ? {
+      type: body.discount_type,
+      value: body.discount_value,
+      original_total: totalOriginalPrice,
+    } : undefined;
 
     return new Response(
       JSON.stringify({
@@ -362,7 +388,7 @@ serve(async (req) => {
         payment_link: paymentLink,
         payment_link_id: paymentLinkId,
         data: yampiData.data,
-        warnings: warnings.length > 0 ? warnings : undefined,
+        discount_applied: discountInfo,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
