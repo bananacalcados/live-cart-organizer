@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import { DbOrder, DbOrderProduct, DbCustomer } from '@/types/database';
+import { DbOrder, DbOrderProduct, DbCustomer, DiscountType } from '@/types/database';
 import { OrderStage } from '@/types/order';
 import { toast } from 'sonner';
 import { createShopifyCartFromOrder } from '@/lib/shopifyCart';
@@ -54,8 +54,9 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       const orders = (data || []).map((order) => ({
         ...order,
         products: order.products as unknown as DbOrderProduct[],
-        customer: order.customer as DbCustomer
-      }));
+        customer: order.customer as DbCustomer,
+        discount_type: order.discount_type as DiscountType | undefined,
+      })) as DbOrder[];
       
       set({ orders });
     } catch (error) {
@@ -104,8 +105,9 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       const order = {
         ...data,
         products: data.products as unknown as DbOrderProduct[],
-        customer: data.customer as DbCustomer
-      };
+        customer: data.customer as DbCustomer,
+        discount_type: data.discount_type as DiscountType | undefined,
+      } as DbOrder;
       
       set((state) => ({ orders: [order, ...state.orders] }));
       toast.success('Pedido criado!');

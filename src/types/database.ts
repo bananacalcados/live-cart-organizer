@@ -27,6 +27,8 @@ export interface DbOrderProduct {
   image?: string;
 }
 
+export type DiscountType = 'fixed' | 'percentage';
+
 export interface DbOrder {
   id: string;
   event_id: string;
@@ -41,6 +43,10 @@ export interface DbOrder {
   last_sent_message_at?: string;
   is_paid: boolean;
   paid_at?: string;
+  discount_type?: DiscountType;
+  discount_value?: number;
+  free_shipping?: boolean;
+  has_gift?: boolean;
   created_at: string;
   updated_at: string;
   // Joined data

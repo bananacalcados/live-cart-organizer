@@ -77,7 +77,11 @@ export type Database = {
           checkout_token: string | null
           created_at: string
           customer_id: string
+          discount_type: string | null
+          discount_value: number | null
           event_id: string
+          free_shipping: boolean | null
+          has_gift: boolean | null
           has_unread_messages: boolean
           id: string
           is_paid: boolean
@@ -94,7 +98,11 @@ export type Database = {
           checkout_token?: string | null
           created_at?: string
           customer_id: string
+          discount_type?: string | null
+          discount_value?: number | null
           event_id: string
+          free_shipping?: boolean | null
+          has_gift?: boolean | null
           has_unread_messages?: boolean
           id?: string
           is_paid?: boolean
@@ -111,7 +119,11 @@ export type Database = {
           checkout_token?: string | null
           created_at?: string
           customer_id?: string
+          discount_type?: string | null
+          discount_value?: number | null
           event_id?: string
+          free_shipping?: boolean | null
+          has_gift?: boolean | null
           has_unread_messages?: boolean
           id?: string
           is_paid?: boolean

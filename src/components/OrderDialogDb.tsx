@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { ProductSelector } from "./ProductSelector";
-import { DbOrder, DbOrderProduct, DbCustomer } from "@/types/database";
+import { DbOrder, DbOrderProduct, DbCustomer, DiscountType } from "@/types/database";
 import { STAGES, OrderStage } from "@/types/order";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -57,6 +58,12 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [localProducts, setLocalProducts] = useState<DbOrderProduct[]>([]);
   const [isGeneratingCartLink, setIsGeneratingCartLink] = useState(false);
   const [banReason, setBanReason] = useState("");
+  
+  // Discount and extras
+  const [discountType, setDiscountType] = useState<DiscountType | "">("");
+  const [discountValue, setDiscountValue] = useState<number>(0);
+  const [freeShipping, setFreeShipping] = useState(false);
+  const [hasGift, setHasGift] = useState(false);
 
   // Check for existing customer by Instagram as user types
   const existingCustomer = useMemo(() => {
@@ -84,6 +91,10 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       setNotes(editingOrder.notes || "");
       setStage(editingOrder.stage as OrderStage);
       setLocalProducts([...editingOrder.products]);
+      setDiscountType(editingOrder.discount_type || "");
+      setDiscountValue(editingOrder.discount_value || 0);
+      setFreeShipping(editingOrder.free_shipping || false);
+      setHasGift(editingOrder.has_gift || false);
     } else {
       resetForm();
     }
@@ -106,6 +117,10 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     setStage("new");
     setLocalProducts([]);
     setBanReason("");
+    setDiscountType("");
+    setDiscountValue(0);
+    setFreeShipping(false);
+    setHasGift(false);
   };
 
   const handleAddLocalProduct = (product: DbOrderProduct) => {
@@ -188,6 +203,10 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         notes: notes || undefined,
         stage,
         products: localProducts,
+        discount_type: discountType || undefined,
+        discount_value: discountValue || undefined,
+        free_shipping: freeShipping,
+        has_gift: hasGift,
       });
 
       // Refresh orders to reflect updated joined customer data (e.g. whatsapp) in the cards/chat buttons
@@ -229,6 +248,15 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     (sum, p) => sum + p.price * p.quantity,
     0
   );
+
+  // Calculate discount
+  const discountAmount = discountType && discountValue
+    ? discountType === 'percentage'
+      ? totalValue * (discountValue / 100)
+      : discountValue
+    : 0;
+  
+  const finalValue = Math.max(0, totalValue - discountAmount);
 
   const isBanned = editingOrder?.customer?.is_banned || existingCustomer?.is_banned;
 
@@ -361,6 +389,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
               <TabsTrigger value="products" className="flex-1">
                 Produtos ({localProducts.length})
               </TabsTrigger>
+              <TabsTrigger value="extras" className="flex-1">
+                Desconto/Extras
+              </TabsTrigger>
               <TabsTrigger value="notes" className="flex-1">
                 Observações
               </TabsTrigger>
@@ -374,14 +405,28 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
               />
 
               {localProducts.length > 0 && (
-                <div className="mt-4 p-4 bg-secondary/50 rounded-lg">
+                <div className="mt-4 p-4 bg-secondary/50 rounded-lg space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">Resumo do Carrinho</span>
-                    <span className="text-lg font-bold text-accent">
+                    <span className="font-medium">Subtotal</span>
+                    <span className="text-muted-foreground">
                       R$ {totalValue.toFixed(2)}
                     </span>
                   </div>
-                  <div className="mt-2 space-y-1">
+                  {discountAmount > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-stage-contacted">Desconto</span>
+                      <span className="text-stage-contacted">
+                        -R$ {discountAmount.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <span className="font-medium">Total</span>
+                    <span className="text-lg font-bold text-accent">
+                      R$ {finalValue.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1 pt-2 border-t">
                     {localProducts.map((p) => (
                       <div
                         key={p.id}
@@ -403,6 +448,78 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                   </div>
                 </div>
               )}
+            </TabsContent>
+            <TabsContent value="extras" className="mt-4 space-y-4">
+              {/* Discount */}
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2">
+                  <Percent className="h-4 w-4" />
+                  Desconto
+                </Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Select 
+                    value={discountType} 
+                    onValueChange={(v) => setDiscountType(v as DiscountType | "")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Tipo de desconto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fixed">
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4" />
+                          Valor fixo (R$)
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="percentage">
+                        <div className="flex items-center gap-2">
+                          <Percent className="h-4 w-4" />
+                          Percentual (%)
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    placeholder={discountType === 'percentage' ? 'Ex: 10' : 'Ex: 15.00'}
+                    value={discountValue || ''}
+                    onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
+                    disabled={!discountType}
+                  />
+                </div>
+                {discountType && discountValue > 0 && (
+                  <p className="text-sm text-stage-contacted">
+                    Desconto de R$ {discountAmount.toFixed(2)} aplicado
+                  </p>
+                )}
+              </div>
+
+              {/* Free Shipping & Gift */}
+              <div className="space-y-3 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="freeShipping" className="flex items-center gap-2 cursor-pointer">
+                    <Truck className="h-4 w-4 text-stage-paid" />
+                    Frete Grátis
+                  </Label>
+                  <Switch
+                    id="freeShipping"
+                    checked={freeShipping}
+                    onCheckedChange={setFreeShipping}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="hasGift" className="flex items-center gap-2 cursor-pointer">
+                    <Gift className="h-4 w-4 text-accent" />
+                    Incluir Brinde
+                  </Label>
+                  <Switch
+                    id="hasGift"
+                    checked={hasGift}
+                    onCheckedChange={setHasGift}
+                  />
+                </div>
+              </div>
             </TabsContent>
             <TabsContent value="notes" className="mt-4">
               <div className="space-y-2">
