@@ -21,6 +21,7 @@ export type Database = {
           id: string
           instagram_handle: string
           is_banned: boolean
+          tags: string[] | null
           updated_at: string
           whatsapp: string | null
         }
@@ -30,6 +31,7 @@ export type Database = {
           id?: string
           instagram_handle: string
           is_banned?: boolean
+          tags?: string[] | null
           updated_at?: string
           whatsapp?: string | null
         }
@@ -39,6 +41,7 @@ export type Database = {
           id?: string
           instagram_handle?: string
           is_banned?: boolean
+          tags?: string[] | null
           updated_at?: string
           whatsapp?: string | null
         }
@@ -157,6 +160,7 @@ export type Database = {
           created_at: string
           direction: string
           id: string
+          is_group: boolean | null
           media_type: string | null
           media_url: string | null
           message: string
@@ -168,6 +172,7 @@ export type Database = {
           created_at?: string
           direction: string
           id?: string
+          is_group?: boolean | null
           media_type?: string | null
           media_url?: string | null
           message: string
@@ -179,6 +184,7 @@ export type Database = {
           created_at?: string
           direction?: string
           id?: string
+          is_group?: boolean | null
           media_type?: string | null
           media_url?: string | null
           message?: string
