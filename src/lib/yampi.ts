@@ -22,6 +22,7 @@ interface CreateYampiPaymentLinkRequest {
   discount_type?: 'fixed' | 'percentage';
   discount_value?: number;
   free_shipping?: boolean;
+  coupon_code?: string;
 }
 
 interface YampiPaymentLinkResponse {
@@ -93,6 +94,7 @@ export async function createYampiPaymentLinkFromOrder(
     discountType?: 'fixed' | 'percentage';
     discountValue?: number;
     freeShipping?: boolean;
+    couponCode?: string;
   }
 ): Promise<string | null> {
   if (products.length === 0) {
@@ -134,6 +136,11 @@ export async function createYampiPaymentLinkFromOrder(
   // Add free shipping if enabled
   if (options?.freeShipping) {
     request.free_shipping = true;
+  }
+
+  // Add coupon code if provided
+  if (options?.couponCode) {
+    request.coupon_code = options.couponCode;
   }
 
   const response = await createYampiPaymentLink(request);

@@ -221,24 +221,38 @@ export function ProductSelector({
                                 }
                                 onValueChange={(value) => {
                                   // Find the variant that matches the selected options
+                                  const currentOptions = currentVariant.selectedOptions.map(o => ({
+                                    name: o.name,
+                                    value: o.name === option.name ? value : o.value
+                                  }));
+                                  
                                   const newVariantIndex = variants.findIndex((v) => {
-                                    const optionValue = v.node.selectedOptions.find(
-                                      (o) => o.name === option.name
-                                    )?.value;
-                                    return optionValue === value;
+                                    return currentOptions.every(co => {
+                                      const variantOption = v.node.selectedOptions.find(vo => vo.name === co.name);
+                                      return variantOption?.value === co.value;
+                                    });
                                   });
+                                  
                                   if (newVariantIndex >= 0) {
                                     setSelectedVariants((prev) => ({
                                       ...prev,
                                       [product.node.id]: newVariantIndex,
                                     }));
+                                    // Auto-add product when selecting from dropdown
+                                    const newVariant = variants[newVariantIndex]?.node;
+                                    if (newVariant) {
+                                      const existingQty = getSelectedQuantity(product.node.id, newVariant.id);
+                                      if (existingQty === 0) {
+                                        handleAddProduct(product, newVariantIndex);
+                                      }
+                                    }
                                   }
                                 }}
                               >
                                 <SelectTrigger className="h-8 text-sm">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="max-h-48 overflow-y-auto z-50">
                                   {option.values.map((value) => (
                                     <SelectItem key={value} value={value}>
                                       {value}
@@ -250,40 +264,42 @@ export function ProductSelector({
                           ))}
                         </div>
 
-                        {/* Show all variants as quick buttons */}
-                        <div className="mt-3 flex flex-wrap gap-1">
-                          {variants.map((variant, idx) => {
-                            const variantQty = getSelectedQuantity(product.node.id, variant.node.id);
-                            const isVariantSelected = variantQty > 0;
-                            
-                            return (
-                              <Button
-                                key={variant.node.id}
-                                variant={isVariantSelected ? "default" : "outline"}
-                                size="sm"
-                                className="text-xs h-7 px-2"
-                                onClick={() => {
-                                  if (isVariantSelected) {
-                                    onUpdateQuantity(
-                                      `${product.node.id}-${variant.node.id}`,
-                                      variantQty + 1
-                                    );
-                                  } else {
-                                    setSelectedVariants((prev) => ({
-                                      ...prev,
-                                      [product.node.id]: idx,
-                                    }));
-                                    handleAddProduct(product, idx);
-                                  }
-                                }}
-                                disabled={!variant.node.availableForSale}
-                              >
-                                {getVariantLabel(variant.node)}
-                                {isVariantSelected && ` (${variantQty})`}
-                                {!variant.node.availableForSale && " - Esgotado"}
-                              </Button>
-                            );
-                          })}
+                        {/* Show all variants as scrollable buttons */}
+                        <div className="mt-3 max-h-32 overflow-y-auto">
+                          <div className="flex flex-wrap gap-1">
+                            {variants.map((variant, idx) => {
+                              const variantQty = getSelectedQuantity(product.node.id, variant.node.id);
+                              const isVariantSelected = variantQty > 0;
+                              
+                              return (
+                                <Button
+                                  key={variant.node.id}
+                                  variant={isVariantSelected ? "default" : "outline"}
+                                  size="sm"
+                                  className="text-xs h-7 px-2 whitespace-nowrap"
+                                  onClick={() => {
+                                    if (isVariantSelected) {
+                                      onUpdateQuantity(
+                                        `${product.node.id}-${variant.node.id}`,
+                                        variantQty + 1
+                                      );
+                                    } else {
+                                      setSelectedVariants((prev) => ({
+                                        ...prev,
+                                        [product.node.id]: idx,
+                                      }));
+                                      handleAddProduct(product, idx);
+                                    }
+                                  }}
+                                  disabled={!variant.node.availableForSale}
+                                >
+                                  {getVariantLabel(variant.node)}
+                                  {isVariantSelected && ` (${variantQty})`}
+                                  {!variant.node.availableForSale && " - Esgotado"}
+                                </Button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     )}

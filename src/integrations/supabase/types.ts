@@ -105,6 +105,7 @@ export type Database = {
         Row: {
           cart_link: string | null
           checkout_token: string | null
+          coupon_code: string | null
           created_at: string
           customer_id: string
           discount_type: string | null
@@ -126,6 +127,7 @@ export type Database = {
         Insert: {
           cart_link?: string | null
           checkout_token?: string | null
+          coupon_code?: string | null
           created_at?: string
           customer_id: string
           discount_type?: string | null
@@ -147,6 +149,7 @@ export type Database = {
         Update: {
           cart_link?: string | null
           checkout_token?: string | null
+          coupon_code?: string | null
           created_at?: string
           customer_id?: string
           discount_type?: string | null
