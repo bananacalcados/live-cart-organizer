@@ -6,7 +6,8 @@ const corsHeaders = {
 };
 
 interface PaymentLinkItem {
-  sku_id: number;
+  sku_id?: number;  // Yampi internal SKU ID
+  sku?: string;     // SKU code (will be looked up if sku_id not provided)
   quantity: number;
   price?: number; // Optional: override price
 }
@@ -51,13 +52,54 @@ serve(async (req) => {
       throw new Error("At least one item is required");
     }
 
-    // Build Yampi API request
-    const yampiPayload: Record<string, unknown> = {
-      items: body.items.map(item => ({
-        sku_id: item.sku_id,
+    // Resolve SKU codes to Yampi sku_ids if needed
+    const resolvedItems: Array<{ sku_id: number; quantity: number; price?: number }> = [];
+    
+    for (const item of body.items) {
+      let skuId = item.sku_id;
+      
+      // If no sku_id but has sku code, look it up
+      if (!skuId && item.sku) {
+        console.log(`Looking up SKU: ${item.sku}`);
+        const searchResponse = await fetch(
+          `https://api.dooki.com.br/v2/${YAMPI_STORE_ALIAS}/catalog/skus?search=${encodeURIComponent(item.sku)}&limit=10`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              "User-Token": YAMPI_USER_TOKEN,
+              "User-Secret-Key": YAMPI_USER_SECRET_KEY,
+            },
+          }
+        );
+
+        const searchData = await searchResponse.json();
+        console.log(`Yampi search result for SKU ${item.sku}:`, JSON.stringify(searchData, null, 2));
+
+        if (searchResponse.ok && searchData?.data) {
+          // Find exact SKU match
+          const match = searchData.data.find((s: { sku: string }) => s.sku === item.sku);
+          if (match) {
+            skuId = match.id;
+            console.log(`Found Yampi sku_id ${skuId} for SKU ${item.sku}`);
+          }
+        }
+      }
+
+      if (!skuId) {
+        throw new Error(`Could not find Yampi SKU ID for SKU: ${item.sku || 'unknown'}`);
+      }
+
+      resolvedItems.push({
+        sku_id: skuId,
         quantity: item.quantity,
         ...(item.price !== undefined && { price: item.price }),
-      })),
+      });
+    }
+
+    // Build Yampi API request
+    const yampiPayload: Record<string, unknown> = {
+      items: resolvedItems,
     };
 
     // Add customer info if provided

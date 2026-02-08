@@ -10,6 +10,7 @@ export type OrderStage =
 export interface OrderProduct {
   id: string;
   shopifyId: string;
+  sku?: string;
   title: string;
   variant: string;
   price: number;

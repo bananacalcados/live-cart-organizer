@@ -1,4 +1,7 @@
 project_id = "tqxhcyuxgqbzqwoidpie"
+[functions.yampi-lookup-sku]
+verify_jwt = false
+
 
 [functions.yampi-create-payment-link]
 verify_jwt = false

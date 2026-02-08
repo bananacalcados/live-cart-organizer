@@ -1,8 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
-import { OrderProduct } from "@/types/order";
+import { DbOrderProduct } from "@/types/database";
 
 interface YampiPaymentLinkItem {
-  sku_id: number;
+  sku?: string;      // SKU code (preferred - will be looked up automatically)
+  sku_id?: number;   // Yampi internal SKU ID (if already known)
   quantity: number;
   price?: number;
 }
@@ -31,7 +32,7 @@ interface YampiPaymentLinkResponse {
 
 /**
  * Creates a payment link using Yampi API
- * Note: This requires products to have a Yampi SKU ID stored
+ * Can accept either SKU codes (which will be looked up) or direct sku_ids
  */
 export async function createYampiPaymentLink(
   request: CreateYampiPaymentLinkRequest
@@ -57,14 +58,11 @@ export async function createYampiPaymentLink(
 }
 
 /**
- * Creates a Yampi payment link from order products
- * This function handles the conversion from Shopify product IDs to Yampi SKU IDs
- * 
- * IMPORTANT: For this to work, you need to have the Yampi SKU IDs mapped
- * Currently returns null if products don't have Yampi SKU IDs
+ * Creates a Yampi payment link from order products using SKU codes
+ * The edge function will automatically lookup the Yampi sku_id for each SKU
  */
 export async function createYampiPaymentLinkFromOrder(
-  products: OrderProduct[],
+  products: DbOrderProduct[],
   options?: {
     orderId?: string;
     customerPhone?: string;
@@ -79,37 +77,23 @@ export async function createYampiPaymentLinkFromOrder(
     return null;
   }
 
-  // For now, we'll use a simple mapping approach
-  // In the future, you may want to store Yampi SKU IDs in the product data
-  // or have a mapping table in the database
-  
-  // Check if products have yampiSkuId (needs to be added to product selection)
+  // Build items using SKU codes - the edge function will look them up
   const items: YampiPaymentLinkItem[] = [];
   
   for (const product of products) {
-    // Try to extract Yampi SKU ID from product
-    // Option 1: If stored in product data (requires update to ProductSelector)
-    // Option 2: If the Shopify variant ID can be used
-    // Option 3: Manual mapping
-    
-    // For now, we'll attempt to use a numeric ID from the shopifyId
-    // This is a placeholder - you'll need to implement proper SKU mapping
-    const skuMatch = product.shopifyId?.match(/\d+$/);
-    
-    if (!skuMatch) {
-      console.error(`Product ${product.title} doesn't have a valid SKU ID`);
+    if (!product.sku) {
+      console.error(`Product ${product.title} doesn't have a SKU`);
       continue;
     }
 
     items.push({
-      sku_id: parseInt(skuMatch[0], 10),
+      sku: product.sku,
       quantity: product.quantity,
-      price: product.price, // Optional: can override price
     });
   }
 
   if (items.length === 0) {
-    console.error("No valid items to create payment link");
+    console.error("No products with valid SKUs found");
     return null;
   }
 
