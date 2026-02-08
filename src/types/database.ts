@@ -13,6 +13,7 @@ export interface DbCustomer {
   whatsapp?: string;
   is_banned: boolean;
   ban_reason?: string;
+  tags?: string[];
   created_at: string;
   updated_at: string;
 }

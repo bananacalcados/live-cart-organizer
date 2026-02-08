@@ -18,6 +18,8 @@ interface CustomerStore {
   banCustomer: (id: string, reason?: string) => Promise<void>;
   unbanCustomer: (id: string) => Promise<void>;
   updateCustomer: (id: string, updates: Partial<DbCustomer>) => Promise<void>;
+  addTagToCustomer: (id: string, tag: string) => Promise<void>;
+  removeTagFromCustomer: (id: string, tag: string) => Promise<void>;
 }
 
 export const useCustomerStore = create<CustomerStore>()((set, get) => ({
@@ -172,6 +174,60 @@ export const useCustomerStore = create<CustomerStore>()((set, get) => ({
     } catch (error) {
       console.error('Error updating customer:', error);
       toast.error('Erro ao atualizar cliente');
+    }
+  },
+
+  addTagToCustomer: async (id, tag) => {
+    const customer = get().customers.find(c => c.id === id);
+    if (!customer) return;
+
+    const currentTags = customer.tags || [];
+    if (currentTags.includes(tag)) return;
+
+    const newTags = [...currentTags, tag];
+    
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .update({ tags: newTags })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      set((state) => ({
+        customers: state.customers.map((c) => 
+          c.id === id ? { ...c, tags: newTags } : c
+        )
+      }));
+    } catch (error) {
+      console.error('Error adding tag:', error);
+      toast.error('Erro ao adicionar tag');
+    }
+  },
+
+  removeTagFromCustomer: async (id, tag) => {
+    const customer = get().customers.find(c => c.id === id);
+    if (!customer) return;
+
+    const currentTags = customer.tags || [];
+    const newTags = currentTags.filter(t => t !== tag);
+    
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .update({ tags: newTags })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      set((state) => ({
+        customers: state.customers.map((c) => 
+          c.id === id ? { ...c, tags: newTags } : c
+        )
+      }));
+    } catch (error) {
+      console.error('Error removing tag:', error);
+      toast.error('Erro ao remover tag');
     }
   },
 }));

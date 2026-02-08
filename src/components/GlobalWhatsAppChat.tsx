@@ -1,33 +1,12 @@
-import { useState, useEffect, useRef } from "react";
-import { MessageCircle, X, Send, Smile, Paperclip, Search, Phone, ChevronLeft } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MessageCircle, X, ChevronLeft, Phone, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
-import { formatDistanceToNow, format, isToday, isYesterday } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
-import { cn } from "@/lib/utils";
-import { EmojiPickerButton } from "./EmojiPickerButton";
-
-interface Message {
-  id: string;
-  phone: string;
-  message: string;
-  direction: string;
-  created_at: string;
-  media_type?: string;
-  media_url?: string;
-  status?: string;
-}
-
-interface Conversation {
-  phone: string;
-  lastMessage: string;
-  lastMessageAt: Date;
-  unreadCount: number;
-  customerName?: string;
-}
+import { useCustomerStore } from "@/stores/customerStore";
+import { ConversationList } from "./chat/ConversationList";
+import { ChatView } from "./chat/ChatView";
+import { Message, Conversation, ChatFilter, StageFilter } from "./chat/ChatTypes";
 
 export function GlobalWhatsAppChat() {
   const [isOpen, setIsOpen] = useState(false);
@@ -37,9 +16,11 @@ export function GlobalWhatsAppChat() {
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
+  const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   
   const { orders, setHasUnreadMessages } = useDbOrderStore();
+  const { customers } = useCustomerStore();
 
   // Load conversations
   useEffect(() => {
@@ -57,16 +38,20 @@ export function GlobalWhatsAppChat() {
       }
 
       // Group by phone
-      const phoneMap = new Map<string, { messages: Message[], unread: number }>();
+      const phoneMap = new Map<string, { messages: Message[], unread: number, isGroup: boolean }>();
       
       for (const msg of data || []) {
         if (!phoneMap.has(msg.phone)) {
-          phoneMap.set(msg.phone, { messages: [], unread: 0 });
+          phoneMap.set(msg.phone, { messages: [], unread: 0, isGroup: msg.is_group || false });
         }
         const entry = phoneMap.get(msg.phone)!;
         entry.messages.push(msg);
         if (msg.direction === 'incoming' && msg.status !== 'read') {
           entry.unread++;
+        }
+        // Update isGroup if any message indicates it's a group
+        if (msg.is_group) {
+          entry.isGroup = true;
         }
       }
 
@@ -74,15 +59,29 @@ export function GlobalWhatsAppChat() {
       const convs: Conversation[] = [];
       phoneMap.forEach((value, phone) => {
         const lastMsg = value.messages[0];
-        // Find customer name
+        const allMessages = value.messages;
+        
+        // Check if last message is incoming and unanswered
+        const hasUnansweredMessage = lastMsg.direction === 'incoming';
+        
+        // Find customer and order
         const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
+        const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
+        
+        // Detect if it's a group (phone starting with group prefix or contains @g.us)
+        const isGroup = value.isGroup || phone.includes('@g.us') || phone.includes('-');
         
         convs.push({
           phone,
           lastMessage: lastMsg.message,
           lastMessageAt: new Date(lastMsg.created_at),
           unreadCount: value.unread,
-          customerName: order?.customer?.instagram_handle,
+          customerName: order?.customer?.instagram_handle || customer?.instagram_handle,
+          isGroup,
+          hasUnansweredMessage,
+          stage: order?.stage,
+          customerId: order?.customer_id || customer?.id,
+          customerTags: customer?.tags,
         });
       });
 
@@ -111,7 +110,7 @@ export function GlobalWhatsAppChat() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isOpen, orders, selectedPhone]);
+  }, [isOpen, orders, selectedPhone, customers]);
 
   // Load messages for selected phone
   const loadMessages = async (phone: string) => {
@@ -127,11 +126,6 @@ export function GlobalWhatsAppChat() {
     }
 
     setMessages(data || []);
-    
-    // Scroll to bottom
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
   };
 
   // Select conversation
@@ -166,27 +160,8 @@ export function GlobalWhatsAppChat() {
     }
   };
 
-  // Format message time
-  const formatMessageTime = (date: Date) => {
-    return format(date, 'HH:mm', { locale: ptBR });
-  };
-
-  // Format conversation time
-  const formatConversationTime = (date: Date) => {
-    if (isToday(date)) {
-      return format(date, 'HH:mm', { locale: ptBR });
-    }
-    if (isYesterday(date)) {
-      return 'Ontem';
-    }
-    return format(date, 'dd/MM', { locale: ptBR });
-  };
-
-  // Filter conversations
-  const filteredConversations = conversations.filter(c => 
-    c.phone.includes(searchQuery) || 
-    c.customerName?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Get selected conversation
+  const selectedConversation = conversations.find(c => c.phone === selectedPhone) || null;
 
   // Total unread
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
@@ -209,7 +184,7 @@ export function GlobalWhatsAppChat() {
   }
 
   return (
-    <div className="fixed bottom-24 right-4 z-50 w-[400px] h-[600px] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed bottom-24 right-4 z-50 w-[420px] h-[650px] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b bg-stage-paid text-white">
         <div className="flex items-center gap-2">
@@ -223,10 +198,14 @@ export function GlobalWhatsAppChat() {
               <ChevronLeft className="h-5 w-5" />
             </Button>
           )}
-          <MessageCircle className="h-5 w-5" />
+          {selectedConversation?.isGroup ? (
+            <Users className="h-5 w-5" />
+          ) : (
+            <MessageCircle className="h-5 w-5" />
+          )}
           <span className="font-semibold">
             {selectedPhone 
-              ? conversations.find(c => c.phone === selectedPhone)?.customerName || selectedPhone 
+              ? selectedConversation?.customerName || selectedPhone 
               : 'WhatsApp'}
           </span>
         </div>
@@ -244,123 +223,25 @@ export function GlobalWhatsAppChat() {
       </div>
 
       {!selectedPhone ? (
-        // Conversation list
-        <div className="flex-1 flex flex-col">
-          {/* Search */}
-          <div className="p-2 border-b">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar conversas..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9"
-              />
-            </div>
-          </div>
-
-          {/* Conversations */}
-          <ScrollArea className="flex-1">
-            {filteredConversations.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>Nenhuma conversa encontrada</p>
-              </div>
-            ) : (
-              <div className="divide-y">
-                {filteredConversations.map((conv) => (
-                  <button
-                    key={conv.phone}
-                    onClick={() => handleSelectConversation(conv.phone)}
-                    className="w-full p-3 flex items-start gap-3 hover:bg-secondary/50 transition-colors text-left"
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-stage-paid/20 text-stage-paid flex-shrink-0">
-                      <Phone className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm truncate">
-                          {conv.customerName || conv.phone}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatConversationTime(conv.lastMessageAt)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-muted-foreground truncate">
-                          {conv.lastMessage}
-                        </p>
-                        {conv.unreadCount > 0 && (
-                          <span className="h-5 min-w-5 px-1 rounded-full bg-stage-paid text-white text-xs flex items-center justify-center">
-                            {conv.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-        </div>
+        <ConversationList
+          conversations={conversations}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onSelectConversation={handleSelectConversation}
+          chatFilter={chatFilter}
+          onChatFilterChange={setChatFilter}
+          stageFilter={stageFilter}
+          onStageFilterChange={setStageFilter}
+        />
       ) : (
-        // Chat view
-        <div className="flex-1 flex flex-col">
-          {/* Messages */}
-          <ScrollArea className="flex-1 p-3 bg-[#e5ddd5] dark:bg-[#0b141a]">
-            <div className="space-y-2">
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={cn(
-                    "flex",
-                    msg.direction === 'outgoing' ? 'justify-end' : 'justify-start'
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "max-w-[80%] rounded-lg px-3 py-2 text-sm",
-                      msg.direction === 'outgoing'
-                        ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-foreground'
-                        : 'bg-white dark:bg-[#202c33] text-foreground'
-                    )}
-                  >
-                    {msg.media_url && msg.media_type?.includes('image') && (
-                      <img src={msg.media_url} alt="" className="max-w-full rounded mb-1" />
-                    )}
-                    <p className="whitespace-pre-wrap break-words">{msg.message}</p>
-                    <p className="text-[10px] text-muted-foreground text-right mt-1">
-                      {formatMessageTime(new Date(msg.created_at))}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          </ScrollArea>
-
-          {/* Input */}
-          <div className="p-2 border-t bg-[#f0f0f0] dark:bg-[#202c33] flex items-center gap-2">
-            <EmojiPickerButton 
-              onEmojiSelect={(emoji) => setNewMessage(prev => prev + emoji)} 
-            />
-            <Input
-              placeholder="Digite uma mensagem..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              className="flex-1 bg-white dark:bg-[#2a3942]"
-            />
-            <Button
-              size="icon"
-              onClick={handleSendMessage}
-              disabled={!newMessage.trim() || isSending}
-              className="bg-stage-paid hover:bg-stage-paid/90"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        <ChatView
+          messages={messages}
+          conversation={selectedConversation}
+          newMessage={newMessage}
+          onNewMessageChange={setNewMessage}
+          onSendMessage={handleSendMessage}
+          isSending={isSending}
+        />
       )}
     </div>
   );
