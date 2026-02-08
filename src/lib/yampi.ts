@@ -36,26 +36,28 @@ interface YampiPaymentLinkResponse {
  */
 async function fetchSkuFromShopifyAdmin(variantId: string): Promise<string | null> {
   try {
-    console.log("Fetching SKU from Shopify Admin API for variant:", variantId);
+    console.log("[Yampi] Fetching SKU from Shopify Admin API for variant:", variantId);
     
     const { data, error } = await supabase.functions.invoke("shopify-get-variant-sku", {
       body: { variantId },
     });
 
+    console.log("[Yampi] Shopify Admin API response:", data, error);
+
     if (error) {
-      console.error("Error calling shopify-get-variant-sku:", error);
+      console.error("[Yampi] Error calling shopify-get-variant-sku:", error);
       return null;
     }
 
     if (data?.success && data?.sku) {
-      console.log("Found SKU:", data.sku);
+      console.log("[Yampi] Found SKU:", data.sku);
       return data.sku;
     }
 
-    console.log("No SKU returned from Shopify Admin API");
+    console.log("[Yampi] No SKU returned from Shopify Admin API:", data);
     return null;
   } catch (error) {
-    console.error("Error fetching SKU from Shopify Admin:", error);
+    console.error("[Yampi] Error fetching SKU from Shopify Admin:", error);
     return null;
   }
 }
@@ -64,28 +66,35 @@ async function fetchSkuFromShopifyAdmin(variantId: string): Promise<string | nul
  * Resolve SKU for a product - uses stored SKU or fetches from Shopify Admin API
  */
 async function resolveProductSku(product: DbOrderProduct): Promise<string | null> {
+  console.log("[Yampi] Resolving SKU for product:", product.title, "| variant:", product.variant, "| stored SKU:", product.sku, "| shopifyId:", product.shopifyId, "| id:", product.id);
+
   // If product already has SKU, use it
   if (product.sku) {
+    console.log("[Yampi] Using stored SKU:", product.sku);
     return product.sku;
   }
 
-  // Try to extract variant ID from shopifyId or composite id
+  // Try to get variant ID from shopifyId first
   let variantId = product.shopifyId;
   
-  // If shopifyId is a Product GID, try to extract variant from composite id
-  if (variantId?.includes("gid://shopify/Product/")) {
+  console.log("[Yampi] Initial variantId from shopifyId:", variantId);
+
+  // If shopifyId is a Product GID (not variant), try to extract variant from composite id
+  if (variantId?.includes("gid://shopify/Product/") && !variantId.includes("ProductVariant")) {
+    console.log("[Yampi] shopifyId is a Product GID, trying to extract variant from composite id");
     const parts = product.id.split("-");
-    const maybeVariant = parts[parts.length - 1];
-    if (maybeVariant?.includes("gid://shopify/ProductVariant/")) {
+    const maybeVariant = parts.find(p => p.includes("gid://shopify/ProductVariant/"));
+    if (maybeVariant) {
       variantId = maybeVariant;
+      console.log("[Yampi] Extracted variant from id:", variantId);
     } else {
-      console.error(`Cannot resolve variant ID for product: ${product.title}`);
+      console.error(`[Yampi] Cannot resolve variant ID for product: ${product.title}`);
       return null;
     }
   }
 
   if (!variantId?.includes("gid://shopify/ProductVariant/")) {
-    console.error(`Invalid variant ID for product: ${product.title}`);
+    console.error(`[Yampi] Invalid variant ID for product: ${product.title}`, variantId);
     return null;
   }
 
@@ -93,7 +102,7 @@ async function resolveProductSku(product: DbOrderProduct): Promise<string | null
   const sku = await fetchSkuFromShopifyAdmin(variantId);
   
   if (!sku) {
-    console.error(`No SKU found in Shopify for product: ${product.title} (${product.variant})`);
+    console.error(`[Yampi] No SKU found in Shopify for product: ${product.title} (${product.variant})`);
   }
   
   return sku;
