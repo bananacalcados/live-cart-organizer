@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.yampi-webhook]
 verify_jwt = false
+
+[functions.shopify-get-variant-sku]
+verify_jwt = false

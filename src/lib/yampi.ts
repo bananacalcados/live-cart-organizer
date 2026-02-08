@@ -1,6 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 import { DbOrderProduct } from "@/types/database";
-import { storefrontApiRequest } from "./shopify";
 
 interface YampiPaymentLinkItem {
   sku?: string;      // SKU code (preferred - will be looked up automatically)
@@ -31,38 +30,38 @@ interface YampiPaymentLinkResponse {
   error?: string;
 }
 
-// Query to fetch SKU for a specific variant
-const VARIANT_SKU_QUERY = `
-  query getVariantSku($id: ID!) {
-    node(id: $id) {
-      ... on ProductVariant {
-        id
-        sku
-        title
-        product {
-          title
-        }
-      }
-    }
-  }
-`;
-
 /**
- * Fetch SKU from Shopify for a specific variant ID
+ * Fetch SKU from Shopify Admin API for a specific variant ID
+ * Uses edge function to securely access Admin API
  */
-async function fetchSkuFromShopify(variantId: string): Promise<string | null> {
+async function fetchSkuFromShopifyAdmin(variantId: string): Promise<string | null> {
   try {
-    const data = await storefrontApiRequest(VARIANT_SKU_QUERY, { id: variantId });
-    const sku = data?.data?.node?.sku;
-    return sku || null;
+    console.log("Fetching SKU from Shopify Admin API for variant:", variantId);
+    
+    const { data, error } = await supabase.functions.invoke("shopify-get-variant-sku", {
+      body: { variantId },
+    });
+
+    if (error) {
+      console.error("Error calling shopify-get-variant-sku:", error);
+      return null;
+    }
+
+    if (data?.success && data?.sku) {
+      console.log("Found SKU:", data.sku);
+      return data.sku;
+    }
+
+    console.log("No SKU returned from Shopify Admin API");
+    return null;
   } catch (error) {
-    console.error("Error fetching SKU from Shopify:", error);
+    console.error("Error fetching SKU from Shopify Admin:", error);
     return null;
   }
 }
 
 /**
- * Resolve SKU for a product - uses stored SKU or fetches from Shopify
+ * Resolve SKU for a product - uses stored SKU or fetches from Shopify Admin API
  */
 async function resolveProductSku(product: DbOrderProduct): Promise<string | null> {
   // If product already has SKU, use it
@@ -90,9 +89,8 @@ async function resolveProductSku(product: DbOrderProduct): Promise<string | null
     return null;
   }
 
-  // Fetch SKU from Shopify
-  console.log(`Fetching SKU from Shopify for variant: ${variantId}`);
-  const sku = await fetchSkuFromShopify(variantId);
+  // Fetch SKU from Shopify Admin API
+  const sku = await fetchSkuFromShopifyAdmin(variantId);
   
   if (!sku) {
     console.error(`No SKU found in Shopify for product: ${product.title} (${product.variant})`);
