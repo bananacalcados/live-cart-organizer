@@ -100,7 +100,7 @@ export async function createYampiPaymentLinkFromOrder(
     return null;
   }
 
-  // Build items with variant IDs and SKUs for backend resolution
+  // Build items with variant IDs, SKUs and prices for backend resolution
   const items: YampiPaymentLinkItem[] = products.map(product => {
     const variantId = extractVariantId(product);
     
@@ -108,6 +108,7 @@ export async function createYampiPaymentLinkFromOrder(
       sku: product.sku || undefined,
       shopify_variant_id: variantId || undefined,
       quantity: product.quantity,
+      price: product.price, // Send price so backend can apply discounts
     };
   });
 
