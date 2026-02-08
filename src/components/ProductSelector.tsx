@@ -60,7 +60,7 @@ export function ProductSelector({
 
     const orderProduct: DbOrderProduct = {
       id: `${product.node.id}-${variant.id}`,
-      shopifyId: product.node.id,
+      shopifyId: variant.id, // Use variant ID for cart API, not product ID
       title: product.node.title,
       variant: variant.title !== "Default Title" ? variant.title : "",
       price: parseFloat(variant.price.amount),
