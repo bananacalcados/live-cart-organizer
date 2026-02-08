@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,8 @@ import { Order, OrderStage, STAGES } from "@/types/order";
 import { useOrderStore } from "@/stores/orderStore";
 import { useTemplateStore, applyTemplateVariables } from "@/stores/templateStore";
 import { EmojiPickerButton } from "./EmojiPickerButton";
+import { uploadMediaToStorage } from "./MediaAttachmentPicker";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +30,14 @@ interface Message {
   message_id: string | null;
   status: string | null;
   created_at: string;
+  media_type?: string;
+  media_url?: string;
+}
+
+interface MediaAttachment {
+  file: File;
+  type: 'image' | 'audio' | 'video' | 'document';
+  previewUrl: string;
 }
 
 interface WhatsAppChatProps {
@@ -52,13 +62,59 @@ function getStatusIcon(status: string | null) {
   }
 }
 
+function getMediaType(file: File): 'image' | 'audio' | 'video' | 'document' {
+  if (file.type.startsWith('image/')) return 'image';
+  if (file.type.startsWith('audio/')) return 'audio';
+  if (file.type.startsWith('video/')) return 'video';
+  return 'document';
+}
+
+function MessageMedia({ msg }: { msg: Message }) {
+  if (msg.media_type === 'text' || !msg.media_url) return null;
+
+  if (msg.media_type === 'image') {
+    return (
+      <img
+        src={msg.media_url}
+        alt="Imagem"
+        className="max-w-full rounded-lg mb-1"
+        style={{ maxHeight: 200 }}
+      />
+    );
+  }
+
+  if (msg.media_type === 'video') {
+    return (
+      <video
+        src={msg.media_url}
+        controls
+        className="max-w-full rounded-lg mb-1"
+        style={{ maxHeight: 200 }}
+      />
+    );
+  }
+
+  if (msg.media_type === 'audio') {
+    return (
+      <audio src={msg.media_url} controls className="w-full mb-1" />
+    );
+  }
+
+  return null;
+}
+
 export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedMedia, setSelectedMedia] = useState<MediaAttachment | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { sendMessage, isLoading: isSending } = useZapi();
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const { sendMessage, sendMedia, isLoading: isSending } = useZapi();
   const { moveOrder } = useOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
 
@@ -66,12 +122,10 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const contactName = order.instagramHandle;
   const currentStage = STAGES.find(s => s.id === order.stage);
 
-  // Format phone with country code for storage
   const formattedPhone = phone.replace(/\D/g, '').startsWith('55') 
     ? phone.replace(/\D/g, '') 
     : '55' + phone.replace(/\D/g, '');
 
-  // Get template variables from order
   const getTemplateVariables = () => {
     const totalValue = order.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
     const productsList = order.products
@@ -88,7 +142,6 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     };
   };
 
-  // Load messages from database
   const loadMessages = async () => {
     const { data, error } = await supabase
       .from('whatsapp_messages')
@@ -104,7 +157,6 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     setIsLoading(false);
   };
 
-  // Subscribe to realtime updates
   useEffect(() => {
     loadMessages();
 
@@ -129,7 +181,6 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     };
   }, [formattedPhone]);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -152,13 +203,79 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     inputRef.current?.focus();
   };
 
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 16MB.');
+      return;
+    }
+
+    const type = getMediaType(file);
+    const previewUrl = URL.createObjectURL(file);
+    setSelectedMedia({ file, type, previewUrl });
+    event.target.value = '';
+  };
+
   const handleSend = async () => {
-    if (!newMessage.trim() || isSending) return;
+    if (isSending || isUploading) return;
+
+    // Send media if selected
+    if (selectedMedia) {
+      setIsUploading(true);
+      
+      const mediaUrl = await uploadMediaToStorage(selectedMedia.file);
+      if (!mediaUrl) {
+        setIsUploading(false);
+        return;
+      }
+
+      const tempId = `temp-${Date.now()}`;
+      const tempMessage: Message = {
+        id: tempId,
+        phone: formattedPhone,
+        message: newMessage.trim() || '',
+        direction: 'outgoing',
+        message_id: null,
+        status: 'sending',
+        created_at: new Date().toISOString(),
+        media_type: selectedMedia.type,
+        media_url: selectedMedia.previewUrl,
+      };
+      setMessages((prev) => [...prev, tempMessage]);
+
+      const result = await sendMedia(phone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined);
+
+      if (result.success) {
+        await supabase.from('whatsapp_messages').insert({
+          phone: formattedPhone,
+          message: newMessage.trim() || `[${selectedMedia.type}]`,
+          direction: 'outgoing',
+          status: 'sent',
+          media_type: selectedMedia.type,
+          media_url: mediaUrl,
+        });
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      } else {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
+        );
+      }
+
+      URL.revokeObjectURL(selectedMedia.previewUrl);
+      setSelectedMedia(null);
+      setNewMessage("");
+      setIsUploading(false);
+      return;
+    }
+
+    // Send text message
+    if (!newMessage.trim()) return;
 
     const messageText = newMessage.trim();
     setNewMessage("");
 
-    // Optimistically add message to UI
     const tempId = `temp-${Date.now()}`;
     const tempMessage: Message = {
       id: tempId,
@@ -171,22 +288,17 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     };
     setMessages((prev) => [...prev, tempMessage]);
 
-    // Send via Z-API
     const result = await sendMessage(phone, messageText);
 
     if (result.success) {
-      // Save to database
       await supabase.from('whatsapp_messages').insert({
         phone: formattedPhone,
         message: messageText,
         direction: 'outgoing',
         status: 'sent',
       });
-
-      // Remove temp message (realtime will add the real one)
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
     } else {
-      // Update temp message status to failed
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
       );
@@ -200,7 +312,6 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     }
   };
 
-  // Get stage color class
   const getStageColorClass = (stageId: OrderStage) => {
     const colors: Record<OrderStage, string> = {
       new: 'bg-[hsl(var(--stage-new))]',
@@ -214,47 +325,37 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     return colors[stageId];
   };
 
-  // Get templates for current stage
   const stageTemplates = getTemplatesByStage(order.stage);
   const allTemplates = templates;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* Hidden file inputs */}
+      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+      <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} />
+      <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileSelect} />
+
       {/* WhatsApp-style Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-[#075E54] text-white">
         {onBack && (
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={onBack}
-            className="text-white hover:bg-white/10 h-8 w-8"
-          >
+          <Button variant="ghost" size="icon" onClick={onBack} className="text-white hover:bg-white/10 h-8 w-8">
             <ArrowLeft className="h-5 w-5" />
           </Button>
         )}
         
-        {/* Avatar */}
         <div className="h-10 w-10 rounded-full bg-gray-400 flex items-center justify-center text-lg font-semibold uppercase">
           {contactName.replace('@', '').charAt(0)}
         </div>
         
-        {/* Contact info */}
         <div className="flex-1 min-w-0">
           <p className="font-medium text-base truncate">{contactName}</p>
           <p className="text-xs text-white/70 truncate">{phone}</p>
         </div>
 
-        {/* Stage Selector */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button 
-              variant="ghost" 
-              className="h-auto px-3 py-1.5 text-white hover:bg-white/10 gap-1.5"
-            >
-              <span className={cn(
-                "h-2.5 w-2.5 rounded-full",
-                getStageColorClass(order.stage)
-              )} />
+            <Button variant="ghost" className="h-auto px-3 py-1.5 text-white hover:bg-white/10 gap-1.5">
+              <span className={cn("h-2.5 w-2.5 rounded-full", getStageColorClass(order.stage))} />
               <span className="text-sm font-medium">{currentStage?.title}</span>
               <ChevronDown className="h-4 w-4" />
             </Button>
@@ -264,15 +365,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               <DropdownMenuItem
                 key={stage.id}
                 onClick={() => handleStageChange(stage.id)}
-                className={cn(
-                  "gap-2 cursor-pointer",
-                  order.stage === stage.id && "bg-muted"
-                )}
+                className={cn("gap-2 cursor-pointer", order.stage === stage.id && "bg-muted")}
               >
-                <span className={cn(
-                  "h-2.5 w-2.5 rounded-full",
-                  getStageColorClass(stage.id)
-                )} />
+                <span className={cn("h-2.5 w-2.5 rounded-full", getStageColorClass(stage.id))} />
                 {stage.title}
               </DropdownMenuItem>
             ))}
@@ -280,7 +375,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         </DropdownMenu>
       </div>
 
-      {/* Messages Area - WhatsApp wallpaper style */}
+      {/* Messages Area */}
       <div 
         className="flex-1 overflow-y-auto p-3"
         style={{
@@ -295,20 +390,15 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="bg-white/80 rounded-lg px-6 py-4 shadow-sm">
-              <p className="text-sm text-gray-600">
-                Nenhuma mensagem ainda
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Inicie uma conversa enviando uma mensagem
-              </p>
+              <p className="text-sm text-gray-600">Nenhuma mensagem ainda</p>
+              <p className="text-xs text-gray-500 mt-1">Inicie uma conversa enviando uma mensagem</p>
             </div>
           </div>
         ) : (
           <div className="space-y-1">
             {messages.map((msg, index) => {
               const showDate = index === 0 || 
-                new Date(msg.created_at).toDateString() !== 
-                new Date(messages[index - 1].created_at).toDateString();
+                new Date(msg.created_at).toDateString() !== new Date(messages[index - 1].created_at).toDateString();
               
               return (
                 <div key={msg.id}>
@@ -319,25 +409,19 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                       </span>
                     </div>
                   )}
-                  <div
-                    className={cn(
-                      "flex",
-                      msg.direction === 'outgoing' ? 'justify-end' : 'justify-start'
-                    )}
-                  >
+                  <div className={cn("flex", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
                     <div
                       className={cn(
                         "max-w-[85%] rounded-lg px-3 py-2 text-sm shadow-sm relative",
-                        msg.direction === 'outgoing'
-                          ? 'bg-[#DCF8C6] text-gray-800'
-                          : 'bg-white text-gray-800'
+                        msg.direction === 'outgoing' ? 'bg-[#DCF8C6] text-gray-800' : 'bg-white text-gray-800'
                       )}
                       style={{
                         borderTopRightRadius: msg.direction === 'outgoing' ? 0 : undefined,
                         borderTopLeftRadius: msg.direction === 'incoming' ? 0 : undefined,
                       }}
                     >
-                      <p className="whitespace-pre-wrap break-words pr-12">{msg.message}</p>
+                      <MessageMedia msg={msg} />
+                      {msg.message && <p className="whitespace-pre-wrap break-words pr-12">{msg.message}</p>}
                       <div className={cn(
                         "absolute bottom-1 right-2 flex items-center gap-1 text-[11px]",
                         msg.direction === 'outgoing' ? 'text-gray-500' : 'text-gray-400'
@@ -355,29 +439,56 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         )}
       </div>
 
-      {/* Input Area - WhatsApp style */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#F0F0F0]">
-        {/* Emoji Picker */}
+      {/* Media Preview */}
+      {selectedMedia && (
+        <div className="p-3 bg-gray-100 border-t flex items-center gap-3">
+          <div className="relative">
+            {selectedMedia.type === 'image' && (
+              <img src={selectedMedia.previewUrl} alt="Preview" className="h-16 w-16 object-cover rounded-lg" />
+            )}
+            {selectedMedia.type === 'video' && (
+              <div className="h-16 w-16 bg-gray-300 rounded-lg flex items-center justify-center">
+                <Play className="h-6 w-6 text-gray-600" />
+              </div>
+            )}
+            {selectedMedia.type === 'audio' && (
+              <div className="h-16 w-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                <Mic className="h-6 w-6 text-gray-500" />
+              </div>
+            )}
+            {isUploading && (
+              <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-white" />
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{selectedMedia.file.name}</p>
+            <p className="text-xs text-gray-500">{(selectedMedia.file.size / 1024 / 1024).toFixed(2)} MB</p>
+          </div>
+          {!isUploading && (
+            <Button variant="ghost" size="icon" onClick={() => setSelectedMedia(null)} className="h-8 w-8">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Input Area */}
+      <div className="flex items-center gap-1 px-2 py-2 bg-[#F0F0F0]">
         <EmojiPickerButton onEmojiSelect={handleEmojiSelect} />
 
         {/* Template Picker */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10"
-            >
+            <Button type="button" variant="ghost" size="icon" className="h-10 w-10">
               <FileText className="h-5 w-5 text-gray-500" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-64 max-h-72 overflow-y-auto">
             {stageTemplates.length > 0 && (
               <>
-                <DropdownMenuLabel className="text-xs">
-                  Para esta etapa ({currentStage?.title})
-                </DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs">Para esta etapa ({currentStage?.title})</DropdownMenuLabel>
                 {stageTemplates.map((t) => (
                   <DropdownMenuItem
                     key={t.id}
@@ -385,9 +496,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                     className="flex-col items-start gap-0.5 cursor-pointer"
                   >
                     <span className="font-medium text-sm">{t.name}</span>
-                    <span className="text-xs text-muted-foreground line-clamp-1">
-                      {t.message.substring(0, 50)}...
-                    </span>
+                    <span className="text-xs text-muted-foreground line-clamp-1">{t.message.substring(0, 50)}...</span>
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
@@ -401,30 +510,39 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                 className="flex-col items-start gap-0.5 cursor-pointer"
               >
                 <span className="font-medium text-sm">{t.name}</span>
-                <span className="text-xs text-muted-foreground line-clamp-1">
-                  {t.message.substring(0, 50)}...
-                </span>
+                <span className="text-xs text-muted-foreground line-clamp-1">{t.message.substring(0, 50)}...</span>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Media buttons */}
+        <Button type="button" variant="ghost" size="icon" className="h-10 w-10" onClick={() => imageInputRef.current?.click()}>
+          <Image className="h-5 w-5 text-gray-500" />
+        </Button>
+        <Button type="button" variant="ghost" size="icon" className="h-10 w-10" onClick={() => videoInputRef.current?.click()}>
+          <Video className="h-5 w-5 text-gray-500" />
+        </Button>
+        <Button type="button" variant="ghost" size="icon" className="h-10 w-10" onClick={() => audioInputRef.current?.click()}>
+          <Mic className="h-5 w-5 text-gray-500" />
+        </Button>
 
         <Input
           ref={inputRef}
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={handleKeyPress}
-          placeholder="Digite uma mensagem"
+          placeholder={selectedMedia ? "Adicionar legenda..." : "Digite uma mensagem"}
           className="flex-1 bg-white rounded-full border-0 px-4 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-          disabled={isSending}
+          disabled={isSending || isUploading}
         />
         <Button
           onClick={handleSend}
-          disabled={!newMessage.trim() || isSending}
+          disabled={(!newMessage.trim() && !selectedMedia) || isSending || isUploading}
           className="h-10 w-10 rounded-full bg-[#075E54] hover:bg-[#064E46] p-0"
           size="icon"
         >
-          {isSending ? (
+          {isSending || isUploading ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
             <Send className="h-5 w-5" />

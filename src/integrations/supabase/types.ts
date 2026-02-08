@@ -19,6 +19,8 @@ export type Database = {
           created_at: string
           direction: string
           id: string
+          media_type: string | null
+          media_url: string | null
           message: string
           message_id: string | null
           phone: string
@@ -28,6 +30,8 @@ export type Database = {
           created_at?: string
           direction: string
           id?: string
+          media_type?: string | null
+          media_url?: string | null
           message: string
           message_id?: string | null
           phone: string
@@ -37,6 +41,8 @@ export type Database = {
           created_at?: string
           direction?: string
           id?: string
+          media_type?: string | null
+          media_url?: string | null
           message?: string
           message_id?: string | null
           phone?: string
