@@ -73,7 +73,7 @@ export function ConversationList({
   const groupsCount = conversations.filter(c => c.isGroup).length;
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Search */}
       <div className="p-2 border-b space-y-2">
         <div className="relative">
