@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { DbOrderProduct } from "@/types/database";
+import { storefrontApiRequest } from "./shopify";
 
 interface YampiPaymentLinkItem {
   sku?: string;      // SKU code (preferred - will be looked up automatically)
@@ -28,6 +29,76 @@ interface YampiPaymentLinkResponse {
   payment_link?: string;
   payment_link_id?: string;
   error?: string;
+}
+
+// Query to fetch SKU for a specific variant
+const VARIANT_SKU_QUERY = `
+  query getVariantSku($id: ID!) {
+    node(id: $id) {
+      ... on ProductVariant {
+        id
+        sku
+        title
+        product {
+          title
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Fetch SKU from Shopify for a specific variant ID
+ */
+async function fetchSkuFromShopify(variantId: string): Promise<string | null> {
+  try {
+    const data = await storefrontApiRequest(VARIANT_SKU_QUERY, { id: variantId });
+    const sku = data?.data?.node?.sku;
+    return sku || null;
+  } catch (error) {
+    console.error("Error fetching SKU from Shopify:", error);
+    return null;
+  }
+}
+
+/**
+ * Resolve SKU for a product - uses stored SKU or fetches from Shopify
+ */
+async function resolveProductSku(product: DbOrderProduct): Promise<string | null> {
+  // If product already has SKU, use it
+  if (product.sku) {
+    return product.sku;
+  }
+
+  // Try to extract variant ID from shopifyId or composite id
+  let variantId = product.shopifyId;
+  
+  // If shopifyId is a Product GID, try to extract variant from composite id
+  if (variantId?.includes("gid://shopify/Product/")) {
+    const parts = product.id.split("-");
+    const maybeVariant = parts[parts.length - 1];
+    if (maybeVariant?.includes("gid://shopify/ProductVariant/")) {
+      variantId = maybeVariant;
+    } else {
+      console.error(`Cannot resolve variant ID for product: ${product.title}`);
+      return null;
+    }
+  }
+
+  if (!variantId?.includes("gid://shopify/ProductVariant/")) {
+    console.error(`Invalid variant ID for product: ${product.title}`);
+    return null;
+  }
+
+  // Fetch SKU from Shopify
+  console.log(`Fetching SKU from Shopify for variant: ${variantId}`);
+  const sku = await fetchSkuFromShopify(variantId);
+  
+  if (!sku) {
+    console.error(`No SKU found in Shopify for product: ${product.title} (${product.variant})`);
+  }
+  
+  return sku;
 }
 
 /**
@@ -60,6 +131,7 @@ export async function createYampiPaymentLink(
 /**
  * Creates a Yampi payment link from order products using SKU codes
  * The edge function will automatically lookup the Yampi sku_id for each SKU
+ * This function also handles products that don't have SKU saved by fetching from Shopify
  */
 export async function createYampiPaymentLinkFromOrder(
   products: DbOrderProduct[],
@@ -77,19 +149,31 @@ export async function createYampiPaymentLinkFromOrder(
     return null;
   }
 
-  // Build items using SKU codes - the edge function will look them up
+  // Build items using SKU codes - resolve missing SKUs from Shopify
   const items: YampiPaymentLinkItem[] = [];
+  const missingSkuProducts: string[] = [];
   
   for (const product of products) {
-    if (!product.sku) {
-      console.error(`Product ${product.title} doesn't have a SKU`);
+    // Resolve SKU (from stored value or fetch from Shopify)
+    const sku = await resolveProductSku(product);
+    
+    if (!sku) {
+      const productLabel = product.variant 
+        ? `${product.title} (${product.variant})`
+        : product.title;
+      missingSkuProducts.push(productLabel);
       continue;
     }
 
     items.push({
-      sku: product.sku,
+      sku,
       quantity: product.quantity,
     });
+  }
+
+  if (missingSkuProducts.length > 0) {
+    console.error("Products without SKU:", missingSkuProducts);
+    throw new Error(`Produtos sem SKU: ${missingSkuProducts.join(", ")}`);
   }
 
   if (items.length === 0) {
