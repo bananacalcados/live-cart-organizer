@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Instagram, Phone, StickyNote, X, Link } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Instagram, Phone, StickyNote, X, Link, Info } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,7 @@ import { ProductSelector } from "./ProductSelector";
 import { Order, OrderProduct, STAGES, OrderStage } from "@/types/order";
 import { useOrderStore } from "@/stores/orderStore";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -30,7 +31,7 @@ interface OrderDialogProps {
 }
 
 export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogProps) {
-  const { addOrder, updateOrder, addProductToOrder, removeProductFromOrder, updateProductQuantity } = useOrderStore();
+  const { addOrder, updateOrder, addProductToOrder, removeProductFromOrder, updateProductQuantity, findOrderByInstagram } = useOrderStore();
 
   const [instagramHandle, setInstagramHandle] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
@@ -38,6 +39,12 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
   const [notes, setNotes] = useState("");
   const [stage, setStage] = useState<OrderStage>("new");
   const [localProducts, setLocalProducts] = useState<OrderProduct[]>([]);
+
+  // Check for existing order as user types
+  const existingOrder = useMemo(() => {
+    if (editingOrder || !instagramHandle.trim()) return null;
+    return findOrderByInstagram(instagramHandle);
+  }, [instagramHandle, editingOrder, findOrderByInstagram]);
 
   useEffect(() => {
     if (editingOrder) {
@@ -148,6 +155,15 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
                 value={instagramHandle}
                 onChange={(e) => setInstagramHandle(e.target.value)}
               />
+              {existingOrder && (
+                <Alert className="mt-2 border-accent/50 bg-accent/10">
+                  <Info className="h-4 w-4 text-accent" />
+                  <AlertDescription className="text-sm">
+                    Pedido existente! WhatsApp: <strong>{existingOrder.whatsapp || "não informado"}</strong>. 
+                    Novos produtos serão adicionados ao pedido atual.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="whatsapp" className="flex items-center gap-2">
@@ -159,6 +175,7 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
                 placeholder="(11) 99999-9999"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
+                disabled={!!existingOrder?.whatsapp}
               />
             </div>
           </div>
