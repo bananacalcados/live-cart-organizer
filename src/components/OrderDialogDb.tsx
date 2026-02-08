@@ -182,7 +182,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     // Check if all products have SKU
     const productsWithoutSku = localProducts.filter(p => !p.sku);
     if (productsWithoutSku.length > 0) {
-      toast.error(`Produtos sem SKU: ${productsWithoutSku.map(p => p.title).join(", ")}`);
+      const details = productsWithoutSku.map(p => 
+        p.variant ? `${p.title} (${p.variant})` : p.title
+      ).join(", ");
+      toast.error(`Produtos sem SKU: ${details}`, {
+        description: "Verifique se o SKU está cadastrado na Shopify para cada variante.",
+        duration: 6000,
+      });
       return;
     }
 
