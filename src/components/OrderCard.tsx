@@ -25,9 +25,13 @@ export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProp
   );
   const totalItems = order.products.reduce((sum, p) => sum + p.quantity, 0);
 
+  const hasUnread = order.hasUnreadMessages;
+
   return (
     <div
-      className={`order-card ${isDragging ? "dragging" : ""}`}
+      className={`order-card ${isDragging ? "dragging" : ""} ${
+        hasUnread ? "ring-2 ring-stage-contacted bg-stage-contacted/10" : ""
+      }`}
     >
         <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">

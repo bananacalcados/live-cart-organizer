@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import { Order, OrderProduct, STAGES, OrderStage } from "@/types/order";
 import { useOrderStore } from "@/stores/orderStore";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
 import {
   Select,
   SelectContent,
@@ -31,7 +32,7 @@ interface OrderDialogProps {
 }
 
 export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogProps) {
-  const { addOrder, updateOrder, addProductToOrder, removeProductFromOrder, updateProductQuantity, findOrderByInstagram } = useOrderStore();
+  const { addOrder, updateOrder, addProductToOrder, removeProductFromOrder, updateProductQuantity, findOrderByInstagram, findOrderByWhatsApp } = useOrderStore();
 
   const [instagramHandle, setInstagramHandle] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
@@ -39,12 +40,21 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
   const [notes, setNotes] = useState("");
   const [stage, setStage] = useState<OrderStage>("new");
   const [localProducts, setLocalProducts] = useState<OrderProduct[]>([]);
+  const [isGeneratingCartLink, setIsGeneratingCartLink] = useState(false);
 
-  // Check for existing order as user types
-  const existingOrder = useMemo(() => {
+  // Check for existing order by Instagram as user types
+  const existingOrderByInstagram = useMemo(() => {
     if (editingOrder || !instagramHandle.trim()) return null;
     return findOrderByInstagram(instagramHandle);
   }, [instagramHandle, editingOrder, findOrderByInstagram]);
+
+  // Check for existing order by WhatsApp as user types
+  const existingOrderByWhatsApp = useMemo(() => {
+    if (editingOrder || !whatsapp.trim() || existingOrderByInstagram) return null;
+    return findOrderByWhatsApp(whatsapp);
+  }, [whatsapp, editingOrder, existingOrderByInstagram, findOrderByWhatsApp]);
+
+  const existingOrder = existingOrderByInstagram || existingOrderByWhatsApp;
 
   useEffect(() => {
     if (editingOrder) {
@@ -93,6 +103,28 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
       prev.map((p) => (p.id === productId ? { ...p, quantity } : p))
     );
   };
+
+  const generateCartLink = useCallback(async () => {
+    if (localProducts.length === 0) {
+      toast.error("Adicione produtos antes de gerar o link");
+      return;
+    }
+    setIsGeneratingCartLink(true);
+    try {
+      const link = await createShopifyCartFromOrder(localProducts);
+      if (link) {
+        setCartLink(link);
+        toast.success("Link do carrinho gerado!");
+      } else {
+        toast.error("Erro ao gerar link do carrinho");
+      }
+    } catch (error) {
+      console.error("Error generating cart link:", error);
+      toast.error("Erro ao gerar link do carrinho");
+    } finally {
+      setIsGeneratingCartLink(false);
+    }
+  }, [localProducts]);
 
   const handleSubmit = () => {
     if (!instagramHandle.trim()) {
@@ -155,11 +187,12 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
                 value={instagramHandle}
                 onChange={(e) => setInstagramHandle(e.target.value)}
               />
-              {existingOrder && (
+              {existingOrderByInstagram && (
                 <Alert className="mt-2 border-accent/50 bg-accent/10">
                   <Info className="h-4 w-4 text-accent" />
                   <AlertDescription className="text-sm">
-                    Pedido existente! WhatsApp: <strong>{existingOrder.whatsapp || "não informado"}</strong>. 
+                    Pedido existente para <strong>{existingOrderByInstagram.instagramHandle}</strong>! 
+                    WhatsApp: <strong>{existingOrderByInstagram.whatsapp || "não informado"}</strong>. 
                     Novos produtos serão adicionados ao pedido atual.
                   </AlertDescription>
                 </Alert>
@@ -175,8 +208,16 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
                 placeholder="(11) 99999-9999"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
-                disabled={!!existingOrder?.whatsapp}
+                disabled={!!existingOrderByInstagram?.whatsapp}
               />
+              {existingOrderByWhatsApp && (
+                <Alert className="mt-2 border-stage-paid/50 bg-stage-paid/10">
+                  <Info className="h-4 w-4 text-stage-paid" />
+                  <AlertDescription className="text-sm">
+                    WhatsApp encontrado em outro pedido: <strong>{existingOrderByWhatsApp.instagramHandle}</strong>.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           </div>
 
@@ -185,12 +226,34 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
               <Link className="h-4 w-4" />
               Link do Carrinho
             </Label>
-            <Input
-              id="cartLink"
-              placeholder="https://..."
-              value={cartLink}
-              onChange={(e) => setCartLink(e.target.value)}
-            />
+            <div className="flex gap-2">
+              <Input
+                id="cartLink"
+                placeholder="https://..."
+                value={cartLink}
+                onChange={(e) => setCartLink(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={generateCartLink}
+                disabled={isGeneratingCartLink || localProducts.length === 0}
+                title="Gerar link do carrinho automaticamente"
+              >
+                {isGeneratingCartLink ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            {localProducts.length > 0 && !cartLink && (
+              <p className="text-xs text-muted-foreground">
+                Clique no ícone para gerar o link automaticamente
+              </p>
+            )}
           </div>
 
           {editingOrder && (

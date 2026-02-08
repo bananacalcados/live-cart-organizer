@@ -115,7 +115,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const { sendMessage, sendMedia, isLoading: isSending } = useZapi();
-  const { moveOrder } = useOrderStore();
+  const { moveOrder, setHasUnreadMessages, updateOrder } = useOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
 
   const phone = order.whatsapp || '';
@@ -159,6 +159,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
   useEffect(() => {
     loadMessages();
+    // Mark messages as read when chat is opened
+    setHasUnreadMessages(order.id, false);
 
     const channel = supabase
       .channel('whatsapp-messages')
@@ -171,7 +173,12 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           filter: `phone=eq.${formattedPhone}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message]);
+          const newMsg = payload.new as Message;
+          setMessages((prev) => [...prev, newMsg]);
+          // If incoming message, mark as read immediately since chat is open
+          if (newMsg.direction === 'incoming') {
+            setHasUnreadMessages(order.id, false);
+          }
         }
       )
       .subscribe();
@@ -179,7 +186,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [formattedPhone]);
+  }, [formattedPhone, order.id, setHasUnreadMessages]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -257,6 +264,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           media_url: mediaUrl,
         });
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        // Track that we sent a message for no-response timer
+        updateOrder(order.id, { lastSentMessageAt: new Date() });
       } else {
         setMessages((prev) =>
           prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
@@ -298,6 +307,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         status: 'sent',
       });
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      // Track that we sent a message for no-response timer
+      updateOrder(order.id, { lastSentMessageAt: new Date() });
     } else {
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))

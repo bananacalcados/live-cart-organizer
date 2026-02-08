@@ -14,6 +14,10 @@ interface OrderStore {
   updateProductQuantity: (orderId: string, productId: string, quantity: number) => void;
   getOrdersByStage: (stage: OrderStage) => Order[];
   findOrderByInstagram: (instagramHandle: string) => Order | undefined;
+  findOrderByWhatsApp: (whatsapp: string) => Order | undefined;
+  setHasUnreadMessages: (orderId: string, hasUnread: boolean) => void;
+  setLastCustomerMessageAt: (orderId: string, timestamp: Date) => void;
+  checkNoResponseOrders: () => void;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
@@ -21,6 +25,11 @@ const generateId = () => Math.random().toString(36).substring(2, 15);
 // Normalize Instagram handle for comparison
 const normalizeInstagram = (handle: string): string => {
   return handle.toLowerCase().replace(/^@/, '').trim();
+};
+
+// Normalize WhatsApp for comparison
+const normalizeWhatsApp = (phone: string): string => {
+  return phone.replace(/\D/g, '').trim();
 };
 
 export const useOrderStore = create<OrderStore>()(
@@ -32,6 +41,14 @@ export const useOrderStore = create<OrderStore>()(
         const normalized = normalizeInstagram(instagramHandle);
         return get().orders.find(
           (order) => normalizeInstagram(order.instagramHandle) === normalized
+        );
+      },
+
+      findOrderByWhatsApp: (whatsapp: string) => {
+        const normalized = normalizeWhatsApp(whatsapp);
+        if (!normalized) return undefined;
+        return get().orders.find(
+          (order) => order.whatsapp && normalizeWhatsApp(order.whatsapp) === normalized
         );
       },
 
@@ -64,6 +81,7 @@ export const useOrderStore = create<OrderStore>()(
           stage: 'new',
           createdAt: now,
           updatedAt: now,
+          hasUnreadMessages: false,
         };
         set((state) => ({ orders: [...state.orders, newOrder] }));
         return id;
@@ -154,6 +172,60 @@ export const useOrderStore = create<OrderStore>()(
 
       getOrdersByStage: (stage) => {
         return get().orders.filter((order) => order.stage === stage);
+      },
+
+      setHasUnreadMessages: (orderId, hasUnread) => {
+        set((state) => ({
+          orders: state.orders.map((order) =>
+            order.id === orderId
+              ? { ...order, hasUnreadMessages: hasUnread, updatedAt: new Date() }
+              : order
+          ),
+        }));
+      },
+
+      setLastCustomerMessageAt: (orderId, timestamp) => {
+        set((state) => ({
+          orders: state.orders.map((order) =>
+            order.id === orderId
+              ? { ...order, lastCustomerMessageAt: timestamp, updatedAt: new Date() }
+              : order
+          ),
+        }));
+      },
+
+      checkNoResponseOrders: () => {
+        const now = new Date();
+        const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+        
+        set((state) => ({
+          orders: state.orders.map((order) => {
+            // Only check orders that have a lastSentMessageAt and are not already in no_response, paid, or shipped
+            if (
+              order.lastSentMessageAt &&
+              !order.lastCustomerMessageAt &&
+              order.stage !== 'no_response' &&
+              order.stage !== 'paid' &&
+              order.stage !== 'shipped' &&
+              new Date(order.lastSentMessageAt) < fiveMinutesAgo
+            ) {
+              return { ...order, stage: 'no_response', updatedAt: now };
+            }
+            // Check if customer replied after we sent message, but then went silent
+            if (
+              order.lastSentMessageAt &&
+              order.lastCustomerMessageAt &&
+              new Date(order.lastSentMessageAt) > new Date(order.lastCustomerMessageAt) &&
+              order.stage !== 'no_response' &&
+              order.stage !== 'paid' &&
+              order.stage !== 'shipped' &&
+              new Date(order.lastSentMessageAt) < fiveMinutesAgo
+            ) {
+              return { ...order, stage: 'no_response', updatedAt: now };
+            }
+            return order;
+          }),
+        }));
       },
     }),
     {

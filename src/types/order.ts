@@ -27,6 +27,9 @@ export interface Order {
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
+  hasUnreadMessages?: boolean;
+  lastCustomerMessageAt?: Date;
+  lastSentMessageAt?: Date;
 }
 
 export interface Stage {
