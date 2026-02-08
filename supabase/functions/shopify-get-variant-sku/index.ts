@@ -12,12 +12,13 @@ serve(async (req) => {
 
   try {
     const SHOPIFY_ACCESS_TOKEN = Deno.env.get("SHOPIFY_ACCESS_TOKEN");
+    const SHOPIFY_STORE_DOMAIN = Deno.env.get("SHOPIFY_STORE_DOMAIN") || "banana-calcados.myshopify.com";
+    
     if (!SHOPIFY_ACCESS_TOKEN) {
       throw new Error("SHOPIFY_ACCESS_TOKEN is not configured");
     }
 
-    // Get store domain from storefront token environment or use default
-    const SHOPIFY_STORE_DOMAIN = "ftx2e2-np.myshopify.com";
+    console.log("Using Shopify store domain:", SHOPIFY_STORE_DOMAIN);
 
     const body = await req.json();
     const { variantId } = body;
