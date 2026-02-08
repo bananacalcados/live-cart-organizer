@@ -30,9 +30,63 @@ interface YampiPaymentLinkResponse {
   error?: string;
 }
 
+interface MappingRecord {
+  shopify_variant_id: string;
+  shopify_sku: string | null;
+  yampi_sku_id: number;
+}
+
+/**
+ * Get cached mapping from database
+ */
+async function getCachedMapping(variantId: string): Promise<number | null> {
+  console.log("[Yampi] Checking cached mapping for variant:", variantId);
+  
+  const { data, error } = await supabase
+    .from("shopify_yampi_mapping")
+    .select("yampi_sku_id")
+    .eq("shopify_variant_id", variantId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[Yampi] Error fetching cached mapping:", error);
+    return null;
+  }
+
+  if (data) {
+    console.log("[Yampi] Found cached mapping:", data.yampi_sku_id);
+    return data.yampi_sku_id;
+  }
+
+  console.log("[Yampi] No cached mapping found");
+  return null;
+}
+
+/**
+ * Save mapping to database for future use
+ */
+async function saveMapping(mapping: MappingRecord): Promise<void> {
+  console.log("[Yampi] Saving mapping:", mapping);
+  
+  const { error } = await supabase
+    .from("shopify_yampi_mapping")
+    .upsert({
+      shopify_variant_id: mapping.shopify_variant_id,
+      shopify_sku: mapping.shopify_sku,
+      yampi_sku_id: mapping.yampi_sku_id,
+    }, {
+      onConflict: "shopify_variant_id",
+    });
+
+  if (error) {
+    console.error("[Yampi] Error saving mapping:", error);
+  } else {
+    console.log("[Yampi] Mapping saved successfully");
+  }
+}
+
 /**
  * Fetch SKU from Shopify Admin API for a specific variant ID
- * Uses edge function to securely access Admin API
  */
 async function fetchSkuFromShopifyAdmin(variantId: string): Promise<string | null> {
   try {
@@ -41,8 +95,6 @@ async function fetchSkuFromShopifyAdmin(variantId: string): Promise<string | nul
     const { data, error } = await supabase.functions.invoke("shopify-get-variant-sku", {
       body: { variantId },
     });
-
-    console.log("[Yampi] Shopify Admin API response:", data, error);
 
     if (error) {
       console.error("[Yampi] Error calling shopify-get-variant-sku:", error);
@@ -63,33 +115,58 @@ async function fetchSkuFromShopifyAdmin(variantId: string): Promise<string | nul
 }
 
 /**
- * Resolve SKU for a product - uses stored SKU or fetches from Shopify Admin API
+ * Lookup Yampi sku_id by SKU code
  */
-async function resolveProductSku(product: DbOrderProduct): Promise<string | null> {
-  console.log("[Yampi] Resolving SKU for product:", product.title, "| variant:", product.variant, "| stored SKU:", product.sku, "| shopifyId:", product.shopifyId, "| id:", product.id);
+async function lookupYampiSkuId(sku: string): Promise<number | null> {
+  try {
+    console.log("[Yampi] Looking up Yampi sku_id for SKU:", sku);
+    
+    const { data, error } = await supabase.functions.invoke("yampi-lookup-sku", {
+      body: { skus: [sku] },
+    });
 
-  // If product already has SKU, use it
-  if (product.sku) {
-    console.log("[Yampi] Using stored SKU:", product.sku);
-    return product.sku;
+    if (error) {
+      console.error("[Yampi] Error calling yampi-lookup-sku:", error);
+      return null;
+    }
+
+    if (data?.success && data?.results?.length > 0) {
+      const result = data.results[0];
+      if (result.found && result.sku_id) {
+        console.log("[Yampi] Found sku_id:", result.sku_id);
+        return result.sku_id;
+      }
+    }
+
+    console.log("[Yampi] SKU not found in Yampi:", sku);
+    return null;
+  } catch (error) {
+    console.error("[Yampi] Error looking up Yampi sku_id:", error);
+    return null;
   }
+}
 
-  // Try to get variant ID from shopifyId first
+/**
+ * Resolve Yampi sku_id for a product variant (on-demand with caching)
+ * 
+ * Flow:
+ * 1. Check cache (database mapping table)
+ * 2. If not cached, get SKU from product or Shopify Admin API
+ * 3. Lookup sku_id in Yampi
+ * 4. Save mapping to cache for future use
+ */
+async function resolveYampiSkuId(product: DbOrderProduct): Promise<number | null> {
+  console.log("[Yampi] Resolving Yampi sku_id for product:", product.title, "| variant:", product.variant);
+
+  // Extract variant ID
   let variantId = product.shopifyId;
   
-  console.log("[Yampi] Initial variantId from shopifyId:", variantId);
-
   // If shopifyId is a Product GID (not variant), try to extract variant from composite id
   if (variantId?.includes("gid://shopify/Product/") && !variantId.includes("ProductVariant")) {
-    console.log("[Yampi] shopifyId is a Product GID, trying to extract variant from composite id");
     const parts = product.id.split("-");
     const maybeVariant = parts.find(p => p.includes("gid://shopify/ProductVariant/"));
     if (maybeVariant) {
       variantId = maybeVariant;
-      console.log("[Yampi] Extracted variant from id:", variantId);
-    } else {
-      console.error(`[Yampi] Cannot resolve variant ID for product: ${product.title}`);
-      return null;
     }
   }
 
@@ -98,19 +175,42 @@ async function resolveProductSku(product: DbOrderProduct): Promise<string | null
     return null;
   }
 
-  // Fetch SKU from Shopify Admin API
-  const sku = await fetchSkuFromShopifyAdmin(variantId);
-  
-  if (!sku) {
-    console.error(`[Yampi] No SKU found in Shopify for product: ${product.title} (${product.variant})`);
+  // Step 1: Check cache
+  const cachedSkuId = await getCachedMapping(variantId);
+  if (cachedSkuId) {
+    return cachedSkuId;
   }
-  
-  return sku;
+
+  // Step 2: Get SKU (from product or Shopify Admin API)
+  let sku = product.sku;
+  if (!sku) {
+    sku = await fetchSkuFromShopifyAdmin(variantId);
+  }
+
+  if (!sku) {
+    console.error(`[Yampi] Could not resolve SKU for product: ${product.title}`);
+    return null;
+  }
+
+  // Step 3: Lookup Yampi sku_id
+  const yampiSkuId = await lookupYampiSkuId(sku);
+  if (!yampiSkuId) {
+    console.error(`[Yampi] SKU not found in Yampi: ${sku}`);
+    return null;
+  }
+
+  // Step 4: Save mapping for future use
+  await saveMapping({
+    shopify_variant_id: variantId,
+    shopify_sku: sku,
+    yampi_sku_id: yampiSkuId,
+  });
+
+  return yampiSkuId;
 }
 
 /**
- * Creates a payment link using Yampi API
- * Can accept either SKU codes (which will be looked up) or direct sku_ids
+ * Creates a payment link using Yampi API (direct call with sku_ids)
  */
 export async function createYampiPaymentLink(
   request: CreateYampiPaymentLinkRequest
@@ -136,9 +236,8 @@ export async function createYampiPaymentLink(
 }
 
 /**
- * Creates a Yampi payment link from order products using SKU codes
- * The edge function will automatically lookup the Yampi sku_id for each SKU
- * This function also handles products that don't have SKU saved by fetching from Shopify
+ * Creates a Yampi payment link from order products
+ * Uses on-demand mapping: checks cache → resolves → saves for future
  */
 export async function createYampiPaymentLinkFromOrder(
   products: DbOrderProduct[],
@@ -156,35 +255,34 @@ export async function createYampiPaymentLinkFromOrder(
     return null;
   }
 
-  // Build items using SKU codes - resolve missing SKUs from Shopify
+  // Build items using resolved Yampi sku_ids
   const items: YampiPaymentLinkItem[] = [];
-  const missingSkuProducts: string[] = [];
+  const failedProducts: string[] = [];
   
   for (const product of products) {
-    // Resolve SKU (from stored value or fetch from Shopify)
-    const sku = await resolveProductSku(product);
+    const yampiSkuId = await resolveYampiSkuId(product);
     
-    if (!sku) {
+    if (!yampiSkuId) {
       const productLabel = product.variant 
         ? `${product.title} (${product.variant})`
         : product.title;
-      missingSkuProducts.push(productLabel);
+      failedProducts.push(productLabel);
       continue;
     }
 
     items.push({
-      sku,
+      sku_id: yampiSkuId,
       quantity: product.quantity,
     });
   }
 
-  if (missingSkuProducts.length > 0) {
-    console.error("Products without SKU:", missingSkuProducts);
-    throw new Error(`Produtos sem SKU: ${missingSkuProducts.join(", ")}`);
+  if (failedProducts.length > 0) {
+    console.error("Products without Yampi mapping:", failedProducts);
+    throw new Error(`Produtos não encontrados na Yampi: ${failedProducts.join(", ")}`);
   }
 
   if (items.length === 0) {
-    console.error("No products with valid SKUs found");
+    console.error("No products with valid Yampi sku_ids found");
     return null;
   }
 
