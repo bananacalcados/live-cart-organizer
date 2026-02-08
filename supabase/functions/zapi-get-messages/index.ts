@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,19 +13,20 @@ serve(async (req) => {
   }
 
   try {
-    const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const token = Deno.env.get('ZAPI_TOKEN');
-    const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
-
-    if (!instanceId || !token || !clientToken) {
-      return new Response(
-        JSON.stringify({ error: 'Z-API credentials not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
+    // Accept phone from query params OR body
+    let phone: string | null = null;
+    
     const url = new URL(req.url);
-    const phone = url.searchParams.get('phone');
+    phone = url.searchParams.get('phone');
+    
+    if (!phone && req.method === 'POST') {
+      try {
+        const body = await req.json();
+        phone = body?.phone;
+      } catch {
+        // Body might be empty
+      }
+    }
 
     if (!phone) {
       return new Response(
@@ -39,28 +41,28 @@ serve(async (req) => {
       formattedPhone = '55' + formattedPhone;
     }
 
-    // Z-API endpoint to get chat messages
-    const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/chat-messages/${formattedPhone}`;
+    // Get messages from our database instead of Z-API
+    // (Z-API chat-messages endpoint doesn't work with multi-device WhatsApp)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const response = await fetch(zapiUrl, {
-      method: 'GET',
-      headers: {
-        'Client-Token': clientToken,
-      },
-    });
+    const { data, error } = await supabase
+      .from('whatsapp_messages')
+      .select('*')
+      .eq('phone', formattedPhone)
+      .order('created_at', { ascending: true });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('Z-API error:', data);
+    if (error) {
+      console.error('Database error:', error);
       return new Response(
-        JSON.stringify({ error: 'Failed to get messages', details: data }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Failed to get messages', details: error }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
-      JSON.stringify(data),
+      JSON.stringify({ messages: data || [], source: 'database' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

@@ -34,7 +34,10 @@ export function WhatsAppChat({ phone, contactName, onBack }: WhatsAppChatProps) 
   const scrollRef = useRef<HTMLDivElement>(null);
   const { sendMessage, isLoading: isSending } = useZapi();
 
-  const formattedPhone = phone.replace(/\D/g, '');
+  // Format phone with country code for storage
+  const formattedPhone = phone.replace(/\D/g, '').startsWith('55') 
+    ? phone.replace(/\D/g, '') 
+    : '55' + phone.replace(/\D/g, '');
 
   // Load messages from database
   const loadMessages = async () => {
@@ -52,63 +55,11 @@ export function WhatsAppChat({ phone, contactName, onBack }: WhatsAppChatProps) 
     setIsLoading(false);
   };
 
-  // Sync messages from Z-API
+  // Reload messages (sync button now just reloads from DB)
   const syncMessages = async () => {
     setIsSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('zapi-get-messages', {
-        body: null,
-        headers: {},
-      });
-
-      // The function uses query params, so we need to call it differently
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-get-messages?phone=${formattedPhone}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const zapiMessages = await response.json();
-        
-        // Process and save messages to database
-        if (Array.isArray(zapiMessages)) {
-          for (const msg of zapiMessages) {
-            const direction = msg.fromMe ? 'outgoing' : 'incoming';
-            const messageText = msg.text?.message || msg.text || msg.body || '';
-            
-            if (messageText) {
-              // Check if message already exists
-              const { data: existing } = await supabase
-                .from('whatsapp_messages')
-                .select('id')
-                .eq('message_id', msg.messageId || msg.id)
-                .single();
-
-              if (!existing) {
-                await supabase.from('whatsapp_messages').insert({
-                  phone: formattedPhone,
-                  message: messageText,
-                  direction,
-                  message_id: msg.messageId || msg.id,
-                  status: 'synced',
-                });
-              }
-            }
-          }
-        }
-        
-        // Reload messages
-        await loadMessages();
-      }
-    } catch (error) {
-      console.error('Error syncing messages:', error);
-    } finally {
-      setIsSyncing(false);
-    }
+    await loadMessages();
+    setIsSyncing(false);
   };
 
   // Subscribe to realtime updates
@@ -229,19 +180,9 @@ export function WhatsAppChat({ phone, contactName, onBack }: WhatsAppChatProps) 
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Phone className="h-12 w-12 text-muted-foreground/50 mb-3" />
             <p className="text-muted-foreground">Nenhuma mensagem ainda</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Envie uma mensagem para iniciar a conversa
+            <p className="text-xs text-muted-foreground mt-1 max-w-[250px]">
+              Envie uma mensagem ou configure o webhook para receber mensagens
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={syncMessages}
-              disabled={isSyncing}
-            >
-              <RefreshCw className={cn("h-4 w-4 mr-2", isSyncing && "animate-spin")} />
-              Sincronizar do WhatsApp
-            </Button>
           </div>
         ) : (
           <div className="space-y-3">
