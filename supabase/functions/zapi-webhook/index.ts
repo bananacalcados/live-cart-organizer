@@ -24,8 +24,56 @@ function getMessageText(payload: AnyPayload): string | null {
   return null;
 }
 
-function normalizePhone(raw: string): string {
-  return raw.replace(/\D/g, '');
+/**
+ * Normalize phone number for storage and matching.
+ * Handles different formats:
+ * - Regular phone: "5511999999999" -> "5511999999999"
+ * - @lid format: "260318001422585@lid" -> extract from connectedPhone/phone field
+ * - Group format: "120363405872786701-group" or "120363405872786701@g.us" -> keep as-is for groups
+ */
+function normalizePhone(payload: AnyPayload): { phone: string; isGroup: boolean } {
+  const rawPhone = asString(payload.phone) || '';
+  const chatLid = asString(payload.chatLid);
+  const connectedPhone = asString(payload.connectedPhone);
+  
+  // Check if it's a group
+  const isGroup = rawPhone.includes('-group') || rawPhone.includes('@g.us') || 
+                  chatLid?.includes('-group') || chatLid?.includes('@g.us') ||
+                  Boolean(payload.isGroup);
+  
+  // For groups, use the raw phone as-is (just normalize digits if needed)
+  if (isGroup) {
+    return { phone: rawPhone.replace('@g.us', '').replace('-group', ''), isGroup: true };
+  }
+  
+  // Handle @lid format - try to get the actual phone number
+  if (rawPhone.includes('@lid') || chatLid?.includes('@lid')) {
+    // Z-API provides the actual phone in the 'phone' field for regular chats
+    // If the phone itself is @lid, look for alternatives
+    
+    // Sometimes Z-API sends the real phone in a different format
+    // The phone number might be in the format that starts with country code
+    const phoneMatch = rawPhone.match(/^(\d+)@lid$/);
+    if (phoneMatch) {
+      // This is a @lid identifier, not a real phone number
+      // We need to use it as-is for internal matching
+      return { phone: phoneMatch[1], isGroup: false };
+    }
+    
+    // If we have a phone that's NOT @lid, use it
+    if (rawPhone && !rawPhone.includes('@')) {
+      return { phone: rawPhone.replace(/\D/g, ''), isGroup: false };
+    }
+    
+    // Fallback: use the lid identifier for internal matching
+    const lidMatch = (chatLid || rawPhone).match(/^(\d+)@lid$/);
+    if (lidMatch) {
+      return { phone: lidMatch[1], isGroup: false };
+    }
+  }
+  
+  // Regular phone number - just remove non-digits
+  return { phone: rawPhone.replace(/\D/g, ''), isGroup: false };
 }
 
 serve(async (req) => {
@@ -47,15 +95,17 @@ serve(async (req) => {
     console.log('Webhook received:', JSON.stringify(payload));
 
     // 1) ReceivedCallback (text messages) - can include fromMe=true for messages we sent
-    const phoneRaw = asString(payload.phone);
+    const rawPhone = asString(payload.phone);
     const messageText = getMessageText(payload);
 
-    if (phoneRaw && messageText) {
-      const phone = normalizePhone(phoneRaw);
+    if (rawPhone && messageText) {
+      const { phone, isGroup } = normalizePhone(payload);
       const messageId = asString(payload.messageId) || asString(payload.zapiMessageId);
       const fromMe = Boolean(payload.fromMe);
       const statusRaw = asString(payload.status);
       const status = (statusRaw ? statusRaw.toLowerCase() : (fromMe ? 'sent' : 'received'));
+
+      console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}`);
 
       if (fromMe) {
         // Avoid duplicate: when user sends via our UI we already INSERT outgoing with message_id=null.
@@ -94,6 +144,7 @@ serve(async (req) => {
           direction: 'outgoing',
           message_id: messageId,
           status,
+          is_group: isGroup,
         });
 
         if (insertError) {
@@ -107,10 +158,13 @@ serve(async (req) => {
           direction: 'incoming',
           message_id: messageId,
           status,
+          is_group: isGroup,
         });
 
         if (error) {
           console.error('Error saving incoming message:', error);
+        } else {
+          console.log(`Saved incoming message from ${phone}`);
         }
       }
     }
