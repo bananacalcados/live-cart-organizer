@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,10 +7,11 @@ const corsHeaders = {
 };
 
 interface PaymentLinkItem {
-  sku_id?: number;  // Yampi internal SKU ID
+  sku_id?: number;  // Yampi internal SKU ID (if already known)
   sku?: string;     // SKU code (will be looked up if sku_id not provided)
+  shopify_variant_id?: string; // Shopify variant GID for mapping
   quantity: number;
-  price?: number; // Optional: override price
+  price?: number;
 }
 
 interface CreatePaymentLinkRequest {
@@ -19,10 +21,181 @@ interface CreatePaymentLinkRequest {
     email?: string;
     phone?: string;
   };
-  order_id?: string; // Internal order ID for tracking
+  order_id?: string;
   discount_type?: 'fixed' | 'percentage';
   discount_value?: number;
   free_shipping?: boolean;
+}
+
+interface MappingRecord {
+  shopify_variant_id: string;
+  shopify_sku: string | null;
+  yampi_sku_id: number;
+}
+
+// Initialize Supabase client with service role for internal table access
+function getSupabaseClient() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+}
+
+// Fetch cached mapping from database
+async function getCachedMapping(supabase: ReturnType<typeof createClient>, variantId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("shopify_yampi_mapping")
+    .select("yampi_sku_id")
+    .eq("shopify_variant_id", variantId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching cached mapping:", error);
+    return null;
+  }
+
+  return data?.yampi_sku_id || null;
+}
+
+// Save mapping to database
+async function saveMapping(supabase: ReturnType<typeof createClient>, mapping: MappingRecord): Promise<void> {
+  const { error } = await supabase
+    .from("shopify_yampi_mapping")
+    .upsert({
+      shopify_variant_id: mapping.shopify_variant_id,
+      shopify_sku: mapping.shopify_sku,
+      yampi_sku_id: mapping.yampi_sku_id,
+    }, {
+      onConflict: "shopify_variant_id",
+    });
+
+  if (error) {
+    console.error("Error saving mapping:", error);
+  }
+}
+
+// Fetch SKU from Shopify Admin API
+async function fetchSkuFromShopify(variantId: string): Promise<string | null> {
+  const SHOPIFY_ACCESS_TOKEN = Deno.env.get("SHOPIFY_ACCESS_TOKEN");
+  const SHOPIFY_STORE_DOMAIN = Deno.env.get("SHOPIFY_STORE_DOMAIN");
+
+  if (!SHOPIFY_ACCESS_TOKEN || !SHOPIFY_STORE_DOMAIN) {
+    console.error("Shopify credentials not configured");
+    return null;
+  }
+
+  try {
+    const numericId = variantId.replace("gid://shopify/ProductVariant/", "");
+    const response = await fetch(
+      `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/variants/${numericId}.json`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.error("Shopify API error:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return data?.variant?.sku || null;
+  } catch (error) {
+    console.error("Error fetching SKU from Shopify:", error);
+    return null;
+  }
+}
+
+// Lookup Yampi sku_id by SKU code
+async function lookupYampiSkuId(sku: string): Promise<number | null> {
+  const YAMPI_USER_TOKEN = Deno.env.get("YAMPI_USER_TOKEN");
+  const YAMPI_USER_SECRET_KEY = Deno.env.get("YAMPI_USER_SECRET_KEY");
+  const YAMPI_STORE_ALIAS = Deno.env.get("YAMPI_STORE_ALIAS");
+
+  try {
+    const searchResponse = await fetch(
+      `https://api.dooki.com.br/v2/${YAMPI_STORE_ALIAS}/catalog/skus?search=${encodeURIComponent(sku)}&limit=10`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Token": YAMPI_USER_TOKEN!,
+          "User-Secret-Key": YAMPI_USER_SECRET_KEY!,
+        },
+      }
+    );
+
+    const searchData = await searchResponse.json();
+
+    if (searchResponse.ok && searchData?.data) {
+      const match = searchData.data.find((s: { sku: string }) => s.sku === sku);
+      if (match) {
+        return match.id;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error looking up Yampi sku_id:", error);
+    return null;
+  }
+}
+
+// Resolve Yampi sku_id with on-demand caching
+async function resolveYampiSkuId(
+  supabase: ReturnType<typeof createClient>,
+  item: PaymentLinkItem
+): Promise<{ skuId: number | null; error?: string }> {
+  // If sku_id is already provided, use it
+  if (item.sku_id) {
+    return { skuId: item.sku_id };
+  }
+
+  const variantId = item.shopify_variant_id;
+
+  // Check cache first if we have a variant ID
+  if (variantId) {
+    const cachedSkuId = await getCachedMapping(supabase, variantId);
+    if (cachedSkuId) {
+      console.log(`Using cached mapping for variant ${variantId}: ${cachedSkuId}`);
+      return { skuId: cachedSkuId };
+    }
+  }
+
+  // Get SKU (from item or fetch from Shopify)
+  let sku = item.sku;
+  if (!sku && variantId) {
+    console.log(`Fetching SKU from Shopify for variant: ${variantId}`);
+    sku = await fetchSkuFromShopify(variantId);
+  }
+
+  if (!sku) {
+    return { skuId: null, error: `Could not resolve SKU for variant: ${variantId || 'unknown'}` };
+  }
+
+  // Lookup Yampi sku_id
+  console.log(`Looking up Yampi sku_id for SKU: ${sku}`);
+  const yampiSkuId = await lookupYampiSkuId(sku);
+
+  if (!yampiSkuId) {
+    return { skuId: null, error: `SKU not found in Yampi: ${sku}` };
+  }
+
+  // Save mapping for future use
+  if (variantId) {
+    await saveMapping(supabase, {
+      shopify_variant_id: variantId,
+      shopify_sku: sku,
+      yampi_sku_id: yampiSkuId,
+    });
+    console.log(`Saved mapping: ${variantId} -> ${yampiSkuId}`);
+  }
+
+  return { skuId: yampiSkuId };
 }
 
 serve(async (req) => {
@@ -45,6 +218,7 @@ serve(async (req) => {
       throw new Error("YAMPI_STORE_ALIAS is not configured");
     }
 
+    const supabase = getSupabaseClient();
     const body: CreatePaymentLinkRequest = await req.json();
     console.log("Creating Yampi payment link with:", JSON.stringify(body, null, 2));
 
@@ -52,42 +226,16 @@ serve(async (req) => {
       throw new Error("At least one item is required");
     }
 
-    // Resolve SKU codes to Yampi sku_ids if needed
+    // Resolve all items to Yampi sku_ids
     const resolvedItems: Array<{ sku_id: number; quantity: number; price?: number }> = [];
-    
+    const errors: string[] = [];
+
     for (const item of body.items) {
-      let skuId = item.sku_id;
+      const { skuId, error } = await resolveYampiSkuId(supabase, item);
       
-      // If no sku_id but has sku code, look it up
-      if (!skuId && item.sku) {
-        console.log(`Looking up SKU: ${item.sku}`);
-        const searchResponse = await fetch(
-          `https://api.dooki.com.br/v2/${YAMPI_STORE_ALIAS}/catalog/skus?search=${encodeURIComponent(item.sku)}&limit=10`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              "User-Token": YAMPI_USER_TOKEN,
-              "User-Secret-Key": YAMPI_USER_SECRET_KEY,
-            },
-          }
-        );
-
-        const searchData = await searchResponse.json();
-        console.log(`Yampi search result for SKU ${item.sku}:`, JSON.stringify(searchData, null, 2));
-
-        if (searchResponse.ok && searchData?.data) {
-          // Find exact SKU match
-          const match = searchData.data.find((s: { sku: string }) => s.sku === item.sku);
-          if (match) {
-            skuId = match.id;
-            console.log(`Found Yampi sku_id ${skuId} for SKU ${item.sku}`);
-          }
-        }
-      }
-
       if (!skuId) {
-        throw new Error(`Could not find Yampi SKU ID for SKU: ${item.sku || 'unknown'}`);
+        errors.push(error || `Unknown error resolving item`);
+        continue;
       }
 
       resolvedItems.push({
@@ -95,6 +243,15 @@ serve(async (req) => {
         quantity: item.quantity,
         ...(item.price !== undefined && { price: item.price }),
       });
+    }
+
+    if (errors.length > 0) {
+      console.error("Errors resolving items:", errors);
+      throw new Error(`Failed to resolve items: ${errors.join("; ")}`);
+    }
+
+    if (resolvedItems.length === 0) {
+      throw new Error("No items could be resolved to Yampi SKUs");
     }
 
     // Build Yampi API request

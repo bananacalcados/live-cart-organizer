@@ -179,19 +179,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       return;
     }
 
-    // Check if all products have SKU
-    const productsWithoutSku = localProducts.filter(p => !p.sku);
-    if (productsWithoutSku.length > 0) {
-      const details = productsWithoutSku.map(p => 
-        p.variant ? `${p.title} (${p.variant})` : p.title
-      ).join(", ");
-      toast.error(`Produtos sem SKU: ${details}`, {
-        description: "Verifique se o SKU está cadastrado na Shopify para cada variante.",
-        duration: 6000,
-      });
-      return;
-    }
-
     setIsGeneratingYampiLink(true);
     try {
       const link = await createYampiPaymentLinkFromOrder(localProducts, {
@@ -204,12 +191,11 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       if (link) {
         setCartLink(link);
         toast.success("Link de pagamento Yampi gerado!");
-      } else {
-        toast.error("Erro ao gerar link Yampi - verifique os SKUs");
       }
     } catch (error) {
       console.error("Error generating Yampi link:", error);
-      toast.error("Erro ao gerar link Yampi");
+      const errorMessage = error instanceof Error ? error.message : "Erro ao gerar link Yampi";
+      toast.error(errorMessage, { duration: 6000 });
     } finally {
       setIsGeneratingYampiLink(false);
     }
