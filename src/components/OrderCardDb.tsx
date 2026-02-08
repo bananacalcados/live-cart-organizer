@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign } from "lucide-react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES } from "@/types/order";
 import { Button } from "@/components/ui/button";
@@ -105,9 +105,15 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         </div>
       </div>
 
-      {/* Badges for Gift, Free Shipping, Discount */}
-      {(order.has_gift || order.free_shipping || (order.discount_value && order.discount_value > 0)) && (
+      {/* Badges for Paid Externally, Gift, Free Shipping, Discount */}
+      {(order.paid_externally || order.has_gift || order.free_shipping || (order.discount_value && order.discount_value > 0)) && (
         <div className="flex flex-wrap gap-1 mb-3">
+          {order.paid_externally && (
+            <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30">
+              <Wallet className="h-3 w-3 mr-1" />
+              Pago Externo
+            </Badge>
+          )}
           {order.has_gift && (
             <Badge variant="secondary" className="text-[10px] bg-accent/20 text-accent border-accent/30">
               <Gift className="h-3 w-3 mr-1" />

@@ -45,6 +45,7 @@ export interface DbOrder {
   last_sent_message_at?: string;
   is_paid: boolean;
   paid_at?: string;
+  paid_externally?: boolean;
   discount_type?: DiscountType;
   discount_value?: number;
   free_shipping?: boolean;
