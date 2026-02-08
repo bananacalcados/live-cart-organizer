@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -67,6 +67,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [freeShipping, setFreeShipping] = useState(false);
   const [hasGift, setHasGift] = useState(false);
   const [couponCode, setCouponCode] = useState("");
+  const [paidExternally, setPaidExternally] = useState(false);
 
   // Check for existing customer by Instagram as user types
   const existingCustomer = useMemo(() => {
@@ -99,6 +100,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       setFreeShipping(editingOrder.free_shipping || false);
       setHasGift(editingOrder.has_gift || false);
       setCouponCode(editingOrder.coupon_code || "");
+      setPaidExternally(editingOrder.paid_externally || false);
     } else {
       resetForm();
     }
@@ -126,6 +128,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     setFreeShipping(false);
     setHasGift(false);
     setCouponCode("");
+    setPaidExternally(false);
   };
 
   const handleAddLocalProduct = (product: DbOrderProduct) => {
@@ -232,7 +235,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       }
 
       // Update existing order
-      await updateOrder(editingOrder.id, {
+      const orderUpdates: Partial<DbOrder> = {
         cart_link: cartLink || undefined,
         notes: notes || undefined,
         stage,
@@ -242,7 +245,16 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         free_shipping: freeShipping,
         has_gift: hasGift,
         coupon_code: couponCode || undefined,
-      });
+        paid_externally: paidExternally,
+      };
+      
+      // If marking as paid externally, also mark as paid
+      if (paidExternally && !editingOrder.is_paid) {
+        orderUpdates.is_paid = true;
+        orderUpdates.paid_at = new Date().toISOString();
+      }
+      
+      await updateOrder(editingOrder.id, orderUpdates);
 
       // Refresh orders to reflect updated joined customer data (e.g. whatsapp) in the cards/chat buttons
       await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
@@ -582,6 +594,21 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 </div>
                 
                 <div className="flex items-center justify-between">
+                  <Label htmlFor="paidExternally" className="flex items-center gap-2 cursor-pointer">
+                    <Wallet className="h-4 w-4 text-primary" />
+                    Pago Fora (Yampi/Shopify)
+                  </Label>
+                  <Switch
+                    id="paidExternally"
+                    checked={paidExternally}
+                    onCheckedChange={setPaidExternally}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground -mt-1">
+                  Marque se o pagamento foi feito fora da Yampi/Shopify (PIX direto, dinheiro, etc.)
+                </p>
+                
+                <div className="flex items-center justify-between pt-2">
                   <Label htmlFor="hasGift" className="flex items-center gap-2 cursor-pointer">
                     <Gift className="h-4 w-4 text-accent" />
                     Incluir Brinde

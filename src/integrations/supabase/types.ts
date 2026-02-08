@@ -120,6 +120,7 @@ export type Database = {
           last_sent_message_at: string | null
           notes: string | null
           paid_at: string | null
+          paid_externally: boolean | null
           products: Json
           stage: string
           updated_at: string
@@ -142,6 +143,7 @@ export type Database = {
           last_sent_message_at?: string | null
           notes?: string | null
           paid_at?: string | null
+          paid_externally?: boolean | null
           products?: Json
           stage?: string
           updated_at?: string
@@ -164,6 +166,7 @@ export type Database = {
           last_sent_message_at?: string | null
           notes?: string | null
           paid_at?: string | null
+          paid_externally?: boolean | null
           products?: Json
           stage?: string
           updated_at?: string
