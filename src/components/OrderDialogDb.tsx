@@ -177,6 +177,11 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     }
 
     if (editingOrder) {
+      // Update customer whatsapp if changed
+      if (editingOrder.customer && whatsapp !== editingOrder.customer.whatsapp) {
+        await createOrUpdateCustomer(editingOrder.customer.instagram_handle, whatsapp || undefined);
+      }
+      
       // Update existing order
       await updateOrder(editingOrder.id, {
         cart_link: cartLink || undefined,
@@ -278,7 +283,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 placeholder="(11) 99999-9999"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
-                disabled={!!existingCustomer?.whatsapp || !!editingOrder}
+                disabled={!!existingCustomer?.whatsapp && !editingOrder}
               />
               {existingCustomerByWhatsApp && (
                 <Alert className="mt-2 border-stage-paid/50 bg-stage-paid/10">
