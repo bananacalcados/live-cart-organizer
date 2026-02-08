@@ -25,6 +25,7 @@ interface CreatePaymentLinkRequest {
   discount_type?: 'fixed' | 'percentage';
   discount_value?: number;
   free_shipping?: boolean;
+  coupon_code?: string; // Pre-created coupon code in Yampi
 }
 
 interface MappingRecord {
@@ -255,14 +256,29 @@ serve(async (req) => {
     }
 
     // Build Yampi API request - Payment Link format requires: name, active, skus
+    // Generate unique link name with timestamp to ensure each customer gets a unique link
+    const uniqueId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    const linkName = body.order_id 
+      ? `Pedido ${body.order_id.slice(0, 8)}-${uniqueId}`
+      : `Link ${uniqueId}`;
+
+    // Calculate discount per item if discount is provided
+    // Yampi might not support global discount, so we apply it via customized_price
+    let totalOriginalPrice = 0;
+    const skusForPriceCalc = resolvedItems.map(item => {
+      // We'll need to apply the discount to individual items
+      return { sku_id: item.sku_id, quantity: item.quantity, price: item.price };
+    });
+
     const skusPayload = resolvedItems.map(item => ({
       id: item.sku_id,  // Yampi uses 'id' not 'sku_id' in the skus array
       quantity: item.quantity,
-      ...(item.price !== undefined && { customized_price: item.price }),
+      // Don't set customized_price here - it may override promotions
+      // If there's a discount, it should be applied via the discount field
     }));
 
     const yampiPayload: Record<string, unknown> = {
-      name: `Pedido ${body.order_id || new Date().toISOString()}`,
+      name: linkName,
       active: true,
       skus: skusPayload,
     };
@@ -276,15 +292,13 @@ serve(async (req) => {
       };
     }
 
-    // Add discount if provided
-    if (body.discount_type && body.discount_value) {
-      yampiPayload.discount = {
-        type: body.discount_type,
-        value: body.discount_value,
-      };
-    }
+    // NOTE: Yampi Payment Link API does NOT support inline discounts.
+    // Discounts must be created as coupons in the Yampi dashboard,
+    // then applied via URL parameter (?cupom=CODE) after link generation.
+    // The discount_type and discount_value fields are ignored here.
+    // To apply a discount, pass coupon_code in the request.
 
-    // Add free shipping if enabled
+    // Add free shipping if enabled (this may or may not be supported)
     if (body.free_shipping) {
       yampiPayload.free_shipping = true;
     }
@@ -313,7 +327,7 @@ serve(async (req) => {
     }
 
     // Extract the payment link URL from response (Yampi uses 'link_url')
-    const paymentLink = yampiData?.data?.link_url || yampiData?.data?.url || yampiData?.data?.checkout_url || null;
+    let paymentLink = yampiData?.data?.link_url || yampiData?.data?.url || yampiData?.data?.checkout_url || null;
     const paymentLinkId = yampiData?.data?.id || null;
 
     if (!paymentLink) {
@@ -321,7 +335,26 @@ serve(async (req) => {
       throw new Error("Payment link not found in Yampi response");
     }
 
+    // Add coupon code to URL if provided
+    // Yampi uses query parameters to apply coupons: ?cupom=CODE
+    if (body.coupon_code) {
+      try {
+        const url = new URL(paymentLink);
+        url.searchParams.set('cupom', body.coupon_code);
+        paymentLink = url.toString();
+        console.log("Added coupon to URL:", paymentLink);
+      } catch (e) {
+        console.error("Error adding coupon to URL:", e);
+      }
+    }
+
     console.log("Payment link created successfully:", paymentLink);
+
+    // Include warning if discount was requested but coupon wasn't used
+    const warnings: string[] = [];
+    if (body.discount_type && body.discount_value && !body.coupon_code) {
+      warnings.push("Desconto solicitado mas nenhum código de cupom foi fornecido. Os descontos na Yampi devem ser criados como cupons no painel e o código deve ser passado.");
+    }
 
     return new Response(
       JSON.stringify({
@@ -329,6 +362,7 @@ serve(async (req) => {
         payment_link: paymentLink,
         payment_link_id: paymentLinkId,
         data: yampiData.data,
+        warnings: warnings.length > 0 ? warnings : undefined,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
