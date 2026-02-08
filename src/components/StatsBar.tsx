@@ -1,4 +1,4 @@
-import { Package, DollarSign, Users, TrendingUp, AlertCircle } from "lucide-react";
+import { Package, DollarSign, TrendingUp, AlertCircle, CheckCircle, Receipt } from "lucide-react";
 import { Order } from "@/types/order";
 
 interface StatsBarProps {
@@ -7,16 +7,26 @@ interface StatsBarProps {
 
 export function StatsBar({ orders }: StatsBarProps) {
   const totalOrders = orders.length;
+  
+  const paidOrders = orders.filter(
+    (o) => o.stage === "paid" || o.stage === "shipped"
+  );
+  const paidOrdersCount = paidOrders.length;
+  const unpaidOrdersCount = totalOrders - paidOrdersCount;
+  
   const totalValue = orders.reduce(
     (sum, order) =>
       sum + order.products.reduce((s, p) => s + p.price * p.quantity, 0),
     0
   );
-  const paidOrders = orders.filter(
-    (o) => o.stage === "paid" || o.stage === "shipped"
-  ).length;
-  const unpaidOrders = totalOrders - paidOrders;
-  const conversionRate = totalOrders > 0 ? (paidOrders / totalOrders) * 100 : 0;
+  
+  const receivedValue = paidOrders.reduce(
+    (sum, order) =>
+      sum + order.products.reduce((s, p) => s + p.price * p.quantity, 0),
+    0
+  );
+  
+  const conversionRate = totalOrders > 0 ? (paidOrdersCount / totalOrders) * 100 : 0;
 
   const stats = [
     {
@@ -28,41 +38,55 @@ export function StatsBar({ orders }: StatsBarProps) {
     },
     {
       label: "Não Pagos",
-      value: unpaidOrders,
+      value: unpaidOrdersCount,
       icon: AlertCircle,
       color: "text-stage-awaiting",
       bgColor: "bg-stage-awaiting/10",
     },
     {
-      label: "Valor Total",
+      label: "Pagos",
+      value: paidOrdersCount,
+      icon: CheckCircle,
+      color: "text-stage-paid",
+      bgColor: "bg-stage-paid/10",
+    },
+    {
+      label: "Faturamento Total",
       value: `R$ ${totalValue.toFixed(2)}`,
-      icon: DollarSign,
+      icon: Receipt,
       color: "text-accent",
       bgColor: "bg-accent/10",
     },
     {
-      label: "Taxa de Conversão",
-      value: `${conversionRate.toFixed(0)}%`,
-      icon: TrendingUp,
+      label: "Faturamento Recebido",
+      value: `R$ ${receivedValue.toFixed(2)}`,
+      icon: DollarSign,
       color: "text-stage-paid",
       bgColor: "bg-stage-paid/10",
+    },
+    {
+      label: "Conversão",
+      value: `${conversionRate.toFixed(0)}%`,
+      icon: TrendingUp,
+      color: "text-stage-contacted",
+      bgColor: "bg-stage-contacted/10",
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="bg-card border border-border/50 rounded-xl p-4 shadow-card"
+          className="bg-card border border-border/50 rounded-xl p-3 shadow-card"
         >
-          <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-lg ${stat.bgColor}`}>
-              <stat.icon className={`h-5 w-5 ${stat.color}`} />
+          <div className="flex items-center gap-2">
+            <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+              <stat.icon className={`h-4 w-4 ${stat.color}`} />
             </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
+            <div className="min-w-0">
+              <p className="text-lg font-bold text-foreground truncate">{stat.value}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{stat.label}</p>
             </div>
           </div>
         </div>
