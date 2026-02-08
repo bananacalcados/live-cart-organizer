@@ -170,8 +170,7 @@ export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProp
         <WhatsAppChatDialog
           open={showChatDialog}
           onOpenChange={setShowChatDialog}
-          phone={order.whatsapp}
-          contactName={order.instagramHandle}
+          order={order}
         />
       )}
     </div>
