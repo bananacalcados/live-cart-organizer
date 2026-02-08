@@ -22,21 +22,31 @@ export function ProductSelector({
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
+  // Debounce search input
   useEffect(() => {
-    loadProducts();
-  }, []);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const loadProducts = async () => {
+  // Fetch products when search changes
+  useEffect(() => {
+    loadProducts(debouncedSearch);
+  }, [debouncedSearch]);
+
+  const loadProducts = async (searchQuery: string = "") => {
     setLoading(true);
-    const data = await fetchProducts(50);
+    // Use Shopify's search API for better results
+    const query = searchQuery.trim() ? `title:*${searchQuery}*` : undefined;
+    const data = await fetchProducts(250, query);
     setProducts(data);
     setLoading(false);
   };
 
-  const filteredProducts = products.filter((p) =>
-    p.node.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredProducts = products;
 
   const handleAddProduct = (product: ShopifyProduct, variantIndex: number = 0) => {
     const variant = product.node.variants.edges[variantIndex]?.node;
