@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Edit2, Trash2, FileText, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Edit2, Trash2, FileText, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,13 +36,18 @@ interface TemplateManagerProps {
 }
 
 export function TemplateManager({ trigger }: TemplateManagerProps) {
-  const { templates, addTemplate, updateTemplate, deleteTemplate } = useTemplateStore();
+  const { templates, isLoading, fetchTemplates, addTemplate, updateTemplate, deleteTemplate } = useTemplateStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [stage, setStage] = useState<OrderStage | 'all'>('all');
+
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
 
   const handleEdit = (template: MessageTemplate) => {
     setEditingTemplate(template);
@@ -52,9 +57,13 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
     setIsEditing(true);
   };
 
-  const handleDelete = (id: string) => {
-    deleteTemplate(id);
-    toast.success("Template excluído");
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteTemplate(id);
+      toast.success("Template excluído");
+    } catch {
+      toast.error("Erro ao excluir template");
+    }
   };
 
   const resetForm = () => {
@@ -64,22 +73,28 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
     setEditingTemplate(null);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name.trim() || !message.trim()) {
       toast.error("Preencha nome e mensagem");
       return;
     }
 
-    if (editingTemplate) {
-      updateTemplate(editingTemplate.id, { name, message, stage });
-      toast.success("Template atualizado");
-    } else {
-      addTemplate({ name, message, stage });
-      toast.success("Template criado");
+    setIsSaving(true);
+    try {
+      if (editingTemplate) {
+        await updateTemplate(editingTemplate.id, { name, message, stage });
+        toast.success("Template atualizado");
+      } else {
+        await addTemplate({ name, message, stage });
+        toast.success("Template criado");
+      }
+      resetForm();
+      setIsEditing(false);
+    } catch {
+      toast.error("Erro ao salvar template");
+    } finally {
+      setIsSaving(false);
     }
-
-    resetForm();
-    setIsEditing(false);
   };
 
   const getStageLabel = (stageId: OrderStage | 'all') => {
@@ -132,6 +147,11 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
           </Button>
 
           <ScrollArea className="flex-1">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
             <div className="space-y-3 pr-4">
               {templates.map((template) => (
                 <div
@@ -173,6 +193,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                 </div>
               ))}
             </div>
+            )}
           </ScrollArea>
         </div>
 
@@ -252,8 +273,10 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                 >
                   Cancelar
                 </Button>
-                <Button className="flex-1" onClick={handleSubmit}>
-                  {editingTemplate ? "Salvar" : "Criar"}
+                <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>
+                  {isSaving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : editingTemplate ? "Salvar" : "Criar"}
                 </Button>
               </div>
             </div>

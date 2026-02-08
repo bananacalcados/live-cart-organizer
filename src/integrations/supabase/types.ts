@@ -74,6 +74,33 @@ export type Database = {
         }
         Relationships: []
       }
+      message_templates: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          name: string
+          stage: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          name: string
+          stage?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          name?: string
+          stage?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           cart_link: string | null
