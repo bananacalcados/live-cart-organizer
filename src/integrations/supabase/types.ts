@@ -14,6 +14,132 @@ export type Database = {
   }
   public: {
     Tables: {
+      customers: {
+        Row: {
+          ban_reason: string | null
+          created_at: string
+          id: string
+          instagram_handle: string
+          is_banned: boolean
+          updated_at: string
+          whatsapp: string | null
+        }
+        Insert: {
+          ban_reason?: string | null
+          created_at?: string
+          id?: string
+          instagram_handle: string
+          is_banned?: boolean
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Update: {
+          ban_reason?: string | null
+          created_at?: string
+          id?: string
+          instagram_handle?: string
+          is_banned?: boolean
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      events: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          cart_link: string | null
+          checkout_token: string | null
+          created_at: string
+          customer_id: string
+          event_id: string
+          has_unread_messages: boolean
+          id: string
+          is_paid: boolean
+          last_customer_message_at: string | null
+          last_sent_message_at: string | null
+          notes: string | null
+          paid_at: string | null
+          products: Json
+          stage: string
+          updated_at: string
+        }
+        Insert: {
+          cart_link?: string | null
+          checkout_token?: string | null
+          created_at?: string
+          customer_id: string
+          event_id: string
+          has_unread_messages?: boolean
+          id?: string
+          is_paid?: boolean
+          last_customer_message_at?: string | null
+          last_sent_message_at?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          products?: Json
+          stage?: string
+          updated_at?: string
+        }
+        Update: {
+          cart_link?: string | null
+          checkout_token?: string | null
+          created_at?: string
+          customer_id?: string
+          event_id?: string
+          has_unread_messages?: boolean
+          id?: string
+          is_paid?: boolean
+          last_customer_message_at?: string | null
+          last_sent_message_at?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          products?: Json
+          stage?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_messages: {
         Row: {
           created_at: string

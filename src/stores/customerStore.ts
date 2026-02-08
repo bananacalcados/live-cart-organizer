@@ -1,0 +1,177 @@
+import { create } from 'zustand';
+import { supabase } from '@/integrations/supabase/client';
+import { DbCustomer } from '@/types/database';
+import { toast } from 'sonner';
+
+// Normalize Instagram handle for comparison
+const normalizeInstagram = (handle: string): string => {
+  return handle.toLowerCase().replace(/^@/, '').trim();
+};
+
+interface CustomerStore {
+  customers: DbCustomer[];
+  isLoading: boolean;
+  fetchCustomers: () => Promise<void>;
+  findCustomerByInstagram: (handle: string) => DbCustomer | undefined;
+  findCustomerByWhatsApp: (whatsapp: string) => DbCustomer | undefined;
+  createOrUpdateCustomer: (instagramHandle: string, whatsapp?: string) => Promise<DbCustomer | null>;
+  banCustomer: (id: string, reason?: string) => Promise<void>;
+  unbanCustomer: (id: string) => Promise<void>;
+  updateCustomer: (id: string, updates: Partial<DbCustomer>) => Promise<void>;
+}
+
+export const useCustomerStore = create<CustomerStore>()((set, get) => ({
+  customers: [],
+  isLoading: false,
+
+  fetchCustomers: async () => {
+    set({ isLoading: true });
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      set({ customers: data || [] });
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      toast.error('Erro ao carregar clientes');
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  findCustomerByInstagram: (handle) => {
+    const normalized = normalizeInstagram(handle);
+    return get().customers.find(
+      (c) => normalizeInstagram(c.instagram_handle) === normalized
+    );
+  },
+
+  findCustomerByWhatsApp: (whatsapp) => {
+    const normalized = whatsapp.replace(/\D/g, '').trim();
+    if (!normalized) return undefined;
+    return get().customers.find(
+      (c) => c.whatsapp && c.whatsapp.replace(/\D/g, '') === normalized
+    );
+  },
+
+  createOrUpdateCustomer: async (instagramHandle, whatsapp) => {
+    const normalized = normalizeInstagram(instagramHandle);
+    const formattedHandle = instagramHandle.startsWith('@') 
+      ? instagramHandle 
+      : `@${instagramHandle}`;
+
+    try {
+      // Check if customer exists
+      const existing = get().findCustomerByInstagram(instagramHandle);
+      
+      if (existing) {
+        // Update whatsapp if provided and different
+        if (whatsapp && whatsapp !== existing.whatsapp) {
+          const { data, error } = await supabase
+            .from('customers')
+            .update({ whatsapp })
+            .eq('id', existing.id)
+            .select()
+            .single();
+
+          if (error) throw error;
+          
+          set((state) => ({
+            customers: state.customers.map((c) => 
+              c.id === existing.id ? data : c
+            )
+          }));
+          
+          return data;
+        }
+        return existing;
+      }
+
+      // Create new customer
+      const { data, error } = await supabase
+        .from('customers')
+        .insert({ 
+          instagram_handle: formattedHandle,
+          whatsapp 
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      set((state) => ({ customers: [data, ...state.customers] }));
+      return data;
+    } catch (error) {
+      console.error('Error creating/updating customer:', error);
+      toast.error('Erro ao salvar cliente');
+      return null;
+    }
+  },
+
+  banCustomer: async (id, reason) => {
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .update({ is_banned: true, ban_reason: reason })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      set((state) => ({
+        customers: state.customers.map((c) => 
+          c.id === id ? { ...c, is_banned: true, ban_reason: reason } : c
+        )
+      }));
+      
+      toast.success('Cliente banido!');
+    } catch (error) {
+      console.error('Error banning customer:', error);
+      toast.error('Erro ao banir cliente');
+    }
+  },
+
+  unbanCustomer: async (id) => {
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .update({ is_banned: false, ban_reason: null })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      set((state) => ({
+        customers: state.customers.map((c) => 
+          c.id === id ? { ...c, is_banned: false, ban_reason: undefined } : c
+        )
+      }));
+      
+      toast.success('Cliente desbanido!');
+    } catch (error) {
+      console.error('Error unbanning customer:', error);
+      toast.error('Erro ao desbanir cliente');
+    }
+  },
+
+  updateCustomer: async (id, updates) => {
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      set((state) => ({
+        customers: state.customers.map((c) => 
+          c.id === id ? { ...c, ...updates } : c
+        )
+      }));
+    } catch (error) {
+      console.error('Error updating customer:', error);
+      toast.error('Erro ao atualizar cliente');
+    }
+  },
+}));

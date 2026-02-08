@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
-import { OrderProduct } from "@/types/order";
+import { DbOrderProduct } from "@/types/database";
 import {
   Select,
   SelectContent,
@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/select";
 
 interface ProductSelectorProps {
-  selectedProducts: OrderProduct[];
-  onAddProduct: (product: OrderProduct) => void;
+  selectedProducts: DbOrderProduct[];
+  onAddProduct: (product: DbOrderProduct) => void;
   onRemoveProduct: (productId: string) => void;
   onUpdateQuantity: (productId: string, quantity: number) => void;
 }
@@ -58,7 +58,7 @@ export function ProductSelector({
     const variant = product.node.variants.edges[variantIndex]?.node;
     if (!variant) return;
 
-    const orderProduct: OrderProduct = {
+    const orderProduct: DbOrderProduct = {
       id: `${product.node.id}-${variant.id}`,
       shopifyId: product.node.id,
       title: product.node.title,
