@@ -181,7 +181,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       if (editingOrder.customer && whatsapp !== editingOrder.customer.whatsapp) {
         await createOrUpdateCustomer(editingOrder.customer.instagram_handle, whatsapp || undefined);
       }
-      
+
       // Update existing order
       await updateOrder(editingOrder.id, {
         cart_link: cartLink || undefined,
@@ -189,6 +189,10 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         stage,
         products: localProducts,
       });
+
+      // Refresh orders to reflect updated joined customer data (e.g. whatsapp) in the cards/chat buttons
+      await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
+
       toast.success("Pedido atualizado!");
     } else {
       // Create or get customer
