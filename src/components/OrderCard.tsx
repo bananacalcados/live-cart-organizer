@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle } from "lucide-react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare } from "lucide-react";
 import { Order, STAGES } from "@/types/order";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
+import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
 
 interface OrderCardProps {
   order: Order;
@@ -15,6 +16,7 @@ interface OrderCardProps {
 
 export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProps) {
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
+  const [showChatDialog, setShowChatDialog] = useState(false);
   
   const stage = STAGES.find((s) => s.id === order.stage);
   const totalValue = order.products.reduce(
@@ -92,6 +94,18 @@ export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProp
           >
             <MessageCircle className="h-3.5 w-3.5" />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-stage-paid hover:text-stage-paid/80 hover:bg-stage-paid/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowChatDialog(true);
+            }}
+            title="Abrir chat em tempo real"
+          >
+            <MessagesSquare className="h-3.5 w-3.5" />
+          </Button>
         </div>
       )}
 
@@ -151,6 +165,15 @@ export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProp
         onOpenChange={setShowWhatsAppDialog}
         order={order}
       />
+
+      {order.whatsapp && (
+        <WhatsAppChatDialog
+          open={showChatDialog}
+          onOpenChange={setShowChatDialog}
+          phone={order.whatsapp}
+          contactName={order.instagramHandle}
+        />
+      )}
     </div>
   );
 }
