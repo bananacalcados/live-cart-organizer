@@ -1,12 +1,43 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import { Header } from "@/components/Header";
+import { KanbanBoard } from "@/components/KanbanBoard";
+import { OrderDialog } from "@/components/OrderDialog";
+import { StatsBar } from "@/components/StatsBar";
+import { useOrderStore } from "@/stores/orderStore";
+import { Order } from "@/types/order";
 
 const Index = () => {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const orders = useOrderStore((state) => state.orders);
+
+  const handleNewOrder = () => {
+    setEditingOrder(null);
+    setDialogOpen(true);
+  };
+
+  const handleEditOrder = (order: Order) => {
+    setEditingOrder(order);
+    setDialogOpen(true);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <Header onNewOrder={handleNewOrder} />
+      
+      <main className="container py-6">
+        <StatsBar orders={orders} />
+        
+        <div className="overflow-x-auto">
+          <KanbanBoard orders={orders} onEditOrder={handleEditOrder} />
+        </div>
+      </main>
+
+      <OrderDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editingOrder={editingOrder}
+      />
     </div>
   );
 };
