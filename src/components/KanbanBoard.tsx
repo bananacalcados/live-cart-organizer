@@ -1,7 +1,7 @@
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Order, STAGES, OrderStage } from "@/types/order";
 import { OrderCard } from "./OrderCard";
-import { useOrderStore } from "@/stores/orderStore";
+import { useDbOrderStore } from "@/stores/dbOrderStore";
 
 interface KanbanBoardProps {
   orders: Order[];
@@ -9,7 +9,7 @@ interface KanbanBoardProps {
 }
 
 export function KanbanBoard({ orders, onEditOrder }: KanbanBoardProps) {
-  const { moveOrder, deleteOrder } = useOrderStore();
+  const { moveOrder, deleteOrder } = useDbOrderStore();
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;

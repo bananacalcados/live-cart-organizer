@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Order, OrderStage, STAGES } from "@/types/order";
-import { useOrderStore } from "@/stores/orderStore";
+import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useTemplateStore, applyTemplateVariables } from "@/stores/templateStore";
 import { EmojiPickerButton } from "./EmojiPickerButton";
 import { uploadMediaToStorage } from "./MediaAttachmentPicker";
@@ -115,7 +115,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const { sendMessage, sendMedia, isLoading: isSending } = useZapi();
-  const { moveOrder, setHasUnreadMessages, updateOrder } = useOrderStore();
+  const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
 
   const phone = order.whatsapp || '';
@@ -265,7 +265,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         });
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         // Track that we sent a message for no-response timer
-        updateOrder(order.id, { lastSentMessageAt: new Date() });
+        updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
       } else {
         setMessages((prev) =>
           prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
@@ -308,7 +308,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       });
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       // Track that we sent a message for no-response timer
-      updateOrder(order.id, { lastSentMessageAt: new Date() });
+      updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
     } else {
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))

@@ -1,4 +1,4 @@
-import { Package, DollarSign, Users, TrendingUp } from "lucide-react";
+import { Package, DollarSign, Users, TrendingUp, AlertCircle } from "lucide-react";
 import { Order } from "@/types/order";
 
 interface StatsBarProps {
@@ -15,6 +15,7 @@ export function StatsBar({ orders }: StatsBarProps) {
   const paidOrders = orders.filter(
     (o) => o.stage === "paid" || o.stage === "shipped"
   ).length;
+  const unpaidOrders = totalOrders - paidOrders;
   const conversionRate = totalOrders > 0 ? (paidOrders / totalOrders) * 100 : 0;
 
   const stats = [
@@ -26,6 +27,13 @@ export function StatsBar({ orders }: StatsBarProps) {
       bgColor: "bg-primary/10",
     },
     {
+      label: "Não Pagos",
+      value: unpaidOrders,
+      icon: AlertCircle,
+      color: "text-stage-awaiting",
+      bgColor: "bg-stage-awaiting/10",
+    },
+    {
       label: "Valor Total",
       value: `R$ ${totalValue.toFixed(2)}`,
       icon: DollarSign,
@@ -33,18 +41,11 @@ export function StatsBar({ orders }: StatsBarProps) {
       bgColor: "bg-accent/10",
     },
     {
-      label: "Clientes Únicos",
-      value: new Set(orders.map((o) => o.instagramHandle)).size,
-      icon: Users,
-      color: "text-stage-paid",
-      bgColor: "bg-stage-paid/10",
-    },
-    {
       label: "Taxa de Conversão",
       value: `${conversionRate.toFixed(0)}%`,
       icon: TrendingUp,
-      color: "text-stage-link-sent",
-      bgColor: "bg-stage-link-sent/10",
+      color: "text-stage-paid",
+      bgColor: "bg-stage-paid/10",
     },
   ];
 
