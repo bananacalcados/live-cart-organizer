@@ -123,7 +123,7 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Instagram className="h-5 w-5 text-accent" />
@@ -131,7 +131,7 @@ export function OrderDialog({ open, onOpenChange, editingOrder }: OrderDialogPro
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 py-4 flex-1 overflow-y-auto">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="instagram" className="flex items-center gap-2">
