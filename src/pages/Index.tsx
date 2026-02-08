@@ -1,33 +1,19 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
-import { KanbanBoard } from "@/components/KanbanBoard";
+import { KanbanBoardDb } from "@/components/KanbanBoardDb";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { StatsBar } from "@/components/StatsBar";
 import { StageNavigation } from "@/components/StageNavigation";
+import { OrderReportDialog } from "@/components/OrderReportDialog";
+import { GlobalWhatsAppChat } from "@/components/GlobalWhatsAppChat";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
-import { DbOrder, DbCustomer } from "@/types/database";
-import { Order, OrderStage } from "@/types/order";
+import { DbOrder } from "@/types/database";
+import { OrderStage } from "@/types/order";
 import { Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-// Convert DbOrder to Order format for compatibility with existing components
-const dbOrderToOrder = (dbOrder: DbOrder): Order => ({
-  id: dbOrder.id,
-  instagramHandle: dbOrder.customer?.instagram_handle || '',
-  whatsapp: dbOrder.customer?.whatsapp,
-  cartLink: dbOrder.cart_link,
-  products: dbOrder.products,
-  stage: dbOrder.stage as OrderStage,
-  notes: dbOrder.notes,
-  createdAt: new Date(dbOrder.created_at),
-  updatedAt: new Date(dbOrder.updated_at),
-  hasUnreadMessages: dbOrder.has_unread_messages,
-  lastCustomerMessageAt: dbOrder.last_customer_message_at ? new Date(dbOrder.last_customer_message_at) : undefined,
-  lastSentMessageAt: dbOrder.last_sent_message_at ? new Date(dbOrder.last_sent_message_at) : undefined,
-});
 
 const Index = () => {
   const navigate = useNavigate();
@@ -75,20 +61,15 @@ const Index = () => {
     setDialogOpen(true);
   };
 
-  const handleEditOrder = (order: Order) => {
-    const dbOrder = orders.find((o) => o.id === order.id);
-    if (dbOrder) {
-      setEditingOrder(dbOrder);
-      setDialogOpen(true);
-    }
+  const handleEditOrder = (order: DbOrder) => {
+    setEditingOrder(order);
+    setDialogOpen(true);
   };
 
-  // Convert orders for KanbanBoard
-  const convertedOrders = orders.map(dbOrderToOrder);
-  
+  // Filter orders by stage
   const filteredOrders = selectedStage === "all" 
-    ? convertedOrders 
-    : convertedOrders.filter((o) => o.stage === selectedStage);
+    ? orders 
+    : orders.filter((o) => o.stage === selectedStage);
 
   const unpaidCount = getUnpaidOrdersCount(currentEventId || undefined);
 
@@ -112,19 +93,22 @@ const Index = () => {
                 </span>
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/events")}
-            >
-              Trocar Evento
-            </Button>
+            <div className="flex items-center gap-2">
+              <OrderReportDialog orders={orders} />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/events")}
+              >
+                Trocar Evento
+              </Button>
+            </div>
           </div>
         </div>
       )}
       
       <main className="container py-6">
-        <StatsBar orders={convertedOrders} />
+        <StatsBar orders={orders} />
         
         {isLoading ? (
           <div className="text-center py-12 text-muted-foreground">
@@ -132,7 +116,7 @@ const Index = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <KanbanBoard orders={filteredOrders} onEditOrder={handleEditOrder} />
+            <KanbanBoardDb orders={filteredOrders} onEditOrder={handleEditOrder} />
           </div>
         )}
       </main>
@@ -148,6 +132,9 @@ const Index = () => {
         editingOrder={editingOrder}
         eventId={currentEventId}
       />
+
+      {/* Global WhatsApp Chat */}
+      <GlobalWhatsAppChat />
     </div>
   );
 };
