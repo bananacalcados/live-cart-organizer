@@ -6,9 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-/**
- * Normalize phone: always store as 55XXXXXXXXXXX
- */
 function normalizePhone(rawPhone: string): string {
   let phone = rawPhone.replace(/\D/g, '');
   if (phone.length >= 10 && phone.length <= 11) {
@@ -17,8 +14,81 @@ function normalizePhone(rawPhone: string): string {
   return phone;
 }
 
+async function downloadMetaMedia(mediaId: string, accessToken: string, supabase: ReturnType<typeof createClient>): Promise<string | null> {
+  try {
+    // Step 1: Get media URL from Meta
+    const metaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+    if (!metaRes.ok) {
+      console.error('Failed to get media URL:', await metaRes.text());
+      return null;
+    }
+    const metaData = await metaRes.json();
+    const mediaUrl = metaData.url;
+    if (!mediaUrl) return null;
+
+    // Step 2: Download the binary
+    const downloadRes = await fetch(mediaUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+    if (!downloadRes.ok) {
+      console.error('Failed to download media:', downloadRes.status);
+      return null;
+    }
+
+    const blob = await downloadRes.blob();
+    const mimeType = metaData.mime_type || 'application/octet-stream';
+    const ext = mimeType.split('/')[1]?.split(';')[0] || 'bin';
+    const fileName = `meta-${mediaId}.${ext}`;
+
+    // Step 3: Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('whatsapp-media')
+      .upload(fileName, blob, {
+        contentType: mimeType,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('Failed to upload media to storage:', uploadError);
+      return null;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('whatsapp-media')
+      .getPublicUrl(fileName);
+
+    return publicUrlData?.publicUrl || null;
+  } catch (err) {
+    console.error('Error downloading Meta media:', err);
+    return null;
+  }
+}
+
+async function getAccessTokenForPhoneNumberId(supabase: ReturnType<typeof createClient>, metaPhoneNumberId: string): Promise<{ accessToken: string; numberId: string } | null> {
+  const { data } = await supabase
+    .from('whatsapp_numbers')
+    .select('id, access_token')
+    .eq('phone_number_id', metaPhoneNumberId)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (data) return { accessToken: data.access_token, numberId: data.id };
+
+  // Fallback to default
+  const { data: def } = await supabase
+    .from('whatsapp_numbers')
+    .select('id, access_token')
+    .eq('is_default', true)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (def) return { accessToken: def.access_token, numberId: def.id };
+
+  const fallbackToken = Deno.env.get('META_WHATSAPP_ACCESS_TOKEN') || '';
+  return fallbackToken ? { accessToken: fallbackToken, numberId: '' } : null;
+}
+
 serve(async (req) => {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -29,14 +99,12 @@ serve(async (req) => {
     const mode = url.searchParams.get('hub.mode');
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
-
     const verifyToken = Deno.env.get('META_WHATSAPP_VERIFY_TOKEN');
 
     if (mode === 'subscribe' && token === verifyToken) {
       console.log('Webhook verified successfully');
       return new Response(challenge, { status: 200 });
     }
-
     console.error('Webhook verification failed', { mode, token });
     return new Response('Forbidden', { status: 403 });
   }
@@ -50,7 +118,6 @@ serve(async (req) => {
     const body = await req.json();
     console.log('Meta webhook received:', JSON.stringify(body));
 
-    // Meta sends { object: 'whatsapp_business_account', entry: [...] }
     if (body.object !== 'whatsapp_business_account') {
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
@@ -61,14 +128,18 @@ serve(async (req) => {
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
         if (change.field !== 'messages') continue;
-
         const value = change.value;
+
+        // Determine which WhatsApp number received this
+        const metaPhoneNumberId = value.metadata?.phone_number_id || '';
+        const creds = await getAccessTokenForPhoneNumberId(supabase, metaPhoneNumberId);
+        const accessToken = creds?.accessToken || '';
+        const whatsappNumberDbId = creds?.numberId || null;
 
         // Process incoming messages
         if (value.messages) {
           for (const msg of value.messages) {
-            const rawPhone = msg.from; // e.g. "5533936180084"
-            const phone = normalizePhone(rawPhone);
+            const phone = normalizePhone(msg.from);
             const messageId = msg.id;
             const timestamp = msg.timestamp
               ? new Date(parseInt(msg.timestamp) * 1000).toISOString()
@@ -77,6 +148,7 @@ serve(async (req) => {
             let messageText = '';
             let mediaType = 'text';
             let mediaUrl: string | null = null;
+            let rawMediaId: string | null = null;
 
             switch (msg.type) {
               case 'text':
@@ -85,23 +157,22 @@ serve(async (req) => {
               case 'image':
                 messageText = msg.image?.caption || '[imagem]';
                 mediaType = 'image';
-                // We'd need to download media via Graph API - store ID for now
-                mediaUrl = msg.image?.id || null;
+                rawMediaId = msg.image?.id || null;
                 break;
               case 'video':
                 messageText = msg.video?.caption || '[vídeo]';
                 mediaType = 'video';
-                mediaUrl = msg.video?.id || null;
+                rawMediaId = msg.video?.id || null;
                 break;
               case 'audio':
                 messageText = '[áudio]';
                 mediaType = 'audio';
-                mediaUrl = msg.audio?.id || null;
+                rawMediaId = msg.audio?.id || null;
                 break;
               case 'document':
                 messageText = msg.document?.caption || msg.document?.filename || '[documento]';
                 mediaType = 'document';
-                mediaUrl = msg.document?.id || null;
+                rawMediaId = msg.document?.id || null;
                 break;
               case 'reaction':
                 messageText = `[reação: ${msg.reaction?.emoji || ''}]`;
@@ -109,13 +180,18 @@ serve(async (req) => {
               case 'sticker':
                 messageText = '[figurinha]';
                 mediaType = 'image';
-                mediaUrl = msg.sticker?.id || null;
+                rawMediaId = msg.sticker?.id || null;
                 break;
               default:
                 messageText = `[${msg.type || 'desconhecido'}]`;
             }
 
-            // Save incoming message
+            // Download media if present
+            if (rawMediaId && accessToken) {
+              const downloadedUrl = await downloadMetaMedia(rawMediaId, accessToken, supabase);
+              mediaUrl = downloadedUrl;
+            }
+
             const { error } = await supabase.from('whatsapp_messages').insert({
               phone,
               message: messageText,
@@ -125,6 +201,7 @@ serve(async (req) => {
               media_type: mediaType,
               media_url: mediaUrl,
               is_group: false,
+              whatsapp_number_id: whatsappNumberDbId || null,
             });
 
             if (error) {
@@ -133,12 +210,9 @@ serve(async (req) => {
               console.log(`Saved incoming message from ${phone}`);
             }
 
-            // Update last_customer_message_at on matching orders
-            // Find customer by phone variations
+            // Update orders
             const phoneWithoutCountry = phone.startsWith('55') ? phone.slice(2) : phone;
             const phoneVariations = [phone, phoneWithoutCountry];
-
-            // Add variant without 9th digit
             if (phoneWithoutCountry.length === 11 && phoneWithoutCountry.charAt(2) === '9') {
               phoneVariations.push(phoneWithoutCountry.slice(0, 2) + phoneWithoutCountry.slice(3));
               phoneVariations.push('55' + phoneWithoutCountry.slice(0, 2) + phoneWithoutCountry.slice(3));
@@ -168,22 +242,16 @@ serve(async (req) => {
           for (const status of value.statuses) {
             const messageId = status.id;
             let newStatus = 'sent';
-
             switch (status.status) {
               case 'sent': newStatus = 'sent'; break;
               case 'delivered': newStatus = 'delivered'; break;
               case 'read': newStatus = 'read'; break;
               case 'failed': newStatus = 'failed'; break;
             }
-
-            const { error } = await supabase
+            await supabase
               .from('whatsapp_messages')
               .update({ status: newStatus })
               .eq('message_id', messageId);
-
-            if (error) {
-              console.error('Error updating message status:', error);
-            }
           }
         }
       }

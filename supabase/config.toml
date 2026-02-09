@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.meta-whatsapp-send-template]
 verify_jwt = false
+
+[functions.meta-whatsapp-get-templates]
+verify_jwt = false
