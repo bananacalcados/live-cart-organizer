@@ -10,6 +10,7 @@ interface SendTemplateRequest {
   phone: string;
   templateName: string;
   language?: string;
+  whatsappNumberId?: string;
   components?: Array<{
     type: string;
     parameters: Array<{
@@ -24,6 +25,30 @@ interface SendTemplateRequest {
 
 interface BulkSendRequest {
   queueIds: string[];
+  whatsappNumberId?: string;
+}
+
+async function getCredentials(supabase: ReturnType<typeof createClient>, whatsappNumberId?: string) {
+  if (whatsappNumberId) {
+    const { data } = await supabase
+      .from('whatsapp_numbers')
+      .select('phone_number_id, access_token')
+      .eq('id', whatsappNumberId)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token };
+  }
+  const { data } = await supabase
+    .from('whatsapp_numbers')
+    .select('phone_number_id, access_token')
+    .eq('is_default', true)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token };
+  return {
+    phoneNumberId: Deno.env.get('META_WHATSAPP_PHONE_NUMBER_ID') || '',
+    accessToken: Deno.env.get('META_WHATSAPP_ACCESS_TOKEN') || '',
+  };
 }
 
 serve(async (req) => {
@@ -32,26 +57,25 @@ serve(async (req) => {
   }
 
   try {
-    const accessToken = Deno.env.get('META_WHATSAPP_ACCESS_TOKEN');
-    const phoneNumberId = Deno.env.get('META_WHATSAPP_PHONE_NUMBER_ID');
-
-    if (!accessToken || !phoneNumberId) {
-      return new Response(
-        JSON.stringify({ error: 'Meta WhatsApp credentials not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body = await req.json();
-    const graphUrl = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
 
     // === Bulk send from queue ===
     if (body.queueIds) {
-      const { queueIds } = body as BulkSendRequest;
+      const { queueIds, whatsappNumberId } = body as BulkSendRequest;
+      const { phoneNumberId, accessToken } = await getCredentials(supabase, whatsappNumberId);
 
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      if (!accessToken || !phoneNumberId) {
+        return new Response(
+          JSON.stringify({ error: 'Meta WhatsApp credentials not configured' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const graphUrl = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
 
       const { data: queueItems, error: fetchError } = await supabase
         .from('meta_message_queue')
@@ -70,7 +94,6 @@ serve(async (req) => {
       const results = [];
 
       for (const item of queueItems || []) {
-        // Format phone
         let formattedPhone = item.phone.replace(/\D/g, '');
         if (!formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
@@ -86,7 +109,6 @@ serve(async (req) => {
           },
         };
 
-        // Add components/params if provided
         if (item.template_params && Array.isArray(item.template_params) && item.template_params.length > 0) {
           (templateBody.template as Record<string, unknown>).components = item.template_params;
         }
@@ -114,7 +136,6 @@ serve(async (req) => {
               })
               .eq('id', item.id);
 
-            // Save to whatsapp_messages for chat history
             await supabase.from('whatsapp_messages').insert({
               phone: formattedPhone,
               message: `[Template: ${item.template_name}]`,
@@ -138,7 +159,6 @@ serve(async (req) => {
             results.push({ id: item.id, success: false, error: errorMsg });
           }
 
-          // Small delay between sends to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, 200));
         } catch (sendError) {
           const errorMsg = sendError instanceof Error ? sendError.message : 'Unknown error';
@@ -162,7 +182,7 @@ serve(async (req) => {
     }
 
     // === Single template send ===
-    const { phone, templateName, language = 'pt_BR', components } = body as SendTemplateRequest;
+    const { phone, templateName, language = 'pt_BR', components, whatsappNumberId } = body as SendTemplateRequest;
 
     if (!phone || !templateName) {
       return new Response(
@@ -171,10 +191,21 @@ serve(async (req) => {
       );
     }
 
+    const { phoneNumberId, accessToken } = await getCredentials(supabase, whatsappNumberId);
+
+    if (!accessToken || !phoneNumberId) {
+      return new Response(
+        JSON.stringify({ error: 'Meta WhatsApp credentials not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     let formattedPhone = phone.replace(/\D/g, '');
     if (!formattedPhone.startsWith('55')) {
       formattedPhone = '55' + formattedPhone;
     }
+
+    const graphUrl = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
 
     const templateBody: Record<string, unknown> = {
       messaging_product: 'whatsapp',

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MessageCircle, Send, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useZapi } from "@/hooks/useZapi";
 import { Order } from "@/types/order";
+import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 
 interface SendWhatsAppDialogProps {
   open: boolean;
@@ -21,6 +23,11 @@ interface SendWhatsAppDialogProps {
 
 export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDialogProps) {
   const { sendMessage, isLoading } = useZapi();
+  const { fetchNumbers } = useWhatsAppNumberStore();
+
+  useEffect(() => {
+    if (open) fetchNumbers();
+  }, [open, fetchNumbers]);
   
   const totalValue = order.products.reduce(
     (sum, p) => sum + p.price * p.quantity,
@@ -60,6 +67,8 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
             <span className="font-medium text-foreground">{order.whatsapp}</span>
             <span className="text-xs">({order.instagramHandle})</span>
           </div>
+
+          <WhatsAppNumberSelector className="h-9 text-xs" />
 
           <div className="space-y-2">
             <Label htmlFor="message">Mensagem</Label>
