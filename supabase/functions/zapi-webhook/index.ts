@@ -50,21 +50,26 @@ function normalizePhone(payload: AnyPayload): { phone: string; isGroup: boolean 
   // For regular chats: extract digits only
   let phone = rawPhone.replace(/\D/g, '');
   
-  // Handle @lid format in the phone field - Z-API still provides real phone in 'phone' field
-  // The @lid is usually in chatLid, the 'phone' field should have the actual number
-  
-  // If phone looks like a @lid identifier (no country code pattern), it's invalid
-  // Brazilian phones: 55 + DDD(2) + phone(8-9) = 12-13 digits
-  if (phone.length > 13 || phone.length < 10) {
-    // This might be a lid identifier, not a real phone
-    // Log it but still store it for matching purposes
-    console.log(`Unusual phone format detected: ${rawPhone} -> ${phone}`);
-  }
-  
   // Ensure it has country code 55 for Brazil
   if (phone.length >= 10 && phone.length <= 11) {
-    // Missing country code, add 55
     phone = '55' + phone;
+  }
+  
+  // Brazilian mobile normalization: 55 + DDD(2) + 9XXXXXXXX(9) = 13 digits
+  // Some systems send without the 9th digit: 55 + DDD(2) + XXXXXXXX(8) = 12 digits
+  // Always normalize to 13 digits by adding the 9 after the DDD
+  if (phone.startsWith('55') && phone.length === 12) {
+    const ddd = phone.substring(2, 4);
+    const number = phone.substring(4);
+    // Only add 9 if the number doesn't already start with 9
+    if (!number.startsWith('9')) {
+      phone = '55' + ddd + '9' + number;
+      console.log(`Normalized 12-digit BR phone to 13: ${rawPhone} -> ${phone}`);
+    }
+  }
+  
+  if (phone.length > 13 || phone.length < 12) {
+    console.log(`Unusual phone format detected: ${rawPhone} -> ${phone}`);
   }
   
   return { phone, isGroup: false };
@@ -145,7 +150,10 @@ serve(async (req) => {
           console.error('Error saving outgoing message:', insertError);
         }
       } else {
-        // Incoming message
+      // Incoming message
+        // Capture sender name (pushName) from Z-API payload
+        const senderName = asString(payload.senderName) || asString(payload.chatName) || asString(payload.pushName) || null;
+        
         const { error } = await supabase.from('whatsapp_messages').insert({
           phone,
           message: messageText,
@@ -153,7 +161,19 @@ serve(async (req) => {
           message_id: messageId,
           status,
           is_group: isGroup,
+          sender_name: senderName,
         });
+        
+        // Upsert chat_contacts with display_name from sender
+        if (senderName && !isGroup) {
+          const { error: contactError } = await supabase
+            .from('chat_contacts')
+            .upsert(
+              { phone, display_name: senderName },
+              { onConflict: 'phone', ignoreDuplicates: false }
+            );
+          if (contactError) console.error('Error upserting chat contact:', contactError);
+        }
 
         if (error) {
           console.error('Error saving incoming message:', error);

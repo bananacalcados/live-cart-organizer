@@ -4,7 +4,7 @@ import {
   Search, Phone, Users, MessageCircle, Filter, ArrowLeft,
   Send, Mic, Image, Video, Paperclip, X, Check, CheckCheck,
   Clock, Camera, Plus, Smile, MoreVertical, ChevronDown, Square,
-  FileText, UserPlus,
+  FileText, UserPlus, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +93,14 @@ interface MetaTemplate {
   }>;
 }
 
+// ── Chat contact type ──
+interface ChatContact {
+  id: string;
+  phone: string;
+  display_name: string | null;
+  custom_name: string | null;
+}
+
 export default function ChatPage() {
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -104,6 +112,9 @@ export default function ChatPage() {
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [numberFilter, setNumberFilter] = useState<string>('all');
+  const [chatContacts, setChatContacts] = useState<ChatContact[]>([]);
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
 
   // Templates
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
@@ -137,8 +148,38 @@ export default function ChatPage() {
   const { numbers, fetchNumbers, selectedNumberId, setSelectedNumberId } = useWhatsAppNumberStore();
   const { sendMessage: zapiSend, sendMedia: zapiSendMedia } = useZapi();
 
-  // ── Fetch numbers on mount ──
+  // ── Fetch numbers and contacts on mount ──
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
+  
+  useEffect(() => {
+    const loadContacts = async () => {
+      const { data } = await supabase.from('chat_contacts').select('*');
+      if (data) setChatContacts(data as ChatContact[]);
+    };
+    loadContacts();
+    const channel = supabase
+      .channel('chat-contacts-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_contacts' }, () => loadContacts())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  const getContactName = useCallback((phone: string): string | null => {
+    const contact = chatContacts.find(c => c.phone === phone);
+    if (contact?.custom_name) return contact.custom_name;
+    if (contact?.display_name) return contact.display_name;
+    return null;
+  }, [chatContacts]);
+
+  const saveContactName = async (phone: string, customName: string) => {
+    const existing = chatContacts.find(c => c.phone === phone);
+    if (existing) {
+      await supabase.from('chat_contacts').update({ custom_name: customName || null }).eq('id', existing.id);
+    } else {
+      await supabase.from('chat_contacts').insert({ phone, custom_name: customName || null });
+    }
+    setEditingName(false);
+  };
 
   // ── Load conversations ──
   const loadConversations = useCallback(async () => {
@@ -176,7 +217,7 @@ export default function ChatPage() {
         lastMessage: lastMsg.message,
         lastMessageAt: new Date(lastMsg.created_at),
         unreadCount: value.unread,
-        customerName: order?.customer?.instagram_handle || customer?.instagram_handle,
+        customerName: getContactName(phone) || order?.customer?.instagram_handle || customer?.instagram_handle,
         isGroup,
         hasUnansweredMessage: lastMsg.direction === 'incoming',
         stage: order?.stage,
@@ -186,7 +227,7 @@ export default function ChatPage() {
     });
     convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
     setConversations(convs);
-  }, [orders, customers, numberFilter]);
+  }, [orders, customers, numberFilter, getContactName]);
 
   useEffect(() => {
     loadConversations();
@@ -685,7 +726,40 @@ export default function ChatPage() {
                   {selectedConv?.isGroup ? <Users className="h-5 w-5" /> : (selectedConv?.customerName || selectedPhone).charAt(0).replace('@', '')}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[#e9edef] font-medium truncate">{selectedConv?.customerName || selectedPhone}</p>
+                  {editingName ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        autoFocus
+                        value={editNameValue}
+                        onChange={(e) => setEditNameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveContactName(selectedPhone!, editNameValue);
+                          if (e.key === 'Escape') setEditingName(false);
+                        }}
+                        className="h-7 text-sm bg-[#2a3942] border-none text-[#e9edef] focus-visible:ring-0"
+                        placeholder="Nome do contato"
+                      />
+                      <Button size="sm" variant="ghost" className="h-7 text-[#00a884] hover:bg-[#2a3942]" onClick={() => saveContactName(selectedPhone!, editNameValue)}>
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-[#aebac1] hover:bg-[#2a3942]" onClick={() => setEditingName(false)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 group">
+                      <p className="text-[#e9edef] font-medium truncate">{selectedConv?.customerName || selectedPhone}</p>
+                      <button
+                        onClick={() => {
+                          setEditNameValue(selectedConv?.customerName || '');
+                          setEditingName(true);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-[#8696a0] hover:text-[#e9edef]"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                   <p className="text-xs text-[#8696a0] truncate">{selectedPhone}</p>
                 </div>
                 {selectedConv?.stage && (
