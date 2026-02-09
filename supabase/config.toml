@@ -23,3 +23,12 @@ verify_jwt = false
 
 [functions.meta-whatsapp-get-templates]
 verify_jwt = false
+
+[functions.paypal-create-order]
+verify_jwt = false
+
+[functions.paypal-webhook]
+verify_jwt = false
+
+[functions.paypal-get-order]
+verify_jwt = false
