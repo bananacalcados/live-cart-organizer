@@ -12,14 +12,16 @@ import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
-import { Calendar } from "lucide-react";
+import { Calendar, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const Index = () => {
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<DbOrder | null>(null);
   const [selectedStage, setSelectedStage] = useState<OrderStage | "all">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   
   const { currentEventId, getCurrentEvent, fetchEvents } = useEventStore();
   const { fetchCustomers } = useCustomerStore();
@@ -66,10 +68,16 @@ const Index = () => {
     setDialogOpen(true);
   };
 
-  // Filter orders by stage
-  const filteredOrders = selectedStage === "all" 
-    ? orders 
-    : orders.filter((o) => o.stage === selectedStage);
+  // Filter orders by stage and search
+  const filteredOrders = orders.filter((o) => {
+    const stageMatch = selectedStage === "all" || o.stage === selectedStage;
+    if (!stageMatch) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().replace(/\D/g, '') || searchQuery.toLowerCase();
+    const instagram = o.customer?.instagram_handle?.toLowerCase() || '';
+    const whatsapp = o.customer?.whatsapp?.replace(/\D/g, '') || '';
+    return instagram.includes(searchQuery.toLowerCase()) || whatsapp.includes(q);
+  });
 
   const unpaidCount = getUnpaidOrdersCount(currentEventId || undefined);
 
@@ -78,7 +86,7 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background">
       <Header onNewOrder={handleNewOrder} />
       
       {currentEvent && (
@@ -107,7 +115,24 @@ const Index = () => {
         </div>
       )}
       
+      <StageNavigation 
+        selectedStage={selectedStage} 
+        onSelectStage={setSelectedStage} 
+      />
+
       <main className="container py-6">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por @ ou WhatsApp..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+
         <StatsBar orders={orders} />
         
         {isLoading ? (
@@ -120,11 +145,6 @@ const Index = () => {
           </div>
         )}
       </main>
-
-      <StageNavigation 
-        selectedStage={selectedStage} 
-        onSelectStage={setSelectedStage} 
-      />
 
       <OrderDialogDb
         open={dialogOpen}
