@@ -11,6 +11,14 @@ function normalizePhone(rawPhone: string): string {
   if (phone.length >= 10 && phone.length <= 11) {
     phone = '55' + phone;
   }
+  // Brazilian mobile normalization: ensure 13 digits (55 + DDD + 9XXXXXXXX)
+  if (phone.startsWith('55') && phone.length === 12) {
+    const ddd = phone.substring(2, 4);
+    const number = phone.substring(4);
+    if (!number.startsWith('9')) {
+      phone = '55' + ddd + '9' + number;
+    }
+  }
   return phone;
 }
 
@@ -192,6 +200,10 @@ serve(async (req) => {
               mediaUrl = downloadedUrl;
             }
 
+            // Get sender name from contacts array
+            const contact = value.contacts?.find((c: any) => c.wa_id === msg.from);
+            const senderName = contact?.profile?.name || null;
+
             const { error } = await supabase.from('whatsapp_messages').insert({
               phone,
               message: messageText,
@@ -202,12 +214,23 @@ serve(async (req) => {
               media_url: mediaUrl,
               is_group: false,
               whatsapp_number_id: whatsappNumberDbId || null,
+              sender_name: senderName,
             });
 
             if (error) {
               console.error('Error saving incoming message:', error);
             } else {
-              console.log(`Saved incoming message from ${phone}`);
+              console.log(`Saved incoming message from ${phone} (${senderName || 'unknown'})`);
+            }
+
+            // Upsert chat_contacts with display_name
+            if (senderName) {
+              await supabase
+                .from('chat_contacts')
+                .upsert(
+                  { phone, display_name: senderName },
+                  { onConflict: 'phone', ignoreDuplicates: false }
+                );
             }
 
             // Update orders
