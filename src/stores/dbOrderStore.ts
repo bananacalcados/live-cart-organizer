@@ -405,19 +405,12 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       
       const lastSent = new Date(order.last_sent_message_at);
       
-      // No customer response ever
+      // Only auto-move to no_response on FIRST contact (customer never responded)
       if (!order.last_customer_message_at && lastSent < fiveMinutesAgo) {
         return true;
       }
       
-      // Customer responded but we sent again and they didn't respond
-      if (order.last_customer_message_at) {
-        const lastCustomer = new Date(order.last_customer_message_at);
-        if (lastSent > lastCustomer && lastSent < fiveMinutesAgo) {
-          return true;
-        }
-      }
-      
+      // If customer has responded at least once, do NOT auto-move anymore
       return false;
     });
 
