@@ -20,7 +20,7 @@ const Index = () => {
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<DbOrder | null>(null);
-  const [selectedStage, setSelectedStage] = useState<OrderStage | "all">("all");
+  const [selectedStage, setSelectedStage] = useState<OrderStage | "all" | "unpaid">("all");
   const [searchQuery, setSearchQuery] = useState("");
   
   const { currentEventId, getCurrentEvent, fetchEvents } = useEventStore();
@@ -70,13 +70,19 @@ const Index = () => {
 
   // Filter orders by stage and search
   const filteredOrders = orders.filter((o) => {
-    const stageMatch = selectedStage === "all" || o.stage === selectedStage;
-    if (!stageMatch) return false;
+    // Stage/unpaid filter
+    if (selectedStage === "unpaid") {
+      if (o.is_paid) return false;
+    } else if (selectedStage !== "all") {
+      if (o.stage !== selectedStage) return false;
+    }
+    
     if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase().replace(/\D/g, '') || searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase();
+    const qDigits = searchQuery.replace(/\D/g, '');
     const instagram = o.customer?.instagram_handle?.toLowerCase() || '';
     const whatsapp = o.customer?.whatsapp?.replace(/\D/g, '') || '';
-    return instagram.includes(searchQuery.toLowerCase()) || whatsapp.includes(q);
+    return instagram.includes(q) || (qDigits && whatsapp.includes(qDigits));
   });
 
   const unpaidCount = getUnpaidOrdersCount(currentEventId || undefined);
