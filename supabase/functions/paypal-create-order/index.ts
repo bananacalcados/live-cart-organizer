@@ -7,9 +7,11 @@ const corsHeaders = {
 };
 
 async function getPayPalAccessToken(): Promise<string> {
-  const clientId = Deno.env.get("PAYPAL_CLIENT_ID")!;
-  const clientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET")!;
-  const baseUrl = Deno.env.get("PAYPAL_BASE_URL") || "https://api-m.paypal.com";
+  const clientId = (Deno.env.get("PAYPAL_CLIENT_ID") || "").trim();
+  const clientSecret = (Deno.env.get("PAYPAL_CLIENT_SECRET") || "").trim();
+  const baseUrl = (Deno.env.get("PAYPAL_BASE_URL") || "https://api-m.paypal.com").trim();
+
+  console.log("PayPal auth debug:", { baseUrl, clientIdLength: clientId.length, secretLength: clientSecret.length, clientIdPrefix: clientId.substring(0, 8) });
 
   const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
     method: "POST",
