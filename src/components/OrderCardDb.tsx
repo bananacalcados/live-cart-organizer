@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet } from "lucide-react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES } from "@/types/order";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { ptBR } from "date-fns/locale";
 import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
 import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
 import { Order } from "@/types/order";
+import { toast } from "sonner";
 
 interface OrderCardDbProps {
   order: DbOrder;
@@ -240,6 +241,30 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       ) : (
         <div className="py-4 text-center text-xs text-muted-foreground bg-secondary/30 rounded-lg">
           Nenhum produto adicionado
+        </div>
+      )}
+
+      {/* Registration link button */}
+      {order.products.length > 0 && (
+        <div className="mt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs gap-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              const url = `${window.location.origin}/register/${order.id}`;
+              navigator.clipboard.writeText(url).then(
+                () => toast.success("Link de cadastro copiado!"),
+                () => {
+                  window.prompt("Copie o link:", url);
+                }
+              );
+            }}
+          >
+            <ClipboardCopy className="h-3 w-3" />
+            Copiar Link de Cadastro
+          </Button>
         </div>
       )}
 

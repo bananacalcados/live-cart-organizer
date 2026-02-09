@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.paypal-get-order]
 verify_jwt = false
+
+[functions.shopify-create-draft-order]
+verify_jwt = false

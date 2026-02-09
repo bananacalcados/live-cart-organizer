@@ -41,6 +41,77 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_registrations: {
+        Row: {
+          address: string
+          address_number: string
+          cep: string
+          city: string
+          complement: string | null
+          cpf: string
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          neighborhood: string
+          order_id: string
+          shopify_draft_order_id: string | null
+          shopify_draft_order_name: string | null
+          state: string
+          status: string
+          updated_at: string
+          whatsapp: string
+        }
+        Insert: {
+          address: string
+          address_number: string
+          cep: string
+          city: string
+          complement?: string | null
+          cpf: string
+          created_at?: string
+          email: string
+          full_name: string
+          id?: string
+          neighborhood: string
+          order_id: string
+          shopify_draft_order_id?: string | null
+          shopify_draft_order_name?: string | null
+          state: string
+          status?: string
+          updated_at?: string
+          whatsapp: string
+        }
+        Update: {
+          address?: string
+          address_number?: string
+          cep?: string
+          city?: string
+          complement?: string | null
+          cpf?: string
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          neighborhood?: string
+          order_id?: string
+          shopify_draft_order_id?: string | null
+          shopify_draft_order_name?: string | null
+          state?: string
+          status?: string
+          updated_at?: string
+          whatsapp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_registrations_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           ban_reason: string | null
