@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -61,6 +61,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [isGeneratingCartLink, setIsGeneratingCartLink] = useState(false);
   const [isGeneratingYampiLink, setIsGeneratingYampiLink] = useState(false);
   const [isGeneratingPayPalLink, setIsGeneratingPayPalLink] = useState(false);
+  const [isGeneratingPixLink, setIsGeneratingPixLink] = useState(false);
   const [banReason, setBanReason] = useState("");
   
   // Discount and extras
@@ -241,6 +242,41 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       toast.error(errorMessage, { duration: 6000 });
     } finally {
       setIsGeneratingPayPalLink(false);
+    }
+  }, [localProducts, editingOrder]);
+
+  const generatePixLink = useCallback(async () => {
+    if (localProducts.length === 0) {
+      toast.error("Adicione produtos antes de gerar o PIX");
+      return;
+    }
+
+    if (!editingOrder) {
+      toast.error("Salve o pedido primeiro antes de gerar o PIX");
+      return;
+    }
+
+    setIsGeneratingPixLink(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
+        body: { orderId: editingOrder.id },
+      });
+
+      if (error) throw error;
+
+      if (data?.qrCode) {
+        // Copy PIX code to clipboard
+        await navigator.clipboard.writeText(data.qrCode);
+        toast.success(`PIX gerado! Código copiado. Valor: R$ ${data.amount}`, { duration: 6000 });
+      } else {
+        throw new Error("No PIX data returned");
+      }
+    } catch (error) {
+      console.error("Error generating PIX:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erro ao gerar PIX";
+      toast.error(errorMessage, { duration: 6000 });
+    } finally {
+      setIsGeneratingPixLink(false);
     }
   }, [localProducts, editingOrder]);
 
@@ -468,10 +504,25 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                   <CreditCard className="h-4 w-4" />
                 )}
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={generatePixLink}
+                disabled={isGeneratingCartLink || isGeneratingYampiLink || isGeneratingPayPalLink || isGeneratingPixLink || localProducts.length === 0 || !editingOrder}
+                title="Gerar PIX (Mercado Pago)"
+                className="text-[#00BFAE] hover:text-[#00BFAE] hover:bg-[#00BFAE]/10"
+              >
+                {isGeneratingPixLink ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <QrCode className="h-4 w-4" />
+                )}
+              </Button>
             </div>
             {localProducts.length > 0 && !cartLink && (
               <p className="text-xs text-muted-foreground">
-                Shopify (↻) | Yampi (🛍️) | PayPal (💳) - clique para gerar
+                Shopify (↻) | Yampi (🛍️) | PayPal (💳) | PIX (◻) - clique para gerar
               </p>
             )}
             <div className="flex items-center justify-between mt-3 p-3 bg-secondary/50 rounded-lg">
