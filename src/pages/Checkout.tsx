@@ -547,7 +547,7 @@ export default function Checkout() {
               <PixPaymentSection orderId={orderData.orderId} amount={Number(orderData.amount)} />
             </TabsContent>
 
-            <TabsContent value="card" className="mt-4 space-y-4">
+            <TabsContent value="card" forceMount className="mt-4 space-y-4 data-[state=inactive]:hidden">
               {/* Card Fields */}
               {cardFieldsEligible && (
                 <div className="space-y-4">
