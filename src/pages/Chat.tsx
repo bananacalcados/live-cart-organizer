@@ -815,6 +815,15 @@ export default function ChatPage() {
                                 borderTopLeftRadius: msg.direction === 'incoming' ? 0 : undefined,
                               }}
                             >
+                              {/* WhatsApp number indicator */}
+                              {msg.whatsapp_number_id && (() => {
+                                const num = numbers.find(n => n.id === msg.whatsapp_number_id);
+                                return num ? (
+                                  <p className="text-[10px] font-medium mb-0.5" style={{ color: msg.direction === 'outgoing' ? '#34d399' : '#60a5fa' }}>
+                                    {num.label}
+                                  </p>
+                                ) : null;
+                              })()}
                               <MessageMedia msg={msg} />
                               {msg.message && <p className="whitespace-pre-wrap break-words pr-14 leading-[1.35]">{msg.message}</p>}
                               <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[11px] text-[#ffffff99]">

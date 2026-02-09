@@ -8,6 +8,8 @@ export interface Message {
   media_url?: string;
   status?: string;
   is_group?: boolean;
+  whatsapp_number_id?: string;
+  sender_name?: string;
 }
 
 export interface Conversation {
