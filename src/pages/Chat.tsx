@@ -4,7 +4,7 @@ import {
   Search, Phone, Users, MessageCircle, Filter, ArrowLeft,
   Send, Mic, Image, Video, Paperclip, X, Check, CheckCheck,
   Clock, Camera, Plus, Smile, MoreVertical, ChevronDown, Square,
-  FileText,
+  FileText, UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,6 +109,8 @@ export default function ChatPage() {
   const [templates, setTemplates] = useState<MetaTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
+  const [showNewChatDialog, setShowNewChatDialog] = useState(false);
+  const [newChatPhone, setNewChatPhone] = useState("");
 
   // Media
   const [selectedMedia, setSelectedMedia] = useState<{ file: File; type: 'image' | 'audio' | 'video' | 'document'; previewUrl: string } | null>(null);
@@ -545,7 +547,17 @@ export default function ChatPage() {
                 </button>
               ))}
             </div>
-          </div>
+            </div>
+            {/* New conversation button */}
+            <div className="px-2 pb-2">
+              <Button
+                onClick={() => setShowNewChatDialog(true)}
+                className="w-full bg-[#00a884] hover:bg-[#00a884]/90 text-[#111b21] h-9 text-sm font-medium gap-2"
+              >
+                <UserPlus className="h-4 w-4" />
+                Nova conversa
+              </Button>
+            </div>
 
           {/* Conversation list */}
           <div className="flex-1 overflow-y-auto">
@@ -818,6 +830,62 @@ export default function ChatPage() {
           )}
         </div>
       </div>
+
+      {/* New Chat Dialog */}
+      <Dialog open={showNewChatDialog} onOpenChange={setShowNewChatDialog}>
+        <DialogContent className="bg-[#202c33] border-[#3b4a54] text-[#e9edef] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#e9edef] flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-[#00a884]" />
+              Nova conversa
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-[#8696a0] mb-1.5 block">Número de WhatsApp</label>
+              <Input
+                placeholder="Ex: 5511999999999"
+                value={newChatPhone}
+                onChange={(e) => setNewChatPhone(e.target.value.replace(/\D/g, ''))}
+                className="bg-[#2a3942] border-none text-[#e9edef] placeholder:text-[#8696a0] h-11 text-base"
+              />
+              <p className="text-[10px] text-[#8696a0] mt-1">Digite o número com DDD e código do país (55 para Brasil)</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  if (!newChatPhone.trim()) { toast.error('Digite um número'); return; }
+                  const phone = newChatPhone.startsWith('55') ? newChatPhone : '55' + newChatPhone;
+                  setSelectedPhone(phone);
+                  loadMessages(phone);
+                  setShowNewChatDialog(false);
+                  setNewChatPhone("");
+                }}
+                variant="outline"
+                className="flex-1 border-[#3b4a54] text-[#e9edef] hover:bg-[#2a3942] h-10"
+              >
+                Abrir conversa
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!newChatPhone.trim()) { toast.error('Digite um número'); return; }
+                  const phone = newChatPhone.startsWith('55') ? newChatPhone : '55' + newChatPhone;
+                  setSelectedPhone(phone);
+                  loadMessages(phone);
+                  setShowNewChatDialog(false);
+                  setNewChatPhone("");
+                  // Open templates after a short delay to let state update
+                  setTimeout(() => handleOpenTemplates(), 300);
+                }}
+                className="flex-1 bg-[#00a884] hover:bg-[#00a884]/90 text-[#111b21] h-10 gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                Enviar Template
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Template Dialog */}
       <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
