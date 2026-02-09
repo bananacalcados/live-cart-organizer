@@ -263,6 +263,56 @@ export type Database = {
           },
         ]
       }
+      paypal_payments: {
+        Row: {
+          amount: number
+          capture_id: string | null
+          created_at: string
+          currency: string
+          id: string
+          order_id: string
+          payer_email: string | null
+          payer_name: string | null
+          paypal_order_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          capture_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          order_id: string
+          payer_email?: string | null
+          payer_name?: string | null
+          paypal_order_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          capture_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          order_id?: string
+          payer_email?: string | null
+          payer_name?: string | null
+          paypal_order_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paypal_payments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shopify_yampi_mapping: {
         Row: {
           created_at: string

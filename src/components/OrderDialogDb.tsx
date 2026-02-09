@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,7 @@ import { STAGES, OrderStage } from "@/types/order";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
 import { createYampiPaymentLinkFromOrder } from "@/lib/yampi";
@@ -59,6 +60,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [localProducts, setLocalProducts] = useState<DbOrderProduct[]>([]);
   const [isGeneratingCartLink, setIsGeneratingCartLink] = useState(false);
   const [isGeneratingYampiLink, setIsGeneratingYampiLink] = useState(false);
+  const [isGeneratingPayPalLink, setIsGeneratingPayPalLink] = useState(false);
   const [banReason, setBanReason] = useState("");
   
   // Discount and extras
@@ -207,6 +209,40 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       setIsGeneratingYampiLink(false);
     }
   }, [localProducts, editingOrder?.id, whatsapp, discountType, discountValue, freeShipping, couponCode]);
+
+  const generatePayPalLink = useCallback(async () => {
+    if (localProducts.length === 0) {
+      toast.error("Adicione produtos antes de gerar o link");
+      return;
+    }
+
+    if (!editingOrder) {
+      toast.error("Salve o pedido primeiro antes de gerar o link PayPal");
+      return;
+    }
+
+    setIsGeneratingPayPalLink(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("paypal-create-order", {
+        body: { orderId: editingOrder.id },
+      });
+
+      if (error) throw error;
+
+      if (data?.checkoutUrl) {
+        setCartLink(data.checkoutUrl);
+        toast.success(`Link PayPal gerado! Valor: R$ ${data.amount}`);
+      } else {
+        throw new Error("No checkout URL returned");
+      }
+    } catch (error) {
+      console.error("Error generating PayPal link:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erro ao gerar link PayPal";
+      toast.error(errorMessage, { duration: 6000 });
+    } finally {
+      setIsGeneratingPayPalLink(false);
+    }
+  }, [localProducts, editingOrder]);
 
   const handleBanCustomer = async () => {
     if (editingOrder?.customer) {
@@ -417,10 +453,25 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                   <ShoppingBag className="h-4 w-4" />
                 )}
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={generatePayPalLink}
+                disabled={isGeneratingCartLink || isGeneratingYampiLink || isGeneratingPayPalLink || localProducts.length === 0 || !editingOrder}
+                title="Gerar link PayPal"
+                className="text-[#0070BA] hover:text-[#0070BA] hover:bg-[#0070BA]/10"
+              >
+                {isGeneratingPayPalLink ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CreditCard className="h-4 w-4" />
+                )}
+              </Button>
             </div>
             {localProducts.length > 0 && !cartLink && (
               <p className="text-xs text-muted-foreground">
-                Shopify (↻) ou Yampi (🛍️) - clique para gerar o link
+                Shopify (↻) | Yampi (🛍️) | PayPal (💳) - clique para gerar
               </p>
             )}
             <div className="flex items-center justify-between mt-3 p-3 bg-secondary/50 rounded-lg">
