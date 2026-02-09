@@ -88,6 +88,7 @@ interface MetaTemplate {
     type: string;
     text?: string;
     format?: string;
+    example?: { header_handle?: string[]; body_text?: string[][] };
     buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
   }>;
 }
@@ -109,6 +110,8 @@ export default function ChatPage() {
   const [templates, setTemplates] = useState<MetaTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [templateSearch, setTemplateSearch] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState<MetaTemplate | null>(null);
+  const [templateParamValues, setTemplateParamValues] = useState<string[]>([]);
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
   const [newChatPhone, setNewChatPhone] = useState("");
 
@@ -405,10 +408,47 @@ export default function ChatPage() {
     fetchTemplates();
   };
 
-  const handleSendTemplate = async (template: MetaTemplate) => {
+  // Extract parameter count from template body
+  const getTemplateParamCount = (template: MetaTemplate): number => {
+    const bodyComp = template.components.find(c => c.type === 'BODY');
+    if (!bodyComp?.text) return 0;
+    const matches = bodyComp.text.match(/\{\{\d+\}\}/g);
+    return matches ? matches.length : 0;
+  };
+
+  const handleSelectTemplate = (template: MetaTemplate) => {
+    const paramCount = getTemplateParamCount(template);
+    if (paramCount > 0) {
+      setSelectedTemplate(template);
+      setTemplateParamValues(new Array(paramCount).fill(''));
+    } else {
+      handleSendTemplate(template, []);
+    }
+  };
+
+  const handleSendTemplate = async (template: MetaTemplate, paramValues: string[]) => {
     if (!selectedPhone) return;
     setIsSending(true);
     setShowTemplateDialog(false);
+    setSelectedTemplate(null);
+
+    // Build components array with parameters
+    const components: Array<{ type: string; parameters: Array<{ type: string; text: string }> }> = [];
+    if (paramValues.length > 0) {
+      components.push({
+        type: 'body',
+        parameters: paramValues.map(val => ({ type: 'text', text: val })),
+      });
+    }
+
+    // Check for HEADER with IMAGE format
+    const headerComp = template.components.find(c => c.type === 'HEADER');
+    if (headerComp?.format === 'IMAGE' && headerComp.example?.header_handle?.[0]) {
+      components.push({
+        type: 'header',
+        parameters: [{ type: 'image', link: headerComp.example.header_handle[0] } as any],
+      });
+    }
 
     try {
       const numberId = numberFilter !== 'all' ? numberFilter : selectedNumberId;
@@ -424,6 +464,7 @@ export default function ChatPage() {
           templateName: template.name,
           language: template.language,
           whatsappNumberId: numberId,
+          components: components.length > 0 ? components : undefined,
         }),
       });
 
@@ -912,7 +953,7 @@ export default function ChatPage() {
                     return (
                       <button
                         key={`${tmpl.name}-${idx}`}
-                        onClick={() => handleSendTemplate(tmpl)}
+                        onClick={() => handleSelectTemplate(tmpl)}
                         className="w-full text-left p-3 rounded-lg bg-[#111b21] hover:bg-[#2a3942] transition-colors"
                       >
                         <div className="flex items-center justify-between mb-1">
@@ -935,6 +976,58 @@ export default function ChatPage() {
               )}
             </ScrollArea>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template Params Dialog */}
+      <Dialog open={!!selectedTemplate} onOpenChange={(open) => { if (!open) setSelectedTemplate(null); }}>
+        <DialogContent className="bg-[#202c33] border-[#3b4a54] text-[#e9edef] max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#e9edef]">
+              Preencher parâmetros: {selectedTemplate?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedTemplate && (() => {
+            const bodyComp = selectedTemplate.components.find(c => c.type === 'BODY');
+            const previewText = bodyComp?.text?.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
+              const val = templateParamValues[parseInt(idx) - 1];
+              return val || `{{${idx}}}`;
+            }) || '';
+            return (
+              <div className="space-y-4">
+                <div className="p-3 rounded-lg bg-[#111b21] text-xs text-[#8696a0] whitespace-pre-wrap">
+                  {previewText}
+                </div>
+                {templateParamValues.map((val, i) => (
+                  <div key={i}>
+                    <label className="text-xs text-[#8696a0] mb-1 block">
+                      Parâmetro {`{{${i + 1}}}`}
+                      {bodyComp?.example?.body_text?.[0]?.[i] && (
+                        <span className="ml-2 text-[#00a884]">ex: {bodyComp.example.body_text[0][i]}</span>
+                      )}
+                    </label>
+                    <Input
+                      value={val}
+                      onChange={(e) => {
+                        const newVals = [...templateParamValues];
+                        newVals[i] = e.target.value;
+                        setTemplateParamValues(newVals);
+                      }}
+                      className="bg-[#2a3942] border-none text-[#e9edef] placeholder:text-[#8696a0]"
+                      placeholder={bodyComp?.example?.body_text?.[0]?.[i] || `Valor do parâmetro ${i + 1}`}
+                    />
+                  </div>
+                ))}
+                <Button
+                  onClick={() => handleSendTemplate(selectedTemplate, templateParamValues)}
+                  disabled={templateParamValues.some(v => !v.trim()) || isSending}
+                  className="w-full bg-[#00a884] hover:bg-[#00a884]/90 text-white"
+                >
+                  {isSending ? 'Enviando...' : 'Enviar template'}
+                </Button>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
