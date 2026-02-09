@@ -380,12 +380,6 @@ export default function ChatPage() {
     try {
       const numberId = numberFilter !== 'all' ? numberFilter : selectedNumberId;
       const params = numberId ? `?whatsappNumberId=${numberId}` : '';
-      const { data, error } = await supabase.functions.invoke('meta-whatsapp-get-templates', {
-        body: null,
-        method: 'GET',
-        headers: {},
-      });
-      // Use fetch directly since invoke doesn't support query params easily
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-get-templates${params}`;
       const res = await fetch(url, {
         headers: {
@@ -397,7 +391,7 @@ export default function ChatPage() {
       if (result.templates) {
         setTemplates(result.templates);
       } else {
-        toast.error('Erro ao buscar templates');
+        toast.error(result?.details?.error?.message || 'Erro ao buscar templates');
       }
     } catch (err) {
       console.error('Error fetching templates:', err);
