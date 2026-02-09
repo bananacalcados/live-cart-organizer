@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +12,32 @@ interface SendMessageRequest {
   type?: 'text' | 'image' | 'video' | 'audio' | 'document';
   mediaUrl?: string;
   caption?: string;
+  whatsappNumberId?: string;
+}
+
+async function getCredentials(supabase: ReturnType<typeof createClient>, whatsappNumberId?: string) {
+  if (whatsappNumberId) {
+    const { data, error } = await supabase
+      .from('whatsapp_numbers')
+      .select('phone_number_id, access_token')
+      .eq('id', whatsappNumberId)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token };
+  }
+  // Fallback: default number
+  const { data } = await supabase
+    .from('whatsapp_numbers')
+    .select('phone_number_id, access_token')
+    .eq('is_default', true)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token };
+  // Final fallback: env vars
+  return {
+    phoneNumberId: Deno.env.get('META_WHATSAPP_PHONE_NUMBER_ID') || '',
+    accessToken: Deno.env.get('META_WHATSAPP_ACCESS_TOKEN') || '',
+  };
 }
 
 serve(async (req) => {
@@ -19,17 +46,11 @@ serve(async (req) => {
   }
 
   try {
-    const accessToken = Deno.env.get('META_WHATSAPP_ACCESS_TOKEN');
-    const phoneNumberId = Deno.env.get('META_WHATSAPP_PHONE_NUMBER_ID');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!accessToken || !phoneNumberId) {
-      return new Response(
-        JSON.stringify({ error: 'Meta WhatsApp credentials not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { phone, message, type = 'text', mediaUrl, caption }: SendMessageRequest = await req.json();
+    const { phone, message, type = 'text', mediaUrl, caption, whatsappNumberId }: SendMessageRequest = await req.json();
 
     if (!phone) {
       return new Response(
@@ -38,7 +59,15 @@ serve(async (req) => {
       );
     }
 
-    // Format phone: Meta expects without + sign, just digits with country code
+    const { phoneNumberId, accessToken } = await getCredentials(supabase, whatsappNumberId);
+
+    if (!accessToken || !phoneNumberId) {
+      return new Response(
+        JSON.stringify({ error: 'Meta WhatsApp credentials not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     let formattedPhone = phone.replace(/\D/g, '');
     if (!formattedPhone.startsWith('55')) {
       formattedPhone = '55' + formattedPhone;
@@ -115,7 +144,6 @@ serve(async (req) => {
       );
     }
 
-    // Extract message ID from response
     const messageId = data.messages?.[0]?.id || null;
 
     console.log('Meta message sent successfully:', data);
