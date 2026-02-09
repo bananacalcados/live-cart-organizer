@@ -43,9 +43,12 @@ serve(async (req) => {
       image?: string;
     }>;
 
+    const paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID") || "";
+
     return new Response(
       JSON.stringify({
         paypalOrderId: payment.paypal_order_id,
+        paypalClientId,
         status: payment.status,
         amount: payment.amount,
         currency: payment.currency,
