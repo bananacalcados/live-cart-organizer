@@ -46,12 +46,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 // ── Status icon helper ──
 function StatusIcon({ status }: { status: string | null }) {
   switch (status) {
-    case 'sending': return <Clock className="h-3 w-3" />;
-    case 'sent': return <Check className="h-3 w-3" />;
-    case 'delivered': return <CheckCheck className="h-3 w-3" />;
+    case 'sending': return <Clock className="h-3 w-3 text-[#ffffff99]" />;
+    case 'sent': return <Check className="h-3 w-3 text-[#ffffff99]" />;
+    case 'delivered': return <CheckCheck className="h-3 w-3 text-[#ffffff99]" />;
     case 'read': return <CheckCheck className="h-3 w-3 text-[#53bdeb]" />;
     case 'failed': return <X className="h-3 w-3 text-red-400" />;
-    default: return <Check className="h-3 w-3" />;
+    default: return <Check className="h-3 w-3 text-[#ffffff99]" />;
   }
 }
 
@@ -332,7 +332,7 @@ export default function ChatPage() {
     return numbers.some(n => n.id === numId);
   };
 
-  const sendViaMeta = async (phone: string, message: string, type: string = 'text', mediaUrl?: string, caption?: string) => {
+  const sendViaMeta = async (phone: string, message: string, type: string = 'text', mediaUrl?: string, caption?: string): Promise<{ success: boolean; messageId?: string }> => {
     const numberId = getActiveNumberId();
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send`;
     const res = await fetch(url, {
@@ -363,16 +363,15 @@ export default function ChatPage() {
       const mediaUrl = await uploadMediaToStorage(selectedMedia.file);
       if (!mediaUrl) { setIsUploading(false); return; }
 
-      let success = false;
+      let sendResult: { success: boolean; messageId?: string } = { success: false };
       if (useMeta) {
-        const result = await sendViaMeta(selectedPhone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
-        success = result.success;
+        sendResult = await sendViaMeta(selectedPhone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
       } else {
         const result = await zapiSendMedia(selectedPhone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined);
-        success = result.success;
+        sendResult = { success: result.success, messageId: undefined };
       }
 
-      if (success) {
+      if (sendResult.success) {
         await supabase.from('whatsapp_messages').insert({
           phone: selectedPhone,
           message: newMessage.trim() || `[${selectedMedia.type}]`,
@@ -381,6 +380,7 @@ export default function ChatPage() {
           media_type: selectedMedia.type,
           media_url: mediaUrl,
           whatsapp_number_id: numberId,
+          message_id: sendResult.messageId || null,
         });
         loadMessages(selectedPhone);
       }
@@ -396,22 +396,22 @@ export default function ChatPage() {
     setNewMessage("");
     setIsSending(true);
 
-    let success = false;
+    let sendResult: { success: boolean; messageId?: string } = { success: false };
     if (useMeta) {
-      const result = await sendViaMeta(selectedPhone, text);
-      success = result.success;
+      sendResult = await sendViaMeta(selectedPhone, text);
     } else {
       const result = await zapiSend(selectedPhone, text);
-      success = result.success;
+      sendResult = { success: result.success, messageId: undefined };
     }
 
-    if (success) {
+    if (sendResult.success) {
       await supabase.from('whatsapp_messages').insert({
         phone: selectedPhone,
         message: text,
         direction: 'outgoing',
         status: 'sent',
         whatsapp_number_id: numberId,
+        message_id: sendResult.messageId || null,
       });
       loadMessages(selectedPhone);
     }
