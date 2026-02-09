@@ -302,6 +302,45 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_numbers: {
+        Row: {
+          access_token: string
+          business_account_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          is_default: boolean
+          label: string
+          phone_display: string
+          phone_number_id: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          business_account_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          label: string
+          phone_display: string
+          phone_number_id: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          business_account_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          label?: string
+          phone_display?: string
+          phone_number_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
