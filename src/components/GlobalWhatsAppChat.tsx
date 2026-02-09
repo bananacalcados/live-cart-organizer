@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { ConversationList } from "./chat/ConversationList";
 import { ChatView } from "./chat/ChatView";
 import { Message, Conversation, ChatFilter, StageFilter } from "./chat/ChatTypes";
@@ -18,9 +20,16 @@ export function GlobalWhatsAppChat() {
   const [isSending, setIsSending] = useState(false);
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
+  const [sendVia, setSendVia] = useState<'zapi' | 'meta'>('zapi');
   
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
+  const { numbers: metaNumbers, selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+
+  // Fetch Meta numbers on mount
+  useEffect(() => {
+    fetchNumbers();
+  }, [fetchNumbers]);
 
   // Load conversations
   useEffect(() => {
@@ -150,17 +159,27 @@ export function GlobalWhatsAppChat() {
     }
   };
 
-  // Send message
+  // Send message via selected API
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedPhone || isSending) return;
 
     setIsSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke('zapi-send-message', {
-        body: { phone: selectedPhone, message: newMessage },
-      });
-
-      if (error) throw error;
+      if (sendVia === 'meta' && selectedNumberId) {
+        const { data, error } = await supabase.functions.invoke('meta-whatsapp-send', {
+          body: { 
+            phone: selectedPhone, 
+            message: newMessage,
+            whatsapp_number_id: selectedNumberId,
+          },
+        });
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.functions.invoke('zapi-send-message', {
+          body: { phone: selectedPhone, message: newMessage },
+        });
+        if (error) throw error;
+      }
 
       setNewMessage("");
     } catch (error) {
@@ -236,6 +255,33 @@ export function GlobalWhatsAppChat() {
           <X className="h-5 w-5" />
         </Button>
       </div>
+
+      {/* API Selector bar */}
+      {selectedPhone && (
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/50 text-xs">
+          <span className="text-muted-foreground">Enviar via:</span>
+          <button
+            onClick={() => setSendVia('zapi')}
+            className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'zapi' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}
+          >
+            Z-API
+          </button>
+          <button
+            onClick={() => setSendVia('meta')}
+            className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'meta' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}
+          >
+            Meta API
+          </button>
+          {sendVia === 'meta' && metaNumbers.length > 1 && (
+            <WhatsAppNumberSelector className="h-7 text-xs flex-1" />
+          )}
+          {sendVia === 'meta' && metaNumbers.length > 0 && (
+            <span className="text-muted-foreground">
+              {metaNumbers.find(n => n.id === selectedNumberId)?.label || ''}
+            </span>
+          )}
+        </div>
+      )}
 
       {!selectedPhone ? (
         <ConversationList
