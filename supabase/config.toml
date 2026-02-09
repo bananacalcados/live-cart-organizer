@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.shopify-get-variant-sku]
 verify_jwt = false
+
+[functions.meta-whatsapp-webhook]
+verify_jwt = false
+
+[functions.meta-whatsapp-send]
+verify_jwt = false
+
+[functions.meta-whatsapp-send-template]
+verify_jwt = false

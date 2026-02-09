@@ -101,6 +101,54 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_message_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          error_message: string | null
+          id: string
+          max_attempts: number
+          phone: string
+          scheduled_at: string | null
+          sent_at: string | null
+          status: string
+          template_language: string
+          template_name: string
+          template_params: Json | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          phone: string
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string
+          template_language?: string
+          template_name: string
+          template_params?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          phone?: string
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string
+          template_language?: string
+          template_name?: string
+          template_params?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           cart_link: string | null
