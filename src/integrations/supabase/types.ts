@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_contacts: {
+        Row: {
+          created_at: string
+          custom_name: string | null
+          display_name: string | null
+          id: string
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          custom_name?: string | null
+          display_name?: string | null
+          id?: string
+          phone: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          custom_name?: string | null
+          display_name?: string | null
+          id?: string
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           ban_reason: string | null
@@ -274,6 +301,7 @@ export type Database = {
           message: string
           message_id: string | null
           phone: string
+          sender_name: string | null
           status: string | null
           whatsapp_number_id: string | null
         }
@@ -287,6 +315,7 @@ export type Database = {
           message: string
           message_id?: string | null
           phone: string
+          sender_name?: string | null
           status?: string | null
           whatsapp_number_id?: string | null
         }
@@ -300,6 +329,7 @@ export type Database = {
           message?: string
           message_id?: string | null
           phone?: string
+          sender_name?: string | null
           status?: string | null
           whatsapp_number_id?: string | null
         }
