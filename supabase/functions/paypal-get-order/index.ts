@@ -52,6 +52,7 @@ serve(async (req) => {
         status: payment.status,
         amount: payment.amount,
         currency: payment.currency,
+        orderId: payment.order_id,
         customerName: customer.instagram_handle || "Cliente",
         products: products.map((p) => ({
           title: p.title,

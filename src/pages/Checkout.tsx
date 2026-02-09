@@ -2,9 +2,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface OrderProduct {
   title: string;
@@ -20,8 +23,16 @@ interface CheckoutData {
   status: string;
   amount: number;
   currency: string;
+  orderId: string;
   customerName: string;
   products: OrderProduct[];
+}
+
+interface PixData {
+  qrCode: string;
+  qrCodeBase64: string;
+  amount: string;
+  expirationDate: string;
 }
 
 declare global {
@@ -52,6 +63,276 @@ declare global {
   }
 }
 
+function formatCPF(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function formatCEP(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
+// ─── Product List ──────────────────────────────────────────────
+function ProductList({ products }: { products: OrderProduct[] }) {
+  return (
+    <div className="space-y-3">
+      <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Itens do Pedido</h3>
+      {products.map((product, index) => (
+        <div key={index} className="flex items-center gap-3 p-3 bg-secondary/30 rounded-lg">
+          {product.image && (
+            <img src={product.image} alt={product.title} className="w-14 h-14 rounded-md object-cover flex-shrink-0" />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm truncate">{product.title}</p>
+            {product.variant && <p className="text-xs text-muted-foreground">{product.variant}</p>}
+            <p className="text-xs text-muted-foreground">Qtd: {product.quantity}</p>
+          </div>
+          <p className="font-semibold text-sm flex-shrink-0">R$ {(product.price * product.quantity).toFixed(2)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── PIX Form + QR ─────────────────────────────────────────────
+function PixPaymentSection({
+  orderId,
+  amount,
+}: {
+  orderId: string;
+  amount: number;
+}) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [cep, setCep] = useState("");
+  const [street, setStreet] = useState("");
+  const [number, setNumber] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [pixData, setPixData] = useState<PixData | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const lookupCep = async (cepValue: string) => {
+    const digits = cepValue.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setStreet(data.logradouro || "");
+        setNeighborhood(data.bairro || "");
+        setCity(data.localidade || "");
+        setState(data.uf || "");
+      }
+    } catch {
+      // ignore CEP lookup errors
+    }
+  };
+
+  const handleGeneratePix = async () => {
+    if (!firstName.trim() || !cpf.trim() || !email.trim()) {
+      toast.error("Preencha nome, CPF e e-mail para continuar");
+      return;
+    }
+    if (cpf.replace(/\D/g, "").length !== 11) {
+      toast.error("CPF inválido");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
+        body: {
+          orderId,
+          payer: {
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            email: email.trim(),
+            cpf: cpf.trim(),
+            address: cep ? {
+              zipCode: cep.trim(),
+              street: street.trim(),
+              number: number.trim(),
+              neighborhood: neighborhood.trim(),
+              city: city.trim(),
+              state: state.trim(),
+            } : undefined,
+          },
+        },
+      });
+      if (error) throw error;
+      if (data?.qrCode) {
+        setPixData(data);
+      } else {
+        throw new Error("PIX data not returned");
+      }
+    } catch (error) {
+      console.error("PIX error:", error);
+      toast.error("Erro ao gerar PIX. Tente novamente.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCopyPix = async () => {
+    if (!pixData?.qrCode) return;
+    try {
+      await navigator.clipboard.writeText(pixData.qrCode);
+      setCopied(true);
+      toast.success("Código PIX copiado!");
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      window.prompt("Copie o código PIX:", pixData.qrCode);
+    }
+  };
+
+  if (pixData) {
+    return (
+      <div className="space-y-4">
+        <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+          <QrCode className="h-4 w-4" />
+          Pague com PIX
+        </h3>
+        <div className="text-center space-y-4">
+          {pixData.qrCodeBase64 && (
+            <div className="flex justify-center">
+              <img
+                src={`data:image/png;base64,${pixData.qrCodeBase64}`}
+                alt="QR Code PIX"
+                className="w-48 h-48 rounded-lg border"
+              />
+            </div>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Escaneie o QR Code acima ou copie o código abaixo:
+          </p>
+          <div className="relative">
+            <div className="p-3 bg-secondary/50 rounded-lg text-xs font-mono break-all max-h-20 overflow-y-auto">
+              {pixData.qrCode}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2 w-full"
+              onClick={handleCopyPix}
+            >
+              {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+              {copied ? "Copiado!" : "Copiar código PIX"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Valor: <span className="font-bold text-foreground">R$ {pixData.amount}</span>
+          </p>
+          {pixData.expirationDate && (
+            <p className="text-xs text-muted-foreground">
+              Válido até: {new Date(pixData.expirationDate).toLocaleString("pt-BR")}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+        <QrCode className="h-4 w-4" />
+        Pagar com PIX
+      </h3>
+      <p className="text-xs text-muted-foreground">Preencha seus dados para gerar o QR Code PIX.</p>
+
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="pix-firstName" className="text-sm">Nome *</Label>
+            <Input id="pix-firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="João" />
+          </div>
+          <div>
+            <Label htmlFor="pix-lastName" className="text-sm">Sobrenome</Label>
+            <Input id="pix-lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Silva" />
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="pix-email" className="text-sm">E-mail *</Label>
+          <Input id="pix-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="joao@email.com" />
+        </div>
+        <div>
+          <Label htmlFor="pix-cpf" className="text-sm">CPF *</Label>
+          <Input id="pix-cpf" value={cpf} onChange={(e) => setCpf(formatCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} />
+        </div>
+
+        <div className="pt-2 border-t">
+          <p className="text-xs text-muted-foreground mb-3">Endereço de entrega</p>
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-1">
+                <Label htmlFor="pix-cep" className="text-sm">CEP</Label>
+                <Input
+                  id="pix-cep"
+                  value={cep}
+                  onChange={(e) => {
+                    const v = formatCEP(e.target.value);
+                    setCep(v);
+                    lookupCep(v);
+                  }}
+                  placeholder="00000-000"
+                  maxLength={9}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="pix-street" className="text-sm">Rua</Label>
+                <Input id="pix-street" value={street} onChange={(e) => setStreet(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label htmlFor="pix-number" className="text-sm">Número</Label>
+                <Input id="pix-number" value={number} onChange={(e) => setNumber(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="pix-neighborhood" className="text-sm">Bairro</Label>
+                <Input id="pix-neighborhood" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="pix-city" className="text-sm">Cidade</Label>
+                <Input id="pix-city" value={city} onChange={(e) => setCity(e.target.value)} />
+              </div>
+            </div>
+            <div className="w-20">
+              <Label htmlFor="pix-state" className="text-sm">UF</Label>
+              <Input id="pix-state" value={state} onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))} maxLength={2} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Button onClick={handleGeneratePix} disabled={isGenerating} className="w-full h-14 text-lg font-semibold" size="lg">
+        {isGenerating ? (
+          <>
+            <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            Gerando PIX...
+          </>
+        ) : (
+          <>
+            <QrCode className="h-5 w-5 mr-2" />
+            Gerar PIX - R$ {amount.toFixed(2)}
+          </>
+        )}
+      </Button>
+    </div>
+  );
+}
+
+// ─── Main Checkout ─────────────────────────────────────────────
 export default function Checkout() {
   const { paypalOrderId } = useParams<{ paypalOrderId: string }>();
   const [orderData, setOrderData] = useState<CheckoutData | null>(null);
@@ -124,10 +405,6 @@ export default function Checkout() {
       sdkLoadedRef.current = false;
     };
     document.body.appendChild(script);
-
-    return () => {
-      // Don't remove - SDK stays loaded
-    };
   }, [orderData, paymentStatus]);
 
   // Render card fields + PayPal button
@@ -138,55 +415,35 @@ export default function Checkout() {
     try {
       const cardFields = window.paypal.CardFields({
         createOrder: () => orderData.paypalOrderId,
-        onApprove: async () => {
-          await handleApprove();
-        },
+        onApprove: async () => { await handleApprove(); },
         onError: (err) => {
           console.error("PayPal CardFields error:", err);
           toast.error("Erro no processamento do cartão.");
           setIsProcessing(false);
         },
         style: {
-          input: {
-            "font-size": "16px",
-            "font-family": "system-ui, sans-serif",
-            color: "#333",
-            "padding": "12px",
-          },
-          ".invalid": {
-            color: "#dc2626",
-          },
+          input: { "font-size": "16px", "font-family": "system-ui, sans-serif", color: "#333", padding: "12px" },
+          ".invalid": { color: "#dc2626" },
         },
       });
 
       if (cardFields.isEligible()) {
         setCardFieldsEligible(true);
         cardFieldsRef.current = cardFields;
-
-        // Render each field
         cardFields.NameField().render("#card-name-field");
         cardFields.NumberField().render("#card-number-field");
         cardFields.ExpiryField().render("#card-expiry-field");
         cardFields.CVVField().render("#card-cvv-field");
       }
 
-      // Also render PayPal button as alternative
       window.paypal.Buttons({
         createOrder: () => orderData.paypalOrderId,
-        onApprove: async () => {
-          await handleApprove();
-        },
+        onApprove: async () => { await handleApprove(); },
         onError: (err) => {
           console.error("PayPal Buttons error:", err);
           toast.error("Erro no PayPal.");
         },
-        style: {
-          layout: "vertical",
-          color: "gold",
-          shape: "rect",
-          label: "pay",
-          height: 48,
-        } as Record<string, unknown>,
+        style: { layout: "vertical", color: "gold", shape: "rect", label: "pay", height: 48 } as Record<string, unknown>,
       }).render("#paypal-button-container");
     } catch (err) {
       console.error("Error rendering PayPal components:", err);
@@ -242,9 +499,7 @@ export default function Checkout() {
             </p>
             <div className="pt-4 p-4 bg-secondary/50 rounded-lg">
               <p className="text-sm text-muted-foreground">Valor pago</p>
-              <p className="text-2xl font-bold text-primary">
-                R$ {Number(orderData.amount).toFixed(2)}
-              </p>
+              <p className="text-2xl font-bold text-primary">R$ {Number(orderData.amount).toFixed(2)}</p>
             </div>
           </CardContent>
         </Card>
@@ -265,122 +520,101 @@ export default function Checkout() {
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Products */}
-          <div className="space-y-3">
-            <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Itens do Pedido</h3>
-            {orderData.products.map((product, index) => (
-              <div key={index} className="flex items-center gap-3 p-3 bg-secondary/30 rounded-lg">
-                {product.image && (
-                  <img
-                    src={product.image}
-                    alt={product.title}
-                    className="w-14 h-14 rounded-md object-cover flex-shrink-0"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{product.title}</p>
-                  {product.variant && (
-                    <p className="text-xs text-muted-foreground">{product.variant}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">Qtd: {product.quantity}</p>
-                </div>
-                <p className="font-semibold text-sm flex-shrink-0">
-                  R$ {(product.price * product.quantity).toFixed(2)}
-                </p>
-              </div>
-            ))}
-          </div>
+          <ProductList products={orderData.products} />
 
           {/* Total */}
           <div className="border-t pt-4">
             <div className="flex items-center justify-between">
               <span className="text-lg font-medium">Total</span>
-              <span className="text-2xl font-bold text-primary">
-                R$ {Number(orderData.amount).toFixed(2)}
-              </span>
+              <span className="text-2xl font-bold text-primary">R$ {Number(orderData.amount).toFixed(2)}</span>
             </div>
           </div>
 
-          {/* Card Fields */}
-          {cardFieldsEligible && (
-            <div className="space-y-4">
-              <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+          {/* Payment Methods Tabs */}
+          <Tabs defaultValue="pix" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="pix" className="flex items-center gap-2">
+                <QrCode className="h-4 w-4" />
+                PIX
+              </TabsTrigger>
+              <TabsTrigger value="card" className="flex items-center gap-2">
                 <CreditCard className="h-4 w-4" />
-                Cartão de Crédito ou Débito
-              </h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm font-medium mb-1 block text-foreground">Nome no cartão</label>
-                  <div id="card-name-field" className="border rounded-md bg-background min-h-[44px]" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block text-foreground">Número do cartão</label>
-                  <div id="card-number-field" className="border rounded-md bg-background min-h-[44px]" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block text-foreground">Validade</label>
-                    <div id="card-expiry-field" className="border rounded-md bg-background min-h-[44px]" />
+                Cartão / PayPal
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="pix" className="mt-4">
+              <PixPaymentSection orderId={orderData.orderId} amount={Number(orderData.amount)} />
+            </TabsContent>
+
+            <TabsContent value="card" className="mt-4 space-y-4">
+              {/* Card Fields */}
+              {cardFieldsEligible && (
+                <div className="space-y-4">
+                  <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                    <CreditCard className="h-4 w-4" />
+                    Cartão de Crédito ou Débito
+                  </h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium mb-1 block text-foreground">Nome no cartão</label>
+                      <div id="card-name-field" className="border rounded-md bg-background min-h-[44px]" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1 block text-foreground">Número do cartão</label>
+                      <div id="card-number-field" className="border rounded-md bg-background min-h-[44px]" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-sm font-medium mb-1 block text-foreground">Validade</label>
+                        <div id="card-expiry-field" className="border rounded-md bg-background min-h-[44px]" />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium mb-1 block text-foreground">CVV</label>
+                        <div id="card-cvv-field" className="border rounded-md bg-background min-h-[44px]" />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block text-foreground">CVV</label>
-                    <div id="card-cvv-field" className="border rounded-md bg-background min-h-[44px]" />
+
+                  <Button onClick={handleCardSubmit} disabled={isProcessing} className="w-full h-14 text-lg font-semibold" size="lg">
+                    {isProcessing ? (
+                      <><Loader2 className="h-5 w-5 animate-spin mr-2" />Processando...</>
+                    ) : (
+                      <><Lock className="h-5 w-5 mr-2" />Pagar R$ {Number(orderData.amount).toFixed(2)}</>
+                    )}
+                  </Button>
+
+                  <div className="relative py-3">
+                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">ou pague com</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <Button
-                onClick={handleCardSubmit}
-                disabled={isProcessing}
-                className="w-full h-14 text-lg font-semibold"
-                size="lg"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                    Processando...
-                  </>
-                ) : (
-                  <>
-                    <Lock className="h-5 w-5 mr-2" />
-                    Pagar R$ {Number(orderData.amount).toFixed(2)}
-                  </>
-                )}
-              </Button>
+              {/* PayPal Button */}
+              <div id="paypal-button-container" className="min-h-[48px]" />
 
-              <div className="relative py-3">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
+              {/* Loading SDK indicator */}
+              {!sdkReady && (
+                <div className="flex items-center justify-center gap-2 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Carregando métodos de pagamento...</p>
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">ou pague com</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* PayPal Button */}
-          <div id="paypal-button-container" className="min-h-[48px]" />
-
-          {/* Loading SDK indicator */}
-          {!sdkReady && (
-            <div className="flex items-center justify-center gap-2 py-4">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Carregando métodos de pagamento...</p>
-            </div>
-          )}
+              )}
+            </TabsContent>
+          </Tabs>
 
           {paymentStatus === "error" && (
             <div className="text-center p-3 bg-destructive/10 rounded-lg">
-              <p className="text-sm text-destructive">
-                Houve um erro ao processar o pagamento. Por favor, tente novamente.
-              </p>
+              <p className="text-sm text-destructive">Houve um erro ao processar o pagamento. Por favor, tente novamente.</p>
             </div>
           )}
 
           <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
             <Lock className="h-3 w-3" />
-            <span>Pagamento processado com segurança pelo PayPal</span>
+            <span>Pagamento processado com segurança</span>
           </div>
         </CardContent>
       </Card>
