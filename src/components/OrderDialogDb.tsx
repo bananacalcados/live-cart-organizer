@@ -265,9 +265,25 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       if (error) throw error;
 
       if (data?.qrCode) {
-        // Copy PIX code to clipboard
-        await navigator.clipboard.writeText(data.qrCode);
-        toast.success(`PIX gerado! Código copiado. Valor: R$ ${data.amount}`, { duration: 6000 });
+        // Try clipboard, fallback gracefully
+        try {
+          await navigator.clipboard.writeText(data.qrCode);
+          toast.success(`PIX gerado! Código copiado. Valor: R$ ${data.amount}`, { duration: 6000 });
+        } catch {
+          toast.success(`PIX gerado! Valor: R$ ${data.amount}`, {
+            description: "Clique para copiar o código PIX",
+            duration: 10000,
+            action: {
+              label: "Copiar",
+              onClick: () => {
+                navigator.clipboard.writeText(data.qrCode).catch(() => {
+                  // Final fallback: prompt
+                  window.prompt("Copie o código PIX:", data.qrCode);
+                });
+              },
+            },
+          });
+        }
       } else {
         throw new Error("No PIX data returned");
       }
