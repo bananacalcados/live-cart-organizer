@@ -4,6 +4,7 @@ import {
   Search, Phone, Users, MessageCircle, Filter, ArrowLeft,
   Send, Mic, Image, Video, Paperclip, X, Check, CheckCheck,
   Clock, Camera, Plus, Smile, MoreVertical, ChevronDown, Square,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,16 +30,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // ── Status icon helper ──
 function StatusIcon({ status }: { status: string | null }) {
@@ -75,6 +78,20 @@ function getMediaType(file: File): 'image' | 'audio' | 'video' | 'document' {
   return 'document';
 }
 
+// ── Meta Template interface ──
+interface MetaTemplate {
+  name: string;
+  language: string;
+  status: string;
+  category: string;
+  components: Array<{
+    type: string;
+    text?: string;
+    format?: string;
+    buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+  }>;
+}
+
 export default function ChatPage() {
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -85,6 +102,13 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [numberFilter, setNumberFilter] = useState<string>('all');
+
+  // Templates
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [templates, setTemplates] = useState<MetaTemplate[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState("");
 
   // Media
   const [selectedMedia, setSelectedMedia] = useState<{ file: File; type: 'image' | 'audio' | 'video' | 'document'; previewUrl: string } | null>(null);
@@ -113,10 +137,17 @@ export default function ChatPage() {
 
   // ── Load conversations ──
   const loadConversations = useCallback(async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from('whatsapp_messages')
       .select('*')
       .order('created_at', { ascending: false });
+
+    // Filter by whatsapp number if selected
+    if (numberFilter !== 'all') {
+      query = query.eq('whatsapp_number_id', numberFilter);
+    }
+
+    const { data, error } = await query;
 
     if (error) { console.error('Error loading messages:', error); return; }
 
@@ -150,7 +181,7 @@ export default function ChatPage() {
     });
     convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
     setConversations(convs);
-  }, [orders, customers]);
+  }, [orders, customers, numberFilter]);
 
   useEffect(() => {
     loadConversations();
@@ -207,35 +238,25 @@ export default function ChatPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
       audioChunksRef.current = [];
-      
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
         setRecordingDuration(0);
-
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const audioFile = new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
         setSelectedMedia({ file: audioFile, type: 'audio', previewUrl: URL.createObjectURL(audioBlob) });
         setIsRecording(false);
       };
-
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(250);
       setIsRecording(true);
       setRecordingDuration(0);
       recordingTimerRef.current = setInterval(() => setRecordingDuration(d => d + 1), 1000);
-    } catch {
-      toast.error('Não foi possível acessar o microfone');
-    }
+    } catch { toast.error('Não foi possível acessar o microfone'); }
   };
 
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-  };
+  const stopRecording = () => { mediaRecorderRef.current?.stop(); };
 
   const cancelRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -258,7 +279,6 @@ export default function ChatPage() {
   const handleSend = async () => {
     if (isSending || isUploading || !selectedPhone) return;
 
-    // Send media
     if (selectedMedia) {
       setIsUploading(true);
       const mediaUrl = await uploadMediaToStorage(selectedMedia.file);
@@ -273,6 +293,7 @@ export default function ChatPage() {
           status: 'sent',
           media_type: selectedMedia.type,
           media_url: mediaUrl,
+          whatsapp_number_id: numberFilter !== 'all' ? numberFilter : (selectedNumberId || null),
         });
       }
       URL.revokeObjectURL(selectedMedia.previewUrl);
@@ -282,7 +303,6 @@ export default function ChatPage() {
       return;
     }
 
-    // Send text
     if (!newMessage.trim()) return;
     const text = newMessage.trim();
     setNewMessage("");
@@ -295,7 +315,91 @@ export default function ChatPage() {
         message: text,
         direction: 'outgoing',
         status: 'sent',
+        whatsapp_number_id: numberFilter !== 'all' ? numberFilter : (selectedNumberId || null),
       });
+    }
+    setIsSending(false);
+  };
+
+  // ── Fetch Meta templates ──
+  const fetchTemplates = async () => {
+    setIsLoadingTemplates(true);
+    try {
+      const numberId = numberFilter !== 'all' ? numberFilter : selectedNumberId;
+      const params = numberId ? `?whatsappNumberId=${numberId}` : '';
+      const { data, error } = await supabase.functions.invoke('meta-whatsapp-get-templates', {
+        body: null,
+        method: 'GET',
+        headers: {},
+      });
+      // Use fetch directly since invoke doesn't support query params easily
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-get-templates${params}`;
+      const res = await fetch(url, {
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'Content-Type': 'application/json',
+        },
+      });
+      const result = await res.json();
+      if (result.templates) {
+        setTemplates(result.templates);
+      } else {
+        toast.error('Erro ao buscar templates');
+      }
+    } catch (err) {
+      console.error('Error fetching templates:', err);
+      toast.error('Erro ao buscar templates');
+    }
+    setIsLoadingTemplates(false);
+  };
+
+  const handleOpenTemplates = () => {
+    setShowTemplateDialog(true);
+    fetchTemplates();
+  };
+
+  const handleSendTemplate = async (template: MetaTemplate) => {
+    if (!selectedPhone) return;
+    setIsSending(true);
+    setShowTemplateDialog(false);
+
+    try {
+      const numberId = numberFilter !== 'all' ? numberFilter : selectedNumberId;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone: selectedPhone,
+          templateName: template.name,
+          language: template.language,
+          whatsappNumberId: numberId,
+        }),
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        // Save to local messages
+        const bodyComp = template.components.find(c => c.type === 'BODY');
+        const bodyText = bodyComp?.text || `[Template: ${template.name}]`;
+        await supabase.from('whatsapp_messages').insert({
+          phone: selectedPhone.replace(/\D/g, '').startsWith('55') ? selectedPhone.replace(/\D/g, '') : '55' + selectedPhone.replace(/\D/g, ''),
+          message: bodyText,
+          direction: 'outgoing',
+          status: 'sent',
+          message_id: result.messageId,
+          whatsapp_number_id: numberId || null,
+        });
+        toast.success('Template enviado!');
+        loadMessages(selectedPhone);
+      } else {
+        toast.error(result.error || 'Erro ao enviar template');
+      }
+    } catch (err) {
+      toast.error('Erro ao enviar template');
     }
     setIsSending(false);
   };
@@ -316,6 +420,11 @@ export default function ChatPage() {
   const contactsCount = conversations.filter(c => !c.isGroup).length;
   const groupsCount = conversations.filter(c => c.isGroup).length;
 
+  const filteredTemplates = templates.filter(t =>
+    t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
+    t.components.some(c => c.text?.toLowerCase().includes(templateSearch.toLowerCase()))
+  );
+
   return (
     <div className="h-screen flex flex-col bg-[#111b21]">
       {/* WhatsApp-style top bar */}
@@ -327,25 +436,28 @@ export default function ChatPage() {
           <MessageCircle className="h-5 w-5 text-[#00a884]" />
           <span className="text-[#e9edef] font-semibold text-lg">WhatsApp</span>
         </div>
-        {/* Instance selector */}
-        {numbers.length > 1 && (
-          <Select value={selectedNumberId || ''} onValueChange={setSelectedNumberId}>
-            <SelectTrigger className="w-auto min-w-[180px] h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef]">
-              <Phone className="h-3.5 w-3.5 mr-2 text-[#00a884]" />
-              <SelectValue placeholder="Instância" />
-            </SelectTrigger>
-            <SelectContent className="bg-[#233138] border-[#3b4a54]">
-              {numbers.map((num) => (
-                <SelectItem key={num.id} value={num.id} className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{num.label}</span>
-                    <span className="text-[#8696a0] text-xs">{num.phone_display}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        {/* Instance selector with "Todos" */}
+        <Select value={numberFilter} onValueChange={setNumberFilter}>
+          <SelectTrigger className="w-auto min-w-[200px] h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef]">
+            <Phone className="h-3.5 w-3.5 mr-2 text-[#00a884]" />
+            <SelectValue placeholder="Filtrar número" />
+          </SelectTrigger>
+          <SelectContent className="bg-[#233138] border-[#3b4a54]">
+            <SelectItem value="all" className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Todos os WhatsApps</span>
+              </div>
+            </SelectItem>
+            {numbers.map((num) => (
+              <SelectItem key={num.id} value={num.id} className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{num.label}</span>
+                  <span className="text-[#8696a0] text-xs">{num.phone_display}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -446,7 +558,6 @@ export default function ChatPage() {
           !selectedPhone && "hidden md:flex"
         )}>
           {!selectedPhone ? (
-            /* Empty state */
             <div className="flex-1 flex flex-col items-center justify-center bg-[#222e35]">
               <div className="text-center">
                 <MessageCircle className="h-20 w-20 text-[#364147] mx-auto mb-4" />
@@ -591,7 +702,6 @@ export default function ChatPage() {
               {/* Input bar */}
               {!isRecording && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-[#202c33] border-t border-[#2a3942]">
-                  {/* Hidden file inputs */}
                   <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
                   <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} />
                   <input ref={docInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" className="hidden" onChange={handleFileSelect} />
@@ -616,12 +726,14 @@ export default function ChatPage() {
                       <DropdownMenuItem onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment'; input.onchange = (e: any) => handleFileSelect(e); input.click(); }} className="gap-2 focus:bg-[#2a3942] focus:text-[#e9edef]">
                         <Camera className="h-4 w-4 text-[#d3396d]" /> Câmera
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleOpenTemplates} className="gap-2 focus:bg-[#2a3942] focus:text-[#e9edef]">
+                        <FileText className="h-4 w-4 text-[#00a884]" /> Template Meta
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
 
                   <EmojiPickerButton onEmojiSelect={(emoji) => setNewMessage(prev => prev + emoji)} />
 
-                  {/* Message input */}
                   <Input
                     ref={inputRef}
                     placeholder="Digite uma mensagem"
@@ -631,7 +743,6 @@ export default function ChatPage() {
                     className="flex-1 bg-[#2a3942] border-none text-[#e9edef] placeholder:text-[#8696a0] focus-visible:ring-0 h-10 rounded-lg"
                   />
 
-                  {/* Send or Mic button */}
                   {newMessage.trim() || selectedMedia ? (
                     <Button
                       size="icon"
@@ -656,6 +767,63 @@ export default function ChatPage() {
           )}
         </div>
       </div>
+
+      {/* Template Dialog */}
+      <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
+        <DialogContent className="bg-[#202c33] border-[#3b4a54] text-[#e9edef] max-w-lg max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="text-[#e9edef] flex items-center gap-2">
+              <FileText className="h-5 w-5 text-[#00a884]" />
+              Templates Meta aprovados
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              placeholder="Buscar template..."
+              value={templateSearch}
+              onChange={(e) => setTemplateSearch(e.target.value)}
+              className="bg-[#2a3942] border-none text-[#e9edef] placeholder:text-[#8696a0]"
+            />
+            <ScrollArea className="max-h-[50vh]">
+              {isLoadingTemplates ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : filteredTemplates.length === 0 ? (
+                <p className="text-center text-[#8696a0] py-8">Nenhum template encontrado</p>
+              ) : (
+                <div className="space-y-2">
+                  {filteredTemplates.map((tmpl, idx) => {
+                    const bodyComp = tmpl.components.find(c => c.type === 'BODY');
+                    const headerComp = tmpl.components.find(c => c.type === 'HEADER');
+                    return (
+                      <button
+                        key={`${tmpl.name}-${idx}`}
+                        onClick={() => handleSendTemplate(tmpl)}
+                        className="w-full text-left p-3 rounded-lg bg-[#111b21] hover:bg-[#2a3942] transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-sm text-[#e9edef]">{tmpl.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-[#00a884]/20 text-[#00a884]">
+                            {tmpl.category}
+                          </span>
+                        </div>
+                        {headerComp?.text && (
+                          <p className="text-xs text-[#00a884] mb-1 font-medium">{headerComp.text}</p>
+                        )}
+                        {bodyComp?.text && (
+                          <p className="text-xs text-[#8696a0] line-clamp-3">{bodyComp.text}</p>
+                        )}
+                        <p className="text-[10px] text-[#8696a0] mt-1">Idioma: {tmpl.language}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -275,6 +275,7 @@ export type Database = {
           message_id: string | null
           phone: string
           status: string | null
+          whatsapp_number_id: string | null
         }
         Insert: {
           created_at?: string
@@ -287,6 +288,7 @@ export type Database = {
           message_id?: string | null
           phone: string
           status?: string | null
+          whatsapp_number_id?: string | null
         }
         Update: {
           created_at?: string
@@ -299,8 +301,17 @@ export type Database = {
           message_id?: string | null
           phone?: string
           status?: string | null
+          whatsapp_number_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_numbers: {
         Row: {
