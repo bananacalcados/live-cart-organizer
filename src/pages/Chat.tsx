@@ -275,17 +275,58 @@ export default function ChatPage() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // ── Determine if using Meta API ──
+  const getActiveNumberId = (): string | null => {
+    return numberFilter !== 'all' ? numberFilter : (selectedNumberId || null);
+  };
+
+  const isMetaNumber = (): boolean => {
+    const numId = getActiveNumberId();
+    if (!numId) return false;
+    return numbers.some(n => n.id === numId);
+  };
+
+  const sendViaMeta = async (phone: string, message: string, type: string = 'text', mediaUrl?: string, caption?: string) => {
+    const numberId = getActiveNumberId();
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ phone, message, type, mediaUrl, caption, whatsappNumberId: numberId }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      toast.error(data?.error || 'Erro ao enviar mensagem via Meta API');
+      return { success: false };
+    }
+    toast.success('Mensagem enviada!');
+    return { success: true, messageId: data.messageId };
+  };
+
   // ── Send message ──
   const handleSend = async () => {
     if (isSending || isUploading || !selectedPhone) return;
+    const useMeta = isMetaNumber();
+    const numberId = getActiveNumberId();
 
     if (selectedMedia) {
       setIsUploading(true);
       const mediaUrl = await uploadMediaToStorage(selectedMedia.file);
       if (!mediaUrl) { setIsUploading(false); return; }
 
-      const result = await zapiSendMedia(selectedPhone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined);
-      if (result.success) {
+      let success = false;
+      if (useMeta) {
+        const result = await sendViaMeta(selectedPhone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
+        success = result.success;
+      } else {
+        const result = await zapiSendMedia(selectedPhone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined);
+        success = result.success;
+      }
+
+      if (success) {
         await supabase.from('whatsapp_messages').insert({
           phone: selectedPhone,
           message: newMessage.trim() || `[${selectedMedia.type}]`,
@@ -293,7 +334,7 @@ export default function ChatPage() {
           status: 'sent',
           media_type: selectedMedia.type,
           media_url: mediaUrl,
-          whatsapp_number_id: numberFilter !== 'all' ? numberFilter : (selectedNumberId || null),
+          whatsapp_number_id: numberId,
         });
       }
       URL.revokeObjectURL(selectedMedia.previewUrl);
@@ -308,15 +349,24 @@ export default function ChatPage() {
     setNewMessage("");
     setIsSending(true);
 
-    const result = await zapiSend(selectedPhone, text);
-    if (result.success) {
+    let success = false;
+    if (useMeta) {
+      const result = await sendViaMeta(selectedPhone, text);
+      success = result.success;
+    } else {
+      const result = await zapiSend(selectedPhone, text);
+      success = result.success;
+    }
+
+    if (success) {
       await supabase.from('whatsapp_messages').insert({
         phone: selectedPhone,
         message: text,
         direction: 'outgoing',
         status: 'sent',
-        whatsapp_number_id: numberFilter !== 'all' ? numberFilter : (selectedNumberId || null),
+        whatsapp_number_id: numberId,
       });
+      loadMessages(selectedPhone);
     }
     setIsSending(false);
   };
