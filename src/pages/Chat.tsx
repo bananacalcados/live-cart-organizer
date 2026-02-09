@@ -336,6 +336,7 @@ export default function ChatPage() {
           media_url: mediaUrl,
           whatsapp_number_id: numberId,
         });
+        loadMessages(selectedPhone);
       }
       URL.revokeObjectURL(selectedMedia.previewUrl);
       setSelectedMedia(null);
