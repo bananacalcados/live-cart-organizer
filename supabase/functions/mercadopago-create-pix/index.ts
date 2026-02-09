@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { orderId } = await req.json();
+    const { orderId, payer } = await req.json();
 
     if (!orderId) {
       throw new Error("orderId is required");
@@ -50,10 +50,42 @@ serve(async (req) => {
     }
     const totalAmount = Math.max(0, subtotal - discountAmount);
 
+    // Use payer data from request, or fallback to customer data
     const customer = order.customer as Record<string, unknown> | null;
-    const customerEmail = (customer?.whatsapp as string) 
-      ? `${(customer.whatsapp as string).replace(/\D/g, "")}@pix.mercadopago.com`
-      : "customer@email.com";
+    const payerEmail = payer?.email || 
+      ((customer?.whatsapp as string) 
+        ? `${(customer.whatsapp as string).replace(/\D/g, "")}@pix.mercadopago.com`
+        : "customer@email.com");
+
+    const payerFirstName = payer?.firstName || (customer?.instagram_handle as string) || "Cliente";
+    const payerLastName = payer?.lastName || "";
+    const payerCpf = payer?.cpf?.replace(/\D/g, "") || undefined;
+
+    // Build payer object
+    const payerObj: Record<string, unknown> = {
+      email: payerEmail,
+      first_name: payerFirstName,
+      last_name: payerLastName,
+    };
+
+    if (payerCpf) {
+      payerObj.identification = {
+        type: "CPF",
+        number: payerCpf,
+      };
+    }
+
+    // Add address if provided
+    if (payer?.address) {
+      payerObj.address = {
+        zip_code: payer.address.zipCode?.replace(/\D/g, "") || undefined,
+        street_name: payer.address.street || undefined,
+        street_number: payer.address.number || undefined,
+        neighborhood: payer.address.neighborhood || undefined,
+        city: payer.address.city || undefined,
+        federal_unit: payer.address.state || undefined,
+      };
+    }
 
     // Create PIX payment via Mercado Pago API
     const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
@@ -67,9 +99,7 @@ serve(async (req) => {
         transaction_amount: totalAmount,
         description: `Pedido #${orderId.substring(0, 8)}`,
         payment_method_id: "pix",
-        payer: {
-          email: customerEmail,
-        },
+        payer: payerObj,
       }),
     });
 
