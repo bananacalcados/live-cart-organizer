@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 async function getPayPalAccessToken(): Promise<string> {
@@ -100,14 +100,6 @@ async function createShopifyOrder(order: Record<string, unknown>, customer: Reco
       financial_status: "paid",
       note: `Pedido pago via PayPal - CRM Order #${(order.id as string).substring(0, 8)}`,
       tags: "paypal,crm",
-      ...(customer
-        ? {
-            customer: {
-              first_name: (customer.instagram_handle as string) || "Cliente",
-            },
-            phone: (customer.whatsapp as string) || undefined,
-          }
-        : {}),
       ...(discountAmount > 0
         ? {
             discount_codes: [
@@ -121,6 +113,24 @@ async function createShopifyOrder(order: Record<string, unknown>, customer: Reco
         : {}),
     },
   };
+
+  // Add customer info safely - format phone for Shopify (+55XXXXXXXXXXX)
+  if (customer) {
+    const orderObj = shopifyOrder.order as Record<string, unknown>;
+    orderObj.customer = {
+      first_name: (customer.instagram_handle as string) || "Cliente",
+    };
+    
+    const rawPhone = (customer.whatsapp as string) || "";
+    if (rawPhone) {
+      // Clean and format phone: ensure it starts with +55
+      const digits = rawPhone.replace(/\D/g, "");
+      if (digits.length >= 10) {
+        const formatted = digits.startsWith("55") ? `+${digits}` : `+55${digits}`;
+        orderObj.phone = formatted;
+      }
+    }
+  }
 
   try {
     const response = await fetch(

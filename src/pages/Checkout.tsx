@@ -551,7 +551,7 @@ export default function Checkout() {
 
   // Load PayPal SDK - only once
   useEffect(() => {
-    if (!orderData || !orderData.paypalClientId || paymentStatus === "success" || sdkLoadedRef.current) return;
+    if (!orderData || !orderData.paypalClientId || !orderData.paypalOrderId || paymentStatus === "success" || sdkLoadedRef.current) return;
     sdkLoadedRef.current = true;
 
     const script = document.createElement("script");
@@ -654,21 +654,48 @@ export default function Checkout() {
 
   if (paymentStatus === "success") {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md mx-4">
-          <CardContent className="pt-6 text-center space-y-4">
-            <CheckCircle2 className="h-16 w-16 text-primary mx-auto" />
-            <h2 className="text-2xl font-bold">Pagamento Confirmado!</h2>
-            <p className="text-muted-foreground">
-              Obrigado, {orderData.customerName}! Seu pedido foi confirmado e está sendo processado.
-            </p>
-            <div className="pt-4 p-4 bg-secondary/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">Valor pago</p>
-              <p className="text-2xl font-bold text-primary">R$ {Number(orderData.amount).toFixed(2)}</p>
+          <CardContent className="pt-8 pb-8 text-center space-y-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-24 h-24 rounded-full bg-primary/10 animate-pulse" />
+              </div>
+              <CheckCircle2 className="h-16 w-16 text-primary mx-auto relative" />
             </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold">Pagamento Confirmado! 🎉</h2>
+              <p className="text-muted-foreground">
+                Obrigado, <span className="font-semibold text-foreground">{orderData.customerName}</span>!
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Seu pedido foi confirmado e está sendo preparado com carinho.
+              </p>
+            </div>
+            
+            <div className="p-4 bg-secondary/50 rounded-xl space-y-3">
+              <p className="text-sm text-muted-foreground">Valor pago</p>
+              <p className="text-3xl font-bold text-primary">R$ {Number(orderData.amount).toFixed(2)}</p>
+              
+              {orderData.products.length > 0 && (
+                <div className="border-t pt-3 mt-3 space-y-2">
+                  {orderData.products.map((product, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm">
+                      {product.image && (
+                        <img src={product.image} alt={product.title} className="w-8 h-8 rounded object-cover" />
+                      )}
+                      <span className="truncate text-muted-foreground">{product.title}</span>
+                      <span className="text-xs text-muted-foreground ml-auto">x{product.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {isEligibleForPrize && (
-              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-400 rounded-lg">
-                <Trophy className="h-10 w-10 text-yellow-500 mx-auto mb-2" />
+              <div className="p-4 bg-accent/50 border-2 border-primary/30 rounded-xl">
+                <Trophy className="h-10 w-10 text-primary mx-auto mb-2" />
                 <p className="font-bold text-lg">🎉 Parabéns!</p>
                 <p className="text-sm text-muted-foreground">
                   Você pagou dentro do prazo e está participando da <strong>Roleta de Prêmios</strong>!
@@ -678,6 +705,15 @@ export default function Checkout() {
                 </p>
               </div>
             )}
+
+            <div className="pt-2 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                📦 Acompanhe a entrega pelo WhatsApp
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Qualquer dúvida, fale conosco!
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
