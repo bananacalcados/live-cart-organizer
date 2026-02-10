@@ -964,6 +964,114 @@ export type Database = {
         }
         Relationships: []
       }
+      zoppy_customers: {
+        Row: {
+          address1: string | null
+          address2: string | null
+          avg_ticket: number | null
+          birth_date: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          ddd: string | null
+          email: string | null
+          external_id: string | null
+          first_name: string | null
+          first_purchase_at: string | null
+          gender: string | null
+          id: string
+          last_name: string | null
+          last_purchase_at: string | null
+          phone: string | null
+          postcode: string | null
+          region_type: string | null
+          rfm_calculated_at: string | null
+          rfm_frequency_score: number | null
+          rfm_monetary_score: number | null
+          rfm_recency_score: number | null
+          rfm_segment: string | null
+          rfm_total_score: number | null
+          state: string | null
+          total_orders: number | null
+          total_spent: number | null
+          updated_at: string
+          zoppy_created_at: string | null
+          zoppy_id: string
+          zoppy_position: string | null
+          zoppy_updated_at: string | null
+        }
+        Insert: {
+          address1?: string | null
+          address2?: string | null
+          avg_ticket?: number | null
+          birth_date?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          ddd?: string | null
+          email?: string | null
+          external_id?: string | null
+          first_name?: string | null
+          first_purchase_at?: string | null
+          gender?: string | null
+          id?: string
+          last_name?: string | null
+          last_purchase_at?: string | null
+          phone?: string | null
+          postcode?: string | null
+          region_type?: string | null
+          rfm_calculated_at?: string | null
+          rfm_frequency_score?: number | null
+          rfm_monetary_score?: number | null
+          rfm_recency_score?: number | null
+          rfm_segment?: string | null
+          rfm_total_score?: number | null
+          state?: string | null
+          total_orders?: number | null
+          total_spent?: number | null
+          updated_at?: string
+          zoppy_created_at?: string | null
+          zoppy_id: string
+          zoppy_position?: string | null
+          zoppy_updated_at?: string | null
+        }
+        Update: {
+          address1?: string | null
+          address2?: string | null
+          avg_ticket?: number | null
+          birth_date?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          ddd?: string | null
+          email?: string | null
+          external_id?: string | null
+          first_name?: string | null
+          first_purchase_at?: string | null
+          gender?: string | null
+          id?: string
+          last_name?: string | null
+          last_purchase_at?: string | null
+          phone?: string | null
+          postcode?: string | null
+          region_type?: string | null
+          rfm_calculated_at?: string | null
+          rfm_frequency_score?: number | null
+          rfm_monetary_score?: number | null
+          rfm_recency_score?: number | null
+          rfm_segment?: string | null
+          rfm_total_score?: number | null
+          state?: string | null
+          total_orders?: number | null
+          total_spent?: number | null
+          updated_at?: string
+          zoppy_created_at?: string | null
+          zoppy_id?: string
+          zoppy_position?: string | null
+          zoppy_updated_at?: string | null
+        }
+        Relationships: []
+      }
       zoppy_sales: {
         Row: {
           completed_at: string | null
