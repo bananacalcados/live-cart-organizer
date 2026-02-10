@@ -19,7 +19,7 @@ export function StageNavigation({ selectedStage, onSelectStage }: StageNavigatio
   return (
     <div className="sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40">
       <div className="container py-2">
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto pb-2">
           <button
             onClick={() => onSelectStage("all")}
             className={cn(
