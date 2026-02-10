@@ -32,8 +32,8 @@ export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
           {STAGES.map((stage) => {
             const stageOrders = getOrdersByStage(stage.id);
             return (
-              <div key={stage.id} className="flex-shrink-0 w-80">
-                <div className="kanban-column">
+              <div key={stage.id} className="flex-shrink-0 w-80 min-w-0 max-w-80">
+                <div className="kanban-column overflow-hidden">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <div className={`w-3 h-3 rounded-full ${stage.color}`} />
@@ -46,7 +46,7 @@ export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
                     </span>
                   </div>
 
-                  <ScrollArea className="h-[calc(100vh-340px)]">
+                  <ScrollArea className="h-[calc(100vh-340px)] [&>div]:!overflow-x-hidden">
                     <Droppable droppableId={stage.id}>
                       {(provided, snapshot) => (
                         <div
