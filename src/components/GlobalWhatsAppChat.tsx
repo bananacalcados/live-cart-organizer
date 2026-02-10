@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { MessageCircle, X, ChevronLeft, Phone, Users } from "lucide-react";
+import { MessageCircle, X, ChevronLeft, Phone, Users, Pencil, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
@@ -24,6 +25,9 @@ export function GlobalWhatsAppChat() {
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [instanceFilter, setInstanceFilter] = useState<InstanceFilter>('all');
   const [sendVia, setSendVia] = useState<'zapi' | 'meta'>('zapi');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
+  const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
@@ -34,6 +38,23 @@ export function GlobalWhatsAppChat() {
   useEffect(() => {
     fetchNumbers();
   }, [fetchNumbers]);
+
+  // Load chat contacts (custom names)
+  useEffect(() => {
+    if (!isOpen) return;
+    const loadChatContacts = async () => {
+      const { data } = await supabase.from('chat_contacts').select('phone, custom_name, display_name');
+      if (data) {
+        const map: Record<string, string> = {};
+        for (const c of data) {
+          if (c.custom_name) map[c.phone] = c.custom_name;
+          else if (c.display_name) map[c.phone] = c.display_name;
+        }
+        setChatContacts(map);
+      }
+    };
+    loadChatContacts();
+  }, [isOpen]);
 
   // Load conversations
   useEffect(() => {
@@ -94,7 +115,7 @@ export function GlobalWhatsAppChat() {
           lastMessage: lastMsg.message,
           lastMessageAt: new Date(lastMsg.created_at),
           unreadCount: value.unread,
-          customerName: order?.customer?.instagram_handle || customer?.instagram_handle,
+          customerName: chatContacts[phone] || order?.customer?.instagram_handle || customer?.instagram_handle,
           isGroup,
           hasUnansweredMessage,
           stage: order?.stage,
@@ -136,7 +157,7 @@ export function GlobalWhatsAppChat() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isOpen, orders, selectedPhone, customers, events]);
+  }, [isOpen, orders, selectedPhone, customers, events, chatContacts]);
 
   const loadMessages = async (phone: string) => {
     const { data, error } = await supabase
@@ -266,6 +287,32 @@ export function GlobalWhatsAppChat() {
     }
   };
 
+  const handleSaveContactName = async () => {
+    if (!selectedPhone) return;
+    const name = editNameValue.trim();
+    try {
+      // Upsert chat_contacts
+      const { error } = await supabase
+        .from('chat_contacts')
+        .upsert(
+          { phone: selectedPhone, custom_name: name || null },
+          { onConflict: 'phone' }
+        );
+      if (error) throw error;
+      setChatContacts(prev => {
+        const next = { ...prev };
+        if (name) next[selectedPhone] = name;
+        else delete next[selectedPhone];
+        return next;
+      });
+      setIsEditingName(false);
+      toast.success('Nome atualizado!');
+    } catch (error) {
+      console.error('Error saving contact name:', error);
+      toast.error('Erro ao salvar nome');
+    }
+  };
+
   const selectedConversation = conversations.find(c => c.phone === selectedPhone) || null;
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -290,7 +337,7 @@ export function GlobalWhatsAppChat() {
     <div className="fixed bottom-24 right-4 z-50 w-[420px] h-[650px] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b bg-stage-paid text-white flex-shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {selectedPhone ? (
             <>
               {selectedConversation?.isGroup ? (
@@ -298,9 +345,41 @@ export function GlobalWhatsAppChat() {
               ) : (
                 <Phone className="h-5 w-5 flex-shrink-0" />
               )}
-              <span className="font-semibold truncate">
-                {selectedConversation?.customerName || selectedPhone}
-              </span>
+              {isEditingName ? (
+                <div className="flex items-center gap-1 flex-1 min-w-0">
+                  <Input
+                    value={editNameValue}
+                    onChange={(e) => setEditNameValue(e.target.value)}
+                    className="h-7 text-sm bg-white/20 border-white/30 text-white placeholder:text-white/60 flex-1"
+                    placeholder="Nome do contato"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveContactName();
+                      if (e.key === 'Escape') setIsEditingName(false);
+                    }}
+                  />
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={handleSaveContactName}>
+                    <Check className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <span className="font-semibold truncate">
+                    {selectedConversation?.customerName || selectedPhone}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-white/70 hover:bg-white/20 flex-shrink-0"
+                    onClick={() => {
+                      setEditNameValue(selectedConversation?.customerName || '');
+                      setIsEditingName(true);
+                    }}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                </>
+              )}
             </>
           ) : (
             <>

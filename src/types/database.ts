@@ -3,6 +3,7 @@ export interface DbEvent {
   name: string;
   description?: string;
   is_active: boolean;
+  default_shipping_cost?: number;
   created_at: string;
   updated_at: string;
 }

@@ -148,6 +148,7 @@ export type Database = {
       events: {
         Row: {
           created_at: string
+          default_shipping_cost: number | null
           description: string | null
           id: string
           is_active: boolean
@@ -156,6 +157,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          default_shipping_cost?: number | null
           description?: string | null
           id?: string
           is_active?: boolean
@@ -164,6 +166,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          default_shipping_cost?: number | null
           description?: string | null
           id?: string
           is_active?: boolean

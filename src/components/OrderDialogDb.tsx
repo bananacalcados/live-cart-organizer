@@ -450,7 +450,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 placeholder="(11) 99999-9999"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
-                disabled={!!existingCustomer?.whatsapp && !editingOrder}
+                disabled={false}
               />
               {existingCustomerByWhatsApp && (
                 <Alert className="mt-2 border-stage-paid/50 bg-stage-paid/10">
