@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState } from "react";
-import { Send, Tag, X, Plus } from "lucide-react";
+import { useRef, useEffect, useState, useCallback } from "react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,6 +10,8 @@ import { ptBR } from "date-fns/locale";
 import { EmojiPickerButton } from "../EmojiPickerButton";
 import { Message, Conversation } from "./ChatTypes";
 import { useCustomerStore } from "@/stores/customerStore";
+import { uploadMediaToStorage } from "../MediaAttachmentPicker";
+import { toast } from "sonner";
 import {
   Popover,
   PopoverContent,
@@ -22,6 +24,8 @@ interface ChatViewProps {
   newMessage: string;
   onNewMessageChange: (message: string) => void;
   onSendMessage: () => void;
+  onSendAudio?: (audioUrl: string) => void;
+  onBack?: () => void;
   isSending: boolean;
 }
 
@@ -35,18 +39,41 @@ export function ChatView({
   newMessage,
   onNewMessageChange,
   onSendMessage,
+  onSendAudio,
+  onBack,
   isSending,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [newTag, setNewTag] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<number | null>(null);
   const { addTagToCustomer, removeTagFromCustomer, customers } = useCustomerStore();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
   const formatMessageTime = (date: Date) => {
     return format(date, 'HH:mm', { locale: ptBR });
+  };
+
+  const formatRecordingTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   const customer = conversation?.customerId 
@@ -67,12 +94,114 @@ export function ChatView({
     }
   };
 
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        // Stop all tracks
+        stream.getTracks().forEach(t => t.stop());
+        
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioBlob.size === 0) {
+          setIsRecording(false);
+          setRecordingTime(0);
+          return;
+        }
+
+        // Upload audio
+        const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
+        const url = await uploadMediaToStorage(file);
+        
+        if (url && onSendAudio) {
+          onSendAudio(url);
+        } else if (!url) {
+          toast.error('Erro ao enviar áudio');
+        }
+
+        setIsRecording(false);
+        setRecordingTime(0);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      timerRef.current = window.setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      toast.error('Não foi possível acessar o microfone. Verifique as permissões.');
+    }
+  }, [onSendAudio]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
+  const cancelRecording = useCallback(() => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      // Clear chunks before stopping so onstop won't upload
+      audioChunksRef.current = [];
+      mediaRecorderRef.current.stop();
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordingTime(0);
+  }, []);
+
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Back button bar */}
+      {onBack && (
+        <div className="flex items-center gap-2 px-2 py-1.5 border-b bg-muted/30 flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            className="h-7 px-2 text-xs gap-1"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Voltar
+          </Button>
+          {conversation && (
+            <span className="text-xs text-muted-foreground truncate">
+              {conversation.customerName || conversation.phone}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Tags bar */}
       {conversation && !conversation.isGroup && (
-        <div className="px-3 py-2 border-b bg-muted/30 flex items-center gap-2 flex-wrap">
+        <div className="px-3 py-2 border-b bg-muted/30 flex items-center gap-2 flex-wrap flex-shrink-0">
           <Tag className="h-3 w-3 text-muted-foreground" />
+          {/* Event tags */}
+          {conversation.eventNames?.map(name => (
+            <Badge key={`event-${name}`} variant="default" className="text-[10px] gap-1 bg-primary/80">
+              📌 {name}
+            </Badge>
+          ))}
           {customerTags.map(tag => (
             <Badge key={tag} variant="secondary" className="text-xs gap-1">
               {tag}
@@ -142,7 +271,13 @@ export function ChatView({
                 {msg.media_url && msg.media_type?.includes('image') && (
                   <img src={msg.media_url} alt="" className="max-w-full rounded mb-1" />
                 )}
-                <p className="whitespace-pre-wrap break-words">{msg.message}</p>
+                {msg.media_url && msg.media_type === 'audio' && (
+                  <audio src={msg.media_url} controls className="w-full mb-1" />
+                )}
+                {msg.media_url && msg.media_type === 'video' && (
+                  <video src={msg.media_url} controls className="max-w-full rounded mb-1" style={{ maxHeight: 200 }} />
+                )}
+                {msg.message && <p className="whitespace-pre-wrap break-words">{msg.message}</p>}
                 <p className="text-[10px] text-muted-foreground text-right mt-1">
                   {formatMessageTime(new Date(msg.created_at))}
                 </p>
@@ -154,25 +289,65 @@ export function ChatView({
       </ScrollArea>
 
       {/* Input */}
-      <div className="p-2 border-t bg-[#f0f0f0] dark:bg-[#202c33] flex items-center gap-2">
-        <EmojiPickerButton 
-          onEmojiSelect={(emoji) => onNewMessageChange(newMessage + emoji)} 
-        />
-        <Input
-          placeholder="Digite uma mensagem..."
-          value={newMessage}
-          onChange={(e) => onNewMessageChange(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && onSendMessage()}
-          className="flex-1 bg-white dark:bg-[#2a3942]"
-        />
-        <Button
-          size="icon"
-          onClick={onSendMessage}
-          disabled={!newMessage.trim() || isSending}
-          className="bg-stage-paid hover:bg-stage-paid/90"
-        >
-          <Send className="h-4 w-4" />
-        </Button>
+      <div className="p-2 border-t bg-[#f0f0f0] dark:bg-[#202c33] flex items-center gap-2 flex-shrink-0">
+        {isRecording ? (
+          <>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={cancelRecording}
+              className="h-10 w-10 text-destructive"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+            <div className="flex-1 flex items-center gap-2">
+              <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
+              <span className="text-sm font-medium text-destructive">
+                {formatRecordingTime(recordingTime)}
+              </span>
+              <span className="text-xs text-muted-foreground">Gravando...</span>
+            </div>
+            <Button
+              size="icon"
+              onClick={stopRecording}
+              className="h-10 w-10 bg-stage-paid hover:bg-stage-paid/90"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </>
+        ) : (
+          <>
+            <EmojiPickerButton 
+              onEmojiSelect={(emoji) => onNewMessageChange(newMessage + emoji)} 
+            />
+            <Input
+              placeholder="Digite uma mensagem..."
+              value={newMessage}
+              onChange={(e) => onNewMessageChange(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onSendMessage()}
+              className="flex-1 bg-white dark:bg-[#2a3942]"
+            />
+            {newMessage.trim() ? (
+              <Button
+                size="icon"
+                onClick={onSendMessage}
+                disabled={isSending}
+                className="bg-stage-paid hover:bg-stage-paid/90"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                size="icon"
+                onClick={startRecording}
+                variant="ghost"
+                className="h-10 w-10"
+              >
+                <Mic className="h-5 w-5 text-muted-foreground" />
+              </Button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

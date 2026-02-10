@@ -110,6 +110,29 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       } as DbOrder;
       
       set((state) => ({ orders: [order, ...state.orders] }));
+
+      // Auto-tag customer with event name
+      try {
+        const { data: eventData } = await supabase
+          .from('events')
+          .select('name')
+          .eq('id', eventId)
+          .single();
+        
+        if (eventData?.name) {
+          const currentTags = customer.tags || [];
+          const eventTag = eventData.name;
+          if (!currentTags.includes(eventTag)) {
+            await supabase
+              .from('customers')
+              .update({ tags: [...currentTags, eventTag] })
+              .eq('id', customer.id);
+          }
+        }
+      } catch (tagError) {
+        console.error('Error auto-tagging customer:', tagError);
+      }
+
       toast.success('Pedido criado!');
       return order;
     } catch (error) {

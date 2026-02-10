@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
+import { useEventStore } from "@/stores/eventStore";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { ConversationList } from "./chat/ConversationList";
 import { ChatView } from "./chat/ChatView";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter } from "./chat/ChatTypes";
+import { toast } from "sonner";
 
 export function GlobalWhatsAppChat() {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,6 +27,7 @@ export function GlobalWhatsAppChat() {
   
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
+  const { events } = useEventStore();
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
 
   // Fetch Meta numbers on mount
@@ -70,15 +73,21 @@ export function GlobalWhatsAppChat() {
         const lastMsg = value.messages[0];
         const hasUnansweredMessage = lastMsg.direction === 'incoming';
         
-        const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
+        const matchingOrders = orders.filter(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
+        const order = matchingOrders[0];
         const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
         const isGroup = value.isGroup || phone.includes('@g.us') || phone.includes('-');
         
-        // Detect which instance the last incoming message came from
+        // Detect instance
         const lastIncoming = value.messages.find(m => m.direction === 'incoming');
         const lastIncomingInstance: 'zapi' | 'meta' | undefined = lastIncoming?.whatsapp_number_id ? 'meta' : lastIncoming ? 'zapi' : undefined;
-        // Also get the whatsapp_number_id from the last message (incoming or outgoing) that has one
         const msgWithNumberId = value.messages.find(m => m.whatsapp_number_id);
+        
+        // Get event names for this customer's orders
+        const eventNames = matchingOrders
+          .map(o => events.find(e => e.id === o.event_id)?.name)
+          .filter(Boolean) as string[];
+        const uniqueEventNames = [...new Set(eventNames)];
         
         convs.push({
           phone,
@@ -93,6 +102,7 @@ export function GlobalWhatsAppChat() {
           customerTags: customer?.tags,
           whatsapp_number_id: msgWithNumberId?.whatsapp_number_id || null,
           lastIncomingInstance,
+          eventNames: uniqueEventNames,
         });
       });
 
@@ -108,7 +118,6 @@ export function GlobalWhatsAppChat() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' },
         (payload) => {
-          console.log('[Chat] New message received:', payload);
           loadConversations();
           if (selectedPhone) {
             loadMessages(selectedPhone);
@@ -122,16 +131,13 @@ export function GlobalWhatsAppChat() {
           loadConversations();
         }
       )
-      .subscribe((status) => {
-        console.log('[Chat] Realtime subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isOpen, orders, selectedPhone, customers]);
+  }, [isOpen, orders, selectedPhone, customers, events]);
 
-  // Load messages for selected phone
   const loadMessages = async (phone: string) => {
     const { data, error } = await supabase
       .from('whatsapp_messages')
@@ -147,17 +153,14 @@ export function GlobalWhatsAppChat() {
     setMessages(data || []);
   };
 
-  // Select conversation - auto-detect instance
   const handleSelectConversation = (phone: string) => {
     setSelectedPhone(phone);
     loadMessages(phone);
     
-    // Auto-detect which instance to use for reply
     const conv = conversations.find(c => c.phone === phone);
     if (conv) {
       if (conv.lastIncomingInstance === 'meta') {
         setSendVia('meta');
-        // Also set the specific Meta number if available
         if (conv.whatsapp_number_id) {
           setSelectedNumberId(conv.whatsapp_number_id);
         }
@@ -166,21 +169,19 @@ export function GlobalWhatsAppChat() {
       }
     }
     
-    // Mark as read
     const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
     if (order) {
       setHasUnreadMessages(order.id, false);
     }
   };
 
-  // Send message via selected API
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedPhone || isSending) return;
 
     setIsSending(true);
     try {
       if (sendVia === 'meta' && selectedNumberId) {
-        const { data, error } = await supabase.functions.invoke('meta-whatsapp-send', {
+        const { error } = await supabase.functions.invoke('meta-whatsapp-send', {
           body: { 
             phone: selectedPhone, 
             message: newMessage,
@@ -189,7 +190,7 @@ export function GlobalWhatsAppChat() {
         });
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.functions.invoke('zapi-send-message', {
+        const { error } = await supabase.functions.invoke('zapi-send-message', {
           body: { phone: selectedPhone, message: newMessage },
         });
         if (error) throw error;
@@ -198,6 +199,55 @@ export function GlobalWhatsAppChat() {
       setNewMessage("");
     } catch (error) {
       console.error('Error sending message:', error);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleSendAudio = async (audioUrl: string) => {
+    if (!selectedPhone) return;
+
+    setIsSending(true);
+    try {
+      if (sendVia === 'meta' && selectedNumberId) {
+        // For Meta, send media via dedicated function
+        const { error } = await supabase.functions.invoke('meta-whatsapp-send', {
+          body: { 
+            phone: selectedPhone, 
+            message: '[áudio]',
+            whatsapp_number_id: selectedNumberId,
+            media_url: audioUrl,
+            media_type: 'audio',
+          },
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.functions.invoke('zapi-send-media', {
+          body: { 
+            phone: selectedPhone, 
+            mediaUrl: audioUrl,
+            mediaType: 'audio',
+          },
+        });
+        if (error) throw error;
+      }
+
+      // Also persist the audio message in DB
+      await supabase.from('whatsapp_messages').insert({
+        phone: selectedPhone,
+        message: '[áudio]',
+        direction: 'outgoing',
+        status: 'sent',
+        media_type: 'audio',
+        media_url: audioUrl,
+      });
+
+      // Reload messages
+      loadMessages(selectedPhone);
+      toast.success('Áudio enviado!');
+    } catch (error) {
+      console.error('Error sending audio:', error);
+      toast.error('Erro ao enviar áudio');
     } finally {
       setIsSending(false);
     }
@@ -225,19 +275,11 @@ export function GlobalWhatsAppChat() {
 
   return (
     <div className="fixed bottom-24 right-4 z-50 w-[420px] h-[650px] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden">
-      {/* Header - always visible */}
+      {/* Header */}
       <div className="flex items-center justify-between p-3 border-b bg-stage-paid text-white flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           {selectedPhone ? (
             <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-white hover:bg-white/20 flex-shrink-0"
-                onClick={() => setSelectedPhone(null)}
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
               {selectedConversation?.isGroup ? (
                 <Users className="h-5 w-5 flex-shrink-0" />
               ) : (
@@ -267,7 +309,7 @@ export function GlobalWhatsAppChat() {
         </Button>
       </div>
 
-      {/* API Selector bar - when in conversation */}
+      {/* API Selector bar */}
       {selectedPhone && (
         <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/50 text-xs flex-shrink-0">
           <span className="text-muted-foreground">Enviar via:</span>
@@ -294,7 +336,7 @@ export function GlobalWhatsAppChat() {
         </div>
       )}
 
-      {/* Content area - takes remaining space */}
+      {/* Content */}
       {!selectedPhone ? (
         <ConversationList
           conversations={conversations}
@@ -316,6 +358,8 @@ export function GlobalWhatsAppChat() {
           newMessage={newMessage}
           onNewMessageChange={setNewMessage}
           onSendMessage={handleSendMessage}
+          onSendAudio={handleSendAudio}
+          onBack={() => setSelectedPhone(null)}
           isSending={isSending}
         />
       )}
