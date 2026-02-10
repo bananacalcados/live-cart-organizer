@@ -86,11 +86,11 @@ export function StatsBar({ orders }: StatsBarProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+    <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="bg-card border border-border/50 rounded-xl p-3 shadow-card"
+          className="flex-shrink-0 min-w-[150px] bg-card border border-border/50 rounded-xl p-3 shadow-card"
         >
           <div className="flex items-center gap-2">
             <div className={`p-2 rounded-lg ${stat.bgColor}`}>
