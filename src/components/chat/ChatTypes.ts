@@ -23,9 +23,7 @@ export interface Conversation {
   stage?: string;
   customerId?: string;
   customerTags?: string[];
-  whatsappNumberIds?: string[];
 }
 
 export type ChatFilter = 'all' | 'contacts' | 'groups';
 export type StageFilter = 'all' | string;
-export type NumberFilter = 'all' | string;

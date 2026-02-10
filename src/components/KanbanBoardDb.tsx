@@ -32,7 +32,7 @@ export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
           {STAGES.map((stage) => {
             const stageOrders = getOrdersByStage(stage.id);
             return (
-              <div key={stage.id} className="flex-shrink-0 w-80 min-w-0 max-w-[320px]">
+              <div key={stage.id} className="flex-shrink-0 w-80">
                 <div className="kanban-column">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
@@ -52,7 +52,7 @@ export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
                         <div
                           ref={provided.innerRef}
                           {...provided.droppableProps}
-                        className={`space-y-3 min-h-[400px] rounded-lg p-1 pr-2 transition-colors overflow-hidden ${
+                          className={`space-y-3 min-h-[400px] rounded-lg p-1 pr-3 transition-colors ${
                             snapshot.isDraggingOver ? "bg-primary/5" : ""
                           }`}
                         >
@@ -67,7 +67,6 @@ export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
                                   ref={provided.innerRef}
                                   {...provided.draggableProps}
                                   {...provided.dragHandleProps}
-                                  className="min-w-0 w-full"
                                 >
                                   <OrderCardDb
                                     order={order}

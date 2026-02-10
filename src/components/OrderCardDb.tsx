@@ -61,7 +61,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
   return (
     <div
-      className={`order-card overflow-hidden max-w-full box-border ${isDragging ? "dragging" : ""} ${
+      className={`order-card ${isDragging ? "dragging" : ""} ${
         hasUnread ? "ring-2 ring-stage-contacted bg-stage-contacted/10" : ""
       }`}
     >
