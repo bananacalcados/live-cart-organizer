@@ -52,7 +52,7 @@ export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
                         <div
                           ref={provided.innerRef}
                           {...provided.droppableProps}
-                          className={`space-y-3 min-h-[400px] rounded-lg p-1 pr-3 transition-colors ${
+                          className={`space-y-3 min-h-[400px] rounded-lg p-1 pr-2 transition-colors ${
                             snapshot.isDraggingOver ? "bg-primary/5" : ""
                           }`}
                         >
