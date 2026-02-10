@@ -49,10 +49,19 @@ async function createShopifyOrder(
       note: `Pedido pago via PIX (Mercado Pago) - CRM Order #${(order.id as string).substring(0, 8)}`,
       tags: "pix,crm,mercadopago",
       ...(customer
-        ? {
-            customer: { first_name: (customer.instagram_handle as string) || "Cliente" },
-            phone: (customer.whatsapp as string) || undefined,
-          }
+        ? (() => {
+            const customerObj: Record<string, unknown> = {
+              customer: { first_name: (customer.instagram_handle as string) || "Cliente" },
+            };
+            const rawPhone = (customer.whatsapp as string) || "";
+            if (rawPhone) {
+              const digits = rawPhone.replace(/\D/g, "");
+              if (digits.length >= 10) {
+                customerObj.phone = digits.startsWith("55") ? `+${digits}` : `+55${digits}`;
+              }
+            }
+            return customerObj;
+          })()
         : {}),
       ...(discountAmount > 0
         ? { discount_codes: [{ code: "CRM-DISCOUNT", amount: discountAmount.toFixed(2), type: "fixed_amount" }] }
