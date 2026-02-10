@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.zoppy-sync-customers]
 verify_jwt = false
+
+[functions.zoppy-sync-sales]
+verify_jwt = false
