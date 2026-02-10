@@ -30,8 +30,8 @@ export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
         {STAGES.map((stage) => {
           const stageOrders = getOrdersByStage(stage.id);
           return (
-            <div key={stage.id} className="flex-shrink-0 w-80">
-              <div className="kanban-column">
+            <div key={stage.id} className="flex-shrink-0 w-80 flex flex-col max-h-[calc(100vh-320px)]">
+              <div className="kanban-column flex flex-col h-full">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <div className={`w-3 h-3 rounded-full ${stage.color}`} />
@@ -49,7 +49,7 @@ export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`space-y-3 min-h-[400px] rounded-lg p-1 transition-colors ${
+                      className={`space-y-3 min-h-[200px] flex-1 overflow-y-auto rounded-lg p-1 transition-colors ${
                         snapshot.isDraggingOver ? "bg-primary/5" : ""
                       }`}
                     >
