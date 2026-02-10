@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
@@ -22,12 +22,37 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch payment record with order details
-    const { data: payment, error } = await supabase
+    // First try to find by paypal_order_id
+    let { data: payment, error } = await supabase
       .from("paypal_payments")
       .select("*, order:orders(*, customer:customers(*))")
       .eq("paypal_order_id", paypalOrderId)
       .maybeSingle();
+
+    // If not found, try to find by checkout_token on the orders table
+    if (!payment) {
+      const { data: order } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("checkout_token", paypalOrderId)
+        .maybeSingle();
+
+      if (order) {
+        // Find the latest payment for this order
+        const { data: paymentByOrder } = await supabase
+          .from("paypal_payments")
+          .select("*, order:orders(*, customer:customers(*))")
+          .eq("order_id", order.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (paymentByOrder) {
+          payment = paymentByOrder;
+          error = null;
+        }
+      }
+    }
 
     if (error || !payment) {
       throw new Error("Payment not found");
