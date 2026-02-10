@@ -69,7 +69,7 @@ serve(async (req) => {
         ? subtotal * (order.discount_value / 100)
         : order.discount_value;
     }
-    const totalAmount = Math.max(0, subtotal - discountAmount);
+    const totalAmount = Math.round(Math.max(0, subtotal - discountAmount) * 100) / 100;
 
     // Build PayPal order items
     const items = products.map((p) => ({
