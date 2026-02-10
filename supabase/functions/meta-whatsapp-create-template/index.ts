@@ -16,10 +16,17 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const url = new URL(req.url);
-    const whatsappNumberId = url.searchParams.get('whatsappNumberId');
+    const body = await req.json();
+    const { whatsappNumberId, name, category, language, components } = body;
 
-    // Get credentials
+    if (!name || !category || !language || !components) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: name, category, language, components' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get credentials from whatsapp_numbers table
     let accessToken = '';
     let businessAccountId = '';
 
@@ -37,7 +44,6 @@ serve(async (req) => {
     }
 
     if (!accessToken || !businessAccountId) {
-      // Fallback to default
       const { data } = await supabase
         .from('whatsapp_numbers')
         .select('access_token, business_account_id')
@@ -57,32 +63,45 @@ serve(async (req) => {
       );
     }
 
-    // Fetch templates from Meta Graph API
-    const statusFilter = url.searchParams.get('status') || '';
-    const graphUrl = statusFilter
-      ? `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?status=${statusFilter}&limit=100`
-      : `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?limit=250`;
+    // Submit template to Meta Graph API
+    const graphUrl = `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates`;
+
+    const templatePayload: Record<string, unknown> = {
+      name,
+      category,
+      language,
+      components,
+    };
+
+    console.log('Submitting template to Meta:', JSON.stringify(templatePayload));
 
     const response = await fetch(graphUrl, {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(templatePayload),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Meta API error fetching templates:', data);
+      console.error('Meta API error creating template:', data);
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch templates', details: data }),
+        JSON.stringify({ error: 'Failed to create template', details: data }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log('Template created successfully:', data);
+
     return new Response(
-      JSON.stringify({ success: true, templates: data.data || [] }),
+      JSON.stringify({ success: true, template: data }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error fetching templates:', error);
+    console.error('Error creating template:', error);
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

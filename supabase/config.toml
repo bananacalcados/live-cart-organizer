@@ -24,6 +24,9 @@ verify_jwt = false
 [functions.meta-whatsapp-get-templates]
 verify_jwt = false
 
+[functions.meta-whatsapp-create-template]
+verify_jwt = false
+
 [functions.paypal-create-order]
 verify_jwt = false
 
