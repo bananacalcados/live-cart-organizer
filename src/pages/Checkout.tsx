@@ -220,7 +220,12 @@ function PixPaymentSection({
       }
     } catch (error) {
       console.error("PIX error:", error);
-      toast.error("Erro ao gerar PIX. Tente novamente.");
+      const errorMsg = error instanceof Error ? error.message : "Erro desconhecido";
+      if (errorMsg.includes("identification") || errorMsg.includes("CPF")) {
+        toast.error("CPF inválido. Verifique e tente novamente.");
+      } else {
+        toast.error("Erro ao gerar PIX. Tente novamente.");
+      }
     } finally {
       setIsGenerating(false);
     }
