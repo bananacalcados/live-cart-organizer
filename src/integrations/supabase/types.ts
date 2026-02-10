@@ -145,6 +145,50 @@ export type Database = {
         }
         Relationships: []
       }
+      event_promotions: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          is_active: boolean
+          name: string
+          shopify_collection_handle: string | null
+          shopify_product_ids: string[] | null
+          tiers: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          is_active?: boolean
+          name: string
+          shopify_collection_handle?: string | null
+          shopify_product_ids?: string[] | null
+          tiers?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          shopify_collection_handle?: string | null
+          shopify_product_ids?: string[] | null
+          tiers?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_promotions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           created_at: string
@@ -253,12 +297,14 @@ export type Database = {
       orders: {
         Row: {
           cart_link: string | null
+          checkout_started_at: string | null
           checkout_token: string | null
           coupon_code: string | null
           created_at: string
           customer_id: string
           discount_type: string | null
           discount_value: number | null
+          eligible_for_prize: boolean | null
           event_id: string
           free_shipping: boolean | null
           has_gift: boolean | null
@@ -276,12 +322,14 @@ export type Database = {
         }
         Insert: {
           cart_link?: string | null
+          checkout_started_at?: string | null
           checkout_token?: string | null
           coupon_code?: string | null
           created_at?: string
           customer_id: string
           discount_type?: string | null
           discount_value?: number | null
+          eligible_for_prize?: boolean | null
           event_id: string
           free_shipping?: boolean | null
           has_gift?: boolean | null
@@ -299,12 +347,14 @@ export type Database = {
         }
         Update: {
           cart_link?: string | null
+          checkout_started_at?: string | null
           checkout_token?: string | null
           coupon_code?: string | null
           created_at?: string
           customer_id?: string
           discount_type?: string | null
           discount_value?: number | null
+          eligible_for_prize?: boolean | null
           event_id?: string
           free_shipping?: boolean | null
           has_gift?: boolean | null

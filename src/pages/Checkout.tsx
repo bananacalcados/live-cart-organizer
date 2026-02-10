@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, Clock, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -332,6 +332,60 @@ function PixPaymentSection({
   );
 }
 
+// ─── Countdown Timer ───────────────────────────────────────────
+function CountdownTimer({ checkoutStartedAt }: { checkoutStartedAt: string | null }) {
+  const [timeLeft, setTimeLeft] = useState<number>(600); // 10 minutes in seconds
+
+  useEffect(() => {
+    if (!checkoutStartedAt) return;
+    
+    const startTime = new Date(checkoutStartedAt).getTime();
+    const endTime = startTime + 10 * 60 * 1000; // 10 minutes
+    
+    const updateTimer = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+      setTimeLeft(remaining);
+    };
+    
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [checkoutStartedAt]);
+
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  const isUrgent = timeLeft <= 120; // last 2 minutes
+  const isExpired = timeLeft <= 0;
+
+  if (isExpired) {
+    return (
+      <div className="text-center p-3 bg-muted rounded-lg">
+        <p className="text-sm text-muted-foreground">⏰ Tempo para participar da roleta expirou</p>
+        <p className="text-xs text-muted-foreground mt-1">Você ainda pode pagar normalmente</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`text-center p-4 rounded-lg border-2 ${isUrgent ? 'border-destructive bg-destructive/10 animate-pulse' : 'border-primary/30 bg-primary/5'}`}>
+      <div className="flex items-center justify-center gap-2 mb-1">
+        <Trophy className="h-5 w-5 text-yellow-500" />
+        <span className="text-sm font-medium">Pague em até 10 min e concorra a prêmios!</span>
+      </div>
+      <div className="flex items-center justify-center gap-2">
+        <Clock className={`h-5 w-5 ${isUrgent ? 'text-destructive' : 'text-primary'}`} />
+        <span className={`text-3xl font-bold font-mono ${isUrgent ? 'text-destructive' : 'text-primary'}`}>
+          {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">
+        Prêmios de até R$ 200,00 na roleta da live! 🎰
+      </p>
+    </div>
+  );
+}
+
 // ─── Main Checkout ─────────────────────────────────────────────
 export default function Checkout() {
   const { paypalOrderId } = useParams<{ paypalOrderId: string }>();
@@ -341,6 +395,8 @@ export default function Checkout() {
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "error">("pending");
   const [sdkReady, setSdkReady] = useState(false);
   const [cardFieldsEligible, setCardFieldsEligible] = useState(false);
+  const [checkoutStartedAt, setCheckoutStartedAt] = useState<string | null>(null);
+  const [isEligibleForPrize, setIsEligibleForPrize] = useState(false);
   const cardFieldsRef = useRef<ReturnType<NonNullable<Window["paypal"]>["CardFields"]> | null>(null);
   const sdkLoadedRef = useRef(false);
   const fieldsRenderedRef = useRef(false);
@@ -359,12 +415,39 @@ export default function Checkout() {
       setOrderData(data);
       if (data.status === "captured") {
         setPaymentStatus("success");
+      } else if (data.orderId) {
+        // Mark checkout started
+        markCheckoutStarted(data.orderId);
       }
     } catch (error) {
       console.error("Error fetching order:", error);
       toast.error("Pedido não encontrado");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const markCheckoutStarted = async (orderId: string) => {
+    try {
+      // Check if already started
+      const { data: orderRow } = await supabase
+        .from('orders')
+        .select('checkout_started_at')
+        .eq('id', orderId)
+        .single();
+      
+      if (orderRow?.checkout_started_at) {
+        setCheckoutStartedAt(orderRow.checkout_started_at);
+      } else {
+        const now = new Date().toISOString();
+        await supabase
+          .from('orders')
+          .update({ checkout_started_at: now })
+          .eq('id', orderId);
+        setCheckoutStartedAt(now);
+      }
+    } catch (error) {
+      console.error('Error marking checkout started:', error);
     }
   };
 
@@ -379,6 +462,20 @@ export default function Checkout() {
       if (data.success) {
         setPaymentStatus("success");
         toast.success("Pagamento realizado com sucesso!");
+        
+        // Check if paid within 10 minutes
+        if (checkoutStartedAt && orderData?.orderId) {
+          const startTime = new Date(checkoutStartedAt).getTime();
+          const now = Date.now();
+          const elapsed = (now - startTime) / 1000;
+          if (elapsed <= 600) { // 10 minutes
+            setIsEligibleForPrize(true);
+            await supabase
+              .from('orders')
+              .update({ eligible_for_prize: true })
+              .eq('id', orderData.orderId);
+          }
+        }
       } else {
         throw new Error("Capture failed");
       }
@@ -389,7 +486,7 @@ export default function Checkout() {
     } finally {
       setIsProcessing(false);
     }
-  }, [paypalOrderId]);
+  }, [paypalOrderId, checkoutStartedAt, orderData?.orderId]);
 
   // Load PayPal SDK
   useEffect(() => {
@@ -501,6 +598,18 @@ export default function Checkout() {
               <p className="text-sm text-muted-foreground">Valor pago</p>
               <p className="text-2xl font-bold text-primary">R$ {Number(orderData.amount).toFixed(2)}</p>
             </div>
+            {isEligibleForPrize && (
+              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-400 rounded-lg">
+                <Trophy className="h-10 w-10 text-yellow-500 mx-auto mb-2" />
+                <p className="font-bold text-lg">🎉 Parabéns!</p>
+                <p className="text-sm text-muted-foreground">
+                  Você pagou dentro do prazo e está participando da <strong>Roleta de Prêmios</strong>!
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Prêmios de até R$ 200,00! Fique de olho na live! 🎰
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -520,6 +629,9 @@ export default function Checkout() {
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Countdown Timer */}
+          <CountdownTimer checkoutStartedAt={checkoutStartedAt} />
+
           <ProductList products={orderData.products} />
 
           {/* Total */}

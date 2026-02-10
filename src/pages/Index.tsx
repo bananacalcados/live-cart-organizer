@@ -7,14 +7,17 @@ import { StatsBar } from "@/components/StatsBar";
 import { StageNavigation } from "@/components/StageNavigation";
 import { OrderReportDialog } from "@/components/OrderReportDialog";
 import { GlobalWhatsAppChat } from "@/components/GlobalWhatsAppChat";
+import { PrizeEligibleList } from "@/components/PrizeEligibleList";
+import { EventPromotionManager } from "@/components/EventPromotionManager";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
-import { Calendar, Search } from "lucide-react";
+import { Calendar, Search, Trophy, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -127,29 +130,52 @@ const Index = () => {
       />
 
       <main className="container py-6">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por @ ou WhatsApp..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
+        <Tabs defaultValue="kanban" className="w-full">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por @ ou WhatsApp..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <TabsList className="ml-auto">
+              <TabsTrigger value="kanban">Pedidos</TabsTrigger>
+              <TabsTrigger value="promotions" className="gap-1">
+                <Tag className="h-3 w-3" />
+                Promoções
+              </TabsTrigger>
+              <TabsTrigger value="prizes" className="gap-1">
+                <Trophy className="h-3 w-3" />
+                Roleta
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </div>
 
-        <StatsBar orders={orders} />
-        
-        {isLoading ? (
-          <div className="text-center py-12 text-muted-foreground">
-            Carregando pedidos...
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <KanbanBoardDb orders={filteredOrders} onEditOrder={handleEditOrder} />
-          </div>
-        )}
+          <TabsContent value="kanban">
+            <StatsBar orders={orders} />
+            
+            {isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                Carregando pedidos...
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <KanbanBoardDb orders={filteredOrders} onEditOrder={handleEditOrder} />
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="promotions">
+            <EventPromotionManager eventId={currentEventId} />
+          </TabsContent>
+
+          <TabsContent value="prizes">
+            <PrizeEligibleList eventId={currentEventId} />
+          </TabsContent>
+        </Tabs>
       </main>
 
       <OrderDialogDb
