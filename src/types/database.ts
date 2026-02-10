@@ -52,8 +52,27 @@ export interface DbOrder {
   free_shipping?: boolean;
   has_gift?: boolean;
   coupon_code?: string;
+  checkout_started_at?: string;
+  eligible_for_prize?: boolean;
   created_at: string;
   updated_at: string;
   // Joined data
   customer?: DbCustomer;
+}
+
+export interface PromotionTier {
+  quantity: number;
+  price: number;
+}
+
+export interface EventPromotion {
+  id: string;
+  event_id: string;
+  name: string;
+  shopify_collection_handle?: string;
+  shopify_product_ids?: string[];
+  tiers: PromotionTier[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
