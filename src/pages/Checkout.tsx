@@ -103,9 +103,11 @@ function ProductList({ products }: { products: OrderProduct[] }) {
 function PixPaymentSection({
   orderId,
   amount,
+  onPaymentConfirmed,
 }: {
   orderId: string;
   amount: number;
+  onPaymentConfirmed: () => void;
 }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -119,7 +121,39 @@ function PixPaymentSection({
   const [state, setState] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
+  const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [pixPaid, setPixPaid] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Poll for PIX payment status
+  useEffect(() => {
+    if (!pixPaymentId || pixPaid) return;
+
+    const checkStatus = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("mercadopago-check-payment", {
+          body: { paymentId: pixPaymentId, orderId },
+        });
+        if (error) return;
+        if (data?.status === "approved") {
+          setPixPaid(true);
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          onPaymentConfirmed();
+        }
+      } catch {
+        // ignore polling errors
+      }
+    };
+
+    // Check immediately, then every 5 seconds
+    checkStatus();
+    pollingRef.current = setInterval(checkStatus, 5000);
+
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [pixPaymentId, pixPaid, orderId, onPaymentConfirmed]);
 
   const lookupCep = async (cepValue: string) => {
     const digits = cepValue.replace(/\D/g, "");
@@ -172,6 +206,9 @@ function PixPaymentSection({
       if (error) throw error;
       if (data?.qrCode) {
         setPixData(data);
+        if (data.paymentId) {
+          setPixPaymentId(String(data.paymentId));
+        }
       } else {
         throw new Error("PIX data not returned");
       }
@@ -195,6 +232,16 @@ function PixPaymentSection({
     }
   };
 
+  if (pixPaid) {
+    return (
+      <div className="text-center space-y-4 py-4">
+        <CheckCircle2 className="h-12 w-12 text-primary mx-auto" />
+        <h3 className="text-lg font-bold">PIX Confirmado!</h3>
+        <p className="text-sm text-muted-foreground">Seu pagamento foi processado com sucesso.</p>
+      </div>
+    );
+  }
+
   if (pixData) {
     return (
       <div className="space-y-4">
@@ -203,6 +250,10 @@ function PixPaymentSection({
           Pague com PIX
         </h3>
         <div className="text-center space-y-4">
+          <div className="flex items-center justify-center gap-2 p-3 bg-primary/10 rounded-lg">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="text-sm font-medium text-primary">Aguardando pagamento...</span>
+          </div>
           {pixData.qrCodeBase64 && (
             <div className="flex justify-center">
               <img
@@ -667,7 +718,19 @@ export default function Checkout() {
             </TabsList>
 
             <TabsContent value="pix" className="mt-4">
-              <PixPaymentSection orderId={orderData.orderId} amount={Number(orderData.amount)} />
+              <PixPaymentSection orderId={orderData.orderId} amount={Number(orderData.amount)} onPaymentConfirmed={() => {
+                setPaymentStatus("success");
+                toast.success("Pagamento PIX confirmado!");
+                // Check prize eligibility
+                if (checkoutStartedAt && orderData?.orderId) {
+                  const startTime = new Date(checkoutStartedAt).getTime();
+                  const elapsed = (Date.now() - startTime) / 1000;
+                  if (elapsed <= 600) {
+                    setIsEligibleForPrize(true);
+                    supabase.from('orders').update({ eligible_for_prize: true }).eq('id', orderData.orderId);
+                  }
+                }
+              }} />
             </TabsContent>
 
             <TabsContent value="card" forceMount className="mt-4 space-y-4 data-[state=inactive]:hidden">
