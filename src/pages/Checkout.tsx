@@ -184,7 +184,7 @@ function PixPaymentSection({
 
     setIsGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
+      const response = await supabase.functions.invoke("mercadopago-create-pix", {
         body: {
           orderId,
           payer: {
@@ -203,14 +203,20 @@ function PixPaymentSection({
           },
         },
       });
-      if (error) throw error;
-      if (data?.qrCode) {
-        setPixData(data);
-        if (data.paymentId) {
-          setPixPaymentId(String(data.paymentId));
-        }
-      } else {
-        throw new Error("PIX data not returned");
+      console.log("PIX response:", JSON.stringify(response));
+      const data = response.data;
+      const error = response.error;
+      if (error) {
+        console.error("PIX invoke error:", error);
+        throw new Error(typeof error === 'object' && error.message ? error.message : String(error));
+      }
+      if (!data || !data.qrCode) {
+        console.error("PIX data missing qrCode:", data);
+        throw new Error("QR Code não retornado");
+      }
+      setPixData(data);
+      if (data.paymentId) {
+        setPixPaymentId(String(data.paymentId));
       }
     } catch (error) {
       console.error("PIX error:", error);
