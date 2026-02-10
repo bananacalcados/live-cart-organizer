@@ -236,13 +236,18 @@ serve(async (req) => {
         );
       }
 
-      // Sync customers from Zoppy API
-      let page = 1;
+      // Support resumable sync: start from a given page
+      const startPage = body.start_page || 1;
+      const maxPages = body.max_pages || 50; // Process up to 50 pages per call (~5k customers)
+      let page = startPage;
       let totalSynced = 0;
       let hasMore = true;
+      let pagesProcessed = 0;
 
-      while (hasMore) {
-        const url = `${ZOPPY_BASE_URL}/customers?page=${page}&limit=100`;
+      console.log(`Starting sync from page ${startPage}, max ${maxPages} pages...`);
+
+      while (hasMore && pagesProcessed < maxPages) {
+        const url = `${ZOPPY_BASE_URL}/customers?page=${page}&limit=100&after=2020-01-01T00:00:00Z`;
         console.log(`Fetching customers page ${page}...`);
         
         const res = await fetch(url, {
@@ -252,6 +257,19 @@ serve(async (req) => {
         if (!res.ok) {
           const text = await res.text();
           console.error(`Zoppy API error: ${res.status} ${text}`);
+          // If we already synced some, return partial success with resume info
+          if (totalSynced > 0) {
+            return new Response(
+              JSON.stringify({ 
+                success: true, 
+                partial: true,
+                count: totalSynced, 
+                next_page: page,
+                message: `${totalSynced} clientes sincronizados (erro na página ${page}, reenvie para continuar)` 
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
           throw new Error(`Zoppy API error: ${res.status}`);
         }
 
@@ -301,12 +319,24 @@ serve(async (req) => {
 
         totalSynced += batch.length;
         page++;
+        pagesProcessed++;
 
         if (customers.length < 100) hasMore = false;
       }
 
+      const completed = !hasMore;
+      console.log(`Sync batch done: ${totalSynced} customers, completed: ${completed}, next page: ${page}`);
+
       return new Response(
-        JSON.stringify({ success: true, count: totalSynced, message: `${totalSynced} clientes sincronizados da Zoppy` }),
+        JSON.stringify({ 
+          success: true, 
+          completed,
+          count: totalSynced, 
+          next_page: completed ? null : page,
+          message: completed 
+            ? `✅ Sincronização completa! ${totalSynced} clientes sincronizados da Zoppy`
+            : `⏳ ${totalSynced} clientes sincronizados. Ainda há mais páginas (próxima: ${page}). Clique novamente para continuar.`
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
