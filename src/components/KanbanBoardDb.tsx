@@ -67,6 +67,7 @@ export function KanbanBoardDb({ orders, onEditOrder }: KanbanBoardDbProps) {
                                   ref={provided.innerRef}
                                   {...provided.draggableProps}
                                   {...provided.dragHandleProps}
+                                  className="min-w-0 w-full"
                                 >
                                   <OrderCardDb
                                     order={order}
