@@ -146,9 +146,7 @@ const Index = () => {
             Carregando pedidos...
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <KanbanBoardDb orders={filteredOrders} onEditOrder={handleEditOrder} />
-          </div>
+          <KanbanBoardDb orders={filteredOrders} onEditOrder={handleEditOrder} />
         )}
       </main>
 
