@@ -21,15 +21,16 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID") || "";
 
     // First try to find by paypal_order_id
-    let { data: payment, error } = await supabase
+    let { data: payment } = await supabase
       .from("paypal_payments")
       .select("*, order:orders(*, customer:customers(*))")
       .eq("paypal_order_id", paypalOrderId)
       .maybeSingle();
 
-    // If not found, try to find by checkout_token on the orders table
+    // If not found, try by checkout_token
     if (!payment) {
       const { data: order } = await supabase
         .from("orders")
@@ -38,7 +39,7 @@ serve(async (req) => {
         .maybeSingle();
 
       if (order) {
-        // Find the latest payment for this order
+        // Try to find a PayPal payment for this order
         const { data: paymentByOrder } = await supabase
           .from("paypal_payments")
           .select("*, order:orders(*, customer:customers(*))")
@@ -49,26 +50,60 @@ serve(async (req) => {
 
         if (paymentByOrder) {
           payment = paymentByOrder;
-          error = null;
+        } else {
+          // No PayPal payment — load order directly (PIX-only flow)
+          const { data: fullOrder, error: orderError } = await supabase
+            .from("orders")
+            .select("*, customer:customers(*)")
+            .eq("id", order.id)
+            .single();
+
+          if (orderError || !fullOrder) {
+            throw new Error("Order not found");
+          }
+
+          const customer = fullOrder.customer as Record<string, unknown> | null;
+          const products = (fullOrder.products || []) as Array<{
+            title: string; variant: string; price: number; quantity: number; image?: string;
+          }>;
+
+          const subtotal = products.reduce((sum, p) => sum + p.price * p.quantity, 0);
+          let discountAmount = 0;
+          if (fullOrder.discount_type && fullOrder.discount_value) {
+            discountAmount = fullOrder.discount_type === "percentage"
+              ? subtotal * (fullOrder.discount_value / 100)
+              : fullOrder.discount_value;
+          }
+          const totalAmount = Math.round(Math.max(0, subtotal - discountAmount) * 100) / 100;
+
+          return new Response(
+            JSON.stringify({
+              paypalOrderId: null,
+              paypalClientId,
+              status: fullOrder.is_paid ? "captured" : "created",
+              amount: totalAmount,
+              currency: "BRL",
+              orderId: fullOrder.id,
+              customerName: customer?.instagram_handle || "Cliente",
+              products: products.map((p) => ({
+                title: p.title, variant: p.variant, price: p.price, quantity: p.quantity, image: p.image,
+              })),
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
       }
     }
 
-    if (error || !payment) {
+    if (!payment) {
       throw new Error("Payment not found");
     }
 
     const order = payment.order as Record<string, unknown>;
     const customer = (order?.customer || {}) as Record<string, unknown>;
     const products = (order?.products || []) as Array<{
-      title: string;
-      variant: string;
-      price: number;
-      quantity: number;
-      image?: string;
+      title: string; variant: string; price: number; quantity: number; image?: string;
     }>;
-
-    const paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID") || "";
 
     return new Response(
       JSON.stringify({
@@ -80,25 +115,16 @@ serve(async (req) => {
         orderId: payment.order_id,
         customerName: customer.instagram_handle || "Cliente",
         products: products.map((p) => ({
-          title: p.title,
-          variant: p.variant,
-          price: p.price,
-          quantity: p.quantity,
-          image: p.image,
+          title: p.title, variant: p.variant, price: p.price, quantity: p.quantity, image: p.image,
         })),
       }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error fetching order:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
