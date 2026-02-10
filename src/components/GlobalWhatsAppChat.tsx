@@ -8,7 +8,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { ConversationList } from "./chat/ConversationList";
 import { ChatView } from "./chat/ChatView";
-import { Message, Conversation, ChatFilter, StageFilter } from "./chat/ChatTypes";
+import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter } from "./chat/ChatTypes";
 
 export function GlobalWhatsAppChat() {
   const [isOpen, setIsOpen] = useState(false);
@@ -20,11 +20,12 @@ export function GlobalWhatsAppChat() {
   const [isSending, setIsSending] = useState(false);
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
+  const [instanceFilter, setInstanceFilter] = useState<InstanceFilter>('all');
   const [sendVia, setSendVia] = useState<'zapi' | 'meta'>('zapi');
   
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
-  const { numbers: metaNumbers, selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+  const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
 
   // Fetch Meta numbers on mount
   useEffect(() => {
@@ -58,7 +59,6 @@ export function GlobalWhatsAppChat() {
         if (msg.direction === 'incoming' && msg.status !== 'read') {
           entry.unread++;
         }
-        // Update isGroup if any message indicates it's a group
         if (msg.is_group) {
           entry.isGroup = true;
         }
@@ -68,17 +68,17 @@ export function GlobalWhatsAppChat() {
       const convs: Conversation[] = [];
       phoneMap.forEach((value, phone) => {
         const lastMsg = value.messages[0];
-        const allMessages = value.messages;
-        
-        // Check if last message is incoming and unanswered
         const hasUnansweredMessage = lastMsg.direction === 'incoming';
         
-        // Find customer and order
         const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
         const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
-        
-        // Detect if it's a group (phone starting with group prefix or contains @g.us)
         const isGroup = value.isGroup || phone.includes('@g.us') || phone.includes('-');
+        
+        // Detect which instance the last incoming message came from
+        const lastIncoming = value.messages.find(m => m.direction === 'incoming');
+        const lastIncomingInstance: 'zapi' | 'meta' | undefined = lastIncoming?.whatsapp_number_id ? 'meta' : lastIncoming ? 'zapi' : undefined;
+        // Also get the whatsapp_number_id from the last message (incoming or outgoing) that has one
+        const msgWithNumberId = value.messages.find(m => m.whatsapp_number_id);
         
         convs.push({
           phone,
@@ -91,17 +91,17 @@ export function GlobalWhatsAppChat() {
           stage: order?.stage,
           customerId: order?.customer_id || customer?.id,
           customerTags: customer?.tags,
+          whatsapp_number_id: msgWithNumberId?.whatsapp_number_id || null,
+          lastIncomingInstance,
         });
       });
 
-      // Sort by last message
       convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
       setConversations(convs);
     };
 
     loadConversations();
 
-    // Subscribe to realtime with insert focus
     const channel = supabase
       .channel('global-whatsapp-chat-realtime')
       .on(
@@ -147,10 +147,24 @@ export function GlobalWhatsAppChat() {
     setMessages(data || []);
   };
 
-  // Select conversation
+  // Select conversation - auto-detect instance
   const handleSelectConversation = (phone: string) => {
     setSelectedPhone(phone);
     loadMessages(phone);
+    
+    // Auto-detect which instance to use for reply
+    const conv = conversations.find(c => c.phone === phone);
+    if (conv) {
+      if (conv.lastIncomingInstance === 'meta') {
+        setSendVia('meta');
+        // Also set the specific Meta number if available
+        if (conv.whatsapp_number_id) {
+          setSelectedNumberId(conv.whatsapp_number_id);
+        }
+      } else {
+        setSendVia('zapi');
+      }
+    }
     
     // Mark as read
     const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
@@ -189,10 +203,7 @@ export function GlobalWhatsAppChat() {
     }
   };
 
-  // Get selected conversation
   const selectedConversation = conversations.find(c => c.phone === selectedPhone) || null;
-
-  // Total unread
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   if (!isOpen) {
@@ -214,9 +225,9 @@ export function GlobalWhatsAppChat() {
 
   return (
     <div className="fixed bottom-24 right-4 z-50 w-[420px] h-[650px] bg-background border rounded-xl shadow-2xl flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b bg-stage-paid text-white">
-        <div className="flex items-center gap-2">
+      {/* Header - always visible */}
+      <div className="flex items-center justify-between p-3 border-b bg-stage-paid text-white flex-shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
           {selectedPhone ? (
             <>
               <Button
@@ -228,9 +239,9 @@ export function GlobalWhatsAppChat() {
                 <ChevronLeft className="h-5 w-5" />
               </Button>
               {selectedConversation?.isGroup ? (
-                <Users className="h-5 w-5" />
+                <Users className="h-5 w-5 flex-shrink-0" />
               ) : (
-                <Phone className="h-5 w-5" />
+                <Phone className="h-5 w-5 flex-shrink-0" />
               )}
               <span className="font-semibold truncate">
                 {selectedConversation?.customerName || selectedPhone}
@@ -246,7 +257,7 @@ export function GlobalWhatsAppChat() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-white hover:bg-white/20"
+          className="h-8 w-8 text-white hover:bg-white/20 flex-shrink-0"
           onClick={() => {
             setIsOpen(false);
             setSelectedPhone(null);
@@ -256,9 +267,9 @@ export function GlobalWhatsAppChat() {
         </Button>
       </div>
 
-      {/* API Selector bar */}
+      {/* API Selector bar - when in conversation */}
       {selectedPhone && (
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/50 text-xs">
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/50 text-xs flex-shrink-0">
           <span className="text-muted-foreground">Enviar via:</span>
           <button
             onClick={() => setSendVia('zapi')}
@@ -276,13 +287,14 @@ export function GlobalWhatsAppChat() {
             <WhatsAppNumberSelector className="h-7 text-xs flex-1" />
           )}
           {sendVia === 'meta' && metaNumbers.length > 0 && (
-            <span className="text-muted-foreground">
+            <span className="text-muted-foreground truncate">
               {metaNumbers.find(n => n.id === selectedNumberId)?.label || ''}
             </span>
           )}
         </div>
       )}
 
+      {/* Content area - takes remaining space */}
       {!selectedPhone ? (
         <ConversationList
           conversations={conversations}
@@ -293,6 +305,9 @@ export function GlobalWhatsAppChat() {
           onChatFilterChange={setChatFilter}
           stageFilter={stageFilter}
           onStageFilterChange={setStageFilter}
+          instanceFilter={instanceFilter}
+          onInstanceFilterChange={setInstanceFilter}
+          metaNumbers={metaNumbers}
         />
       ) : (
         <ChatView

@@ -23,7 +23,10 @@ export interface Conversation {
   stage?: string;
   customerId?: string;
   customerTags?: string[];
+  whatsapp_number_id?: string | null;
+  lastIncomingInstance?: 'zapi' | 'meta';
 }
 
 export type ChatFilter = 'all' | 'contacts' | 'groups';
 export type StageFilter = 'all' | string;
+export type InstanceFilter = 'all' | 'zapi' | 'meta' | string;

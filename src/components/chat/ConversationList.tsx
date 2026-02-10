@@ -1,12 +1,13 @@
-import { Search, Phone, Users, MessageCircle, Filter } from "lucide-react";
+import { Search, Phone, Users, MessageCircle, Filter, Wifi } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Conversation, ChatFilter, StageFilter } from "./ChatTypes";
+import { Conversation, ChatFilter, StageFilter, InstanceFilter } from "./ChatTypes";
 import { STAGES } from "@/types/order";
+import { WhatsAppNumber } from "@/stores/whatsappNumberStore";
 import {
   Select,
   SelectContent,
@@ -29,6 +30,9 @@ interface ConversationListProps {
   onChatFilterChange: (filter: ChatFilter) => void;
   stageFilter: StageFilter;
   onStageFilterChange: (stage: StageFilter) => void;
+  instanceFilter: InstanceFilter;
+  onInstanceFilterChange: (filter: InstanceFilter) => void;
+  metaNumbers: WhatsAppNumber[];
 }
 
 export function ConversationList({
@@ -40,6 +44,9 @@ export function ConversationList({
   onChatFilterChange,
   stageFilter,
   onStageFilterChange,
+  instanceFilter,
+  onInstanceFilterChange,
+  metaNumbers,
 }: ConversationListProps) {
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) {
@@ -54,15 +61,21 @@ export function ConversationList({
   // Apply filters
   const filteredConversations = conversations
     .filter(c => {
-      // Chat type filter
       if (chatFilter === 'contacts' && c.isGroup) return false;
       if (chatFilter === 'groups' && !c.isGroup) return false;
       return true;
     })
     .filter(c => {
-      // Stage filter
       if (stageFilter !== 'all' && c.stage !== stageFilter) return false;
       return true;
+    })
+    .filter(c => {
+      // Instance filter
+      if (instanceFilter === 'all') return true;
+      if (instanceFilter === 'zapi') return !c.whatsapp_number_id;
+      if (instanceFilter === 'meta') return !!c.whatsapp_number_id;
+      // Specific meta number id
+      return c.whatsapp_number_id === instanceFilter;
     })
     .filter(c =>
       c.phone.includes(searchQuery) ||
@@ -75,7 +88,7 @@ export function ConversationList({
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Search */}
-      <div className="p-2 border-b space-y-2">
+      <div className="p-2 border-b space-y-2 flex-shrink-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -105,6 +118,24 @@ export function ConversationList({
           </Tabs>
         </div>
 
+        {/* Instance filter */}
+        <Select value={instanceFilter} onValueChange={onInstanceFilterChange}>
+          <SelectTrigger className="h-8 text-xs">
+            <Wifi className="h-3 w-3 mr-2" />
+            <SelectValue placeholder="Filtrar por instância" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as instâncias</SelectItem>
+            <SelectItem value="zapi">Z-API</SelectItem>
+            <SelectItem value="meta">Meta API (todas)</SelectItem>
+            {metaNumbers.map(num => (
+              <SelectItem key={num.id} value={num.id}>
+                Meta - {num.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         {/* Stage filter */}
         <Select value={stageFilter} onValueChange={onStageFilterChange}>
           <SelectTrigger className="h-8 text-xs">
@@ -126,7 +157,7 @@ export function ConversationList({
       </div>
 
       {/* Conversations */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1" style={{ minHeight: 0 }}>
         {filteredConversations.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
             <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -159,7 +190,7 @@ export function ConversationList({
                       {conv.customerName || conv.phone}
                     </span>
                     <span className={cn(
-                      "text-xs",
+                      "text-xs flex-shrink-0",
                       conv.hasUnansweredMessage ? "text-yellow-600 dark:text-yellow-400 font-medium" : "text-muted-foreground"
                     )}>
                       {formatConversationTime(conv.lastMessageAt)}
@@ -170,6 +201,11 @@ export function ConversationList({
                       {conv.lastMessage}
                     </p>
                     <div className="flex items-center gap-1 flex-shrink-0">
+                      {conv.whatsapp_number_id ? (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 text-blue-500 border-blue-300">M</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 text-green-500 border-green-300">Z</Badge>
+                      )}
                       {conv.customerTags?.slice(0, 2).map(tag => (
                         <Badge key={tag} variant="outline" className="text-[10px] px-1 py-0">
                           {tag}
