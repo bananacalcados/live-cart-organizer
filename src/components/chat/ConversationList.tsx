@@ -1,11 +1,11 @@
-import { Search, Phone, Users, MessageCircle, Filter } from "lucide-react";
+import { Search, Phone, Users, MessageCircle, Filter, Smartphone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Conversation, ChatFilter, StageFilter } from "./ChatTypes";
+import { Conversation, ChatFilter, StageFilter, NumberFilter } from "./ChatTypes";
 import { STAGES } from "@/types/order";
 import {
   Select,
@@ -20,6 +20,12 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 
+interface WhatsAppNumber {
+  id: string;
+  label: string;
+  phone_display: string;
+}
+
 interface ConversationListProps {
   conversations: Conversation[];
   searchQuery: string;
@@ -29,6 +35,9 @@ interface ConversationListProps {
   onChatFilterChange: (filter: ChatFilter) => void;
   stageFilter: StageFilter;
   onStageFilterChange: (stage: StageFilter) => void;
+  numberFilter: NumberFilter;
+  onNumberFilterChange: (filter: NumberFilter) => void;
+  metaNumbers: WhatsAppNumber[];
 }
 
 export function ConversationList({
@@ -40,6 +49,9 @@ export function ConversationList({
   onChatFilterChange,
   stageFilter,
   onStageFilterChange,
+  numberFilter,
+  onNumberFilterChange,
+  metaNumbers,
 }: ConversationListProps) {
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) {
@@ -54,14 +66,18 @@ export function ConversationList({
   // Apply filters
   const filteredConversations = conversations
     .filter(c => {
-      // Chat type filter
       if (chatFilter === 'contacts' && c.isGroup) return false;
       if (chatFilter === 'groups' && !c.isGroup) return false;
       return true;
     })
     .filter(c => {
-      // Stage filter
       if (stageFilter !== 'all' && c.stage !== stageFilter) return false;
+      return true;
+    })
+    .filter(c => {
+      if (numberFilter !== 'all') {
+        return c.whatsappNumberIds?.includes(numberFilter);
+      }
       return true;
     })
     .filter(c =>
@@ -123,6 +139,27 @@ export function ConversationList({
             ))}
           </SelectContent>
         </Select>
+
+        {/* WhatsApp number filter */}
+        {metaNumbers.length > 0 && (
+          <Select value={numberFilter} onValueChange={onNumberFilterChange}>
+            <SelectTrigger className="h-8 text-xs">
+              <Smartphone className="h-3 w-3 mr-2" />
+              <SelectValue placeholder="Filtrar por número" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os números</SelectItem>
+              {metaNumbers.map(num => (
+                <SelectItem key={num.id} value={num.id}>
+                  <div className="flex items-center gap-2">
+                    <span>{num.label}</span>
+                    <span className="text-muted-foreground">{num.phone_display}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Conversations */}

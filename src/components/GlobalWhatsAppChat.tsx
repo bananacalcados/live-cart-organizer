@@ -8,7 +8,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { ConversationList } from "./chat/ConversationList";
 import { ChatView } from "./chat/ChatView";
-import { Message, Conversation, ChatFilter, StageFilter } from "./chat/ChatTypes";
+import { Message, Conversation, ChatFilter, StageFilter, NumberFilter } from "./chat/ChatTypes";
 
 export function GlobalWhatsAppChat() {
   const [isOpen, setIsOpen] = useState(false);
@@ -21,6 +21,7 @@ export function GlobalWhatsAppChat() {
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [sendVia, setSendVia] = useState<'zapi' | 'meta'>('zapi');
+  const [numberFilter, setNumberFilter] = useState<NumberFilter>('all');
   
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
@@ -47,20 +48,22 @@ export function GlobalWhatsAppChat() {
       }
 
       // Group by phone
-      const phoneMap = new Map<string, { messages: Message[], unread: number, isGroup: boolean }>();
+      const phoneMap = new Map<string, { messages: Message[], unread: number, isGroup: boolean, numberIds: Set<string> }>();
       
       for (const msg of data || []) {
         if (!phoneMap.has(msg.phone)) {
-          phoneMap.set(msg.phone, { messages: [], unread: 0, isGroup: msg.is_group || false });
+          phoneMap.set(msg.phone, { messages: [], unread: 0, isGroup: msg.is_group || false, numberIds: new Set() });
         }
         const entry = phoneMap.get(msg.phone)!;
         entry.messages.push(msg);
         if (msg.direction === 'incoming' && msg.status !== 'read') {
           entry.unread++;
         }
-        // Update isGroup if any message indicates it's a group
         if (msg.is_group) {
           entry.isGroup = true;
+        }
+        if (msg.whatsapp_number_id) {
+          entry.numberIds.add(msg.whatsapp_number_id);
         }
       }
 
@@ -91,6 +94,7 @@ export function GlobalWhatsAppChat() {
           stage: order?.stage,
           customerId: order?.customer_id || customer?.id,
           customerTags: customer?.tags,
+          whatsappNumberIds: Array.from(value.numberIds),
         });
       });
 
@@ -293,6 +297,9 @@ export function GlobalWhatsAppChat() {
           onChatFilterChange={setChatFilter}
           stageFilter={stageFilter}
           onStageFilterChange={setStageFilter}
+          numberFilter={numberFilter}
+          onNumberFilterChange={setNumberFilter}
+          metaNumbers={metaNumbers}
         />
       ) : (
         <ChatView
