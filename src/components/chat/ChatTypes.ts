@@ -25,6 +25,7 @@ export interface Conversation {
   customerTags?: string[];
   whatsapp_number_id?: string | null;
   lastIncomingInstance?: 'zapi' | 'meta';
+  eventNames?: string[];
 }
 
 export type ChatFilter = 'all' | 'contacts' | 'groups';
