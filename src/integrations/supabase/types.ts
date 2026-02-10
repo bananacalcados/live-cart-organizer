@@ -383,6 +383,250 @@ export type Database = {
         }
         Relationships: []
       }
+      marketing_campaigns: {
+        Row: {
+          ai_prompt: string | null
+          ai_strategy: Json | null
+          channels: string[] | null
+          completed_at: string | null
+          contact_list_id: string | null
+          content: Json | null
+          created_at: string
+          delivered_count: number | null
+          description: string | null
+          failed_count: number | null
+          id: string
+          name: string
+          objective: string | null
+          read_count: number | null
+          scheduled_at: string | null
+          sent_count: number | null
+          started_at: string | null
+          status: string
+          target_audience: string | null
+          total_recipients: number | null
+          updated_at: string
+          whatsapp_number_id: string | null
+          whatsapp_template_name: string | null
+          whatsapp_template_params: Json | null
+        }
+        Insert: {
+          ai_prompt?: string | null
+          ai_strategy?: Json | null
+          channels?: string[] | null
+          completed_at?: string | null
+          contact_list_id?: string | null
+          content?: Json | null
+          created_at?: string
+          delivered_count?: number | null
+          description?: string | null
+          failed_count?: number | null
+          id?: string
+          name: string
+          objective?: string | null
+          read_count?: number | null
+          scheduled_at?: string | null
+          sent_count?: number | null
+          started_at?: string | null
+          status?: string
+          target_audience?: string | null
+          total_recipients?: number | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+          whatsapp_template_name?: string | null
+          whatsapp_template_params?: Json | null
+        }
+        Update: {
+          ai_prompt?: string | null
+          ai_strategy?: Json | null
+          channels?: string[] | null
+          completed_at?: string | null
+          contact_list_id?: string | null
+          content?: Json | null
+          created_at?: string
+          delivered_count?: number | null
+          description?: string | null
+          failed_count?: number | null
+          id?: string
+          name?: string
+          objective?: string | null
+          read_count?: number | null
+          scheduled_at?: string | null
+          sent_count?: number | null
+          started_at?: string | null
+          status?: string
+          target_audience?: string | null
+          total_recipients?: number | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+          whatsapp_template_name?: string | null
+          whatsapp_template_params?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_campaigns_contact_list_id_fkey"
+            columns: ["contact_list_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_contact_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_campaigns_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_contact_lists: {
+        Row: {
+          contact_count: number
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          source: string
+          source_event_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          contact_count?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          source?: string
+          source_event_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contact_count?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          source?: string
+          source_event_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_contact_lists_source_event_id_fkey"
+            columns: ["source_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_contacts: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          instagram: string | null
+          list_id: string
+          metadata: Json | null
+          name: string | null
+          phone: string | null
+          tags: string[] | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          instagram?: string | null
+          list_id: string
+          metadata?: Json | null
+          name?: string | null
+          phone?: string | null
+          tags?: string[] | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          instagram?: string | null
+          list_id?: string
+          metadata?: Json | null
+          name?: string | null
+          phone?: string | null
+          tags?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_contacts_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_contact_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_send_logs: {
+        Row: {
+          campaign_id: string
+          channel: string
+          contact_id: string | null
+          created_at: string
+          delivered_at: string | null
+          email: string | null
+          error_message: string | null
+          id: string
+          meta_message_id: string | null
+          phone: string | null
+          read_at: string | null
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          campaign_id: string
+          channel?: string
+          contact_id?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          meta_message_id?: string | null
+          phone?: string | null
+          read_at?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          campaign_id?: string
+          channel?: string
+          contact_id?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          meta_message_id?: string | null
+          phone?: string | null
+          read_at?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_send_logs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_send_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_templates: {
         Row: {
           created_at: string
@@ -717,6 +961,102 @@ export type Database = {
           phone_display?: string
           phone_number_id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      zoppy_sales: {
+        Row: {
+          completed_at: string | null
+          coupon_code: string | null
+          created_at: string
+          customer_data: Json | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          discount: number | null
+          external_id: string | null
+          id: string
+          line_items: Json | null
+          shipping: number | null
+          status: string
+          subtotal: number | null
+          total: number | null
+          updated_at: string
+          zoppy_created_at: string | null
+          zoppy_order_id: string
+          zoppy_updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          coupon_code?: string | null
+          created_at?: string
+          customer_data?: Json | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          discount?: number | null
+          external_id?: string | null
+          id?: string
+          line_items?: Json | null
+          shipping?: number | null
+          status?: string
+          subtotal?: number | null
+          total?: number | null
+          updated_at?: string
+          zoppy_created_at?: string | null
+          zoppy_order_id: string
+          zoppy_updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          coupon_code?: string | null
+          created_at?: string
+          customer_data?: Json | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          discount?: number | null
+          external_id?: string | null
+          id?: string
+          line_items?: Json | null
+          shipping?: number | null
+          status?: string
+          subtotal?: number | null
+          total?: number | null
+          updated_at?: string
+          zoppy_created_at?: string | null
+          zoppy_order_id?: string
+          zoppy_updated_at?: string | null
+        }
+        Relationships: []
+      }
+      zoppy_sync_log: {
+        Row: {
+          completed_at: string | null
+          error_message: string | null
+          id: string
+          records_synced: number | null
+          started_at: string
+          status: string
+          sync_type: string
+        }
+        Insert: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          records_synced?: number | null
+          started_at?: string
+          status?: string
+          sync_type?: string
+        }
+        Update: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          records_synced?: number | null
+          started_at?: string
+          status?: string
+          sync_type?: string
         }
         Relationships: []
       }
