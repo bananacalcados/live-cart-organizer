@@ -178,27 +178,40 @@ export function GlobalWhatsAppChat() {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedPhone || isSending) return;
 
+    const messageText = newMessage.trim();
     setIsSending(true);
+    setNewMessage("");
     try {
       if (sendVia === 'meta' && selectedNumberId) {
         const { error } = await supabase.functions.invoke('meta-whatsapp-send', {
           body: { 
             phone: selectedPhone, 
-            message: newMessage,
+            message: messageText,
             whatsapp_number_id: selectedNumberId,
           },
         });
         if (error) throw error;
       } else {
         const { error } = await supabase.functions.invoke('zapi-send-message', {
-          body: { phone: selectedPhone, message: newMessage },
+          body: { phone: selectedPhone, message: messageText },
         });
         if (error) throw error;
       }
 
-      setNewMessage("");
+      // Persist the sent message in the database
+      await supabase.from('whatsapp_messages').insert({
+        phone: selectedPhone,
+        message: messageText,
+        direction: 'outgoing',
+        status: 'sent',
+        whatsapp_number_id: sendVia === 'meta' ? selectedNumberId : null,
+      });
+
+      // Reload messages to show the sent message
+      loadMessages(selectedPhone);
     } catch (error) {
       console.error('Error sending message:', error);
+      toast.error('Erro ao enviar mensagem');
     } finally {
       setIsSending(false);
     }
