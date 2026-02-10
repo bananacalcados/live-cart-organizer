@@ -9,12 +9,13 @@ import { OrderReportDialog } from "@/components/OrderReportDialog";
 import { GlobalWhatsAppChat } from "@/components/GlobalWhatsAppChat";
 import { PrizeEligibleList } from "@/components/PrizeEligibleList";
 import { EventPromotionManager } from "@/components/EventPromotionManager";
+import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
-import { Calendar, Search, Trophy, Tag } from "lucide-react";
+import { Calendar, Search, Trophy, Tag, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -151,6 +152,10 @@ const Index = () => {
                 <Trophy className="h-3 w-3" />
                 Roleta
               </TabsTrigger>
+              <TabsTrigger value="meta-templates" className="gap-1">
+                <MessageSquare className="h-3 w-3" />
+                Templates API
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -174,6 +179,10 @@ const Index = () => {
 
           <TabsContent value="prizes">
             <PrizeEligibleList eventId={currentEventId} />
+          </TabsContent>
+
+          <TabsContent value="meta-templates">
+            <MetaTemplateCreator />
           </TabsContent>
         </Tabs>
       </main>
