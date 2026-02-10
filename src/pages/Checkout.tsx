@@ -488,7 +488,11 @@ export default function Checkout() {
     }
   }, [paypalOrderId, checkoutStartedAt, orderData?.orderId]);
 
-  // Load PayPal SDK
+  // Store handleApprove in a ref to avoid re-creating PayPal components
+  const handleApproveRef = useRef(handleApprove);
+  useEffect(() => { handleApproveRef.current = handleApprove; }, [handleApprove]);
+
+  // Load PayPal SDK - only once
   useEffect(() => {
     if (!orderData || !orderData.paypalClientId || paymentStatus === "success" || sdkLoadedRef.current) return;
     sdkLoadedRef.current = true;
@@ -502,9 +506,10 @@ export default function Checkout() {
       sdkLoadedRef.current = false;
     };
     document.body.appendChild(script);
-  }, [orderData, paymentStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderData?.paypalClientId, paymentStatus]);
 
-  // Render card fields + PayPal button
+  // Render card fields + PayPal button - only once after SDK loads
   useEffect(() => {
     if (!sdkReady || !window.paypal || !orderData || paymentStatus === "success" || fieldsRenderedRef.current) return;
     fieldsRenderedRef.current = true;
@@ -512,7 +517,7 @@ export default function Checkout() {
     try {
       const cardFields = window.paypal.CardFields({
         createOrder: () => orderData.paypalOrderId,
-        onApprove: async () => { await handleApprove(); },
+        onApprove: async () => { await handleApproveRef.current(); },
         onError: (err) => {
           console.error("PayPal CardFields error:", err);
           toast.error("Erro no processamento do cartão.");
@@ -527,15 +532,20 @@ export default function Checkout() {
       if (cardFields.isEligible()) {
         setCardFieldsEligible(true);
         cardFieldsRef.current = cardFields;
-        cardFields.NameField().render("#card-name-field");
-        cardFields.NumberField().render("#card-number-field");
-        cardFields.ExpiryField().render("#card-expiry-field");
-        cardFields.CVVField().render("#card-cvv-field");
+        // Delay render slightly to ensure DOM containers exist
+        setTimeout(() => {
+          cardFields.NameField().render("#card-name-field").catch(console.error);
+          cardFields.NumberField().render("#card-number-field").catch(console.error);
+          cardFields.ExpiryField().render("#card-expiry-field").catch(console.error);
+          cardFields.CVVField().render("#card-cvv-field").catch(console.error);
+        }, 100);
+      } else {
+        console.log("PayPal CardFields not eligible, showing PayPal buttons only");
       }
 
       window.paypal.Buttons({
         createOrder: () => orderData.paypalOrderId,
-        onApprove: async () => { await handleApprove(); },
+        onApprove: async () => { await handleApproveRef.current(); },
         onError: (err) => {
           console.error("PayPal Buttons error:", err);
           toast.error("Erro no PayPal.");
@@ -545,7 +555,8 @@ export default function Checkout() {
     } catch (err) {
       console.error("Error rendering PayPal components:", err);
     }
-  }, [sdkReady, orderData, paymentStatus, handleApprove]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sdkReady]);
 
   const handleCardSubmit = async () => {
     if (!cardFieldsRef.current) return;
@@ -660,50 +671,48 @@ export default function Checkout() {
             </TabsContent>
 
             <TabsContent value="card" forceMount className="mt-4 space-y-4 data-[state=inactive]:hidden">
-              {/* Card Fields */}
-              {cardFieldsEligible && (
-                <div className="space-y-4">
-                  <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                    <CreditCard className="h-4 w-4" />
-                    Cartão de Crédito ou Débito
-                  </h3>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-sm font-medium mb-1 block text-foreground">Nome no cartão</label>
-                      <div id="card-name-field" className="border rounded-md bg-background min-h-[44px]" />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium mb-1 block text-foreground">Número do cartão</label>
-                      <div id="card-number-field" className="border rounded-md bg-background min-h-[44px]" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-sm font-medium mb-1 block text-foreground">Validade</label>
-                        <div id="card-expiry-field" className="border rounded-md bg-background min-h-[44px]" />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-1 block text-foreground">CVV</label>
-                        <div id="card-cvv-field" className="border rounded-md bg-background min-h-[44px]" />
-                      </div>
-                    </div>
+              {/* Card Fields - always render containers so PayPal SDK can mount */}
+              <div className={cardFieldsEligible ? "space-y-4" : "hidden"}>
+                <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Cartão de Crédito ou Débito
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block text-foreground">Nome no cartão</label>
+                    <div id="card-name-field" className="border rounded-md bg-background min-h-[44px]" />
                   </div>
-
-                  <Button onClick={handleCardSubmit} disabled={isProcessing} className="w-full h-14 text-lg font-semibold" size="lg">
-                    {isProcessing ? (
-                      <><Loader2 className="h-5 w-5 animate-spin mr-2" />Processando...</>
-                    ) : (
-                      <><Lock className="h-5 w-5 mr-2" />Pagar R$ {Number(orderData.amount).toFixed(2)}</>
-                    )}
-                  </Button>
-
-                  <div className="relative py-3">
-                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">ou pague com</span>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block text-foreground">Número do cartão</label>
+                    <div id="card-number-field" className="border rounded-md bg-background min-h-[44px]" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium mb-1 block text-foreground">Validade</label>
+                      <div id="card-expiry-field" className="border rounded-md bg-background min-h-[44px]" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1 block text-foreground">CVV</label>
+                      <div id="card-cvv-field" className="border rounded-md bg-background min-h-[44px]" />
                     </div>
                   </div>
                 </div>
-              )}
+
+                <Button onClick={handleCardSubmit} disabled={isProcessing} className="w-full h-14 text-lg font-semibold" size="lg">
+                  {isProcessing ? (
+                    <><Loader2 className="h-5 w-5 animate-spin mr-2" />Processando...</>
+                  ) : (
+                    <><Lock className="h-5 w-5 mr-2" />Pagar R$ {Number(orderData.amount).toFixed(2)}</>
+                  )}
+                </Button>
+
+                <div className="relative py-3">
+                  <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">ou pague com</span>
+                  </div>
+                </div>
+              </div>
 
               {/* PayPal Button */}
               <div id="paypal-button-container" className="min-h-[48px]" />

@@ -48,7 +48,7 @@ serve(async (req) => {
         ? subtotal * (order.discount_value / 100)
         : order.discount_value;
     }
-    const totalAmount = Math.max(0, subtotal - discountAmount);
+    const totalAmount = Math.round(Math.max(0, subtotal - discountAmount) * 100) / 100;
 
     // Use payer data from request, or fallback to customer data
     const customer = order.customer as Record<string, unknown> | null;

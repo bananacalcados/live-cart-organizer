@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.shopify-create-draft-order]
 verify_jwt = false
+
+[functions.mercadopago-create-pix]
+verify_jwt = false
