@@ -84,6 +84,26 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         }
       }
 
+      // Check for event shipping cost and if customer already has an order in this event
+      let applyShipping = false;
+      let shippingCost = 0;
+      try {
+        const { data: eventData } = await supabase
+          .from('events')
+          .select('default_shipping_cost')
+          .eq('id', eventId)
+          .single();
+        
+        if (eventData?.default_shipping_cost) {
+          shippingCost = Number(eventData.default_shipping_cost);
+          // Check if customer already has any order in this event
+          const existingOrders = get().orders.filter(
+            o => o.event_id === eventId && o.customer_id === customer.id
+          );
+          applyShipping = existingOrders.length === 0; // First order gets shipping
+        }
+      } catch {}
+
       const { data, error } = await supabase
         .from('orders')
         .insert({
@@ -92,7 +112,11 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           products: productsToJson(products),
           cart_link: cartLink,
           checkout_token: checkoutToken,
-          stage: 'new'
+          stage: 'new',
+          // Apply shipping or free shipping based on order count
+          free_shipping: !applyShipping && shippingCost > 0 ? true : false,
+          discount_type: applyShipping && shippingCost > 0 ? 'fixed' as DiscountType : undefined,
+          notes: applyShipping && shippingCost > 0 ? `Frete: R$ ${shippingCost.toFixed(2)}` : (!applyShipping && shippingCost > 0 ? 'Frete grátis (2º+ pedido)' : undefined),
         })
         .select(`
           *,
