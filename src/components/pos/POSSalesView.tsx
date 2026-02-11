@@ -492,65 +492,65 @@ export function POSSalesView({ storeId, sellerId }: Props) {
             "flex-1 flex items-center gap-3 rounded-xl p-3 border transition-all",
             unreadWhatsApp > 0
               ? "bg-green-500/10 border-green-500/30"
-              : "bg-pos-white/5 border-pos-white/10"
+              : "bg-gray-100 border-gray-200"
           )}>
-            <div className={cn("p-2 rounded-lg", unreadWhatsApp > 0 ? "bg-green-500/20" : "bg-pos-white/10")}>
-              <Phone className={cn("h-5 w-5", unreadWhatsApp > 0 ? "text-green-400" : "text-pos-white/30")} />
+            <div className={cn("p-2 rounded-lg", unreadWhatsApp > 0 ? "bg-green-500/20" : "bg-gray-200")}>
+              <Phone className={cn("h-5 w-5", unreadWhatsApp > 0 ? "text-green-600" : "text-gray-400")} />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-pos-white/40 font-medium">WhatsApp</p>
-              <p className={cn("text-lg font-bold leading-tight", unreadWhatsApp > 0 ? "text-green-400" : "text-pos-white/30")}>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">WhatsApp</p>
+              <p className={cn("text-lg font-bold leading-tight", unreadWhatsApp > 0 ? "text-green-600" : "text-gray-400")}>
                 {unreadWhatsApp}
               </p>
-              <p className="text-[10px] text-pos-white/40">sem resposta</p>
+              <p className="text-[10px] text-gray-400">sem resposta</p>
             </div>
           </div>
 
           <div className={cn(
             "flex-1 flex items-center gap-3 rounded-xl p-3 border transition-all",
             pendingReturns > 0
-              ? "bg-pos-orange/10 border-pos-orange/30"
-              : "bg-pos-white/5 border-pos-white/10"
+              ? "bg-orange-50 border-orange-300"
+              : "bg-gray-100 border-gray-200"
           )}>
-            <div className={cn("p-2 rounded-lg", pendingReturns > 0 ? "bg-pos-orange/20" : "bg-pos-white/10")}>
-              <RotateCcw className={cn("h-5 w-5", pendingReturns > 0 ? "text-pos-orange" : "text-pos-white/30")} />
+            <div className={cn("p-2 rounded-lg", pendingReturns > 0 ? "bg-orange-100" : "bg-gray-200")}>
+              <RotateCcw className={cn("h-5 w-5", pendingReturns > 0 ? "text-orange-600" : "text-gray-400")} />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-pos-white/40 font-medium">Trocas</p>
-              <p className={cn("text-lg font-bold leading-tight", pendingReturns > 0 ? "text-pos-orange" : "text-pos-white/30")}>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Trocas</p>
+              <p className={cn("text-lg font-bold leading-tight", pendingReturns > 0 ? "text-orange-600" : "text-gray-400")}>
                 {pendingReturns}
               </p>
-              <p className="text-[10px] text-pos-white/40">solicitações</p>
+              <p className="text-[10px] text-gray-400">solicitações</p>
             </div>
           </div>
 
           <div className={cn(
             "flex-1 flex items-center gap-3 rounded-xl p-3 border transition-all",
             unreadTeamChat > 0
-              ? "bg-pos-yellow/10 border-pos-yellow/30"
-              : "bg-pos-white/5 border-pos-white/10"
+              ? "bg-yellow-50 border-yellow-400"
+              : "bg-gray-100 border-gray-200"
           )}>
-            <div className={cn("p-2 rounded-lg", unreadTeamChat > 0 ? "bg-pos-yellow/20" : "bg-pos-white/10")}>
-              <MessageSquare className={cn("h-5 w-5", unreadTeamChat > 0 ? "text-pos-yellow" : "text-pos-white/30")} />
+            <div className={cn("p-2 rounded-lg", unreadTeamChat > 0 ? "bg-yellow-100" : "bg-gray-200")}>
+              <MessageSquare className={cn("h-5 w-5", unreadTeamChat > 0 ? "text-yellow-600" : "text-gray-400")} />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-pos-white/40 font-medium">Chat Equipe</p>
-              <p className={cn("text-lg font-bold leading-tight", unreadTeamChat > 0 ? "text-pos-yellow" : "text-pos-white/30")}>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Chat Equipe</p>
+              <p className={cn("text-lg font-bold leading-tight", unreadTeamChat > 0 ? "text-yellow-600" : "text-gray-400")}>
                 {unreadTeamChat}
               </p>
-              <p className="text-[10px] text-pos-white/40">não lidas</p>
+              <p className="text-[10px] text-gray-400">não lidas</p>
             </div>
           </div>
         </div>
       )}
 
       {/* Seller selector + Step Navigation */}
-      <div className="flex items-center gap-1 p-3 border-b border-pos-yellow/10 bg-pos-black">
+      <div className="flex items-center gap-1 p-3 border-b border-gray-200 bg-white">
         {/* Seller */}
         <div className="mr-3">
           <Select value={selectedSeller} onValueChange={setSelectedSeller}>
-            <SelectTrigger className="h-8 w-36 bg-pos-white/5 border-pos-yellow/30 text-pos-white text-xs">
-              <Users className="h-3 w-3 mr-1 text-pos-orange" />
+            <SelectTrigger className="h-8 w-36 bg-gray-50 border-gray-300 text-gray-800 text-xs">
+              <Users className="h-3 w-3 mr-1 text-orange-500" />
               <SelectValue placeholder="Vendedora" />
             </SelectTrigger>
             <SelectContent>
@@ -570,9 +570,9 @@ export function POSSalesView({ storeId, sellerId }: Props) {
               onClick={() => setStep(s.id)}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                isActive && "bg-pos-yellow text-pos-black shadow-md shadow-pos-yellow/30",
-                isDone && "bg-pos-orange/20 text-pos-orange",
-                !isActive && !isDone && "text-pos-white/50 hover:bg-pos-white/10"
+                isActive && "bg-pos-yellow text-black shadow-md shadow-pos-yellow/30",
+                isDone && "bg-orange-100 text-orange-600",
+                !isActive && !isDone && "text-gray-500 hover:bg-gray-100"
               )}
             >
               {isDone ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}

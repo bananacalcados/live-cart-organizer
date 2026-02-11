@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const MAX_EXECUTION_MS = 140_000; // ~140s safety margin (edge fn limit ~150s)
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -16,8 +18,10 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
+  const startTime = Date.now();
+
   try {
-    const { store_id } = await req.json();
+    const { store_id, resume_page, resume_log_id } = await req.json();
 
     let stores: { id: string; tiny_token: string }[] = [];
     if (store_id) {
@@ -36,46 +40,56 @@ serve(async (req) => {
     const results: any[] = [];
 
     for (const store of stores) {
-      // Create sync log
-      const { data: logEntry } = await supabase
-        .from('pos_product_sync_log')
-        .insert({ store_id: store.id, status: 'running', products_synced: 0 })
-        .select('id')
-        .single();
-      const logId = logEntry?.id;
+      const startPage = (store_id && resume_page) ? resume_page : 1;
+      let logId = resume_log_id || null;
+
+      // Create or reuse sync log
+      if (!logId) {
+        const { data: logEntry } = await supabase
+          .from('pos_product_sync_log')
+          .insert({ store_id: store.id, status: 'running', products_synced: 0 })
+          .select('id')
+          .single();
+        logId = logEntry?.id;
+      }
 
       try {
         const token = store.tiny_token;
 
-        // First, count total products to calculate progress
+        // Get total pages from first request
         const countResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: `token=${token}&formato=json&pagina=1`,
         });
         const countData = await countResp.json();
-        const totalRecords = countData.retorno?.numero_paginas
-          ? parseInt(countData.retorno.numero_paginas) * 100
-          : (countData.retorno?.produtos?.length || 0);
+        const totalPages = parseInt(countData.retorno?.numero_paginas || '1');
+        const totalRecords = totalPages * 100;
 
-        // Update log with estimated total
-        if (logId && totalRecords > 0) {
+        if (logId && startPage === 1) {
           await supabase.from('pos_product_sync_log').update({
             total_products: totalRecords,
           }).eq('id', logId);
         }
 
-        let page = 1;
+        let page = startPage;
         let totalSynced = 0;
         let hasMore = true;
+        let timedOut = false;
 
-        // We already have page 1 data
-        let currentPageData = countData;
+        // Reuse page 1 data if starting from page 1
+        let cachedFirstPage = startPage === 1 ? countData : null;
 
         while (hasMore) {
+          // Check time budget
+          if (Date.now() - startTime > MAX_EXECUTION_MS) {
+            timedOut = true;
+            break;
+          }
+
           let searchData;
-          if (page === 1) {
-            searchData = currentPageData;
+          if (page === 1 && cachedFirstPage) {
+            searchData = cachedFirstPage;
           } else {
             const searchResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
               method: 'POST',
@@ -96,107 +110,139 @@ serve(async (req) => {
             break;
           }
 
-          for (const item of rawProducts) {
-            const p = item.produto;
-            try {
-              const detailResp = await fetch('https://api.tiny.com.br/api2/produto.obter.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `token=${token}&formato=json&id=${p.id}`,
-              });
-              const detailData = await detailResp.json();
-              const full = detailData.retorno?.produto;
+          // Process products in parallel batches of 5 to speed up
+          for (let i = 0; i < rawProducts.length; i += 5) {
+            if (Date.now() - startTime > MAX_EXECUTION_MS) {
+              timedOut = true;
+              break;
+            }
 
-              if (!full) continue;
+            const batch = rawProducts.slice(i, i + 5);
+            const batchPromises = batch.map(async (item: any) => {
+              const p = item.produto;
+              try {
+                const detailResp = await fetch('https://api.tiny.com.br/api2/produto.obter.php', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: `token=${token}&formato=json&id=${p.id}`,
+                });
+                const detailData = await detailResp.json();
+                const full = detailData.retorno?.produto;
+                if (!full) return 0;
 
-              const variations = full.variacoes || [];
-              const rows: any[] = [];
+                const variations = full.variacoes || [];
+                const rows: any[] = [];
 
-              if (variations.length > 0) {
-                for (const v of variations) {
-                  const variation = v.variacao;
+                if (variations.length > 0) {
+                  for (const v of variations) {
+                    const variation = v.variacao;
+                    rows.push({
+                      store_id: store.id,
+                      tiny_id: full.id,
+                      sku: variation.codigo || full.codigo || '',
+                      name: full.nome,
+                      variant: variation.grade?.tamanho
+                        ? `${variation.grade?.cor || ''} ${variation.grade?.tamanho || ''}`.trim()
+                        : variation.variacao || '',
+                      size: variation.grade?.tamanho || null,
+                      color: variation.grade?.cor || null,
+                      category: full.classe_produto || null,
+                      price: parseFloat(variation.preco || full.preco || '0'),
+                      barcode: variation.gtin || full.gtin || '',
+                      stock: parseFloat(variation.estoqueAtual || full.estoqueAtual || '0'),
+                      image_url: full.anexos?.[0]?.anexo?.url || null,
+                      is_active: full.situacao === 'A',
+                      synced_at: new Date().toISOString(),
+                    });
+                  }
+                } else {
                   rows.push({
                     store_id: store.id,
                     tiny_id: full.id,
-                    sku: variation.codigo || full.codigo || '',
+                    sku: full.codigo || '',
                     name: full.nome,
-                    variant: variation.grade?.tamanho
-                      ? `${variation.grade?.cor || ''} ${variation.grade?.tamanho || ''}`.trim()
-                      : variation.variacao || '',
-                    size: variation.grade?.tamanho || null,
-                    color: variation.grade?.cor || null,
+                    variant: '',
+                    size: null,
+                    color: null,
                     category: full.classe_produto || null,
-                    price: parseFloat(variation.preco || full.preco || '0'),
-                    barcode: variation.gtin || full.gtin || '',
-                    stock: parseFloat(variation.estoqueAtual || full.estoqueAtual || '0'),
+                    price: parseFloat(full.preco || '0'),
+                    barcode: full.gtin || '',
+                    stock: parseFloat(full.estoqueAtual || '0'),
                     image_url: full.anexos?.[0]?.anexo?.url || null,
                     is_active: full.situacao === 'A',
                     synced_at: new Date().toISOString(),
                   });
                 }
-              } else {
-                rows.push({
-                  store_id: store.id,
-                  tiny_id: full.id,
-                  sku: full.codigo || '',
-                  name: full.nome,
-                  variant: '',
-                  size: null,
-                  color: null,
-                  category: full.classe_produto || null,
-                  price: parseFloat(full.preco || '0'),
-                  barcode: full.gtin || '',
-                  stock: parseFloat(full.estoqueAtual || '0'),
-                  image_url: full.anexos?.[0]?.anexo?.url || null,
-                  is_active: full.situacao === 'A',
-                  synced_at: new Date().toISOString(),
-                });
-              }
 
-              for (const row of rows) {
+                // Upsert all rows for this product at once
                 await supabase
                   .from('pos_products')
-                  .upsert(row, { onConflict: 'store_id,tiny_id,sku,variant' });
-                totalSynced++;
-              }
+                  .upsert(rows, { onConflict: 'store_id,tiny_id,sku,variant' });
 
-              // Update progress in sync log every 5 products
-              if (logId && totalSynced % 5 === 0) {
-                await supabase.from('pos_product_sync_log').update({
-                  products_synced: totalSynced,
-                }).eq('id', logId);
+                return rows.length;
+              } catch (e) {
+                console.error('Error syncing product:', p.id, e);
+                return 0;
               }
-            } catch (e) {
-              console.error('Error syncing product:', p.id, e);
+            });
+
+            const counts = await Promise.all(batchPromises);
+            totalSynced += counts.reduce((a, b) => a + b, 0);
+
+            // Update progress every batch
+            if (logId) {
+              await supabase.from('pos_product_sync_log').update({
+                products_synced: totalSynced,
+              }).eq('id', logId);
             }
 
-            await new Promise(r => setTimeout(r, 350));
+            // Small delay between batches to respect rate limits
+            await new Promise(r => setTimeout(r, 200));
           }
+
+          if (timedOut) break;
 
           page++;
           if (rawProducts.length < 100) hasMore = false;
         }
 
-        // Final update
-        if (logId) {
-          await supabase.from('pos_product_sync_log').update({
-            status: 'completed',
+        if (timedOut) {
+          // Save progress so frontend can resume
+          if (logId) {
+            await supabase.from('pos_product_sync_log').update({
+              status: 'partial',
+              products_synced: totalSynced,
+              error_message: JSON.stringify({ resume_page: page, resume_log_id: logId }),
+            }).eq('id', logId);
+          }
+          results.push({
+            store_id: store.id,
             products_synced: totalSynced,
-            completed_at: new Date().toISOString(),
-          }).eq('id', logId);
+            status: 'partial',
+            resume_page: page,
+            resume_log_id: logId,
+            total_pages: totalPages,
+          });
+        } else {
+          if (logId) {
+            await supabase.from('pos_product_sync_log').update({
+              status: 'completed',
+              products_synced: totalSynced,
+              completed_at: new Date().toISOString(),
+            }).eq('id', logId);
+          }
+          results.push({ store_id: store.id, products_synced: totalSynced, status: 'completed' });
         }
-
-        results.push({ store_id: store.id, products_synced: totalSynced, status: 'completed' });
       } catch (e) {
         console.error('Sync error for store:', store.id, e);
         if (logId) {
           await supabase.from('pos_product_sync_log').update({
             status: 'error',
-            error_message: e.message,
+            error_message: (e as Error).message,
             completed_at: new Date().toISOString(),
           }).eq('id', logId);
         }
-        results.push({ store_id: store.id, status: 'error', error: e.message });
+        results.push({ store_id: store.id, status: 'error', error: (e as Error).message });
       }
     }
 
@@ -205,7 +251,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
+    return new Response(JSON.stringify({ success: false, error: (error as Error).message }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
