@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart3, Home, TrendingUp, DollarSign, Package, ShoppingCart, Store,
-  ArrowDownRight, RefreshCw, Loader2
+  ArrowDownRight, RefreshCw, Loader2, Box, ShoppingBag
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,6 +76,8 @@ export default function Management() {
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncingShopify, setSyncingShopify] = useState(false);
+  const [syncingStock, setSyncingStock] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ currentDate: string; storeName: string; phase: string } | null>(null);
 
   const [tinyOrders, setTinyOrders] = useState<TinySyncedOrder[]>([]);
@@ -176,10 +178,34 @@ export default function Management() {
     }
   };
 
-  const syncFromTiny = () => {
+  const syncTinyOrders = () => {
     const fromDate = format(dateRange.start, 'dd/MM/yyyy');
     const toDate = format(dateRange.end, 'dd/MM/yyyy');
-    runSyncWithResume({ date_from: fromDate, date_to: toDate, sync_stock: true });
+    runSyncWithResume({ date_from: fromDate, date_to: toDate, sync_stock: false });
+  };
+
+  const syncTinyStock = () => {
+    setSyncingStock(true);
+    runSyncWithResume({ stock_only: true }).finally(() => setSyncingStock(false));
+  };
+
+  const syncShopifyOrders = async () => {
+    setSyncingShopify(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('expedition-sync-orders', {
+        body: {
+          created_at_min: dateRange.start.toISOString(),
+          created_at_max: dateRange.end.toISOString(),
+        },
+      });
+      if (error) throw error;
+      toast.success(`Shopify sincronizado: ${data?.orders_synced || 0} pedidos`);
+      fetchData();
+    } catch (e: any) {
+      toast.error(`Erro sync Shopify: ${e.message}`);
+    } finally {
+      setSyncingShopify(false);
+    }
   };
 
   useEffect(() => { fetchData(); }, [period]);
@@ -325,11 +351,19 @@ export default function Management() {
                 <SelectItem value="last_month">Mês passado</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={syncFromTiny} disabled={syncing} className="gap-1 h-8 text-xs bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground">
+            <Button variant="outline" size="sm" onClick={syncTinyOrders} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground">
               {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               {syncing && syncProgress
                 ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
-                : syncing ? "Iniciando..." : "Sync Tiny"}
+                : syncing ? "Iniciando..." : "Pedidos Tiny"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={syncTinyStock} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(25,90%,52%)] text-white border-[hsl(25,90%,52%)] hover:bg-[hsl(25,90%,45%)]">
+              {syncingStock ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Box className="h-3.5 w-3.5" />}
+              {syncingStock ? "Estoque..." : "Estoque"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={syncShopifyOrders} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(0,0%,15%)] text-[hsl(45,10%,90%)] border-[hsl(0,0%,25%)] hover:bg-[hsl(0,0%,20%)]">
+              {syncingShopify ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingBag className="h-3.5 w-3.5" />}
+              {syncingShopify ? "Shopify..." : "Shopify"}
             </Button>
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1 h-8 text-[hsl(45,10%,90%)] hover:text-primary hover:bg-[hsl(0,0%,15%)]"><Home className="h-4 w-4" /></Button>

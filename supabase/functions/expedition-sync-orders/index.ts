@@ -23,6 +23,10 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
+    // Accept optional date filters
+    const body = await req.json().catch(() => ({}));
+    const { created_at_min, created_at_max } = body;
+
     // Create sync log
     const { data: syncLog } = await supabase
       .from('expedition_sync_log')
@@ -35,11 +39,18 @@ serve(async (req) => {
     let hasNextPage = true;
 
     while (hasNextPage) {
-      // Fetch orders from Shopify (paid and unfulfilled)
-      let url = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/orders.json?status=any&limit=50&fields=id,name,order_number,email,phone,financial_status,fulfillment_status,total_price,subtotal_price,total_shipping_price_set,total_discounts,created_at,line_items,shipping_address,note,customer,total_weight`;
-      
+      let url: string;
       if (pageInfo) {
         url = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/orders.json?page_info=${pageInfo}&limit=50`;
+      } else {
+        const params = new URLSearchParams({
+          status: 'any',
+          limit: '50',
+          fields: 'id,name,order_number,email,phone,financial_status,fulfillment_status,total_price,subtotal_price,total_shipping_price_set,total_discounts,created_at,line_items,shipping_address,note,customer,total_weight,token,checkout_token',
+        });
+        if (created_at_min) params.set('created_at_min', created_at_min);
+        if (created_at_max) params.set('created_at_max', created_at_max);
+        url = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/orders.json?${params.toString()}`;
       }
 
       const response = await fetch(url, {
