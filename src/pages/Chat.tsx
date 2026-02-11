@@ -559,7 +559,7 @@ export default function ChatPage() {
       {/* WhatsApp-style top bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-[#202c33] border-b border-[#2a3942]">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="text-[#aebac1] hover:bg-[#2a3942]" onClick={() => navigate('/events')}>
+          <Button variant="ghost" size="icon" className="text-[#aebac1] hover:bg-[#2a3942]" onClick={() => navigate('/')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <MessageCircle className="h-5 w-5 text-[#00a884]" />

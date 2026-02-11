@@ -1,4 +1,5 @@
-import { Instagram, Plus } from "lucide-react";
+import { Instagram, Plus, Home } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { TemplateManager } from "./TemplateManager";
 import { ThemeToggle } from "./ThemeToggle";
@@ -8,6 +9,7 @@ interface HeaderProps {
 }
 
 export function Header({ onNewOrder }: HeaderProps) {
+  const navigate = useNavigate();
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
@@ -22,6 +24,10 @@ export function Header({ onNewOrder }: HeaderProps) {
         </div>
         
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1">
+            <Home className="h-4 w-4" />
+            Início
+          </Button>
           <ThemeToggle />
           <TemplateManager />
           <Button onClick={onNewOrder} className="btn-accent gap-2">

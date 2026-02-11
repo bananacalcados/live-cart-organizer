@@ -301,7 +301,7 @@ export default function Marketing() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={() => navigate('/')}>← Pedidos</Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1">← Início</Button>
             <Button variant="ghost" size="sm" onClick={() => navigate('/chat')}>Chat</Button>
           </div>
         </div>
