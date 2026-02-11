@@ -6,7 +6,7 @@ import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { StatsBar } from "@/components/StatsBar";
 import { StageNavigation } from "@/components/StageNavigation";
 import { OrderReportDialog } from "@/components/OrderReportDialog";
-import { GlobalWhatsAppChat } from "@/components/GlobalWhatsAppChat";
+
 import { PrizeEligibleList } from "@/components/PrizeEligibleList";
 import { EventPromotionManager } from "@/components/EventPromotionManager";
 import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
@@ -195,8 +195,7 @@ const Index = () => {
         eventId={currentEventId}
       />
 
-      {/* Global WhatsApp Chat */}
-      <GlobalWhatsAppChat />
+
     </div>
   );
 };

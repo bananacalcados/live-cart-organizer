@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,10 +10,27 @@ import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatView } from "@/components/chat/ChatView";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter } from "@/components/chat/ChatTypes";
+import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface Props {
   storeId: string;
+}
+
+interface CrmCustomerData {
+  name?: string;
+  instagram?: string;
+  tags?: string[];
+  orders: {
+    id: string;
+    orderName?: string;
+    status?: string;
+    trackingCode?: string;
+    totalPrice?: number;
+    createdAt?: string;
+  }[];
 }
 
 export function POSWhatsApp({ storeId }: Props) {
@@ -30,6 +47,8 @@ export function POSWhatsApp({ storeId }: Props) {
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
+  const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
+  const [showCrmPanel, setShowCrmPanel] = useState(false);
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
 
@@ -50,6 +69,57 @@ export function POSWhatsApp({ storeId }: Props) {
     };
     load();
   }, []);
+
+  // Load CRM data when phone is selected
+  useEffect(() => {
+    if (!selectedPhone) {
+      setCrmData(null);
+      setShowCrmPanel(false);
+      return;
+    }
+
+    const loadCrmData = async () => {
+      const cleanPhone = selectedPhone.replace(/\D/g, '');
+      
+      // Find customer by phone
+      const { data: customer } = await supabase
+        .from("customers")
+        .select("id, instagram_handle, tags, whatsapp")
+        .or(`whatsapp.ilike.%${cleanPhone.slice(-8)}%`)
+        .limit(1)
+        .maybeSingle();
+
+      // Find expedition orders by phone
+      const { data: expOrders } = await supabase
+        .from("expedition_orders")
+        .select("id, shopify_order_name, expedition_status, freight_tracking_code, total_price, shopify_created_at")
+        .or(`customer_phone.ilike.%${cleanPhone.slice(-8)}%`)
+        .order("shopify_created_at", { ascending: false })
+        .limit(5);
+
+      if (!customer && (!expOrders || expOrders.length === 0)) {
+        setCrmData(null);
+        return;
+      }
+
+      setCrmData({
+        name: chatContacts[selectedPhone],
+        instagram: customer?.instagram_handle,
+        tags: customer?.tags || [],
+        orders: (expOrders || []).map(o => ({
+          id: o.id,
+          orderName: o.shopify_order_name || undefined,
+          status: o.expedition_status,
+          trackingCode: o.freight_tracking_code || undefined,
+          totalPrice: o.total_price || undefined,
+          createdAt: o.shopify_created_at || undefined,
+        })),
+      });
+      setShowCrmPanel(true);
+    };
+
+    loadCrmData();
+  }, [selectedPhone, chatContacts]);
 
   // Load conversations
   useEffect(() => {
@@ -187,6 +257,32 @@ export function POSWhatsApp({ storeId }: Props) {
     }
   };
 
+  const handleSendMedia = async (mediaUrl: string, mediaType: string, caption?: string) => {
+    if (!selectedPhone) return;
+    setIsSending(true);
+    try {
+      const msgText = caption || `[${mediaType}]`;
+      if (sendVia === "meta" && selectedNumberId) {
+        await supabase.functions.invoke("meta-whatsapp-send", {
+          body: { phone: selectedPhone, message: msgText, whatsapp_number_id: selectedNumberId, media_url: mediaUrl, media_type: mediaType },
+        });
+      } else {
+        await supabase.functions.invoke("zapi-send-media", {
+          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption },
+        });
+      }
+      await supabase.from("whatsapp_messages").insert({
+        phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
+      });
+      loadMessages(selectedPhone);
+      toast.success("Mídia enviada!");
+    } catch (error) {
+      toast.error("Erro ao enviar mídia");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const handleSaveContactName = async () => {
     if (!selectedPhone) return;
     const name = editNameValue.trim();
@@ -205,6 +301,65 @@ export function POSWhatsApp({ storeId }: Props) {
 
   const selectedConversation = conversations.find(c => c.phone === selectedPhone) || null;
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
+
+  const statusLabels: Record<string, string> = {
+    pending: "Pendente",
+    picking: "Separando",
+    packing: "Embalando",
+    ready_to_ship: "Pronto p/ envio",
+    shipped: "Enviado",
+    delivered: "Entregue",
+    cancelled: "Cancelado",
+  };
+
+  const customerInfoPanel = crmData && showCrmPanel ? (
+    <div className="border-b border-pos-yellow/10 bg-pos-white/5 px-3 py-2 flex-shrink-0">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-pos-yellow" />
+          <span className="text-xs font-bold text-pos-white">Dados do Cliente</span>
+          {crmData.instagram && (
+            <span className="text-[10px] text-pos-white/50">@{crmData.instagram}</span>
+          )}
+        </div>
+        <Button variant="ghost" size="icon" className="h-5 w-5 text-pos-white/40" onClick={() => setShowCrmPanel(false)}>
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+      {crmData.tags && crmData.tags.length > 0 && (
+        <div className="flex gap-1 flex-wrap mb-1">
+          {crmData.tags.map(t => (
+            <Badge key={t} variant="secondary" className="text-[9px] bg-pos-yellow/20 text-pos-yellow border-0">{t}</Badge>
+          ))}
+        </div>
+      )}
+      {crmData.orders.length > 0 ? (
+        <div className="space-y-1 max-h-24 overflow-y-auto">
+          {crmData.orders.map(o => (
+            <div key={o.id} className="flex items-center gap-2 text-[10px] text-pos-white/70 bg-pos-white/5 rounded px-2 py-1">
+              <Package className="h-3 w-3 text-pos-orange flex-shrink-0" />
+              <span className="font-mono font-bold">{o.orderName || '—'}</span>
+              <Badge variant="outline" className="text-[9px] border-pos-white/20 text-pos-white/60">{statusLabels[o.status || ''] || o.status}</Badge>
+              {o.trackingCode && (
+                <span className="flex items-center gap-0.5">
+                  <Truck className="h-3 w-3" /> {o.trackingCode}
+                </span>
+              )}
+              {o.totalPrice && <span className="ml-auto">R$ {o.totalPrice.toFixed(2)}</span>}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[10px] text-pos-white/40">Nenhum pedido encontrado</p>
+      )}
+    </div>
+  ) : crmData && !showCrmPanel ? (
+    <div className="border-b border-pos-yellow/10 bg-pos-white/5 px-3 py-1 flex-shrink-0">
+      <Button variant="ghost" size="sm" className="text-[10px] text-pos-yellow h-5 px-2 gap-1" onClick={() => setShowCrmPanel(true)}>
+        <User className="h-3 w-3" /> Ver dados do cliente ({crmData.orders.length} pedido{crmData.orders.length !== 1 ? 's' : ''})
+      </Button>
+    </div>
+  ) : null;
 
   return (
     <div className="h-full flex flex-col bg-pos-black">
@@ -236,7 +391,7 @@ export function POSWhatsApp({ storeId }: Props) {
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-pos-white/40" onClick={() => { setEditNameValue(selectedConversation?.customerName || ""); setIsEditingName(true); }}>
                     <Pencil className="h-3 w-3" />
                   </Button>
-              </>
+                </>
               )}
             </>
           ) : (
@@ -298,8 +453,10 @@ export function POSWhatsApp({ storeId }: Props) {
             onNewMessageChange={setNewMessage}
             onSendMessage={handleSendMessage}
             onSendAudio={handleSendAudio}
+            onSendMedia={handleSendMedia}
             onBack={() => setSelectedPhone(null)}
             isSending={isSending}
+            customerInfoPanel={customerInfoPanel}
           />
         )}
       </div>

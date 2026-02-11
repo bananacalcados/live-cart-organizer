@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -25,8 +25,10 @@ interface ChatViewProps {
   onNewMessageChange: (message: string) => void;
   onSendMessage: () => void;
   onSendAudio?: (audioUrl: string) => void;
+  onSendMedia?: (mediaUrl: string, mediaType: string, caption?: string) => void;
   onBack?: () => void;
   isSending: boolean;
+  customerInfoPanel?: React.ReactNode;
 }
 
 const PREDEFINED_TAGS = [
@@ -40,10 +42,15 @@ export function ChatView({
   onNewMessageChange,
   onSendMessage,
   onSendAudio,
+  onSendMedia,
   onBack,
   isSending,
+  customerInfoPanel,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [newTag, setNewTag] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -170,6 +177,27 @@ export function ChatView({
     setRecordingTime(0);
   }, []);
 
+  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !onSendMedia) return;
+    event.target.value = '';
+
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 16MB.');
+      return;
+    }
+
+    const mediaType = file.type.startsWith('image/') ? 'image'
+      : file.type.startsWith('video/') ? 'video'
+      : file.type.startsWith('audio/') ? 'audio' : 'document';
+
+    toast.info('Enviando arquivo...');
+    const url = await uploadMediaToStorage(file);
+    if (url) {
+      onSendMedia(url, mediaType);
+    }
+  }, [onSendMedia]);
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Back button bar */}
@@ -249,6 +277,9 @@ export function ChatView({
         </div>
       )}
 
+      {/* Customer Info Panel */}
+      {customerInfoPanel}
+
       {/* Messages */}
       <ScrollArea className="flex-1 p-3 bg-[#e5ddd5] dark:bg-[#0b141a]" style={{ minHeight: 0 }}>
         <div className="space-y-2">
@@ -320,6 +351,31 @@ export function ChatView({
             <EmojiPickerButton 
               onEmojiSelect={(emoji) => onNewMessageChange(newMessage + emoji)} 
             />
+            {onSendMedia && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-10 w-10">
+                    <Paperclip className="h-5 w-5 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" align="start" side="top">
+                  <div className="flex gap-1">
+                    <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                    <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} />
+                    <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
+                    <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => imageInputRef.current?.click()}>
+                      <Image className="h-4 w-4" /> Foto
+                    </Button>
+                    <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => videoInputRef.current?.click()}>
+                      <Image className="h-4 w-4" /> Vídeo
+                    </Button>
+                    <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => fileInputRef.current?.click()}>
+                      <Paperclip className="h-4 w-4" /> Arquivo
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
             <Input
               placeholder="Digite uma mensagem..."
               value={newMessage}
