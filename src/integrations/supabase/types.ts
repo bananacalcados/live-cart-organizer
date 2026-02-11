@@ -3146,9 +3146,13 @@ export type Database = {
       tiny_management_sync_log: {
         Row: {
           completed_at: string | null
+          current_date_syncing: string | null
+          date_from: string | null
+          date_to: string | null
           error_message: string | null
           id: string
           orders_synced: number | null
+          phase: string | null
           started_at: string
           status: string
           store_id: string | null
@@ -3156,9 +3160,13 @@ export type Database = {
         }
         Insert: {
           completed_at?: string | null
+          current_date_syncing?: string | null
+          date_from?: string | null
+          date_to?: string | null
           error_message?: string | null
           id?: string
           orders_synced?: number | null
+          phase?: string | null
           started_at?: string
           status?: string
           store_id?: string | null
@@ -3166,9 +3174,13 @@ export type Database = {
         }
         Update: {
           completed_at?: string | null
+          current_date_syncing?: string | null
+          date_from?: string | null
+          date_to?: string | null
           error_message?: string | null
           id?: string
           orders_synced?: number | null
+          phase?: string | null
           started_at?: string
           status?: string
           store_id?: string | null

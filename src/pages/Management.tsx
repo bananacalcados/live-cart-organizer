@@ -75,7 +75,7 @@ export default function Management() {
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<{ total: number; synced: number; storeName: string } | null>(null);
+  const [syncProgress, setSyncProgress] = useState<{ currentDate: string; storeName: string; phase: string } | null>(null);
 
   const [tinyOrders, setTinyOrders] = useState<TinySyncedOrder[]>([]);
   const [expeditionOrders, setExpeditionOrders] = useState<ExpeditionOrder[]>([]);
@@ -117,21 +117,25 @@ export default function Management() {
 
   const syncFromTiny = async () => {
     setSyncing(true);
-    setSyncProgress({ total: 0, synced: 0, storeName: "Iniciando..." });
+    setSyncProgress({ currentDate: "Iniciando...", storeName: "", phase: "orders" });
 
-    // Start polling sync logs
+    // Start polling sync logs for day-based progress
     const pollInterval = setInterval(async () => {
       const { data: logs } = await supabase
         .from('tiny_management_sync_log')
-        .select('orders_synced, status, store_id')
+        .select('orders_synced, status, store_id, current_date_syncing, phase')
         .eq('status', 'running')
         .order('started_at', { ascending: false })
         .limit(1);
 
       if (logs && logs.length > 0) {
-        const log = logs[0];
+        const log = logs[0] as any;
         const storeName = stores.find(s => s.id === log.store_id)?.name || "Loja";
-        setSyncProgress({ total: 0, synced: log.orders_synced || 0, storeName });
+        setSyncProgress({
+          currentDate: log.current_date_syncing || "Processando...",
+          storeName,
+          phase: log.phase || 'orders',
+        });
       }
     }, 1500);
 
@@ -302,7 +306,7 @@ export default function Management() {
             <Button variant="outline" size="sm" onClick={syncFromTiny} disabled={syncing} className="gap-1 h-8 text-xs">
               {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               {syncing && syncProgress
-                ? `${syncProgress.storeName}: ${syncProgress.synced} pedidos...`
+                ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
                 : syncing ? "Iniciando..." : "Sync Tiny"}
             </Button>
             <ThemeToggle />
