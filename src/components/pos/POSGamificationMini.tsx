@@ -58,7 +58,7 @@ export function POSGamificationMini({ storeId }: Props) {
     <div className="p-6 space-y-6 overflow-auto h-full">
       <div>
         <h2 className="text-lg font-bold text-pos-white flex items-center gap-2">
-          <Trophy className="h-5 w-5 text-pos-yellow" /> Gamificação
+          <Trophy className="h-5 w-5 text-pos-orange" /> Gamificação
         </h2>
         <p className="text-sm text-pos-white/50">Ranking semanal das vendedoras</p>
       </div>
@@ -67,7 +67,7 @@ export function POSGamificationMini({ storeId }: Props) {
         <div className="text-center py-8 text-pos-white/50">Carregando...</div>
       ) : entries.length === 0 ? (
         <div className="text-center py-16 space-y-3">
-          <Trophy className="h-16 w-16 mx-auto text-pos-yellow/30" />
+          <Trophy className="h-16 w-16 mx-auto text-pos-orange/30" />
           <p className="text-pos-white/50">Nenhuma pontuação registrada ainda</p>
           <p className="text-xs text-pos-white/30">Cadastre vendedoras e comece a pontuar!</p>
         </div>
@@ -75,7 +75,7 @@ export function POSGamificationMini({ storeId }: Props) {
         <div className="space-y-3">
           {entries.map((entry, i) => (
             <div key={entry.id} className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${
-              i === 0 ? 'border-pos-yellow/50 bg-pos-yellow/5 shadow-[0_0_15px_hsl(48_100%_50%/0.1)]' : 'border-pos-white/10 bg-pos-white/5'
+              i === 0 ? 'border-pos-orange/50 bg-pos-orange/5 shadow-[0_0_15px_hsl(25_100%_50%/0.1)]' : 'border-pos-white/10 bg-pos-white/5'
             }`}>
               <div className="flex items-center justify-center w-8">
                 {i < 3 ? (
@@ -93,7 +93,7 @@ export function POSGamificationMini({ storeId }: Props) {
                 </div>
               </div>
               <div className="text-right">
-                <div className="flex items-center gap-1 text-pos-yellow font-bold">
+                <div className="flex items-center gap-1 text-pos-orange font-bold">
                   <Star className="h-4 w-4" />
                   {entry.weekly_points} pts
                 </div>
@@ -105,13 +105,13 @@ export function POSGamificationMini({ storeId }: Props) {
       )}
 
       {/* Scoring rules */}
-      <div className="rounded-xl bg-pos-white/5 border border-pos-yellow/20 p-4 space-y-2">
+      <div className="rounded-xl bg-pos-white/5 border border-pos-orange/20 p-4 space-y-2">
         <h4 className="text-xs font-bold text-pos-orange uppercase tracking-wider">Como pontuar</h4>
         <div className="space-y-1 text-xs text-pos-white/60">
-          <div className="flex justify-between"><span>Cadastro completo (100%)</span><span className="text-pos-yellow font-bold">+10 pts</span></div>
-          <div className="flex justify-between"><span>Cadastro parcial (50%+)</span><span className="text-pos-yellow font-bold">+5 pts</span></div>
-          <div className="flex justify-between"><span>Venda realizada</span><span className="text-pos-yellow font-bold">+3 pts</span></div>
-          <div className="flex justify-between"><span>Solicitação atendida &lt;5min</span><span className="text-pos-yellow font-bold">+5 pts</span></div>
+          <div className="flex justify-between"><span>Cadastro completo (100%)</span><span className="text-pos-orange font-bold">+10 pts</span></div>
+          <div className="flex justify-between"><span>Cadastro parcial (50%+)</span><span className="text-pos-orange font-bold">+5 pts</span></div>
+          <div className="flex justify-between"><span>Venda realizada</span><span className="text-pos-orange font-bold">+3 pts</span></div>
+          <div className="flex justify-between"><span>Solicitação atendida &lt;5min</span><span className="text-pos-orange font-bold">+5 pts</span></div>
           <div className="flex justify-between"><span>Troca/devolução por defeito</span><span className="text-red-400 font-bold">-2 pts</span></div>
         </div>
       </div>

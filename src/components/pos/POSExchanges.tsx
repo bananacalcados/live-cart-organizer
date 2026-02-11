@@ -180,19 +180,19 @@ export function POSExchanges({ storeId }: Props) {
     <div className="grid grid-cols-[1fr_80px_60px_80px_32px] gap-2 items-end">
       <div>
         <Label className="text-pos-white/50 text-[10px]">Produto</Label>
-        <Input value={items[idx].product_name} onChange={e => updateItem(items, setItems, idx, "product_name", e.target.value)} placeholder="Nome ou SKU" className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+        <Input value={items[idx].product_name} onChange={e => updateItem(items, setItems, idx, "product_name", e.target.value)} placeholder="Nome ou SKU" className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
       </div>
       <div>
         <Label className="text-pos-white/50 text-[10px]">SKU</Label>
-        <Input value={items[idx].sku} onChange={e => updateItem(items, setItems, idx, "sku", e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+        <Input value={items[idx].sku} onChange={e => updateItem(items, setItems, idx, "sku", e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
       </div>
       <div>
         <Label className="text-pos-white/50 text-[10px]">Qtd</Label>
-        <Input type="number" value={items[idx].quantity} onChange={e => updateItem(items, setItems, idx, "quantity", parseInt(e.target.value) || 1)} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+        <Input type="number" value={items[idx].quantity} onChange={e => updateItem(items, setItems, idx, "quantity", parseInt(e.target.value) || 1)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
       </div>
       <div>
         <Label className="text-pos-white/50 text-[10px]">Preço</Label>
-        <Input type="number" step="0.01" value={items[idx].unit_price} onChange={e => updateItem(items, setItems, idx, "unit_price", parseFloat(e.target.value) || 0)} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+        <Input type="number" step="0.01" value={items[idx].unit_price} onChange={e => updateItem(items, setItems, idx, "unit_price", parseFloat(e.target.value) || 0)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
       </div>
       <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} disabled={items.length <= 1}>
         <X className="h-3 w-3" />
@@ -206,7 +206,7 @@ export function POSExchanges({ storeId }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-pos-white flex items-center gap-2">
-            <RotateCcw className="h-5 w-5 text-pos-yellow" /> Trocas & Devoluções
+            <RotateCcw className="h-5 w-5 text-pos-orange" /> Trocas & Devoluções
           </h2>
           <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={() => setShowNew(true)}>
             <Plus className="h-4 w-4" /> Nova Troca
@@ -217,10 +217,10 @@ export function POSExchanges({ storeId }: Props) {
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-white/30" />
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por produto, SKU ou vale..." className="pl-9 bg-pos-white/5 border-pos-yellow/20 text-pos-white h-9" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por produto, SKU ou vale..." className="pl-9 bg-pos-white/5 border-pos-orange/20 text-pos-white h-9" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-36 bg-pos-white/5 border-pos-yellow/20 text-pos-white h-9">
+            <SelectTrigger className="w-36 bg-pos-white/5 border-pos-orange/20 text-pos-white h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -234,7 +234,7 @@ export function POSExchanges({ storeId }: Props) {
 
         {/* List */}
         {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-pos-yellow" /></div>
+          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-pos-orange" /></div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 text-pos-white/40">
             <RotateCcw className="h-12 w-12 mx-auto mb-2 opacity-30" />
@@ -247,11 +247,11 @@ export function POSExchanges({ storeId }: Props) {
               const statusInfo = STATUS_MAP[ex.status] || STATUS_MAP.pending;
               const TypeIcon = typeInfo.icon;
               return (
-                <Card key={ex.id} className="bg-pos-white/5 border-pos-yellow/10">
+                <Card key={ex.id} className="bg-pos-white/5 border-pos-orange/10">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <TypeIcon className="h-4 w-4 text-pos-yellow" />
+                        <TypeIcon className="h-4 w-4 text-pos-orange" />
                         <span className="text-sm font-bold text-pos-white">{typeInfo.label}</span>
                         <Badge className={`text-[10px] ${statusInfo.color} border-0`}>{statusInfo.label}</Badge>
                       </div>
@@ -263,12 +263,12 @@ export function POSExchanges({ storeId }: Props) {
                         {(ex.returned_items || []).map((it, i) => (
                           <p key={i} className="text-pos-white">{it.quantity}x {it.product_name} <span className="text-pos-white/40">R$ {it.unit_price?.toFixed(2)}</span></p>
                         ))}
-                        <p className="text-pos-yellow font-bold mt-1">Total: R$ {ex.returned_total?.toFixed(2)}</p>
+                        <p className="text-pos-orange font-bold mt-1">Total: R$ {ex.returned_total?.toFixed(2)}</p>
                       </div>
                       {ex.exchange_type === "credit" ? (
                         <div>
                           <p className="text-pos-white/50 mb-1">Vale Gerado</p>
-                          <p className="text-pos-yellow font-bold text-lg">{ex.credit_code}</p>
+                          <p className="text-pos-orange font-bold text-lg">{ex.credit_code}</p>
                           <p className="text-pos-white/40">R$ {ex.credit_amount?.toFixed(2)}</p>
                           {ex.credit_expires_at && <p className="text-pos-white/40">Expira: {new Date(ex.credit_expires_at).toLocaleDateString("pt-BR")}</p>}
                           {ex.credit_used_at && <p className="text-green-400">Utilizado em {new Date(ex.credit_used_at).toLocaleDateString("pt-BR")}</p>}
@@ -279,7 +279,7 @@ export function POSExchanges({ storeId }: Props) {
                           {(ex.new_items || []).map((it, i) => (
                             <p key={i} className="text-pos-white">{it.quantity}x {it.product_name} <span className="text-pos-white/40">R$ {it.unit_price?.toFixed(2)}</span></p>
                           ))}
-                          <p className="text-pos-yellow font-bold mt-1">Total: R$ {ex.new_total?.toFixed(2)}</p>
+                          <p className="text-pos-orange font-bold mt-1">Total: R$ {ex.new_total?.toFixed(2)}</p>
                           {ex.exchange_type === "difference" && (
                             <p className={`font-bold mt-1 ${ex.difference_amount > 0 ? "text-red-400" : "text-green-400"}`}>
                               {ex.difference_amount > 0 ? `Cliente paga: R$ ${ex.difference_amount.toFixed(2)}` : `Devolver: R$ ${Math.abs(ex.difference_amount).toFixed(2)}`}
@@ -298,10 +298,10 @@ export function POSExchanges({ storeId }: Props) {
 
         {/* New Exchange Dialog */}
         <Dialog open={showNew} onOpenChange={v => { if (!v) resetForm(); setShowNew(v); }}>
-          <DialogContent className="bg-pos-black border-pos-yellow/30 max-w-2xl max-h-[90vh] overflow-y-auto">
+           <DialogContent className="bg-pos-black border-pos-orange/30 max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-pos-white flex items-center gap-2">
-                <RotateCcw className="h-5 w-5 text-pos-yellow" /> Registrar Troca
+                <RotateCcw className="h-5 w-5 text-pos-orange" /> Registrar Troca
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
@@ -311,7 +311,7 @@ export function POSExchanges({ storeId }: Props) {
                   <button
                     key={key}
                     onClick={() => setExchangeType(key)}
-                    className={`p-3 rounded-lg border text-center transition-all ${exchangeType === key ? "border-pos-yellow bg-pos-yellow/10 text-pos-yellow" : "border-pos-white/10 text-pos-white/50 hover:border-pos-white/30"}`}
+                    className={`p-3 rounded-lg border text-center transition-all ${exchangeType === key ? "border-pos-orange bg-pos-orange/10 text-pos-orange" : "border-pos-white/10 text-pos-white/50 hover:border-pos-white/30"}`}
                   >
                     <Icon className="h-5 w-5 mx-auto mb-1" />
                     <p className="text-xs font-medium">{label}</p>
@@ -322,7 +322,7 @@ export function POSExchanges({ storeId }: Props) {
               {/* Seller */}
               {sellers.length > 0 && (
                 <Select value={selectedSeller} onValueChange={setSelectedSeller}>
-                  <SelectTrigger className="bg-pos-white/5 border-pos-yellow/30 text-pos-white">
+                  <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
                     <SelectValue placeholder="Vendedora (opcional)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -339,10 +339,10 @@ export function POSExchanges({ storeId }: Props) {
                 <div className="space-y-2">
                   {returnedItems.map((_, idx) => <ItemRow key={idx} items={returnedItems} setItems={setReturnedItems} idx={idx} />)}
                 </div>
-                <Button variant="ghost" className="mt-2 text-pos-yellow text-xs gap-1" onClick={() => setReturnedItems(p => [...p, { product_name: "", sku: "", quantity: 1, unit_price: 0 }])}>
+                <Button variant="ghost" className="mt-2 text-pos-orange text-xs gap-1" onClick={() => setReturnedItems(p => [...p, { product_name: "", sku: "", quantity: 1, unit_price: 0 }])}>
                   <Plus className="h-3 w-3" /> Adicionar Produto
                 </Button>
-                <p className="text-right text-sm text-pos-yellow font-bold">Subtotal devolvido: R$ {returnedTotal.toFixed(2)}</p>
+                <p className="text-right text-sm text-pos-orange font-bold">Subtotal devolvido: R$ {returnedTotal.toFixed(2)}</p>
               </div>
 
               {/* New Items (swap / difference) */}
@@ -354,10 +354,10 @@ export function POSExchanges({ storeId }: Props) {
                     <div className="space-y-2">
                       {newItems.map((_, idx) => <ItemRow key={idx} items={newItems} setItems={setNewItems} idx={idx} />)}
                     </div>
-                    <Button variant="ghost" className="mt-2 text-pos-yellow text-xs gap-1" onClick={() => setNewItems(p => [...p, { product_name: "", sku: "", quantity: 1, unit_price: 0 }])}>
+                    <Button variant="ghost" className="mt-2 text-pos-orange text-xs gap-1" onClick={() => setNewItems(p => [...p, { product_name: "", sku: "", quantity: 1, unit_price: 0 }])}>
                       <Plus className="h-3 w-3" /> Adicionar Produto
                     </Button>
-                    <p className="text-right text-sm text-pos-yellow font-bold">Subtotal novo: R$ {newTotal.toFixed(2)}</p>
+                    <p className="text-right text-sm text-pos-orange font-bold">Subtotal novo: R$ {newTotal.toFixed(2)}</p>
                   </div>
                 </>
               )}
@@ -371,7 +371,7 @@ export function POSExchanges({ storeId }: Props) {
                     </p>
                     {differenceAmount > 0 && (
                       <Select value={diffPaymentMethod} onValueChange={setDiffPaymentMethod}>
-                        <SelectTrigger className="mt-2 bg-pos-white/5 border-pos-yellow/30 text-pos-white h-8 text-xs">
+                        <SelectTrigger className="mt-2 bg-pos-white/5 border-pos-orange/30 text-pos-white h-8 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -388,12 +388,12 @@ export function POSExchanges({ storeId }: Props) {
 
               {/* Credit config */}
               {exchangeType === "credit" && (
-                <Card className="bg-pos-yellow/10 border-pos-yellow/30">
+                <Card className="bg-pos-orange/10 border-pos-orange/30">
                   <CardContent className="p-3 space-y-2">
-                    <p className="text-pos-yellow font-bold text-sm">🎫 Vale de R$ {returnedTotal.toFixed(2)}</p>
+                    <p className="text-pos-orange font-bold text-sm">🎫 Vale de R$ {returnedTotal.toFixed(2)}</p>
                     <div>
                       <Label className="text-pos-white/60 text-[10px]">Validade (dias)</Label>
-                      <Input type="number" value={creditDays} onChange={e => setCreditDays(e.target.value)} className="h-8 w-24 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+                      <Input type="number" value={creditDays} onChange={e => setCreditDays(e.target.value)} className="h-8 w-24 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
                     </div>
                   </CardContent>
                 </Card>
@@ -406,7 +406,7 @@ export function POSExchanges({ storeId }: Props) {
                 <div>
                   <Label className="text-pos-white/50 text-xs">Motivo da troca</Label>
                   <Select value={returnReason} onValueChange={setReturnReason}>
-                    <SelectTrigger className="bg-pos-white/5 border-pos-yellow/30 text-pos-white h-8 text-xs">
+                    <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white h-8 text-xs">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -420,7 +420,7 @@ export function POSExchanges({ storeId }: Props) {
                 </div>
                 <div>
                   <Label className="text-pos-white/50 text-xs">Observações</Label>
-                  <Input value={notes} onChange={e => setNotes(e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+                  <Input value={notes} onChange={e => setNotes(e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
                 </div>
               </div>
 

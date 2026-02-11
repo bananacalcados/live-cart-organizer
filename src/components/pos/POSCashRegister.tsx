@@ -165,8 +165,8 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
 
       {!register ? (
         <div className="text-center py-16 space-y-4">
-          <div className="h-20 w-20 mx-auto rounded-full bg-pos-yellow/10 flex items-center justify-center">
-            <DollarSign className="h-10 w-10 text-pos-yellow" />
+          <div className="h-20 w-20 mx-auto rounded-full bg-pos-orange/10 flex items-center justify-center">
+            <DollarSign className="h-10 w-10 text-pos-orange" />
           </div>
           <h3 className="text-xl font-bold text-pos-white">Caixa Fechado</h3>
           <p className="text-pos-white/50">Abra o caixa para começar a registrar vendas</p>
@@ -182,25 +182,25 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Card className="bg-pos-white/5 border-pos-yellow/20">
+            <Card className="bg-pos-white/5 border-pos-orange/20">
               <CardContent className="p-4">
                 <p className="text-xs text-pos-white/50">Abertura</p>
                 <p className="text-lg font-bold text-pos-white">R$ {(register.opening_balance || 0).toFixed(2)}</p>
               </CardContent>
             </Card>
-            <Card className="bg-pos-white/5 border-pos-yellow/20">
+            <Card className="bg-pos-white/5 border-pos-orange/20">
               <CardContent className="p-4">
                 <p className="text-xs text-pos-white/50">Vendas Total</p>
-                <p className="text-lg font-bold text-pos-yellow">R$ {totalSales.toFixed(2)}</p>
+                <p className="text-lg font-bold text-pos-orange">R$ {totalSales.toFixed(2)}</p>
               </CardContent>
             </Card>
-            <Card className="bg-pos-white/5 border-pos-yellow/20">
+            <Card className="bg-pos-white/5 border-pos-orange/20">
               <CardContent className="p-4">
                 <p className="text-xs text-pos-white/50">Sangrias</p>
                 <p className="text-lg font-bold text-red-400">- R$ {(register.withdrawals || 0).toFixed(2)}</p>
               </CardContent>
             </Card>
-            <Card className="bg-pos-white/5 border-pos-yellow/20">
+            <Card className="bg-pos-white/5 border-pos-orange/20">
               <CardContent className="p-4">
                 <p className="text-xs text-pos-white/50">Saldo Esperado</p>
                 <p className="text-lg font-bold text-pos-orange">R$ {expectedBalance.toFixed(2)}</p>
@@ -208,28 +208,28 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
             </Card>
           </div>
 
-          <Separator className="bg-pos-yellow/20" />
+          <Separator className="bg-pos-orange/20" />
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Card className="bg-pos-white/5 border-pos-yellow/10">
+            <Card className="bg-pos-white/5 border-pos-orange/10">
               <CardContent className="p-3 text-center">
                 <p className="text-[10px] text-pos-white/40">Dinheiro</p>
                 <p className="font-bold text-sm text-pos-white">R$ {(register.cash_sales || 0).toFixed(2)}</p>
               </CardContent>
             </Card>
-            <Card className="bg-pos-white/5 border-pos-yellow/10">
+            <Card className="bg-pos-white/5 border-pos-orange/10">
               <CardContent className="p-3 text-center">
                 <p className="text-[10px] text-pos-white/40">Cartão</p>
                 <p className="font-bold text-sm text-pos-white">R$ {(register.card_sales || 0).toFixed(2)}</p>
               </CardContent>
             </Card>
-            <Card className="bg-pos-white/5 border-pos-yellow/10">
+            <Card className="bg-pos-white/5 border-pos-orange/10">
               <CardContent className="p-3 text-center">
                 <p className="text-[10px] text-pos-white/40">PIX</p>
                 <p className="font-bold text-sm text-pos-white">R$ {(register.pix_sales || 0).toFixed(2)}</p>
               </CardContent>
             </Card>
-            <Card className="bg-pos-white/5 border-pos-yellow/10">
+            <Card className="bg-pos-white/5 border-pos-orange/10">
               <CardContent className="p-3 text-center">
                 <p className="text-[10px] text-pos-white/40">Outros</p>
                 <p className="font-bold text-sm text-pos-white">R$ {(register.other_sales || 0).toFixed(2)}</p>
@@ -253,14 +253,14 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
 
       {/* Open Dialog */}
       <Dialog open={showOpen} onOpenChange={setShowOpen}>
-        <DialogContent className="bg-pos-black border-pos-yellow/30">
+        <DialogContent className="bg-pos-black border-pos-orange/30">
           <DialogHeader>
-            <DialogTitle className="text-pos-white flex items-center gap-2"><Unlock className="h-5 w-5 text-pos-yellow" /> Abrir Caixa</DialogTitle>
+            <DialogTitle className="text-pos-white flex items-center gap-2"><Unlock className="h-5 w-5 text-pos-orange" /> Abrir Caixa</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <Label className="text-pos-white/70 text-xs">Valor de abertura (fundo de troco)</Label>
-              <Input type="number" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              <Input type="number" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
             </div>
             <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-12" onClick={handleOpen}>Abrir Caixa</Button>
           </div>
@@ -269,23 +269,23 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
 
       {/* Close Dialog */}
       <Dialog open={showClose} onOpenChange={setShowClose}>
-        <DialogContent className="bg-pos-black border-pos-yellow/30">
+        <DialogContent className="bg-pos-black border-pos-orange/30">
           <DialogHeader>
             <DialogTitle className="text-pos-white flex items-center gap-2"><Lock className="h-5 w-5 text-pos-orange" /> Fechar Caixa</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-pos-white/5 border border-pos-yellow/20 space-y-2">
+            <div className="p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-pos-white/50">Saldo esperado:</span>
-                <span className="font-bold text-pos-yellow">R$ {expectedBalance.toFixed(2)}</span>
+                <span className="font-bold text-pos-orange">R$ {expectedBalance.toFixed(2)}</span>
               </div>
             </div>
             <div>
               <Label className="text-pos-white/70 text-xs">Valor contado no caixa</Label>
-              <Input type="number" value={closingBalance} onChange={e => setClosingBalance(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              <Input type="number" value={closingBalance} onChange={e => setClosingBalance(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
             </div>
             {closingBalance && (
-              <div className="p-3 rounded-xl bg-pos-white/5 border border-pos-yellow/20">
+              <div className="p-3 rounded-xl bg-pos-white/5 border border-pos-orange/20">
                 <div className="flex justify-between text-sm">
                   <span className="text-pos-white/50">Diferença:</span>
                   <span className={`font-bold ${(parseFloat(closingBalance) - expectedBalance) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -301,7 +301,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
 
       {/* Movement Dialog */}
       <Dialog open={!!showMovement} onOpenChange={() => setShowMovement(null)}>
-        <DialogContent className="bg-pos-black border-pos-yellow/30">
+        <DialogContent className="bg-pos-black border-pos-orange/30">
           <DialogHeader>
             <DialogTitle className="text-pos-white flex items-center gap-2">
               {showMovement === 'withdraw' ? <ArrowUp className="h-5 w-5 text-red-400" /> : <ArrowDown className="h-5 w-5 text-green-400" />}
@@ -311,11 +311,11 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
           <div className="space-y-4">
             <div>
               <Label className="text-pos-white/70 text-xs">Valor</Label>
-              <Input type="number" value={movementAmount} onChange={e => setMovementAmount(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              <Input type="number" value={movementAmount} onChange={e => setMovementAmount(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
             </div>
             <div>
               <Label className="text-pos-white/70 text-xs">Observação</Label>
-              <Textarea value={movementNotes} onChange={e => setMovementNotes(e.target.value)} placeholder="Motivo..." className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              <Textarea value={movementNotes} onChange={e => setMovementNotes(e.target.value)} placeholder="Motivo..." className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
             </div>
             <Button className={`w-full font-bold h-12 ${showMovement === 'withdraw' ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`} onClick={handleMovement}>
               Confirmar

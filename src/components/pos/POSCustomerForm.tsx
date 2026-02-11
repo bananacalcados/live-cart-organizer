@@ -95,18 +95,18 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] bg-pos-black border-pos-yellow/30 p-0 gap-0">
-        <DialogHeader className="p-4 border-b border-pos-yellow/20">
+      <DialogContent className="max-w-2xl max-h-[90vh] bg-pos-black border-pos-orange/30 p-0 gap-0">
+        <DialogHeader className="p-4 border-b border-pos-orange/20">
           <DialogTitle className="flex items-center justify-between text-pos-white">
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-pos-yellow" />
+              <User className="h-5 w-5 text-pos-orange" />
               Cadastro de Cliente
             </div>
             <div className="flex items-center gap-2">
-              <Star className="h-4 w-4 text-pos-yellow" />
-              <span className="text-sm font-normal text-pos-yellow">{completeness}% completo</span>
+              <Star className="h-4 w-4 text-pos-orange" />
+              <span className="text-sm font-normal text-pos-orange">{completeness}% completo</span>
               <div className="w-20 h-2 rounded-full bg-pos-white/10">
-                <div className="h-full rounded-full bg-pos-yellow transition-all" style={{ width: `${completeness}%` }} />
+                <div className="h-full rounded-full bg-pos-orange transition-all" style={{ width: `${completeness}%` }} />
               </div>
             </div>
           </DialogTitle>
@@ -120,19 +120,19 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <Label className="text-pos-white/70 text-xs">Nome *</Label>
-                  <Input value={form.name} onChange={e => update('name', e.target.value)} placeholder="Nome completo" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.name} onChange={e => update('name', e.target.value)} placeholder="Nome completo" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
                 <div>
                   <Label className="text-pos-white/70 text-xs">CPF</Label>
-                  <Input value={form.cpf} onChange={e => update('cpf', e.target.value)} placeholder="000.000.000-00" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.cpf} onChange={e => update('cpf', e.target.value)} placeholder="000.000.000-00" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
                 <div>
                   <Label className="text-pos-white/70 text-xs">WhatsApp</Label>
-                  <Input value={form.whatsapp} onChange={e => update('whatsapp', e.target.value)} placeholder="(11) 99999-9999" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.whatsapp} onChange={e => update('whatsapp', e.target.value)} placeholder="(11) 99999-9999" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
                 <div className="col-span-2">
                   <Label className="text-pos-white/70 text-xs">E-mail</Label>
-                  <Input value={form.email} onChange={e => update('email', e.target.value)} placeholder="email@exemplo.com" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.email} onChange={e => update('email', e.target.value)} placeholder="email@exemplo.com" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
               </div>
             </div>
@@ -143,31 +143,31 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label className="text-pos-white/70 text-xs">CEP</Label>
-                  <Input value={form.cep} onChange={e => update('cep', e.target.value)} onBlur={handleCepLookup} placeholder="00000-000" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.cep} onChange={e => update('cep', e.target.value)} onBlur={handleCepLookup} placeholder="00000-000" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
                 <div className="col-span-2">
                   <Label className="text-pos-white/70 text-xs">Rua</Label>
-                  <Input value={form.address} onChange={e => update('address', e.target.value)} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.address} onChange={e => update('address', e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
                 <div>
                   <Label className="text-pos-white/70 text-xs">Número</Label>
-                  <Input value={form.address_number} onChange={e => update('address_number', e.target.value)} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.address_number} onChange={e => update('address_number', e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
                 <div>
                   <Label className="text-pos-white/70 text-xs">Complemento</Label>
-                  <Input value={form.complement} onChange={e => update('complement', e.target.value)} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.complement} onChange={e => update('complement', e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
                 <div>
                   <Label className="text-pos-white/70 text-xs">Bairro</Label>
-                  <Input value={form.neighborhood} onChange={e => update('neighborhood', e.target.value)} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.neighborhood} onChange={e => update('neighborhood', e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
                 <div>
                   <Label className="text-pos-white/70 text-xs">Cidade</Label>
-                  <Input value={form.city} onChange={e => update('city', e.target.value)} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.city} onChange={e => update('city', e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
                 <div>
                   <Label className="text-pos-white/70 text-xs">Estado</Label>
-                  <Input value={form.state} onChange={e => update('state', e.target.value)} placeholder="SP" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow" />
+                  <Input value={form.state} onChange={e => update('state', e.target.value)} placeholder="SP" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
               </div>
             </div>
@@ -179,7 +179,7 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
                 <div>
                   <Label className="text-pos-white/70 text-xs">Faixa de Idade</Label>
                   <Select value={form.age_range} onValueChange={v => update('age_range', v)}>
-                    <SelectTrigger className="bg-pos-white/5 border-pos-yellow/30 text-pos-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {AGE_RANGES.map(r => <SelectItem key={r} value={r}>{r} anos</SelectItem>)}
                     </SelectContent>
@@ -188,7 +188,7 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
                 <div>
                   <Label className="text-pos-white/70 text-xs">Estilo que Gosta</Label>
                   <Select value={form.preferred_style} onValueChange={v => update('preferred_style', v)}>
-                    <SelectTrigger className="bg-pos-white/5 border-pos-yellow/30 text-pos-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {STYLES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
@@ -197,22 +197,22 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
               </div>
               <div>
                 <Label className="text-pos-white/70 text-xs">Observações</Label>
-                <Textarea value={form.notes} onChange={e => update('notes', e.target.value)} placeholder="Preferências, alergias, etc..." className="bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow min-h-[60px]" />
+                <Textarea value={form.notes} onChange={e => update('notes', e.target.value)} placeholder="Preferências, alergias, etc..." className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange min-h-[60px]" />
               </div>
             </div>
 
             {/* Gamification hint */}
-            <div className="rounded-xl bg-pos-yellow/5 border border-pos-yellow/20 p-3 flex items-center gap-3">
-              <Star className="h-5 w-5 text-pos-yellow flex-shrink-0" />
+            <div className="rounded-xl bg-pos-orange/5 border border-pos-orange/20 p-3 flex items-center gap-3">
+              <Star className="h-5 w-5 text-pos-orange flex-shrink-0" />
               <div className="text-xs text-pos-white/70">
-                <span className="font-bold text-pos-yellow">+{Math.floor(completeness / 10)} pts</span> — Quanto mais dados preencher, mais pontos você ganha na gamificação!
+                <span className="font-bold text-pos-orange">+{Math.floor(completeness / 10)} pts</span> — Quanto mais dados preencher, mais pontos você ganha na gamificação!
               </div>
             </div>
           </div>
         </ScrollArea>
 
-        <div className="p-4 border-t border-pos-yellow/20 flex items-center justify-end gap-2">
-          <Button variant="ghost" className="text-pos-white/70 hover:text-pos-yellow" onClick={() => onOpenChange(false)}>Cancelar</Button>
+        <div className="p-4 border-t border-pos-orange/20 flex items-center justify-end gap-2">
+          <Button variant="ghost" className="text-pos-white/70 hover:text-pos-orange" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={handleSave} disabled={saving}>
             <Save className="h-4 w-4" /> {saving ? 'Salvando...' : 'Salvar Cliente'}
           </Button>
