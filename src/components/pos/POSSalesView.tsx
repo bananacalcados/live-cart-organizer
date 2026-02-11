@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -59,6 +60,10 @@ export function POSSalesView({ storeId, sellerId }: Props) {
   const [step, setStep] = useState<SaleStep>("scan");
   const [showCamera, setShowCamera] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState("");
+  const [multiPayments, setMultiPayments] = useState<{ method_id: string; method_name: string; amount: number }[]>([]);
+  const [useMultiPayment, setUseMultiPayment] = useState(false);
+  const [multiPaymentMethodId, setMultiPaymentMethodId] = useState("");
+  const [multiPaymentAmount, setMultiPaymentAmount] = useState("");
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string; cpf?: string; email?: string; whatsapp?: string; address?: string; cep?: string; city?: string; state?: string; age_range?: string; preferred_style?: string } | null>(null);
   const [searching, setSearching] = useState(false);
@@ -347,7 +352,13 @@ export function POSSalesView({ storeId, sellerId }: Props) {
     if (cart.length === 0) return;
     setFinalizingSale(true);
     try {
-      const selectedPaymentMethod = paymentMethods.find(m => m.id === selectedPayment);
+      let paymentMethodName = '';
+      if (useMultiPayment && multiPayments.length > 0) {
+        paymentMethodName = multiPayments.map(p => `${p.method_name} (R$${p.amount.toFixed(2)})`).join(' + ');
+      } else {
+        const selectedPaymentMethod = paymentMethods.find(m => m.id === selectedPayment);
+        paymentMethodName = selectedPaymentMethod?.name || '';
+      }
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-create-sale`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
@@ -366,8 +377,8 @@ export function POSSalesView({ storeId, sellerId }: Props) {
             quantity: item.quantity,
             barcode: item.barcode,
           })),
-          payment_method_id: selectedPayment,
-          payment_method_name: selectedPaymentMethod?.name || '',
+          payment_method_id: useMultiPayment ? 'multi' : selectedPayment,
+          payment_method_name: paymentMethodName,
         }),
       });
       const data = await resp.json();
@@ -423,6 +434,10 @@ export function POSSalesView({ storeId, sellerId }: Props) {
     setSearchResults([]);
     setCashReceived("");
     setInstallments("1");
+    setMultiPayments([]);
+    setUseMultiPayment(false);
+    setMultiPaymentMethodId("");
+    setMultiPaymentAmount("");
   };
 
   const steps: { id: SaleStep; label: string; icon: typeof ScanBarcode }[] = [
@@ -435,6 +450,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
   const stepIndex = steps.findIndex(s => s.id === step);
   const selectedPaymentName = paymentMethods.find(m => m.id === selectedPayment)?.name || '';
   const cashChange = cashReceived ? Math.max(0, parseFloat(cashReceived) - subtotal) : 0;
+  const multiPaymentsTotal = multiPayments.reduce((s, p) => s + p.amount, 0);
 
   // --- GATE: Cash register must be open ---
   if (checkingRegister) {
@@ -715,58 +731,138 @@ export function POSSalesView({ storeId, sellerId }: Props) {
 
           {step === "payment" && (
             <div className="p-6 space-y-6 overflow-auto">
-              <div>
-                <h2 className="text-lg font-bold mb-1 text-pos-white">Forma de Pagamento</h2>
-                <p className="text-sm text-pos-white/50">Formas de pagamento do Tiny ERP</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold mb-1 text-pos-white">Forma de Pagamento</h2>
+                  <p className="text-sm text-pos-white/50">Formas de pagamento do Tiny ERP</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-pos-white/50">Pagamento misto</span>
+                  <Switch checked={useMultiPayment} onCheckedChange={(v) => { setUseMultiPayment(v); if (!v) setMultiPayments([]); }} />
+                </div>
               </div>
               {loadingPayments ? (
                 <div className="flex items-center justify-center py-12 text-pos-white/50">
                   <Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando formas de pagamento do Tiny...
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {paymentMethods.map(method => {
-                    const isSelected = selectedPayment === method.id;
-                    const lowerName = method.name.toLowerCase();
-                    let Icon = CreditCard;
-                    if (lowerName.includes('dinheiro')) Icon = Banknote;
-                    else if (lowerName.includes('pix')) Icon = QrCode;
-                    else if (lowerName.includes('crediário') || lowerName.includes('crediario')) Icon = FileText;
-                    return (
-                      <div key={method.id} className={cn(
-                        "cursor-pointer rounded-xl border-2 p-6 flex flex-col items-center justify-center gap-3 transition-all hover:shadow-lg",
-                        isSelected ? "border-pos-yellow bg-pos-yellow/10 shadow-[0_0_20px_hsl(48_100%_50%/0.15)]" : "border-pos-white/10 bg-pos-white/5 hover:border-pos-yellow/30"
-                      )} onClick={() => setSelectedPayment(method.id)}>
-                        <div className={cn("p-3 rounded-xl transition-colors", isSelected ? "bg-pos-yellow text-pos-black" : "bg-pos-white/10 text-pos-white/60")}>
-                          <Icon className="h-6 w-6" />
+              ) : !useMultiPayment ? (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {paymentMethods.map(method => {
+                      const isSelected = selectedPayment === method.id;
+                      const lowerName = method.name.toLowerCase();
+                      let Icon = CreditCard;
+                      if (lowerName.includes('dinheiro')) Icon = Banknote;
+                      else if (lowerName.includes('pix')) Icon = QrCode;
+                      else if (lowerName.includes('crediário') || lowerName.includes('crediario')) Icon = FileText;
+                      return (
+                        <div key={method.id} className={cn(
+                          "cursor-pointer rounded-xl border-2 p-6 flex flex-col items-center justify-center gap-3 transition-all hover:shadow-lg",
+                          isSelected ? "border-pos-yellow bg-pos-yellow/10 shadow-[0_0_20px_hsl(48_100%_50%/0.15)]" : "border-pos-white/10 bg-pos-white/5 hover:border-pos-yellow/30"
+                        )} onClick={() => setSelectedPayment(method.id)}>
+                          <div className={cn("p-3 rounded-xl transition-colors", isSelected ? "bg-pos-yellow text-pos-black" : "bg-pos-white/10 text-pos-white/60")}>
+                            <Icon className="h-6 w-6" />
+                          </div>
+                          <span className={cn("font-medium text-sm text-center", isSelected ? "text-pos-yellow" : "text-pos-white/70")}>{method.name}</span>
                         </div>
-                        <span className={cn("font-medium text-sm text-center", isSelected ? "text-pos-yellow" : "text-pos-white/70")}>{method.name}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {selectedPaymentName.toLowerCase().includes('crédito') && (
-                <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-yellow/20">
-                  <Label className="text-pos-white">Parcelas</Label>
-                  <Select value={installments} onValueChange={setInstallments}>
-                    <SelectTrigger className="bg-pos-white/5 border-pos-yellow/30 text-pos-white"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {[1, 2, 3, 6, 10, 12].map(n => (
-                        <SelectItem key={n} value={String(n)}>{n}x de R$ {(subtotal / n).toFixed(2)}{n === 1 ? ' (à vista)' : ''}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {selectedPaymentName.toLowerCase().includes('dinheiro') && (
-                <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-yellow/20">
-                  <Label className="text-pos-white">Valor recebido</Label>
-                  <Input type="number" value={cashReceived} onChange={e => setCashReceived(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30" />
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-pos-white/50">Troco:</span>
-                    <span className="font-bold text-lg text-pos-yellow">R$ {cashChange.toFixed(2)}</span>
+                      );
+                    })}
                   </div>
+                  {selectedPaymentName.toLowerCase().includes('crédito') && (
+                    <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-yellow/20">
+                      <Label className="text-pos-white">Parcelas</Label>
+                      <Select value={installments} onValueChange={setInstallments}>
+                        <SelectTrigger className="bg-pos-white/5 border-pos-yellow/30 text-pos-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 6, 10, 12].map(n => (
+                            <SelectItem key={n} value={String(n)}>{n}x de R$ {(subtotal / n).toFixed(2)}{n === 1 ? ' (à vista)' : ''}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {selectedPaymentName.toLowerCase().includes('dinheiro') && (
+                    <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-yellow/20">
+                      <Label className="text-pos-white">Valor recebido</Label>
+                      <Input type="number" value={cashReceived} onChange={e => setCashReceived(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30" />
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-pos-white/50">Troco:</span>
+                        <span className="font-bold text-lg text-pos-yellow">R$ {cashChange.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-4">
+                  {/* Multi-payment: add payment methods with amounts */}
+                  <div className="flex gap-2">
+                    <Select value={multiPaymentMethodId} onValueChange={setMultiPaymentMethodId}>
+                      <SelectTrigger className="flex-1 bg-pos-white/5 border-pos-yellow/30 text-pos-white">
+                        <SelectValue placeholder="Forma de pagamento" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {paymentMethods.map(m => (
+                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      value={multiPaymentAmount}
+                      onChange={e => setMultiPaymentAmount(e.target.value)}
+                      placeholder="Valor R$"
+                      className="w-32 bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30"
+                    />
+                    <Button
+                      className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold"
+                      onClick={() => {
+                        if (!multiPaymentMethodId || !multiPaymentAmount) return;
+                        const method = paymentMethods.find(m => m.id === multiPaymentMethodId);
+                        if (!method) return;
+                        setMultiPayments(prev => [...prev, {
+                          method_id: multiPaymentMethodId,
+                          method_name: method.name,
+                          amount: parseFloat(multiPaymentAmount) || 0,
+                        }]);
+                        setMultiPaymentMethodId("");
+                        setMultiPaymentAmount("");
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {multiPayments.length > 0 && (
+                    <div className="space-y-2">
+                      {multiPayments.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-yellow/20">
+                          <div className="flex items-center gap-2">
+                            <CreditCard className="h-4 w-4 text-pos-yellow" />
+                            <span className="text-sm text-pos-white">{p.method_name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-pos-yellow">R$ {p.amount.toFixed(2)}</span>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-300" onClick={() => setMultiPayments(prev => prev.filter((_, idx) => idx !== i))}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-pos-yellow/10 border border-pos-yellow/30">
+                        <span className="text-sm text-pos-white/70">Total informado:</span>
+                        <span className={cn("font-bold text-lg", multiPaymentsTotal === subtotal ? "text-green-400" : multiPaymentsTotal < subtotal ? "text-red-400" : "text-pos-yellow")}>
+                          R$ {multiPaymentsTotal.toFixed(2)}
+                        </span>
+                      </div>
+                      {multiPaymentsTotal !== subtotal && (
+                        <p className="text-xs text-red-400">
+                          {multiPaymentsTotal < subtotal
+                            ? `Faltam R$ ${(subtotal - multiPaymentsTotal).toFixed(2)} para completar o total`
+                            : `Excede o total em R$ ${(multiPaymentsTotal - subtotal).toFixed(2)}`}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -846,11 +942,19 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                 <User className="h-3 w-3" />{selectedCustomer.name}
               </div>
             )}
-            {selectedPayment && (
+            {useMultiPayment && multiPayments.length > 0 ? (
+              <div className="space-y-1">
+                {multiPayments.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs text-pos-white/50">
+                    <CreditCard className="h-3 w-3" />{p.method_name}: R$ {p.amount.toFixed(2)}
+                  </div>
+                ))}
+              </div>
+            ) : selectedPayment ? (
               <div className="flex items-center gap-2 text-xs text-pos-white/50">
                 <CreditCard className="h-3 w-3" />{selectedPaymentName}
               </div>
-            )}
+            ) : null}
             <Separator className="bg-pos-yellow/20" />
             <div className="flex items-center justify-between">
               <span className="text-sm text-pos-white/50">Subtotal</span>

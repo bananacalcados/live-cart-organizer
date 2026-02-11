@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -32,13 +33,16 @@ export function POSConfig({ storeId }: Props) {
   const [autoEmit, setAutoEmit] = useState(false);
   const [autoEmitMinValue, setAutoEmitMinValue] = useState("");
   const [syncing, setSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState<{ status: string; products_synced: number; completed_at: string } | null>(null);
+  const [lastSync, setLastSync] = useState<{ status: string; products_synced: number; completed_at: string; total_products?: number } | null>(null);
   const [productCount, setProductCount] = useState(0);
+  const [syncProgress, setSyncProgress] = useState<{ synced: number; total: number } | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     loadSellers();
     loadInvoiceConfig();
     loadSyncInfo();
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [storeId]);
 
   const loadSellers = async () => {
@@ -55,17 +59,15 @@ export function POSConfig({ storeId }: Props) {
   };
 
   const loadSyncInfo = async () => {
-    // Last sync log
     const { data: log } = await supabase
       .from('pos_product_sync_log')
-      .select('status, products_synced, completed_at')
+      .select('status, products_synced, completed_at, total_products')
       .eq('store_id', storeId)
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();
     setLastSync(log);
 
-    // Product count
     const { count } = await supabase
       .from('pos_products')
       .select('id', { count: 'exact', head: true })
@@ -129,29 +131,65 @@ export function POSConfig({ storeId }: Props) {
     }
   };
 
+  const pollSyncProgress = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      const { data: log } = await supabase
+        .from('pos_product_sync_log')
+        .select('status, products_synced, total_products, completed_at')
+        .eq('store_id', storeId)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (log) {
+        const synced = log.products_synced || 0;
+        const total = log.total_products || 0;
+        setSyncProgress({ synced, total });
+
+        if (log.status === 'completed' || log.status === 'error') {
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          setSyncing(false);
+          setSyncProgress(null);
+          setLastSync(log);
+          loadSyncInfo();
+          if (log.status === 'completed') {
+            toast.success(`Sync concluído! ${synced} produtos sincronizados.`);
+          } else {
+            toast.error("Erro durante a sincronização");
+          }
+        }
+      }
+    }, 3000);
+  };
+
   const syncProducts = async () => {
     setSyncing(true);
-    toast.info("Sincronizando produtos do Tiny ERP... Isso pode levar alguns minutos.");
+    setSyncProgress({ synced: 0, total: 0 });
+    toast.info("Sincronizando produtos do Tiny ERP...");
     try {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sync-products`, {
+      // Fire and forget - we'll poll for progress
+      fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sync-products`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
         body: JSON.stringify({ store_id: storeId }),
       });
-      const data = await resp.json();
-      if (data.success) {
-        const result = data.results?.[0];
-        toast.success(`Sync concluído! ${result?.products_synced || 0} produtos sincronizados.`);
-        loadSyncInfo();
-      } else {
-        toast.error(data.error || "Erro no sync");
-      }
+
+      // Start polling for progress
+      pollSyncProgress();
     } catch (e) {
       toast.error("Erro ao sincronizar");
-    } finally {
       setSyncing(false);
+      setSyncProgress(null);
     }
   };
+
+  const progressPercent = syncProgress
+    ? syncProgress.total > 0
+      ? Math.min(100, Math.round((syncProgress.synced / syncProgress.total) * 100))
+      : 0
+    : 0;
 
   return (
     <ScrollArea className="h-full">
@@ -184,7 +222,27 @@ export function POSConfig({ storeId }: Props) {
                 {syncing ? 'Sincronizando...' : 'Sincronizar Agora'}
               </Button>
             </div>
-            {lastSync && (
+
+            {/* Progress Bar */}
+            {syncing && syncProgress && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs text-pos-white/70">
+                  <span>Progresso da sincronização</span>
+                  <span className="font-mono font-bold text-pos-yellow">
+                    {syncProgress.total > 0
+                      ? `${syncProgress.synced} / ${syncProgress.total} (${progressPercent}%)`
+                      : `${syncProgress.synced} produtos...`
+                    }
+                  </span>
+                </div>
+                <Progress value={syncProgress.total > 0 ? progressPercent : undefined} className="h-3 bg-pos-white/10" />
+                <p className="text-[10px] text-pos-white/40">
+                  ⏱ Tempo estimado: ~{syncProgress.total > 0 ? Math.ceil((syncProgress.total - syncProgress.synced) * 0.4 / 60) : '?'} min restante(s)
+                </p>
+              </div>
+            )}
+
+            {!syncing && lastSync && (
               <div className="flex items-center gap-2 text-xs text-pos-white/50">
                 {lastSync.status === 'completed' ? (
                   <CheckCircle className="h-3 w-3 text-green-400" />
