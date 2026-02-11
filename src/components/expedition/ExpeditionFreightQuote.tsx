@@ -194,10 +194,10 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
         return;
       }
       if (data?.success && data?.label_url) {
-        toast.success('Etiqueta oficial obtida com sucesso!');
+        toast.success(data?.message || 'Etiqueta oficial obtida com sucesso!');
         onRefresh();
       } else {
-        toast.error(data?.error || 'Etiqueta oficial ainda não disponível. Verifique se a expedição foi comprada no Tiny.');
+        toast.info(data?.message || data?.error || 'Etiqueta oficial ainda não disponível.');
       }
     } catch (error: any) {
       toast.error('Erro ao buscar etiqueta. Tente novamente.');
