@@ -605,6 +605,501 @@ export type Database = {
         }
         Relationships: []
       }
+      expedition_dispatch_manifest_items: {
+        Row: {
+          created_at: string
+          expedition_order_id: string
+          id: string
+          manifest_id: string
+          tracking_code: string | null
+          verified: boolean | null
+          verified_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          expedition_order_id: string
+          id?: string
+          manifest_id: string
+          tracking_code?: string | null
+          verified?: boolean | null
+          verified_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          expedition_order_id?: string
+          id?: string
+          manifest_id?: string
+          tracking_code?: string | null
+          verified?: boolean | null
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expedition_dispatch_manifest_items_expedition_order_id_fkey"
+            columns: ["expedition_order_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expedition_dispatch_manifest_items_manifest_id_fkey"
+            columns: ["manifest_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_dispatch_manifests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expedition_dispatch_manifests: {
+        Row: {
+          carrier: string
+          collected_at: string | null
+          collector_name: string | null
+          created_at: string
+          id: string
+          manifest_number: string | null
+          notes: string | null
+          order_count: number | null
+          signature_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          carrier: string
+          collected_at?: string | null
+          collector_name?: string | null
+          created_at?: string
+          id?: string
+          manifest_number?: string | null
+          notes?: string | null
+          order_count?: number | null
+          signature_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          carrier?: string
+          collected_at?: string | null
+          collector_name?: string | null
+          created_at?: string
+          id?: string
+          manifest_number?: string | null
+          notes?: string | null
+          order_count?: number | null
+          signature_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      expedition_freight_quotes: {
+        Row: {
+          carrier: string
+          delivery_days: number | null
+          error_message: string | null
+          expedition_order_id: string
+          id: string
+          is_selected: boolean | null
+          price: number
+          quoted_at: string
+          service: string
+        }
+        Insert: {
+          carrier: string
+          delivery_days?: number | null
+          error_message?: string | null
+          expedition_order_id: string
+          id?: string
+          is_selected?: boolean | null
+          price: number
+          quoted_at?: string
+          service: string
+        }
+        Update: {
+          carrier?: string
+          delivery_days?: number | null
+          error_message?: string | null
+          expedition_order_id?: string
+          id?: string
+          is_selected?: boolean | null
+          price?: number
+          quoted_at?: string
+          service?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expedition_freight_quotes_expedition_order_id_fkey"
+            columns: ["expedition_order_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expedition_groups: {
+        Row: {
+          created_at: string
+          customer_email: string | null
+          customer_name: string | null
+          id: string
+          order_count: number | null
+          status: string
+          total_items: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          id?: string
+          order_count?: number | null
+          status?: string
+          total_items?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          id?: string
+          order_count?: number | null
+          status?: string
+          total_items?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      expedition_order_items: {
+        Row: {
+          barcode: string | null
+          created_at: string
+          expedition_order_id: string
+          id: string
+          pack_verified: boolean | null
+          packed_quantity: number | null
+          pick_verified: boolean | null
+          picked_quantity: number | null
+          product_name: string
+          quantity: number
+          shopify_line_item_id: string | null
+          sku: string | null
+          unit_price: number | null
+          variant_name: string | null
+          weight_grams: number | null
+        }
+        Insert: {
+          barcode?: string | null
+          created_at?: string
+          expedition_order_id: string
+          id?: string
+          pack_verified?: boolean | null
+          packed_quantity?: number | null
+          pick_verified?: boolean | null
+          picked_quantity?: number | null
+          product_name: string
+          quantity?: number
+          shopify_line_item_id?: string | null
+          sku?: string | null
+          unit_price?: number | null
+          variant_name?: string | null
+          weight_grams?: number | null
+        }
+        Update: {
+          barcode?: string | null
+          created_at?: string
+          expedition_order_id?: string
+          id?: string
+          pack_verified?: boolean | null
+          packed_quantity?: number | null
+          pick_verified?: boolean | null
+          picked_quantity?: number | null
+          product_name?: string
+          quantity?: number
+          shopify_line_item_id?: string | null
+          sku?: string | null
+          unit_price?: number | null
+          variant_name?: string | null
+          weight_grams?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expedition_order_items_expedition_order_id_fkey"
+            columns: ["expedition_order_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expedition_orders: {
+        Row: {
+          created_at: string
+          customer_cpf: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          dispatch_verified: boolean | null
+          dispatch_verified_at: string | null
+          expedition_status: string
+          financial_status: string
+          freight_carrier: string | null
+          freight_delivery_days: number | null
+          freight_label_url: string | null
+          freight_price: number | null
+          freight_service: string | null
+          freight_tracking_code: string | null
+          fulfillment_status: string | null
+          group_id: string | null
+          id: string
+          internal_barcode: string | null
+          invoice_key: string | null
+          invoice_number: string | null
+          invoice_pdf_url: string | null
+          invoice_series: string | null
+          invoice_xml_url: string | null
+          notes: string | null
+          picking_list_id: string | null
+          shipping_address: Json | null
+          shopify_created_at: string | null
+          shopify_order_id: string
+          shopify_order_name: string | null
+          shopify_order_number: string | null
+          subtotal_price: number | null
+          tiny_order_id: string | null
+          total_discount: number | null
+          total_price: number | null
+          total_shipping: number | null
+          total_weight_grams: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          dispatch_verified?: boolean | null
+          dispatch_verified_at?: string | null
+          expedition_status?: string
+          financial_status?: string
+          freight_carrier?: string | null
+          freight_delivery_days?: number | null
+          freight_label_url?: string | null
+          freight_price?: number | null
+          freight_service?: string | null
+          freight_tracking_code?: string | null
+          fulfillment_status?: string | null
+          group_id?: string | null
+          id?: string
+          internal_barcode?: string | null
+          invoice_key?: string | null
+          invoice_number?: string | null
+          invoice_pdf_url?: string | null
+          invoice_series?: string | null
+          invoice_xml_url?: string | null
+          notes?: string | null
+          picking_list_id?: string | null
+          shipping_address?: Json | null
+          shopify_created_at?: string | null
+          shopify_order_id: string
+          shopify_order_name?: string | null
+          shopify_order_number?: string | null
+          subtotal_price?: number | null
+          tiny_order_id?: string | null
+          total_discount?: number | null
+          total_price?: number | null
+          total_shipping?: number | null
+          total_weight_grams?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          dispatch_verified?: boolean | null
+          dispatch_verified_at?: string | null
+          expedition_status?: string
+          financial_status?: string
+          freight_carrier?: string | null
+          freight_delivery_days?: number | null
+          freight_label_url?: string | null
+          freight_price?: number | null
+          freight_service?: string | null
+          freight_tracking_code?: string | null
+          fulfillment_status?: string | null
+          group_id?: string | null
+          id?: string
+          internal_barcode?: string | null
+          invoice_key?: string | null
+          invoice_number?: string | null
+          invoice_pdf_url?: string | null
+          invoice_series?: string | null
+          invoice_xml_url?: string | null
+          notes?: string | null
+          picking_list_id?: string | null
+          shipping_address?: Json | null
+          shopify_created_at?: string | null
+          shopify_order_id?: string
+          shopify_order_name?: string | null
+          shopify_order_number?: string | null
+          subtotal_price?: number | null
+          tiny_order_id?: string | null
+          total_discount?: number | null
+          total_price?: number | null
+          total_shipping?: number | null
+          total_weight_grams?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expedition_orders_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expedition_orders_picking_list_id_fkey"
+            columns: ["picking_list_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_picking_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expedition_picking_lists: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          picked_items: number | null
+          status: string
+          total_items: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          picked_items?: number | null
+          status?: string
+          total_items?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          picked_items?: number | null
+          status?: string
+          total_items?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      expedition_returns: {
+        Row: {
+          created_at: string
+          customer_email: string | null
+          customer_name: string | null
+          exchange_order_id: string | null
+          expedition_order_id: string | null
+          id: string
+          inspected_at: string | null
+          inspection_notes: string | null
+          items: Json | null
+          notes: string | null
+          reason: string | null
+          received_at: string | null
+          refund_amount: number | null
+          return_type: string
+          shopify_order_name: string | null
+          status: string
+          tracking_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          exchange_order_id?: string | null
+          expedition_order_id?: string | null
+          id?: string
+          inspected_at?: string | null
+          inspection_notes?: string | null
+          items?: Json | null
+          notes?: string | null
+          reason?: string | null
+          received_at?: string | null
+          refund_amount?: number | null
+          return_type?: string
+          shopify_order_name?: string | null
+          status?: string
+          tracking_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          exchange_order_id?: string | null
+          expedition_order_id?: string | null
+          id?: string
+          inspected_at?: string | null
+          inspection_notes?: string | null
+          items?: Json | null
+          notes?: string | null
+          reason?: string | null
+          received_at?: string | null
+          refund_amount?: number | null
+          return_type?: string
+          shopify_order_name?: string | null
+          status?: string
+          tracking_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expedition_returns_expedition_order_id_fkey"
+            columns: ["expedition_order_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expedition_sync_log: {
+        Row: {
+          completed_at: string | null
+          error_message: string | null
+          id: string
+          orders_synced: number | null
+          started_at: string
+          status: string
+          sync_type: string
+        }
+        Insert: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          orders_synced?: number | null
+          started_at?: string
+          status?: string
+          sync_type?: string
+        }
+        Update: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          orders_synced?: number | null
+          started_at?: string
+          status?: string
+          sync_type?: string
+        }
+        Relationships: []
+      }
       marketing_campaigns: {
         Row: {
           actual_cost: number | null
