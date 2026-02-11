@@ -77,12 +77,14 @@ async function chargePagarme(
   const itemsTotal = products.reduce((s, p) => s + Math.round(p.price * 100) * p.quantity, 0);
   const diff = itemsTotal - params.totalAmountCents;
 
+  // Distribute discount proportionally across all items
   const items = products.map((p, i) => {
     const unitCents = Math.round(p.price * 100);
     let adjustedCents = unitCents;
-    // apply discount proportionally to first item for simplicity
-    if (i === 0 && diff > 0) {
-      adjustedCents = Math.max(1, unitCents - Math.ceil(diff / p.quantity));
+    if (diff > 0 && itemsTotal > 0) {
+      const proportion = (unitCents * p.quantity) / itemsTotal;
+      const itemDiscount = Math.round(diff * proportion / p.quantity);
+      adjustedCents = Math.max(1, unitCents - itemDiscount);
     }
     return {
       amount: adjustedCents,
@@ -91,6 +93,16 @@ async function chargePagarme(
       code: `item_${i}`,
     };
   });
+
+  // Adjust last item to ensure total matches exactly
+  if (diff > 0) {
+    const currentTotal = items.reduce((s, it) => s + it.amount * it.quantity, 0);
+    const remaining = currentTotal - params.totalAmountCents;
+    if (remaining !== 0 && items.length > 0) {
+      const lastItem = items[items.length - 1];
+      lastItem.amount = Math.max(1, lastItem.amount - Math.ceil(remaining / lastItem.quantity));
+    }
+  }
 
   const orderBody = {
     items,
@@ -162,6 +174,10 @@ async function chargeAppmax(
   const totalReais = params.totalAmountCents / 100;
   const phone = params.customer.phone.replace(/\D/g, "");
 
+  // Distribute discount proportionally across product prices for APPMAX
+  const productsTotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
+  const discountRatio = productsTotal > 0 ? totalReais / productsTotal : 1;
+
   const body: Record<string, unknown> = {
     access_token: accessToken,
     customer: {
@@ -175,7 +191,7 @@ async function chargeAppmax(
       sku: `sku_${i}`,
       name: p.title.substring(0, 200),
       qty: p.quantity,
-      price: p.price,
+      price: Math.round(p.price * discountRatio * 100) / 100,
       digital_product: 1,
     })),
     payment: {
