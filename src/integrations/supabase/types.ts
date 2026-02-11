@@ -2873,15 +2873,15 @@ export type Database = {
       }
       whatsapp_numbers: {
         Row: {
-          access_token: string
-          business_account_id: string
+          access_token: string | null
+          business_account_id: string | null
           created_at: string
           id: string
           is_active: boolean
           is_default: boolean
           label: string
           phone_display: string
-          phone_number_id: string
+          phone_number_id: string | null
           provider: string
           updated_at: string
           zapi_client_token: string | null
@@ -2889,15 +2889,15 @@ export type Database = {
           zapi_token: string | null
         }
         Insert: {
-          access_token: string
-          business_account_id: string
+          access_token?: string | null
+          business_account_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
           is_default?: boolean
           label: string
           phone_display: string
-          phone_number_id: string
+          phone_number_id?: string | null
           provider?: string
           updated_at?: string
           zapi_client_token?: string | null
@@ -2905,15 +2905,15 @@ export type Database = {
           zapi_token?: string | null
         }
         Update: {
-          access_token?: string
-          business_account_id?: string
+          access_token?: string | null
+          business_account_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
           is_default?: boolean
           label?: string
           phone_display?: string
-          phone_number_id?: string
+          phone_number_id?: string | null
           provider?: string
           updated_at?: string
           zapi_client_token?: string | null
