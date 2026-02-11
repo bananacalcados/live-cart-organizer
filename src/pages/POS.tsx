@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
-  ArrowRightLeft, Settings, Trophy, Phone, Bell
+  ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,13 +15,15 @@ import { POSConfig } from "@/components/pos/POSConfig";
 import { POSExchanges } from "@/components/pos/POSExchanges";
 import { POSInterStoreRequests } from "@/components/pos/POSInterStoreRequests";
 import { POSWhatsApp } from "@/components/pos/POSWhatsApp";
+import { POSDailySales } from "@/components/pos/POSDailySales";
 import { TeamChat } from "@/components/TeamChat";
 import { supabase } from "@/integrations/supabase/client";
 
-type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp";
+type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily";
 
 const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badge?: boolean }[] = [
   { id: "sales", label: "Venda", icon: ShoppingCart },
+  { id: "daily", label: "Vendas Dia", icon: BarChart3 },
   { id: "cash", label: "Caixa", icon: DollarSign },
   { id: "returns", label: "Trocas", icon: RotateCcw },
   { id: "requests", label: "Solicitações", icon: ArrowRightLeft, badge: true },
@@ -132,6 +134,7 @@ export default function POS() {
         {section === "returns" && <POSExchanges storeId={selectedStore} />}
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
         {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} />}
+        {section === "daily" && <POSDailySales storeId={selectedStore} />}
         {section === "chat" && (
           <div className="flex-1 p-6 overflow-hidden">
             <div className="h-full rounded-xl border border-pos-yellow/20 overflow-hidden">
