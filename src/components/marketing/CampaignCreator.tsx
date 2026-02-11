@@ -242,7 +242,7 @@ export function CampaignCreator({ open, onOpenChange, customerStats, onCreated }
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 pr-4">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-4">
           <div className="space-y-4 py-2 pb-4">
             {/* STEP 1: BRIEFING */}
             {step === 'briefing' && (
@@ -452,7 +452,7 @@ export function CampaignCreator({ open, onOpenChange, customerStats, onCreated }
               </Card>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2 border-t pt-3">
           {step === 'briefing' && (
