@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const MAX_EXECUTION_MS = 140_000; // ~140s safety margin (edge fn limit ~150s)
+const MAX_EXECUTION_MS = 50_000; // ~50s safety margin (edge fn limit ~60s on Cloud)
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
