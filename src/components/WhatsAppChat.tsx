@@ -919,7 +919,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                   {previewText}
                 </div>
                 {templateParamValues.map((val, i) => {
-                  const totalFull = order.products.reduce((s, p) => s + p.price * p.quantity, 0);
+                  const totalFull = order.products.reduce((s, p) => s + ((p as any).compareAtPrice || p.price) * p.quantity, 0);
+                  const totalDiscount = order.products.reduce((s, p) => s + p.price * p.quantity, 0);
                   const prodsText = order.products
                     .map((p) => `${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`)
                     .join(', ');
@@ -928,7 +929,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                     { label: 'Nome', value: order.instagramHandle.replace('@', '') },
                     { label: '@ Instagram', value: order.instagramHandle },
                     { label: 'WhatsApp', value: order.whatsapp || '' },
-                    { label: 'Total', value: `R$ ${totalFull.toFixed(2)}` },
+                    { label: 'Total cheio', value: `R$ ${totalFull.toFixed(2)}` },
+                    { label: 'Total c/ desconto', value: `R$ ${totalDiscount.toFixed(2)}` },
                     { label: 'Produtos', value: prodsText },
                     { label: 'Link carrinho', value: order.cartLink || '' },
                   ].filter(s => s.value);

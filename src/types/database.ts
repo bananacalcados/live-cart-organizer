@@ -26,6 +26,7 @@ export interface DbOrderProduct {
   title: string;
   variant: string;
   price: number;
+  compareAtPrice?: number;
   quantity: number;
   image?: string;
 }
