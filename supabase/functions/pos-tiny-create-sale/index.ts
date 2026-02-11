@@ -122,6 +122,26 @@ serve(async (req) => {
 
         await supabase.from('pos_sale_items').insert(saleItems);
 
+        // Update local stock cache (pos_products)
+        for (const item of items) {
+          if (item.sku) {
+            const { data: product } = await supabase
+              .from('pos_products')
+              .select('id, stock')
+              .eq('store_id', store_id)
+              .eq('sku', item.sku)
+              .maybeSingle();
+
+            if (product) {
+              const newStock = Math.max(0, (product.stock || 0) - item.quantity);
+              await supabase
+                .from('pos_products')
+                .update({ stock: newStock, synced_at: new Date().toISOString() })
+                .eq('id', product.id);
+            }
+          }
+        }
+
         // Award gamification points to seller
         if (seller_id) {
           const { data: existingGamification } = await supabase
