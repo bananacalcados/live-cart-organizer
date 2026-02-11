@@ -462,11 +462,13 @@ export default function Management() {
                 ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
                 : syncing ? "Iniciando..." : "Pedidos Tiny"}
             </Button>
-            <Button variant="outline" size="sm" onClick={syncTinyStock} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(25,90%,52%)] text-white border-[hsl(25,90%,52%)] hover:bg-[hsl(25,90%,45%)]">
+            <Button variant="outline" size="sm" onClick={syncTinyStock} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(25,90%,52%)] text-white border-[hsl(25,90%,52%)] hover:bg-[hsl(25,90%,45%)] max-w-[280px]">
               {syncingStock ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Box className="h-3.5 w-3.5" />}
-              {syncingStock && syncProgress
-                ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
-                : syncingStock ? "Estoque..." : "Estoque"}
+              <span className="truncate">
+                {syncingStock && syncProgress
+                  ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
+                  : syncingStock ? "Estoque..." : "Estoque"}
+              </span>
             </Button>
             <Button variant="outline" size="sm" onClick={syncShopifyOrders} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(0,0%,15%)] text-[hsl(45,10%,90%)] border-[hsl(0,0%,25%)] hover:bg-[hsl(0,0%,20%)]">
               {syncingShopify ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingBag className="h-3.5 w-3.5" />}
