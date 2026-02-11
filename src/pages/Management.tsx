@@ -75,6 +75,7 @@ export default function Management() {
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ total: number; synced: number; storeName: string } | null>(null);
 
   const [tinyOrders, setTinyOrders] = useState<TinySyncedOrder[]>([]);
   const [expeditionOrders, setExpeditionOrders] = useState<ExpeditionOrder[]>([]);
@@ -116,7 +117,24 @@ export default function Management() {
 
   const syncFromTiny = async () => {
     setSyncing(true);
-    toast.info("Sincronizando pedidos do Tiny ERP...");
+    setSyncProgress({ total: 0, synced: 0, storeName: "Iniciando..." });
+
+    // Start polling sync logs
+    const pollInterval = setInterval(async () => {
+      const { data: logs } = await supabase
+        .from('tiny_management_sync_log')
+        .select('orders_synced, status, store_id')
+        .eq('status', 'running')
+        .order('started_at', { ascending: false })
+        .limit(1);
+
+      if (logs && logs.length > 0) {
+        const log = logs[0];
+        const storeName = stores.find(s => s.id === log.store_id)?.name || "Loja";
+        setSyncProgress({ total: 0, synced: log.orders_synced || 0, storeName });
+      }
+    }, 1500);
+
     try {
       const fromDate = format(dateRange.start, 'dd/MM/yyyy');
       const toDate = format(dateRange.end, 'dd/MM/yyyy');
@@ -133,7 +151,9 @@ export default function Management() {
     } catch (e: any) {
       toast.error(`Erro na sincronização: ${e.message}`);
     } finally {
+      clearInterval(pollInterval);
       setSyncing(false);
+      setSyncProgress(null);
     }
   };
 
@@ -281,7 +301,9 @@ export default function Management() {
             </Select>
             <Button variant="outline" size="sm" onClick={syncFromTiny} disabled={syncing} className="gap-1 h-8 text-xs">
               {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              {syncing ? "Sincronizando..." : "Sync Tiny"}
+              {syncing && syncProgress
+                ? `${syncProgress.storeName}: ${syncProgress.synced} pedidos...`
+                : syncing ? "Iniciando..." : "Sync Tiny"}
             </Button>
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1 h-8"><Home className="h-4 w-4" /></Button>
