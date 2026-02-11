@@ -53,3 +53,12 @@ verify_jwt = false
 
 [functions.ai-marketing-strategy]
 verify_jwt = false
+
+[functions.expedition-sync-orders]
+verify_jwt = false
+
+[functions.expedition-quote-freight]
+verify_jwt = false
+
+[functions.expedition-tiny-invoice]
+verify_jwt = false
