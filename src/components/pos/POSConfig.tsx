@@ -41,7 +41,7 @@ export function POSConfig({ storeId }: Props) {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // WhatsApp numbers config
-  const [allWhatsAppNumbers, setAllWhatsAppNumbers] = useState<{ id: string; label: string; phone_display: string }[]>([]);
+  const [allWhatsAppNumbers, setAllWhatsAppNumbers] = useState<{ id: string; label: string; phone_display: string; provider: string }[]>([]);
   const [linkedNumberIds, setLinkedNumberIds] = useState<Set<string>>(new Set());
   const [savingNumbers, setSavingNumbers] = useState(false);
 
@@ -55,7 +55,7 @@ export function POSConfig({ storeId }: Props) {
 
   const loadWhatsAppNumbers = async () => {
     const [{ data: allNums }, { data: linked }] = await Promise.all([
-      supabase.from('whatsapp_numbers').select('id, label, phone_display').eq('is_active', true),
+      supabase.from('whatsapp_numbers').select('id, label, phone_display, provider').eq('is_active', true),
       supabase.from('pos_store_whatsapp_numbers').select('whatsapp_number_id').eq('store_id', storeId),
     ]);
     setAllWhatsAppNumbers(allNums || []);
@@ -391,6 +391,12 @@ export function POSConfig({ storeId }: Props) {
                     <label htmlFor={`wn-${num.id}`} className="flex-1 cursor-pointer">
                       <span className="text-sm text-pos-white">{num.label}</span>
                       <span className="text-xs text-pos-white/40 ml-2">{num.phone_display}</span>
+                      {num.provider === 'zapi' && (
+                        <span className="text-[10px] ml-2 px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 font-medium">Z-API</span>
+                      )}
+                      {num.provider === 'meta' && (
+                        <span className="text-[10px] ml-2 px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-medium">Meta</span>
+                      )}
                     </label>
                   </div>
                 ))}
