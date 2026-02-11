@@ -6,21 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Parse DD/MM/YYYY to Date
 function parseBRDate(str: string): Date {
   const [d, m, y] = str.split('/').map(Number);
   return new Date(y, m - 1, d);
 }
 
-// Format Date to DD/MM/YYYY
 function formatBRDate(date: Date): string {
   const d = String(date.getDate()).padStart(2, '0');
   const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
+  return `${d}/${m}/${date.getFullYear()}`;
 }
 
-// Format Date to YYYY-MM-DD
 function formatISO(date: Date): string {
   const d = String(date.getDate()).padStart(2, '0');
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -33,11 +29,14 @@ function addDays(date: Date, days: number): Date {
   return result;
 }
 
+const FUNCTION_TIME_LIMIT_MS = 50_000; // 50s safety margin
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const functionStart = Date.now();
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -64,21 +63,23 @@ serve(async (req) => {
 
     const results: any[] = [];
 
-    // Calculate total days for progress
     const startDate = parseBRDate(date_from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'));
     const endDate = parseBRDate(date_to || new Date().toLocaleDateString('pt-BR'));
-    const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
     for (const store of stores) {
-      // Create sync log
+      if (Date.now() - functionStart > FUNCTION_TIME_LIMIT_MS) {
+        results.push({ store_id: store.id, store_name: store.name, status: 'skipped', reason: 'timeout' });
+        continue;
+      }
+
       const { data: logEntry } = await supabase
         .from('tiny_management_sync_log')
         .insert({
           store_id: store.id,
           sync_type: 'orders',
           status: 'running',
-          date_from: date_from,
-          date_to: date_to,
+          date_from,
+          date_to,
           phase: 'orders',
           current_date_syncing: formatBRDate(startDate),
         })
@@ -88,15 +89,14 @@ serve(async (req) => {
       try {
         const token = store.tiny_token;
         let totalSynced = 0;
-        let daysProcessed = 0;
-
-        // Sync day by day
         let currentDate = new Date(startDate);
-        
+
+        // ===== PHASE 1: Orders day by day =====
         while (currentDate <= endDate) {
+          if (Date.now() - functionStart > FUNCTION_TIME_LIMIT_MS) break;
+
           const dayStr = formatBRDate(currentDate);
-          
-          // Update log with current date
+
           if (logEntry?.id) {
             await supabase.from('tiny_management_sync_log').update({
               current_date_syncing: dayStr,
@@ -104,18 +104,15 @@ serve(async (req) => {
             }).eq('id', logEntry.id);
           }
 
-          // Fetch orders for this specific day
           let page = 1;
           let hasMore = true;
 
           while (hasMore) {
+            if (Date.now() - functionStart > FUNCTION_TIME_LIMIT_MS) { hasMore = false; break; }
+
             const params = new URLSearchParams({
-              token,
-              formato: 'json',
-              pagina: String(page),
-              dataInicial: dayStr,
-              dataFinal: dayStr,
-              situacao: 'aprovado',
+              token, formato: 'json', pagina: String(page),
+              dataInicial: dayStr, dataFinal: dayStr, situacao: 'aprovado',
             });
 
             const resp = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
@@ -123,27 +120,20 @@ serve(async (req) => {
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
               body: params.toString(),
             });
-
             const data = await resp.json();
 
-            if (data.retorno?.status === 'Erro') {
-              hasMore = false;
-              break;
-            }
+            if (data.retorno?.status === 'Erro') { hasMore = false; break; }
 
             const totalPages = parseInt(data.retorno?.numero_paginas || '1');
             const orders = data.retorno?.pedidos || [];
-
-            if (orders.length === 0) {
-              hasMore = false;
-              break;
-            }
+            if (orders.length === 0) { hasMore = false; break; }
 
             const rows: any[] = [];
 
             for (const item of orders) {
+              if (Date.now() - functionStart > FUNCTION_TIME_LIMIT_MS) break;
               const o = item.pedido;
-              
+
               try {
                 await new Promise(r => setTimeout(r, 600));
                 const detailResp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
@@ -155,7 +145,6 @@ serve(async (req) => {
                 const full = detailData.retorno?.pedido;
 
                 if (full) {
-                  const orderDate = formatISO(currentDate);
                   const items = (full.itens || []).map((i: any) => ({
                     name: i.item?.descricao || '',
                     sku: i.item?.codigo || '',
@@ -168,7 +157,7 @@ serve(async (req) => {
                     store_id: store.id,
                     tiny_order_id: String(full.id || o.id),
                     tiny_order_number: String(full.numero || o.numero || ''),
-                    order_date: orderDate,
+                    order_date: formatISO(currentDate),
                     customer_name: full.cliente?.nome || o.nome_comprador || null,
                     status: full.situacao || o.situacao || 'aprovado',
                     payment_method: full.forma_pagamento || null,
@@ -192,8 +181,7 @@ serve(async (req) => {
                   status: o.situacao || 'aprovado',
                   payment_method: null,
                   subtotal: parseFloat(o.valor || '0'),
-                  discount: 0,
-                  shipping: 0,
+                  discount: 0, shipping: 0,
                   total: parseFloat(o.valor || '0'),
                   items: '[]',
                   synced_at: new Date().toISOString(),
@@ -213,19 +201,16 @@ serve(async (req) => {
             if (page > totalPages) hasMore = false;
           }
 
-          daysProcessed++;
           currentDate = addDays(currentDate, 1);
-
-          // Rate limit between days
           await new Promise(r => setTimeout(r, 400));
         }
 
-        // Sync stock/cost if requested
-        if (sync_stock) {
+        // ===== PHASE 2: Stock sync using batch search =====
+        if (sync_stock && Date.now() - functionStart < FUNCTION_TIME_LIMIT_MS) {
           if (logEntry?.id) {
             await supabase.from('tiny_management_sync_log').update({
               phase: 'stock',
-              current_date_syncing: 'Atualizando estoque...',
+              current_date_syncing: 'Estoque: página 1...',
             }).eq('id', logEntry.id);
           }
 
@@ -233,7 +218,9 @@ serve(async (req) => {
           let stockHasMore = true;
           let stockUpdated = 0;
 
-          while (stockHasMore && stockUpdated < 300) {
+          while (stockHasMore && Date.now() - functionStart < FUNCTION_TIME_LIMIT_MS) {
+            await new Promise(r => setTimeout(r, 600));
+
             const resp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -245,10 +232,12 @@ serve(async (req) => {
 
             const totalPages = parseInt(data.retorno?.numero_paginas || '1');
             const products = data.retorno?.produtos || [];
-
             if (products.length === 0) { stockHasMore = false; break; }
 
-            for (const item of products.slice(0, 15)) {
+            // Batch: get details for up to 10 products per page to get cost_price + stock
+            for (const item of products) {
+              if (Date.now() - functionStart > FUNCTION_TIME_LIMIT_MS) { stockHasMore = false; break; }
+
               const p = item.produto;
               try {
                 await new Promise(r => setTimeout(r, 600));
@@ -265,17 +254,19 @@ serve(async (req) => {
                   const sellPrice = parseFloat(full.preco || '0');
                   const stock = parseFloat(full.estoqueAtual || '0');
 
+                  const updateData: any = { 
+                    cost_price: costPrice, 
+                    stock, 
+                    synced_at: new Date().toISOString() 
+                  };
+                  if (sellPrice > 0) updateData.price = sellPrice;
+
                   await supabase
                     .from('pos_products')
-                    .update({ 
-                      cost_price: costPrice, 
-                      stock, 
-                      price: sellPrice > 0 ? sellPrice : undefined,
-                      synced_at: new Date().toISOString() 
-                    })
+                    .update(updateData)
                     .eq('store_id', store.id)
-                    .eq('tiny_id', p.id);
-                  
+                    .eq('tiny_id', String(p.id));
+
                   stockUpdated++;
                 }
               } catch (e) {
@@ -285,7 +276,7 @@ serve(async (req) => {
 
             if (logEntry?.id) {
               await supabase.from('tiny_management_sync_log').update({
-                current_date_syncing: `Estoque: ${stockUpdated} produtos atualizados`,
+                current_date_syncing: `Estoque: ${stockUpdated} produtos (pg ${stockPage}/${totalPages})`,
               }).eq('id', logEntry.id);
             }
 

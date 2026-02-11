@@ -62,9 +62,9 @@ interface ProductRow {
 }
 
 const CHART_COLORS = [
-  "hsl(48, 95%, 50%)", "hsl(25, 90%, 52%)", "hsl(200, 80%, 50%)",
-  "hsl(145, 65%, 42%)", "hsl(280, 60%, 55%)", "hsl(0, 70%, 50%)",
-  "hsl(185, 60%, 40%)", "hsl(45, 90%, 50%)"
+  "hsl(0, 0%, 15%)", "hsl(48, 95%, 50%)", "hsl(25, 90%, 52%)",
+  "hsl(0, 0%, 35%)", "hsl(48, 80%, 40%)", "hsl(25, 70%, 40%)",
+  "hsl(0, 0%, 55%)", "hsl(48, 60%, 60%)"
 ];
 
 type Period = "today" | "7d" | "30d" | "month" | "last_month";
@@ -273,17 +273,17 @@ export default function Management() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur">
+      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-[hsl(0,0%,8%)] text-[hsl(45,10%,95%)]">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <BarChart3 className="h-5 w-5" />
             </div>
-            <h1 className="text-lg font-bold">Gestão</h1>
+            <h1 className="text-lg font-bold text-[hsl(45,10%,95%)]">Gestão</h1>
           </div>
           <div className="flex items-center gap-2">
             <Select value={storeFilter} onValueChange={setStoreFilter}>
-              <SelectTrigger className="w-[160px] h-8 text-xs">
+              <SelectTrigger className="w-[160px] h-8 text-xs bg-[hsl(0,0%,15%)] border-[hsl(0,0%,20%)] text-[hsl(45,10%,90%)]">
                 <SelectValue placeholder="Todas as lojas" />
               </SelectTrigger>
               <SelectContent>
@@ -292,7 +292,7 @@ export default function Management() {
               </SelectContent>
             </Select>
             <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-              <SelectTrigger className="w-[140px] h-8 text-xs">
+              <SelectTrigger className="w-[140px] h-8 text-xs bg-[hsl(0,0%,15%)] border-[hsl(0,0%,20%)] text-[hsl(45,10%,90%)]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -303,14 +303,14 @@ export default function Management() {
                 <SelectItem value="last_month">Mês passado</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={syncFromTiny} disabled={syncing} className="gap-1 h-8 text-xs">
+            <Button variant="outline" size="sm" onClick={syncFromTiny} disabled={syncing} className="gap-1 h-8 text-xs bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground">
               {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               {syncing && syncProgress
                 ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
                 : syncing ? "Iniciando..." : "Sync Tiny"}
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1 h-8"><Home className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1 h-8 text-[hsl(45,10%,90%)] hover:text-primary hover:bg-[hsl(0,0%,15%)]"><Home className="h-4 w-4" /></Button>
           </div>
         </div>
       </header>
@@ -351,8 +351,8 @@ export default function Management() {
                           <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
                           <Tooltip formatter={(v: number) => fmt(v)} />
                           <Legend />
-                          <Bar dataKey="lojas" name="Lojas (Tiny)" fill="hsl(48, 95%, 50%)" radius={[4,4,0,0]} />
-                          <Bar dataKey="shopify" name="Shopify" fill="hsl(25, 90%, 52%)" radius={[4,4,0,0]} />
+                          <Bar dataKey="lojas" name="Lojas (Tiny)" fill="hsl(0, 0%, 15%)" radius={[4,4,0,0]} />
+                          <Bar dataKey="shopify" name="Shopify" fill="hsl(48, 95%, 50%)" radius={[4,4,0,0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </CardContent>
@@ -382,7 +382,7 @@ export default function Management() {
                         <XAxis type="number" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
                         <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(v: number) => fmt(v)} />
-                        <Bar dataKey="revenue" name="Faturamento" fill="hsl(48, 95%, 50%)" radius={[0,4,4,0]} />
+                        <Bar dataKey="revenue" name="Faturamento" fill="hsl(25, 90%, 52%)" radius={[0,4,4,0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
