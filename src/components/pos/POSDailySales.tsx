@@ -1,13 +1,17 @@
 import { useState, useEffect } from "react";
 import {
   DollarSign, ShoppingCart, Tag, Users, TrendingUp,
-  Package, Loader2, RefreshCw, BarChart3
+  Package, Loader2, RefreshCw, BarChart3, Send, RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 interface Props {
   storeId: string;
@@ -23,6 +27,8 @@ interface SaleSummary {
   seller_id: string | null;
   status: string;
   tiny_order_number: string | null;
+  tiny_order_id: string | null;
+  customer_id: string | null;
 }
 
 interface SellerStats {
@@ -36,6 +42,7 @@ export function POSDailySales({ storeId }: Props) {
   const [saleItems, setSaleItems] = useState<any[]>([]);
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resending, setResending] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -46,7 +53,7 @@ export function POSDailySales({ storeId }: Props) {
       const [salesRes, itemsRes, sellersRes] = await Promise.all([
         supabase
           .from("pos_sales")
-          .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number")
+          .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id")
           .eq("store_id", storeId)
           .gte("created_at", todayStart.toISOString())
           .order("created_at", { ascending: false }),
@@ -83,6 +90,93 @@ export function POSDailySales({ storeId }: Props) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resendToTiny = async (sale: SaleSummary) => {
+    setResending(sale.id);
+    try {
+      // Fetch sale items
+      const { data: items } = await supabase
+        .from("pos_sale_items")
+        .select("*")
+        .eq("sale_id", sale.id);
+
+      if (!items || items.length === 0) {
+        toast.error("Nenhum item encontrado para esta venda");
+        return;
+      }
+
+      // Fetch customer if exists
+      let customer: any = undefined;
+      if (sale.customer_id) {
+        const { data: cust } = await supabase
+          .from("pos_customers")
+          .select("*")
+          .eq("id", sale.customer_id)
+          .maybeSingle();
+        if (cust) {
+          customer = {
+            id: cust.id,
+            name: cust.name,
+            cpf: cust.cpf,
+            email: cust.email,
+            whatsapp: cust.whatsapp,
+            address: cust.address,
+            cep: cust.cep,
+            city: cust.city,
+            state: cust.state,
+          };
+        }
+      }
+
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-create-sale`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({
+          store_id: storeId,
+          seller_id: sale.seller_id || undefined,
+          customer,
+          items: items.map((item: any) => ({
+            tiny_id: item.tiny_product_id,
+            sku: item.sku,
+            name: item.product_name,
+            variant: item.variant_name,
+            size: item.size,
+            category: item.category,
+            price: item.unit_price,
+            quantity: item.quantity,
+            barcode: item.barcode,
+          })),
+          payment_method_name: sale.payment_method || undefined,
+          discount: sale.discount > 0 ? sale.discount : undefined,
+        }),
+      });
+
+      const data = await resp.json();
+      if (data.success) {
+        toast.success(`Venda reenviada ao Tiny! Pedido #${data.tiny_order_number || data.tiny_order_id}`);
+        // Update sale record with new tiny IDs
+        await supabase
+          .from("pos_sales")
+          .update({
+            tiny_order_id: String(data.tiny_order_id),
+            tiny_order_number: data.tiny_order_number ? String(data.tiny_order_number) : null,
+          })
+          .eq("id", sale.id);
+        loadData();
+      } else {
+        toast.error(data.error || "Erro ao reenviar ao Tiny");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao reenviar venda");
+    } finally {
+      setResending(null);
     }
   };
 
@@ -268,8 +362,10 @@ export function POSDailySales({ storeId }: Props) {
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-pos-white/40 font-mono">{time}</span>
                         <div>
-                          {sale.tiny_order_number && (
+                          {sale.tiny_order_number ? (
                             <p className="text-xs text-pos-orange font-medium">#{sale.tiny_order_number}</p>
+                          ) : (
+                            <p className="text-xs text-red-400 font-medium">Sem Tiny</p>
                           )}
                           <p className="text-xs text-pos-white/50">
                             {sale.payment_method || "—"}
@@ -277,11 +373,27 @@ export function POSDailySales({ storeId }: Props) {
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-sm text-pos-white">R$ {(sale.total || 0).toFixed(2)}</p>
-                        {sale.discount > 0 && (
-                          <p className="text-[10px] text-red-400">-R$ {sale.discount.toFixed(2)}</p>
-                        )}
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="font-bold text-sm text-pos-white">R$ {(sale.total || 0).toFixed(2)}</p>
+                          {sale.discount > 0 && (
+                            <p className="text-[10px] text-red-400">-R$ {sale.discount.toFixed(2)}</p>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs"
+                          onClick={() => resendToTiny(sale)}
+                          disabled={resending === sale.id}
+                        >
+                          {resending === sale.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Send className="h-3 w-3" />
+                          )}
+                          <span className="hidden sm:inline">{sale.tiny_order_id ? "Reenviar" : "Enviar"}</span>
+                        </Button>
                       </div>
                     </div>
                   );
