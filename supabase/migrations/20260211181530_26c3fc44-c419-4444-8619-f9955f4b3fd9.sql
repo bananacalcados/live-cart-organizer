@@ -1,0 +1,1 @@
+ALTER TABLE public.chat_contacts ADD COLUMN IF NOT EXISTS profile_pic_url TEXT;

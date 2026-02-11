@@ -60,14 +60,17 @@ export function POSWhatsApp({ storeId }: Props) {
   // Load chat contacts + photos
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from("chat_contacts").select("phone, custom_name, display_name");
+      const { data } = await supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url");
       if (data) {
         const nameMap: Record<string, string> = {};
-        for (const c of data) {
+        const photoMap: Record<string, string> = {};
+        for (const c of data as any[]) {
           if (c.custom_name) nameMap[c.phone] = c.custom_name;
           else if (c.display_name) nameMap[c.phone] = c.display_name;
+          if (c.profile_pic_url) photoMap[c.phone] = c.profile_pic_url;
         }
         setChatContacts(nameMap);
+        setContactPhotos(photoMap);
       }
     };
     load();
