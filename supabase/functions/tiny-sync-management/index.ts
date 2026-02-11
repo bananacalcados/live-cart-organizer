@@ -225,16 +225,17 @@ serve(async (req) => {
             const products = data.retorno?.produtos || [];
             if (products.length === 0) break;
 
-            // Batch update: read stock directly from listing
-            for (const item of products) {
+            // Batch update all 100 products at once via RPC or individual promise.all
+            const now = new Date().toISOString();
+            const updates = products.map((item: any) => {
               const p = item.produto;
-              const stock = parseFloat(p.estoque || '0');
-              await supabase.from('pos_products').update({
-                stock,
-                synced_at: new Date().toISOString(),
+              return supabase.from('pos_products').update({
+                stock: parseFloat(p.estoque || '0'),
+                synced_at: now,
               }).eq('store_id', store.id).eq('tiny_id', String(p.id));
-              stockUpdated++;
-            }
+            });
+            await Promise.all(updates);
+            stockUpdated += products.length;
 
             const pct = Math.round((stockPage / totalStockPages) * 100);
             if (logId) {
