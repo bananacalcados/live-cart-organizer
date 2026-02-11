@@ -196,9 +196,9 @@ serve(async (req) => {
           }
         }
 
-        // ===== PHASE 2: Stock — same fast approach as POS sync =====
-        // Uses produtos.pesquisa in batch (100/page), then calls produto.obter
-        // only for products that need cost_price update, with timeout + resume
+        // ===== PHASE 2: Stock — fetch stock per product from pos_products =====
+        // Only calls produto.obter.estoque.php (not produto.obter) to save rate limits.
+        // Maps deposit name to store name for accurate per-store stock.
         if ((sync_stock || stock_only) && Date.now() - functionStart < TIME_LIMIT_MS) {
           if (logId) {
             await supabase.from('tiny_management_sync_log').update({
@@ -206,12 +206,15 @@ serve(async (req) => {
             }).eq('id', logId);
           }
 
+          // Extract store name keyword for deposit matching (e.g., "Loja Perola" -> "perola")
+          const storeKeywords = store.name.toLowerCase().replace(/loja\s*/g, '').trim().split(/\s+/);
+
           let stockPage = resume_stock_page || 1;
-          let stockHasMore = true;
+          let stockTimedOut = false;
           let stockUpdated = 0;
           let totalStockPages = 1;
 
-          while (stockHasMore && Date.now() - functionStart < TIME_LIMIT_MS) {
+          while (!stockTimedOut && Date.now() - functionStart < TIME_LIMIT_MS) {
             await new Promise(r => setTimeout(r, 600));
 
             const resp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
@@ -221,36 +224,60 @@ serve(async (req) => {
             });
             const data = await resp.json();
 
-            if (data.retorno?.status === 'Erro') { stockHasMore = false; break; }
+            if (data.retorno?.status === 'Erro') break;
             totalStockPages = parseInt(data.retorno?.numero_paginas || '1');
             const products = data.retorno?.produtos || [];
-            if (products.length === 0) { stockHasMore = false; break; }
+            if (products.length === 0) break;
 
-            // For each product in page, get detail (cost + stock) 
             for (const item of products) {
-              if (Date.now() - functionStart > TIME_LIMIT_MS) { stockHasMore = false; break; }
+              if (Date.now() - functionStart > TIME_LIMIT_MS) { stockTimedOut = true; break; }
               const p = item.produto;
               try {
                 await new Promise(r => setTimeout(r, 600));
-                const dr = await fetch('https://api.tiny.com.br/api2/produto.obter.php', {
+                const sr = await fetch('https://api.tiny.com.br/api2/produto.obter.estoque.php', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                   body: `token=${token}&formato=json&id=${p.id}`,
                 });
-                const dd = await dr.json();
-                const full = dd.retorno?.produto;
-                if (full) {
-                  const costPrice = parseFloat(full.preco_custo || '0');
-                  const sellPrice = parseFloat(full.preco || '0');
-                  const stock = parseFloat(full.estoqueAtual || '0');
+                const sd = await sr.json();
+                const stockData = sd.retorno?.produto;
 
-                  const updateData: any = { cost_price: costPrice, stock, synced_at: new Date().toISOString() };
-                  if (sellPrice > 0) updateData.price = sellPrice;
-
-                  await supabase.from('pos_products').update(updateData)
-                    .eq('store_id', store.id).eq('tiny_id', String(p.id));
-                  stockUpdated++;
+                let stock = 0;
+                if (stockData) {
+                  const depositos = stockData.depositos || [];
+                  if (depositos.length > 0) {
+                    // Find the deposit matching this store's name
+                    let matchedDeposit = null;
+                    for (const dep of depositos) {
+                      const d = dep.deposito || dep;
+                      const depName = (d.nome || '').toLowerCase();
+                      if (storeKeywords.some((kw: string) => depName.includes(kw))) {
+                        matchedDeposit = d;
+                        break;
+                      }
+                    }
+                    if (matchedDeposit) {
+                      stock = parseFloat(matchedDeposit.saldo || '0');
+                    } else {
+                      // Fallback: sum all deposits
+                      for (const dep of depositos) {
+                        const d = dep.deposito || dep;
+                        stock += parseFloat(d.saldo || '0');
+                      }
+                    }
+                  } else {
+                    stock = parseFloat(stockData.saldo || stockData.estoqueAtual || '0');
+                  }
                 }
+
+                if (stockUpdated < 3) {
+                  console.log(`Stock ${p.id} (${store.name}): deposit match=${storeKeywords}, stock=${stock}`);
+                }
+
+                const updateData: any = { stock, synced_at: new Date().toISOString() };
+                await supabase.from('pos_products').update(updateData)
+                  .eq('store_id', store.id).eq('tiny_id', String(p.id));
+                stockUpdated++;
               } catch (e) {
                 console.error(`Product ${p.id}:`, e);
               }
@@ -262,12 +289,13 @@ serve(async (req) => {
               }).eq('id', logId);
             }
 
+            if (stockTimedOut) break;
             stockPage++;
-            if (stockPage > totalStockPages) stockHasMore = false;
+            if (stockPage > totalStockPages) break;
           }
 
           // If we timed out during stock, return resume info
-          if (stockHasMore && Date.now() - functionStart >= TIME_LIMIT_MS) {
+          if (stockTimedOut || (Date.now() - functionStart >= TIME_LIMIT_MS && stockPage <= totalStockPages)) {
             if (logId) {
               await supabase.from('tiny_management_sync_log').update({
                 status: 'partial',
