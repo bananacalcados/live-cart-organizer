@@ -14,6 +14,7 @@ import TransparentCheckout from "./pages/TransparentCheckout";
 import Expedition from "./pages/Expedition";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
+import { TeamChat } from "./components/TeamChat";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,7 @@ const App = () => (
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        <TeamChat />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
