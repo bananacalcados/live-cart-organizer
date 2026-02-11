@@ -196,94 +196,106 @@ serve(async (req) => {
           }
         }
 
-        // ===== PHASE 2: Stock — fetch real stock via produto.obter.estoque in parallel batches =====
+        // ===== PHASE 2: Stock — fetch from pos_products cache, call Tiny API with proper rate limiting =====
         if ((sync_stock || stock_only) && Date.now() - functionStart < TIME_LIMIT_MS) {
           if (logId) {
             await supabase.from('tiny_management_sync_log').update({
-              phase: 'stock', current_date_syncing: 'Estoque: iniciando...',
+              phase: 'stock', current_date_syncing: 'Estoque: carregando produtos...',
             }).eq('id', logId);
           }
 
-          let stockPage = resume_stock_page || 1;
+          // Get total count of products for this store
+          const { count: totalProducts } = await supabase
+            .from('pos_products')
+            .select('*', { count: 'exact', head: true })
+            .eq('store_id', store.id)
+            .eq('is_active', true);
+
+          const totalProds = totalProducts || 0;
+          const PAGE_SIZE = 100;
+          const totalStockPages = Math.ceil(totalProds / PAGE_SIZE);
+          let stockPage = resume_stock_page || 0; // 0-indexed offset pages
           let stockTimedOut = false;
-          let stockUpdated = 0;
-          let totalStockPages = 1;
-          const BATCH_SIZE = 10; // parallel requests per batch
+          let stockUpdated = (resume_stock_page || 0) * PAGE_SIZE; // estimate previous progress
+          const BATCH_SIZE = 5; // parallel API calls per batch
+          const BATCH_DELAY = 10000; // 10s between batches = ~30 req/min
 
           while (!stockTimedOut && Date.now() - functionStart < TIME_LIMIT_MS) {
-            await new Promise(r => setTimeout(r, 300));
+            // Fetch a page of products from local cache
+            const { data: cachedProducts } = await supabase
+              .from('pos_products')
+              .select('tiny_id')
+              .eq('store_id', store.id)
+              .eq('is_active', true)
+              .order('tiny_id')
+              .range(stockPage * PAGE_SIZE, (stockPage + 1) * PAGE_SIZE - 1);
 
-            const resp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: `token=${token}&formato=json&pagina=${stockPage}`,
-            });
-            const data = await resp.json();
+            if (!cachedProducts || cachedProducts.length === 0) break;
 
-            if (data.retorno?.status === 'Erro') break;
-            totalStockPages = parseInt(data.retorno?.numero_paginas || '1');
-            const productsList = data.retorno?.produtos || [];
-            if (productsList.length === 0) break;
-
-            // Fetch stock for each product in parallel batches of BATCH_SIZE
             const now = new Date().toISOString();
-            for (let i = 0; i < productsList.length; i += BATCH_SIZE) {
+
+            // Process in batches of BATCH_SIZE with proper rate limiting
+            for (let i = 0; i < cachedProducts.length; i += BATCH_SIZE) {
               if (Date.now() - functionStart > TIME_LIMIT_MS) { stockTimedOut = true; break; }
-              const batch = productsList.slice(i, i + BATCH_SIZE);
-              
+              const batch = cachedProducts.slice(i, i + BATCH_SIZE);
+
               const stockResults = await Promise.all(
-                batch.map(async (item: any) => {
-                  const p = item.produto;
+                batch.map(async (prod) => {
                   try {
                     const sr = await fetch('https://api.tiny.com.br/api2/produto.obter.estoque.php', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                      body: `token=${token}&formato=json&id=${p.id}`,
+                      body: `token=${token}&formato=json&id=${prod.tiny_id}`,
                     });
                     const sd = await sr.json();
                     if (sd.retorno?.status !== 'Erro') {
-                      return { tinyId: String(p.id), stock: parseFloat(sd.retorno?.produto?.saldo || '0') };
+                      return { tinyId: String(prod.tiny_id), stock: parseFloat(sd.retorno?.produto?.saldo || '0') };
                     }
                   } catch (e) {
-                    console.error(`Stock error ${p.id}:`, e);
+                    // Silently fail, keep existing stock
                   }
-                  return { tinyId: String(p.id), stock: 0 };
+                  return null; // Don't update if API failed
                 })
               );
 
-              // Batch DB update
-              const dbUpdates = stockResults.map(r =>
-                supabase.from('pos_products').update({
-                  stock: r.stock,
-                  synced_at: now,
-                }).eq('store_id', store.id).eq('tiny_id', r.tinyId)
-              );
-              await Promise.all(dbUpdates);
+              // Only update products that got a successful response
+              const successful = stockResults.filter(r => r !== null);
+              if (successful.length > 0) {
+                const dbUpdates = successful.map(r =>
+                  supabase.from('pos_products').update({
+                    stock: r!.stock,
+                    synced_at: now,
+                  }).eq('store_id', store.id).eq('tiny_id', r!.tinyId)
+                );
+                await Promise.all(dbUpdates);
+              }
               stockUpdated += batch.length;
 
-              // Small delay between batches to respect rate limits (~30 req/min safe with 10 parallel)
-              await new Promise(r => setTimeout(r, 2500));
+              // Respect Tiny rate limit (~30 req/min)
+              if (i + BATCH_SIZE < cachedProducts.length) {
+                await new Promise(r => setTimeout(r, BATCH_DELAY));
+              }
             }
 
-            const pct = Math.round((stockPage / totalStockPages) * 100);
+            const pct = totalStockPages > 0 ? Math.round(((stockPage + 1) / totalStockPages) * 100) : 100;
             if (logId) {
               await supabase.from('tiny_management_sync_log').update({
-                current_date_syncing: `Estoque: ${pct}% (pg ${stockPage}/${totalStockPages}) — ${stockUpdated} produtos`,
+                current_date_syncing: `Estoque: ${pct}% (${stockUpdated}/${totalProds} produtos)`,
               }).eq('id', logId);
             }
 
             if (Date.now() - functionStart > TIME_LIMIT_MS) { stockTimedOut = true; break; }
             stockPage++;
-            if (stockPage > totalStockPages) break;
+            if (stockPage >= totalStockPages) break;
           }
 
-          // If we timed out during stock, return resume info
-          if (stockTimedOut || (Date.now() - functionStart >= TIME_LIMIT_MS && stockPage <= totalStockPages)) {
+          // If we timed out, save resume point
+          if (stockTimedOut || (Date.now() - functionStart >= TIME_LIMIT_MS && stockPage < totalStockPages)) {
+            const pct = totalStockPages > 0 ? Math.round((stockPage / totalStockPages) * 100) : 0;
             if (logId) {
-              const pct = Math.round((stockPage / totalStockPages) * 100);
               await supabase.from('tiny_management_sync_log').update({
                 status: 'partial',
-                current_date_syncing: `Estoque parcial: ${pct}% (pg ${stockPage}/${totalStockPages})`,
+                current_date_syncing: `Estoque parcial: ${pct}% (${stockUpdated}/${totalProds})`,
                 orders_synced: totalSynced,
               }).eq('id', logId);
             }
