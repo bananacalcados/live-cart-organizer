@@ -36,13 +36,18 @@ serve(async (req) => {
     });
 
     const data = await resp.json();
-    console.log('Tiny sellers status:', data.retorno?.status);
+    const rawSellers = data.retorno?.vendedores || [];
 
-    const sellers = (data.retorno?.vendedores || []).map((item: any) => ({
-      tiny_id: String(item.vendedor?.id || item.id),
-      name: item.vendedor?.nome || item.nome || 'Sem nome',
-      situacao: item.vendedor?.situacao || item.situacao || 'A',
-    })).filter((s: any) => s.situacao === 'A');
+    const sellers = rawSellers.map((item: any) => {
+      const v = item.vendedor || item;
+      return {
+        tiny_id: String(v.id || ''),
+        name: v.nome || 'Sem nome',
+        situacao: v.situacao || 'A',
+      };
+    }).filter((s: any) => s.situacao === 'A' || s.situacao === 'Ativo');
+
+    console.log(`Found ${sellers.length} active sellers from Tiny`);
 
     // Sync sellers to pos_sellers table
     for (const seller of sellers) {
