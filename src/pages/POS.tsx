@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
@@ -12,7 +12,11 @@ import { POSSalesView } from "@/components/pos/POSSalesView";
 import { POSCashRegister } from "@/components/pos/POSCashRegister";
 import { POSGamificationMini } from "@/components/pos/POSGamificationMini";
 import { POSConfig } from "@/components/pos/POSConfig";
+import { POSExchanges } from "@/components/pos/POSExchanges";
+import { POSInterStoreRequests } from "@/components/pos/POSInterStoreRequests";
+import { POSWhatsApp } from "@/components/pos/POSWhatsApp";
 import { TeamChat } from "@/components/TeamChat";
+import { supabase } from "@/integrations/supabase/client";
 
 type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp";
 
@@ -31,7 +35,27 @@ export default function POS() {
   const navigate = useNavigate();
   const [selectedStore, setSelectedStore] = useState<string>("");
   const [section, setSection] = useState<POSSection>("sales");
-  const [pendingRequests] = useState(0); // TODO: realtime
+  const [pendingRequests, setPendingRequests] = useState(0);
+
+  // Realtime count of pending requests for this store
+  useEffect(() => {
+    if (!selectedStore) return;
+    const loadPending = async () => {
+      const { count } = await supabase
+        .from("pos_inter_store_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("to_store_id", selectedStore)
+        .eq("status", "pending");
+      setPendingRequests(count || 0);
+    };
+    loadPending();
+
+    const channel = supabase
+      .channel("pos-requests-badge")
+      .on("postgres_changes", { event: "*", schema: "public", table: "pos_inter_store_requests" }, () => loadPending())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedStore]);
 
   if (!selectedStore) {
     return <POSStoreSelector onSelect={setSelectedStore} />;
@@ -105,37 +129,13 @@ export default function POS() {
         {section === "cash" && <POSCashRegister storeId={selectedStore} />}
         {section === "gamification" && <POSGamificationMini storeId={selectedStore} />}
         {section === "config" && <POSConfig storeId={selectedStore} />}
-        {section === "returns" && (
-          <div className="flex-1 flex items-center justify-center text-pos-white/40">
-            <div className="text-center space-y-2">
-              <RotateCcw className="h-12 w-12 mx-auto opacity-30" />
-              <p className="text-lg font-medium">Trocas & Devoluções</p>
-              <p className="text-sm">Será implementado na Fase 2</p>
-            </div>
-          </div>
-        )}
-        {section === "requests" && (
-          <div className="flex-1 flex items-center justify-center text-pos-white/40">
-            <div className="text-center space-y-2">
-              <ArrowRightLeft className="h-12 w-12 mx-auto opacity-30" />
-              <p className="text-lg font-medium">Solicitações entre Lojas</p>
-              <p className="text-sm">Será implementado na Fase 2</p>
-            </div>
-          </div>
-        )}
+        {section === "returns" && <POSExchanges storeId={selectedStore} />}
+        {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
+        {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} />}
         {section === "chat" && (
           <div className="flex-1 p-6 overflow-hidden">
             <div className="h-full rounded-xl border border-pos-yellow/20 overflow-hidden">
               <TeamChat />
-            </div>
-          </div>
-        )}
-        {section === "whatsapp" && (
-          <div className="flex-1 flex items-center justify-center text-pos-white/40">
-            <div className="text-center space-y-2">
-              <Phone className="h-12 w-12 mx-auto opacity-30" />
-              <p className="text-lg font-medium">Chat WhatsApp</p>
-              <p className="text-sm">Será integrado na próxima iteração</p>
             </div>
           </div>
         )}
