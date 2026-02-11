@@ -918,7 +918,22 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                 <div className="p-3 rounded-lg bg-[#111b21] text-xs text-[#8696a0] whitespace-pre-wrap">
                   {previewText}
                 </div>
-                {templateParamValues.map((val, i) => (
+                {templateParamValues.map((val, i) => {
+                  const totalFull = order.products.reduce((s, p) => s + p.price * p.quantity, 0);
+                  const prodsText = order.products
+                    .map((p) => `${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`)
+                    .join(', ');
+
+                  const shortcuts = [
+                    { label: 'Nome', value: order.instagramHandle.replace('@', '') },
+                    { label: '@ Instagram', value: order.instagramHandle },
+                    { label: 'WhatsApp', value: order.whatsapp || '' },
+                    { label: 'Total', value: `R$ ${totalFull.toFixed(2)}` },
+                    { label: 'Produtos', value: prodsText },
+                    { label: 'Link carrinho', value: order.cartLink || '' },
+                  ].filter(s => s.value);
+
+                  return (
                   <div key={i}>
                     <label className="text-xs text-[#8696a0] mb-1 block">
                       Parâmetro {`{{${i + 1}}}`}
@@ -936,8 +951,25 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                       className="bg-[#2a3942] border-none text-[#e9edef] placeholder:text-[#8696a0]"
                       placeholder={bodyComp?.example?.body_text?.[0]?.[i] || `Valor do parâmetro ${i + 1}`}
                     />
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {shortcuts.map((s) => (
+                        <button
+                          key={s.label}
+                          type="button"
+                          onClick={() => {
+                            const newVals = [...templateParamValues];
+                            newVals[i] = s.value;
+                            setTemplateParamValues(newVals);
+                          }}
+                          className="text-[10px] px-2 py-0.5 rounded bg-[#00a884]/20 text-[#00a884] hover:bg-[#00a884]/40 transition-colors"
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
                 <Button
                   onClick={() => handleSendMetaTemplate(selectedTemplate, templateParamValues)}
                   disabled={templateParamValues.some(v => !v.trim()) || isSending}
