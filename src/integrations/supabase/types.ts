@@ -1142,6 +1142,47 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_barcode_aliases: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          original_barcode: string
+          product_name: string
+          product_sku: string | null
+          product_tiny_id: number
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          original_barcode: string
+          product_name: string
+          product_sku?: string | null
+          product_tiny_id: number
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          original_barcode?: string
+          product_name?: string
+          product_sku?: string | null
+          product_tiny_id?: number
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_barcode_aliases_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_correction_queue: {
         Row: {
           attempts: number | null
@@ -1329,6 +1370,69 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "inventory_counts_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_unresolved_barcodes: {
+        Row: {
+          barcode: string
+          count_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          photo_url: string | null
+          resolved_at: string | null
+          resolved_product_name: string | null
+          resolved_product_tiny_id: number | null
+          scanned_quantity: number
+          status: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          barcode: string
+          count_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          photo_url?: string | null
+          resolved_at?: string | null
+          resolved_product_name?: string | null
+          resolved_product_tiny_id?: number | null
+          scanned_quantity?: number
+          status?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string
+          count_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          photo_url?: string | null
+          resolved_at?: string | null
+          resolved_product_name?: string | null
+          resolved_product_tiny_id?: number | null
+          scanned_quantity?: number
+          status?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_unresolved_barcodes_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_counts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_unresolved_barcodes_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "pos_stores"
