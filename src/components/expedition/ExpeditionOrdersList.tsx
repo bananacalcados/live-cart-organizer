@@ -193,6 +193,11 @@ function OrderRow({ order }: { order: any }) {
               <p className="text-sm text-muted-foreground">
                 {order.customer_name} • {order.customer_email}
               </p>
+              {order.shopify_created_at && (
+                <p className="text-xs text-muted-foreground">
+                  📅 {new Date(order.shopify_created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
               {addr && (
                 <p className="text-xs text-muted-foreground">
                   {addr.city}/{addr.province} - CEP: {addr.zip}
