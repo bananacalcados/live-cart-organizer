@@ -6,7 +6,8 @@ import {
   Megaphone, 
   Truck, 
   LogOut,
-  Instagram
+  Instagram,
+  Store
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,13 @@ const modules = [
     icon: Truck,
     path: "/expedition",
     color: "bg-stage-paid/10 text-stage-paid",
+  },
+  {
+    title: "Frente de Caixa",
+    description: "PDV para vendas em loja física",
+    icon: Store,
+    path: "/pos",
+    color: "bg-primary/10 text-primary",
   },
 ];
 
