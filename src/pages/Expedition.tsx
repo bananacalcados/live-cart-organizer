@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { RefreshCw, Package, Truck, FileText, BarChart3, RotateCcw, CheckCircle2, AlertTriangle, Search, ScanBarcode, Loader2, ChevronRight, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { pt } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ExpeditionOrdersList } from '@/components/expedition/ExpeditionOrdersList';
@@ -15,6 +19,7 @@ import { ExpeditionPackingStation } from '@/components/expedition/ExpeditionPack
 import { ExpeditionFreightQuote } from '@/components/expedition/ExpeditionFreightQuote';
 import { ExpeditionDispatch } from '@/components/expedition/ExpeditionDispatch';
 import { ExpeditionReturns } from '@/components/expedition/ExpeditionReturns';
+import { SupportDashboard } from '@/components/expedition/SupportDashboard';
 
 const STEPS = [
   { id: 'orders', label: 'Pedidos', icon: Package, description: 'Sincronizar e visualizar' },
@@ -35,15 +40,27 @@ export default function Expedition() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
 
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('expedition_orders')
         .select('*, expedition_order_items(*)')
         .order('shopify_created_at', { ascending: false });
 
+      if (dateFrom) {
+        query = query.gte('shopify_created_at', format(dateFrom, 'yyyy-MM-dd'));
+      }
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setDate(endDate.getDate() + 1);
+        query = query.lt('shopify_created_at', format(endDate, 'yyyy-MM-dd'));
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       setOrders(data || []);
     } catch (error) {
@@ -51,19 +68,14 @@ export default function Expedition() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [dateFrom, dateTo]);
 
   useEffect(() => {
     fetchOrders();
-
-    // Subscribe to realtime changes
     const channel = supabase
       .channel('expedition-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expedition_orders' }, () => {
-        fetchOrders();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expedition_orders' }, () => fetchOrders())
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [fetchOrders]);
 
@@ -84,6 +96,21 @@ export default function Expedition() {
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  // Auto-navigate to next step
+  const goToNextStep = useCallback(() => {
+    const currentIndex = STEPS.findIndex(s => s.id === activeStep);
+    if (currentIndex >= 0 && currentIndex < STEPS.length - 1) {
+      const nextStep = STEPS[currentIndex + 1].id;
+      setActiveStep(nextStep);
+      toast.success(`Avançando para: ${STEPS[currentIndex + 1].label}`);
+    }
+  }, [activeStep]);
+
+  const clearDateFilter = () => {
+    setDateFrom(undefined);
+    setDateTo(undefined);
   };
 
   const approvedOrders = orders.filter(o => o.financial_status === 'paid' || o.financial_status === 'partially_paid');
@@ -164,6 +191,18 @@ export default function Expedition() {
                 </button>
               );
             })}
+            {/* Support tab */}
+            <button
+              onClick={() => setActiveStep('support')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-all ${
+                activeStep === 'support'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`}
+            >
+              <HeadphonesIcon className="h-4 w-4" />
+              <span className="hidden md:inline font-medium">Suporte</span>
+            </button>
             {/* Returns tab */}
             <button
               onClick={() => setActiveStep('returns')}
@@ -182,15 +221,58 @@ export default function Expedition() {
 
       {/* Main Content */}
       <div className="container py-4">
-        {/* Search */}
-        <div className="mb-4 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por pedido, cliente, email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+        {/* Search + Date Filter */}
+        <div className="mb-4 flex flex-col md:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por pedido, cliente, email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn("gap-2 text-sm", dateFrom && "text-foreground")}>
+                  <CalendarIcon className="h-4 w-4" />
+                  {dateFrom ? format(dateFrom, 'dd/MM/yyyy') : 'De'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateFrom}
+                  onSelect={setDateFrom}
+                  locale={pt}
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn("gap-2 text-sm", dateTo && "text-foreground")}>
+                  <CalendarIcon className="h-4 w-4" />
+                  {dateTo ? format(dateTo, 'dd/MM/yyyy') : 'Até'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateTo}
+                  onSelect={setDateTo}
+                  locale={pt}
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+            {(dateFrom || dateTo) && (
+              <Button variant="ghost" size="sm" onClick={clearDateFilter} className="text-xs">
+                Limpar
+              </Button>
+            )}
+          </div>
         </div>
 
         {isLoading ? (
@@ -199,6 +281,7 @@ export default function Expedition() {
           </div>
         ) : (
           <>
+            {activeStep === 'support' && <SupportDashboard />}
             {(activeStep === 'orders' || activeStep === 'grouping') && (
               <ExpeditionOrdersList
                 orders={orders}
@@ -240,6 +323,15 @@ export default function Expedition() {
             )}
             {activeStep === 'returns' && (
               <ExpeditionReturns onRefresh={fetchOrders} />
+            )}
+
+            {/* Next Step Button (show on workflow steps, not support/returns) */}
+            {STEPS.some(s => s.id === activeStep) && activeStep !== 'manifest' && (
+              <div className="flex justify-end mt-6">
+                <Button onClick={goToNextStep} className="gap-2">
+                  Próxima Etapa →
+                </Button>
+              </div>
             )}
           </>
         )}

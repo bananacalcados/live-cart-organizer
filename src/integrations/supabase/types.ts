@@ -1628,6 +1628,149 @@ export type Database = {
         }
         Relationships: []
       }
+      support_tickets: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          customer_name: string | null
+          customer_phone: string | null
+          deadline_at: string | null
+          description: string | null
+          expedition_order_id: string | null
+          id: string
+          points_awarded: number | null
+          priority: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          shopify_order_name: string | null
+          source: string
+          started_at: string | null
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          deadline_at?: string | null
+          description?: string | null
+          expedition_order_id?: string | null
+          id?: string
+          points_awarded?: number | null
+          priority?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          shopify_order_name?: string | null
+          source?: string
+          started_at?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          deadline_at?: string | null
+          description?: string | null
+          expedition_order_id?: string | null
+          id?: string
+          points_awarded?: number | null
+          priority?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          shopify_order_name?: string | null
+          source?: string
+          started_at?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_expedition_order_id_fkey"
+            columns: ["expedition_order_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_chat_messages: {
+        Row: {
+          channel: string
+          created_at: string
+          id: string
+          message: string
+          sender_name: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          id?: string
+          message: string
+          sender_name: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          id?: string
+          message?: string
+          sender_name?: string
+        }
+        Relationships: []
+      }
+      team_gamification: {
+        Row: {
+          badges: Json
+          created_at: string
+          id: string
+          member_name: string
+          penalties: number
+          tickets_fast: number
+          tickets_medium: number
+          tickets_resolved: number
+          tickets_slow: number
+          total_points: number
+          updated_at: string
+          weekly_goal: number
+          weekly_points: number
+        }
+        Insert: {
+          badges?: Json
+          created_at?: string
+          id?: string
+          member_name: string
+          penalties?: number
+          tickets_fast?: number
+          tickets_medium?: number
+          tickets_resolved?: number
+          tickets_slow?: number
+          total_points?: number
+          updated_at?: string
+          weekly_goal?: number
+          weekly_points?: number
+        }
+        Update: {
+          badges?: Json
+          created_at?: string
+          id?: string
+          member_name?: string
+          penalties?: number
+          tickets_fast?: number
+          tickets_medium?: number
+          tickets_resolved?: number
+          tickets_slow?: number
+          total_points?: number
+          updated_at?: string
+          weekly_goal?: number
+          weekly_points?: number
+        }
+        Relationships: []
+      }
       whatsapp_messages: {
         Row: {
           created_at: string
