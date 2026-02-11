@@ -173,12 +173,34 @@ export function POSConfig({ storeId }: Props) {
     }
   };
 
+  // Track how long a "running" status has been unchanged
+  const lastRunningCheckRef = useRef<{ synced: number; since: number } | null>(null);
+
+  const triggerResume = async (resumePage: number, resumeLogId: string) => {
+    console.log('Triggering resume from page', resumePage, 'logId', resumeLogId);
+    toast.info(`Continuando sincronização da página ${resumePage}...`);
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sync-products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+        body: JSON.stringify({
+          store_id: storeId,
+          resume_page: resumePage,
+          resume_log_id: resumeLogId,
+        }),
+      });
+    } catch (e) {
+      console.error('Resume fetch error:', e);
+    }
+  };
+
   const pollSyncProgress = () => {
     if (pollRef.current) clearInterval(pollRef.current);
+    lastRunningCheckRef.current = null;
     pollRef.current = setInterval(async () => {
       const { data: log } = await supabase
         .from('pos_product_sync_log')
-        .select('status, products_synced, total_products, completed_at, error_message')
+        .select('id, status, products_synced, total_products, completed_at, error_message, started_at')
         .eq('store_id', storeId)
         .order('started_at', { ascending: false })
         .limit(1)
@@ -192,34 +214,45 @@ export function POSConfig({ storeId }: Props) {
         if (log.status === 'completed') {
           if (pollRef.current) clearInterval(pollRef.current);
           pollRef.current = null;
+          lastRunningCheckRef.current = null;
           setSyncing(false);
           setSyncProgress(null);
           setLastSync(log);
           loadSyncInfo();
           toast.success(`Sync concluído! ${synced} produtos sincronizados.`);
         } else if (log.status === 'partial') {
-          // Auto-resume: the edge function timed out, call it again to continue
+          // Auto-resume: the edge function saved progress before timeout
           try {
             const resumeInfo = JSON.parse(log.error_message || '{}');
-            console.log('Auto-resuming sync from page', resumeInfo.resume_page);
-            toast.info(`Continuando sincronização da página ${resumeInfo.resume_page}...`);
-            fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sync-products`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-              body: JSON.stringify({
-                store_id: storeId,
-                resume_page: resumeInfo.resume_page,
-                resume_log_id: resumeInfo.resume_log_id,
-              }),
-            });
-            // Update log back to running
-            await supabase.from('pos_product_sync_log').update({ status: 'running' }).eq('store_id', storeId).eq('status', 'partial');
+            if (resumeInfo.resume_page && resumeInfo.resume_log_id) {
+              triggerResume(resumeInfo.resume_page, resumeInfo.resume_log_id);
+            }
           } catch (e) {
-            console.error('Resume error:', e);
+            console.error('Resume parse error:', e);
+          }
+        } else if (log.status === 'running') {
+          // Detect stale "running" — function was killed before saving "partial"
+          const now = Date.now();
+          if (!lastRunningCheckRef.current || lastRunningCheckRef.current.synced !== synced) {
+            lastRunningCheckRef.current = { synced, since: now };
+          } else {
+            const staleDuration = now - lastRunningCheckRef.current.since;
+            if (staleDuration > 90_000) {
+              console.warn('Detected stale running sync, restarting...');
+              const estimatedPage = Math.max(1, Math.floor(synced / 100) + 1);
+              await supabase.from('pos_product_sync_log').update({
+                status: 'partial',
+                error_message: JSON.stringify({ resume_page: estimatedPage, resume_log_id: log.id }),
+              }).eq('id', log.id);
+              lastRunningCheckRef.current = null;
+              toast.info(`Sync travou, retomando da página ${estimatedPage}...`);
+              triggerResume(estimatedPage, log.id);
+            }
           }
         } else if (log.status === 'error') {
           if (pollRef.current) clearInterval(pollRef.current);
           pollRef.current = null;
+          lastRunningCheckRef.current = null;
           setSyncing(false);
           setSyncProgress(null);
           setLastSync(log);
