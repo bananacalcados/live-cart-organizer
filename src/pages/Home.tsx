@@ -8,7 +8,8 @@ import {
   LogOut,
   Instagram,
   Store,
-  Package
+  Package,
+  BarChart3
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,13 @@ const modules = [
     icon: Package,
     path: "/inventory",
     color: "bg-stage-contacted/10 text-stage-contacted",
+  },
+  {
+    title: "Gestão",
+    description: "Vendas, custos, margens e estoque consolidado",
+    icon: BarChart3,
+    path: "/management",
+    color: "bg-primary/10 text-primary",
   },
 ];
 
