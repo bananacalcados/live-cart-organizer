@@ -1,4 +1,4 @@
-import { Search, Phone, Users, MessageCircle, Filter, Wifi } from "lucide-react";
+import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Conversation, ChatFilter, StageFilter, InstanceFilter } from "./ChatTypes";
+import { Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "./ChatTypes";
 import { STAGES } from "@/types/order";
 import { WhatsAppNumber } from "@/stores/whatsappNumberStore";
 import {
@@ -16,11 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -33,10 +28,20 @@ interface ConversationListProps {
   onStageFilterChange: (stage: StageFilter) => void;
   instanceFilter: InstanceFilter;
   onInstanceFilterChange: (filter: InstanceFilter) => void;
+  statusFilter: ConversationStatusFilter;
+  onStatusFilterChange: (filter: ConversationStatusFilter) => void;
   metaNumbers: WhatsAppNumber[];
   contactPhotos?: Record<string, string>;
   contactNames?: Record<string, string>;
 }
+
+const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel: string }[] = [
+  { value: 'all', label: 'Todas', shortLabel: 'Todas' },
+  { value: 'not_started', label: 'Não Iniciadas', shortLabel: 'Novas' },
+  { value: 'awaiting_reply', label: 'Aguardando Resposta', shortLabel: 'Aguard.' },
+  { value: 'awaiting_customer', label: 'Aguardando Cliente', shortLabel: 'Pend.' },
+  { value: 'finished', label: 'Finalizadas', shortLabel: 'Finaliz.' },
+];
 
 export function ConversationList({
   conversations,
@@ -49,17 +54,15 @@ export function ConversationList({
   onStageFilterChange,
   instanceFilter,
   onInstanceFilterChange,
+  statusFilter,
+  onStatusFilterChange,
   metaNumbers,
   contactPhotos = {},
   contactNames = {},
 }: ConversationListProps) {
   const formatConversationTime = (date: Date) => {
-    if (isToday(date)) {
-      return format(date, 'HH:mm', { locale: ptBR });
-    }
-    if (isYesterday(date)) {
-      return 'Ontem';
-    }
+    if (isToday(date)) return format(date, 'HH:mm', { locale: ptBR });
+    if (isYesterday(date)) return 'Ontem';
     return format(date, 'dd/MM', { locale: ptBR });
   };
 
@@ -85,6 +88,12 @@ export function ConversationList({
       if (instanceFilter === 'meta') return !!c.whatsapp_number_id;
       return c.whatsapp_number_id === instanceFilter;
     })
+    .filter(c => {
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'finished') return c.isFinished;
+      if (c.isFinished) return false; // finished conversations only show in finished tab
+      return c.conversationStatus === statusFilter;
+    })
     .filter(c =>
       c.phone.includes(searchQuery) ||
       c.customerName?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -92,6 +101,15 @@ export function ConversationList({
 
   const contactsCount = conversations.filter(c => !c.isGroup).length;
   const groupsCount = conversations.filter(c => c.isGroup).length;
+
+  // Count per status
+  const statusCounts: Record<ConversationStatusFilter, number> = {
+    all: conversations.length,
+    not_started: conversations.filter(c => !c.isFinished && c.conversationStatus === 'not_started').length,
+    awaiting_reply: conversations.filter(c => !c.isFinished && c.conversationStatus === 'awaiting_reply').length,
+    awaiting_customer: conversations.filter(c => !c.isFinished && c.conversationStatus === 'awaiting_customer').length,
+    finished: conversations.filter(c => c.isFinished).length,
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white dark:bg-[#111b21]">
@@ -106,24 +124,48 @@ export function ConversationList({
             className="pl-9 h-9 bg-[#f0f2f5] dark:bg-[#202c33] border-0 rounded-lg"
           />
         </div>
+
+        {/* Status filter tabs */}
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          {STATUS_TABS.map(tab => (
+            <button
+              key={tab.value}
+              onClick={() => onStatusFilterChange(tab.value)}
+              className={cn(
+                "px-2 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors flex-shrink-0",
+                statusFilter === tab.value
+                  ? "bg-[#00a884] text-white"
+                  : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
+              )}
+            >
+              {tab.shortLabel}
+              {statusCounts[tab.value] > 0 && (
+                <span className="ml-1 text-[9px] opacity-80">({statusCounts[tab.value]})</span>
+              )}
+            </button>
+          ))}
+        </div>
         
-        {/* Filters */}
-        <div className="flex gap-2">
-          <Tabs value={chatFilter} onValueChange={(v) => onChatFilterChange(v as ChatFilter)} className="flex-1">
-            <TabsList className="w-full h-8 bg-[#f0f2f5] dark:bg-[#202c33]">
-              <TabsTrigger value="all" className="flex-1 text-xs h-7">
-                Todas
-              </TabsTrigger>
-              <TabsTrigger value="contacts" className="flex-1 text-xs h-7">
-                <Phone className="h-3 w-3 mr-1" />
-                {contactsCount}
-              </TabsTrigger>
-              <TabsTrigger value="groups" className="flex-1 text-xs h-7">
-                <Users className="h-3 w-3 mr-1" />
-                {groupsCount}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+        {/* Chat type filter */}
+        <div className="flex gap-1">
+          {(['all', 'contacts', 'groups'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => onChatFilterChange(f)}
+              className={cn(
+                "flex-1 px-2 py-1 rounded text-[10px] font-medium transition-colors",
+                chatFilter === f
+                  ? "bg-[#00a884]/20 text-[#00a884]"
+                  : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0]"
+              )}
+            >
+              {f === 'all' ? 'Todas' : f === 'contacts' ? (
+                <span className="flex items-center justify-center gap-1"><Phone className="h-3 w-3" />{contactsCount}</span>
+              ) : (
+                <span className="flex items-center justify-center gap-1"><Users className="h-3 w-3" />{groupsCount}</span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Instance filter */}
@@ -201,9 +243,14 @@ export function ConversationList({
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-[15px] text-[#111b21] dark:text-[#e9edef] truncate">
-                      {conv.customerName || contactNames[conv.phone] || conv.phone}
-                    </span>
+                    <div className="flex items-center gap-1 min-w-0 flex-1">
+                      <span className="font-medium text-[15px] text-[#111b21] dark:text-[#e9edef] truncate">
+                        {conv.customerName || contactNames[conv.phone] || conv.phone}
+                      </span>
+                      {conv.hasOtherInstances && (
+                        <Link2 className="h-3 w-3 text-orange-400 flex-shrink-0" />
+                      )}
+                    </div>
                     <span className={cn(
                       "text-xs flex-shrink-0",
                       conv.hasUnansweredMessage ? "text-[#00a884] font-medium" : "text-[#667781]"
@@ -216,10 +263,16 @@ export function ConversationList({
                       {conv.lastMessage}
                     </p>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {conv.whatsapp_number_id ? (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 text-blue-500 border-blue-300">M</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 text-green-500 border-green-300">Z</Badge>
+                      {/* Instance label */}
+                      {conv.instanceLabel && (
+                        <Badge variant="outline" className={cn(
+                          "text-[8px] px-1 py-0 leading-tight",
+                          conv.whatsapp_number_id 
+                            ? "text-blue-500 border-blue-300" 
+                            : "text-green-500 border-green-300"
+                        )}>
+                          {conv.instanceLabel}
+                        </Badge>
                       )}
                       {conv.unreadCount > 0 && (
                         <span className="h-5 min-w-5 px-1 rounded-full bg-[#00a884] text-white text-xs flex items-center justify-center font-bold">
