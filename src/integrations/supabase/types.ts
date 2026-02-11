@@ -2135,6 +2135,9 @@ export type Database = {
           id: string
           invoice_number: string | null
           invoice_pdf_url: string | null
+          nfce_key: string | null
+          nfce_number: string | null
+          nfce_pdf_url: string | null
           notes: string | null
           payment_details: Json | null
           payment_method: string | null
@@ -2144,6 +2147,7 @@ export type Database = {
           subtotal: number
           tiny_invoice_id: string | null
           tiny_order_id: string | null
+          tiny_order_number: string | null
           total: number
           updated_at: string
         }
@@ -2155,6 +2159,9 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
+          nfce_key?: string | null
+          nfce_number?: string | null
+          nfce_pdf_url?: string | null
           notes?: string | null
           payment_details?: Json | null
           payment_method?: string | null
@@ -2164,6 +2171,7 @@ export type Database = {
           subtotal?: number
           tiny_invoice_id?: string | null
           tiny_order_id?: string | null
+          tiny_order_number?: string | null
           total?: number
           updated_at?: string
         }
@@ -2175,6 +2183,9 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
+          nfce_key?: string | null
+          nfce_number?: string | null
+          nfce_pdf_url?: string | null
           notes?: string | null
           payment_details?: Json | null
           payment_method?: string | null
@@ -2184,6 +2195,7 @@ export type Database = {
           subtotal?: number
           tiny_invoice_id?: string | null
           tiny_order_id?: string | null
+          tiny_order_number?: string | null
           total?: number
           updated_at?: string
         }

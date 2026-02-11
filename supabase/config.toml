@@ -65,3 +65,18 @@ verify_jwt = false
 
 [functions.pagarme-create-charge]
 verify_jwt = false
+
+[functions.pos-tiny-search-product]
+verify_jwt = false
+
+[functions.pos-tiny-sellers]
+verify_jwt = false
+
+[functions.pos-tiny-payment-methods]
+verify_jwt = false
+
+[functions.pos-tiny-create-sale]
+verify_jwt = false
+
+[functions.pos-tiny-emit-nfce]
+verify_jwt = false
