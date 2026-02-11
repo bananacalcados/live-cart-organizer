@@ -1990,6 +1990,112 @@ export type Database = {
           },
         ]
       }
+      pos_product_sync_log: {
+        Row: {
+          completed_at: string | null
+          error_message: string | null
+          id: string
+          products_synced: number | null
+          started_at: string
+          status: string
+          store_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          products_synced?: number | null
+          started_at?: string
+          status?: string
+          store_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          products_synced?: number | null
+          started_at?: string
+          status?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_product_sync_log_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_products: {
+        Row: {
+          barcode: string
+          category: string | null
+          color: string | null
+          created_at: string
+          id: string
+          image_url: string | null
+          is_active: boolean
+          name: string
+          price: number
+          size: string | null
+          sku: string
+          stock: number
+          store_id: string
+          synced_at: string
+          tiny_id: number
+          updated_at: string
+          variant: string
+        }
+        Insert: {
+          barcode?: string
+          category?: string | null
+          color?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          name: string
+          price?: number
+          size?: string | null
+          sku?: string
+          stock?: number
+          store_id: string
+          synced_at?: string
+          tiny_id: number
+          updated_at?: string
+          variant?: string
+        }
+        Update: {
+          barcode?: string
+          category?: string | null
+          color?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          name?: string
+          price?: number
+          size?: string | null
+          sku?: string
+          stock?: number
+          store_id?: string
+          synced_at?: string
+          tiny_id?: number
+          updated_at?: string
+          variant?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_products_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_returns: {
         Row: {
           created_at: string
@@ -2769,7 +2875,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       [_ in never]: never

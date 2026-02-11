@@ -1,15 +1,17 @@
 import { useState, useEffect } from "react";
-import { Settings, Store, Users, Save, Plus, Trash2, Receipt } from "lucide-react";
+import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 interface Props {
   storeId: string;
@@ -29,10 +31,14 @@ export function POSConfig({ storeId }: Props) {
   const [newStore, setNewStore] = useState({ name: "", tiny_token: "", address: "" });
   const [autoEmit, setAutoEmit] = useState(false);
   const [autoEmitMinValue, setAutoEmitMinValue] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<{ status: string; products_synced: number; completed_at: string } | null>(null);
+  const [productCount, setProductCount] = useState(0);
 
   useEffect(() => {
     loadSellers();
     loadInvoiceConfig();
+    loadSyncInfo();
   }, [storeId]);
 
   const loadSellers = async () => {
@@ -46,6 +52,25 @@ export function POSConfig({ storeId }: Props) {
       setAutoEmit(data.auto_emit_on_sale);
       setAutoEmitMinValue(String(data.auto_emit_min_value || 0));
     }
+  };
+
+  const loadSyncInfo = async () => {
+    // Last sync log
+    const { data: log } = await supabase
+      .from('pos_product_sync_log')
+      .select('status, products_synced, completed_at')
+      .eq('store_id', storeId)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setLastSync(log);
+
+    // Product count
+    const { count } = await supabase
+      .from('pos_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', storeId);
+    setProductCount(count || 0);
   };
 
   const addSeller = async () => {
@@ -104,6 +129,30 @@ export function POSConfig({ storeId }: Props) {
     }
   };
 
+  const syncProducts = async () => {
+    setSyncing(true);
+    toast.info("Sincronizando produtos do Tiny ERP... Isso pode levar alguns minutos.");
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sync-products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+        body: JSON.stringify({ store_id: storeId }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        const result = data.results?.[0];
+        toast.success(`Sync concluído! ${result?.products_synced || 0} produtos sincronizados.`);
+        loadSyncInfo();
+      } else {
+        toast.error(data.error || "Erro no sync");
+      }
+    } catch (e) {
+      toast.error("Erro ao sincronizar");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <ScrollArea className="h-full">
       <div className="p-6 space-y-6">
@@ -112,6 +161,47 @@ export function POSConfig({ storeId }: Props) {
             <Settings className="h-5 w-5 text-pos-yellow" /> Configurações
           </h2>
         </div>
+
+        {/* Product Sync */}
+        <Card className="bg-pos-white/5 border-pos-yellow/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center justify-between text-pos-white">
+              <span className="flex items-center gap-2"><RefreshCw className="h-4 w-4 text-pos-yellow" /> Sincronização de Produtos</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-pos-white">Produtos no banco local</p>
+                <p className="text-2xl font-bold text-pos-yellow">{productCount}</p>
+              </div>
+              <Button
+                className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2 h-12 px-6"
+                onClick={syncProducts}
+                disabled={syncing}
+              >
+                {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {syncing ? 'Sincronizando...' : 'Sincronizar Agora'}
+              </Button>
+            </div>
+            {lastSync && (
+              <div className="flex items-center gap-2 text-xs text-pos-white/50">
+                {lastSync.status === 'completed' ? (
+                  <CheckCircle className="h-3 w-3 text-green-400" />
+                ) : lastSync.status === 'error' ? (
+                  <AlertCircle className="h-3 w-3 text-red-400" />
+                ) : (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                )}
+                Último sync: {lastSync.completed_at ? new Date(lastSync.completed_at).toLocaleString('pt-BR') : 'em andamento'}
+                {lastSync.products_synced > 0 && ` • ${lastSync.products_synced} produtos`}
+              </div>
+            )}
+            <p className="text-[10px] text-pos-white/30">
+              Sincroniza todos os produtos do Tiny ERP para o banco local, permitindo busca instantânea no PDV.
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Stores */}
         <Card className="bg-pos-white/5 border-pos-yellow/20">
