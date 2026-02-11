@@ -189,15 +189,18 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
       const { data, error } = await supabase.functions.invoke('expedition-fetch-label', {
         body: { order_id: orderId },
       });
-      if (error) throw error;
+      if (error) {
+        toast.error('Erro ao conectar com o servidor. Tente novamente.');
+        return;
+      }
       if (data?.success && data?.label_url) {
         toast.success('Etiqueta oficial obtida com sucesso!');
         onRefresh();
       } else {
-        toast.error('Etiqueta oficial ainda não disponível. Verifique se a expedição foi comprada no Tiny.');
+        toast.error(data?.error || 'Etiqueta oficial ainda não disponível. Verifique se a expedição foi comprada no Tiny.');
       }
     } catch (error: any) {
-      toast.error(`Erro: ${error.message}`);
+      toast.error('Erro ao buscar etiqueta. Tente novamente.');
     } finally {
       setLoadingId(null);
     }
