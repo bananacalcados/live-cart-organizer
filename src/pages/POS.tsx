@@ -64,14 +64,14 @@ export default function POS() {
   return (
     <div className="h-screen flex bg-pos-black">
       {/* Sidebar */}
-      <div className="w-16 lg:w-52 border-r border-pos-yellow/20 bg-pos-black flex flex-col">
+      <div className="w-16 lg:w-52 border-r border-pos-white/10 bg-pos-white flex flex-col">
         {/* Logo */}
-        <div className="p-3 border-b border-pos-yellow/20 flex items-center gap-2">
+        <div className="p-3 border-b border-pos-white/10 flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-pos-yellow text-pos-black font-bold flex-shrink-0">
             <Store className="h-4 w-4" />
           </div>
           <div className="hidden lg:block min-w-0">
-            <h1 className="text-xs font-bold text-pos-white truncate">Frente de Caixa</h1>
+            <h1 className="text-xs font-bold text-white truncate">Frente de Caixa</h1>
             <p className="text-[10px] text-pos-yellow-muted truncate">PDV</p>
           </div>
         </div>
@@ -88,8 +88,8 @@ export default function POS() {
                 className={cn(
                   "w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-all relative",
                   isActive
-                    ? "bg-pos-yellow text-pos-black shadow-md shadow-pos-yellow/30"
-                    : "text-pos-white/60 hover:bg-pos-white/5 hover:text-pos-white"
+                    ? "bg-pos-yellow text-pos-white shadow-md shadow-pos-yellow/30"
+                    : "text-white/60 hover:bg-white/10 hover:text-white"
                 )}
               >
                 <Icon className="h-4 w-4 flex-shrink-0" />
@@ -105,17 +105,17 @@ export default function POS() {
         </nav>
 
         {/* Footer */}
-        <div className="p-2 border-t border-pos-yellow/20 space-y-1">
+        <div className="p-2 border-t border-white/10 space-y-1">
           <button
             onClick={() => setSelectedStore("")}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-pos-white/40 hover:bg-pos-white/5 hover:text-pos-white/70 transition-all"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-white/40 hover:bg-white/10 hover:text-white/70 transition-all"
           >
             <Store className="h-3.5 w-3.5 flex-shrink-0" />
             <span className="hidden lg:inline">Trocar Loja</span>
           </button>
           <button
             onClick={() => navigate("/")}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-pos-white/40 hover:bg-pos-white/5 hover:text-pos-white/70 transition-all"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-white/40 hover:bg-white/10 hover:text-white/70 transition-all"
           >
             <Home className="h-3.5 w-3.5 flex-shrink-0" />
             <span className="hidden lg:inline">Início</span>

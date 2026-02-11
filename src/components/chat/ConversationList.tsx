@@ -2,6 +2,7 @@ import { Search, Phone, Users, MessageCircle, Filter, Wifi } from "lucide-react"
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -33,6 +34,7 @@ interface ConversationListProps {
   instanceFilter: InstanceFilter;
   onInstanceFilterChange: (filter: InstanceFilter) => void;
   metaNumbers: WhatsAppNumber[];
+  contactPhotos?: Record<string, string>;
 }
 
 export function ConversationList({
@@ -47,6 +49,7 @@ export function ConversationList({
   instanceFilter,
   onInstanceFilterChange,
   metaNumbers,
+  contactPhotos = {},
 }: ConversationListProps) {
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) {
@@ -56,6 +59,11 @@ export function ConversationList({
       return 'Ontem';
     }
     return format(date, 'dd/MM', { locale: ptBR });
+  };
+
+  const getInitials = (name?: string) => {
+    if (!name) return "?";
+    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
   };
 
   // Apply filters
@@ -70,11 +78,9 @@ export function ConversationList({
       return true;
     })
     .filter(c => {
-      // Instance filter
       if (instanceFilter === 'all') return true;
       if (instanceFilter === 'zapi') return !c.whatsapp_number_id;
       if (instanceFilter === 'meta') return !!c.whatsapp_number_id;
-      // Specific meta number id
       return c.whatsapp_number_id === instanceFilter;
     })
     .filter(c =>
@@ -86,23 +92,23 @@ export function ConversationList({
   const groupsCount = conversations.filter(c => c.isGroup).length;
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white dark:bg-[#111b21]">
       {/* Search */}
-      <div className="p-2 border-b space-y-2 flex-shrink-0">
+      <div className="p-2 border-b border-[#e9edef] dark:border-[#313d45] space-y-2 flex-shrink-0 bg-white dark:bg-[#111b21]">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#54656f]" />
           <Input
             placeholder="Buscar conversas..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-9 h-9"
+            className="pl-9 h-9 bg-[#f0f2f5] dark:bg-[#202c33] border-0 rounded-lg"
           />
         </div>
         
         {/* Filters */}
         <div className="flex gap-2">
           <Tabs value={chatFilter} onValueChange={(v) => onChatFilterChange(v as ChatFilter)} className="flex-1">
-            <TabsList className="w-full h-8">
+            <TabsList className="w-full h-8 bg-[#f0f2f5] dark:bg-[#202c33]">
               <TabsTrigger value="all" className="flex-1 text-xs h-7">
                 Todas
               </TabsTrigger>
@@ -120,7 +126,7 @@ export function ConversationList({
 
         {/* Instance filter */}
         <Select value={instanceFilter} onValueChange={onInstanceFilterChange}>
-          <SelectTrigger className="h-8 text-xs">
+          <SelectTrigger className="h-8 text-xs bg-[#f0f2f5] dark:bg-[#202c33] border-0">
             <Wifi className="h-3 w-3 mr-2" />
             <SelectValue placeholder="Filtrar por instância" />
           </SelectTrigger>
@@ -138,7 +144,7 @@ export function ConversationList({
 
         {/* Stage filter */}
         <Select value={stageFilter} onValueChange={onStageFilterChange}>
-          <SelectTrigger className="h-8 text-xs">
+          <SelectTrigger className="h-8 text-xs bg-[#f0f2f5] dark:bg-[#202c33] border-0">
             <Filter className="h-3 w-3 mr-2" />
             <SelectValue placeholder="Filtrar por etapa" />
           </SelectTrigger>
@@ -159,45 +165,52 @@ export function ConversationList({
       {/* Conversations */}
       <ScrollArea className="flex-1" style={{ minHeight: 0 }}>
         {filteredConversations.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
+          <div className="p-8 text-center text-[#667781]">
             <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
             <p>Nenhuma conversa encontrada</p>
           </div>
         ) : (
-          <div className="divide-y">
+          <div>
             {filteredConversations.map((conv) => (
               <button
                 key={conv.phone}
                 onClick={() => onSelectConversation(conv.phone)}
                 className={cn(
-                  "w-full p-3 flex items-start gap-3 hover:bg-secondary/50 transition-colors text-left",
-                  conv.hasUnansweredMessage && "bg-yellow-100 dark:bg-yellow-900/30 hover:bg-yellow-200 dark:hover:bg-yellow-900/50"
+                  "w-full px-3 py-3 flex items-center gap-3 hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors text-left border-b border-[#e9edef] dark:border-[#313d45]",
+                  conv.hasUnansweredMessage && "bg-[#d9fdd3]/30 dark:bg-[#005c4b]/20"
                 )}
               >
-                <div className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-full flex-shrink-0",
-                  conv.isGroup ? "bg-blue-500/20 text-blue-500" : "bg-stage-paid/20 text-stage-paid"
-                )}>
-                  {conv.isGroup ? (
-                    <Users className="h-5 w-5" />
-                  ) : (
-                    <Phone className="h-5 w-5" />
-                  )}
-                </div>
+                {/* Avatar with photo */}
+                <Avatar className="h-12 w-12 flex-shrink-0">
+                  {contactPhotos[conv.phone] ? (
+                    <AvatarImage src={contactPhotos[conv.phone]} />
+                  ) : null}
+                  <AvatarFallback className={cn(
+                    "text-white text-sm font-bold",
+                    conv.isGroup ? "bg-[#00a884]" : "bg-[#dfe5e7] text-[#54656f]"
+                  )}>
+                    {conv.isGroup ? (
+                      <Users className="h-6 w-6" />
+                    ) : (
+                      getInitials(conv.customerName)
+                    )}
+                  </AvatarFallback>
+                </Avatar>
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm truncate">
+                    <span className="font-medium text-[15px] text-[#111b21] dark:text-[#e9edef] truncate">
                       {conv.customerName || conv.phone}
                     </span>
                     <span className={cn(
                       "text-xs flex-shrink-0",
-                      conv.hasUnansweredMessage ? "text-yellow-600 dark:text-yellow-400 font-medium" : "text-muted-foreground"
+                      conv.hasUnansweredMessage ? "text-[#00a884] font-medium" : "text-[#667781]"
                     )}>
                       {formatConversationTime(conv.lastMessageAt)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm text-muted-foreground truncate flex-1">
+                    <p className="text-sm text-[#667781] truncate flex-1">
                       {conv.lastMessage}
                     </p>
                     <div className="flex items-center gap-1 flex-shrink-0">
@@ -206,13 +219,8 @@ export function ConversationList({
                       ) : (
                         <Badge variant="outline" className="text-[9px] px-1 py-0 text-green-500 border-green-300">Z</Badge>
                       )}
-                      {conv.customerTags?.slice(0, 2).map(tag => (
-                        <Badge key={tag} variant="outline" className="text-[10px] px-1 py-0">
-                          {tag}
-                        </Badge>
-                      ))}
                       {conv.unreadCount > 0 && (
-                        <span className="h-5 min-w-5 px-1 rounded-full bg-stage-paid text-white text-xs flex items-center justify-center">
+                        <span className="h-5 min-w-5 px-1 rounded-full bg-[#00a884] text-white text-xs flex items-center justify-center font-bold">
                           {conv.unreadCount}
                         </span>
                       )}

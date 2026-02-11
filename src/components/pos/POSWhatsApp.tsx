@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
@@ -23,6 +24,7 @@ interface CrmCustomerData {
   name?: string;
   instagram?: string;
   tags?: string[];
+  profilePicUrl?: string;
   orders: {
     id: string;
     orderName?: string;
@@ -45,6 +47,7 @@ export function POSWhatsApp({ storeId }: Props) {
   const [instanceFilter, setInstanceFilter] = useState<InstanceFilter>("all");
   const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
+  const [contactPhotos, setContactPhotos] = useState<Record<string, string>>({});
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
@@ -54,17 +57,17 @@ export function POSWhatsApp({ storeId }: Props) {
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
-  // Load chat contacts
+  // Load chat contacts + photos
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase.from("chat_contacts").select("phone, custom_name, display_name");
       if (data) {
-        const map: Record<string, string> = {};
+        const nameMap: Record<string, string> = {};
         for (const c of data) {
-          if (c.custom_name) map[c.phone] = c.custom_name;
-          else if (c.display_name) map[c.phone] = c.display_name;
+          if (c.custom_name) nameMap[c.phone] = c.custom_name;
+          else if (c.display_name) nameMap[c.phone] = c.display_name;
         }
-        setChatContacts(map);
+        setChatContacts(nameMap);
       }
     };
     load();
@@ -81,7 +84,6 @@ export function POSWhatsApp({ storeId }: Props) {
     const loadCrmData = async () => {
       const cleanPhone = selectedPhone.replace(/\D/g, '');
       
-      // Find customer by phone
       const { data: customer } = await supabase
         .from("customers")
         .select("id, instagram_handle, tags, whatsapp")
@@ -89,7 +91,6 @@ export function POSWhatsApp({ storeId }: Props) {
         .limit(1)
         .maybeSingle();
 
-      // Find expedition orders by phone
       const { data: expOrders } = await supabase
         .from("expedition_orders")
         .select("id, shopify_order_name, expedition_status, freight_tracking_code, total_price, shopify_created_at")
@@ -106,6 +107,7 @@ export function POSWhatsApp({ storeId }: Props) {
         name: chatContacts[selectedPhone],
         instagram: customer?.instagram_handle,
         tags: customer?.tags || [],
+        profilePicUrl: contactPhotos[selectedPhone],
         orders: (expOrders || []).map(o => ({
           id: o.id,
           orderName: o.shopify_order_name || undefined,
@@ -119,7 +121,7 @@ export function POSWhatsApp({ storeId }: Props) {
     };
 
     loadCrmData();
-  }, [selectedPhone, chatContacts]);
+  }, [selectedPhone, chatContacts, contactPhotos]);
 
   // Load conversations
   useEffect(() => {
@@ -312,34 +314,39 @@ export function POSWhatsApp({ storeId }: Props) {
     cancelled: "Cancelado",
   };
 
+  const getInitials = (name?: string) => {
+    if (!name) return "?";
+    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  };
+
   const customerInfoPanel = crmData && showCrmPanel ? (
-    <div className="border-b border-pos-yellow/10 bg-pos-white/5 px-3 py-2 flex-shrink-0">
+    <div className="border-b border-[#00a884]/20 bg-[#f0f2f5] dark:bg-[#111b21] px-3 py-2 flex-shrink-0">
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-pos-yellow" />
-          <span className="text-xs font-bold text-pos-white">Dados do Cliente</span>
+          <User className="h-4 w-4 text-[#00a884]" />
+          <span className="text-xs font-bold text-foreground">Dados do Cliente</span>
           {crmData.instagram && (
-            <span className="text-[10px] text-pos-white/50">@{crmData.instagram}</span>
+            <span className="text-[10px] text-muted-foreground">@{crmData.instagram}</span>
           )}
         </div>
-        <Button variant="ghost" size="icon" className="h-5 w-5 text-pos-white/40" onClick={() => setShowCrmPanel(false)}>
+        <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground" onClick={() => setShowCrmPanel(false)}>
           <X className="h-3 w-3" />
         </Button>
       </div>
       {crmData.tags && crmData.tags.length > 0 && (
         <div className="flex gap-1 flex-wrap mb-1">
           {crmData.tags.map(t => (
-            <Badge key={t} variant="secondary" className="text-[9px] bg-pos-yellow/20 text-pos-yellow border-0">{t}</Badge>
+            <Badge key={t} variant="secondary" className="text-[9px] bg-[#00a884]/20 text-[#00a884] border-0">{t}</Badge>
           ))}
         </div>
       )}
       {crmData.orders.length > 0 ? (
         <div className="space-y-1 max-h-24 overflow-y-auto">
           {crmData.orders.map(o => (
-            <div key={o.id} className="flex items-center gap-2 text-[10px] text-pos-white/70 bg-pos-white/5 rounded px-2 py-1">
+            <div key={o.id} className="flex items-center gap-2 text-[10px] text-muted-foreground bg-white dark:bg-[#202c33] rounded px-2 py-1">
               <Package className="h-3 w-3 text-pos-orange flex-shrink-0" />
               <span className="font-mono font-bold">{o.orderName || '—'}</span>
-              <Badge variant="outline" className="text-[9px] border-pos-white/20 text-pos-white/60">{statusLabels[o.status || ''] || o.status}</Badge>
+              <Badge variant="outline" className="text-[9px] border-muted text-muted-foreground">{statusLabels[o.status || ''] || o.status}</Badge>
               {o.trackingCode && (
                 <span className="flex items-center gap-0.5">
                   <Truck className="h-3 w-3" /> {o.trackingCode}
@@ -350,55 +357,62 @@ export function POSWhatsApp({ storeId }: Props) {
           ))}
         </div>
       ) : (
-        <p className="text-[10px] text-pos-white/40">Nenhum pedido encontrado</p>
+        <p className="text-[10px] text-muted-foreground">Nenhum pedido encontrado</p>
       )}
     </div>
   ) : crmData && !showCrmPanel ? (
-    <div className="border-b border-pos-yellow/10 bg-pos-white/5 px-3 py-1 flex-shrink-0">
-      <Button variant="ghost" size="sm" className="text-[10px] text-pos-yellow h-5 px-2 gap-1" onClick={() => setShowCrmPanel(true)}>
+    <div className="border-b border-[#00a884]/20 bg-[#f0f2f5] dark:bg-[#111b21] px-3 py-1 flex-shrink-0">
+      <Button variant="ghost" size="sm" className="text-[10px] text-[#00a884] h-5 px-2 gap-1" onClick={() => setShowCrmPanel(true)}>
         <User className="h-3 w-3" /> Ver dados do cliente ({crmData.orders.length} pedido{crmData.orders.length !== 1 ? 's' : ''})
       </Button>
     </div>
   ) : null;
 
   return (
-    <div className="h-full flex flex-col bg-pos-black">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-pos-yellow/20 flex-shrink-0">
+    <div className="h-full flex flex-col bg-[#f0f2f5] dark:bg-[#111b21]">
+      {/* WhatsApp-style Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-[#008069] dark:bg-[#202c33] flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {selectedPhone ? (
             <>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-pos-white/60 hover:text-pos-white" onClick={() => setSelectedPhone(null)}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10" onClick={() => setSelectedPhone(null)}>
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              {selectedConversation?.isGroup ? <Users className="h-5 w-5 text-pos-yellow" /> : <Phone className="h-5 w-5 text-pos-yellow" />}
+              <Avatar className="h-9 w-9">
+                {contactPhotos[selectedPhone] ? (
+                  <AvatarImage src={contactPhotos[selectedPhone]} />
+                ) : null}
+                <AvatarFallback className="bg-[#dfe5e7] dark:bg-[#6b7b8a] text-[#54656f] dark:text-white text-xs font-bold">
+                  {selectedConversation?.isGroup ? <Users className="h-4 w-4" /> : getInitials(selectedConversation?.customerName || selectedPhone)}
+                </AvatarFallback>
+              </Avatar>
               {isEditingName ? (
                 <div className="flex items-center gap-1 flex-1">
                   <Input
                     value={editNameValue}
                     onChange={e => setEditNameValue(e.target.value)}
-                    className="h-7 text-sm bg-pos-white/10 border-pos-yellow/30 text-pos-white flex-1"
+                    className="h-7 text-sm bg-white/20 border-white/30 text-white flex-1 placeholder:text-white/50"
                     autoFocus
                     onKeyDown={e => { if (e.key === "Enter") handleSaveContactName(); if (e.key === "Escape") setIsEditingName(false); }}
                   />
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-pos-yellow" onClick={handleSaveContactName}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-white" onClick={handleSaveContactName}>
                     <Check className="h-4 w-4" />
                   </Button>
                 </div>
               ) : (
-                <>
-                  <span className="font-bold text-pos-white truncate">{selectedConversation?.customerName || selectedPhone}</span>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-pos-white/40" onClick={() => { setEditNameValue(selectedConversation?.customerName || ""); setIsEditingName(true); }}>
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className="font-semibold text-white truncate">{selectedConversation?.customerName || selectedPhone}</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-white/60 hover:text-white hover:bg-white/10" onClick={() => { setEditNameValue(selectedConversation?.customerName || ""); setIsEditingName(true); }}>
                     <Pencil className="h-3 w-3" />
                   </Button>
-                </>
+                </div>
               )}
             </>
           ) : (
             <>
-              <MessageCircle className="h-5 w-5 text-pos-yellow" />
-              <span className="font-bold text-pos-white">WhatsApp</span>
-              {totalUnread > 0 && <Badge className="bg-red-500 text-white border-0 text-xs">{totalUnread}</Badge>}
+              <MessageCircle className="h-5 w-5 text-white" />
+              <span className="font-bold text-white">WhatsApp</span>
+              {totalUnread > 0 && <Badge className="bg-white text-[#008069] border-0 text-xs font-bold">{totalUnread}</Badge>}
             </>
           )}
         </div>
@@ -406,7 +420,7 @@ export function POSWhatsApp({ storeId }: Props) {
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-400 hover:text-red-300 hover:bg-red-500/10 gap-1 text-xs"
+            className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
             onClick={() => {
               setSelectedPhone(null);
               setMessages([]);
@@ -421,10 +435,10 @@ export function POSWhatsApp({ storeId }: Props) {
 
       {/* API Selector */}
       {selectedPhone && (
-        <div className="flex items-center gap-2 px-4 py-1.5 border-b border-pos-yellow/10 text-xs flex-shrink-0">
-          <span className="text-pos-white/40">Via:</span>
-          <button onClick={() => setSendVia("zapi")} className={`px-2 py-0.5 rounded-full ${sendVia === "zapi" ? "bg-pos-yellow text-pos-black" : "bg-pos-white/10 text-pos-white/50"}`}>Z-API</button>
-          <button onClick={() => setSendVia("meta")} className={`px-2 py-0.5 rounded-full ${sendVia === "meta" ? "bg-pos-yellow text-pos-black" : "bg-pos-white/10 text-pos-white/50"}`}>Meta API</button>
+        <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] bg-white dark:bg-[#202c33] text-xs flex-shrink-0">
+          <span className="text-muted-foreground">Via:</span>
+          <button onClick={() => setSendVia("zapi")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "zapi" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Z-API</button>
+          <button onClick={() => setSendVia("meta")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "meta" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Meta API</button>
           {sendVia === "meta" && metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" />}
         </div>
       )}
@@ -444,6 +458,7 @@ export function POSWhatsApp({ storeId }: Props) {
             instanceFilter={instanceFilter}
             onInstanceFilterChange={setInstanceFilter}
             metaNumbers={metaNumbers}
+            contactPhotos={contactPhotos}
           />
         ) : (
           <ChatView

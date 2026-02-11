@@ -57,13 +57,13 @@
     --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(200 15% 98%) 100%);
     --gradient-accent: linear-gradient(135deg, hsl(15 85% 55%) 0%, hsl(25 90% 50%) 100%);
 
-    /* POS Brand Colors - Vibrant */
-    --pos-black: 0 0% 8%;
+    /* POS Brand Colors - Light theme */
+    --pos-black: 0 0% 97%;
     --pos-yellow: 48 100% 50%;
     --pos-orange: 25 100% 50%;
-    --pos-white: 0 0% 100%;
-    --pos-yellow-muted: 48 90% 55%;
-    --pos-orange-muted: 25 90% 55%;
+    --pos-white: 0 0% 12%;
+    --pos-yellow-muted: 48 85% 45%;
+    --pos-orange-muted: 25 85% 45%;
 
     /* Shadows */
     --shadow-sm: 0 1px 2px hsl(200 30% 20% / 0.05);
@@ -111,7 +111,7 @@
     --input: 200 20% 20%;
     --ring: 185 55% 45%;
 
-    --pos-black: 0 0% 6%;
+    --pos-black: 0 0% 8%;
     --pos-yellow: 48 100% 55%;
     --pos-orange: 25 100% 55%;
     --pos-white: 0 0% 95%;
