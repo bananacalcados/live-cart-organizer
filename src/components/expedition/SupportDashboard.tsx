@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { HeadphonesIcon, Plus, Clock, CheckCircle2, AlertTriangle, Trophy, Flame, Star, Zap, Target, Medal } from 'lucide-react';
+import { HeadphonesIcon, Plus, Clock, CheckCircle2, AlertTriangle, Trophy, Flame, Star, Zap, Target, Medal, MessageCircle, ArrowRightLeft, Phone } from 'lucide-react';
+import { SupportWhatsAppChat } from './SupportWhatsAppChat';
 
 interface SupportTicket {
   id: string;
@@ -46,12 +47,6 @@ interface GamificationEntry {
   badges: any[];
 }
 
-const BADGES = [
-  { id: 'speed_demon', name: '⚡ Speed Demon', description: '10 tickets em <5min', threshold: 10, field: 'tickets_fast' },
-  { id: 'resolver', name: '🎯 Resolver', description: '50 tickets resolvidos', threshold: 50, field: 'tickets_resolved' },
-  { id: 'centurion', name: '💯 Centurião', description: '100 pontos na semana', threshold: 100, field: 'weekly_points' },
-];
-
 function getTimeElapsed(startDate: string) {
   const diff = Date.now() - new Date(startDate).getTime();
   const mins = Math.floor(diff / 60000);
@@ -77,7 +72,9 @@ export function SupportDashboard() {
   const [newPriority, setNewPriority] = useState('medium');
   const [newAssignedTo, setNewAssignedTo] = useState('');
   const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
   const [newOrderName, setNewOrderName] = useState('');
+  const [chatTicket, setChatTicket] = useState<SupportTicket | null>(null);
 
   const loadData = useCallback(async () => {
     const [ticketsRes, rankingRes] = await Promise.all([
@@ -97,6 +94,11 @@ export function SupportDashboard() {
     return () => { supabase.removeChannel(channel); };
   }, [loadData]);
 
+  // Get unique team members for transfer
+  const teamMembers = Array.from(new Set(
+    tickets.map(t => t.assigned_to).filter(Boolean) as string[]
+  ));
+
   const createTicket = async () => {
     if (!newSubject.trim()) { toast.error('Informe o assunto'); return; }
     const deadline = new Date();
@@ -108,11 +110,12 @@ export function SupportDashboard() {
       priority: newPriority,
       assigned_to: newAssignedTo.trim() || null,
       customer_name: newCustomerName.trim() || null,
+      customer_phone: newCustomerPhone.trim() || null,
       shopify_order_name: newOrderName.trim() || null,
       deadline_at: deadline.toISOString(),
     });
 
-    setNewSubject(''); setNewDescription(''); setNewAssignedTo(''); setNewCustomerName(''); setNewOrderName('');
+    setNewSubject(''); setNewDescription(''); setNewAssignedTo(''); setNewCustomerName(''); setNewCustomerPhone(''); setNewOrderName('');
     setShowNewTicket(false);
     toast.success('Ticket criado!');
     loadData();
@@ -121,6 +124,12 @@ export function SupportDashboard() {
   const startTicket = async (ticket: SupportTicket) => {
     await supabase.from('support_tickets').update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', ticket.id);
     toast.success('Ticket iniciado!');
+    loadData();
+  };
+
+  const transferTicket = async (ticket: SupportTicket, newOwner: string) => {
+    await supabase.from('support_tickets').update({ assigned_to: newOwner }).eq('id', ticket.id);
+    toast.success(`Ticket transferido para ${newOwner}`);
     loadData();
   };
 
@@ -135,19 +144,19 @@ export function SupportDashboard() {
       points_awarded: points,
     }).eq('id', ticket.id);
 
-    // Update gamification
     if (ticket.assigned_to) {
       const { data: existing } = await supabase.from('team_gamification').select('*').eq('member_name', ticket.assigned_to).maybeSingle();
       if (existing) {
+        const e = existing as GamificationEntry;
         const updates: any = {
-          total_points: (existing as GamificationEntry).total_points + points,
-          weekly_points: (existing as GamificationEntry).weekly_points + points,
-          tickets_resolved: (existing as GamificationEntry).tickets_resolved + 1,
+          total_points: e.total_points + points,
+          weekly_points: e.weekly_points + points,
+          tickets_resolved: e.tickets_resolved + 1,
         };
-        if (tier === 'fast') updates.tickets_fast = (existing as GamificationEntry).tickets_fast + 1;
-        if (tier === 'medium') updates.tickets_medium = (existing as GamificationEntry).tickets_medium + 1;
-        if (tier === 'slow') updates.tickets_slow = (existing as GamificationEntry).tickets_slow + 1;
-        await supabase.from('team_gamification').update(updates).eq('id', (existing as GamificationEntry).id);
+        if (tier === 'fast') updates.tickets_fast = e.tickets_fast + 1;
+        if (tier === 'medium') updates.tickets_medium = e.tickets_medium + 1;
+        if (tier === 'slow') updates.tickets_slow = e.tickets_slow + 1;
+        await supabase.from('team_gamification').update(updates).eq('id', e.id);
       } else {
         await supabase.from('team_gamification').insert({
           member_name: ticket.assigned_to,
@@ -169,13 +178,50 @@ export function SupportDashboard() {
   const inProgressTickets = tickets.filter(t => t.status === 'in_progress');
   const resolvedTickets = tickets.filter(t => t.status === 'resolved');
 
+  // If a chat is open, show split view
+  if (chatTicket) {
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" style={{ height: 'calc(100vh - 300px)' }}>
+        <div className="space-y-3 overflow-auto">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <HeadphonesIcon className="h-4 w-4" /> Tickets
+          </h3>
+          <ScrollArea className="h-[calc(100vh-380px)]">
+            <div className="space-y-2 pr-2">
+              {[...newTickets, ...inProgressTickets].map(ticket => (
+                <TicketCard
+                  key={ticket.id}
+                  ticket={ticket}
+                  onStart={startTicket}
+                  onResolve={resolveTicket}
+                  onTransfer={transferTicket}
+                  onOpenChat={setChatTicket}
+                  teamMembers={teamMembers}
+                  isActive={ticket.id === chatTicket.id}
+                />
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+        <div className="h-full">
+          <SupportWhatsAppChat
+            phone={chatTicket.customer_phone || ''}
+            customerName={chatTicket.customer_name || 'Cliente'}
+            ticketSubject={chatTicket.subject}
+            onClose={() => setChatTicket(null)}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Support Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <Card className="border-yellow-500/30 bg-yellow-500/5">
+        <Card className="border-orange-500/30 bg-orange-500/5">
           <CardContent className="p-3 flex items-center gap-3">
-            <AlertTriangle className="h-8 w-8 text-yellow-500" />
+            <AlertTriangle className="h-8 w-8 text-orange-500" />
             <div>
               <p className="text-2xl font-bold">{newTickets.length}</p>
               <p className="text-xs text-muted-foreground">Novos</p>
@@ -212,36 +258,16 @@ export function SupportDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Tickets Columns */}
-        <TicketColumn
-          title="🆕 Novos"
-          tickets={newTickets}
-          color="yellow"
-          onStart={startTicket}
-          onResolve={resolveTicket}
-        />
-        <TicketColumn
-          title="🔄 Em Andamento"
-          tickets={inProgressTickets}
-          color="blue"
-          onStart={startTicket}
-          onResolve={resolveTicket}
-        />
+        <TicketColumn title="🆕 Novos" tickets={newTickets} onStart={startTicket} onResolve={resolveTicket} onTransfer={transferTicket} onOpenChat={setChatTicket} teamMembers={teamMembers} />
+        <TicketColumn title="🔄 Em Andamento" tickets={inProgressTickets} onStart={startTicket} onResolve={resolveTicket} onTransfer={transferTicket} onOpenChat={setChatTicket} teamMembers={teamMembers} />
         <div className="space-y-3">
-          <TicketColumn
-            title="✅ Finalizados"
-            tickets={resolvedTickets.slice(0, 10)}
-            color="green"
-            onStart={startTicket}
-            onResolve={resolveTicket}
-          />
+          <TicketColumn title="✅ Finalizados" tickets={resolvedTickets.slice(0, 10)} onStart={startTicket} onResolve={resolveTicket} onTransfer={transferTicket} onOpenChat={setChatTicket} teamMembers={teamMembers} />
           
-          {/* Ranking */}
           {ranking.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <Trophy className="h-4 w-4 text-yellow-500" /> Ranking da Equipe
+                  <Trophy className="h-4 w-4 text-orange-500" /> Ranking da Equipe
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -252,9 +278,7 @@ export function SupportDashboard() {
                     </span>
                     <div className="flex-1">
                       <p className="text-sm font-medium">{entry.member_name}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {entry.tickets_resolved} resolvidos · {entry.tickets_fast} rápidos
-                      </p>
+                      <p className="text-[10px] text-muted-foreground">{entry.tickets_resolved} resolvidos · {entry.tickets_fast} rápidos</p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-primary">{entry.total_points} pts</p>
@@ -290,9 +314,13 @@ export function SupportDashboard() {
                 <Input value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} placeholder="Nome" />
               </div>
               <div>
-                <Label>Pedido</Label>
-                <Input value={newOrderName} onChange={(e) => setNewOrderName(e.target.value)} placeholder="#1234" />
+                <Label>WhatsApp</Label>
+                <Input value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} placeholder="5511999999999" />
               </div>
+            </div>
+            <div>
+              <Label>Pedido</Label>
+              <Input value={newOrderName} onChange={(e) => setNewOrderName(e.target.value)} placeholder="#1234" />
             </div>
             <div>
               <Label>Descrição</Label>
@@ -326,15 +354,19 @@ export function SupportDashboard() {
 function TicketColumn({
   title,
   tickets,
-  color,
   onStart,
   onResolve,
+  onTransfer,
+  onOpenChat,
+  teamMembers,
 }: {
   title: string;
   tickets: SupportTicket[];
-  color: string;
   onStart: (t: SupportTicket) => void;
   onResolve: (t: SupportTicket, notes: string) => void;
+  onTransfer: (t: SupportTicket, newOwner: string) => void;
+  onOpenChat: (t: SupportTicket) => void;
+  teamMembers: string[];
 }) {
   return (
     <div className="space-y-2">
@@ -342,7 +374,7 @@ function TicketColumn({
       <ScrollArea className="h-[400px]">
         <div className="space-y-2 pr-2">
           {tickets.map((ticket) => (
-            <TicketCard key={ticket.id} ticket={ticket} onStart={onStart} onResolve={onResolve} />
+            <TicketCard key={ticket.id} ticket={ticket} onStart={onStart} onResolve={onResolve} onTransfer={onTransfer} onOpenChat={onOpenChat} teamMembers={teamMembers} />
           ))}
           {tickets.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-8">Nenhum ticket</p>
@@ -357,17 +389,27 @@ function TicketCard({
   ticket,
   onStart,
   onResolve,
+  onTransfer,
+  onOpenChat,
+  teamMembers,
+  isActive,
 }: {
   ticket: SupportTicket;
   onStart: (t: SupportTicket) => void;
   onResolve: (t: SupportTicket, notes: string) => void;
+  onTransfer: (t: SupportTicket, newOwner: string) => void;
+  onOpenChat: (t: SupportTicket) => void;
+  teamMembers: string[];
+  isActive?: boolean;
 }) {
   const [showResolve, setShowResolve] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
   const [notes, setNotes] = useState('');
+  const [transferTo, setTransferTo] = useState('');
   const isOverdue = ticket.deadline_at && new Date(ticket.deadline_at) < new Date() && ticket.status !== 'resolved';
 
   return (
-    <Card className={`${isOverdue ? 'border-destructive/50 bg-destructive/5' : ''}`}>
+    <Card className={`${isOverdue ? 'border-destructive/50 bg-destructive/5' : ''} ${isActive ? 'ring-2 ring-primary' : ''}`}>
       <CardContent className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
@@ -380,29 +422,70 @@ function TicketCard({
           </Badge>
         </div>
 
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
           {ticket.assigned_to && <span>👤 {ticket.assigned_to}</span>}
+          {ticket.customer_phone && <span className="flex items-center gap-0.5"><Phone className="h-2.5 w-2.5" /> {ticket.customer_phone}</span>}
           {ticket.started_at && ticket.status === 'in_progress' && (
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" /> {getTimeElapsed(ticket.started_at)}
-            </span>
+            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {getTimeElapsed(ticket.started_at)}</span>
           )}
-          {ticket.points_awarded > 0 && (
-            <span className="text-primary font-bold">+{ticket.points_awarded} pts</span>
-          )}
+          {ticket.points_awarded > 0 && <span className="text-primary font-bold">+{ticket.points_awarded} pts</span>}
           {isOverdue && <span className="text-destructive font-bold">⚠️ ATRASADO</span>}
         </div>
 
-        {ticket.status === 'new' && (
-          <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={() => onStart(ticket)}>
-            Iniciar Atendimento
-          </Button>
+        {/* Action buttons */}
+        <div className="flex gap-1 flex-wrap">
+          {ticket.status === 'new' && (
+            <Button size="sm" variant="outline" className="h-7 text-xs flex-1" onClick={() => onStart(ticket)}>
+              Iniciar
+            </Button>
+          )}
+          {ticket.status === 'in_progress' && !showResolve && (
+            <Button size="sm" className="h-7 text-xs flex-1" onClick={() => setShowResolve(true)}>
+              Resolver
+            </Button>
+          )}
+          
+          {/* WhatsApp button */}
+          {ticket.customer_phone && ticket.status !== 'resolved' && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onOpenChat(ticket)}>
+              <MessageCircle className="h-3 w-3" /> WhatsApp
+            </Button>
+          )}
+
+          {/* Transfer button */}
+          {ticket.status !== 'resolved' && (
+            <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => setShowTransfer(!showTransfer)}>
+              <ArrowRightLeft className="h-3 w-3" /> Transferir
+            </Button>
+          )}
+        </div>
+
+        {/* Transfer form */}
+        {showTransfer && (
+          <div className="space-y-2 pt-1 border-t">
+            <p className="text-[10px] text-muted-foreground font-medium">Transferir para:</p>
+            <div className="flex flex-wrap gap-1">
+              {teamMembers.filter(m => m !== ticket.assigned_to).map(member => (
+                <Button key={member} size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => { onTransfer(ticket, member); setShowTransfer(false); }}>
+                  {member}
+                </Button>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              <Input
+                value={transferTo}
+                onChange={(e) => setTransferTo(e.target.value)}
+                placeholder="Ou digite o nome..."
+                className="h-7 text-xs"
+              />
+              <Button size="sm" className="h-7 text-xs" disabled={!transferTo.trim()} onClick={() => { onTransfer(ticket, transferTo.trim()); setTransferTo(''); setShowTransfer(false); }}>
+                OK
+              </Button>
+            </div>
+          </div>
         )}
-        {ticket.status === 'in_progress' && !showResolve && (
-          <Button size="sm" className="w-full h-7 text-xs" onClick={() => setShowResolve(true)}>
-            Resolver
-          </Button>
-        )}
+
+        {/* Resolve form */}
         {showResolve && (
           <div className="space-y-2">
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Como foi resolvido?" className="h-7 text-xs" />
