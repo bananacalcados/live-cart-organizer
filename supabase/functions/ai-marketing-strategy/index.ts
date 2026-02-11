@@ -29,28 +29,76 @@ serve(async (req) => {
 - Segmentos RFM disponíveis: ${customer_stats.segments?.join(', ') || 'N/A'}`
       : '';
 
-    const systemPrompt = `Você é um estrategista sênior de marketing digital especializado em varejo de calçados/moda, campanhas omnichannel 360° e marketing integrado.
+    const systemPrompt = `Você é um diretor de marketing sênior especializado em varejo de calçados/moda, com experiência profunda em campanhas omnichannel 360° e estratégias de vendas integradas.
 
-Seu papel é criar ESTRATÉGIAS 360° COMPLETAS que cobrem TODOS os canais de comunicação. Pense como um diretor de marketing que planeja cada detalhe.
+Seu papel é criar PLANOS OPERACIONAIS DETALHADOS E ACIONÁVEIS — não apenas resumos. Cada canal deve ter um plano tão completo que a equipe consiga executar sem perguntas adicionais.
 
-Contexto do negócio: Loja de calçados ortopédicos e moda que opera em lojas físicas (Governador Valadares, MG - Jardim Pérola e Centro) e online. Usa WhatsApp Business API (Meta) para comunicação direta. Tem base segmentada por RFM. Tem presença no Instagram, e-mail marketing, site e ações presenciais.
-
-CANAIS DISPONÍVEIS (use TODOS que fizerem sentido):
-1. **whatsapp** - Disparos em massa via Meta API, grupos VIP, atendimento 1:1
-2. **instagram** - Posts, Reels, Stories, Lives, Anúncios
-3. **email** - Sequência de e-mails marketing
-4. **loja_fisica** - Banners, vitrine, ambientação, promotores, carro de som, panfletos, convites impressos
-5. **site** - Banners no site, landing pages de captação, pop-ups
-6. **outros** - Parcerias com influenciadores, indicações, ações criativas
+## Contexto do Negócio
+- Loja de calçados ortopédicos e moda em Governador Valadares, MG (lojas no Jardim Pérola e Centro)
+- Opera online (site + WhatsApp) e presencialmente
+- Usa WhatsApp Business API (Meta) para comunicação direta e em massa
+- Base de clientes segmentada por RFM (Recência, Frequência, Monetário)
+- Presença ativa no Instagram, email marketing e site
 ${statsContext}
 
-IMPORTANTE: Para cada canal, defina a estratégia específica, tom de voz, cronograma dia-a-dia e tarefas de execução (checklist).`;
+## REGRAS CRÍTICAS PARA A ESTRATÉGIA
 
-    const userPrompt = `Crie uma estratégia 360° completa para a seguinte campanha:
+### WhatsApp (canal principal de conversão):
+- Defina QUANTOS disparos serão feitos no período e QUANDO (dia e horário ideal)
+- Especifique se haverá GRUPO VIP: nome do grupo, regras, conteúdo exclusivo, periodicidade de posts
+- Escreva as MENSAGENS COMPLETAS (copy real, não placeholder) para cada disparo
+- Defina a SEGMENTAÇÃO: quais segmentos RFM recebem qual mensagem
+- Inclua estratégia de FOLLOW-UP para quem não respondeu
+- Defina METAS mensuráveis: taxa de resposta esperada, conversões
+
+### Instagram:
+- Defina o CALENDÁRIO EDITORIAL completo: quantos posts, stories, reels por semana
+- Escreva COPIES COMPLETAS para cada peça (legendas, CTAs)
+- Especifique FORMATOS: carrossel, vídeo, foto, before/after, depoimento
+- Defina se haverá investimento em ADS: valor, público, objetivo do anúncio
+- Inclua PARCERIAS com influenciadores: perfil ideal, tipo de conteúdo, entregáveis
+
+### Email:
+- Defina QUANTOS emails serão enviados e com qual FREQUÊNCIA
+- Escreva o ASSUNTO e COPY COMPLETA de cada email
+- Especifique o LAYOUT: hero image, CTA, estrutura visual
+- Defina SEGMENTAÇÃO de lista: quem recebe o quê
+- Inclua AUTOMAÇÕES: welcome series, abandoned cart, post-purchase
+
+### Loja Física:
+- Defina METAS ESPECÍFICAS para as vendedoras (ex: X vendas/dia, Y cadastros)
+- Inclua PREMIAÇÃO/GAMIFICAÇÃO para a equipe (comissão extra, bônus por meta)
+- Especifique AÇÕES PRESENCIAIS: carro de som (roteiro, bairros, horários), panfletos (quantidade, pontos de distribuição)
+- Defina AMBIENTAÇÃO da loja: vitrine, cheiro, música, decoração temática
+- Inclua SCRIPTS de atendimento para as vendedoras (pitch de venda)
+- Defina ações de CAPTAÇÃO na loja: QR code para grupo VIP, cadastro para sorteio
+
+### Site:
+- Especifique BANNERS (copy + posição), POP-UPS de captação, LANDING PAGES
+- Defina OFERTAS EXCLUSIVAS para o canal (cupom, frete grátis)
+
+### Outros:
+- Parcerias locais, ações de guerrilha, carro de som, indicações, sorteios
+
+## FORMATO DE RESPOSTA
+Seja EXTENSO e DETALHADO. Cada content_plan item deve ter uma content_suggestion com o TEXTO REAL da mensagem/copy/roteiro, não apenas uma descrição genérica.
+Cada tarefa deve ser ACIONÁVEL e ESPECÍFICA (não "fazer post", mas "criar carrossel 4 slides sobre benefícios ortopédicos com CTA para WhatsApp").`;
+
+    const userPrompt = `Crie uma estratégia 360° OPERACIONAL E DETALHADA para:
 
 **Objetivo:** ${objective}
-**Público-alvo:** ${audience || "A definir com base na análise"}
+**Público-alvo:** ${audience || "A definir com base na análise dos segmentos RFM"}
 ${instructions ? `**Instruções adicionais:** ${instructions}` : ""}
+
+IMPORTANTE:
+- Gere pelo menos 5-8 itens no cronograma de cada canal principal (WhatsApp, Instagram, Email)
+- Cada item do cronograma DEVE ter content_suggestion com o TEXTO REAL (copy completa)
+- Gere pelo menos 4-6 tarefas específicas por canal
+- Inclua metas numéricas sempre que possível
+- Para WhatsApp: inclua as mensagens completas que serão enviadas
+- Para Email: inclua assunto + corpo resumido de cada email
+- Para Loja Física: inclua metas de vendas e premiação da equipe
+- Para Instagram: inclua legendas completas dos posts
 
 Responda OBRIGATORIAMENTE usando a ferramenta generate_360_strategy.`;
 
@@ -61,7 +109,7 @@ Responda OBRIGATORIAMENTE usando a ferramenta generate_360_strategy.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -71,59 +119,76 @@ Responda OBRIGATORIAMENTE usando a ferramenta generate_360_strategy.`;
             type: "function",
             function: {
               name: "generate_360_strategy",
-              description: "Gera uma estratégia 360° completa de campanha de marketing multicanal",
+              description: "Gera uma estratégia 360° operacional e detalhada de campanha de marketing multicanal",
               parameters: {
                 type: "object",
                 properties: {
                   campaign_name: { type: "string", description: "Nome criativo e impactante para a campanha" },
-                  summary: { type: "string", description: "Resumo executivo da estratégia em 2-3 frases" },
+                  summary: { type: "string", description: "Resumo executivo da estratégia em 3-5 frases, incluindo a big idea" },
                   start_date_suggestion: { type: "string", description: "Data sugerida para início (formato YYYY-MM-DD)" },
                   end_date_suggestion: { type: "string", description: "Data sugerida para término (formato YYYY-MM-DD)" },
-                  estimated_budget: { type: "number", description: "Estimativa de orçamento em R$" },
-                  target_analysis: { type: "string", description: "Análise do público-alvo ideal, quais segmentos RFM priorizar e por quê" },
+                  estimated_budget: { type: "number", description: "Estimativa de orçamento total em R$" },
+                  target_analysis: { type: "string", description: "Análise profunda do público-alvo: segmentos RFM prioritários, comportamento de compra, objeções comuns e como quebrá-las" },
                   lead_capture: {
                     type: "object",
                     properties: {
-                      strategy: { type: "string" },
+                      strategy: { type: "string", description: "Estratégia completa de captação de leads com metas numéricas" },
                       channels: { type: "array", items: { type: "string" } },
                       tips: { type: "array", items: { type: "string" } },
-                      landing_page_suggestion: { type: "string", description: "Sugestão de título e campos para landing page de captação" }
+                      landing_page_suggestion: { type: "string", description: "Descrição detalhada da landing page: título, campos, oferta, copy do CTA" }
                     },
                     required: ["strategy", "channels", "tips"]
                   },
                   channel_strategies: {
                     type: "array",
-                    description: "Estratégia detalhada para cada canal de comunicação",
+                    description: "Estratégia OPERACIONAL detalhada para cada canal",
                     items: {
                       type: "object",
                       properties: {
                         channel_type: { type: "string", description: "whatsapp, instagram, email, loja_fisica, site, outros" },
-                        strategy: { type: "string", description: "Estratégia geral para esse canal" },
-                        tone_of_voice: { type: "string", description: "Tom de voz específico para esse canal" },
+                        strategy: { type: "string", description: "Estratégia completa para o canal, incluindo objetivos, metas numéricas e KPIs" },
+                        tone_of_voice: { type: "string", description: "Tom de voz com exemplos concretos de como falar" },
+                        key_messages: {
+                          type: "array",
+                          description: "Mensagens-chave / copies completas que serão usadas nesse canal",
+                          items: { type: "string" }
+                        },
+                        goals: {
+                          type: "array",
+                          description: "Metas numéricas e KPIs específicos do canal",
+                          items: { type: "string" }
+                        },
+                        team_instructions: {
+                          type: "string",
+                          description: "Instruções para a equipe responsável (vendedoras, social media, etc). Inclua scripts, premiações, gamificação se aplicável."
+                        },
                         content_plan: {
                           type: "array",
-                          description: "Plano de conteúdo detalhado (posts, mensagens, ações)",
+                          description: "Cronograma DETALHADO com cada ação/peça/disparo. Mínimo 5 itens para canais principais.",
                           items: {
                             type: "object",
                             properties: {
-                              day_offset: { type: "number", description: "Dia relativo ao início da campanha (0 = primeiro dia)" },
-                              title: { type: "string" },
-                              description: { type: "string" },
-                              content_type: { type: "string", description: "Ex: post, story, reels, email, template_whatsapp, banner, acao_presencial" },
-                              content_suggestion: { type: "string", description: "Sugestão detalhada do conteúdo" }
+                              day_offset: { type: "number", description: "Dia relativo ao início (0 = primeiro dia)" },
+                              title: { type: "string", description: "Título da ação" },
+                              description: { type: "string", description: "O que fazer nesse dia" },
+                              content_type: { type: "string", description: "Ex: disparo_whatsapp, post_feed, story, reels, email, banner, acao_presencial, carro_de_som, grupo_vip" },
+                              content_suggestion: { type: "string", description: "COPY COMPLETA / TEXTO REAL da mensagem, legenda, email ou roteiro. Não escreva 'sugestão de texto', escreva o TEXTO PRONTO." },
+                              target_segment: { type: "string", description: "Segmento alvo desta ação específica (ex: Campeões, Em Risco, Todos)" },
+                              expected_result: { type: "string", description: "Resultado esperado (ex: 30% taxa de abertura, 50 cadastros)" }
                             },
-                            required: ["day_offset", "title", "description", "content_type"]
+                            required: ["day_offset", "title", "description", "content_type", "content_suggestion"]
                           }
                         },
                         tasks: {
                           type: "array",
-                          description: "Checklist de tarefas de execução para esse canal",
+                          description: "Checklist ACIONÁVEL com tarefas específicas. Mínimo 4 tarefas por canal principal.",
                           items: {
                             type: "object",
                             properties: {
-                              title: { type: "string" },
-                              description: { type: "string" },
-                              due_day_offset: { type: "number", description: "Dia relativo ao início da campanha para conclusão" }
+                              title: { type: "string", description: "Tarefa específica e acionável (não genérica)" },
+                              description: { type: "string", description: "Detalhes de como executar" },
+                              due_day_offset: { type: "number" },
+                              responsible: { type: "string", description: "Quem deve executar (ex: Social Media, Vendedora, Gerente)" }
                             },
                             required: ["title"]
                           }
@@ -132,8 +197,9 @@ Responda OBRIGATORIAMENTE usando a ferramenta generate_360_strategy.`;
                       required: ["channel_type", "strategy", "tone_of_voice", "content_plan", "tasks"]
                     }
                   },
-                  success_metrics: { type: "array", items: { type: "string" } },
-                  additional_tips: { type: "array", items: { type: "string" } }
+                  success_metrics: { type: "array", items: { type: "string" }, description: "KPIs mensuráveis com valores-alvo" },
+                  additional_tips: { type: "array", items: { type: "string" } },
+                  risk_mitigation: { type: "array", items: { type: "string" }, description: "Riscos potenciais e planos B" }
                 },
                 required: ["campaign_name", "summary", "target_analysis", "lead_capture", "channel_strategies", "success_metrics", "additional_tips"],
                 additionalProperties: false

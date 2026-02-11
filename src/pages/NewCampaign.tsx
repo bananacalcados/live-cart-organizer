@@ -351,6 +351,7 @@ export default function NewCampaign() {
 
                   {strategy.channel_strategies.map(ch => (
                     <TabsContent key={ch.channel_type} value={ch.channel_type} className="space-y-4 mt-4">
+                      {/* Strategy & Goals */}
                       <Card>
                         <CardContent className="pt-4 pb-4 px-5 space-y-3">
                           <p className="text-sm leading-relaxed">{ch.strategy}</p>
@@ -358,19 +359,72 @@ export default function NewCampaign() {
                         </CardContent>
                       </Card>
 
+                      {/* Goals / KPIs */}
+                      {(ch as any).goals?.length > 0 && (
+                        <Card className="border-emerald-500/20 bg-emerald-500/5">
+                          <CardContent className="pt-4 pb-4 px-5 space-y-2">
+                            <h5 className="text-sm font-semibold flex items-center gap-1.5">🎯 Metas do Canal</h5>
+                            <ul className="space-y-1">
+                              {(ch as any).goals.map((g: string, i: number) => (
+                                <li key={i} className="text-sm flex gap-2"><span className="text-emerald-600 shrink-0">✓</span>{g}</li>
+                              ))}
+                            </ul>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Team Instructions */}
+                      {(ch as any).team_instructions && (
+                        <Card className="border-amber-500/20 bg-amber-500/5">
+                          <CardContent className="pt-4 pb-4 px-5 space-y-2">
+                            <h5 className="text-sm font-semibold flex items-center gap-1.5">👥 Instruções para a Equipe</h5>
+                            <p className="text-sm leading-relaxed whitespace-pre-line">{(ch as any).team_instructions}</p>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Key Messages */}
+                      {(ch as any).key_messages?.length > 0 && (
+                        <div className="space-y-2">
+                          <h5 className="text-sm font-semibold flex items-center gap-1.5">💬 Mensagens-Chave / Copies</h5>
+                          {(ch as any).key_messages.map((msg: string, i: number) => (
+                            <Card key={i}>
+                              <CardContent className="pt-3 pb-3 px-4">
+                                <p className="text-sm italic leading-relaxed">"{msg}"</p>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+
                       {/* Content Plan */}
                       <div className="space-y-2">
-                        <h5 className="text-sm font-semibold flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />Cronograma</h5>
+                        <h5 className="text-sm font-semibold flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />Cronograma ({ch.content_plan.length} ações)</h5>
                         {ch.content_plan.map((cp, i) => (
-                          <div key={i} className="flex gap-3 text-sm items-start border rounded-lg p-3">
-                            <Badge variant="outline" className="shrink-0 mt-0.5">Dia {cp.day_offset}</Badge>
-                            <div className="min-w-0">
-                              <p className="font-medium">{cp.title}</p>
-                              <p className="text-muted-foreground">{cp.description}</p>
-                              {cp.content_suggestion && <p className="italic text-muted-foreground mt-1">💬 {cp.content_suggestion}</p>}
-                              <Badge variant="secondary" className="text-xs mt-1.5">{cp.content_type}</Badge>
-                            </div>
-                          </div>
+                          <Card key={i}>
+                            <CardContent className="pt-3 pb-3 px-4">
+                              <div className="flex items-start gap-3">
+                                <Badge variant="outline" className="shrink-0 mt-0.5">Dia {cp.day_offset}</Badge>
+                                <div className="min-w-0 flex-1 space-y-1.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-medium text-sm">{cp.title}</p>
+                                    <Badge variant="secondary" className="text-xs">{cp.content_type}</Badge>
+                                    {(cp as any).target_segment && <Badge variant="outline" className="text-xs">🎯 {(cp as any).target_segment}</Badge>}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">{cp.description}</p>
+                                  {cp.content_suggestion && (
+                                    <div className="bg-muted/50 rounded-md p-3 mt-1">
+                                      <p className="text-xs font-semibold text-muted-foreground mb-1">📝 Copy / Texto:</p>
+                                      <p className="text-sm whitespace-pre-line">{cp.content_suggestion}</p>
+                                    </div>
+                                  )}
+                                  {(cp as any).expected_result && (
+                                    <p className="text-xs text-muted-foreground">📊 Resultado esperado: {(cp as any).expected_result}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
                         ))}
                       </div>
 
@@ -380,9 +434,12 @@ export default function NewCampaign() {
                         {ch.tasks.map((t, i) => (
                           <div key={i} className="flex items-start gap-2 text-sm border rounded-lg p-3">
                             <CheckCircle2 className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                            <div>
-                              <p className="font-medium">{t.title}</p>
-                              {t.description && <p className="text-muted-foreground">{t.description}</p>}
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-medium">{t.title}</p>
+                                {(t as any).responsible && <Badge variant="outline" className="text-xs">👤 {(t as any).responsible}</Badge>}
+                              </div>
+                              {t.description && <p className="text-muted-foreground mt-0.5">{t.description}</p>}
                               {t.due_day_offset != null && <Badge variant="outline" className="text-xs mt-1">Dia {t.due_day_offset}</Badge>}
                             </div>
                           </div>
@@ -416,6 +473,20 @@ export default function NewCampaign() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Risk Mitigation */}
+              {(strategy as any).risk_mitigation?.length > 0 && (
+                <Card className="border-red-500/20 bg-red-500/5">
+                  <CardContent className="pt-4 pb-4 px-5">
+                    <h4 className="text-sm font-semibold text-red-700 dark:text-red-400 mb-2">⚠️ Riscos e Planos B</h4>
+                    <ul className="space-y-1.5">
+                      {(strategy as any).risk_mitigation.map((r: string, i: number) => (
+                        <li key={i} className="text-sm text-muted-foreground">• {r}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 
