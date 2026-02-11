@@ -15,7 +15,6 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -32,21 +31,6 @@ export default function Login() {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin },
-      });
-      setLoading(false);
-      if (error) {
-        toast({ title: "Erro ao cadastrar", description: error.message, variant: "destructive" });
-      } else {
-        toast({ title: "Conta criada!", description: "Você já pode acessar o sistema." });
-        setIsSignUp(false);
-      }
-      return;
-    }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
@@ -122,17 +106,9 @@ export default function Login() {
               </div>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Aguarde..." : isSignUp ? "Criar Conta" : "Entrar"}
+              {loading ? "Aguarde..." : "Entrar"}
             </Button>
           </form>
-
-          <button
-            type="button"
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {isSignUp ? "Já tem conta? Entrar" : "Criar primeira conta de admin"}
-          </button>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
