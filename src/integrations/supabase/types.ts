@@ -1999,6 +1999,7 @@ export type Database = {
           started_at: string
           status: string
           store_id: string
+          total_products: number | null
         }
         Insert: {
           completed_at?: string | null
@@ -2008,6 +2009,7 @@ export type Database = {
           started_at?: string
           status?: string
           store_id: string
+          total_products?: number | null
         }
         Update: {
           completed_at?: string | null
@@ -2017,6 +2019,7 @@ export type Database = {
           started_at?: string
           status?: string
           store_id?: string
+          total_products?: number | null
         }
         Relationships: [
           {
