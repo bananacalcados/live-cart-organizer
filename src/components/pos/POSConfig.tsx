@@ -178,7 +178,7 @@ export function POSConfig({ storeId }: Props) {
     pollRef.current = setInterval(async () => {
       const { data: log } = await supabase
         .from('pos_product_sync_log')
-        .select('status, products_synced, total_products, completed_at')
+        .select('status, products_synced, total_products, completed_at, error_message')
         .eq('store_id', storeId)
         .order('started_at', { ascending: false })
         .limit(1)
@@ -189,18 +189,41 @@ export function POSConfig({ storeId }: Props) {
         const total = log.total_products || 0;
         setSyncProgress({ synced, total });
 
-        if (log.status === 'completed' || log.status === 'error') {
+        if (log.status === 'completed') {
           if (pollRef.current) clearInterval(pollRef.current);
           pollRef.current = null;
           setSyncing(false);
           setSyncProgress(null);
           setLastSync(log);
           loadSyncInfo();
-          if (log.status === 'completed') {
-            toast.success(`Sync concluído! ${synced} produtos sincronizados.`);
-          } else {
-            toast.error("Erro durante a sincronização");
+          toast.success(`Sync concluído! ${synced} produtos sincronizados.`);
+        } else if (log.status === 'partial') {
+          // Auto-resume: the edge function timed out, call it again to continue
+          try {
+            const resumeInfo = JSON.parse(log.error_message || '{}');
+            console.log('Auto-resuming sync from page', resumeInfo.resume_page);
+            toast.info(`Continuando sincronização da página ${resumeInfo.resume_page}...`);
+            fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sync-products`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+              body: JSON.stringify({
+                store_id: storeId,
+                resume_page: resumeInfo.resume_page,
+                resume_log_id: resumeInfo.resume_log_id,
+              }),
+            });
+            // Update log back to running
+            await supabase.from('pos_product_sync_log').update({ status: 'running' }).eq('store_id', storeId).eq('status', 'partial');
+          } catch (e) {
+            console.error('Resume error:', e);
           }
+        } else if (log.status === 'error') {
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          setSyncing(false);
+          setSyncProgress(null);
+          setLastSync(log);
+          toast.error("Erro durante a sincronização");
         }
       }
     }, 3000);
@@ -211,14 +234,11 @@ export function POSConfig({ storeId }: Props) {
     setSyncProgress({ synced: 0, total: 0 });
     toast.info("Sincronizando produtos do Tiny ERP...");
     try {
-      // Fire and forget - we'll poll for progress
       fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sync-products`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
         body: JSON.stringify({ store_id: storeId }),
       });
-
-      // Start polling for progress
       pollSyncProgress();
     } catch (e) {
       toast.error("Erro ao sincronizar");
