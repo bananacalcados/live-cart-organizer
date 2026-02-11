@@ -58,13 +58,17 @@ export function ProductSelector({
     const variant = product.node.variants.edges[variantIndex]?.node;
     if (!variant) return;
 
+    const compareAt = variant.compareAtPrice ? parseFloat(variant.compareAtPrice.amount) : undefined;
+    const price = parseFloat(variant.price.amount);
+
     const orderProduct: DbOrderProduct = {
       id: `${product.node.id}-${variant.id}`,
-      shopifyId: variant.id, // Use variant ID for cart API, not product ID
+      shopifyId: variant.id,
       sku: variant.sku || undefined,
       title: product.node.title,
       variant: variant.title !== "Default Title" ? variant.title : "",
-      price: parseFloat(variant.price.amount),
+      price,
+      compareAtPrice: compareAt && compareAt > price ? compareAt : undefined,
       quantity: 1,
       image: product.node.images.edges[0]?.node.url,
     };
@@ -154,9 +158,20 @@ export function ProductSelector({
                             {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                           </button>
                         )}
-                        <p className="text-sm text-accent font-semibold">
-                          R$ {parseFloat(currentVariant.price.amount).toFixed(2)}
-                        </p>
+                        {currentVariant.compareAtPrice && parseFloat(currentVariant.compareAtPrice.amount) > parseFloat(currentVariant.price.amount) ? (
+                          <p className="text-sm">
+                            <span className="text-muted-foreground line-through mr-1">
+                              R$ {parseFloat(currentVariant.compareAtPrice.amount).toFixed(2)}
+                            </span>
+                            <span className="text-accent font-semibold">
+                              R$ {parseFloat(currentVariant.price.amount).toFixed(2)}
+                            </span>
+                          </p>
+                        ) : (
+                          <p className="text-sm text-accent font-semibold">
+                            R$ {parseFloat(currentVariant.price.amount).toFixed(2)}
+                          </p>
+                        )}
                       </div>
 
                       {isSelected ? (
