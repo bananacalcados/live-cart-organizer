@@ -103,9 +103,30 @@ serve(async (req) => {
           expedition_status: expeditionStatus,
         };
 
+        // Try to match with CRM order to get live/event/gift info
+        const checkoutToken = order.token || order.checkout_token;
+        let liveData: any = {};
+        if (checkoutToken) {
+          const { data: crmOrder } = await supabase
+            .from('orders')
+            .select('event_id, has_gift, events(name, created_at)')
+            .eq('checkout_token', checkoutToken)
+            .maybeSingle();
+
+          if (crmOrder) {
+            const evt = (crmOrder as any).events;
+            liveData = {
+              is_from_live: true,
+              source_event_name: evt?.name || null,
+              source_event_date: evt?.created_at || null,
+              has_gift: crmOrder.has_gift || false,
+            };
+          }
+        }
+
         if (existing) {
           // Update existing - don't overwrite expedition_status if already progressed
-          const updateData = { ...orderData };
+          const updateData = { ...orderData, ...liveData };
           if (existing.expedition_status !== 'pending_sync') {
             delete (updateData as any).expedition_status;
           }
@@ -117,7 +138,7 @@ serve(async (req) => {
           // Insert new order
           const { data: newOrder } = await supabase
             .from('expedition_orders')
-            .insert(orderData)
+            .insert({ ...orderData, ...liveData })
             .select('id')
             .single();
 
@@ -129,7 +150,7 @@ serve(async (req) => {
               product_name: item.title || item.name || 'Unknown',
               variant_name: item.variant_title || null,
               sku: item.sku || null,
-              barcode: null, // Will be fetched separately if needed
+              barcode: null,
               quantity: item.quantity || 1,
               unit_price: parseFloat(item.price || '0'),
               weight_grams: (item.grams || 0) * (item.quantity || 1),
