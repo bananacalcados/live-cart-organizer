@@ -62,6 +62,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [isGeneratingYampiLink, setIsGeneratingYampiLink] = useState(false);
   const [isGeneratingPayPalLink, setIsGeneratingPayPalLink] = useState(false);
   const [isGeneratingPixLink, setIsGeneratingPixLink] = useState(false);
+  const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
   const [banReason, setBanReason] = useState("");
   
   // Discount and extras
@@ -305,6 +306,28 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       onOpenChange(false);
     }
   };
+
+  const handleCreateShopifyOrder = useCallback(async () => {
+    if (!editingOrder) {
+      toast.error("Salve o pedido primeiro");
+      return;
+    }
+    setIsCreatingShopifyOrder(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-create-order", {
+        body: { orderId: editingOrder.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Pedido criado na Shopify! ${data?.shopifyOrderName || ""}`, { duration: 6000 });
+    } catch (error) {
+      console.error("Error creating Shopify order:", error);
+      const msg = error instanceof Error ? error.message : "Erro ao criar pedido na Shopify";
+      toast.error(msg, { duration: 8000 });
+    } finally {
+      setIsCreatingShopifyOrder(false);
+    }
+  }, [editingOrder]);
 
   const handleSubmit = async () => {
     if (!instagramHandle.trim()) {
@@ -577,6 +600,22 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 onCheckedChange={setPaidExternally}
               />
             </div>
+            {editingOrder && editingOrder.is_paid && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full mt-2 text-primary hover:bg-primary/10"
+                onClick={handleCreateShopifyOrder}
+                disabled={isCreatingShopifyOrder || localProducts.length === 0}
+              >
+                {isCreatingShopifyOrder ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <ShoppingBag className="h-4 w-4 mr-2" />
+                )}
+                Criar Pedido na Shopify
+              </Button>
+            )}
           </div>
 
           {editingOrder && (

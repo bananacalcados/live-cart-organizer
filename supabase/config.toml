@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.inventory-fetch-all-stock]
 verify_jwt = false
+
+[functions.shopify-create-order]
+verify_jwt = false
