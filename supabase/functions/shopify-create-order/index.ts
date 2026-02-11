@@ -16,7 +16,7 @@ serve(async (req) => {
     const shopifyToken = Deno.env.get("SHOPIFY_ACCESS_TOKEN");
 
     if (!shopifyDomain || !shopifyToken) {
-      throw new Error("Shopify credentials not configured (SHOPIFY_STORE_DOMAIN / SHOPIFY_ACCESS_TOKEN)");
+      throw new Error("Shopify credentials not configured");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -34,6 +34,15 @@ serve(async (req) => {
       .single();
 
     if (orderError || !order) throw new Error("Order not found");
+
+    // Try to find customer registration for richer data (address, CPF, email, full name)
+    const { data: registration } = await supabase
+      .from("customer_registrations")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     const products = order.products as Array<{
       shopifyId: string;
@@ -62,34 +71,65 @@ serve(async (req) => {
         : order.discount_value;
     }
 
-    // Build customer info
+    // Format phone to +55...
+    function formatPhone(raw: string | null | undefined): string | null {
+      if (!raw) return null;
+      const digits = raw.replace(/\D/g, "");
+      if (digits.length < 10) return null;
+      return digits.startsWith("55") ? `+${digits}` : `+55${digits}`;
+    }
+
+    // Build customer & address from registration or CRM customer
     const customer = order.customer;
-    const customerObj: Record<string, unknown> = {};
-    if (customer) {
-      customerObj.customer = { first_name: customer.instagram_handle || "Cliente" };
-      const rawPhone = customer.whatsapp || "";
-      if (rawPhone) {
-        const digits = rawPhone.replace(/\D/g, "");
-        if (digits.length >= 10) {
-          customerObj.phone = digits.startsWith("55") ? `+${digits}` : `+55${digits}`;
-        }
-      }
+    const phone = formatPhone(registration?.whatsapp || customer?.whatsapp);
+
+    // Determine name
+    const fullName = registration?.full_name || customer?.instagram_handle || "Cliente";
+    const nameParts = fullName.split(" ");
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(" ") || "-";
+
+    // Build Shopify customer object
+    const shopifyCustomer: Record<string, unknown> = {
+      first_name: firstName,
+      last_name: lastName,
+    };
+    if (registration?.email) shopifyCustomer.email = registration.email;
+    if (phone) shopifyCustomer.phone = phone;
+
+    // Build shipping/billing address if registration exists
+    let shippingAddress: Record<string, unknown> | null = null;
+    if (registration) {
+      shippingAddress = {
+        first_name: firstName,
+        last_name: lastName,
+        address1: registration.address ? `${registration.address}, ${registration.address_number}` : undefined,
+        address2: registration.complement || undefined,
+        city: registration.city || undefined,
+        province: registration.state || undefined,
+        zip: registration.cep || undefined,
+        country: "BR",
+        phone: phone || undefined,
+      };
     }
 
     const shopifyOrder: Record<string, unknown> = {
       order: {
         line_items: lineItems,
         financial_status: "paid",
-        note: `Pedido criado manualmente via CRM - Order #${orderId.substring(0, 8)}`,
+        note: `Pedido criado manualmente via CRM - Order #${orderId.substring(0, 8)}${registration?.cpf ? ` | CPF: ${registration.cpf}` : ""}`,
         tags: "crm,manual-sync",
-        ...customerObj,
+        customer: shopifyCustomer,
+        ...(registration?.email ? { email: registration.email } : {}),
+        ...(phone ? { phone } : {}),
+        ...(shippingAddress ? { shipping_address: shippingAddress, billing_address: shippingAddress } : {}),
         ...(discountAmount > 0
           ? { discount_codes: [{ code: "CRM-DISCOUNT", amount: discountAmount.toFixed(2), type: "fixed_amount" }] }
           : {}),
       },
     };
 
-    console.log("Creating Shopify order for:", orderId);
+    console.log("Creating Shopify order for:", orderId, "with customer:", JSON.stringify(shopifyCustomer));
 
     const response = await fetch(`https://${shopifyDomain}/admin/api/2025-01/orders.json`, {
       method: "POST",
