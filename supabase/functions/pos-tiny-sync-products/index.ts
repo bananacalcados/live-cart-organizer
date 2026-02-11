@@ -19,7 +19,6 @@ serve(async (req) => {
   try {
     const { store_id } = await req.json();
 
-    // If store_id provided, sync just that store; otherwise sync all stores
     let stores: { id: string; tiny_token: string }[] = [];
     if (store_id) {
       const { data, error } = await supabase
@@ -40,25 +39,51 @@ serve(async (req) => {
       // Create sync log
       const { data: logEntry } = await supabase
         .from('pos_product_sync_log')
-        .insert({ store_id: store.id, status: 'running' })
+        .insert({ store_id: store.id, status: 'running', products_synced: 0 })
         .select('id')
         .single();
       const logId = logEntry?.id;
 
       try {
         const token = store.tiny_token;
+
+        // First, count total products to calculate progress
+        const countResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${token}&formato=json&pagina=1`,
+        });
+        const countData = await countResp.json();
+        const totalRecords = countData.retorno?.numero_paginas
+          ? parseInt(countData.retorno.numero_paginas) * 100
+          : (countData.retorno?.produtos?.length || 0);
+
+        // Update log with estimated total
+        if (logId && totalRecords > 0) {
+          await supabase.from('pos_product_sync_log').update({
+            total_products: totalRecords,
+          }).eq('id', logId);
+        }
+
         let page = 1;
         let totalSynced = 0;
         let hasMore = true;
 
+        // We already have page 1 data
+        let currentPageData = countData;
+
         while (hasMore) {
-          // Search all products page by page
-          const searchResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `token=${token}&formato=json&pagina=${page}`,
-          });
-          const searchData = await searchResp.json();
+          let searchData;
+          if (page === 1) {
+            searchData = currentPageData;
+          } else {
+            const searchResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: `token=${token}&formato=json&pagina=${page}`,
+            });
+            searchData = await searchResp.json();
+          }
 
           if (searchData.retorno?.status === 'Erro') {
             hasMore = false;
@@ -71,7 +96,6 @@ serve(async (req) => {
             break;
           }
 
-          // Get details for each product (includes variations)
           for (const item of rawProducts) {
             const p = item.produto;
             try {
@@ -129,27 +153,31 @@ serve(async (req) => {
                 });
               }
 
-              // Upsert each row
               for (const row of rows) {
                 await supabase
                   .from('pos_products')
                   .upsert(row, { onConflict: 'store_id,tiny_id,sku,variant' });
                 totalSynced++;
               }
+
+              // Update progress in sync log every 5 products
+              if (logId && totalSynced % 5 === 0) {
+                await supabase.from('pos_product_sync_log').update({
+                  products_synced: totalSynced,
+                }).eq('id', logId);
+              }
             } catch (e) {
               console.error('Error syncing product:', p.id, e);
             }
 
-            // Tiny API rate limit: ~30 req/min, add small delay
             await new Promise(r => setTimeout(r, 350));
           }
 
           page++;
-          // Tiny returns max 100 per page
           if (rawProducts.length < 100) hasMore = false;
         }
 
-        // Update sync log
+        // Final update
         if (logId) {
           await supabase.from('pos_product_sync_log').update({
             status: 'completed',
