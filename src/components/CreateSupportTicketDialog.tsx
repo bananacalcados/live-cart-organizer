@@ -43,7 +43,7 @@ export function CreateSupportTicketDialog({
 
     setIsCreating(true);
     const deadline = new Date();
-    deadline.setHours(deadline.getHours() + (priority === 'high' ? 1 : priority === 'medium' ? 4 : 24));
+    deadline.setMinutes(deadline.getMinutes() + (priority === 'high' ? 10 : priority === 'medium' ? 60 : 120));
 
     const { error } = await supabase.from('support_tickets').insert({
       subject: subject.trim(),
@@ -122,9 +122,9 @@ export function CreateSupportTicketDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="low">🟢 Baixa (24h)</SelectItem>
-                <SelectItem value="medium">🟡 Média (4h)</SelectItem>
-                <SelectItem value="high">🔴 Alta (1h)</SelectItem>
+                <SelectItem value="low">🟢 Baixa (2h)</SelectItem>
+                <SelectItem value="medium">🟡 Média (1h)</SelectItem>
+                <SelectItem value="high">🔴 Urgente (10min)</SelectItem>
               </SelectContent>
             </Select>
           </div>
