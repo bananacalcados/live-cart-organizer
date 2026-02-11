@@ -6,6 +6,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Parse DD/MM/YYYY to Date
+function parseBRDate(str: string): Date {
+  const [d, m, y] = str.split('/').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Format Date to DD/MM/YYYY
+function formatBRDate(date: Date): string {
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const y = date.getFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+// Format Date to YYYY-MM-DD
+function formatISO(date: Date): string {
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${date.getFullYear()}-${m}-${d}`;
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -37,168 +64,176 @@ serve(async (req) => {
 
     const results: any[] = [];
 
+    // Calculate total days for progress
+    const startDate = parseBRDate(date_from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'));
+    const endDate = parseBRDate(date_to || new Date().toLocaleDateString('pt-BR'));
+    const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
     for (const store of stores) {
       // Create sync log
       const { data: logEntry } = await supabase
         .from('tiny_management_sync_log')
-        .insert({ store_id: store.id, sync_type: 'orders', status: 'running' })
+        .insert({
+          store_id: store.id,
+          sync_type: 'orders',
+          status: 'running',
+          date_from: date_from,
+          date_to: date_to,
+          phase: 'orders',
+          current_date_syncing: formatBRDate(startDate),
+        })
         .select('id')
         .single();
 
       try {
         const token = store.tiny_token;
         let totalSynced = 0;
+        let daysProcessed = 0;
 
-        // Build date filter for Tiny API
-        const fromDate = date_from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR');
-        const toDate = date_to || new Date().toLocaleDateString('pt-BR');
-
-        let page = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-          const params = new URLSearchParams({
-            token,
-            formato: 'json',
-            pagina: String(page),
-            dataInicial: fromDate,
-            dataFinal: toDate,
-            situacao: 'aprovado',
-          });
-
-          const resp = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params.toString(),
-          });
-
-          const data = await resp.json();
-
-          if (data.retorno?.status === 'Erro') {
-            const errMsg = data.retorno?.erros?.[0]?.erro || 'Unknown error';
-            console.log(`Store ${store.name} page ${page}: ${errMsg}`);
-            hasMore = false;
-            break;
-          }
-
-          const totalPages = parseInt(data.retorno?.numero_paginas || '1');
-          const orders = data.retorno?.pedidos || [];
-
-          if (orders.length === 0) {
-            hasMore = false;
-            break;
-          }
-
-          // Get details for each order (max 10 per batch to respect rate limits)
-          const batch = orders.slice(0, 20);
-          const rows: any[] = [];
-
-          for (const item of batch) {
-            const o = item.pedido;
-            
-            // Get full order details
-            try {
-              await new Promise(r => setTimeout(r, 600)); // Rate limit
-              const detailResp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `token=${token}&formato=json&id=${o.id}`,
-              });
-              const detailData = await detailResp.json();
-              const full = detailData.retorno?.pedido;
-
-              if (full) {
-                // Parse date from DD/MM/YYYY
-                const dateParts = (full.data_pedido || o.data_pedido || '').split('/');
-                const orderDate = dateParts.length === 3
-                  ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`
-                  : new Date().toISOString().split('T')[0];
-
-                // Extract items
-                const items = (full.itens || []).map((i: any) => ({
-                  name: i.item?.descricao || '',
-                  sku: i.item?.codigo || '',
-                  quantity: parseFloat(i.item?.quantidade || '1'),
-                  unit_price: parseFloat(i.item?.valor_unitario || '0'),
-                  total: parseFloat(i.item?.valor_unitario || '0') * parseFloat(i.item?.quantidade || '1'),
-                }));
-
-                rows.push({
-                  store_id: store.id,
-                  tiny_order_id: String(full.id || o.id),
-                  tiny_order_number: String(full.numero || o.numero || ''),
-                  order_date: orderDate,
-                  customer_name: full.cliente?.nome || o.nome_comprador || null,
-                  status: full.situacao || o.situacao || 'aprovado',
-                  payment_method: full.forma_pagamento || null,
-                  subtotal: parseFloat(full.totalProdutos || full.total_pedido || '0'),
-                  discount: parseFloat(full.desconto || '0'),
-                  shipping: parseFloat(full.total_frete || '0'),
-                  total: parseFloat(full.total_pedido || o.valor || '0'),
-                  items: JSON.stringify(items),
-                  raw_data: full,
-                  synced_at: new Date().toISOString(),
-                });
-              }
-            } catch (e) {
-              console.error(`Error fetching order ${o.id}:`, e);
-              // Fallback to search data
-              const dateParts = (o.data_pedido || '').split('/');
-              const orderDate = dateParts.length === 3
-                ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`
-                : new Date().toISOString().split('T')[0];
-
-              rows.push({
-                store_id: store.id,
-                tiny_order_id: String(o.id),
-                tiny_order_number: String(o.numero || ''),
-                order_date: orderDate,
-                customer_name: o.nome_comprador || null,
-                status: o.situacao || 'aprovado',
-                payment_method: null,
-                subtotal: parseFloat(o.valor || '0'),
-                discount: 0,
-                shipping: 0,
-                total: parseFloat(o.valor || '0'),
-                items: '[]',
-                synced_at: new Date().toISOString(),
-              });
-            }
-          }
-
-          // Upsert orders
-          if (rows.length > 0) {
-            const { error: upsertErr } = await supabase
-              .from('tiny_synced_orders')
-              .upsert(rows, { onConflict: 'store_id,tiny_order_id' });
-            if (upsertErr) console.error('Upsert error:', upsertErr);
-          }
-
-          totalSynced += rows.length;
-
-          // Update log
+        // Sync day by day
+        let currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate) {
+          const dayStr = formatBRDate(currentDate);
+          
+          // Update log with current date
           if (logEntry?.id) {
             await supabase.from('tiny_management_sync_log').update({
+              current_date_syncing: dayStr,
               orders_synced: totalSynced,
             }).eq('id', logEntry.id);
           }
 
-          page++;
-          if (page > totalPages) hasMore = false;
+          // Fetch orders for this specific day
+          let page = 1;
+          let hasMore = true;
 
-          // Safety: don't run for too long (25s limit)
-          if (totalSynced > 200) {
-            hasMore = false;
+          while (hasMore) {
+            const params = new URLSearchParams({
+              token,
+              formato: 'json',
+              pagina: String(page),
+              dataInicial: dayStr,
+              dataFinal: dayStr,
+              situacao: 'aprovado',
+            });
+
+            const resp = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: params.toString(),
+            });
+
+            const data = await resp.json();
+
+            if (data.retorno?.status === 'Erro') {
+              hasMore = false;
+              break;
+            }
+
+            const totalPages = parseInt(data.retorno?.numero_paginas || '1');
+            const orders = data.retorno?.pedidos || [];
+
+            if (orders.length === 0) {
+              hasMore = false;
+              break;
+            }
+
+            const rows: any[] = [];
+
+            for (const item of orders) {
+              const o = item.pedido;
+              
+              try {
+                await new Promise(r => setTimeout(r, 600));
+                const detailResp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: `token=${token}&formato=json&id=${o.id}`,
+                });
+                const detailData = await detailResp.json();
+                const full = detailData.retorno?.pedido;
+
+                if (full) {
+                  const orderDate = formatISO(currentDate);
+                  const items = (full.itens || []).map((i: any) => ({
+                    name: i.item?.descricao || '',
+                    sku: i.item?.codigo || '',
+                    quantity: parseFloat(i.item?.quantidade || '1'),
+                    unit_price: parseFloat(i.item?.valor_unitario || '0'),
+                    total: parseFloat(i.item?.valor_unitario || '0') * parseFloat(i.item?.quantidade || '1'),
+                  }));
+
+                  rows.push({
+                    store_id: store.id,
+                    tiny_order_id: String(full.id || o.id),
+                    tiny_order_number: String(full.numero || o.numero || ''),
+                    order_date: orderDate,
+                    customer_name: full.cliente?.nome || o.nome_comprador || null,
+                    status: full.situacao || o.situacao || 'aprovado',
+                    payment_method: full.forma_pagamento || null,
+                    subtotal: parseFloat(full.totalProdutos || full.total_pedido || '0'),
+                    discount: parseFloat(full.desconto || '0'),
+                    shipping: parseFloat(full.total_frete || '0'),
+                    total: parseFloat(full.total_pedido || o.valor || '0'),
+                    items: JSON.stringify(items),
+                    raw_data: full,
+                    synced_at: new Date().toISOString(),
+                  });
+                }
+              } catch (e) {
+                console.error(`Error fetching order ${o.id}:`, e);
+                rows.push({
+                  store_id: store.id,
+                  tiny_order_id: String(o.id),
+                  tiny_order_number: String(o.numero || ''),
+                  order_date: formatISO(currentDate),
+                  customer_name: o.nome_comprador || null,
+                  status: o.situacao || 'aprovado',
+                  payment_method: null,
+                  subtotal: parseFloat(o.valor || '0'),
+                  discount: 0,
+                  shipping: 0,
+                  total: parseFloat(o.valor || '0'),
+                  items: '[]',
+                  synced_at: new Date().toISOString(),
+                });
+              }
+            }
+
+            if (rows.length > 0) {
+              const { error: upsertErr } = await supabase
+                .from('tiny_synced_orders')
+                .upsert(rows, { onConflict: 'store_id,tiny_order_id' });
+              if (upsertErr) console.error('Upsert error:', upsertErr);
+            }
+
+            totalSynced += rows.length;
+            page++;
+            if (page > totalPages) hasMore = false;
           }
+
+          daysProcessed++;
+          currentDate = addDays(currentDate, 1);
+
+          // Rate limit between days
+          await new Promise(r => setTimeout(r, 400));
         }
 
         // Sync stock/cost if requested
         if (sync_stock) {
+          if (logEntry?.id) {
+            await supabase.from('tiny_management_sync_log').update({
+              phase: 'stock',
+              current_date_syncing: 'Atualizando estoque...',
+            }).eq('id', logEntry.id);
+          }
+
           let stockPage = 1;
           let stockHasMore = true;
           let stockUpdated = 0;
 
-          while (stockHasMore && stockUpdated < 500) {
+          while (stockHasMore && stockUpdated < 300) {
             const resp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -213,8 +248,7 @@ serve(async (req) => {
 
             if (products.length === 0) { stockHasMore = false; break; }
 
-            // Get details for cost price (batch of 5 to respect rate limits)
-            for (const item of products.slice(0, 10)) {
+            for (const item of products.slice(0, 15)) {
               const p = item.produto;
               try {
                 await new Promise(r => setTimeout(r, 600));
@@ -228,20 +262,31 @@ serve(async (req) => {
 
                 if (full) {
                   const costPrice = parseFloat(full.preco_custo || '0');
+                  const sellPrice = parseFloat(full.preco || '0');
                   const stock = parseFloat(full.estoqueAtual || '0');
 
-                  // Update pos_products with cost_price
                   await supabase
                     .from('pos_products')
-                    .update({ cost_price: costPrice, stock, synced_at: new Date().toISOString() })
+                    .update({ 
+                      cost_price: costPrice, 
+                      stock, 
+                      price: sellPrice > 0 ? sellPrice : undefined,
+                      synced_at: new Date().toISOString() 
+                    })
                     .eq('store_id', store.id)
                     .eq('tiny_id', p.id);
                   
                   stockUpdated++;
                 }
               } catch (e) {
-                console.error(`Error getting product ${p.id} cost:`, e);
+                console.error(`Error getting product ${p.id}:`, e);
               }
+            }
+
+            if (logEntry?.id) {
+              await supabase.from('tiny_management_sync_log').update({
+                current_date_syncing: `Estoque: ${stockUpdated} produtos atualizados`,
+              }).eq('id', logEntry.id);
             }
 
             stockPage++;
@@ -254,6 +299,8 @@ serve(async (req) => {
           await supabase.from('tiny_management_sync_log').update({
             status: 'completed',
             orders_synced: totalSynced,
+            phase: 'done',
+            current_date_syncing: null,
             completed_at: new Date().toISOString(),
           }).eq('id', logEntry.id);
         }
