@@ -6,8 +6,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// Very conservative: 35s to guarantee we save progress before the 60s platform kill
+// 35s to guarantee we save progress before the 60s platform kill
 const MAX_EXECUTION_MS = 35_000;
+
+// Extract variant info from product name like "CHINELO CARTAGO DAKAR - 42 - Marrom"
+function extractVariantFromName(name: string): { variant: string; size: string | null; color: string | null } {
+  const parts = name.split(' - ');
+  if (parts.length >= 3) {
+    const size = parts[parts.length - 2]?.trim() || null;
+    const color = parts[parts.length - 1]?.trim() || null;
+    return { variant: `${size || ''} ${color || ''}`.trim(), size, color };
+  }
+  if (parts.length === 2) {
+    const last = parts[1]?.trim() || '';
+    // Check if it's a number (size) or text (color)
+    if (/^\d{2,3}$/.test(last)) {
+      return { variant: last, size: last, color: null };
+    }
+    return { variant: last, size: null, color: last };
+  }
+  return { variant: '', size: null, color: null };
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -22,7 +41,7 @@ serve(async (req) => {
   const startTime = Date.now();
 
   try {
-    const { store_id, resume_page, resume_log_id } = await req.json();
+    const { store_id, resume_page, resume_offset, resume_log_id } = await req.json();
 
     let stores: { id: string; tiny_token: string }[] = [];
     if (store_id) {
@@ -42,6 +61,7 @@ serve(async (req) => {
 
     for (const store of stores) {
       const startPage = (store_id && resume_page) ? resume_page : 1;
+      const startOffset = (store_id && resume_offset) ? resume_offset : 0;
       let logId = resume_log_id || null;
 
       // Get previous synced count when resuming
@@ -64,7 +84,6 @@ serve(async (req) => {
           .single();
         logId = logEntry?.id;
       } else {
-        // Mark as running again on resume
         await supabase.from('pos_product_sync_log').update({ status: 'running' }).eq('id', logId);
       }
 
@@ -81,22 +100,23 @@ serve(async (req) => {
         const totalPages = parseInt(countData.retorno?.numero_paginas || '1');
         const totalRecords = totalPages * 100;
 
-        if (logId && startPage === 1) {
+        if (logId && startPage === 1 && startOffset === 0) {
           await supabase.from('pos_product_sync_log').update({
             total_products: totalRecords,
           }).eq('id', logId);
         }
 
         let page = startPage;
-        let totalSynced = 0; // count for THIS execution
+        let totalSynced = 0;
         let hasMore = true;
         let timedOut = false;
+        let lastPage = page;
+        let lastOffset = 0;
 
         // Reuse page 1 data if starting from page 1
-        let cachedFirstPage = startPage === 1 ? countData : null;
+        let cachedFirstPage = (startPage === 1 && startOffset === 0) ? countData : null;
 
         while (hasMore) {
-          // Check time budget BEFORE starting a new page
           if (Date.now() - startTime > MAX_EXECUTION_MS) {
             timedOut = true;
             break;
@@ -125,14 +145,25 @@ serve(async (req) => {
             break;
           }
 
-          // Process products in batches of 3 (reduced from 5 to respect Tiny rate limits)
-          for (let i = 0; i < rawProducts.length; i += 3) {
+          // Skip already-processed products when resuming mid-page
+          const productsToProcess = (page === startPage && startOffset > 0)
+            ? rawProducts.slice(startOffset)
+            : rawProducts;
+
+          // Process products in batches of 3
+          for (let i = 0; i < productsToProcess.length; i += 3) {
             if (Date.now() - startTime > MAX_EXECUTION_MS) {
               timedOut = true;
+              // Save exact offset within page
+              const actualIndex = (page === startPage && startOffset > 0)
+                ? startOffset + i
+                : i;
+              lastOffset = actualIndex;
+              lastPage = page;
               break;
             }
 
-            const batch = rawProducts.slice(i, i + 3);
+            const batch = productsToProcess.slice(i, i + 3);
             const batchPromises = batch.map(async (item: any) => {
               const p = item.produto;
               try {
@@ -148,17 +179,21 @@ serve(async (req) => {
                 const variations = full.variacoes || [];
                 const rows: any[] = [];
 
+                // Extract variant from name for products without explicit variations
+                const nameVariant = extractVariantFromName(full.nome || '');
+
                 if (variations.length > 0) {
                   for (const v of variations) {
                     const variation = v.variacao;
+                    const variantLabel = variation.grade?.tamanho
+                      ? `${variation.grade?.cor || ''} ${variation.grade?.tamanho || ''}`.trim()
+                      : variation.variacao || '';
                     rows.push({
                       store_id: store.id,
                       tiny_id: full.id,
                       sku: variation.codigo || full.codigo || '',
                       name: full.nome,
-                      variant: variation.grade?.tamanho
-                        ? `${variation.grade?.cor || ''} ${variation.grade?.tamanho || ''}`.trim()
-                        : variation.variacao || '',
+                      variant: variantLabel,
                       size: variation.grade?.tamanho || null,
                       color: variation.grade?.cor || null,
                       category: full.classe_produto || null,
@@ -176,9 +211,9 @@ serve(async (req) => {
                     tiny_id: full.id,
                     sku: full.codigo || '',
                     name: full.nome,
-                    variant: '',
-                    size: null,
-                    color: null,
+                    variant: nameVariant.variant,
+                    size: nameVariant.size,
+                    color: nameVariant.color,
                     category: full.classe_produto || null,
                     price: parseFloat(full.preco || '0'),
                     barcode: full.gtin || '',
@@ -189,7 +224,6 @@ serve(async (req) => {
                   });
                 }
 
-                // Upsert all rows for this product at once
                 await supabase
                   .from('pos_products')
                   .upsert(rows, { onConflict: 'store_id,tiny_id,sku,variant' });
@@ -204,37 +238,40 @@ serve(async (req) => {
             const counts = await Promise.all(batchPromises);
             totalSynced += counts.reduce((a, b) => a + b, 0);
 
-            // Update progress every batch (cumulative with previous runs)
+            // Update progress every batch
             if (logId) {
               await supabase.from('pos_product_sync_log').update({
                 products_synced: previousSynced + totalSynced,
               }).eq('id', logId);
             }
 
-            // Increased delay between batches to respect Tiny API rate limits
-            await new Promise(r => setTimeout(r, 500));
+            // Delay between batches for rate limiting
+            await new Promise(r => setTimeout(r, 400));
           }
 
           if (timedOut) break;
 
+          // Page fully completed - move to next
           page++;
+          lastPage = page;
+          lastOffset = 0;
           if (rawProducts.length < 100) hasMore = false;
         }
 
         if (timedOut) {
-          // Save progress so frontend can resume
           if (logId) {
             await supabase.from('pos_product_sync_log').update({
               status: 'partial',
               products_synced: previousSynced + totalSynced,
-              error_message: JSON.stringify({ resume_page: page, resume_log_id: logId }),
+              error_message: JSON.stringify({ resume_page: lastPage, resume_offset: lastOffset, resume_log_id: logId }),
             }).eq('id', logId);
           }
           results.push({
             store_id: store.id,
             products_synced: previousSynced + totalSynced,
             status: 'partial',
-            resume_page: page,
+            resume_page: lastPage,
+            resume_offset: lastOffset,
             resume_log_id: logId,
             total_pages: totalPages,
           });
