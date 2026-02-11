@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -373,11 +373,21 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
           <div className="flex items-center gap-3">
             <Package className="h-5 w-5 text-muted-foreground" />
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-bold text-foreground">{order.shopify_order_name || order.shopify_order_number}</span>
                 <Badge className={statusColors[order.expedition_status] || 'bg-muted'}>
                   {currentStep?.label || order.expedition_status}
                 </Badge>
+                {order.is_from_live && (
+                  <Badge className="bg-red-500 text-white gap-1">
+                    <Radio className="h-3 w-3" /> LIVE
+                  </Badge>
+                )}
+                {order.has_gift && (
+                  <Badge className="bg-pink-500 text-white gap-1">
+                    <Gift className="h-3 w-3" /> Brinde
+                  </Badge>
+                )}
                 {order.group_id && (
                   <Badge variant="outline" className="gap-1">
                     <Users className="h-3 w-3" /> Agrupado
@@ -386,6 +396,12 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
               </div>
               <p className="text-sm text-muted-foreground">
                 {order.customer_name} • {order.customer_email}
+                {order.source_event_name && (
+                  <span className="ml-2 text-xs font-medium text-primary">
+                    📌 {order.source_event_name}
+                    {order.source_event_date && ` (${new Date(order.source_event_date).toLocaleDateString('pt-BR')})`}
+                  </span>
+                )}
               </p>
               {order.shopify_created_at && (
                 <p className="text-xs text-muted-foreground">

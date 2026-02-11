@@ -850,6 +850,7 @@ export type Database = {
           freight_tracking_code: string | null
           fulfillment_status: string | null
           group_id: string | null
+          has_gift: boolean
           id: string
           internal_barcode: string | null
           invoice_key: string | null
@@ -857,6 +858,7 @@ export type Database = {
           invoice_pdf_url: string | null
           invoice_series: string | null
           invoice_xml_url: string | null
+          is_from_live: boolean
           notes: string | null
           picking_list_id: string | null
           shipping_address: Json | null
@@ -864,6 +866,8 @@ export type Database = {
           shopify_order_id: string
           shopify_order_name: string | null
           shopify_order_number: string | null
+          source_event_date: string | null
+          source_event_name: string | null
           subtotal_price: number | null
           tiny_invoice_id: string | null
           tiny_order_id: string | null
@@ -891,6 +895,7 @@ export type Database = {
           freight_tracking_code?: string | null
           fulfillment_status?: string | null
           group_id?: string | null
+          has_gift?: boolean
           id?: string
           internal_barcode?: string | null
           invoice_key?: string | null
@@ -898,6 +903,7 @@ export type Database = {
           invoice_pdf_url?: string | null
           invoice_series?: string | null
           invoice_xml_url?: string | null
+          is_from_live?: boolean
           notes?: string | null
           picking_list_id?: string | null
           shipping_address?: Json | null
@@ -905,6 +911,8 @@ export type Database = {
           shopify_order_id: string
           shopify_order_name?: string | null
           shopify_order_number?: string | null
+          source_event_date?: string | null
+          source_event_name?: string | null
           subtotal_price?: number | null
           tiny_invoice_id?: string | null
           tiny_order_id?: string | null
@@ -932,6 +940,7 @@ export type Database = {
           freight_tracking_code?: string | null
           fulfillment_status?: string | null
           group_id?: string | null
+          has_gift?: boolean
           id?: string
           internal_barcode?: string | null
           invoice_key?: string | null
@@ -939,6 +948,7 @@ export type Database = {
           invoice_pdf_url?: string | null
           invoice_series?: string | null
           invoice_xml_url?: string | null
+          is_from_live?: boolean
           notes?: string | null
           picking_list_id?: string | null
           shipping_address?: Json | null
@@ -946,6 +956,8 @@ export type Database = {
           shopify_order_id?: string
           shopify_order_name?: string | null
           shopify_order_number?: string | null
+          source_event_date?: string | null
+          source_event_name?: string | null
           subtotal_price?: number | null
           tiny_invoice_id?: string | null
           tiny_order_id?: string | null
