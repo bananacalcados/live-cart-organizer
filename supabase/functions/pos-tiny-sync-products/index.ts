@@ -6,7 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const MAX_EXECUTION_MS = 50_000; // ~50s safety margin (edge fn limit ~60s on Cloud)
+// Very conservative: 35s to guarantee we save progress before the 60s platform kill
+const MAX_EXECUTION_MS = 35_000;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -43,6 +44,17 @@ serve(async (req) => {
       const startPage = (store_id && resume_page) ? resume_page : 1;
       let logId = resume_log_id || null;
 
+      // Get previous synced count when resuming
+      let previousSynced = 0;
+      if (logId) {
+        const { data: existingLog } = await supabase
+          .from('pos_product_sync_log')
+          .select('products_synced')
+          .eq('id', logId)
+          .maybeSingle();
+        previousSynced = existingLog?.products_synced || 0;
+      }
+
       // Create or reuse sync log
       if (!logId) {
         const { data: logEntry } = await supabase
@@ -51,6 +63,9 @@ serve(async (req) => {
           .select('id')
           .single();
         logId = logEntry?.id;
+      } else {
+        // Mark as running again on resume
+        await supabase.from('pos_product_sync_log').update({ status: 'running' }).eq('id', logId);
       }
 
       try {
@@ -73,7 +88,7 @@ serve(async (req) => {
         }
 
         let page = startPage;
-        let totalSynced = 0;
+        let totalSynced = 0; // count for THIS execution
         let hasMore = true;
         let timedOut = false;
 
@@ -81,7 +96,7 @@ serve(async (req) => {
         let cachedFirstPage = startPage === 1 ? countData : null;
 
         while (hasMore) {
-          // Check time budget
+          // Check time budget BEFORE starting a new page
           if (Date.now() - startTime > MAX_EXECUTION_MS) {
             timedOut = true;
             break;
@@ -110,14 +125,14 @@ serve(async (req) => {
             break;
           }
 
-          // Process products in parallel batches of 5 to speed up
-          for (let i = 0; i < rawProducts.length; i += 5) {
+          // Process products in batches of 3 (reduced from 5 to respect Tiny rate limits)
+          for (let i = 0; i < rawProducts.length; i += 3) {
             if (Date.now() - startTime > MAX_EXECUTION_MS) {
               timedOut = true;
               break;
             }
 
-            const batch = rawProducts.slice(i, i + 5);
+            const batch = rawProducts.slice(i, i + 3);
             const batchPromises = batch.map(async (item: any) => {
               const p = item.produto;
               try {
@@ -189,15 +204,15 @@ serve(async (req) => {
             const counts = await Promise.all(batchPromises);
             totalSynced += counts.reduce((a, b) => a + b, 0);
 
-            // Update progress every batch
+            // Update progress every batch (cumulative with previous runs)
             if (logId) {
               await supabase.from('pos_product_sync_log').update({
-                products_synced: totalSynced,
+                products_synced: previousSynced + totalSynced,
               }).eq('id', logId);
             }
 
-            // Small delay between batches to respect rate limits
-            await new Promise(r => setTimeout(r, 200));
+            // Increased delay between batches to respect Tiny API rate limits
+            await new Promise(r => setTimeout(r, 500));
           }
 
           if (timedOut) break;
@@ -211,13 +226,13 @@ serve(async (req) => {
           if (logId) {
             await supabase.from('pos_product_sync_log').update({
               status: 'partial',
-              products_synced: totalSynced,
+              products_synced: previousSynced + totalSynced,
               error_message: JSON.stringify({ resume_page: page, resume_log_id: logId }),
             }).eq('id', logId);
           }
           results.push({
             store_id: store.id,
-            products_synced: totalSynced,
+            products_synced: previousSynced + totalSynced,
             status: 'partial',
             resume_page: page,
             resume_log_id: logId,
@@ -227,11 +242,11 @@ serve(async (req) => {
           if (logId) {
             await supabase.from('pos_product_sync_log').update({
               status: 'completed',
-              products_synced: totalSynced,
+              products_synced: previousSynced + totalSynced,
               completed_at: new Date().toISOString(),
             }).eq('id', logId);
           }
-          results.push({ store_id: store.id, products_synced: totalSynced, status: 'completed' });
+          results.push({ store_id: store.id, products_synced: previousSynced + totalSynced, status: 'completed' });
         }
       } catch (e) {
         console.error('Sync error for store:', store.id, e);
