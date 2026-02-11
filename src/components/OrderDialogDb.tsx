@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode, Lock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -524,6 +524,25 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 type="button"
                 variant="outline"
                 size="icon"
+                onClick={() => {
+                  if (!editingOrder) {
+                    toast.error("Salve o pedido primeiro");
+                    return;
+                  }
+                  const url = `${window.location.origin}/checkout/order/${editingOrder.id}`;
+                  setCartLink(url);
+                  toast.success("Link do checkout transparente gerado!");
+                }}
+                disabled={localProducts.length === 0 || !editingOrder}
+                title="Gerar link Checkout Transparente (Pagar.me/APPMAX)"
+                className="text-emerald-600 hover:text-emerald-600 hover:bg-emerald-600/10"
+              >
+                <Lock className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
                 onClick={generatePixLink}
                 disabled={isGeneratingCartLink || isGeneratingYampiLink || isGeneratingPayPalLink || isGeneratingPixLink || localProducts.length === 0 || !editingOrder}
                 title="Gerar PIX (Mercado Pago)"
@@ -538,7 +557,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
             </div>
             {localProducts.length > 0 && !cartLink && (
               <p className="text-xs text-muted-foreground">
-                Shopify (↻) | Yampi (🛍️) | PayPal (💳) | PIX (◻) - clique para gerar
+                Shopify (↻) | Yampi (🛍️) | PayPal (💳) | Checkout (🔒) | PIX (◻)
               </p>
             )}
             <div className="flex items-center justify-between mt-3 p-3 bg-secondary/50 rounded-lg">
