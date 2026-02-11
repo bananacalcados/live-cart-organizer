@@ -1,0 +1,1 @@
+ALTER TABLE public.expedition_orders ADD COLUMN tiny_invoice_id text;
