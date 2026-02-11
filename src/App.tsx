@@ -10,6 +10,7 @@ import Marketing from "./pages/Marketing";
 import Checkout from "./pages/Checkout";
 import CustomerRegister from "./pages/CustomerRegister";
 import NotFound from "./pages/NotFound";
+import LandingPage from "./pages/LandingPage";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/marketing" element={<Marketing />} />
           <Route path="/checkout/:paypalOrderId" element={<Checkout />} />
           <Route path="/register/:orderId" element={<CustomerRegister />} />
+          <Route path="/lp/:slug" element={<LandingPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

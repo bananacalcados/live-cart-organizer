@@ -29,22 +29,30 @@ serve(async (req) => {
 - Segmentos RFM disponíveis: ${customer_stats.segments?.join(', ') || 'N/A'}`
       : '';
 
-    const systemPrompt = `Você é um estrategista sênior de marketing digital especializado em varejo de calçados/moda, WhatsApp Business e campanhas omnichannel.
+    const systemPrompt = `Você é um estrategista sênior de marketing digital especializado em varejo de calçados/moda, campanhas omnichannel 360° e marketing integrado.
 
-Seu papel é criar ESTRATÉGIAS COMPLETAS de campanha, não apenas mensagens. Pense como um diretor de marketing.
+Seu papel é criar ESTRATÉGIAS 360° COMPLETAS que cobrem TODOS os canais de comunicação. Pense como um diretor de marketing que planeja cada detalhe.
 
-Contexto do negócio: Loja de calçados que opera tanto em loja física (Governador Valadares, MG) quanto online. Usa WhatsApp Business API (Meta) para comunicação. Tem base segmentada por RFM (Recência, Frequência, Valor Monetário).
+Contexto do negócio: Loja de calçados ortopédicos e moda que opera em lojas físicas (Governador Valadares, MG - Jardim Pérola e Centro) e online. Usa WhatsApp Business API (Meta) para comunicação direta. Tem base segmentada por RFM. Tem presença no Instagram, e-mail marketing, site e ações presenciais.
+
+CANAIS DISPONÍVEIS (use TODOS que fizerem sentido):
+1. **whatsapp** - Disparos em massa via Meta API, grupos VIP, atendimento 1:1
+2. **instagram** - Posts, Reels, Stories, Lives, Anúncios
+3. **email** - Sequência de e-mails marketing
+4. **loja_fisica** - Banners, vitrine, ambientação, promotores, carro de som, panfletos, convites impressos
+5. **site** - Banners no site, landing pages de captação, pop-ups
+6. **outros** - Parcerias com influenciadores, indicações, ações criativas
 ${statsContext}
 
-IMPORTANTE: Você NÃO define os templates de WhatsApp. Os templates serão escolhidos pelo usuário depois. Foque na estratégia.`;
+IMPORTANTE: Para cada canal, defina a estratégia específica, tom de voz, cronograma dia-a-dia e tarefas de execução (checklist).`;
 
-    const userPrompt = `Crie uma estratégia completa de campanha de marketing.
+    const userPrompt = `Crie uma estratégia 360° completa para a seguinte campanha:
 
 **Objetivo:** ${objective}
 **Público-alvo:** ${audience || "A definir com base na análise"}
 ${instructions ? `**Instruções adicionais:** ${instructions}` : ""}
 
-Responda OBRIGATORIAMENTE usando a ferramenta generate_strategy.`;
+Responda OBRIGATORIAMENTE usando a ferramenta generate_360_strategy.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -62,77 +70,78 @@ Responda OBRIGATORIAMENTE usando a ferramenta generate_strategy.`;
           {
             type: "function",
             function: {
-              name: "generate_strategy",
-              description: "Gera uma estratégia completa de campanha de marketing",
+              name: "generate_360_strategy",
+              description: "Gera uma estratégia 360° completa de campanha de marketing multicanal",
               parameters: {
                 type: "object",
                 properties: {
-                  campaign_name: {
-                    type: "string",
-                    description: "Nome criativo e impactante para a campanha"
-                  },
-                  summary: {
-                    type: "string",
-                    description: "Resumo executivo da estratégia em 2-3 frases"
-                  },
-                  target_analysis: {
-                    type: "string",
-                    description: "Análise do público-alvo ideal, quais segmentos RFM priorizar e por quê"
-                  },
+                  campaign_name: { type: "string", description: "Nome criativo e impactante para a campanha" },
+                  summary: { type: "string", description: "Resumo executivo da estratégia em 2-3 frases" },
+                  start_date_suggestion: { type: "string", description: "Data sugerida para início (formato YYYY-MM-DD)" },
+                  end_date_suggestion: { type: "string", description: "Data sugerida para término (formato YYYY-MM-DD)" },
+                  estimated_budget: { type: "number", description: "Estimativa de orçamento em R$" },
+                  target_analysis: { type: "string", description: "Análise do público-alvo ideal, quais segmentos RFM priorizar e por quê" },
                   lead_capture: {
                     type: "object",
-                    description: "Estratégia de captação de leads antes/durante a campanha",
                     properties: {
-                      strategy: { type: "string", description: "Descrição da estratégia de captação" },
-                      channels: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Canais de captação (ex: instagram, landing_page, loja_fisica, indicacao)"
-                      },
-                      tips: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Dicas práticas para maximizar a captação"
-                      }
+                      strategy: { type: "string" },
+                      channels: { type: "array", items: { type: "string" } },
+                      tips: { type: "array", items: { type: "string" } },
+                      landing_page_suggestion: { type: "string", description: "Sugestão de título e campos para landing page de captação" }
                     },
                     required: ["strategy", "channels", "tips"]
                   },
-                  communication_steps: {
+                  channel_strategies: {
                     type: "array",
-                    description: "Sequência de comunicações da campanha (2-5 etapas)",
+                    description: "Estratégia detalhada para cada canal de comunicação",
                     items: {
                       type: "object",
                       properties: {
-                        step_number: { type: "number" },
-                        label: { type: "string", description: "Nome da etapa (ex: Aquecimento, Convite, Lembrete, Última Chance)" },
-                        objective: { type: "string", description: "O que essa etapa deve alcançar" },
-                        timing: { type: "string", description: "Quando enviar (ex: 5 dias antes, no dia, 2h antes)" },
-                        delay_hours: { type: "number", description: "Horas de delay em relação à etapa anterior (0 para a primeira)" },
-                        tone: { type: "string", description: "Tom da mensagem (ex: curiosidade, urgência, exclusividade)" },
-                        content_suggestion: { type: "string", description: "Sugestão de conteúdo/abordagem para o template (não o template em si)" },
-                        media_suggestion: { type: "string", description: "Tipo de mídia recomendada (ex: imagem do produto, vídeo teaser, carrossel)" }
+                        channel_type: { type: "string", description: "whatsapp, instagram, email, loja_fisica, site, outros" },
+                        strategy: { type: "string", description: "Estratégia geral para esse canal" },
+                        tone_of_voice: { type: "string", description: "Tom de voz específico para esse canal" },
+                        content_plan: {
+                          type: "array",
+                          description: "Plano de conteúdo detalhado (posts, mensagens, ações)",
+                          items: {
+                            type: "object",
+                            properties: {
+                              day_offset: { type: "number", description: "Dia relativo ao início da campanha (0 = primeiro dia)" },
+                              title: { type: "string" },
+                              description: { type: "string" },
+                              content_type: { type: "string", description: "Ex: post, story, reels, email, template_whatsapp, banner, acao_presencial" },
+                              content_suggestion: { type: "string", description: "Sugestão detalhada do conteúdo" }
+                            },
+                            required: ["day_offset", "title", "description", "content_type"]
+                          }
+                        },
+                        tasks: {
+                          type: "array",
+                          description: "Checklist de tarefas de execução para esse canal",
+                          items: {
+                            type: "object",
+                            properties: {
+                              title: { type: "string" },
+                              description: { type: "string" },
+                              due_day_offset: { type: "number", description: "Dia relativo ao início da campanha para conclusão" }
+                            },
+                            required: ["title"]
+                          }
+                        }
                       },
-                      required: ["step_number", "label", "objective", "timing", "delay_hours", "tone", "content_suggestion"]
+                      required: ["channel_type", "strategy", "tone_of_voice", "content_plan", "tasks"]
                     }
                   },
-                  success_metrics: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "KPIs e métricas de sucesso esperadas"
-                  },
-                  additional_tips: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "Dicas extras e boas práticas para a campanha"
-                  }
+                  success_metrics: { type: "array", items: { type: "string" } },
+                  additional_tips: { type: "array", items: { type: "string" } }
                 },
-                required: ["campaign_name", "summary", "target_analysis", "lead_capture", "communication_steps", "success_metrics", "additional_tips"],
+                required: ["campaign_name", "summary", "target_analysis", "lead_capture", "channel_strategies", "success_metrics", "additional_tips"],
                 additionalProperties: false
               }
             }
           }
         ],
-        tool_choice: { type: "function", function: { name: "generate_strategy" } },
+        tool_choice: { type: "function", function: { name: "generate_360_strategy" } },
       }),
     });
 
