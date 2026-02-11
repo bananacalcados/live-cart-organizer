@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -39,12 +40,53 @@ export function POSConfig({ storeId }: Props) {
   const [syncProgress, setSyncProgress] = useState<{ synced: number; total: number } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // WhatsApp numbers config
+  const [allWhatsAppNumbers, setAllWhatsAppNumbers] = useState<{ id: string; label: string; phone_display: string }[]>([]);
+  const [linkedNumberIds, setLinkedNumberIds] = useState<Set<string>>(new Set());
+  const [savingNumbers, setSavingNumbers] = useState(false);
+
   useEffect(() => {
     loadSellers();
     loadInvoiceConfig();
     loadSyncInfo();
+    loadWhatsAppNumbers();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [storeId]);
+
+  const loadWhatsAppNumbers = async () => {
+    const [{ data: allNums }, { data: linked }] = await Promise.all([
+      supabase.from('whatsapp_numbers').select('id, label, phone_display').eq('is_active', true),
+      supabase.from('pos_store_whatsapp_numbers').select('whatsapp_number_id').eq('store_id', storeId),
+    ]);
+    setAllWhatsAppNumbers(allNums || []);
+    setLinkedNumberIds(new Set((linked || []).map((l: any) => l.whatsapp_number_id)));
+  };
+
+  const toggleWhatsAppNumber = (numberId: string) => {
+    setLinkedNumberIds(prev => {
+      const next = new Set(prev);
+      if (next.has(numberId)) next.delete(numberId);
+      else next.add(numberId);
+      return next;
+    });
+  };
+
+  const saveWhatsAppNumbers = async () => {
+    setSavingNumbers(true);
+    try {
+      await supabase.from('pos_store_whatsapp_numbers').delete().eq('store_id', storeId);
+      const rows = Array.from(linkedNumberIds).map(whatsapp_number_id => ({ store_id: storeId, whatsapp_number_id }));
+      if (rows.length > 0) {
+        const { error } = await supabase.from('pos_store_whatsapp_numbers').insert(rows);
+        if (error) throw error;
+      }
+      toast.success("Números vinculados salvos!");
+    } catch {
+      toast.error("Erro ao salvar");
+    } finally {
+      setSavingNumbers(false);
+    }
+  };
 
   const loadSellers = async () => {
     const { data } = await supabase.from('pos_sellers').select('*').eq('store_id', storeId).order('name');
@@ -271,6 +313,44 @@ export function POSConfig({ storeId }: Props) {
               </Button>
             </CardTitle>
           </CardHeader>
+        </Card>
+
+        {/* WhatsApp Numbers per Store */}
+        <Card className="bg-pos-white/5 border-pos-yellow/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2 text-pos-white">
+              <Phone className="h-4 w-4 text-green-400" /> Instâncias WhatsApp
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-pos-white/50">Selecione quais números de WhatsApp esta loja pode utilizar.</p>
+            {allWhatsAppNumbers.length === 0 ? (
+              <p className="text-xs text-pos-white/40">Nenhum número cadastrado no sistema.</p>
+            ) : (
+              <div className="space-y-2">
+                {allWhatsAppNumbers.map(num => (
+                  <div key={num.id} className="flex items-center gap-3 p-2 rounded-lg bg-pos-white/5">
+                    <Checkbox
+                      id={`wn-${num.id}`}
+                      checked={linkedNumberIds.has(num.id)}
+                      onCheckedChange={() => toggleWhatsAppNumber(num.id)}
+                    />
+                    <label htmlFor={`wn-${num.id}`} className="flex-1 cursor-pointer">
+                      <span className="text-sm text-pos-white">{num.label}</span>
+                      <span className="text-xs text-pos-white/40 ml-2">{num.phone_display}</span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button
+              className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2"
+              onClick={saveWhatsAppNumbers}
+              disabled={savingNumbers}
+            >
+              <Save className="h-4 w-4" /> {savingNumbers ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </CardContent>
         </Card>
 
         {/* Sellers */}

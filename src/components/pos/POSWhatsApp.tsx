@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -236,7 +236,7 @@ export function POSWhatsApp({ storeId }: Props) {
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-pos-white/40" onClick={() => { setEditNameValue(selectedConversation?.customerName || ""); setIsEditingName(true); }}>
                     <Pencil className="h-3 w-3" />
                   </Button>
-                </>
+              </>
               )}
             </>
           ) : (
@@ -247,6 +247,21 @@ export function POSWhatsApp({ storeId }: Props) {
             </>
           )}
         </div>
+        {selectedPhone && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-red-400 hover:text-red-300 hover:bg-red-500/10 gap-1 text-xs"
+            onClick={() => {
+              setSelectedPhone(null);
+              setMessages([]);
+              toast.success("Conversa finalizada");
+            }}
+          >
+            <PhoneOff className="h-4 w-4" />
+            Finalizar
+          </Button>
+        )}
       </div>
 
       {/* API Selector */}
