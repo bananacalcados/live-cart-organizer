@@ -6,26 +6,24 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// 35s to guarantee we save progress before the 60s platform kill
-const MAX_EXECUTION_MS = 35_000;
-
 // Extract variant info from product name like "CHINELO CARTAGO DAKAR - 42 - Marrom"
-function extractVariantFromName(name: string): { variant: string; size: string | null; color: string | null } {
+function extractVariantFromName(name: string): { baseName: string; variant: string; size: string | null; color: string | null } {
   const parts = name.split(' - ');
   if (parts.length >= 3) {
+    const baseName = parts.slice(0, parts.length - 2).join(' - ').trim();
     const size = parts[parts.length - 2]?.trim() || null;
     const color = parts[parts.length - 1]?.trim() || null;
-    return { variant: `${size || ''} ${color || ''}`.trim(), size, color };
+    return { baseName, variant: `${size || ''} ${color || ''}`.trim(), size, color };
   }
   if (parts.length === 2) {
+    const baseName = parts[0].trim();
     const last = parts[1]?.trim() || '';
-    // Check if it's a number (size) or text (color)
     if (/^\d{2,3}$/.test(last)) {
-      return { variant: last, size: last, color: null };
+      return { baseName, variant: last, size: last, color: null };
     }
-    return { variant: last, size: null, color: last };
+    return { baseName, variant: last, size: null, color: last };
   }
-  return { variant: '', size: null, color: null };
+  return { baseName: name, variant: '', size: null, color: null };
 }
 
 serve(async (req) => {
@@ -38,10 +36,8 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
-  const startTime = Date.now();
-
   try {
-    const { store_id, resume_page, resume_offset, resume_log_id } = await req.json();
+    const { store_id, resume_page, resume_log_id } = await req.json();
 
     let stores: { id: string; tiny_token: string }[] = [];
     if (store_id) {
@@ -60,12 +56,10 @@ serve(async (req) => {
     const results: any[] = [];
 
     for (const store of stores) {
-      const startPage = (store_id && resume_page) ? resume_page : 1;
-      const startOffset = (store_id && resume_offset) ? resume_offset : 0;
+      let page = resume_page || 1;
       let logId = resume_log_id || null;
-
-      // Get previous synced count when resuming
       let previousSynced = 0;
+
       if (logId) {
         const { data: existingLog } = await supabase
           .from('pos_product_sync_log')
@@ -75,7 +69,6 @@ serve(async (req) => {
         previousSynced = existingLog?.products_synced || 0;
       }
 
-      // Create or reuse sync log
       if (!logId) {
         const { data: logEntry } = await supabase
           .from('pos_product_sync_log')
@@ -89,54 +82,32 @@ serve(async (req) => {
 
       try {
         const token = store.tiny_token;
-
-        // Get total pages from first request
-        const countResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${token}&formato=json&pagina=1`,
-        });
-        const countData = await countResp.json();
-        const totalPages = parseInt(countData.retorno?.numero_paginas || '1');
-        const totalRecords = totalPages * 100;
-
-        if (logId && startPage === 1 && startOffset === 0) {
-          await supabase.from('pos_product_sync_log').update({
-            total_products: totalRecords,
-          }).eq('id', logId);
-        }
-
-        let page = startPage;
         let totalSynced = 0;
         let hasMore = true;
-        let timedOut = false;
-        let lastPage = page;
-        let lastOffset = 0;
-
-        // Reuse page 1 data if starting from page 1
-        let cachedFirstPage = (startPage === 1 && startOffset === 0) ? countData : null;
+        let totalPages = 1;
 
         while (hasMore) {
-          if (Date.now() - startTime > MAX_EXECUTION_MS) {
-            timedOut = true;
-            break;
-          }
-
-          let searchData;
-          if (page === 1 && cachedFirstPage) {
-            searchData = cachedFirstPage;
-          } else {
-            const searchResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: `token=${token}&formato=json&pagina=${page}`,
-            });
-            searchData = await searchResp.json();
-          }
+          // Fetch one page of 100 products from search listing
+          const searchResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `token=${token}&formato=json&pagina=${page}`,
+          });
+          const searchData = await searchResp.json();
 
           if (searchData.retorno?.status === 'Erro') {
             hasMore = false;
             break;
+          }
+
+          // Get total pages from first response
+          if (page === (resume_page || 1)) {
+            totalPages = parseInt(searchData.retorno?.numero_paginas || '1');
+            if (logId && page === 1) {
+              await supabase.from('pos_product_sync_log').update({
+                total_products: totalPages * 100,
+              }).eq('id', logId);
+            }
           }
 
           const rawProducts = searchData.retorno?.produtos || [];
@@ -145,156 +116,72 @@ serve(async (req) => {
             break;
           }
 
-          // Skip already-processed products when resuming mid-page
-          const productsToProcess = (page === startPage && startOffset > 0)
-            ? rawProducts.slice(startOffset)
-            : rawProducts;
-
-          // Process products in batches of 3
-          for (let i = 0; i < productsToProcess.length; i += 3) {
-            if (Date.now() - startTime > MAX_EXECUTION_MS) {
-              timedOut = true;
-              // Save exact offset within page
-              const actualIndex = (page === startPage && startOffset > 0)
-                ? startOffset + i
-                : i;
-              lastOffset = actualIndex;
-              lastPage = page;
-              break;
-            }
-
-            const batch = productsToProcess.slice(i, i + 3);
-            const batchPromises = batch.map(async (item: any) => {
-              const p = item.produto;
-              try {
-                const detailResp = await fetch('https://api.tiny.com.br/api2/produto.obter.php', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                  body: `token=${token}&formato=json&id=${p.id}`,
-                });
-                const detailData = await detailResp.json();
-                const full = detailData.retorno?.produto;
-                if (!full) return 0;
-
-                const variations = full.variacoes || [];
-                const rows: any[] = [];
-
-                // Extract variant from name for products without explicit variations
-                const nameVariant = extractVariantFromName(full.nome || '');
-
-                if (variations.length > 0) {
-                  for (const v of variations) {
-                    const variation = v.variacao;
-                    const variantLabel = variation.grade?.tamanho
-                      ? `${variation.grade?.cor || ''} ${variation.grade?.tamanho || ''}`.trim()
-                      : variation.variacao || '';
-                    rows.push({
-                      store_id: store.id,
-                      tiny_id: full.id,
-                      sku: variation.codigo || full.codigo || '',
-                      name: full.nome,
-                      variant: variantLabel,
-                      size: variation.grade?.tamanho || null,
-                      color: variation.grade?.cor || null,
-                      category: full.classe_produto || null,
-                      price: parseFloat(variation.preco || full.preco || '0'),
-                      barcode: variation.gtin || full.gtin || '',
-                      stock: parseFloat(variation.estoqueAtual || full.estoqueAtual || '0'),
-                      image_url: full.anexos?.[0]?.anexo?.url || null,
-                      is_active: full.situacao === 'A',
-                      synced_at: new Date().toISOString(),
-                    });
-                  }
-                } else {
-                  rows.push({
-                    store_id: store.id,
-                    tiny_id: full.id,
-                    sku: full.codigo || '',
-                    name: full.nome,
-                    variant: nameVariant.variant,
-                    size: nameVariant.size,
-                    color: nameVariant.color,
-                    category: full.classe_produto || null,
-                    price: parseFloat(full.preco || '0'),
-                    barcode: full.gtin || '',
-                    stock: parseFloat(full.estoqueAtual || '0'),
-                    image_url: full.anexos?.[0]?.anexo?.url || null,
-                    is_active: full.situacao === 'A',
-                    synced_at: new Date().toISOString(),
-                  });
-                }
-
-                await supabase
-                  .from('pos_products')
-                  .upsert(rows, { onConflict: 'store_id,tiny_id,sku,variant' });
-
-                return rows.length;
-              } catch (e) {
-                console.error('Error syncing product:', p.id, e);
-                return 0;
-              }
+          // Build rows directly from search listing — NO individual detail calls
+          const rows: any[] = [];
+          for (const item of rawProducts) {
+            const p = item.produto;
+            const nameInfo = extractVariantFromName(p.nome || '');
+            rows.push({
+              store_id: store.id,
+              tiny_id: p.id,
+              sku: p.codigo || '',
+              name: p.nome || '',
+              variant: nameInfo.variant,
+              size: nameInfo.size,
+              color: nameInfo.color,
+              price: parseFloat(p.preco || '0'),
+              barcode: '',
+              stock: 0,
+              is_active: p.situacao === 'A',
+              synced_at: new Date().toISOString(),
             });
-
-            const counts = await Promise.all(batchPromises);
-            totalSynced += counts.reduce((a, b) => a + b, 0);
-
-            // Update progress every batch
-            if (logId) {
-              await supabase.from('pos_product_sync_log').update({
-                products_synced: previousSynced + totalSynced,
-              }).eq('id', logId);
-            }
-
-            // Delay between batches for rate limiting
-            await new Promise(r => setTimeout(r, 400));
           }
 
-          if (timedOut) break;
+          // Upsert all 100 products at once
+          if (rows.length > 0) {
+            await supabase
+              .from('pos_products')
+              .upsert(rows, { onConflict: 'store_id,tiny_id,sku,variant' });
+          }
 
-          // Page fully completed - move to next
+          totalSynced += rows.length;
+
+          // Update progress
+          if (logId) {
+            await supabase.from('pos_product_sync_log').update({
+              products_synced: previousSynced + totalSynced,
+            }).eq('id', logId);
+          }
+
+          // Next page
           page++;
-          lastPage = page;
-          lastOffset = 0;
-          if (rawProducts.length < 100) hasMore = false;
+          if (page > totalPages) hasMore = false;
+
+          // Small delay to respect rate limits (only 1 call per page now!)
+          if (hasMore) await new Promise(r => setTimeout(r, 600));
         }
 
-        if (timedOut) {
-          if (logId) {
-            await supabase.from('pos_product_sync_log').update({
-              status: 'partial',
-              products_synced: previousSynced + totalSynced,
-              error_message: JSON.stringify({ resume_page: lastPage, resume_offset: lastOffset, resume_log_id: logId }),
-            }).eq('id', logId);
-          }
-          results.push({
-            store_id: store.id,
-            products_synced: previousSynced + totalSynced,
-            status: 'partial',
-            resume_page: lastPage,
-            resume_offset: lastOffset,
-            resume_log_id: logId,
-            total_pages: totalPages,
-          });
-        } else {
-          if (logId) {
-            await supabase.from('pos_product_sync_log').update({
-              status: 'completed',
-              products_synced: previousSynced + totalSynced,
-              completed_at: new Date().toISOString(),
-            }).eq('id', logId);
-          }
-          results.push({ store_id: store.id, products_synced: previousSynced + totalSynced, status: 'completed' });
-        }
-      } catch (e) {
-        console.error('Sync error for store:', store.id, e);
+        // Done!
         if (logId) {
           await supabase.from('pos_product_sync_log').update({
-            status: 'error',
-            error_message: (e as Error).message,
+            status: 'completed',
+            products_synced: previousSynced + totalSynced,
             completed_at: new Date().toISOString(),
           }).eq('id', logId);
         }
-        results.push({ store_id: store.id, status: 'error', error: (e as Error).message });
+        results.push({ store_id: store.id, products_synced: previousSynced + totalSynced, status: 'completed' });
+
+      } catch (e) {
+        console.error('Sync error for store:', store.id, e);
+        if (logId) {
+          // Save progress so it can resume
+          await supabase.from('pos_product_sync_log').update({
+            status: 'partial',
+            error_message: JSON.stringify({ resume_page: page, resume_log_id: logId }),
+            completed_at: new Date().toISOString(),
+          }).eq('id', logId);
+        }
+        results.push({ store_id: store.id, status: 'partial', resume_page: page, resume_log_id: logId, error: (e as Error).message });
       }
     }
 
