@@ -196,8 +196,7 @@ serve(async (req) => {
           }
         }
 
-        // ===== PHASE 2: Stock — read stock directly from produtos.pesquisa listing =====
-        // Uses the "estoque" field from the search endpoint: 1 API call per 100 products.
+        // ===== PHASE 2: Stock — fetch real stock via produto.obter.estoque in parallel batches =====
         if ((sync_stock || stock_only) && Date.now() - functionStart < TIME_LIMIT_MS) {
           if (logId) {
             await supabase.from('tiny_management_sync_log').update({
@@ -209,9 +208,10 @@ serve(async (req) => {
           let stockTimedOut = false;
           let stockUpdated = 0;
           let totalStockPages = 1;
+          const BATCH_SIZE = 10; // parallel requests per batch
 
           while (!stockTimedOut && Date.now() - functionStart < TIME_LIMIT_MS) {
-            await new Promise(r => setTimeout(r, 350));
+            await new Promise(r => setTimeout(r, 300));
 
             const resp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
               method: 'POST',
@@ -222,20 +222,48 @@ serve(async (req) => {
 
             if (data.retorno?.status === 'Erro') break;
             totalStockPages = parseInt(data.retorno?.numero_paginas || '1');
-            const products = data.retorno?.produtos || [];
-            if (products.length === 0) break;
+            const productsList = data.retorno?.produtos || [];
+            if (productsList.length === 0) break;
 
-            // Batch update all 100 products at once via RPC or individual promise.all
+            // Fetch stock for each product in parallel batches of BATCH_SIZE
             const now = new Date().toISOString();
-            const updates = products.map((item: any) => {
-              const p = item.produto;
-              return supabase.from('pos_products').update({
-                stock: parseFloat(p.estoque || '0'),
-                synced_at: now,
-              }).eq('store_id', store.id).eq('tiny_id', String(p.id));
-            });
-            await Promise.all(updates);
-            stockUpdated += products.length;
+            for (let i = 0; i < productsList.length; i += BATCH_SIZE) {
+              if (Date.now() - functionStart > TIME_LIMIT_MS) { stockTimedOut = true; break; }
+              const batch = productsList.slice(i, i + BATCH_SIZE);
+              
+              const stockResults = await Promise.all(
+                batch.map(async (item: any) => {
+                  const p = item.produto;
+                  try {
+                    const sr = await fetch('https://api.tiny.com.br/api2/produto.obter.estoque.php', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                      body: `token=${token}&formato=json&id=${p.id}`,
+                    });
+                    const sd = await sr.json();
+                    if (sd.retorno?.status !== 'Erro') {
+                      return { tinyId: String(p.id), stock: parseFloat(sd.retorno?.produto?.saldo || '0') };
+                    }
+                  } catch (e) {
+                    console.error(`Stock error ${p.id}:`, e);
+                  }
+                  return { tinyId: String(p.id), stock: 0 };
+                })
+              );
+
+              // Batch DB update
+              const dbUpdates = stockResults.map(r =>
+                supabase.from('pos_products').update({
+                  stock: r.stock,
+                  synced_at: now,
+                }).eq('store_id', store.id).eq('tiny_id', r.tinyId)
+              );
+              await Promise.all(dbUpdates);
+              stockUpdated += batch.length;
+
+              // Small delay between batches to respect rate limits (~30 req/min safe with 10 parallel)
+              await new Promise(r => setTimeout(r, 2500));
+            }
 
             const pct = Math.round((stockPage / totalStockPages) * 100);
             if (logId) {
