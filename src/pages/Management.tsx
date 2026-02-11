@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart3, Home, TrendingUp, DollarSign, Package, ShoppingCart, Store,
-  ArrowUpRight, ArrowDownRight, Calendar, Filter, RefreshCw
+  ArrowDownRight, RefreshCw, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,30 +12,24 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from "recharts";
-import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, isWithinInterval } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import { toast } from "sonner";
 
-interface SaleRow {
+interface TinySyncedOrder {
   id: string;
   store_id: string;
-  total: number;
+  tiny_order_id: string;
+  tiny_order_number: string | null;
+  order_date: string;
+  customer_name: string | null;
+  status: string | null;
+  payment_method: string | null;
   subtotal: number;
   discount: number;
-  payment_method: string;
-  status: string;
-  created_at: string;
-}
-
-interface SaleItemRow {
-  id: string;
-  sale_id: string;
-  product_name: string;
-  variant_name: string | null;
-  category: string | null;
-  unit_price: number;
-  quantity: number;
-  total_price: number;
+  shipping: number;
+  total: number;
+  items: any;
 }
 
 interface ExpeditionOrder {
@@ -63,6 +57,7 @@ interface ProductRow {
   variant: string | null;
   category: string | null;
   price: number;
+  cost_price: number;
   stock: number;
 }
 
@@ -79,9 +74,9 @@ export default function Management() {
   const [period, setPeriod] = useState<Period>("30d");
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
-  const [sales, setSales] = useState<SaleRow[]>([]);
-  const [saleItems, setSaleItems] = useState<SaleItemRow[]>([]);
+  const [tinyOrders, setTinyOrders] = useState<TinySyncedOrder[]>([]);
   const [expeditionOrders, setExpeditionOrders] = useState<ExpeditionOrder[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -99,139 +94,161 @@ export default function Management() {
 
   const fetchData = async () => {
     setLoading(true);
+    const startDate = dateRange.start.toISOString().split('T')[0];
+    const endDate = dateRange.end.toISOString().split('T')[0];
     const iso = { start: dateRange.start.toISOString(), end: dateRange.end.toISOString() };
 
-    const [salesRes, itemsRes, expRes, storesRes, prodsRes] = await Promise.all([
-      supabase.from("pos_sales").select("id, store_id, total, subtotal, discount, payment_method, status, created_at")
-        .gte("created_at", iso.start).lte("created_at", iso.end).eq("status", "completed"),
-      supabase.from("pos_sale_items").select("id, sale_id, product_name, variant_name, category, unit_price, quantity, total_price"),
+    const [tinyRes, expRes, storesRes, prodsRes] = await Promise.all([
+      supabase.from("tiny_synced_orders").select("*")
+        .gte("order_date", startDate).lte("order_date", endDate),
       supabase.from("expedition_orders").select("id, shopify_order_name, total_price, subtotal_price, total_shipping, total_discount, financial_status, expedition_status, created_at, customer_name")
         .gte("created_at", iso.start).lte("created_at", iso.end),
       supabase.from("pos_stores").select("id, name").eq("is_active", true),
-      supabase.from("pos_products").select("id, store_id, name, variant, category, price, stock").eq("is_active", true),
+      supabase.from("pos_products").select("id, store_id, name, variant, category, price, cost_price, stock").eq("is_active", true),
     ]);
 
-    setSales(salesRes.data || []);
-    setSaleItems(itemsRes.data || []);
+    setTinyOrders((tinyRes.data || []) as unknown as TinySyncedOrder[]);
     setExpeditionOrders(expRes.data || []);
     setStores(storesRes.data || []);
-    setProducts(prodsRes.data || []);
+    setProducts((prodsRes.data || []) as unknown as ProductRow[]);
     setLoading(false);
+  };
+
+  const syncFromTiny = async () => {
+    setSyncing(true);
+    toast.info("Sincronizando pedidos do Tiny ERP...");
+    try {
+      const fromDate = format(dateRange.start, 'dd/MM/yyyy');
+      const toDate = format(dateRange.end, 'dd/MM/yyyy');
+      
+      const { data, error } = await supabase.functions.invoke('tiny-sync-management', {
+        body: { date_from: fromDate, date_to: toDate, sync_stock: true },
+      });
+
+      if (error) throw error;
+
+      const totalSynced = data?.results?.reduce((s: number, r: any) => s + (r.orders_synced || 0), 0) || 0;
+      toast.success(`Sincronização concluída: ${totalSynced} pedidos importados`);
+      fetchData();
+    } catch (e: any) {
+      toast.error(`Erro na sincronização: ${e.message}`);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   useEffect(() => { fetchData(); }, [period]);
 
   // --- Computed ---
-  const filteredSales = useMemo(() => {
-    if (storeFilter === "all") return sales;
-    return sales.filter(s => s.store_id === storeFilter);
-  }, [sales, storeFilter]);
-
-  const filteredSaleIds = useMemo(() => new Set(filteredSales.map(s => s.id)), [filteredSales]);
-  const filteredItems = useMemo(() => saleItems.filter(i => filteredSaleIds.has(i.sale_id)), [saleItems, filteredSaleIds]);
+  const filteredTinyOrders = useMemo(() => {
+    if (storeFilter === "all") return tinyOrders;
+    return tinyOrders.filter(s => s.store_id === storeFilter);
+  }, [tinyOrders, storeFilter]);
 
   const shopifyPaidOrders = useMemo(() => expeditionOrders.filter(o => o.financial_status === "paid"), [expeditionOrders]);
 
+  // Parse items from tiny orders
+  const allTinyItems = useMemo(() => {
+    const items: { name: string; sku: string; quantity: number; unit_price: number; total: number; store_id: string }[] = [];
+    filteredTinyOrders.forEach(order => {
+      try {
+        const parsed = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
+        parsed.forEach((i: any) => items.push({ ...i, store_id: order.store_id }));
+      } catch {}
+    });
+    return items;
+  }, [filteredTinyOrders]);
+
   // KPIs
-  const posTotalRevenue = filteredSales.reduce((s, v) => s + Number(v.total || 0), 0);
-  const posItemsSold = filteredItems.reduce((s, v) => s + v.quantity, 0);
-  const posTicketMedio = filteredSales.length > 0 ? posTotalRevenue / filteredSales.length : 0;
-  const posDiscount = filteredSales.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const tinyTotalRevenue = filteredTinyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
+  const tinyItemsSold = allTinyItems.reduce((s, v) => s + (v.quantity || 0), 0);
+  const tinyDiscount = filteredTinyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
 
   const shopifyRevenue = shopifyPaidOrders.reduce((s, o) => s + Number(o.total_price || 0), 0);
-  const shopifyShipping = shopifyPaidOrders.reduce((s, o) => s + Number(o.total_shipping || 0), 0);
   const shopifyDiscount = shopifyPaidOrders.reduce((s, o) => s + Number(o.total_discount || 0), 0);
 
-  const totalRevenue = posTotalRevenue + shopifyRevenue;
-  const totalOrders = filteredSales.length + shopifyPaidOrders.length;
+  const totalRevenue = tinyTotalRevenue + shopifyRevenue;
+  const totalOrders = filteredTinyOrders.length + shopifyPaidOrders.length;
 
-  // Top products
+  // Top products (from Tiny items)
   const productRanking = useMemo(() => {
     const map = new Map<string, { name: string; qty: number; revenue: number }>();
-    filteredItems.forEach(i => {
-      const key = i.product_name + (i.variant_name ? ` - ${i.variant_name}` : "");
+    allTinyItems.forEach(i => {
+      const key = i.name || i.sku;
+      if (!key) return;
       const cur = map.get(key) || { name: key, qty: 0, revenue: 0 };
-      cur.qty += i.quantity;
-      cur.revenue += Number(i.total_price);
+      cur.qty += i.quantity || 0;
+      cur.revenue += i.total || (i.unit_price * i.quantity) || 0;
       map.set(key, cur);
     });
     return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 15);
-  }, [filteredItems]);
-
-  // Category breakdown
-  const categoryBreakdown = useMemo(() => {
-    const map = new Map<string, number>();
-    filteredItems.forEach(i => {
-      const cat = i.category || "Sem categoria";
-      map.set(cat, (map.get(cat) || 0) + Number(i.total_price));
-    });
-    return [...map.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filteredItems]);
+  }, [allTinyItems]);
 
   // Payment methods
   const paymentBreakdown = useMemo(() => {
     const map = new Map<string, number>();
-    filteredSales.forEach(s => {
+    filteredTinyOrders.forEach(s => {
       const m = s.payment_method || "Outros";
       map.set(m, (map.get(m) || 0) + Number(s.total));
     });
     return [...map.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filteredSales]);
+  }, [filteredTinyOrders]);
 
   // Daily trend
   const dailyTrend = useMemo(() => {
-    const map = new Map<string, { pos: number; shopify: number }>();
-    filteredSales.forEach(s => {
-      const day = format(new Date(s.created_at), "dd/MM");
-      const cur = map.get(day) || { pos: 0, shopify: 0 };
-      cur.pos += Number(s.total);
+    const map = new Map<string, { lojas: number; shopify: number }>();
+    filteredTinyOrders.forEach(s => {
+      const day = s.order_date ? format(new Date(s.order_date + 'T12:00:00'), "dd/MM") : "??";
+      const cur = map.get(day) || { lojas: 0, shopify: 0 };
+      cur.lojas += Number(s.total);
       map.set(day, cur);
     });
     shopifyPaidOrders.forEach(o => {
       const day = format(new Date(o.created_at), "dd/MM");
-      const cur = map.get(day) || { pos: 0, shopify: 0 };
+      const cur = map.get(day) || { lojas: 0, shopify: 0 };
       cur.shopify += Number(o.total_price || 0);
       map.set(day, cur);
     });
-    return [...map.entries()].map(([date, v]) => ({ date, ...v, total: v.pos + v.shopify })).sort((a, b) => a.date.localeCompare(b.date));
-  }, [filteredSales, shopifyPaidOrders]);
+    return [...map.entries()].map(([date, v]) => ({ date, ...v, total: v.lojas + v.shopify })).sort((a, b) => a.date.localeCompare(b.date));
+  }, [filteredTinyOrders, shopifyPaidOrders]);
 
   // Store comparison
   const storeComparison = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; orders: number }>();
     stores.forEach(st => map.set(st.id, { name: st.name, revenue: 0, orders: 0 }));
-    sales.forEach(s => {
+    tinyOrders.forEach(s => {
       const cur = map.get(s.store_id);
       if (cur) { cur.revenue += Number(s.total); cur.orders++; }
     });
-    // Add Shopify as a virtual store
     const shopifyData = { name: "Shopify (Online)", revenue: shopifyRevenue, orders: shopifyPaidOrders.length };
     return [...map.values(), shopifyData].filter(s => s.orders > 0).sort((a, b) => b.revenue - a.revenue);
-  }, [sales, stores, shopifyRevenue, shopifyPaidOrders]);
+  }, [tinyOrders, stores, shopifyRevenue, shopifyPaidOrders]);
 
-  // Inventory summary
+  // Inventory summary (from pos_products synced with Tiny)
   const inventorySummary = useMemo(() => {
-    const byStore = new Map<string, { name: string; totalItems: number; totalValue: number; zeroStock: number }>();
-    stores.forEach(st => byStore.set(st.id, { name: st.name, totalItems: 0, totalValue: 0, zeroStock: 0 }));
+    const byStore = new Map<string, { name: string; totalItems: number; totalValue: number; totalCost: number; zeroStock: number }>();
+    stores.forEach(st => byStore.set(st.id, { name: st.name, totalItems: 0, totalValue: 0, totalCost: 0, zeroStock: 0 }));
     products.forEach(p => {
       const cur = byStore.get(p.store_id);
       if (cur) {
-        cur.totalItems += Number(p.stock || 0);
-        cur.totalValue += Number(p.stock || 0) * Number(p.price || 0);
-        if (Number(p.stock) <= 0) cur.zeroStock++;
+        const stock = Number(p.stock || 0);
+        cur.totalItems += stock;
+        cur.totalValue += stock * Number(p.price || 0);
+        cur.totalCost += stock * Number(p.cost_price || 0);
+        if (stock <= 0) cur.zeroStock++;
       }
     });
     return [...byStore.values()];
   }, [products, stores]);
 
   const totalStockValue = inventorySummary.reduce((s, v) => s + v.totalValue, 0);
+  const totalStockCost = inventorySummary.reduce((s, v) => s + v.totalCost, 0);
   const totalZeroStock = inventorySummary.reduce((s, v) => s + v.zeroStock, 0);
 
   const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
@@ -262,7 +279,10 @@ export default function Management() {
                 <SelectItem value="last_month">Mês passado</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="ghost" size="icon" onClick={fetchData} className="h-8 w-8"><RefreshCw className="h-4 w-4" /></Button>
+            <Button variant="outline" size="sm" onClick={syncFromTiny} disabled={syncing} className="gap-1 h-8 text-xs">
+              {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              {syncing ? "Sincronizando..." : "Sync Tiny"}
+            </Button>
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1 h-8"><Home className="h-4 w-4" /></Button>
           </div>
@@ -277,11 +297,11 @@ export default function Management() {
             {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               <KPICard title="Faturamento Total" value={fmt(totalRevenue)} icon={DollarSign} />
-              <KPICard title="Vendas Lojas" value={fmt(posTotalRevenue)} icon={Store} sub={`${filteredSales.length} vendas`} />
+              <KPICard title="Vendas Lojas (Tiny)" value={fmt(tinyTotalRevenue)} icon={Store} sub={`${filteredTinyOrders.length} pedidos`} />
               <KPICard title="Vendas Shopify" value={fmt(shopifyRevenue)} icon={ShoppingCart} sub={`${shopifyPaidOrders.length} pedidos`} />
               <KPICard title="Ticket Médio" value={fmt(totalOrders > 0 ? totalRevenue / totalOrders : 0)} icon={TrendingUp} />
-              <KPICard title="Itens Vendidos (Loja)" value={posItemsSold.toString()} icon={Package} />
-              <KPICard title="Descontos" value={fmt(posDiscount + shopifyDiscount)} icon={ArrowDownRight} variant="destructive" />
+              <KPICard title="Itens Vendidos" value={tinyItemsSold.toString()} icon={Package} />
+              <KPICard title="Descontos" value={fmt(tinyDiscount + shopifyDiscount)} icon={ArrowDownRight} variant="destructive" />
             </div>
 
             <Tabs defaultValue="overview" className="space-y-4">
@@ -296,7 +316,7 @@ export default function Management() {
               <TabsContent value="overview" className="space-y-4">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <Card className="lg:col-span-2">
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">Faturamento Diário</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Faturamento Diário (Tiny ERP + Shopify)</CardTitle></CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={280}>
                         <BarChart data={dailyTrend}>
@@ -305,7 +325,7 @@ export default function Management() {
                           <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
                           <Tooltip formatter={(v: number) => fmt(v)} />
                           <Legend />
-                          <Bar dataKey="pos" name="Lojas" fill="hsl(48, 95%, 50%)" radius={[4,4,0,0]} />
+                          <Bar dataKey="lojas" name="Lojas (Tiny)" fill="hsl(48, 95%, 50%)" radius={[4,4,0,0]} />
                           <Bar dataKey="shopify" name="Shopify" fill="hsl(25, 90%, 52%)" radius={[4,4,0,0]} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -327,7 +347,6 @@ export default function Management() {
                   </Card>
                 </div>
 
-                {/* Store comparison */}
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-sm">Comparativo por Canal</CardTitle></CardHeader>
                   <CardContent>
@@ -346,10 +365,12 @@ export default function Management() {
 
               {/* Products */}
               <TabsContent value="products" className="space-y-4">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">Top Produtos (Lojas)</CardTitle></CardHeader>
-                    <CardContent>
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Top Produtos (Tiny ERP)</CardTitle></CardHeader>
+                  <CardContent>
+                    {productRanking.length === 0 ? (
+                      <p className="text-muted-foreground text-sm text-center py-8">Sincronize os dados do Tiny para ver o ranking de produtos.</p>
+                    ) : (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -363,30 +384,16 @@ export default function Management() {
                           {productRanking.map((p, i) => (
                             <TableRow key={i}>
                               <TableCell className="font-bold text-primary">{i + 1}</TableCell>
-                              <TableCell className="max-w-[200px] truncate text-xs">{p.name}</TableCell>
+                              <TableCell className="max-w-[300px] truncate text-xs">{p.name}</TableCell>
                               <TableCell className="text-right">{p.qty}</TableCell>
                               <TableCell className="text-right font-semibold">{fmt(p.revenue)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">Receita por Categoria</CardTitle></CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={350}>
-                        <PieChart>
-                          <Pie data={categoryBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={120} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                            {categoryBreakdown.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip formatter={(v: number) => fmt(v)} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-                </div>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               {/* Stores */}
@@ -401,7 +408,7 @@ export default function Management() {
                           </div>
                           <div>
                             <h3 className="font-semibold">{sc.name}</h3>
-                            <p className="text-xs text-muted-foreground">{sc.orders} vendas no período</p>
+                            <p className="text-xs text-muted-foreground">{sc.orders} pedidos no período</p>
                           </div>
                         </div>
                         <div className="space-y-2">
@@ -423,7 +430,9 @@ export default function Management() {
               {/* Inventory */}
               <TabsContent value="inventory" className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                  <KPICard title="Valor em Estoque" value={fmt(totalStockValue)} icon={Package} />
+                  <KPICard title="Valor em Estoque (Venda)" value={fmt(totalStockValue)} icon={Package} />
+                  <KPICard title="Custo em Estoque" value={fmt(totalStockCost)} icon={DollarSign} />
+                  <KPICard title="Margem Estimada" value={totalStockCost > 0 ? `${(((totalStockValue - totalStockCost) / totalStockValue) * 100).toFixed(0)}%` : "—"} icon={TrendingUp} />
                   <KPICard title="Produtos Zerados" value={totalZeroStock.toString()} icon={ArrowDownRight} variant="destructive" />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -437,8 +446,16 @@ export default function Management() {
                             <span className="font-bold">{inv.totalItems.toLocaleString("pt-BR")}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Valor estimado</span>
+                            <span className="text-muted-foreground">Valor (venda)</span>
                             <span className="font-semibold">{fmt(inv.totalValue)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Custo</span>
+                            <span className="font-semibold text-muted-foreground">{fmt(inv.totalCost)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Margem</span>
+                            <span className="font-semibold">{inv.totalCost > 0 ? `${(((inv.totalValue - inv.totalCost) / inv.totalValue) * 100).toFixed(0)}%` : "—"}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Produtos zerados</span>

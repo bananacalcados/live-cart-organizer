@@ -2563,6 +2563,7 @@ export type Database = {
           barcode: string
           category: string | null
           color: string | null
+          cost_price: number | null
           created_at: string
           id: string
           image_url: string | null
@@ -2582,6 +2583,7 @@ export type Database = {
           barcode?: string
           category?: string | null
           color?: string | null
+          cost_price?: number | null
           created_at?: string
           id?: string
           image_url?: string | null
@@ -2601,6 +2603,7 @@ export type Database = {
           barcode?: string
           category?: string | null
           color?: string | null
+          cost_price?: number | null
           created_at?: string
           id?: string
           image_url?: string | null
@@ -3139,6 +3142,112 @@ export type Database = {
           weekly_points?: number
         }
         Relationships: []
+      }
+      tiny_management_sync_log: {
+        Row: {
+          completed_at: string | null
+          error_message: string | null
+          id: string
+          orders_synced: number | null
+          started_at: string
+          status: string
+          store_id: string | null
+          sync_type: string
+        }
+        Insert: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          orders_synced?: number | null
+          started_at?: string
+          status?: string
+          store_id?: string | null
+          sync_type?: string
+        }
+        Update: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          orders_synced?: number | null
+          started_at?: string
+          status?: string
+          store_id?: string | null
+          sync_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiny_management_sync_log_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tiny_synced_orders: {
+        Row: {
+          created_at: string
+          customer_name: string | null
+          discount: number | null
+          id: string
+          items: Json | null
+          order_date: string
+          payment_method: string | null
+          raw_data: Json | null
+          shipping: number | null
+          status: string | null
+          store_id: string
+          subtotal: number | null
+          synced_at: string
+          tiny_order_id: string
+          tiny_order_number: string | null
+          total: number | null
+        }
+        Insert: {
+          created_at?: string
+          customer_name?: string | null
+          discount?: number | null
+          id?: string
+          items?: Json | null
+          order_date: string
+          payment_method?: string | null
+          raw_data?: Json | null
+          shipping?: number | null
+          status?: string | null
+          store_id: string
+          subtotal?: number | null
+          synced_at?: string
+          tiny_order_id: string
+          tiny_order_number?: string | null
+          total?: number | null
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string | null
+          discount?: number | null
+          id?: string
+          items?: Json | null
+          order_date?: string
+          payment_method?: string | null
+          raw_data?: Json | null
+          shipping?: number | null
+          status?: string | null
+          store_id?: string
+          subtotal?: number | null
+          synced_at?: string
+          tiny_order_id?: string
+          tiny_order_number?: string | null
+          total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiny_synced_orders_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_messages: {
         Row: {
