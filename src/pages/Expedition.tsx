@@ -42,6 +42,7 @@ export default function Expedition() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
+  const [openSupportCount, setOpenSupportCount] = useState(0);
 
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
@@ -70,14 +71,28 @@ export default function Expedition() {
     }
   }, [dateFrom, dateTo]);
 
+  // Fetch open support tickets count
+  const fetchSupportCount = useCallback(async () => {
+    const { count } = await supabase
+      .from('support_tickets')
+      .select('*', { count: 'exact', head: true })
+      .in('status', ['new', 'in_progress']);
+    setOpenSupportCount(count || 0);
+  }, []);
+
   useEffect(() => {
     fetchOrders();
+    fetchSupportCount();
     const channel = supabase
       .channel('expedition-orders')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'expedition_orders' }, () => fetchOrders())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchOrders]);
+    const supportChannel = supabase
+      .channel('expedition-support-count')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => fetchSupportCount())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); supabase.removeChannel(supportChannel); };
+  }, [fetchOrders, fetchSupportCount]);
 
   const syncOrders = async () => {
     setIsSyncing(true);
@@ -155,13 +170,14 @@ export default function Expedition() {
       {/* Stats Bar */}
       <div className="border-b border-border/40 bg-card">
         <div className="container py-3">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
             <StatCard label="Total" value={stats.total} icon={<Package className="h-4 w-4" />} />
             <StatCard label="Aprovados" value={stats.approved} icon={<CheckCircle2 className="h-4 w-4 text-green-500" />} />
-            <StatCard label="Pendentes" value={stats.pending} icon={<AlertTriangle className="h-4 w-4 text-yellow-500" />} />
+            <StatCard label="Pendentes" value={stats.pending} icon={<AlertTriangle className="h-4 w-4 text-orange-500" />} />
             <StatCard label="Separando" value={stats.picking} icon={<ClipboardList className="h-4 w-4 text-blue-500" />} />
             <StatCard label="Embalados" value={stats.packed} icon={<PackageCheck className="h-4 w-4 text-purple-500" />} />
             <StatCard label="Despachados" value={stats.dispatched} icon={<Truck className="h-4 w-4 text-primary" />} />
+            <StatCard label="Suportes Abertos" value={openSupportCount} icon={<HeadphonesIcon className="h-4 w-4 text-destructive" />} highlight={openSupportCount > 0} />
           </div>
         </div>
       </div>
@@ -340,12 +356,12 @@ export default function Expedition() {
   );
 }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function StatCard({ label, value, icon, highlight }: { label: string; value: number; icon: React.ReactNode; highlight?: boolean }) {
   return (
-    <div className="flex items-center gap-2 p-2 rounded-lg bg-background border border-border/50">
+    <div className={`flex items-center gap-2 p-2 rounded-lg bg-background border ${highlight ? 'border-destructive/50 bg-destructive/5 animate-pulse' : 'border-border/50'}`}>
       {icon}
       <div>
-        <p className="text-lg font-bold text-foreground">{value}</p>
+        <p className={`text-lg font-bold ${highlight ? 'text-destructive' : 'text-foreground'}`}>{value}</p>
         <p className="text-xs text-muted-foreground">{label}</p>
       </div>
     </div>
