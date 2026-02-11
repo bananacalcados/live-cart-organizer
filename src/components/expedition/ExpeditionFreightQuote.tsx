@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Truck, Receipt, Tag, CheckCircle2, Download, RefreshCw } from 'lucide-react';
+import { Loader2, Truck, Receipt, Tag, CheckCircle2, Download, RefreshCw, Printer } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -163,6 +163,75 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
     }
   };
 
+  const printShippingLabel = (order: any) => {
+    const addr = order.shipping_address as any;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(`<html><head><title>Etiqueta Envio - ${order.shopify_order_name}</title>
+<style>
+  @page { size: 100mm 150mm; margin: 3mm; }
+  body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 8px; }
+  .box { border: 2px solid #000; padding: 8px; }
+  .section { border-bottom: 1px solid #ccc; padding: 6px 0; }
+  .label { font-size: 9px; color: #666; text-transform: uppercase; }
+  .value { font-size: 13px; font-weight: bold; }
+  .tracking { font-size: 18px; font-weight: bold; text-align: center; letter-spacing: 2px; margin: 8px 0; }
+  .barcode { text-align: center; font-family: monospace; font-size: 14px; margin: 6px 0; }
+</style></head><body>
+<div class="box">
+  <div class="section" style="text-align:center;font-weight:bold;font-size:14px;">
+    ${order.freight_carrier || 'TRANSPORTADORA'} — ${order.freight_service || ''}
+  </div>
+  <div class="section">
+    <div class="label">Destinatário</div>
+    <div class="value">${order.customer_name || ''}</div>
+    <div>${addr?.address1 || ''} ${addr?.address2 || ''}</div>
+    <div>${addr?.city || ''} / ${addr?.province || ''} — CEP: ${addr?.zip || ''}</div>
+    <div>${order.customer_phone || ''}</div>
+  </div>
+  <div class="section">
+    <div class="label">Pedido</div>
+    <div class="value">${order.shopify_order_name}</div>
+  </div>
+  ${order.freight_tracking_code ? `<div class="tracking">${order.freight_tracking_code}</div>` : ''}
+  ${order.invoice_number ? `<div class="section"><div class="label">NF-e</div><div class="value">${order.invoice_number}</div></div>` : ''}
+  <div class="barcode">${order.internal_barcode || ''}</div>
+</div>
+</body></html>`);
+    w.document.close();
+    w.print();
+  };
+
+  const printInternalLabel = (order: any) => {
+    const w = window.open('', '_blank');
+    if (!w) return;
+    const items = order.expedition_order_items || [];
+    const itemLines = items.map((it: any, i: number) =>
+      `<tr><td>${i + 1}</td><td>${it.product_name}${it.variant_name ? ' — ' + it.variant_name : ''}</td><td style="text-align:center">${it.quantity}</td><td style="font-family:monospace;font-size:10px">${it.sku || '-'}</td></tr>`
+    ).join('');
+    w.document.write(`<html><head><title>Etiqueta Interna - ${order.shopify_order_name}</title>
+<style>
+  @page { size: 100mm 80mm; margin: 2mm; }
+  body { font-family: Arial, sans-serif; font-size: 10px; margin: 0; padding: 6px; }
+  .box { border: 2px dashed #000; padding: 6px; }
+  .title { font-size: 14px; font-weight: bold; text-align: center; margin-bottom: 4px; }
+  .code { font-family: monospace; font-size: 16px; font-weight: bold; text-align: center; letter-spacing: 2px; margin: 6px 0; border: 1px solid #000; padding: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  th, td { border: 1px solid #ccc; padding: 2px 4px; text-align: left; font-size: 9px; }
+  th { background: #eee; }
+  .footer { margin-top: 6px; font-size: 9px; text-align: center; color: #666; }
+</style></head><body>
+<div class="box">
+  <div class="title">${order.shopify_order_name} — ${order.customer_name || ''}</div>
+  <div class="code">${order.internal_barcode}</div>
+  ${items.length > 0 ? `<table><thead><tr><th>#</th><th>Produto</th><th>Qtd</th><th>SKU</th></tr></thead><tbody>${itemLines}</tbody></table>` : ''}
+  <div class="footer">${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} • ${order.freight_carrier || ''} ${order.freight_tracking_code || ''}</div>
+</div>
+</body></html>`);
+    w.document.close();
+    w.print();
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-foreground">
@@ -291,25 +360,54 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
 
                 {/* Labels section */}
                 {activeTab === 'labels' && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {order.internal_barcode ? (
-                      <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <CheckCircle2 className="h-4 w-4 text-green-500" />
-                              <span className="font-medium text-foreground">Código Interno</span>
-                            </div>
-                            <p className="text-lg font-mono font-bold mt-1 text-foreground">{order.internal_barcode}</p>
-                          </div>
-                          {order.freight_tracking_code && (
+                      <>
+                        <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800">
+                          <div className="flex items-center justify-between">
                             <div>
-                              <p className="text-xs text-muted-foreground">Rastreio</p>
-                              <p className="font-mono font-bold text-foreground">{order.freight_tracking_code}</p>
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                <span className="font-medium text-foreground">Código Interno</span>
+                              </div>
+                              <p className="text-lg font-mono font-bold mt-1 text-foreground">{order.internal_barcode}</p>
                             </div>
-                          )}
+                            {order.freight_tracking_code && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Rastreio</p>
+                                <p className="font-mono font-bold text-foreground">{order.freight_tracking_code}</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
+
+                        {/* Print buttons */}
+                        <div className="flex flex-wrap gap-2">
+                          {order.freight_label_url && (
+                            <Button size="sm" variant="outline" className="gap-2" asChild>
+                              <a href={order.freight_label_url} target="_blank" rel="noopener noreferrer">
+                                <Download className="h-4 w-4" /> Baixar Etiqueta Envio
+                              </a>
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => printShippingLabel(order)}
+                          >
+                            <Printer className="h-4 w-4" /> Imprimir Etiqueta Envio
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="gap-2"
+                            onClick={() => printInternalLabel(order)}
+                          >
+                            <Printer className="h-4 w-4" /> Imprimir Etiqueta Interna
+                          </Button>
+                        </div>
+                      </>
                     ) : (
                       <Button
                         onClick={() => handleGenerateLabel(order.id)}
