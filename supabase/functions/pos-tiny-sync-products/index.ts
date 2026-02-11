@@ -130,7 +130,7 @@ serve(async (req) => {
               size: nameInfo.size,
               color: nameInfo.color,
               price: parseFloat(p.preco || '0'),
-              barcode: '',
+              barcode: p.gtin || p.codigo || '',
               stock: 0,
               is_active: p.situacao === 'A',
               synced_at: new Date().toISOString(),
