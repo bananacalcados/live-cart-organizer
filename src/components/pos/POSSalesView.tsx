@@ -230,24 +230,48 @@ export function POSSalesView({ storeId, sellerId }: Props) {
       const isBarcode = /^\d{8,14}$/.test(query);
 
       if (isBarcode) {
-        // Barcode: search local DB by exact barcode
+        // Barcode: first try local DB by exact barcode OR sku
         const { data } = await supabase
           .from('pos_products')
           .select('*')
           .eq('store_id', storeId)
-          .eq('barcode', query)
+          .or(`barcode.eq.${query},sku.eq.${query}`)
           .eq('is_active', true)
           .limit(10);
 
         if (data && data.length > 0) {
-          if (data.length === 1) {
-            addToCart(mapDbProduct(data[0]));
+          // Found in cache — use it but also fetch real-time stock from Tiny API in background
+          const products = data.map(mapDbProduct);
+          if (products.length === 1) {
+            addToCart(products[0]);
             setBarcodeInput("");
           } else {
-            setSearchResults(data.map(mapDbProduct));
+            setSearchResults(products);
           }
+          // Fetch real-time stock in background for found products
+          fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-product`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+            body: JSON.stringify({ store_id: storeId, gtin: query }),
+          }).then(r => r.json()).then(apiData => {
+            if (apiData.success && apiData.products?.length > 0) {
+              // Update stock in cache
+              for (const ap of apiData.products) {
+                supabase.from('pos_products')
+                  .update({ stock: ap.stock, barcode: ap.barcode || query })
+                  .eq('store_id', storeId)
+                  .eq('sku', ap.sku)
+                  .then(() => {});
+              }
+              // Update cart with real stock
+              setCart(prev => prev.map(item => {
+                const match = apiData.products.find((ap: any) => ap.sku === item.sku);
+                return match ? { ...item, stock: match.stock } : item;
+              }));
+            }
+          }).catch(() => {});
         } else {
-          // Fallback to Tiny API for barcode not in local DB
+          // Not in cache — fetch from Tiny API (returns stock)
           const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-product`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
