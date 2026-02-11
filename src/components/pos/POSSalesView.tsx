@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import {
   ScanBarcode, Search, Plus, Minus, Trash2, User, CreditCard,
   Receipt, Printer, Camera, ShoppingCart, Package, Check,
-  QrCode, Banknote, FileText, ChevronRight, Loader2, Users
+  QrCode, Banknote, FileText, ChevronRight, Loader2, Users,
+  Lock, MessageSquare, RotateCcw, Phone, Bell
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,13 +78,74 @@ export function POSSalesView({ storeId, sellerId }: Props) {
   const [installments, setInstallments] = useState("1");
   const [cashReceived, setCashReceived] = useState("");
 
+  // Cash register gate
+  const [hasOpenRegister, setHasOpenRegister] = useState<boolean | null>(null);
+  const [checkingRegister, setCheckingRegister] = useState(true);
+
+  // Notification counters
+  const [unreadWhatsApp, setUnreadWhatsApp] = useState(0);
+  const [unreadTeamChat, setUnreadTeamChat] = useState(0);
+  const [pendingReturns, setPendingReturns] = useState(0);
+
   const subtotal = cart.reduce((s, item) => s + item.price * item.quantity, 0);
   const totalItems = cart.reduce((s, item) => s + item.quantity, 0);
 
+  // Check if cash register is open
+  useEffect(() => {
+    checkCashRegister();
+  }, [storeId]);
+
+  const checkCashRegister = async () => {
+    setCheckingRegister(true);
+    try {
+      const { data, error } = await supabase
+        .from('pos_cash_registers')
+        .select('id')
+        .eq('store_id', storeId)
+        .eq('status', 'open')
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      setHasOpenRegister(!!data);
+    } catch (e) {
+      console.error(e);
+      setHasOpenRegister(false);
+    } finally {
+      setCheckingRegister(false);
+    }
+  };
+
+  // Load notification counts
+  useEffect(() => {
+    if (!hasOpenRegister) return;
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 30000); // refresh every 30s
+    return () => clearInterval(interval);
+  }, [hasOpenRegister]);
+
+  const loadNotifications = async () => {
+    try {
+      // Unread WhatsApp messages (conversations with unanswered messages)
+      const { count: whatsAppCount } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('has_unread_messages', true);
+      setUnreadWhatsApp(whatsAppCount || 0);
+
+      // Team chat unread count from localStorage
+      const storedUnread = parseInt(localStorage.getItem('team_chat_unread') || '0', 10);
+      setUnreadTeamChat(storedUnread);
+    } catch (e) {
+      // silently fail for non-critical notifications
+      console.error('Notification load error:', e);
+    }
+  };
+
   // Load sellers on mount
   useEffect(() => {
+    if (!hasOpenRegister) return;
     loadSellers();
-  }, [storeId]);
+  }, [storeId, hasOpenRegister]);
 
   const loadSellers = async () => {
     setLoadingSellers(true);
@@ -156,7 +218,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
       const data = await resp.json();
 
       if (data.success && data.products.length > 0) {
-        if (data.products.length === 1 || isBarcode) {
+        if (data.products.length === 1 && isBarcode) {
           const product = data.products[0];
           addToCart(product);
           setBarcodeInput("");
@@ -311,8 +373,98 @@ export function POSSalesView({ storeId, sellerId }: Props) {
   const selectedPaymentName = paymentMethods.find(m => m.id === selectedPayment)?.name || '';
   const cashChange = cashReceived ? Math.max(0, parseFloat(cashReceived) - subtotal) : 0;
 
+  // --- GATE: Cash register must be open ---
+  if (checkingRegister) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-pos-white/50">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" /> Verificando caixa...
+      </div>
+    );
+  }
+
+  if (!hasOpenRegister) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="h-20 w-20 mx-auto rounded-full bg-red-500/10 flex items-center justify-center">
+            <Lock className="h-10 w-10 text-red-400" />
+          </div>
+          <h3 className="text-xl font-bold text-pos-white">Caixa Fechado</h3>
+          <p className="text-pos-white/50">
+            É necessário abrir o caixa antes de iniciar as vendas. Vá até a seção <strong className="text-pos-yellow">Caixa</strong> para fazer a abertura.
+          </p>
+          <div className="flex items-center justify-center gap-2 text-xs text-pos-white/30">
+            <Lock className="h-3 w-3" />
+            Vendas bloqueadas até a abertura do caixa
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const totalNotifications = unreadWhatsApp + unreadTeamChat + pendingReturns;
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
+      {/* Notification Dashboard */}
+      {step === "scan" && (
+        <div className="flex items-stretch gap-3 px-4 pt-3 pb-1">
+          <div className={cn(
+            "flex-1 flex items-center gap-3 rounded-xl p-3 border transition-all",
+            unreadWhatsApp > 0
+              ? "bg-green-500/10 border-green-500/30"
+              : "bg-pos-white/5 border-pos-white/10"
+          )}>
+            <div className={cn("p-2 rounded-lg", unreadWhatsApp > 0 ? "bg-green-500/20" : "bg-pos-white/10")}>
+              <Phone className={cn("h-5 w-5", unreadWhatsApp > 0 ? "text-green-400" : "text-pos-white/30")} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-pos-white/40 font-medium">WhatsApp</p>
+              <p className={cn("text-lg font-bold leading-tight", unreadWhatsApp > 0 ? "text-green-400" : "text-pos-white/30")}>
+                {unreadWhatsApp}
+              </p>
+              <p className="text-[10px] text-pos-white/40">sem resposta</p>
+            </div>
+          </div>
+
+          <div className={cn(
+            "flex-1 flex items-center gap-3 rounded-xl p-3 border transition-all",
+            pendingReturns > 0
+              ? "bg-pos-orange/10 border-pos-orange/30"
+              : "bg-pos-white/5 border-pos-white/10"
+          )}>
+            <div className={cn("p-2 rounded-lg", pendingReturns > 0 ? "bg-pos-orange/20" : "bg-pos-white/10")}>
+              <RotateCcw className={cn("h-5 w-5", pendingReturns > 0 ? "text-pos-orange" : "text-pos-white/30")} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-pos-white/40 font-medium">Trocas</p>
+              <p className={cn("text-lg font-bold leading-tight", pendingReturns > 0 ? "text-pos-orange" : "text-pos-white/30")}>
+                {pendingReturns}
+              </p>
+              <p className="text-[10px] text-pos-white/40">solicitações</p>
+            </div>
+          </div>
+
+          <div className={cn(
+            "flex-1 flex items-center gap-3 rounded-xl p-3 border transition-all",
+            unreadTeamChat > 0
+              ? "bg-pos-yellow/10 border-pos-yellow/30"
+              : "bg-pos-white/5 border-pos-white/10"
+          )}>
+            <div className={cn("p-2 rounded-lg", unreadTeamChat > 0 ? "bg-pos-yellow/20" : "bg-pos-white/10")}>
+              <MessageSquare className={cn("h-5 w-5", unreadTeamChat > 0 ? "text-pos-yellow" : "text-pos-white/30")} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-pos-white/40 font-medium">Chat Equipe</p>
+              <p className={cn("text-lg font-bold leading-tight", unreadTeamChat > 0 ? "text-pos-yellow" : "text-pos-white/30")}>
+                {unreadTeamChat}
+              </p>
+              <p className="text-[10px] text-pos-white/40">não lidas</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Seller selector + Step Navigation */}
       <div className="flex items-center gap-1 p-3 border-b border-pos-yellow/10 bg-pos-black">
         {/* Seller */}
@@ -361,7 +513,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                   <div className="relative flex-1">
                     <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-yellow" />
                     <Input
-                      placeholder="Bipe o código de barras ou digite o SKU..."
+                      placeholder="Bipe o código de barras, SKU ou nome do produto..."
                       value={barcodeInput}
                       onChange={(e) => setBarcodeInput(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleBarcodeScan()}
@@ -408,7 +560,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                     <div className="text-center py-20 text-pos-white/40">
                       <ScanBarcode className="h-16 w-16 mx-auto mb-4 opacity-30" />
                       <p className="text-lg font-medium">Nenhum produto adicionado</p>
-                      <p className="text-sm mt-1">Bipe um código de barras ou busque por SKU</p>
+                      <p className="text-sm mt-1">Bipe um código de barras, SKU ou busque pelo nome</p>
                     </div>
                   ) : cart.map(item => (
                     <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl border border-pos-yellow/10 bg-pos-white/5 hover:border-pos-yellow/30 transition-all">
@@ -647,6 +799,8 @@ export function POSSalesView({ storeId, sellerId }: Props) {
               onClick={() => {
                 if (step === "payment") {
                   finalizeSale();
+                } else if (step === "invoice") {
+                  resetSale();
                 } else if (stepIndex < steps.length - 1) {
                   setStep(steps[stepIndex + 1].id);
                 }
