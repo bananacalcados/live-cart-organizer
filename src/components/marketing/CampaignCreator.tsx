@@ -221,7 +221,7 @@ export function CampaignCreator({ open, onOpenChange, customerStats, onCreated }
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
-      <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />Nova Campanha 360°
@@ -242,8 +242,8 @@ export function CampaignCreator({ open, onOpenChange, customerStats, onCreated }
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
-          <div className="space-y-4 py-2">
+        <ScrollArea className="flex-1 min-h-0 pr-4">
+          <div className="space-y-4 py-2 pb-4">
             {/* STEP 1: BRIEFING */}
             {step === 'briefing' && (
               <Card className="border-dashed border-primary/30 bg-primary/5">

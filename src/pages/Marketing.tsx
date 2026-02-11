@@ -29,6 +29,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
 import { CampaignCreator } from "@/components/marketing/CampaignCreator";
 import { CampaignDetail } from "@/components/marketing/CampaignDetail";
+import { CampaignCardExpanded } from "@/components/marketing/CampaignCardExpanded";
 
 // ─── Types ──────────────────────────────────────
 
@@ -330,33 +331,12 @@ export default function Marketing() {
 
             <div className="grid gap-3">
               {campaigns.map(c => (
-                <Card key={c.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedCampaign(c)}>
-                  <CardContent className="pt-4 pb-3 px-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold text-sm truncate">{c.name}</h3>
-                          <Badge className={`text-[10px] ${STATUS_COLORS[c.status] || ''}`}>
-                            {STATUS_LABELS[c.status] || c.status}
-                          </Badge>
-                        </div>
-                        {c.description && <p className="text-xs text-muted-foreground line-clamp-1">{c.description}</p>}
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          {c.channels?.map(ch => {
-                            const Icon = CHANNEL_ICONS[ch] || Sparkles;
-                            return <Badge key={ch} variant="outline" className="text-[10px] gap-0.5"><Icon className="h-2.5 w-2.5" />{ch}</Badge>;
-                          })}
-                          {c.start_date && <span className="text-[10px] text-muted-foreground">📅 {c.start_date}</span>}
-                          {c.budget ? <span className="text-[10px] text-muted-foreground">💰 {formatCurrency(c.budget)}</span> : null}
-                          <span className="text-[10px] text-muted-foreground">{formatDate(c.created_at)}</span>
-                        </div>
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={(e) => { e.stopPropagation(); deleteCampaign(c.id); }}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                <CampaignCardExpanded
+                  key={c.id}
+                  campaign={c}
+                  onOpenDetail={() => setSelectedCampaign(c)}
+                  onDelete={() => deleteCampaign(c.id)}
+                />
               ))}
               {campaigns.length === 0 && (
                 <Card>
