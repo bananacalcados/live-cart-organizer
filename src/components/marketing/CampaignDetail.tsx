@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import {
   CheckCircle2, Circle, Clock, Send, Trash2, Eye, Calendar,
   ListChecks, MessageSquare, Instagram, Mail, Store, Globe, Sparkles,
-  Target, BarChart3, DollarSign, Users, TrendingUp, ChevronRight
+  Target, BarChart3, DollarSign, Users, TrendingUp, ChevronRight,
+  Pencil, Save, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 
 const CHANNEL_META: Record<string, { icon: typeof Send; label: string; color: string }> = {
   whatsapp: { icon: MessageSquare, label: "WhatsApp", color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/30" },
@@ -93,6 +95,9 @@ export function CampaignDetail({ campaign, onClose, onStatusChange }: Props) {
   const [channels, setChannels] = useState<ChannelRecord[]>([]);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
+  const [editingChannel, setEditingChannel] = useState<string | null>(null);
+  const [editStrategy, setEditStrategy] = useState("");
+  const [editTone, setEditTone] = useState("");
 
   const fetchData = useCallback(async () => {
     if (!campaign) return;
@@ -114,6 +119,23 @@ export function CampaignDetail({ campaign, onClose, onStatusChange }: Props) {
     if (!error) setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
   };
 
+  const startEditChannel = (ch: ChannelRecord) => {
+    setEditingChannel(ch.id);
+    setEditStrategy(ch.strategy || "");
+    setEditTone(ch.tone_of_voice || "");
+  };
+
+  const saveChannelEdit = async (channelId: string) => {
+    const { error } = await supabase.from('campaign_channels').update({
+      strategy: editStrategy,
+      tone_of_voice: editTone,
+    }).eq('id', channelId);
+    if (error) { toast.error("Erro ao salvar"); return; }
+    setChannels(prev => prev.map(c => c.id === channelId ? { ...c, strategy: editStrategy, tone_of_voice: editTone } : c));
+    setEditingChannel(null);
+    toast.success("Estratégia atualizada!");
+  };
+
   if (!campaign) return null;
 
   const doneCount = tasks.filter(t => t.status === 'done').length;
@@ -124,7 +146,7 @@ export function CampaignDetail({ campaign, onClose, onStatusChange }: Props) {
 
   return (
     <Dialog open={!!campaign} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {campaign.name}
@@ -136,7 +158,7 @@ export function CampaignDetail({ campaign, onClose, onStatusChange }: Props) {
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-          <TabsList className="bg-transparent p-0 gap-1 shrink-0">
+          <TabsList className="bg-transparent p-0 gap-1 shrink-0 flex-wrap h-auto">
             <TabsTrigger value="overview" className="gap-1 text-xs"><Target className="h-3 w-3" />Visão Geral</TabsTrigger>
             {channels.map(ch => {
               const meta = CHANNEL_META[ch.channel_type] || CHANNEL_META.outros;
@@ -151,7 +173,7 @@ export function CampaignDetail({ campaign, onClose, onStatusChange }: Props) {
             <TabsTrigger value="metrics" className="gap-1 text-xs"><BarChart3 className="h-3 w-3" />Métricas</TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="flex-1 mt-3">
+          <ScrollArea className="flex-1 min-h-0 mt-3">
             {/* OVERVIEW */}
             <TabsContent value="overview" className="space-y-3 mt-0">
               {/* Progress */}
@@ -168,7 +190,7 @@ export function CampaignDetail({ campaign, onClose, onStatusChange }: Props) {
               </Card>
 
               {/* Dates & Budget */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <Card><CardContent className="pt-3 pb-2 px-3 text-center">
                   <Calendar className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
                   <p className="text-xs text-muted-foreground">Início</p>
@@ -224,16 +246,45 @@ export function CampaignDetail({ campaign, onClose, onStatusChange }: Props) {
               const meta = CHANNEL_META[ch.channel_type] || CHANNEL_META.outros;
               const chTasks = tasks.filter(t => t.channel_id === ch.id);
               const contentPlan = Array.isArray(ch.content_plan) ? ch.content_plan : [];
+              const isEditing = editingChannel === ch.id;
               return (
                 <TabsContent key={ch.id} value={ch.channel_type} className="space-y-3 mt-0">
-                  {ch.strategy && (
-                    <Card>
-                      <CardContent className="pt-3 pb-3 px-4">
-                        <p className="text-sm">{ch.strategy}</p>
-                        {ch.tone_of_voice && <Badge variant="secondary" className="text-[10px] mt-1">🎤 Tom: {ch.tone_of_voice}</Badge>}
-                      </CardContent>
-                    </Card>
-                  )}
+                  {/* Strategy - editable */}
+                  <Card>
+                    <CardContent className="pt-3 pb-3 px-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="text-xs font-semibold text-muted-foreground">Estratégia</h5>
+                        {!isEditing ? (
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => startEditChannel(ch)}>
+                            <Pencil className="h-3 w-3" />Editar
+                          </Button>
+                        ) : (
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => setEditingChannel(null)}>
+                              <X className="h-3 w-3" />Cancelar
+                            </Button>
+                            <Button size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => saveChannelEdit(ch.id)}>
+                              <Save className="h-3 w-3" />Salvar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      {isEditing ? (
+                        <div className="space-y-2">
+                          <Textarea value={editStrategy} onChange={e => setEditStrategy(e.target.value)} rows={4} className="text-sm" />
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">🎤 Tom:</span>
+                            <Input value={editTone} onChange={e => setEditTone(e.target.value)} className="text-xs h-7" />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-sm">{ch.strategy}</p>
+                          {ch.tone_of_voice && <Badge variant="secondary" className="text-[10px] mt-1">🎤 Tom: {ch.tone_of_voice}</Badge>}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
 
                   {/* Cronograma */}
                   {contentPlan.length > 0 && (
