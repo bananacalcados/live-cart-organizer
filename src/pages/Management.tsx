@@ -213,9 +213,64 @@ export default function Management() {
     runSyncWithResume({ date_from: fromDate, date_to: toDate, sync_stock: false });
   };
 
-  const syncTinyStock = () => {
+  const syncTinyStock = async () => {
     setSyncingStock(true);
-    runSyncWithResume({ stock_only: true }).finally(() => setSyncingStock(false));
+    setSyncProgress({ currentDate: "Estoque: Iniciando...", storeName: "", phase: "stock" });
+
+    const pollInterval = setInterval(async () => {
+      const { data: logs } = await supabase
+        .from('tiny_management_sync_log')
+        .select('orders_synced, status, store_id, current_date_syncing, phase')
+        .in('status', ['running', 'partial'])
+        .order('started_at', { ascending: false })
+        .limit(1);
+      if (logs && logs.length > 0) {
+        const log = logs[0] as any;
+        const storeName = stores.find(s => s.id === log.store_id)?.name || "Loja";
+        setSyncProgress({ currentDate: log.current_date_syncing || "Processando...", storeName, phase: 'stock' });
+      }
+    }, 1500);
+
+    try {
+      const storesToSync = stores.map(s => s.id);
+      for (const sid of storesToSync) {
+        let currentBody: any = { stock_only: true, store_id: sid };
+        let attempts = 0;
+        const MAX_ATTEMPTS = 30;
+
+        while (attempts < MAX_ATTEMPTS) {
+          attempts++;
+          const { data, error } = await supabase.functions.invoke('tiny-sync-management', { body: currentBody });
+          if (error) throw error;
+
+          const partialResults = data?.results || [];
+          const partial = partialResults.find((r: any) => r.status === 'partial');
+          if (partial?.resume_stock_page) {
+            const stName = stores.find(s => s.id === sid)?.name || "Loja";
+            toast.info(`Continuando estoque ${stName}... (pg ${partial.resume_stock_page})`);
+            currentBody = {
+              store_id: partial.store_id,
+              stock_only: true,
+              resume_stock_page: partial.resume_stock_page,
+              resume_log_id: partial.resume_log_id,
+            };
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+          break;
+        }
+        const stName = stores.find(s => s.id === sid)?.name || "Loja";
+        toast.success(`Estoque ${stName} sincronizado`);
+      }
+      toast.success("Sincronização de estoque concluída!");
+      fetchData();
+    } catch (e: any) {
+      toast.error(`Erro na sincronização de estoque: ${e.message}`);
+    } finally {
+      clearInterval(pollInterval);
+      setSyncingStock(false);
+      setSyncProgress(null);
+    }
   };
 
   const syncShopifyOrders = async () => {
@@ -409,7 +464,9 @@ export default function Management() {
             </Button>
             <Button variant="outline" size="sm" onClick={syncTinyStock} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(25,90%,52%)] text-white border-[hsl(25,90%,52%)] hover:bg-[hsl(25,90%,45%)]">
               {syncingStock ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Box className="h-3.5 w-3.5" />}
-              {syncingStock ? "Estoque..." : "Estoque"}
+              {syncingStock && syncProgress
+                ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
+                : syncingStock ? "Estoque..." : "Estoque"}
             </Button>
             <Button variant="outline" size="sm" onClick={syncShopifyOrders} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(0,0%,15%)] text-[hsl(45,10%,90%)] border-[hsl(0,0%,25%)] hover:bg-[hsl(0,0%,20%)]">
               {syncingShopify ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingBag className="h-3.5 w-3.5" />}

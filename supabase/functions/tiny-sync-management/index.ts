@@ -109,7 +109,7 @@ serve(async (req) => {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
                   token, formato: 'json', pagina: String(page),
-                  dataInicial: dayStr, dataFinal: dayStr, situacao: 'aprovado',
+                  dataInicial: dayStr, dataFinal: dayStr,
                 }).toString(),
               });
               const data = await resp.json();
