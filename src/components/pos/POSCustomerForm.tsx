@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,9 @@ import { toast } from "sonner";
 
 const AGE_RANGES = ["18-24", "25-34", "35-44", "45-54", "55+"];
 const STYLES = ["Casual", "Esportivo", "Clássico", "Streetwear", "Romântico", "Minimalista", "Boho", "Fashion"];
+const GENDERS = ["Feminino", "Masculino", "Outro", "Prefiro não informar"];
+const SHOE_SIZES = ["33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44"];
+const CHILDREN_AGE_RANGES = ["0-2 anos", "3-5 anos", "6-10 anos", "11-14 anos", "15-17 anos"];
 
 interface Props {
   open: boolean;
@@ -27,14 +31,15 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
     cep: "", address: "", address_number: "", complement: "",
     neighborhood: "", city: "", state: "",
     age_range: "", preferred_style: "", notes: "",
+    shoe_size: "", gender: "", has_children: false, children_age_range: "",
   });
 
-  const update = (field: string, value: string) => setForm(f => ({ ...f, [field]: value }));
+  const update = (field: string, value: string | boolean) => setForm(f => ({ ...f, [field]: value }));
 
   // Calculate completeness for gamification
-  const fields = Object.values(form);
-  const filled = fields.filter(v => v.trim()).length;
-  const completeness = Math.round((filled / fields.length) * 100);
+  const stringFields = [form.name, form.email, form.whatsapp, form.cpf, form.cep, form.address, form.address_number, form.complement, form.neighborhood, form.city, form.state, form.age_range, form.preferred_style, form.notes, form.shoe_size, form.gender, form.children_age_range];
+  const filled = stringFields.filter(v => v.trim()).length + (form.has_children ? 1 : 0);
+  const completeness = Math.round((filled / (stringFields.length + 1)) * 100);
 
   const handleCepLookup = async () => {
     if (form.cep.length < 8) return;
@@ -77,14 +82,18 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
           age_range: form.age_range || null,
           preferred_style: form.preferred_style || null,
           notes: form.notes || null,
-        })
+          shoe_size: form.shoe_size || null,
+          gender: form.gender || null,
+          has_children: form.has_children,
+          children_age_range: form.children_age_range || null,
+        } as any)
         .select()
         .single();
 
       if (error) throw error;
       toast.success("Cliente cadastrado!");
       onSaved({ id: data.id, name: data.name || '', cpf: data.cpf || undefined });
-      setForm({ name: "", email: "", whatsapp: "", cpf: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", age_range: "", preferred_style: "", notes: "" });
+      setForm({ name: "", email: "", whatsapp: "", cpf: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", age_range: "", preferred_style: "", notes: "", shoe_size: "", gender: "", has_children: false, children_age_range: "" });
     } catch (e: any) {
       console.error(e);
       toast.error("Erro ao salvar cliente");
@@ -177,11 +186,29 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
               <h3 className="text-sm font-bold text-pos-orange uppercase tracking-wider">Preferências (CRM)</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <Label className="text-pos-white/70 text-xs">Sexo</Label>
+                  <Select value={form.gender} onValueChange={v => update('gender', v)}>
+                    <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {GENDERS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
                   <Label className="text-pos-white/70 text-xs">Faixa de Idade</Label>
                   <Select value={form.age_range} onValueChange={v => update('age_range', v)}>
                     <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {AGE_RANGES.map(r => <SelectItem key={r} value={r}>{r} anos</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Tamanho (Calçado)</Label>
+                  <Select value={form.shoe_size} onValueChange={v => update('shoe_size', v)}>
+                    <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {SHOE_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -194,6 +221,23 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 items-end">
+                <div className="flex items-center gap-3 py-2">
+                  <Switch checked={form.has_children} onCheckedChange={v => update('has_children', v)} />
+                  <Label className="text-pos-white/70 text-xs">Possui filhos?</Label>
+                </div>
+                {form.has_children && (
+                  <div>
+                    <Label className="text-pos-white/70 text-xs">Faixa Etária dos Filhos</Label>
+                    <Select value={form.children_age_range} onValueChange={v => update('children_age_range', v)}>
+                      <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {CHILDREN_AGE_RANGES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
               <div>
                 <Label className="text-pos-white/70 text-xs">Observações</Label>

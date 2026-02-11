@@ -35,15 +35,14 @@ serve(async (req) => {
     });
 
     const data = await resp.json();
-    console.log('Tiny payment methods response:', JSON.stringify(data.retorno?.status));
+    console.log('Tiny payment methods full response:', JSON.stringify(data.retorno));
 
-    const rawMethods = data.retorno?.formas_recebimento || data.retorno?.formasPagamento || [];
-    const methods = rawMethods.map((item: any) => {
-      const inner = item.forma_recebimento || item.formaPagamento || item;
-      return {
-        id: String(inner.id || item.id),
-        name: inner.descricao || inner.nome || item.descricao || 'Sem nome',
-      };
+    const rawMethods = data.retorno?.formas_recebimento || data.retorno?.formasPagamento || data.retorno?.formasRecebimento || [];
+    const methods = rawMethods.map((item: any, idx: number) => {
+      const inner = item.forma_recebimento || item.formaRecebimento || item.formaPagamento || item;
+      const name = inner.descricao || inner.nome || item.descricao || item.nome || 'Sem nome';
+      const id = String(inner.id || item.id || name.toLowerCase().replace(/\s+/g, '_'));
+      return { id, name };
     });
 
     return new Response(JSON.stringify({ success: true, methods }), {
