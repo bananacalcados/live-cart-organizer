@@ -43,6 +43,7 @@ interface ExpeditionOrder {
   expedition_status: string;
   created_at: string;
   customer_name: string | null;
+  shopify_created_at: string | null;
 }
 
 interface StoreRow {
@@ -102,8 +103,8 @@ export default function Management() {
     const [tinyRes, expRes, storesRes, prodsRes] = await Promise.all([
       supabase.from("tiny_synced_orders").select("*")
         .gte("order_date", startDate).lte("order_date", endDate),
-      supabase.from("expedition_orders").select("id, shopify_order_name, total_price, subtotal_price, total_shipping, total_discount, financial_status, expedition_status, created_at, customer_name")
-        .gte("created_at", iso.start).lte("created_at", iso.end),
+      supabase.from("expedition_orders").select("id, shopify_order_name, total_price, subtotal_price, total_shipping, total_discount, financial_status, expedition_status, created_at, customer_name, shopify_created_at")
+        .gte("shopify_created_at", iso.start).lte("shopify_created_at", iso.end),
       supabase.from("pos_stores").select("id, name").eq("is_active", true),
       supabase.from("pos_products").select("id, store_id, name, variant, category, price, cost_price, stock").eq("is_active", true),
     ]);
@@ -248,7 +249,8 @@ export default function Management() {
       map.set(day, cur);
     });
     shopifyPaidOrders.forEach(o => {
-      const day = format(new Date(o.created_at), "dd/MM");
+      const dateStr = o.shopify_created_at || o.created_at;
+      const day = format(new Date(dateStr), "dd/MM");
       const cur = map.get(day) || { lojas: 0, shopify: 0 };
       cur.shopify += Number(o.total_price || 0);
       map.set(day, cur);
