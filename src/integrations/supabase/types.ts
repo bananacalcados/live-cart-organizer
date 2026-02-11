@@ -1758,16 +1758,20 @@ export type Database = {
           address_number: string | null
           age_range: string | null
           cep: string | null
+          children_age_range: string | null
           city: string | null
           complement: string | null
           cpf: string | null
           created_at: string
           email: string | null
+          gender: string | null
+          has_children: boolean | null
           id: string
           name: string | null
           neighborhood: string | null
           notes: string | null
           preferred_style: string | null
+          shoe_size: string | null
           state: string | null
           updated_at: string
           whatsapp: string | null
@@ -1777,16 +1781,20 @@ export type Database = {
           address_number?: string | null
           age_range?: string | null
           cep?: string | null
+          children_age_range?: string | null
           city?: string | null
           complement?: string | null
           cpf?: string | null
           created_at?: string
           email?: string | null
+          gender?: string | null
+          has_children?: boolean | null
           id?: string
           name?: string | null
           neighborhood?: string | null
           notes?: string | null
           preferred_style?: string | null
+          shoe_size?: string | null
           state?: string | null
           updated_at?: string
           whatsapp?: string | null
@@ -1796,16 +1804,20 @@ export type Database = {
           address_number?: string | null
           age_range?: string | null
           cep?: string | null
+          children_age_range?: string | null
           city?: string | null
           complement?: string | null
           cpf?: string | null
           created_at?: string
           email?: string | null
+          gender?: string | null
+          has_children?: boolean | null
           id?: string
           name?: string | null
           neighborhood?: string | null
           notes?: string | null
           preferred_style?: string | null
+          shoe_size?: string | null
           state?: string | null
           updated_at?: string
           whatsapp?: string | null
