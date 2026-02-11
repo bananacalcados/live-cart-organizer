@@ -141,7 +141,7 @@ export default function Expedition() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <NavLink to="/events">CRM</NavLink>
+            <NavLink to="/">Início</NavLink>
             <NavLink to="/chat">Chat</NavLink>
             <NavLink to="/marketing">Marketing</NavLink>
             <Button onClick={syncOrders} disabled={isSyncing} variant="outline" className="gap-2">
