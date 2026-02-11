@@ -113,6 +113,11 @@ export function ExpeditionOrdersList({ orders, searchTerm, showGrouping, onRefre
                         <span className="text-xs text-muted-foreground ml-2">
                           {o.expedition_order_items?.length || 0} itens
                         </span>
+                        {o.shopify_created_at && (
+                          <span className="text-xs text-muted-foreground ml-2">
+                            📅 {new Date(o.shopify_created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
                       </div>
                       <span className="text-sm font-medium">
                         R$ {Number(o.total_price || 0).toFixed(2)}
