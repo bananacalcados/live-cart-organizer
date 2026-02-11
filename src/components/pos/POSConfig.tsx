@@ -176,9 +176,9 @@ export function POSConfig({ storeId }: Props) {
   // Track how long a "running" status has been unchanged
   const lastRunningCheckRef = useRef<{ synced: number; since: number } | null>(null);
 
-  const triggerResume = async (resumePage: number, resumeLogId: string, resumeOffset?: number) => {
-    console.log('Triggering resume from page', resumePage, 'offset', resumeOffset || 0, 'logId', resumeLogId);
-    toast.info(`Continuando sincronização da página ${resumePage}${resumeOffset ? ` (produto ${resumeOffset})` : ''}...`);
+  const triggerResume = async (resumePage: number, resumeLogId: string) => {
+    console.log('Triggering resume from page', resumePage, 'logId', resumeLogId);
+    toast.info(`Continuando sincronização da página ${resumePage}...`);
     try {
       await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sync-products`, {
         method: 'POST',
@@ -186,7 +186,6 @@ export function POSConfig({ storeId }: Props) {
         body: JSON.stringify({
           store_id: storeId,
           resume_page: resumePage,
-          resume_offset: resumeOffset || 0,
           resume_log_id: resumeLogId,
         }),
       });
@@ -221,12 +220,12 @@ export function POSConfig({ storeId }: Props) {
           setLastSync(log);
           loadSyncInfo();
           toast.success(`Sync concluído! ${synced} produtos sincronizados.`);
-        } else if (log.status === 'partial') {
+          } else if (log.status === 'partial') {
           // Auto-resume: the edge function saved progress before timeout
           try {
             const resumeInfo = JSON.parse(log.error_message || '{}');
             if (resumeInfo.resume_page && resumeInfo.resume_log_id) {
-              triggerResume(resumeInfo.resume_page, resumeInfo.resume_log_id, resumeInfo.resume_offset);
+              triggerResume(resumeInfo.resume_page, resumeInfo.resume_log_id);
             }
           } catch (e) {
             console.error('Resume parse error:', e);
