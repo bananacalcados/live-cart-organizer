@@ -212,7 +212,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
           <h2 className="text-lg font-bold text-pos-white flex items-center gap-2">
             <ArrowRightLeft className="h-5 w-5 text-pos-yellow" /> Solicitações entre Lojas
           </h2>
-          <Button className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2" onClick={() => setShowNew(true)}>
+          <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={() => setShowNew(true)}>
             <Plus className="h-4 w-4" /> Nova Solicitação
           </Button>
         </div>
@@ -385,7 +385,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
                 <Textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} className="h-16 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white resize-none" />
               </div>
 
-              <Button className="w-full bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold h-12 gap-2" onClick={handleCreate} disabled={saving}>
+              <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-12 gap-2" onClick={handleCreate} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Enviar Solicitação
               </Button>
@@ -436,7 +436,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
                 <Textarea value={responseNotes} onChange={e => setResponseNotes(e.target.value)} className="h-16 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white resize-none" />
               </div>
 
-              <Button className="w-full bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={() => respondingId && handleRespond(respondingId)}>
+              <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => respondingId && handleRespond(respondingId)}>
                 Confirmar
               </Button>
             </div>

@@ -603,7 +603,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                   <Button variant="outline" size="icon" className="h-12 w-12 border-pos-yellow/30 text-pos-yellow hover:bg-pos-yellow/10" onClick={() => setShowCamera(true)}>
                     <Camera className="h-5 w-5" />
                   </Button>
-                  <Button className="h-12 px-6 bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={() => handleBarcodeScan()} disabled={searching}>
+                  <Button className="h-12 px-6 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => handleBarcodeScan()} disabled={searching}>
                     {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-4 w-4 mr-2" /> Buscar</>}
                   </Button>
                 </div>
@@ -691,10 +691,10 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                   onKeyDown={e => e.key === "Enter" && searchCustomerByTerm()}
                   className="h-12 bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-yellow"
                 />
-                <Button className="h-12 gap-2 bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={searchCustomerByTerm} disabled={searchingCustomer}>
+                <Button className="h-12 gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={searchCustomerByTerm} disabled={searchingCustomer}>
                   {searchingCustomer ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 </Button>
-                <Button className="h-12 gap-2 bg-pos-orange text-pos-white hover:bg-pos-orange-muted font-bold" onClick={() => setShowCustomerForm(true)}>
+                <Button className="h-12 gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => setShowCustomerForm(true)}>
                   <Plus className="h-4 w-4" /> Novo
                 </Button>
               </div>
@@ -814,7 +814,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                       className="w-32 bg-pos-white/5 border-pos-yellow/30 text-pos-white placeholder:text-pos-white/30"
                     />
                     <Button
-                      className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold"
+                      className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
                       onClick={() => {
                         if (!multiPaymentMethodId || !multiPaymentAmount) return;
                         const method = paymentMethods.find(m => m.id === multiPaymentMethodId);
@@ -899,7 +899,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                     <Printer className="h-5 w-5" /> Imprimir Nota
                   </Button>
                 )}
-                <Button className="h-14 gap-2 text-base bg-pos-orange text-pos-white hover:bg-pos-orange-muted font-bold col-span-2" onClick={resetSale}>
+                <Button className="h-14 gap-2 text-base bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold col-span-2" onClick={resetSale}>
                   <ShoppingCart className="h-5 w-5" /> Nova Venda
                 </Button>
               </div>
@@ -961,7 +961,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
               <span className="font-bold text-lg text-pos-yellow">R$ {subtotal.toFixed(2)}</span>
             </div>
             <Button
-              className="w-full h-10 text-sm gap-2 bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold"
+              className="w-full h-10 text-sm gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
               disabled={cart.length === 0 || finalizingSale}
               onClick={() => {
                 if (step === "payment") {
@@ -1001,7 +1001,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
               <p className="text-sm">Câmera será ativada aqui</p>
             </div>
           </div>
-          <Button className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={() => setShowCamera(false)}>Fechar</Button>
+          <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => setShowCamera(false)}>Fechar</Button>
         </DialogContent>
       </Dialog>
 
