@@ -230,11 +230,14 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
 
       if (error) throw error;
 
-      if (data?.checkoutUrl) {
+      if (data?.approvalUrl) {
+        setCartLink(data.approvalUrl);
+        toast.success(`Link PayPal gerado! Valor: R$ ${data.amount}`);
+      } else if (data?.checkoutUrl) {
         setCartLink(data.checkoutUrl);
         toast.success(`Link PayPal gerado! Valor: R$ ${data.amount}`);
       } else {
-        throw new Error("No checkout URL returned");
+        throw new Error("No PayPal URL returned");
       }
     } catch (error) {
       console.error("Error generating PayPal link:", error);
