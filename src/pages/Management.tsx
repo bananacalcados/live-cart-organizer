@@ -115,41 +115,55 @@ export default function Management() {
     setLoading(false);
   };
 
-  const syncFromTiny = async () => {
+  const runSyncWithResume = async (body: any) => {
     setSyncing(true);
-    setSyncProgress({ currentDate: "Iniciando...", storeName: "", phase: "orders" });
+    setSyncProgress({ currentDate: "Iniciando...", storeName: "", phase: body.stock_only ? "stock" : "orders" });
 
-    // Start polling sync logs for day-based progress
     const pollInterval = setInterval(async () => {
       const { data: logs } = await supabase
         .from('tiny_management_sync_log')
         .select('orders_synced, status, store_id, current_date_syncing, phase')
-        .eq('status', 'running')
+        .in('status', ['running', 'partial'])
         .order('started_at', { ascending: false })
         .limit(1);
-
       if (logs && logs.length > 0) {
         const log = logs[0] as any;
         const storeName = stores.find(s => s.id === log.store_id)?.name || "Loja";
-        setSyncProgress({
-          currentDate: log.current_date_syncing || "Processando...",
-          storeName,
-          phase: log.phase || 'orders',
-        });
+        setSyncProgress({ currentDate: log.current_date_syncing || "Processando...", storeName, phase: log.phase || 'orders' });
       }
     }, 1500);
 
     try {
-      const fromDate = format(dateRange.start, 'dd/MM/yyyy');
-      const toDate = format(dateRange.end, 'dd/MM/yyyy');
-      
-      const { data, error } = await supabase.functions.invoke('tiny-sync-management', {
-        body: { date_from: fromDate, date_to: toDate, sync_stock: true },
-      });
+      let currentBody = { ...body };
+      let totalSynced = 0;
+      let attempts = 0;
+      const MAX_ATTEMPTS = 20; // allow many resumes for large stock syncs
 
-      if (error) throw error;
+      while (attempts < MAX_ATTEMPTS) {
+        attempts++;
+        const { data, error } = await supabase.functions.invoke('tiny-sync-management', { body: currentBody });
+        if (error) throw error;
 
-      const totalSynced = data?.results?.reduce((s: number, r: any) => s + (r.orders_synced || 0), 0) || 0;
+        const partialResults = data?.results || [];
+        totalSynced += partialResults.reduce((s: number, r: any) => s + (r.orders_synced || 0), 0);
+
+        // Check if any result needs resume
+        const partial = partialResults.find((r: any) => r.status === 'partial');
+        if (partial) {
+          toast.info(`Continuando sync de estoque... (pg ${partial.resume_stock_page})`);
+          currentBody = {
+            store_id: partial.store_id,
+            stock_only: true,
+            resume_stock_page: partial.resume_stock_page,
+            resume_log_id: partial.resume_log_id,
+          };
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+
+        break; // all completed
+      }
+
       toast.success(`Sincronização concluída: ${totalSynced} pedidos importados`);
       fetchData();
     } catch (e: any) {
@@ -159,6 +173,12 @@ export default function Management() {
       setSyncing(false);
       setSyncProgress(null);
     }
+  };
+
+  const syncFromTiny = () => {
+    const fromDate = format(dateRange.start, 'dd/MM/yyyy');
+    const toDate = format(dateRange.end, 'dd/MM/yyyy');
+    runSyncWithResume({ date_from: fromDate, date_to: toDate, sync_stock: true });
   };
 
   useEffect(() => { fetchData(); }, [period]);
