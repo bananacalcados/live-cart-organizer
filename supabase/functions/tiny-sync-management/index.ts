@@ -196,9 +196,8 @@ serve(async (req) => {
           }
         }
 
-        // ===== PHASE 2: Stock — fetch stock per product from pos_products =====
-        // Only calls produto.obter.estoque.php (not produto.obter) to save rate limits.
-        // Maps deposit name to store name for accurate per-store stock.
+        // ===== PHASE 2: Stock — read stock directly from produtos.pesquisa listing =====
+        // Uses the "estoque" field from the search endpoint: 1 API call per 100 products.
         if ((sync_stock || stock_only) && Date.now() - functionStart < TIME_LIMIT_MS) {
           if (logId) {
             await supabase.from('tiny_management_sync_log').update({
@@ -206,16 +205,13 @@ serve(async (req) => {
             }).eq('id', logId);
           }
 
-          // Extract store name keyword for deposit matching (e.g., "Loja Perola" -> "perola")
-          const storeKeywords = store.name.toLowerCase().replace(/loja\s*/g, '').trim().split(/\s+/);
-
           let stockPage = resume_stock_page || 1;
           let stockTimedOut = false;
           let stockUpdated = 0;
           let totalStockPages = 1;
 
           while (!stockTimedOut && Date.now() - functionStart < TIME_LIMIT_MS) {
-            await new Promise(r => setTimeout(r, 600));
+            await new Promise(r => setTimeout(r, 350));
 
             const resp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
               method: 'POST',
@@ -229,67 +225,25 @@ serve(async (req) => {
             const products = data.retorno?.produtos || [];
             if (products.length === 0) break;
 
+            // Batch update: read stock directly from listing
             for (const item of products) {
-              if (Date.now() - functionStart > TIME_LIMIT_MS) { stockTimedOut = true; break; }
               const p = item.produto;
-              try {
-                await new Promise(r => setTimeout(r, 600));
-                const sr = await fetch('https://api.tiny.com.br/api2/produto.obter.estoque.php', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                  body: `token=${token}&formato=json&id=${p.id}`,
-                });
-                const sd = await sr.json();
-                const stockData = sd.retorno?.produto;
-
-                let stock = 0;
-                if (stockData) {
-                  const depositos = stockData.depositos || [];
-                  if (depositos.length > 0) {
-                    // Find the deposit matching this store's name
-                    let matchedDeposit = null;
-                    for (const dep of depositos) {
-                      const d = dep.deposito || dep;
-                      const depName = (d.nome || '').toLowerCase();
-                      if (storeKeywords.some((kw: string) => depName.includes(kw))) {
-                        matchedDeposit = d;
-                        break;
-                      }
-                    }
-                    if (matchedDeposit) {
-                      stock = parseFloat(matchedDeposit.saldo || '0');
-                    } else {
-                      // Fallback: sum all deposits
-                      for (const dep of depositos) {
-                        const d = dep.deposito || dep;
-                        stock += parseFloat(d.saldo || '0');
-                      }
-                    }
-                  } else {
-                    stock = parseFloat(stockData.saldo || stockData.estoqueAtual || '0');
-                  }
-                }
-
-                if (stockUpdated < 3) {
-                  console.log(`Stock ${p.id} (${store.name}): deposit match=${storeKeywords}, stock=${stock}`);
-                }
-
-                const updateData: any = { stock, synced_at: new Date().toISOString() };
-                await supabase.from('pos_products').update(updateData)
-                  .eq('store_id', store.id).eq('tiny_id', String(p.id));
-                stockUpdated++;
-              } catch (e) {
-                console.error(`Product ${p.id}:`, e);
-              }
+              const stock = parseFloat(p.estoque || '0');
+              await supabase.from('pos_products').update({
+                stock,
+                synced_at: new Date().toISOString(),
+              }).eq('store_id', store.id).eq('tiny_id', String(p.id));
+              stockUpdated++;
             }
 
+            const pct = Math.round((stockPage / totalStockPages) * 100);
             if (logId) {
               await supabase.from('tiny_management_sync_log').update({
-                current_date_syncing: `Estoque: ${stockUpdated} produtos (pg ${stockPage}/${totalStockPages})`,
+                current_date_syncing: `Estoque: ${pct}% (pg ${stockPage}/${totalStockPages}) — ${stockUpdated} produtos`,
               }).eq('id', logId);
             }
 
-            if (stockTimedOut) break;
+            if (Date.now() - functionStart > TIME_LIMIT_MS) { stockTimedOut = true; break; }
             stockPage++;
             if (stockPage > totalStockPages) break;
           }
@@ -297,9 +251,10 @@ serve(async (req) => {
           // If we timed out during stock, return resume info
           if (stockTimedOut || (Date.now() - functionStart >= TIME_LIMIT_MS && stockPage <= totalStockPages)) {
             if (logId) {
+              const pct = Math.round((stockPage / totalStockPages) * 100);
               await supabase.from('tiny_management_sync_log').update({
                 status: 'partial',
-                current_date_syncing: `Estoque parcial: ${stockUpdated} produtos (pg ${stockPage}/${totalStockPages})`,
+                current_date_syncing: `Estoque parcial: ${pct}% (pg ${stockPage}/${totalStockPages})`,
                 orders_synced: totalSynced,
               }).eq('id', logId);
             }
@@ -308,7 +263,7 @@ serve(async (req) => {
               orders_synced: totalSynced, stock_updated: stockUpdated,
               resume_stock_page: stockPage, resume_log_id: logId,
             });
-            continue; // skip the "completed" block
+            continue;
           }
         }
 
