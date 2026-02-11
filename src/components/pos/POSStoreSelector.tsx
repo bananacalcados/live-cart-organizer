@@ -69,18 +69,18 @@ export function POSStoreSelector({ onSelect }: Props) {
 
   return (
     <div className="min-h-screen bg-pos-black flex flex-col">
-      <header className="sticky top-0 z-50 w-full border-b border-pos-yellow/20 bg-pos-black/95 backdrop-blur">
+      <header className="sticky top-0 z-50 w-full border-b border-pos-orange/20 bg-pos-black/95 backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pos-yellow text-pos-black">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pos-orange text-pos-black">
               <Store className="h-5 w-5" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-pos-white">Frente de Caixa</h1>
-              <p className="text-xs text-pos-yellow-muted">Selecione a loja</p>
+              <p className="text-xs text-pos-orange-muted">Selecione a loja</p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1 text-pos-white hover:text-pos-yellow hover:bg-pos-yellow/10">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1 text-pos-white hover:text-pos-orange hover:bg-pos-orange/10">
             <Home className="h-4 w-4" /> Início
           </Button>
         </div>
@@ -89,7 +89,7 @@ export function POSStoreSelector({ onSelect }: Props) {
       <main className="flex-1 container py-10 flex items-center justify-center">
         <div className="w-full max-w-lg space-y-4">
           <div className="text-center mb-8">
-            <Store className="h-12 w-12 mx-auto text-pos-yellow mb-3" />
+            <Store className="h-12 w-12 mx-auto text-pos-orange mb-3" />
             <h2 className="text-2xl font-bold text-pos-white">Qual loja você está?</h2>
             <p className="text-pos-white/60 mt-1">Selecione para conectar ao Tiny ERP correto</p>
           </div>
@@ -99,7 +99,7 @@ export function POSStoreSelector({ onSelect }: Props) {
             <div className="text-center text-pos-white/50 py-8">
               <p>Nenhuma loja cadastrada.</p>
               <p className="text-xs mt-2 mb-4">Adicione sua primeira loja para começar.</p>
-              <Button className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2" onClick={() => setShowAddStore(true)}>
+              <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={() => setShowAddStore(true)}>
                 <Plus className="h-4 w-4" /> Adicionar Loja
               </Button>
             </div>
@@ -108,11 +108,11 @@ export function POSStoreSelector({ onSelect }: Props) {
               {stores.map(store => (
                 <div
                   key={store.id}
-                  className="cursor-pointer rounded-xl border-2 border-pos-yellow/30 bg-pos-black hover:border-pos-yellow hover:shadow-[0_0_20px_hsl(48_100%_50%/0.15)] transition-all group p-6 flex items-center justify-between"
+                  className="cursor-pointer rounded-xl border-2 border-pos-orange/30 bg-pos-black hover:border-pos-orange hover:shadow-[0_0_20px_hsl(25_100%_50%/0.15)] transition-all group p-6 flex items-center justify-between"
                   onClick={() => onSelect(store.id)}
                 >
                   <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-xl bg-pos-yellow/10 text-pos-yellow group-hover:bg-pos-yellow group-hover:text-pos-black transition-all group-hover:scale-110">
+                    <div className="p-3 rounded-xl bg-pos-orange/10 text-pos-orange group-hover:bg-pos-orange group-hover:text-pos-black transition-all group-hover:scale-110">
                       <Store className="h-6 w-6" />
                     </div>
                     <div>
@@ -120,11 +120,11 @@ export function POSStoreSelector({ onSelect }: Props) {
                       {store.address && <p className="text-sm text-pos-white/50">{store.address}</p>}
                     </div>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-pos-white/40 group-hover:text-pos-yellow transition-colors" />
+                  <ChevronRight className="h-5 w-5 text-pos-white/40 group-hover:text-pos-orange transition-colors" />
                 </div>
               ))}
               <div className="text-center pt-4">
-                <Button variant="outline" className="gap-2 border-pos-yellow/30 text-pos-yellow hover:bg-pos-yellow/10" onClick={() => setShowAddStore(true)}>
+                <Button variant="outline" className="gap-2 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={() => setShowAddStore(true)}>
                   <Plus className="h-4 w-4" /> Adicionar outra loja
                 </Button>
               </div>
@@ -135,23 +135,23 @@ export function POSStoreSelector({ onSelect }: Props) {
 
       {/* Add Store Dialog */}
       <Dialog open={showAddStore} onOpenChange={setShowAddStore}>
-        <DialogContent className="bg-pos-black border-pos-yellow/30">
+        <DialogContent className="bg-pos-black border-pos-orange/30">
           <DialogHeader><DialogTitle className="text-pos-white">Adicionar Loja</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
               <Label className="text-pos-white/70 text-xs">Nome da Loja *</Label>
-              <Input value={newStore.name} onChange={e => setNewStore(s => ({ ...s, name: e.target.value }))} placeholder="Ex: Loja Centro" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              <Input value={newStore.name} onChange={e => setNewStore(s => ({ ...s, name: e.target.value }))} placeholder="Ex: Loja Centro" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
             </div>
             <div>
               <Label className="text-pos-white/70 text-xs">Token da API Tiny *</Label>
-              <Input value={newStore.tiny_token} onChange={e => setNewStore(s => ({ ...s, tiny_token: e.target.value }))} placeholder="Cole o token do Tiny ERP aqui" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow font-mono text-xs" />
+              <Input value={newStore.tiny_token} onChange={e => setNewStore(s => ({ ...s, tiny_token: e.target.value }))} placeholder="Cole o token do Tiny ERP aqui" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange font-mono text-xs" />
               <p className="text-[10px] text-pos-white/30 mt-1">Encontre em Tiny ERP → Configurações → Tokens de API</p>
             </div>
             <div>
               <Label className="text-pos-white/70 text-xs">Endereço (opcional)</Label>
-              <Input value={newStore.address} onChange={e => setNewStore(s => ({ ...s, address: e.target.value }))} placeholder="Rua, número, cidade" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              <Input value={newStore.address} onChange={e => setNewStore(s => ({ ...s, address: e.target.value }))} placeholder="Rua, número, cidade" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
             </div>
-            <Button className="w-full bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={addStore} disabled={saving}>
+            <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addStore} disabled={saving}>
               {saving ? "Salvando..." : "Adicionar Loja"}
             </Button>
           </div>

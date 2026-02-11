@@ -258,22 +258,22 @@ export function POSConfig({ storeId }: Props) {
       <div className="p-6 space-y-6">
         <div>
           <h2 className="text-lg font-bold text-pos-white flex items-center gap-2">
-            <Settings className="h-5 w-5 text-pos-yellow" /> Configurações
+            <Settings className="h-5 w-5 text-pos-orange" /> Configurações
           </h2>
         </div>
 
         {/* Product Sync */}
-        <Card className="bg-pos-white/5 border-pos-yellow/20">
+        <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between text-pos-white">
-              <span className="flex items-center gap-2"><RefreshCw className="h-4 w-4 text-pos-yellow" /> Sincronização de Produtos</span>
+              <span className="flex items-center gap-2"><RefreshCw className="h-4 w-4 text-pos-orange" /> Sincronização de Produtos</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-pos-white">Produtos no banco local</p>
-                <p className="text-2xl font-bold text-pos-yellow">{productCount}</p>
+                <p className="text-2xl font-bold text-pos-orange">{productCount}</p>
               </div>
               <Button
                 className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2 h-12 px-6"
@@ -290,7 +290,7 @@ export function POSConfig({ storeId }: Props) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-pos-white/70">
                   <span>Progresso da sincronização</span>
-                  <span className="font-mono font-bold text-pos-yellow">
+                  <span className="font-mono font-bold text-pos-orange">
                     {syncProgress.total > 0
                       ? `${syncProgress.synced} / ${syncProgress.total} (${progressPercent}%)`
                       : `${syncProgress.synced} produtos...`
@@ -324,10 +324,10 @@ export function POSConfig({ storeId }: Props) {
         </Card>
 
         {/* Stores */}
-        <Card className="bg-pos-white/5 border-pos-yellow/20">
+        <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between text-pos-white">
-              <span className="flex items-center gap-2"><Store className="h-4 w-4 text-pos-yellow" /> Lojas</span>
+              <span className="flex items-center gap-2"><Store className="h-4 w-4 text-pos-orange" /> Lojas</span>
               <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddStore(true)}>
                 <Plus className="h-3 w-3" /> Nova Loja
               </Button>
@@ -336,7 +336,7 @@ export function POSConfig({ storeId }: Props) {
         </Card>
 
         {/* WhatsApp Numbers per Store */}
-        <Card className="bg-pos-white/5 border-pos-yellow/20">
+        <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2 text-pos-white">
               <Phone className="h-4 w-4 text-green-400" /> Instâncias WhatsApp
@@ -374,7 +374,7 @@ export function POSConfig({ storeId }: Props) {
         </Card>
 
         {/* Sellers */}
-        <Card className="bg-pos-white/5 border-pos-yellow/20">
+        <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between text-pos-white">
               <span className="flex items-center gap-2"><Users className="h-4 w-4 text-pos-orange" /> Vendedoras</span>
@@ -398,10 +398,10 @@ export function POSConfig({ storeId }: Props) {
         </Card>
 
         {/* Invoice Config */}
-        <Card className="bg-pos-white/5 border-pos-yellow/20">
+        <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2 text-pos-white">
-              <Receipt className="h-4 w-4 text-pos-yellow" /> Emissão Automática de NF
+              <Receipt className="h-4 w-4 text-pos-orange" /> Emissão Automática de NF
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -416,7 +416,7 @@ export function POSConfig({ storeId }: Props) {
               <>
                 <div>
                   <Label className="text-pos-white/70 text-xs">Valor mínimo para emissão automática</Label>
-                  <Input type="number" value={autoEmitMinValue} onChange={e => setAutoEmitMinValue(e.target.value)} placeholder="0,00" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+                  <Input type="number" value={autoEmitMinValue} onChange={e => setAutoEmitMinValue(e.target.value)} placeholder="0,00" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
                 </div>
                 <div>
                   <Label className="text-pos-white/70 text-xs mb-2 block">Formas de pagamento que geram NFC-e</Label>
@@ -458,10 +458,10 @@ export function POSConfig({ storeId }: Props) {
 
         {/* Add Seller Dialog */}
         <Dialog open={showAddSeller} onOpenChange={setShowAddSeller}>
-          <DialogContent className="bg-pos-black border-pos-yellow/30">
+          <DialogContent className="bg-pos-black border-pos-orange/30">
             <DialogHeader><DialogTitle className="text-pos-white">Adicionar Vendedora</DialogTitle></DialogHeader>
             <div className="space-y-4">
-              <Input value={newSellerName} onChange={e => setNewSellerName(e.target.value)} placeholder="Nome da vendedora" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              <Input value={newSellerName} onChange={e => setNewSellerName(e.target.value)} placeholder="Nome da vendedora" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
               <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addSeller}>Adicionar</Button>
             </div>
           </DialogContent>
@@ -469,20 +469,20 @@ export function POSConfig({ storeId }: Props) {
 
         {/* Add Store Dialog */}
         <Dialog open={showAddStore} onOpenChange={setShowAddStore}>
-          <DialogContent className="bg-pos-black border-pos-yellow/30">
+          <DialogContent className="bg-pos-black border-pos-orange/30">
             <DialogHeader><DialogTitle className="text-pos-white">Adicionar Loja</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div>
                 <Label className="text-pos-white/70 text-xs">Nome da Loja</Label>
-                <Input value={newStore.name} onChange={e => setNewStore(s => ({ ...s, name: e.target.value }))} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+                <Input value={newStore.name} onChange={e => setNewStore(s => ({ ...s, name: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
               </div>
               <div>
                 <Label className="text-pos-white/70 text-xs">Token da API Tiny</Label>
-                <Input value={newStore.tiny_token} onChange={e => setNewStore(s => ({ ...s, tiny_token: e.target.value }))} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+                <Input value={newStore.tiny_token} onChange={e => setNewStore(s => ({ ...s, tiny_token: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
               </div>
               <div>
                 <Label className="text-pos-white/70 text-xs">Endereço (opcional)</Label>
-                <Input value={newStore.address} onChange={e => setNewStore(s => ({ ...s, address: e.target.value }))} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+                <Input value={newStore.address} onChange={e => setNewStore(s => ({ ...s, address: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
               </div>
               <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addStore}>Adicionar Loja</Button>
             </div>

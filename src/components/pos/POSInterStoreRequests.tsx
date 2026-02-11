@@ -210,7 +210,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-pos-white flex items-center gap-2">
-            <ArrowRightLeft className="h-5 w-5 text-pos-yellow" /> Solicitações entre Lojas
+            <ArrowRightLeft className="h-5 w-5 text-pos-orange" /> Solicitações entre Lojas
           </h2>
           <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={() => setShowNew(true)}>
             <Plus className="h-4 w-4" /> Nova Solicitação
@@ -222,14 +222,14 @@ export function POSInterStoreRequests({ storeId }: Props) {
           <button onClick={() => setTab("received")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "received" ? "bg-pos-orange text-pos-white" : "bg-pos-white/5 text-pos-white/50"}`}>
             📥 Recebidas {pendingReceivedCount > 0 && <Badge className="ml-1 bg-red-500 text-white border-0 text-[10px]">{pendingReceivedCount}</Badge>}
           </button>
-          <button onClick={() => setTab("sent")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "sent" ? "bg-pos-yellow text-pos-black" : "bg-pos-white/5 text-pos-white/50"}`}>
+          <button onClick={() => setTab("sent")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "sent" ? "bg-pos-orange text-pos-black" : "bg-pos-white/5 text-pos-white/50"}`}>
             📤 Enviadas ({sentRequests.length})
           </button>
         </div>
 
         {/* List */}
         {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-pos-yellow" /></div>
+          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-pos-orange" /></div>
         ) : displayedRequests.length === 0 ? (
           <div className="text-center py-12 text-pos-white/40">
             <ArrowRightLeft className="h-12 w-12 mx-auto mb-2 opacity-30" />
@@ -242,7 +242,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
               const StatusIcon = statusInfo.icon;
               const isSent = req.from_store_id === storeId;
               return (
-                <Card key={req.id} className={`border-pos-yellow/10 ${req.status === "pending" && !isSent ? "bg-pos-orange/10 border-pos-orange/30" : "bg-pos-white/5"}`}>
+                <Card key={req.id} className={`border-pos-orange/10 ${req.status === "pending" && !isSent ? "bg-pos-orange/10 border-pos-orange/30" : "bg-pos-white/5"}`}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -261,7 +261,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
                     <div className="space-y-1 mb-2">
                       {(req.items || []).map((it, i) => (
                         <div key={i} className="flex items-center gap-2 text-sm text-pos-white">
-                          <Package className="h-3 w-3 text-pos-yellow" />
+                          <Package className="h-3 w-3 text-pos-orange" />
                           <span>{it.quantity}x {it.product_name}</span>
                           {it.size && <Badge variant="outline" className="text-[10px] border-pos-white/20 text-pos-white/60">{it.size}</Badge>}
                           {it.color && <Badge variant="outline" className="text-[10px] border-pos-white/20 text-pos-white/60">{it.color}</Badge>}
@@ -304,10 +304,10 @@ export function POSInterStoreRequests({ storeId }: Props) {
 
         {/* New Request Dialog */}
         <Dialog open={showNew} onOpenChange={v => { if (!v) resetForm(); setShowNew(v); }}>
-          <DialogContent className="bg-pos-black border-pos-yellow/30 max-w-lg">
+          <DialogContent className="bg-pos-black border-pos-orange/30 max-w-lg">
             <DialogHeader>
               <DialogTitle className="text-pos-white flex items-center gap-2">
-                <Send className="h-5 w-5 text-pos-yellow" /> Solicitar Produto
+                <Send className="h-5 w-5 text-pos-orange" /> Solicitar Produto
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
@@ -315,7 +315,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
               <div>
                 <Label className="text-pos-white/60 text-xs">Pedir para qual loja?</Label>
                 <Select value={targetStoreId} onValueChange={setTargetStoreId}>
-                  <SelectTrigger className="bg-pos-white/5 border-pos-yellow/30 text-pos-white">
+                  <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
                     <SelectValue placeholder="Selecione a loja" />
                   </SelectTrigger>
                   <SelectContent>
@@ -326,7 +326,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
 
               {/* Priority */}
               <div className="flex gap-2">
-                <button onClick={() => setPriority("normal")} className={`flex-1 py-2 rounded-lg text-xs font-bold ${priority === "normal" ? "bg-pos-yellow text-pos-black" : "bg-pos-white/5 text-pos-white/50"}`}>
+                <button onClick={() => setPriority("normal")} className={`flex-1 py-2 rounded-lg text-xs font-bold ${priority === "normal" ? "bg-pos-orange text-pos-black" : "bg-pos-white/5 text-pos-white/50"}`}>
                   Normal
                 </button>
                 <button onClick={() => setPriority("urgent")} className={`flex-1 py-2 rounded-lg text-xs font-bold ${priority === "urgent" ? "bg-red-500 text-white" : "bg-pos-white/5 text-pos-white/50"}`}>
@@ -342,26 +342,26 @@ export function POSInterStoreRequests({ storeId }: Props) {
                   <div key={idx} className="grid grid-cols-[1fr_60px_60px_60px_32px] gap-2 items-end">
                     <div>
                       <Label className="text-pos-white/50 text-[10px]">Produto</Label>
-                      <Input value={items[idx].product_name} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, product_name: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+                      <Input value={items[idx].product_name} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, product_name: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
                     </div>
                     <div>
                       <Label className="text-pos-white/50 text-[10px]">Tam</Label>
-                      <Input value={items[idx].size} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, size: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+                      <Input value={items[idx].size} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, size: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
                     </div>
                     <div>
                       <Label className="text-pos-white/50 text-[10px]">Cor</Label>
-                      <Input value={items[idx].color} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, color: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+                      <Input value={items[idx].color} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, color: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
                     </div>
                     <div>
                       <Label className="text-pos-white/50 text-[10px]">Qtd</Label>
-                      <Input type="number" value={items[idx].quantity} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, quantity: parseInt(e.target.value) || 1 } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+                      <Input type="number" value={items[idx].quantity} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, quantity: parseInt(e.target.value) || 1 } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
                     </div>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length <= 1}>
                       <X className="h-3 w-3" />
                     </Button>
                   </div>
                 ))}
-                <Button variant="ghost" className="text-pos-yellow text-xs gap-1" onClick={() => setItems(p => [...p, { product_name: "", sku: "", quantity: 1, size: "", color: "" }])}>
+                <Button variant="ghost" className="text-pos-orange text-xs gap-1" onClick={() => setItems(p => [...p, { product_name: "", sku: "", quantity: 1, size: "", color: "" }])}>
                   <Plus className="h-3 w-3" /> Adicionar Produto
                 </Button>
               </div>
@@ -372,17 +372,17 @@ export function POSInterStoreRequests({ storeId }: Props) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-pos-white/50 text-xs">Nome do cliente</Label>
-                  <Input value={customerName} onChange={e => setCustomerName(e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" placeholder="Opcional" />
+                  <Input value={customerName} onChange={e => setCustomerName(e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" placeholder="Opcional" />
                 </div>
                 <div>
                   <Label className="text-pos-white/50 text-xs">WhatsApp do cliente</Label>
-                  <Input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" placeholder="Opcional" />
+                  <Input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" placeholder="Opcional" />
                 </div>
               </div>
 
               <div>
                 <Label className="text-pos-white/50 text-xs">Observações</Label>
-                <Textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} className="h-16 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white resize-none" />
+                <Textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} className="h-16 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white resize-none" />
               </div>
 
               <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-12 gap-2" onClick={handleCreate} disabled={saving}>
@@ -395,13 +395,13 @@ export function POSInterStoreRequests({ storeId }: Props) {
 
         {/* Respond Dialog */}
         <Dialog open={!!respondingId} onOpenChange={v => { if (!v) { setRespondingId(null); resetResponseForm(); } }}>
-          <DialogContent className="bg-pos-black border-pos-yellow/30 max-w-md">
+          <DialogContent className="bg-pos-black border-pos-orange/30 max-w-md">
             <DialogHeader>
               <DialogTitle className="text-pos-white">Responder Solicitação</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <Select value={responseStatus} onValueChange={setResponseStatus}>
-                <SelectTrigger className="bg-pos-white/5 border-pos-yellow/30 text-pos-white">
+                <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -417,23 +417,23 @@ export function POSInterStoreRequests({ storeId }: Props) {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-pos-white/50 text-xs">Nome do motoboy</Label>
-                      <Input value={courierName} onChange={e => setCourierName(e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+                      <Input value={courierName} onChange={e => setCourierName(e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
                     </div>
                     <div>
                       <Label className="text-pos-white/50 text-xs">Telefone do motoboy</Label>
-                      <Input value={courierPhone} onChange={e => setCourierPhone(e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+                      <Input value={courierPhone} onChange={e => setCourierPhone(e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
                     </div>
                   </div>
                   <div>
                     <Label className="text-pos-white/50 text-xs">Previsão de chegada</Label>
-                    <Input value={estimatedArrival} onChange={e => setEstimatedArrival(e.target.value)} placeholder="Ex: 30 minutos" className="h-8 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white" />
+                    <Input value={estimatedArrival} onChange={e => setEstimatedArrival(e.target.value)} placeholder="Ex: 30 minutos" className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
                   </div>
                 </>
               )}
 
               <div>
                 <Label className="text-pos-white/50 text-xs">Observação</Label>
-                <Textarea value={responseNotes} onChange={e => setResponseNotes(e.target.value)} className="h-16 text-xs bg-pos-white/5 border-pos-yellow/30 text-pos-white resize-none" />
+                <Textarea value={responseNotes} onChange={e => setResponseNotes(e.target.value)} className="h-16 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white resize-none" />
               </div>
 
               <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => respondingId && handleRespond(respondingId)}>
