@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,6 +17,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { CreateSupportTicketDialog } from "../CreateSupportTicketDialog";
 
 interface ChatViewProps {
   messages: Message[];
@@ -219,6 +220,10 @@ export function ChatView({
               {conversation.customerName || conversation.phone}
             </span>
           )}
+          <CreateSupportTicketDialog
+            phone={conversation?.phone}
+            customerName={conversation?.customerName}
+          />
           {onFinish && (
             <Button
               variant="ghost"

@@ -170,6 +170,7 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
           <p className="text-[10px] opacity-80 truncate">{ticketSubject} · {phone}</p>
         </div>
         <WhatsAppNumberSelector />
+        
       </div>
 
       {/* Messages */}
