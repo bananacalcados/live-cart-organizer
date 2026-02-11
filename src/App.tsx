@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Events from "./pages/Events";
 import Chat from "./pages/Chat";
@@ -14,6 +15,7 @@ import TransparentCheckout from "./pages/TransparentCheckout";
 import Expedition from "./pages/Expedition";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
+import Login from "./pages/Login";
 import { TeamChat } from "./components/TeamChat";
 
 const queryClient = new QueryClient();
@@ -25,16 +27,21 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/events" element={<Events />} />
-          <Route path="/chat" element={<Chat />} />
-          <Route path="/marketing" element={<Marketing />} />
-          <Route path="/marketing/new" element={<NewCampaign />} />
-          <Route path="/expedition" element={<Expedition />} />
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
           <Route path="/checkout/:paypalOrderId" element={<Checkout />} />
           <Route path="/checkout/order/:orderId" element={<TransparentCheckout />} />
           <Route path="/register/:orderId" element={<CustomerRegister />} />
           <Route path="/lp/:slug" element={<LandingPage />} />
+
+          {/* Protected routes */}
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
+          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+          <Route path="/marketing" element={<ProtectedRoute><Marketing /></ProtectedRoute>} />
+          <Route path="/marketing/new" element={<ProtectedRoute><NewCampaign /></ProtectedRoute>} />
+          <Route path="/expedition" element={<ProtectedRoute><Expedition /></ProtectedRoute>} />
+
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
