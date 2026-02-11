@@ -1809,6 +1809,107 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_exchanges: {
+        Row: {
+          created_at: string
+          credit_amount: number | null
+          credit_code: string | null
+          credit_expires_at: string | null
+          credit_used_at: string | null
+          customer_id: string | null
+          difference_amount: number | null
+          difference_payment_method: string | null
+          exchange_type: string
+          id: string
+          new_items: Json | null
+          new_total: number | null
+          notes: string | null
+          original_sale_id: string | null
+          return_reason: string | null
+          returned_items: Json
+          returned_total: number
+          seller_id: string | null
+          status: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          credit_amount?: number | null
+          credit_code?: string | null
+          credit_expires_at?: string | null
+          credit_used_at?: string | null
+          customer_id?: string | null
+          difference_amount?: number | null
+          difference_payment_method?: string | null
+          exchange_type?: string
+          id?: string
+          new_items?: Json | null
+          new_total?: number | null
+          notes?: string | null
+          original_sale_id?: string | null
+          return_reason?: string | null
+          returned_items?: Json
+          returned_total?: number
+          seller_id?: string | null
+          status?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          credit_amount?: number | null
+          credit_code?: string | null
+          credit_expires_at?: string | null
+          credit_used_at?: string | null
+          customer_id?: string | null
+          difference_amount?: number | null
+          difference_payment_method?: string | null
+          exchange_type?: string
+          id?: string
+          new_items?: Json | null
+          new_total?: number | null
+          notes?: string | null
+          original_sale_id?: string | null
+          return_reason?: string | null
+          returned_items?: Json
+          returned_total?: number
+          seller_id?: string | null
+          status?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_exchanges_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "pos_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_gamification: {
         Row: {
           badges: Json
@@ -1866,6 +1967,95 @@ export type Database = {
           {
             foreignKeyName: "pos_gamification_store_id_fkey"
             columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_inter_store_requests: {
+        Row: {
+          courier_name: string | null
+          courier_phone: string | null
+          created_at: string
+          customer_name: string | null
+          customer_phone: string | null
+          delivered_at: string | null
+          estimated_arrival: string | null
+          from_store_id: string
+          id: string
+          items: Json
+          notes: string | null
+          priority: string | null
+          requested_by: string | null
+          responded_by: string | null
+          status: string
+          to_store_id: string
+          updated_at: string
+        }
+        Insert: {
+          courier_name?: string | null
+          courier_phone?: string | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivered_at?: string | null
+          estimated_arrival?: string | null
+          from_store_id: string
+          id?: string
+          items?: Json
+          notes?: string | null
+          priority?: string | null
+          requested_by?: string | null
+          responded_by?: string | null
+          status?: string
+          to_store_id: string
+          updated_at?: string
+        }
+        Update: {
+          courier_name?: string | null
+          courier_phone?: string | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivered_at?: string | null
+          estimated_arrival?: string | null
+          from_store_id?: string
+          id?: string
+          items?: Json
+          notes?: string | null
+          priority?: string | null
+          requested_by?: string | null
+          responded_by?: string | null
+          status?: string
+          to_store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_inter_store_requests_from_store_id_fkey"
+            columns: ["from_store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_inter_store_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_inter_store_requests_responded_by_fkey"
+            columns: ["responded_by"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_inter_store_requests_to_store_id_fkey"
+            columns: ["to_store_id"]
             isOneToOne: false
             referencedRelation: "pos_stores"
             referencedColumns: ["id"]
