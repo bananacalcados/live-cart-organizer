@@ -205,8 +205,11 @@ export const useOrderStore = create<OrderStore>()(
               order.lastSentMessageAt &&
               !order.lastCustomerMessageAt &&
               order.stage !== 'no_response' &&
+              order.stage !== 'awaiting_payment' &&
               order.stage !== 'paid' &&
               order.stage !== 'shipped' &&
+              order.stage !== 'cancelled' &&
+              order.stage !== 'collect_next_day' &&
               new Date(order.lastSentMessageAt) < fiveMinutesAgo
             ) {
               return { ...order, stage: 'no_response', updatedAt: now };
@@ -217,8 +220,11 @@ export const useOrderStore = create<OrderStore>()(
               order.lastCustomerMessageAt &&
               new Date(order.lastSentMessageAt) > new Date(order.lastCustomerMessageAt) &&
               order.stage !== 'no_response' &&
+              order.stage !== 'awaiting_payment' &&
               order.stage !== 'paid' &&
               order.stage !== 'shipped' &&
+              order.stage !== 'cancelled' &&
+              order.stage !== 'collect_next_day' &&
               new Date(order.lastSentMessageAt) < fiveMinutesAgo
             ) {
               return { ...order, stage: 'no_response', updatedAt: now };
