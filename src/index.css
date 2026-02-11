@@ -46,10 +46,11 @@
     --stage-new: 200 80% 50%;
     --stage-contacted: 45 90% 50%;
     --stage-no-response: 15 85% 55%;
-    --stage-link-sent: 280 60% 55%;
     --stage-awaiting: 185 60% 40%;
     --stage-paid: 145 65% 42%;
     --stage-shipped: 220 70% 50%;
+    --stage-cancelled: 0 70% 50%;
+    --stage-collect-next-day: 280 60% 55%;
 
     /* Gradients */
     --gradient-hero: linear-gradient(135deg, hsl(185 60% 30%) 0%, hsl(200 50% 25%) 100%);

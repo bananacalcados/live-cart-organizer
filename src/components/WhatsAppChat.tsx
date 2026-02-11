@@ -370,6 +370,12 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       // Track that we sent a message for no-response timer
       updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
+      
+      // Auto-move to awaiting_payment when sending a payment link
+      if (messageText.includes('/checkout/') || messageText.includes('link_carrinho') || (order.cartLink && messageText.includes(order.cartLink))) {
+        const { moveOrder } = useDbOrderStore.getState();
+        moveOrder(order.id, 'awaiting_payment');
+      }
     } else {
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
@@ -389,10 +395,11 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       new: 'bg-[hsl(var(--stage-new))]',
       contacted: 'bg-[hsl(var(--stage-contacted))]',
       no_response: 'bg-[hsl(var(--stage-no-response))]',
-      link_sent: 'bg-[hsl(var(--stage-link-sent))]',
       awaiting_payment: 'bg-[hsl(var(--stage-awaiting))]',
       paid: 'bg-[hsl(var(--stage-paid))]',
       shipped: 'bg-[hsl(var(--stage-shipped))]',
+      cancelled: 'bg-[hsl(var(--stage-cancelled))]',
+      collect_next_day: 'bg-[hsl(var(--stage-collect-next-day))]',
     };
     return colors[stageId];
   };

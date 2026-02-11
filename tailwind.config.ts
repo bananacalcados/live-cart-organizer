@@ -64,10 +64,11 @@ export default {
           new: "hsl(var(--stage-new))",
           contacted: "hsl(var(--stage-contacted))",
           "no-response": "hsl(var(--stage-no-response))",
-          "link-sent": "hsl(var(--stage-link-sent))",
           awaiting: "hsl(var(--stage-awaiting))",
           paid: "hsl(var(--stage-paid))",
           shipped: "hsl(var(--stage-shipped))",
+          cancelled: "hsl(var(--stage-cancelled))",
+          "collect-next-day": "hsl(var(--stage-collect-next-day))",
         },
       },
       borderRadius: {
