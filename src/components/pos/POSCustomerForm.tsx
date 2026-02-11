@@ -213,7 +213,7 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
 
         <div className="p-4 border-t border-pos-yellow/20 flex items-center justify-end gap-2">
           <Button variant="ghost" className="text-pos-white/70 hover:text-pos-yellow" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2" onClick={handleSave} disabled={saving}>
+          <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={handleSave} disabled={saving}>
             <Save className="h-4 w-4" /> {saving ? 'Salvando...' : 'Salvar Cliente'}
           </Button>
         </div>

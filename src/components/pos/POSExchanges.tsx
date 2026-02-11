@@ -208,7 +208,7 @@ export function POSExchanges({ storeId }: Props) {
           <h2 className="text-lg font-bold text-pos-white flex items-center gap-2">
             <RotateCcw className="h-5 w-5 text-pos-yellow" /> Trocas & Devoluções
           </h2>
-          <Button className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2" onClick={() => setShowNew(true)}>
+          <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={() => setShowNew(true)}>
             <Plus className="h-4 w-4" /> Nova Troca
           </Button>
         </div>
@@ -424,7 +424,7 @@ export function POSExchanges({ storeId }: Props) {
                 </div>
               </div>
 
-              <Button className="w-full bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold h-12 gap-2" onClick={handleSave} disabled={saving}>
+              <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-12 gap-2" onClick={handleSave} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Registrar Troca
               </Button>

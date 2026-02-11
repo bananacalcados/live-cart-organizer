@@ -170,7 +170,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
           </div>
           <h3 className="text-xl font-bold text-pos-white">Caixa Fechado</h3>
           <p className="text-pos-white/50">Abra o caixa para começar a registrar vendas</p>
-          <Button className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2 h-12 px-8" onClick={() => setShowOpen(true)}>
+          <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2 h-12 px-8" onClick={() => setShowOpen(true)}>
             <Unlock className="h-5 w-5" /> Abrir Caixa
           </Button>
         </div>
@@ -244,7 +244,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
             <Button className="flex-1 gap-2 border-2 border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20" variant="outline" onClick={() => setShowMovement('deposit')}>
               <ArrowDown className="h-4 w-4" /> Reforço
             </Button>
-            <Button className="flex-1 gap-2 bg-pos-orange text-pos-white hover:bg-pos-orange-muted font-bold" onClick={() => setShowClose(true)}>
+            <Button className="flex-1 gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => setShowClose(true)}>
               <Lock className="h-4 w-4" /> Fechar Caixa
             </Button>
           </div>
@@ -262,7 +262,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
               <Label className="text-pos-white/70 text-xs">Valor de abertura (fundo de troco)</Label>
               <Input type="number" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
             </div>
-            <Button className="w-full bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold h-12" onClick={handleOpen}>Abrir Caixa</Button>
+            <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-12" onClick={handleOpen}>Abrir Caixa</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -294,7 +294,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                 </div>
               </div>
             )}
-            <Button className="w-full bg-pos-orange text-pos-white hover:bg-pos-orange-muted font-bold h-12" onClick={handleClose}>Fechar Caixa</Button>
+            <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-12" onClick={handleClose}>Fechar Caixa</Button>
           </div>
         </DialogContent>
       </Dialog>

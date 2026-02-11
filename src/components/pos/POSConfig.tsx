@@ -276,7 +276,7 @@ export function POSConfig({ storeId }: Props) {
                 <p className="text-2xl font-bold text-pos-yellow">{productCount}</p>
               </div>
               <Button
-                className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2 h-12 px-6"
+                className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2 h-12 px-6"
                 onClick={syncProducts}
                 disabled={syncing}
               >
@@ -328,7 +328,7 @@ export function POSConfig({ storeId }: Props) {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between text-pos-white">
               <span className="flex items-center gap-2"><Store className="h-4 w-4 text-pos-yellow" /> Lojas</span>
-              <Button size="sm" className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-1" onClick={() => setShowAddStore(true)}>
+              <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddStore(true)}>
                 <Plus className="h-3 w-3" /> Nova Loja
               </Button>
             </CardTitle>
@@ -364,7 +364,7 @@ export function POSConfig({ storeId }: Props) {
               </div>
             )}
             <Button
-              className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2"
+              className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2"
               onClick={saveWhatsAppNumbers}
               disabled={savingNumbers}
             >
@@ -378,7 +378,7 @@ export function POSConfig({ storeId }: Props) {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between text-pos-white">
               <span className="flex items-center gap-2"><Users className="h-4 w-4 text-pos-orange" /> Vendedoras</span>
-              <Button size="sm" className="bg-pos-orange text-pos-white hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddSeller(true)}>
+              <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddSeller(true)}>
                 <Plus className="h-3 w-3" /> Adicionar
               </Button>
             </CardTitle>
@@ -450,7 +450,7 @@ export function POSConfig({ storeId }: Props) {
                 </div>
               </>
             )}
-            <Button className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2" onClick={saveInvoiceConfig}>
+            <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={saveInvoiceConfig}>
               <Save className="h-4 w-4" /> Salvar
             </Button>
           </CardContent>
@@ -462,7 +462,7 @@ export function POSConfig({ storeId }: Props) {
             <DialogHeader><DialogTitle className="text-pos-white">Adicionar Vendedora</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <Input value={newSellerName} onChange={e => setNewSellerName(e.target.value)} placeholder="Nome da vendedora" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
-              <Button className="w-full bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={addSeller}>Adicionar</Button>
+              <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addSeller}>Adicionar</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -484,7 +484,7 @@ export function POSConfig({ storeId }: Props) {
                 <Label className="text-pos-white/70 text-xs">Endereço (opcional)</Label>
                 <Input value={newStore.address} onChange={e => setNewStore(s => ({ ...s, address: e.target.value }))} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
               </div>
-              <Button className="w-full bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={addStore}>Adicionar Loja</Button>
+              <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addStore}>Adicionar Loja</Button>
             </div>
           </DialogContent>
         </Dialog>
