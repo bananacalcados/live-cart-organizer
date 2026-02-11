@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { CheckCircle2, AlertTriangle, Users, Package } from 'lucide-react';
 
 interface Props {
@@ -15,6 +16,8 @@ interface Props {
 }
 
 export function ExpeditionOrdersList({ orders, searchTerm, showGrouping, onRefresh }: Props) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   const filtered = orders.filter(o => {
     const term = searchTerm.toLowerCase();
     if (!term) return true;
@@ -39,6 +42,22 @@ export function ExpeditionOrdersList({ orders, searchTerm, showGrouping, onRefre
   }
 
   const multiOrderCustomers = Array.from(customerGroups.entries()).filter(([, orders]) => orders.length > 1);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === approved.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(approved.map(o => o.id)));
+    }
+  };
 
   const handleAutoGroup = async () => {
     try {
@@ -70,12 +89,115 @@ export function ExpeditionOrdersList({ orders, searchTerm, showGrouping, onRefre
     }
   };
 
+  const handleManualGroup = async () => {
+    if (selectedIds.size < 2) {
+      toast.error('Selecione pelo menos 2 pedidos para agrupar.');
+      return;
+    }
+
+    const selected = approved.filter(o => selectedIds.has(o.id));
+    const firstOrder = selected[0];
+
+    try {
+      const { data: group } = await supabase
+        .from('expedition_groups')
+        .insert({
+          customer_email: firstOrder.customer_email,
+          customer_name: firstOrder.customer_name,
+          order_count: selected.length,
+          total_items: selected.reduce((sum: number, o: any) =>
+            sum + (o.expedition_order_items?.length || 0), 0),
+        })
+        .select()
+        .single();
+
+      if (group) {
+        await supabase
+          .from('expedition_orders')
+          .update({ group_id: group.id, expedition_status: 'grouped' })
+          .in('id', Array.from(selectedIds));
+      }
+
+      toast.success(`Grupo manual criado com ${selected.length} pedidos!`);
+      setSelectedIds(new Set());
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro ao agrupar: ${error.message}`);
+    }
+  };
+
   if (showGrouping) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
+        {/* Manual grouping section */}
+        <Card className="border-dashed border-2 border-primary/30">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Package className="h-4 w-4" /> Agrupar Pedidos Manualmente
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Selecione os pedidos que deseja agrupar ({selectedIds.size} selecionados)
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={selectAll}>
+                  {selectedIds.size === approved.length ? 'Desmarcar todos' : 'Selecionar todos'}
+                </Button>
+                {selectedIds.size >= 2 && (
+                  <Button onClick={handleManualGroup} size="sm" className="gap-2">
+                    <Users className="h-4 w-4" />
+                    Agrupar {selectedIds.size} pedidos
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1 max-h-[400px] overflow-y-auto">
+              {approved.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">Nenhum pedido aprovado.</p>
+              ) : (
+                approved.map(o => (
+                  <label
+                    key={o.id}
+                    className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
+                      selectedIds.has(o.id) ? 'bg-primary/10' : 'hover:bg-secondary/50'
+                    }`}
+                  >
+                    <Checkbox
+                      checked={selectedIds.has(o.id)}
+                      onCheckedChange={() => toggleSelect(o.id)}
+                    />
+                    <div className="flex-1 flex items-center justify-between min-w-0">
+                      <div className="min-w-0">
+                        <span className="font-medium text-sm">{o.shopify_order_name}</span>
+                        <span className="text-xs text-muted-foreground ml-2">{o.customer_name}</span>
+                        <span className="text-xs text-muted-foreground ml-2">
+                          {o.expedition_order_items?.length || 0} itens
+                        </span>
+                        {o.shopify_created_at && (
+                          <span className="text-xs text-muted-foreground ml-2">
+                            📅 {new Date(o.shopify_created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium shrink-0 ml-2">
+                        R$ {Number(o.total_price || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Auto grouping section */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-foreground">Agrupamento por Cliente</h2>
+            <h2 className="text-lg font-bold text-foreground">Agrupamento Automático por Cliente</h2>
             <p className="text-sm text-muted-foreground">
               {multiOrderCustomers.length} clientes com múltiplos pedidos
             </p>
