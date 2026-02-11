@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.pos-tiny-emit-nfce]
 verify_jwt = false
+
+[functions.pos-tiny-sync-products]
+verify_jwt = false

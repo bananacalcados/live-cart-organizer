@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ScanBarcode, Search, Plus, Minus, Trash2, User, CreditCard,
   Receipt, Printer, Camera, ShoppingCart, Package, Check,
@@ -200,40 +200,103 @@ export function POSSalesView({ storeId, sellerId }: Props) {
 
   const removeItem = (id: string) => setCart(prev => prev.filter(item => item.id !== id));
 
-  const handleBarcodeScan = async () => {
-    if (!barcodeInput.trim()) return;
+  // Debounce timer ref
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-search with debounce when typing
+  useEffect(() => {
+    if (!barcodeInput.trim() || barcodeInput.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      handleBarcodeScan(barcodeInput.trim());
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [barcodeInput, storeId]);
+
+  const handleBarcodeScan = async (term?: string) => {
+    const query = term || barcodeInput.trim();
+    if (!query) return;
     setSearching(true);
     setSearchResults([]);
     try {
-      const isBarcode = /^\d{8,14}$/.test(barcodeInput.trim());
-      const body = isBarcode
-        ? { store_id: storeId, gtin: barcodeInput.trim() }
-        : { store_id: storeId, query: barcodeInput.trim() };
+      const isBarcode = /^\d{8,14}$/.test(query);
 
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-product`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-        body: JSON.stringify(body),
-      });
-      const data = await resp.json();
+      if (isBarcode) {
+        // Barcode: search local DB by exact barcode
+        const { data } = await supabase
+          .from('pos_products')
+          .select('*')
+          .eq('store_id', storeId)
+          .eq('barcode', query)
+          .eq('is_active', true)
+          .limit(10);
 
-      if (data.success && data.products.length > 0) {
-        if (data.products.length === 1 && isBarcode) {
-          const product = data.products[0];
-          addToCart(product);
-          setBarcodeInput("");
+        if (data && data.length > 0) {
+          if (data.length === 1) {
+            addToCart(mapDbProduct(data[0]));
+            setBarcodeInput("");
+          } else {
+            setSearchResults(data.map(mapDbProduct));
+          }
         } else {
-          setSearchResults(data.products);
+          // Fallback to Tiny API for barcode not in local DB
+          const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-product`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+            body: JSON.stringify({ store_id: storeId, gtin: query }),
+          });
+          const apiData = await resp.json();
+          if (apiData.success && apiData.products.length > 0) {
+            if (apiData.products.length === 1) {
+              addToCart(apiData.products[0]);
+              setBarcodeInput("");
+            } else {
+              setSearchResults(apiData.products);
+            }
+          } else {
+            toast.error("Produto não encontrado");
+          }
         }
       } else {
-        toast.error(data.error || "Produto não encontrado");
+        // Text search: local DB with ilike (trigram index)
+        const { data } = await supabase
+          .from('pos_products')
+          .select('*')
+          .eq('store_id', storeId)
+          .eq('is_active', true)
+          .or(`name.ilike.%${query}%,sku.ilike.%${query}%,barcode.ilike.%${query}%`)
+          .order('name')
+          .limit(20);
+
+        if (data && data.length > 0) {
+          setSearchResults(data.map(mapDbProduct));
+        } else {
+          setSearchResults([]);
+        }
       }
     } catch (e) {
-      toast.error("Erro ao buscar produto");
+      console.error('Search error:', e);
     } finally {
       setSearching(false);
     }
   };
+
+  const mapDbProduct = (row: any): CartItem => ({
+    id: `${row.tiny_id}-${row.sku}-${row.variant}`,
+    tiny_id: row.tiny_id,
+    sku: row.sku || '',
+    name: row.name,
+    variant: row.variant || '',
+    size: row.size,
+    category: row.category,
+    price: parseFloat(row.price || '0'),
+    quantity: 1,
+    barcode: row.barcode || '',
+    stock: parseFloat(row.stock || '0'),
+  });
 
   const addToCart = (product: any) => {
     const cartId = `${product.tiny_id}-${product.sku}-${product.variant}`;
@@ -524,7 +587,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                   <Button variant="outline" size="icon" className="h-12 w-12 border-pos-yellow/30 text-pos-yellow hover:bg-pos-yellow/10" onClick={() => setShowCamera(true)}>
                     <Camera className="h-5 w-5" />
                   </Button>
-                  <Button className="h-12 px-6 bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={handleBarcodeScan} disabled={searching}>
+                  <Button className="h-12 px-6 bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={() => handleBarcodeScan()} disabled={searching}>
                     {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-4 w-4 mr-2" /> Buscar</>}
                   </Button>
                 </div>
