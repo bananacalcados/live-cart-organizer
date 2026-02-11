@@ -178,6 +178,228 @@ export type Database = {
           },
         ]
       }
+      campaign_channels: {
+        Row: {
+          campaign_id: string
+          channel_type: string
+          content_plan: Json | null
+          created_at: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          schedule: Json | null
+          strategy: string | null
+          tone_of_voice: string | null
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          channel_type: string
+          content_plan?: Json | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          schedule?: Json | null
+          strategy?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          channel_type?: string
+          content_plan?: Json | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          schedule?: Json | null
+          strategy?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_channels_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_landing_pages: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          custom_css: string | null
+          description: string | null
+          form_fields: Json | null
+          hero_image_url: string | null
+          id: string
+          is_active: boolean
+          slug: string
+          submissions: number
+          thank_you_message: string | null
+          title: string
+          updated_at: string
+          views: number
+          whatsapp_redirect: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          custom_css?: string | null
+          description?: string | null
+          form_fields?: Json | null
+          hero_image_url?: string | null
+          id?: string
+          is_active?: boolean
+          slug: string
+          submissions?: number
+          thank_you_message?: string | null
+          title: string
+          updated_at?: string
+          views?: number
+          whatsapp_redirect?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          custom_css?: string | null
+          description?: string | null
+          form_fields?: Json | null
+          hero_image_url?: string | null
+          id?: string
+          is_active?: boolean
+          slug?: string
+          submissions?: number
+          thank_you_message?: string | null
+          title?: string
+          updated_at?: string
+          views?: number
+          whatsapp_redirect?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_landing_pages_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_leads: {
+        Row: {
+          campaign_id: string
+          conversion_value: number | null
+          converted: boolean
+          converted_at: string | null
+          created_at: string
+          email: string | null
+          id: string
+          instagram: string | null
+          metadata: Json | null
+          name: string | null
+          phone: string | null
+          source: string | null
+        }
+        Insert: {
+          campaign_id: string
+          conversion_value?: number | null
+          converted?: boolean
+          converted_at?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          instagram?: string | null
+          metadata?: Json | null
+          name?: string | null
+          phone?: string | null
+          source?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          conversion_value?: number | null
+          converted?: boolean
+          converted_at?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          instagram?: string | null
+          metadata?: Json | null
+          name?: string | null
+          phone?: string | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_leads_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_tasks: {
+        Row: {
+          assigned_to: string | null
+          campaign_id: string
+          channel_id: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          sort_order: number
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          campaign_id: string
+          channel_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          sort_order?: number
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          campaign_id?: string
+          channel_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          sort_order?: number
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_tasks_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_tasks_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_contacts: {
         Row: {
           created_at: string
@@ -385,8 +607,12 @@ export type Database = {
       }
       marketing_campaigns: {
         Row: {
+          actual_cost: number | null
           ai_prompt: string | null
           ai_strategy: Json | null
+          attributed_orders: number | null
+          attributed_revenue: number | null
+          budget: number | null
           channels: string[] | null
           completed_at: string | null
           contact_list_id: string | null
@@ -394,13 +620,17 @@ export type Database = {
           created_at: string
           delivered_count: number | null
           description: string | null
+          end_date: string | null
           failed_count: number | null
           id: string
+          leads_captured: number | null
           name: string
           objective: string | null
+          people_reached: number | null
           read_count: number | null
           scheduled_at: string | null
           sent_count: number | null
+          start_date: string | null
           started_at: string | null
           status: string
           target_audience: string | null
@@ -411,8 +641,12 @@ export type Database = {
           whatsapp_template_params: Json | null
         }
         Insert: {
+          actual_cost?: number | null
           ai_prompt?: string | null
           ai_strategy?: Json | null
+          attributed_orders?: number | null
+          attributed_revenue?: number | null
+          budget?: number | null
           channels?: string[] | null
           completed_at?: string | null
           contact_list_id?: string | null
@@ -420,13 +654,17 @@ export type Database = {
           created_at?: string
           delivered_count?: number | null
           description?: string | null
+          end_date?: string | null
           failed_count?: number | null
           id?: string
+          leads_captured?: number | null
           name: string
           objective?: string | null
+          people_reached?: number | null
           read_count?: number | null
           scheduled_at?: string | null
           sent_count?: number | null
+          start_date?: string | null
           started_at?: string | null
           status?: string
           target_audience?: string | null
@@ -437,8 +675,12 @@ export type Database = {
           whatsapp_template_params?: Json | null
         }
         Update: {
+          actual_cost?: number | null
           ai_prompt?: string | null
           ai_strategy?: Json | null
+          attributed_orders?: number | null
+          attributed_revenue?: number | null
+          budget?: number | null
           channels?: string[] | null
           completed_at?: string | null
           contact_list_id?: string | null
@@ -446,13 +688,17 @@ export type Database = {
           created_at?: string
           delivered_count?: number | null
           description?: string | null
+          end_date?: string | null
           failed_count?: number | null
           id?: string
+          leads_captured?: number | null
           name?: string
           objective?: string | null
+          people_reached?: number | null
           read_count?: number | null
           scheduled_at?: string | null
           sent_count?: number | null
+          start_date?: string | null
           started_at?: string | null
           status?: string
           target_audience?: string | null
