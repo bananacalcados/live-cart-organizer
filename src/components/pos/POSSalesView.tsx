@@ -3,7 +3,7 @@ import {
   ScanBarcode, Search, Plus, Minus, Trash2, User, CreditCard,
   Receipt, Printer, Camera, ShoppingCart, Package, Check,
   QrCode, Banknote, FileText, ChevronRight, Loader2, Users,
-  Lock, MessageSquare, RotateCcw, Phone, Bell
+  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,8 @@ export function POSSalesView({ storeId, sellerId }: Props) {
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [installments, setInstallments] = useState("1");
   const [cashReceived, setCashReceived] = useState("");
+  const [discount, setDiscount] = useState("");
+  const [discountType, setDiscountType] = useState<"value" | "percent">("value");
 
   // Cash register gate
   const [hasOpenRegister, setHasOpenRegister] = useState<boolean | null>(null);
@@ -94,6 +96,10 @@ export function POSSalesView({ storeId, sellerId }: Props) {
 
   const subtotal = cart.reduce((s, item) => s + item.price * item.quantity, 0);
   const totalItems = cart.reduce((s, item) => s + item.quantity, 0);
+  const discountValue = discountType === "percent"
+    ? subtotal * (parseFloat(discount || "0") / 100)
+    : parseFloat(discount || "0");
+  const totalWithDiscount = Math.max(0, subtotal - discountValue);
 
   // Check if cash register is open
   useEffect(() => {
@@ -403,6 +409,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
           })),
           payment_method_id: useMultiPayment ? 'multi' : selectedPayment,
           payment_method_name: paymentMethodName,
+          discount: discountValue > 0 ? discountValue : undefined,
         }),
       });
       const data = await resp.json();
@@ -462,6 +469,8 @@ export function POSSalesView({ storeId, sellerId }: Props) {
     setUseMultiPayment(false);
     setMultiPaymentMethodId("");
     setMultiPaymentAmount("");
+    setDiscount("");
+    setDiscountType("value");
   };
 
   const steps: { id: SaleStep; label: string; icon: typeof ScanBarcode }[] = [
@@ -473,7 +482,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
 
   const stepIndex = steps.findIndex(s => s.id === step);
   const selectedPaymentName = paymentMethods.find(m => m.id === selectedPayment)?.name || '';
-  const cashChange = cashReceived ? Math.max(0, parseFloat(cashReceived) - subtotal) : 0;
+  const cashChange = cashReceived ? Math.max(0, parseFloat(cashReceived) - totalWithDiscount) : 0;
   const multiPaymentsTotal = multiPayments.reduce((s, p) => s + p.amount, 0);
 
   // --- GATE: Cash register must be open ---
@@ -799,7 +808,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                         <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {[1, 2, 3, 6, 10, 12].map(n => (
-                            <SelectItem key={n} value={String(n)}>{n}x de R$ {(subtotal / n).toFixed(2)}{n === 1 ? ' (à vista)' : ''}</SelectItem>
+                            <SelectItem key={n} value={String(n)}>{n}x de R$ {(totalWithDiscount / n).toFixed(2)}{n === 1 ? ' (à vista)' : ''}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -874,21 +883,52 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                       ))}
                       <div className="flex items-center justify-between p-3 rounded-lg bg-pos-orange/10 border border-pos-orange/30">
                         <span className="text-sm text-pos-white/70">Total informado:</span>
-                        <span className={cn("font-bold text-lg", multiPaymentsTotal === subtotal ? "text-green-400" : multiPaymentsTotal < subtotal ? "text-red-400" : "text-pos-orange")}>
+                        <span className={cn("font-bold text-lg", multiPaymentsTotal === totalWithDiscount ? "text-green-400" : multiPaymentsTotal < totalWithDiscount ? "text-red-400" : "text-pos-orange")}>
                           R$ {multiPaymentsTotal.toFixed(2)}
                         </span>
                       </div>
-                      {multiPaymentsTotal !== subtotal && (
+                      {multiPaymentsTotal !== totalWithDiscount && (
                         <p className="text-xs text-red-400">
-                          {multiPaymentsTotal < subtotal
-                            ? `Faltam R$ ${(subtotal - multiPaymentsTotal).toFixed(2)} para completar o total`
-                            : `Excede o total em R$ ${(multiPaymentsTotal - subtotal).toFixed(2)}`}
+                          {multiPaymentsTotal < totalWithDiscount
+                            ? `Faltam R$ ${(totalWithDiscount - multiPaymentsTotal).toFixed(2)} para completar o total`
+                            : `Excede o total em R$ ${(multiPaymentsTotal - totalWithDiscount).toFixed(2)}`}
                         </p>
                       )}
                     </div>
                   )}
                 </div>
               )}
+
+              {/* Discount Section */}
+              <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
+                <Label className="text-pos-white flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-pos-orange" /> Desconto
+                </Label>
+                <div className="flex gap-2">
+                  <Select value={discountType} onValueChange={(v: "value" | "percent") => setDiscountType(v)}>
+                    <SelectTrigger className="w-24 bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="value">R$</SelectItem>
+                      <SelectItem value="percent">%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    value={discount}
+                    onChange={e => setDiscount(e.target.value)}
+                    placeholder={discountType === "percent" ? "Ex: 10" : "Ex: 50.00"}
+                    className="flex-1 bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30"
+                  />
+                </div>
+                {discountValue > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-pos-white/50">Desconto aplicado:</span>
+                    <span className="font-bold text-red-400">-R$ {discountValue.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -906,7 +946,8 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                       : 'Pedido criado no Tiny ERP'}
                   </p>
                 </div>
-                <div className="text-2xl font-bold text-pos-orange">R$ {subtotal.toFixed(2)}</div>
+                <div className="text-2xl font-bold text-pos-orange">R$ {totalWithDiscount.toFixed(2)}</div>
+                {discountValue > 0 && <p className="text-sm text-red-400">Desconto: -R$ {discountValue.toFixed(2)}</p>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Button
@@ -982,7 +1023,17 @@ export function POSSalesView({ storeId, sellerId }: Props) {
             <Separator className="bg-pos-orange/20" />
             <div className="flex items-center justify-between">
               <span className="text-sm text-pos-white/50">Subtotal</span>
-              <span className="font-bold text-lg text-pos-orange">R$ {subtotal.toFixed(2)}</span>
+              <span className="text-sm text-pos-white/50">R$ {subtotal.toFixed(2)}</span>
+            </div>
+            {discountValue > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-red-400">Desconto</span>
+                <span className="text-sm text-red-400">-R$ {discountValue.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-pos-white">Total</span>
+              <span className="font-bold text-lg text-pos-orange">R$ {totalWithDiscount.toFixed(2)}</span>
             </div>
             <Button
               className="w-full h-10 text-sm gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
