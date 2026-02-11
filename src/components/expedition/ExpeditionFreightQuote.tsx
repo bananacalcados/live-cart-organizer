@@ -144,17 +144,37 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
   const handleGenerateLabel = async (orderId: string) => {
     setLoadingId(orderId);
     try {
+      // Generate internal barcode
       const internalBarcode = `EXP-${Date.now()}-${orderId.slice(0, 8)}`.toUpperCase();
       
       await supabase
         .from('expedition_orders')
-        .update({
-          internal_barcode: internalBarcode,
-          expedition_status: 'label_generated',
-        })
+        .update({ internal_barcode: internalBarcode })
         .eq('id', orderId);
 
-      toast.success('Etiqueta e código interno gerados!');
+      // Fetch official shipping label from Tiny/Frenet
+      const { data, error } = await supabase.functions.invoke('expedition-fetch-label', {
+        body: { order_id: orderId },
+      });
+
+      if (error) {
+        console.error('Label fetch error:', error);
+        // Still update status even if label fetch fails
+        await supabase
+          .from('expedition_orders')
+          .update({ expedition_status: 'label_generated' })
+          .eq('id', orderId);
+        toast.success('Código interno gerado! Etiqueta oficial não encontrada no Tiny — verifique se a expedição foi criada.');
+      } else if (data?.success && data?.label_url) {
+        toast.success('Etiqueta oficial e código interno gerados!');
+      } else {
+        await supabase
+          .from('expedition_orders')
+          .update({ expedition_status: 'label_generated' })
+          .eq('id', orderId);
+        toast.success('Código interno gerado! Etiqueta oficial ainda não disponível no Tiny.');
+      }
+
       onRefresh();
     } catch (error: any) {
       toast.error(`Erro: ${error.message}`);
@@ -163,43 +183,24 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
     }
   };
 
-  const printShippingLabel = (order: any) => {
-    const addr = order.shipping_address as any;
-    const w = window.open('', '_blank');
-    if (!w) return;
-    w.document.write(`<html><head><title>Etiqueta Envio - ${order.shopify_order_name}</title>
-<style>
-  @page { size: 100mm 150mm; margin: 3mm; }
-  body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 8px; }
-  .box { border: 2px solid #000; padding: 8px; }
-  .section { border-bottom: 1px solid #ccc; padding: 6px 0; }
-  .label { font-size: 9px; color: #666; text-transform: uppercase; }
-  .value { font-size: 13px; font-weight: bold; }
-  .tracking { font-size: 18px; font-weight: bold; text-align: center; letter-spacing: 2px; margin: 8px 0; }
-  .barcode { text-align: center; font-family: monospace; font-size: 14px; margin: 6px 0; }
-</style></head><body>
-<div class="box">
-  <div class="section" style="text-align:center;font-weight:bold;font-size:14px;">
-    ${order.freight_carrier || 'TRANSPORTADORA'} — ${order.freight_service || ''}
-  </div>
-  <div class="section">
-    <div class="label">Destinatário</div>
-    <div class="value">${order.customer_name || ''}</div>
-    <div>${addr?.address1 || ''} ${addr?.address2 || ''}</div>
-    <div>${addr?.city || ''} / ${addr?.province || ''} — CEP: ${addr?.zip || ''}</div>
-    <div>${order.customer_phone || ''}</div>
-  </div>
-  <div class="section">
-    <div class="label">Pedido</div>
-    <div class="value">${order.shopify_order_name}</div>
-  </div>
-  ${order.freight_tracking_code ? `<div class="tracking">${order.freight_tracking_code}</div>` : ''}
-  ${order.invoice_number ? `<div class="section"><div class="label">NF-e</div><div class="value">${order.invoice_number}</div></div>` : ''}
-  <div class="barcode">${order.internal_barcode || ''}</div>
-</div>
-</body></html>`);
-    w.document.close();
-    w.print();
+  const handleFetchOfficialLabel = async (orderId: string) => {
+    setLoadingId(orderId);
+    try {
+      const { data, error } = await supabase.functions.invoke('expedition-fetch-label', {
+        body: { order_id: orderId },
+      });
+      if (error) throw error;
+      if (data?.success && data?.label_url) {
+        toast.success('Etiqueta oficial obtida com sucesso!');
+        onRefresh();
+      } else {
+        toast.error('Etiqueta oficial ainda não disponível. Verifique se a expedição foi comprada no Tiny.');
+      }
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   const printInternalLabel = (order: any) => {
@@ -383,21 +384,24 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
 
                         {/* Print buttons */}
                         <div className="flex flex-wrap gap-2">
-                          {order.freight_label_url && (
+                          {order.freight_label_url ? (
                             <Button size="sm" variant="outline" className="gap-2" asChild>
                               <a href={order.freight_label_url} target="_blank" rel="noopener noreferrer">
-                                <Download className="h-4 w-4" /> Baixar Etiqueta Envio
+                                <Download className="h-4 w-4" /> Imprimir Etiqueta Oficial de Envio
                               </a>
                             </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => handleFetchOfficialLabel(order.id)}
+                              disabled={loadingId === order.id}
+                            >
+                              {loadingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                              Buscar Etiqueta Oficial (Tiny/Frenet)
+                            </Button>
                           )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-2"
-                            onClick={() => printShippingLabel(order)}
-                          >
-                            <Printer className="h-4 w-4" /> Imprimir Etiqueta Envio
-                          </Button>
                           <Button
                             size="sm"
                             variant="secondary"
