@@ -44,7 +44,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { store_id, date_from, date_to, sync_stock, stock_only, resume_stock_page, resume_log_id } = body;
+    const { store_id, date_from, date_to, sync_stock, stock_only, resume_stock_page, resume_log_id, resume_date } = body;
 
     let stores: { id: string; name: string; tiny_token: string }[] = [];
     if (store_id) {
@@ -88,7 +88,9 @@ serve(async (req) => {
 
         // ===== PHASE 1: Orders (skip if stock_only) =====
         if (!stock_only) {
-          const startDate = parseBRDate(date_from || new Date(Date.now() - 30 * 86400000).toLocaleDateString('pt-BR'));
+          const startDate = resume_date 
+            ? parseBRDate(resume_date) 
+            : parseBRDate(date_from || new Date(Date.now() - 30 * 86400000).toLocaleDateString('pt-BR'));
           const endDate = parseBRDate(date_to || new Date().toLocaleDateString('pt-BR'));
           let currentDate = new Date(startDate);
 
@@ -173,6 +175,24 @@ serve(async (req) => {
             }
             currentDate = addDays(currentDate, 1);
             await new Promise(r => setTimeout(r, 400));
+          }
+
+          // If orders timed out before finishing all dates, return partial
+          if (currentDate <= endDate && Date.now() - functionStart >= TIME_LIMIT_MS) {
+            if (logId) {
+              await supabase.from('tiny_management_sync_log').update({
+                status: 'partial',
+                current_date_syncing: `Parcial: parou em ${formatBRDate(currentDate)}`,
+                orders_synced: totalSynced,
+              }).eq('id', logId);
+            }
+            results.push({
+              store_id: store.id, store_name: store.name, status: 'partial',
+              orders_synced: totalSynced,
+              resume_date: formatBRDate(currentDate),
+              resume_log_id: logId,
+            });
+            continue;
           }
         }
 

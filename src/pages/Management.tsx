@@ -3,8 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart3, Home, TrendingUp, DollarSign, Package, ShoppingCart, Store,
-  ArrowDownRight, RefreshCw, Loader2, Box, ShoppingBag
+  ArrowDownRight, RefreshCw, Loader2, Box, ShoppingBag, Calendar
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -68,11 +70,13 @@ const CHART_COLORS = [
   "hsl(0, 0%, 55%)", "hsl(48, 60%, 60%)"
 ];
 
-type Period = "today" | "7d" | "30d" | "month" | "last_month";
+type Period = "today" | "7d" | "30d" | "month" | "last_month" | "custom";
 
 export default function Management() {
   const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>("30d");
+  const [customFrom, setCustomFrom] = useState(() => format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [customTo, setCustomTo] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -93,8 +97,9 @@ export default function Management() {
       case "30d": return { start: startOfDay(subDays(now, 30)), end: endOfDay(now) };
       case "month": return { start: startOfMonth(now), end: endOfMonth(now) };
       case "last_month": { const lm = subMonths(now, 1); return { start: startOfMonth(lm), end: endOfMonth(lm) }; }
+      case "custom": return { start: startOfDay(new Date(customFrom + 'T12:00:00')), end: endOfDay(new Date(customTo + 'T12:00:00')) };
     }
-  }, [period]);
+  }, [period, customFrom, customTo]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -137,34 +142,58 @@ export default function Management() {
     }, 1500);
 
     try {
-      let currentBody = { ...body };
       let totalSynced = 0;
-      let attempts = 0;
-      const MAX_ATTEMPTS = 20; // allow many resumes for large stock syncs
 
-      while (attempts < MAX_ATTEMPTS) {
-        attempts++;
-        const { data, error } = await supabase.functions.invoke('tiny-sync-management', { body: currentBody });
-        if (error) throw error;
+      // Sync each store separately to avoid timeout
+      const storesToSync = body.store_id ? [body.store_id] : stores.map(s => s.id);
 
-        const partialResults = data?.results || [];
-        totalSynced += partialResults.reduce((s: number, r: any) => s + (r.orders_synced || 0), 0);
+      for (const sid of storesToSync) {
+        let currentBody = { ...body, store_id: sid };
+        let attempts = 0;
+        const MAX_ATTEMPTS = 30;
 
-        // Check if any result needs resume
-        const partial = partialResults.find((r: any) => r.status === 'partial');
-        if (partial) {
-          toast.info(`Continuando sync de estoque... (pg ${partial.resume_stock_page})`);
-          currentBody = {
-            store_id: partial.store_id,
-            stock_only: true,
-            resume_stock_page: partial.resume_stock_page,
-            resume_log_id: partial.resume_log_id,
-          };
-          await new Promise(r => setTimeout(r, 1000));
-          continue;
+        while (attempts < MAX_ATTEMPTS) {
+          attempts++;
+          const { data, error } = await supabase.functions.invoke('tiny-sync-management', { body: currentBody });
+          if (error) throw error;
+
+          const partialResults = data?.results || [];
+          totalSynced += partialResults.reduce((s: number, r: any) => s + (r.orders_synced || 0), 0);
+
+          const partial = partialResults.find((r: any) => r.status === 'partial');
+          if (partial) {
+            const stName = stores.find(s => s.id === sid)?.name || "Loja";
+            if (partial.resume_stock_page) {
+              toast.info(`Continuando estoque ${stName}... (pg ${partial.resume_stock_page})`);
+              currentBody = {
+                store_id: partial.store_id,
+                stock_only: true,
+                resume_stock_page: partial.resume_stock_page,
+                resume_log_id: partial.resume_log_id,
+              };
+            } else if (partial.resume_date) {
+              toast.info(`Continuando pedidos ${stName}... (${partial.resume_date})`);
+              currentBody = {
+                ...body,
+                store_id: partial.store_id,
+                resume_date: partial.resume_date,
+                resume_log_id: partial.resume_log_id,
+              };
+            }
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+
+          // Check if orders sync timed out (skipped store means it was cut short)
+          const skipped = partialResults.find((r: any) => r.status === 'skipped');
+          if (skipped) {
+            // Re-run for this store
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+
+          break;
         }
-
-        break; // all completed
       }
 
       toast.success(`Sincronização concluída: ${totalSynced} pedidos importados`);
@@ -349,8 +378,29 @@ export default function Management() {
                 <SelectItem value="30d">Últimos 30 dias</SelectItem>
                 <SelectItem value="month">Mês atual</SelectItem>
                 <SelectItem value="last_month">Mês passado</SelectItem>
+                <SelectItem value="custom">Personalizado</SelectItem>
               </SelectContent>
             </Select>
+            {period === "custom" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1 h-8 text-xs bg-[hsl(0,0%,15%)] border-[hsl(0,0%,20%)] text-[hsl(45,10%,90%)]">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {format(new Date(customFrom + 'T12:00:00'), 'dd/MM/yy')} — {format(new Date(customTo + 'T12:00:00'), 'dd/MM/yy')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-3 space-y-2" align="end">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium w-8">De:</label>
+                    <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="h-8 text-xs w-[150px]" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium w-8">Até:</label>
+                    <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="h-8 text-xs w-[150px]" />
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
             <Button variant="outline" size="sm" onClick={syncTinyOrders} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground">
               {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               {syncing && syncProgress
