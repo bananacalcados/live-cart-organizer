@@ -407,6 +407,7 @@ export type Database = {
           display_name: string | null
           id: string
           phone: string
+          profile_pic_url: string | null
           updated_at: string
         }
         Insert: {
@@ -415,6 +416,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           phone: string
+          profile_pic_url?: string | null
           updated_at?: string
         }
         Update: {
@@ -423,6 +425,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           phone?: string
+          profile_pic_url?: string | null
           updated_at?: string
         }
         Relationships: []
