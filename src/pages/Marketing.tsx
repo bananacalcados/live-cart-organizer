@@ -87,6 +87,34 @@ interface CampaignStep {
   template_params: Record<string, string>;
   delay_hours: number;
   label: string;
+  objective?: string;
+  timing?: string;
+  tone?: string;
+  content_suggestion?: string;
+  media_suggestion?: string;
+}
+
+interface AIStrategy {
+  campaign_name: string;
+  summary: string;
+  target_analysis: string;
+  lead_capture: {
+    strategy: string;
+    channels: string[];
+    tips: string[];
+  };
+  communication_steps: Array<{
+    step_number: number;
+    label: string;
+    objective: string;
+    timing: string;
+    delay_hours: number;
+    tone: string;
+    content_suggestion: string;
+    media_suggestion?: string;
+  }>;
+  success_metrics: string[];
+  additional_tips: string[];
 }
 
 interface ContactList {
@@ -164,6 +192,8 @@ export default function Marketing() {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiStrategy, setAiStrategy] = useState<AIStrategy | null>(null);
+  const [creationStep, setCreationStep] = useState<'briefing' | 'strategy' | 'configure'>('briefing');
 
   // Campaign form
   const [campaignName, setCampaignName] = useState("");
@@ -264,61 +294,78 @@ export default function Marketing() {
     }
     setIsGeneratingAI(true);
     try {
-      const prompt = `Você é um estrategista de marketing digital especializado em WhatsApp Business e varejo de calçados/moda.
+      // Gather customer stats for context
+      const customerStats = {
+        total: customers.length,
+        local: customers.filter(c => c.region_type === 'local').length,
+        online: customers.filter(c => c.region_type === 'online').length,
+        revenue: customers.reduce((s, c) => s + c.total_spent, 0),
+        segments: [...new Set(customers.map(c => c.rfm_segment).filter(Boolean))],
+      };
 
-Objetivo da campanha: ${campaignObjective}
-Público-alvo: ${campaignAudience || "Todos os clientes"}
-${campaignAiPrompt ? `Instruções adicionais: ${campaignAiPrompt}` : ""}
-
-Gere uma estratégia de campanha com:
-1. Nome criativo para a campanha
-2. Descrição resumida (1-2 frases)
-3. Sequência de 2-4 mensagens WhatsApp (etapas) com:
-   - Label da etapa (ex: "Convite Inicial", "Lembrete", "Última Chance")
-   - Delay em horas entre cada etapa (0 para a primeira)
-   - Nome sugerido para template Meta (snake_case)
-4. Canais recomendados
-
-Responda em JSON: { "name": "...", "description": "...", "steps": [{ "label": "...", "delay_hours": 0, "template_name": "..." }], "channels": ["whatsapp"] }`;
-
-      const res = await supabase.functions.invoke('meta-whatsapp-send', {
-        body: { _ai_request: true, prompt, model: 'google/gemini-2.5-flash' }
-      });
-
-      // Try Lovable AI
-      const aiRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send`, {
-        method: 'POST',
-        headers: {
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          'Content-Type': 'application/json',
+      const res = await supabase.functions.invoke('ai-marketing-strategy', {
+        body: {
+          objective: campaignObjective,
+          audience: campaignAudience,
+          instructions: campaignAiPrompt,
+          customer_stats: customers.length > 0 ? customerStats : null,
         },
-        body: JSON.stringify({ _ai_generate: true, prompt }),
       });
 
-      // For now, generate a basic strategy based on the objective
-      const strategy = generateLocalStrategy(campaignObjective, campaignAudience);
-      setCampaignName(strategy.name);
-      setCampaignSteps(strategy.steps.map((s: any) => ({
+      if (res.error) throw new Error(res.error.message);
+      const data = res.data as any;
+      
+      if (!data?.success || !data?.strategy) {
+        throw new Error(data?.error || "Erro ao gerar estratégia");
+      }
+
+      const strategy = data.strategy as AIStrategy;
+      setAiStrategy(strategy);
+      setCampaignName(strategy.campaign_name);
+      setCampaignSteps(strategy.communication_steps.map((s) => ({
         id: crypto.randomUUID(),
-        template_name: s.template_name,
+        template_name: "",
         template_params: {},
         delay_hours: s.delay_hours,
         label: s.label,
+        objective: s.objective,
+        timing: s.timing,
+        tone: s.tone,
+        content_suggestion: s.content_suggestion,
+        media_suggestion: s.media_suggestion,
       })));
-      toast.success("Estratégia gerada!");
-    } catch (err) {
+      setCreationStep('strategy');
+      toast.success("Estratégia gerada com sucesso!");
+    } catch (err: any) {
       console.error(err);
-      // Fallback to local generation
-      const strategy = generateLocalStrategy(campaignObjective, campaignAudience);
-      setCampaignName(strategy.name);
-      setCampaignSteps(strategy.steps.map((s: any) => ({
-        id: crypto.randomUUID(),
-        template_name: s.template_name,
-        template_params: {},
-        delay_hours: s.delay_hours,
-        label: s.label,
-      })));
-      toast.success("Estratégia gerada (local)!");
+      if (err?.message?.includes('429') || err?.message?.includes('Rate')) {
+        toast.error("Limite de requisições atingido. Tente em alguns segundos.");
+      } else if (err?.message?.includes('402')) {
+        toast.error("Créditos de IA insuficientes.");
+      } else {
+        // Fallback to local strategy
+        const strategy = generateLocalStrategy(campaignObjective, campaignAudience);
+        setCampaignName(strategy.name);
+        setAiStrategy({
+          campaign_name: strategy.name,
+          summary: `Campanha focada em: ${campaignObjective}`,
+          target_analysis: campaignAudience || "Público geral da base de clientes",
+          lead_capture: { strategy: "Captação via WhatsApp e redes sociais", channels: ["whatsapp", "instagram"], tips: ["Usar stories para gerar curiosidade", "Criar link de cadastro"] },
+          communication_steps: strategy.steps.map((s: any, i: number) => ({
+            step_number: i + 1, label: s.label, objective: `Etapa ${i + 1} da comunicação`,
+            timing: i === 0 ? "Imediatamente" : `${s.delay_hours}h após etapa anterior`,
+            delay_hours: s.delay_hours, tone: "engajamento", content_suggestion: "Personalizar com dados do cliente",
+          })),
+          success_metrics: ["Taxa de abertura > 70%", "Taxa de resposta > 15%", "Conversão em vendas"],
+          additional_tips: ["Personalizar mensagens com nome do cliente", "Enviar em horários de maior engajamento (10h-12h, 18h-20h)"],
+        });
+        setCampaignSteps(strategy.steps.map((s: any) => ({
+          id: crypto.randomUUID(), template_name: "", template_params: {},
+          delay_hours: s.delay_hours, label: s.label,
+        })));
+        setCreationStep('strategy');
+        toast.success("Estratégia gerada (offline)!");
+      }
     } finally {
       setIsGeneratingAI(false);
     }
@@ -390,6 +437,7 @@ Responda em JSON: { "name": "...", "description": "...", "steps": [{ "label": ".
           whatsapp_template_params: campaignSteps.length > 0 ? campaignSteps as any : null,
           channels: ['whatsapp'],
           status: 'draft',
+          ai_strategy: aiStrategy as any,
           content: { steps: campaignSteps } as any,
         }])
         .select()
@@ -413,6 +461,8 @@ Responda em JSON: { "name": "...", "description": "...", "steps": [{ "label": ".
     setCampaignAiPrompt("");
     setCampaignListId("");
     setCampaignNumberId("");
+    setAiStrategy(null);
+    setCreationStep('briefing');
     setCampaignSteps([
       { id: crypto.randomUUID(), template_name: "", template_params: {}, delay_hours: 0, label: "Mensagem 1" },
     ]);
@@ -888,144 +938,283 @@ Responda em JSON: { "name": "...", "description": "...", "steps": [{ "label": ".
 
       {/* ── CREATE CAMPAIGN DIALOG ── */}
       <Dialog open={isCreating} onOpenChange={setIsCreating}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5" />Nova Campanha de Marketing
             </DialogTitle>
+            {/* Step indicator */}
+            <div className="flex items-center gap-2 pt-2">
+              {(['briefing', 'strategy', 'configure'] as const).map((step, i) => (
+                <div key={step} className="flex items-center gap-1.5">
+                  <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                    creationStep === step ? 'bg-primary text-primary-foreground' :
+                    (['briefing', 'strategy', 'configure'].indexOf(creationStep) > i) ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
+                  }`}>{i + 1}</div>
+                  <span className={`text-xs ${creationStep === step ? 'font-semibold' : 'text-muted-foreground'}`}>
+                    {step === 'briefing' ? 'Briefing' : step === 'strategy' ? 'Estratégia' : 'Configurar'}
+                  </span>
+                  {i < 2 && <ChevronDown className="h-3 w-3 text-muted-foreground -rotate-90" />}
+                </div>
+              ))}
+            </div>
           </DialogHeader>
+
           <div className="space-y-4 py-2">
-            {/* AI Strategy Generator */}
-            <Card className="border-dashed border-primary/30 bg-primary/5">
-              <CardContent className="pt-4 pb-3 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Brain className="h-4 w-4 text-primary" />
-                  <h3 className="font-semibold text-sm">Assistente de IA</h3>
-                </div>
+            {/* ── STEP 1: BRIEFING ── */}
+            {creationStep === 'briefing' && (
+              <Card className="border-dashed border-primary/30 bg-primary/5">
+                <CardContent className="pt-4 pb-3 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-primary" />
+                    <h3 className="font-semibold text-sm">Briefing da Campanha</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Descreva o que você quer alcançar. A IA vai montar toda a estratégia: análise de público, captação de leads, sequência de comunicação, métricas e dicas.
+                  </p>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Objetivo da campanha *</Label>
+                    <Textarea
+                      placeholder="Ex: Divulgar live de lançamento da coleção de verão com foco em sandálias femininas. Queremos converter clientes inativos e fidelizar os novos."
+                      value={campaignObjective}
+                      onChange={e => setCampaignObjective(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Público-alvo (opcional)</Label>
+                    <Input placeholder="Ex: Clientes fiéis da loja física + clientes online que compraram há mais de 3 meses" value={campaignAudience} onChange={e => setCampaignAudience(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Instruções adicionais (opcional)</Label>
+                    <Textarea placeholder="Ex: Temos parceria com influenciadora @fulana, incluir menção. Usar tom descontraído. Campanha válida por 1 semana." value={campaignAiPrompt} onChange={e => setCampaignAiPrompt(e.target.value)} rows={2} />
+                  </div>
+                  <Button onClick={handleGenerateAI} disabled={isGeneratingAI} className="w-full gap-1">
+                    <Brain className={`h-3.5 w-3.5 ${isGeneratingAI ? 'animate-pulse' : ''}`} />
+                    {isGeneratingAI ? 'Gerando estratégia completa...' : '🚀 Gerar Estratégia com IA'}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── STEP 2: STRATEGY REVIEW ── */}
+            {creationStep === 'strategy' && aiStrategy && (
+              <div className="space-y-4">
+                {/* Campaign Name */}
                 <div className="space-y-2">
-                  <Label className="text-xs">Objetivo da campanha</Label>
-                  <Input placeholder="Ex: Divulgar live de lançamento de coleção de verão" value={campaignObjective} onChange={e => setCampaignObjective(e.target.value)} />
+                  <Label className="text-xs">Nome da Campanha</Label>
+                  <Input value={campaignName} onChange={e => setCampaignName(e.target.value)} className="font-semibold" />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">Público-alvo (opcional)</Label>
-                  <Input placeholder="Ex: Clientes fiéis da loja física" value={campaignAudience} onChange={e => setCampaignAudience(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">Instruções extras para a IA (opcional)</Label>
-                  <Textarea placeholder="Ex: Foco em produtos ortopédicos, criar senso de urgência..." value={campaignAiPrompt} onChange={e => setCampaignAiPrompt(e.target.value)} rows={2} />
-                </div>
-                <Button size="sm" onClick={handleGenerateAI} disabled={isGeneratingAI} className="w-full gap-1">
-                  <Brain className={`h-3.5 w-3.5 ${isGeneratingAI ? 'animate-pulse' : ''}`} />
-                  {isGeneratingAI ? 'Gerando estratégia...' : 'Gerar Estratégia com IA'}
-                </Button>
-              </CardContent>
-            </Card>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label className="text-xs">Nome da Campanha *</Label>
-                <Input placeholder="Ex: Pré-Carnaval 2026" value={campaignName} onChange={e => setCampaignName(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Lista de Contatos</Label>
-                <Select value={campaignListId} onValueChange={setCampaignListId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione uma lista" /></SelectTrigger>
-                  <SelectContent>
-                    {contactLists.map(l => (
-                      <SelectItem key={l.id} value={l.id}>{l.name} ({l.contact_count})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                {/* Summary */}
+                <Card>
+                  <CardContent className="pt-3 pb-3 px-4">
+                    <h4 className="text-xs font-semibold text-muted-foreground mb-1">📋 Resumo</h4>
+                    <p className="text-sm">{aiStrategy.summary}</p>
+                  </CardContent>
+                </Card>
 
-            <div className="space-y-2">
-              <Label className="text-xs">Número WhatsApp</Label>
-              <Select value={campaignNumberId} onValueChange={setCampaignNumberId}>
-                <SelectTrigger><SelectValue placeholder="Selecione um número" /></SelectTrigger>
-                <SelectContent>
-                  {whatsappNumbers.map(n => (
-                    <SelectItem key={n.id} value={n.id}>{n.label} ({n.phone_display})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                {/* Target Analysis */}
+                <Card>
+                  <CardContent className="pt-3 pb-3 px-4">
+                    <h4 className="text-xs font-semibold text-muted-foreground mb-1">🎯 Análise de Público</h4>
+                    <p className="text-sm">{aiStrategy.target_analysis}</p>
+                  </CardContent>
+                </Card>
 
-            {/* Multi-step Templates */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold flex items-center gap-1">
-                  <Send className="h-3.5 w-3.5" />
-                  Sequência de Mensagens ({campaignSteps.length} etapa{campaignSteps.length > 1 ? 's' : ''})
-                </Label>
-                <Button variant="outline" size="sm" onClick={addStep} className="gap-1">
-                  <Plus className="h-3 w-3" />Adicionar Etapa
-                </Button>
-              </div>
-
-              {campaignSteps.map((step, idx) => (
-                <Card key={step.id} className="border-border/50">
-                  <CardContent className="pt-3 pb-2 px-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">
-                          {idx + 1}
-                        </div>
-                        <Input
-                          className="h-7 text-xs font-semibold border-none shadow-none px-1 w-40"
-                          value={step.label}
-                          onChange={e => updateStep(step.id, { label: e.target.value })}
-                        />
-                      </div>
-                      {campaignSteps.length > 1 && (
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeStep(step.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
+                {/* Lead Capture */}
+                <Card className="border-blue-500/20 bg-blue-500/5">
+                  <CardContent className="pt-3 pb-3 px-4 space-y-2">
+                    <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-1">📣 Captação de Leads</h4>
+                    <p className="text-sm">{aiStrategy.lead_capture.strategy}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {aiStrategy.lead_capture.channels.map(ch => (
+                        <Badge key={ch} variant="outline" className="text-[10px]">{ch}</Badge>
+                      ))}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Template Meta</Label>
-                        <Input
-                          className="h-8 text-xs"
-                          placeholder="nome_do_template"
-                          value={step.template_name}
-                          onChange={e => updateStep(step.id, { template_name: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">
-                          {idx === 0 ? 'Enviar imediatamente' : 'Delay (horas após etapa anterior)'}
-                        </Label>
-                        {idx === 0 ? (
-                          <Input className="h-8 text-xs" value="Imediatamente" disabled />
-                        ) : (
-                          <Input
-                            className="h-8 text-xs"
-                            type="number"
-                            min={1}
-                            placeholder="24"
-                            value={step.delay_hours}
-                            onChange={e => updateStep(step.id, { delay_hours: parseInt(e.target.value) || 0 })}
-                          />
-                        )}
-                      </div>
+                    <ul className="space-y-1">
+                      {aiStrategy.lead_capture.tips.map((tip, i) => (
+                        <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
+                          <span className="text-blue-500 shrink-0">💡</span>{tip}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                {/* Communication Steps */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                    <Send className="h-3.5 w-3.5" />
+                    Sequência de Comunicação ({aiStrategy.communication_steps.length} etapas)
+                  </h4>
+                  {aiStrategy.communication_steps.map((step, idx) => (
+                    <Card key={idx} className="border-border/50">
+                      <CardContent className="pt-3 pb-2 px-3 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0">
+                            {step.step_number}
+                          </div>
+                          <span className="font-semibold text-sm">{step.label}</span>
+                          <Badge variant="outline" className="text-[10px] ml-auto">{step.timing}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground pl-8">{step.objective}</p>
+                        <div className="flex gap-2 pl-8 flex-wrap">
+                          <Badge variant="secondary" className="text-[10px]">Tom: {step.tone}</Badge>
+                          {step.media_suggestion && (
+                            <Badge variant="secondary" className="text-[10px]">Mídia: {step.media_suggestion}</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs pl-8 mt-1 text-muted-foreground italic">
+                          💬 {step.content_suggestion}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Success Metrics */}
+                <Card>
+                  <CardContent className="pt-3 pb-3 px-4">
+                    <h4 className="text-xs font-semibold text-muted-foreground mb-1">📊 Métricas de Sucesso</h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      {aiStrategy.success_metrics.map((m, i) => (
+                        <Badge key={i} variant="outline" className="text-[10px]">{m}</Badge>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
-              ))}
 
-              <p className="text-[10px] text-muted-foreground">
-                💡 Cada etapa envia um template diferente. Configure o delay para criar uma sequência de comunicação (ex: convite → lembrete → última chance).
-              </p>
-            </div>
+                {/* Tips */}
+                {aiStrategy.additional_tips.length > 0 && (
+                  <Card>
+                    <CardContent className="pt-3 pb-3 px-4">
+                      <h4 className="text-xs font-semibold text-muted-foreground mb-1">✨ Dicas da IA</h4>
+                      <ul className="space-y-1">
+                        {aiStrategy.additional_tips.map((tip, i) => (
+                          <li key={i} className="text-xs text-muted-foreground">• {tip}</li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+
+            {/* ── STEP 3: CONFIGURE ── */}
+            {creationStep === 'configure' && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-xs">Nome da Campanha *</Label>
+                  <Input value={campaignName} onChange={e => setCampaignName(e.target.value)} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Lista de Contatos</Label>
+                    <Select value={campaignListId} onValueChange={setCampaignListId}>
+                      <SelectTrigger><SelectValue placeholder="Selecione uma lista" /></SelectTrigger>
+                      <SelectContent>
+                        {contactLists.map(l => (
+                          <SelectItem key={l.id} value={l.id}>{l.name} ({l.contact_count})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Número WhatsApp</Label>
+                    <Select value={campaignNumberId} onValueChange={setCampaignNumberId}>
+                      <SelectTrigger><SelectValue placeholder="Selecione um número" /></SelectTrigger>
+                      <SelectContent>
+                        {whatsappNumbers.map(n => (
+                          <SelectItem key={n.id} value={n.id}>{n.label} ({n.phone_display})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Template selection per step */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold flex items-center gap-1">
+                      <Send className="h-3.5 w-3.5" />
+                      Escolher Templates ({campaignSteps.length} etapa{campaignSteps.length > 1 ? 's' : ''})
+                    </Label>
+                    <Button variant="outline" size="sm" onClick={addStep} className="gap-1">
+                      <Plus className="h-3 w-3" />Etapa
+                    </Button>
+                  </div>
+
+                  {campaignSteps.map((step, idx) => (
+                    <Card key={step.id} className="border-border/50">
+                      <CardContent className="pt-3 pb-2 px-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">{idx + 1}</div>
+                            <Input className="h-7 text-xs font-semibold border-none shadow-none px-1 w-40" value={step.label} onChange={e => updateStep(step.id, { label: e.target.value })} />
+                          </div>
+                          {campaignSteps.length > 1 && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeStep(step.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                        {step.content_suggestion && (
+                          <p className="text-[10px] text-muted-foreground italic pl-8">💬 {step.content_suggestion}</p>
+                        )}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Template Meta</Label>
+                            <Input className="h-8 text-xs" placeholder="nome_do_template" value={step.template_name} onChange={e => updateStep(step.id, { template_name: e.target.value })} />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">
+                              {idx === 0 ? 'Enviar imediatamente' : 'Delay (horas)'}
+                            </Label>
+                            {idx === 0 ? (
+                              <Input className="h-8 text-xs" value="Imediatamente" disabled />
+                            ) : (
+                              <Input className="h-8 text-xs" type="number" min={1} placeholder="24" value={step.delay_hours} onChange={e => updateStep(step.id, { delay_hours: parseInt(e.target.value) || 0 })} />
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreating(false)}>Cancelar</Button>
-            <Button onClick={handleCreateCampaign} className="gap-1">
-              <Plus className="h-3.5 w-3.5" />Criar Campanha
-            </Button>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            {creationStep === 'briefing' && (
+              <>
+                <Button variant="outline" onClick={() => setIsCreating(false)}>Cancelar</Button>
+                <Button variant="ghost" onClick={() => setCreationStep('configure')} className="gap-1 text-xs">
+                  Pular IA →
+                </Button>
+              </>
+            )}
+            {creationStep === 'strategy' && (
+              <>
+                <Button variant="outline" onClick={() => setCreationStep('briefing')}>← Voltar ao Briefing</Button>
+                <Button variant="outline" onClick={() => { setAiStrategy(null); setCreationStep('briefing'); }} className="gap-1">
+                  <RefreshCw className="h-3 w-3" />Regerar
+                </Button>
+                <Button onClick={() => setCreationStep('configure')} className="gap-1">
+                  Aprovar Estratégia →
+                </Button>
+              </>
+            )}
+            {creationStep === 'configure' && (
+              <>
+                <Button variant="outline" onClick={() => aiStrategy ? setCreationStep('strategy') : setCreationStep('briefing')}>← Voltar</Button>
+                <Button onClick={handleCreateCampaign} className="gap-1">
+                  <Plus className="h-3.5 w-3.5" />Criar Campanha
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
