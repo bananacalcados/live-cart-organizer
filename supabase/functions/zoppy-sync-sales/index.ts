@@ -40,10 +40,10 @@ serve(async (req) => {
     console.log(`Syncing sales from page ${startPage}, after ${afterDate}, max ${maxPages} pages...`);
 
     while (hasMore && pagesProcessed < maxPages) {
-      // Try with after param first, fallback without it
-      const afterParam = afterDate ? `&after=${afterDate}` : '';
-      const url = `${ZOPPY_BASE_URL}/orders?page=${page}&limit=100${afterParam}`;
-
+      // Use the same format that works for /customers endpoint
+      const url = `${ZOPPY_BASE_URL}/orders?page=${page}&limit=100&after=${encodeURIComponent(afterDate)}`;
+      console.log(`Fetching: ${url}`);
+      
       const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${zoppyToken}`, 'Content-Type': 'application/json' },
       });
