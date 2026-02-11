@@ -1601,6 +1601,691 @@ export type Database = {
           },
         ]
       }
+      pos_cash_registers: {
+        Row: {
+          card_sales: number | null
+          cash_sales: number | null
+          closed_at: string | null
+          closing_balance: number | null
+          created_at: string
+          deposits: number | null
+          difference: number | null
+          expected_balance: number | null
+          id: string
+          notes: string | null
+          opened_at: string
+          opening_balance: number
+          other_sales: number | null
+          pix_sales: number | null
+          seller_id: string | null
+          status: string
+          store_id: string
+          updated_at: string
+          withdrawals: number | null
+        }
+        Insert: {
+          card_sales?: number | null
+          cash_sales?: number | null
+          closed_at?: string | null
+          closing_balance?: number | null
+          created_at?: string
+          deposits?: number | null
+          difference?: number | null
+          expected_balance?: number | null
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opening_balance?: number
+          other_sales?: number | null
+          pix_sales?: number | null
+          seller_id?: string | null
+          status?: string
+          store_id: string
+          updated_at?: string
+          withdrawals?: number | null
+        }
+        Update: {
+          card_sales?: number | null
+          cash_sales?: number | null
+          closed_at?: string | null
+          closing_balance?: number | null
+          created_at?: string
+          deposits?: number | null
+          difference?: number | null
+          expected_balance?: number | null
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opening_balance?: number
+          other_sales?: number | null
+          pix_sales?: number | null
+          seller_id?: string | null
+          status?: string
+          store_id?: string
+          updated_at?: string
+          withdrawals?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_cash_registers_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_cash_registers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_conditionals: {
+        Row: {
+          conditional_type: string
+          created_at: string
+          customer_id: string | null
+          due_date: string | null
+          id: string
+          items: Json
+          notes: string | null
+          returned_at: string | null
+          seller_id: string | null
+          status: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          conditional_type?: string
+          created_at?: string
+          customer_id?: string | null
+          due_date?: string | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          returned_at?: string | null
+          seller_id?: string | null
+          status?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          conditional_type?: string
+          created_at?: string
+          customer_id?: string | null
+          due_date?: string | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          returned_at?: string | null
+          seller_id?: string | null
+          status?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_conditionals_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "pos_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_conditionals_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_conditionals_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_customers: {
+        Row: {
+          address: string | null
+          address_number: string | null
+          age_range: string | null
+          cep: string | null
+          city: string | null
+          complement: string | null
+          cpf: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string | null
+          neighborhood: string | null
+          notes: string | null
+          preferred_style: string | null
+          state: string | null
+          updated_at: string
+          whatsapp: string | null
+        }
+        Insert: {
+          address?: string | null
+          address_number?: string | null
+          age_range?: string | null
+          cep?: string | null
+          city?: string | null
+          complement?: string | null
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          neighborhood?: string | null
+          notes?: string | null
+          preferred_style?: string | null
+          state?: string | null
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Update: {
+          address?: string | null
+          address_number?: string | null
+          age_range?: string | null
+          cep?: string | null
+          city?: string | null
+          complement?: string | null
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          neighborhood?: string | null
+          notes?: string | null
+          preferred_style?: string | null
+          state?: string | null
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      pos_gamification: {
+        Row: {
+          badges: Json
+          complete_registrations: number
+          created_at: string
+          fast_requests_answered: number
+          id: string
+          partial_registrations: number
+          returns_count: number
+          seller_id: string
+          store_id: string
+          total_points: number
+          total_sales: number
+          updated_at: string
+          weekly_points: number
+        }
+        Insert: {
+          badges?: Json
+          complete_registrations?: number
+          created_at?: string
+          fast_requests_answered?: number
+          id?: string
+          partial_registrations?: number
+          returns_count?: number
+          seller_id: string
+          store_id: string
+          total_points?: number
+          total_sales?: number
+          updated_at?: string
+          weekly_points?: number
+        }
+        Update: {
+          badges?: Json
+          complete_registrations?: number
+          created_at?: string
+          fast_requests_answered?: number
+          id?: string
+          partial_registrations?: number
+          returns_count?: number
+          seller_id?: string
+          store_id?: string
+          total_points?: number
+          total_sales?: number
+          updated_at?: string
+          weekly_points?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_gamification_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_gamification_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_invoice_config: {
+        Row: {
+          auto_emit_min_value: number | null
+          auto_emit_on_sale: boolean
+          auto_emit_payment_methods: string[] | null
+          created_at: string
+          id: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_emit_min_value?: number | null
+          auto_emit_on_sale?: boolean
+          auto_emit_payment_methods?: string[] | null
+          created_at?: string
+          id?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_emit_min_value?: number | null
+          auto_emit_on_sale?: boolean
+          auto_emit_payment_methods?: string[] | null
+          created_at?: string
+          id?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_invoice_config_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_product_requests: {
+        Row: {
+          answered_at: string | null
+          answered_by: string | null
+          created_at: string
+          id: string
+          items: Json
+          notes: string | null
+          points_awarded: boolean | null
+          priority: string
+          requested_at: string
+          requested_by: string | null
+          requesting_store_id: string
+          status: string
+          target_store_id: string
+          updated_at: string
+        }
+        Insert: {
+          answered_at?: string | null
+          answered_by?: string | null
+          created_at?: string
+          id?: string
+          items?: Json
+          notes?: string | null
+          points_awarded?: boolean | null
+          priority?: string
+          requested_at?: string
+          requested_by?: string | null
+          requesting_store_id: string
+          status?: string
+          target_store_id: string
+          updated_at?: string
+        }
+        Update: {
+          answered_at?: string | null
+          answered_by?: string | null
+          created_at?: string
+          id?: string
+          items?: Json
+          notes?: string | null
+          points_awarded?: boolean | null
+          priority?: string
+          requested_at?: string
+          requested_by?: string | null
+          requesting_store_id?: string
+          status?: string
+          target_store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_product_requests_answered_by_fkey"
+            columns: ["answered_by"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_product_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_product_requests_requesting_store_id_fkey"
+            columns: ["requesting_store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_product_requests_target_store_id_fkey"
+            columns: ["target_store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_returns: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          id: string
+          items: Json
+          notes: string | null
+          reason: string
+          reason_detail: string | null
+          refund_amount: number | null
+          return_type: string
+          sale_id: string | null
+          seller_id: string | null
+          status: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          reason?: string
+          reason_detail?: string | null
+          refund_amount?: number | null
+          return_type?: string
+          sale_id?: string | null
+          seller_id?: string | null
+          status?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          reason?: string
+          reason_detail?: string | null
+          refund_amount?: number | null
+          return_type?: string
+          sale_id?: string | null
+          seller_id?: string | null
+          status?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_returns_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "pos_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_returns_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_returns_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_sale_items: {
+        Row: {
+          barcode: string | null
+          category: string | null
+          created_at: string
+          id: string
+          product_name: string
+          quantity: number
+          sale_id: string
+          size: string | null
+          sku: string | null
+          tiny_product_id: string | null
+          total_price: number
+          unit_price: number
+          variant_name: string | null
+        }
+        Insert: {
+          barcode?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          product_name: string
+          quantity?: number
+          sale_id: string
+          size?: string | null
+          sku?: string | null
+          tiny_product_id?: string | null
+          total_price?: number
+          unit_price?: number
+          variant_name?: string | null
+        }
+        Update: {
+          barcode?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          product_name?: string
+          quantity?: number
+          sale_id?: string
+          size?: string | null
+          sku?: string | null
+          tiny_product_id?: string | null
+          total_price?: number
+          unit_price?: number
+          variant_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_sales: {
+        Row: {
+          cash_register_id: string | null
+          created_at: string
+          customer_id: string | null
+          discount: number
+          id: string
+          invoice_number: string | null
+          invoice_pdf_url: string | null
+          notes: string | null
+          payment_details: Json | null
+          payment_method: string | null
+          seller_id: string | null
+          status: string
+          store_id: string
+          subtotal: number
+          tiny_invoice_id: string | null
+          tiny_order_id: string | null
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          cash_register_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          discount?: number
+          id?: string
+          invoice_number?: string | null
+          invoice_pdf_url?: string | null
+          notes?: string | null
+          payment_details?: Json | null
+          payment_method?: string | null
+          seller_id?: string | null
+          status?: string
+          store_id: string
+          subtotal?: number
+          tiny_invoice_id?: string | null
+          tiny_order_id?: string | null
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          cash_register_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          discount?: number
+          id?: string
+          invoice_number?: string | null
+          invoice_pdf_url?: string | null
+          notes?: string | null
+          payment_details?: Json | null
+          payment_method?: string | null
+          seller_id?: string | null
+          status?: string
+          store_id?: string
+          subtotal?: number
+          tiny_invoice_id?: string | null
+          tiny_order_id?: string | null
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sales_cash_register_id_fkey"
+            columns: ["cash_register_id"]
+            isOneToOne: false
+            referencedRelation: "pos_cash_registers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sales_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "pos_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sales_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sales_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_sellers: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          store_id: string | null
+          tiny_seller_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          store_id?: string | null
+          tiny_seller_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          store_id?: string | null
+          tiny_seller_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sellers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_stores: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          tiny_token: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          tiny_token: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          tiny_token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shopify_yampi_mapping: {
         Row: {
           created_at: string

@@ -1,0 +1,214 @@
+import { useState, useEffect } from "react";
+import { Settings, Store, Users, Save, Plus, Trash2, Receipt } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+interface Props {
+  storeId: string;
+}
+
+interface SellerRow {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
+export function POSConfig({ storeId }: Props) {
+  const [sellers, setSellers] = useState<SellerRow[]>([]);
+  const [showAddSeller, setShowAddSeller] = useState(false);
+  const [newSellerName, setNewSellerName] = useState("");
+  const [showAddStore, setShowAddStore] = useState(false);
+  const [newStore, setNewStore] = useState({ name: "", tiny_token: "", address: "" });
+  const [autoEmit, setAutoEmit] = useState(false);
+  const [autoEmitMinValue, setAutoEmitMinValue] = useState("");
+
+  useEffect(() => {
+    loadSellers();
+    loadInvoiceConfig();
+  }, [storeId]);
+
+  const loadSellers = async () => {
+    const { data } = await supabase.from('pos_sellers').select('*').eq('store_id', storeId).order('name');
+    setSellers(data || []);
+  };
+
+  const loadInvoiceConfig = async () => {
+    const { data } = await supabase.from('pos_invoice_config').select('*').eq('store_id', storeId).maybeSingle();
+    if (data) {
+      setAutoEmit(data.auto_emit_on_sale);
+      setAutoEmitMinValue(String(data.auto_emit_min_value || 0));
+    }
+  };
+
+  const addSeller = async () => {
+    if (!newSellerName.trim()) return;
+    try {
+      const { error } = await supabase.from('pos_sellers').insert({ store_id: storeId, name: newSellerName });
+      if (error) throw error;
+      toast.success("Vendedora adicionada!");
+      setNewSellerName("");
+      setShowAddSeller(false);
+      loadSellers();
+    } catch (e) {
+      toast.error("Erro ao adicionar");
+    }
+  };
+
+  const removeSeller = async (id: string) => {
+    await supabase.from('pos_sellers').delete().eq('id', id);
+    loadSellers();
+  };
+
+  const addStore = async () => {
+    if (!newStore.name.trim() || !newStore.tiny_token.trim()) {
+      toast.error("Nome e token são obrigatórios");
+      return;
+    }
+    try {
+      const { error } = await supabase.from('pos_stores').insert(newStore);
+      if (error) throw error;
+      toast.success("Loja adicionada! Recarregue para vê-la.");
+      setNewStore({ name: "", tiny_token: "", address: "" });
+      setShowAddStore(false);
+    } catch (e) {
+      toast.error("Erro ao adicionar loja");
+    }
+  };
+
+  const saveInvoiceConfig = async () => {
+    try {
+      const existing = await supabase.from('pos_invoice_config').select('id').eq('store_id', storeId).maybeSingle();
+      if (existing.data) {
+        await supabase.from('pos_invoice_config').update({
+          auto_emit_on_sale: autoEmit,
+          auto_emit_min_value: parseFloat(autoEmitMinValue) || 0,
+        }).eq('id', existing.data.id);
+      } else {
+        await supabase.from('pos_invoice_config').insert({
+          store_id: storeId,
+          auto_emit_on_sale: autoEmit,
+          auto_emit_min_value: parseFloat(autoEmitMinValue) || 0,
+        });
+      }
+      toast.success("Configuração salva!");
+    } catch (e) {
+      toast.error("Erro ao salvar");
+    }
+  };
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="p-6 space-y-6">
+        <div>
+          <h2 className="text-lg font-bold text-pos-white flex items-center gap-2">
+            <Settings className="h-5 w-5 text-pos-yellow" /> Configurações
+          </h2>
+        </div>
+
+        {/* Stores */}
+        <Card className="bg-pos-white/5 border-pos-yellow/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center justify-between text-pos-white">
+              <span className="flex items-center gap-2"><Store className="h-4 w-4 text-pos-yellow" /> Lojas</span>
+              <Button size="sm" className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-1" onClick={() => setShowAddStore(true)}>
+                <Plus className="h-3 w-3" /> Nova Loja
+              </Button>
+            </CardTitle>
+          </CardHeader>
+        </Card>
+
+        {/* Sellers */}
+        <Card className="bg-pos-white/5 border-pos-yellow/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center justify-between text-pos-white">
+              <span className="flex items-center gap-2"><Users className="h-4 w-4 text-pos-orange" /> Vendedoras</span>
+              <Button size="sm" className="bg-pos-orange text-pos-white hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddSeller(true)}>
+                <Plus className="h-3 w-3" /> Adicionar
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {sellers.length === 0 ? (
+              <p className="text-xs text-pos-white/40">Nenhuma vendedora cadastrada</p>
+            ) : sellers.map(s => (
+              <div key={s.id} className="flex items-center justify-between p-2 rounded-lg bg-pos-white/5">
+                <span className="text-sm text-pos-white">{s.name}</span>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-300" onClick={() => removeSeller(s.id)}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Invoice Config */}
+        <Card className="bg-pos-white/5 border-pos-yellow/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2 text-pos-white">
+              <Receipt className="h-4 w-4 text-pos-yellow" /> Emissão Automática de NF
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-pos-white">Emitir NFC-e automaticamente</p>
+                <p className="text-xs text-pos-white/40">Ao finalizar cada venda</p>
+              </div>
+              <Switch checked={autoEmit} onCheckedChange={setAutoEmit} />
+            </div>
+            {autoEmit && (
+              <div>
+                <Label className="text-pos-white/70 text-xs">Valor mínimo para emissão automática</Label>
+                <Input type="number" value={autoEmitMinValue} onChange={e => setAutoEmitMinValue(e.target.value)} placeholder="0,00" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              </div>
+            )}
+            <Button className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2" onClick={saveInvoiceConfig}>
+              <Save className="h-4 w-4" /> Salvar
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Add Seller Dialog */}
+        <Dialog open={showAddSeller} onOpenChange={setShowAddSeller}>
+          <DialogContent className="bg-pos-black border-pos-yellow/30">
+            <DialogHeader><DialogTitle className="text-pos-white">Adicionar Vendedora</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <Input value={newSellerName} onChange={e => setNewSellerName(e.target.value)} placeholder="Nome da vendedora" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              <Button className="w-full bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={addSeller}>Adicionar</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Store Dialog */}
+        <Dialog open={showAddStore} onOpenChange={setShowAddStore}>
+          <DialogContent className="bg-pos-black border-pos-yellow/30">
+            <DialogHeader><DialogTitle className="text-pos-white">Adicionar Loja</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-pos-white/70 text-xs">Nome da Loja</Label>
+                <Input value={newStore.name} onChange={e => setNewStore(s => ({ ...s, name: e.target.value }))} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              </div>
+              <div>
+                <Label className="text-pos-white/70 text-xs">Token da API Tiny</Label>
+                <Input value={newStore.tiny_token} onChange={e => setNewStore(s => ({ ...s, tiny_token: e.target.value }))} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              </div>
+              <div>
+                <Label className="text-pos-white/70 text-xs">Endereço (opcional)</Label>
+                <Input value={newStore.address} onChange={e => setNewStore(s => ({ ...s, address: e.target.value }))} className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+              </div>
+              <Button className="w-full bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={addStore}>Adicionar Loja</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </ScrollArea>
+  );
+}
