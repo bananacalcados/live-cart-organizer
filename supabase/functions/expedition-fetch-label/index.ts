@@ -45,11 +45,25 @@ serve(async (req) => {
 
     if (expeditionData.retorno?.status !== 'OK' && expeditionData.retorno?.status !== 'Processado') {
       const err = expeditionData.retorno?.erros?.[0]?.erro || JSON.stringify(expeditionData.retorno);
-      throw new Error(`Erro ao obter expedição do Tiny: ${err}`);
+      // Return 200 with user-friendly error instead of 500
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Expedição não encontrada no Tiny para este pedido. Verifique se a expedição foi criada e a etiqueta comprada no Tiny ERP.`,
+        details: err,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const expedition = expeditionData.retorno?.expedicao;
-    if (!expedition) throw new Error('Nenhuma expedição encontrada para este pedido no Tiny. Verifique se a expedição foi criada no Tiny ERP.');
+    if (!expedition) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Nenhuma expedição encontrada para este pedido no Tiny. Crie a expedição e compre a etiqueta no Tiny ERP primeiro.',
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const idExpedicao = expedition.id || expedition.idExpedicao;
     const trackingCode = expedition.codigoRastreamento || expedition.codigo_rastreamento || null;
