@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Truck, Receipt, Tag, CheckCircle2, Download, ExternalLink } from 'lucide-react';
+import { Loader2, Truck, Receipt, Tag, CheckCircle2, Download, RefreshCw } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -15,12 +15,37 @@ interface Props {
 
 export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefresh }: Props) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [quotesMap, setQuotesMap] = useState<Record<string, any[]>>({});
 
   const filtered = orders.filter(o => {
     const term = searchTerm.toLowerCase();
     if (term && !(o.shopify_order_name?.toLowerCase().includes(term) || o.customer_name?.toLowerCase().includes(term))) return false;
     return true;
   });
+
+  // Fetch existing quotes for all orders
+  useEffect(() => {
+    if (activeTab !== 'freight') return;
+    const fetchQuotes = async () => {
+      const orderIds = filtered.map(o => o.id);
+      if (orderIds.length === 0) return;
+      const { data } = await supabase
+        .from('expedition_freight_quotes')
+        .select('*')
+        .in('expedition_order_id', orderIds)
+        .order('price', { ascending: true });
+
+      if (data) {
+        const map: Record<string, any[]> = {};
+        data.forEach(q => {
+          if (!map[q.expedition_order_id]) map[q.expedition_order_id] = [];
+          map[q.expedition_order_id].push(q);
+        });
+        setQuotesMap(map);
+      }
+    };
+    fetchQuotes();
+  }, [activeTab, filtered.length]);
 
   const handleQuoteFreight = async (orderId: string) => {
     setLoadingId(orderId);
@@ -31,6 +56,15 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
       if (error) throw error;
       if (data?.success) {
         toast.success(`${data.quotes?.length || 0} cotações recebidas!`);
+        // Refresh quotes from DB
+        const { data: newQuotes } = await supabase
+          .from('expedition_freight_quotes')
+          .select('*')
+          .eq('expedition_order_id', orderId)
+          .order('price', { ascending: true });
+        if (newQuotes) {
+          setQuotesMap(prev => ({ ...prev, [orderId]: newQuotes }));
+        }
         onRefresh();
       } else {
         throw new Error(data?.error || 'Falha na cotação');
@@ -65,6 +99,12 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
         .update({ is_selected: true })
         .eq('id', quote.id);
 
+      // Update local state
+      setQuotesMap(prev => ({
+        ...prev,
+        [orderId]: (prev[orderId] || []).map(q => ({ ...q, is_selected: q.id === quote.id })),
+      }));
+
       toast.success(`Frete selecionado: ${quote.carrier} - ${quote.service}`);
       onRefresh();
     } catch (error: any) {
@@ -75,7 +115,6 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
   const handleEmitInvoice = async (orderId: string) => {
     setLoadingId(orderId);
     try {
-      // First create order in Tiny if not yet
       const order = filtered.find(o => o.id === orderId);
       if (!order?.tiny_order_id) {
         const { data: createData, error: createError } = await supabase.functions.invoke('expedition-tiny-invoice', {
@@ -85,7 +124,6 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
         if (!createData?.success) throw new Error(createData?.error || 'Erro ao criar pedido no Tiny');
       }
 
-      // Then emit invoice
       const { data, error } = await supabase.functions.invoke('expedition-tiny-invoice', {
         body: { order_id: orderId, action: 'emit_invoice' },
       });
@@ -106,7 +144,6 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
   const handleGenerateLabel = async (orderId: string) => {
     setLoadingId(orderId);
     try {
-      // Generate internal barcode
       const internalBarcode = `EXP-${Date.now()}-${orderId.slice(0, 8)}`.toUpperCase();
       
       await supabase
@@ -137,6 +174,7 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
       ) : (
         filtered.map(order => {
           const addr = order.shipping_address as any;
+          const quotes = quotesMap[order.id] || [];
           return (
             <Card key={order.id}>
               <CardHeader className="pb-2">
@@ -149,35 +187,67 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {order.customer_name} • {addr?.city}/{addr?.province} • CEP: {addr?.zip}
+                  {order.total_weight_grams ? ` • ${order.total_weight_grams}g` : ''}
                 </p>
               </CardHeader>
               <CardContent className="space-y-3">
                 {/* Freight section */}
                 {activeTab === 'freight' && (
                   <div className="space-y-2">
-                    {order.freight_carrier ? (
-                      <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                          <span className="font-medium text-foreground">
-                            {order.freight_carrier} - {order.freight_service}
-                          </span>
-                          <span className="font-bold">R$ {Number(order.freight_price || 0).toFixed(2)}</span>
-                          {order.freight_delivery_days && (
-                            <Badge variant="secondary">{order.freight_delivery_days} dias</Badge>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
+                    <div className="flex gap-2">
                       <Button
                         onClick={() => handleQuoteFreight(order.id)}
                         disabled={loadingId === order.id}
                         variant="outline"
+                        size="sm"
                         className="gap-2"
                       >
-                        {loadingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-                        Cotar Frete
+                        {loadingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        {quotes.length > 0 ? 'Recotar' : 'Cotar Frete'}
                       </Button>
+                    </div>
+
+                    {/* Show freight options */}
+                    {quotes.length > 0 && (
+                      <div className="space-y-1">
+                        {quotes.map(q => (
+                          <div
+                            key={q.id}
+                            className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                              q.is_selected
+                                ? 'border-green-500 bg-green-50 dark:bg-green-900/10'
+                                : 'border-border hover:border-primary/50 hover:bg-secondary/50'
+                            }`}
+                            onClick={() => handleSelectFreight(order.id, q)}
+                          >
+                            <div className="flex items-center gap-3">
+                              {q.is_selected && <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />}
+                              <div>
+                                <span className="font-medium text-foreground">{q.carrier}</span>
+                                <span className="text-sm text-muted-foreground ml-2">{q.service}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 text-right">
+                              {q.delivery_days && (
+                                <Badge variant="secondary">{q.delivery_days} dias</Badge>
+                              )}
+                              <span className="font-bold text-foreground min-w-[80px] text-right">
+                                R$ {Number(q.price || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Selected freight summary */}
+                    {order.freight_carrier && (
+                      <div className="p-2 rounded bg-green-50 dark:bg-green-900/10 text-sm">
+                        <span className="text-green-700 dark:text-green-400 font-medium">
+                          ✓ Selecionado: {order.freight_carrier} - {order.freight_service} — R$ {Number(order.freight_price || 0).toFixed(2)}
+                          {order.freight_delivery_days && ` (${order.freight_delivery_days} dias)`}
+                        </span>
+                      </div>
                     )}
                   </div>
                 )}
