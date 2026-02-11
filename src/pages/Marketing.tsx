@@ -27,7 +27,7 @@ import {
 import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
-import { CampaignCreator } from "@/components/marketing/CampaignCreator";
+
 import { CampaignDetail } from "@/components/marketing/CampaignDetail";
 import { CampaignCardExpanded } from "@/components/marketing/CampaignCardExpanded";
 
@@ -124,7 +124,7 @@ export default function Marketing() {
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
+  
 
   // Customers state
   const [customers, setCustomers] = useState<ZoppyCustomer[]>([]);
@@ -323,7 +323,7 @@ export default function Marketing() {
                 <Button variant="outline" size="sm" onClick={() => setUploadDialogOpen(true)} className="gap-1">
                   <Upload className="h-3.5 w-3.5" />Upload Excel
                 </Button>
-                <Button size="sm" onClick={() => setIsCreating(true)} className="gap-1">
+                <Button size="sm" onClick={() => navigate('/marketing/new')} className="gap-1">
                   <Plus className="h-3.5 w-3.5" />Nova Campanha 360°
                 </Button>
               </div>
@@ -344,7 +344,7 @@ export default function Marketing() {
                     <Target className="h-8 w-8 mx-auto mb-2 opacity-40" />
                     <p className="text-sm">Nenhuma campanha criada ainda</p>
                     <p className="text-xs mt-1">Crie uma campanha 360° com estratégia multicanal gerada por IA</p>
-                    <Button size="sm" className="mt-3 gap-1" onClick={() => setIsCreating(true)}>
+                    <Button size="sm" className="mt-3 gap-1" onClick={() => navigate('/marketing/new')}>
                       <Plus className="h-3.5 w-3.5" />Criar primeira campanha
                     </Button>
                   </CardContent>
@@ -481,13 +481,6 @@ export default function Marketing() {
         </Tabs>
       </div>
 
-      {/* Campaign Creator */}
-      <CampaignCreator
-        open={isCreating}
-        onOpenChange={setIsCreating}
-        customerStats={customerStats}
-        onCreated={fetchCampaigns}
-      />
 
       {/* Campaign Detail */}
       <CampaignDetail
