@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Events from "./pages/Events";
 import Chat from "./pages/Chat";
 import Marketing from "./pages/Marketing";
+import NewCampaign from "./pages/NewCampaign";
 import Checkout from "./pages/Checkout";
 import CustomerRegister from "./pages/CustomerRegister";
 import NotFound from "./pages/NotFound";
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/events" element={<Events />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/marketing" element={<Marketing />} />
+          <Route path="/marketing/new" element={<NewCampaign />} />
           <Route path="/checkout/:paypalOrderId" element={<Checkout />} />
           <Route path="/register/:orderId" element={<CustomerRegister />} />
           <Route path="/lp/:slug" element={<LandingPage />} />
