@@ -131,7 +131,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
-  const { sendMessage, sendMedia, isLoading: isSending } = useZapi();
+  const [isSending, setIsSending] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
   const { selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
@@ -152,6 +152,41 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
+
+  // ── Send via Meta API using selected number ──
+  const sendViaMeta = async (
+    phoneNumber: string,
+    message: string,
+    type: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text',
+    mediaUrl?: string,
+    caption?: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone: phoneNumber,
+          message,
+          type,
+          mediaUrl,
+          caption,
+          whatsappNumberId: selectedNumberId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        return { success: true, messageId: data.messageId };
+      }
+      return { success: false, error: data.error || 'Erro ao enviar' };
+    } catch (err) {
+      return { success: false, error: 'Erro de conexão' };
+    }
+  };
 
   const phone = order.whatsapp || '';
   const contactName = order.instagramHandle;
@@ -313,7 +348,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       };
       setMessages((prev) => [...prev, tempMessage]);
 
-      const result = await sendMedia(phone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined);
+      setIsSending(true);
+      const result = await sendViaMeta(phone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
+      setIsSending(false);
 
       if (result.success) {
         await supabase.from('whatsapp_messages').insert({
@@ -323,6 +360,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           status: 'sent',
           media_type: selectedMedia.type,
           media_url: mediaUrl,
+          message_id: result.messageId || null,
+          whatsapp_number_id: selectedNumberId || null,
         });
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         // Track that we sent a message for no-response timer
@@ -358,7 +397,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     };
     setMessages((prev) => [...prev, tempMessage]);
 
-    const result = await sendMessage(phone, messageText);
+    setIsSending(true);
+    const result = await sendViaMeta(phone, messageText);
+    setIsSending(false);
 
     if (result.success) {
       await supabase.from('whatsapp_messages').insert({
@@ -366,6 +407,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         message: messageText,
         direction: 'outgoing',
         status: 'sent',
+        message_id: result.messageId || null,
+        whatsapp_number_id: selectedNumberId || null,
       });
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       // Track that we sent a message for no-response timer
@@ -530,7 +573,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
         const mediaUrl = await uploadMediaToStorage(file);
         if (mediaUrl) {
-          const result = await sendMedia(phone, mediaUrl, 'audio');
+          const result = await sendViaMeta(phone, '[Áudio]', 'audio', mediaUrl);
           if (result.success) {
             await supabase.from('whatsapp_messages').insert({
               phone: normalizedPhone,
@@ -556,7 +599,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     } catch (error) {
       toast.error('Não foi possível acessar o microfone.');
     }
-  }, [phone, normalizedPhone, sendMedia, order.id, updateOrder]);
+  }, [phone, normalizedPhone, order.id, updateOrder, selectedNumberId]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
