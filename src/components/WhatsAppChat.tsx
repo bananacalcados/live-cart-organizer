@@ -922,8 +922,14 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                   const totalFull = order.products.reduce((s, p) => s + ((p as any).compareAtPrice || p.price) * p.quantity, 0);
                   const totalDiscount = order.products.reduce((s, p) => s + p.price * p.quantity, 0);
                   const prodsText = order.products
-                    .map((p) => `${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`)
-                    .join(', ');
+                    .map((p) => {
+                      const cp = (p as any).compareAtPrice;
+                      if (cp && cp > p.price) {
+                        return `${p.quantity}x ${p.title} - ~R$ ${(cp * p.quantity).toFixed(2)}~ por R$ ${(p.price * p.quantity).toFixed(2)}`;
+                      }
+                      return `${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`;
+                    })
+                    .join('\n');
 
                   const shortcuts = [
                     { label: 'Nome', value: order.instagramHandle.replace('@', '') },
