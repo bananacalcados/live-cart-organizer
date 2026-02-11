@@ -331,6 +331,11 @@ export function GlobalWhatsAppChat() {
           onSendMessage={handleSendMessage}
           onSendAudio={handleSendAudio}
           onBack={() => setSelectedPhone(null)}
+          onFinish={async () => {
+            if (selectedPhone) await finishConversation(selectedPhone);
+            setSelectedPhone(null);
+            toast.success("Conversa finalizada");
+          }}
           isSending={isSending}
         />
       )}

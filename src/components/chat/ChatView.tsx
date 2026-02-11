@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -27,6 +27,7 @@ interface ChatViewProps {
   onSendAudio?: (audioUrl: string) => void;
   onSendMedia?: (mediaUrl: string, mediaType: string, caption?: string) => void;
   onBack?: () => void;
+  onFinish?: () => void;
   isSending: boolean;
   customerInfoPanel?: React.ReactNode;
 }
@@ -44,6 +45,7 @@ export function ChatView({
   onSendAudio,
   onSendMedia,
   onBack,
+  onFinish,
   isSending,
   customerInfoPanel,
 }: ChatViewProps) {
@@ -213,9 +215,20 @@ export function ChatView({
             Voltar
           </Button>
           {conversation && (
-            <span className="text-xs text-muted-foreground truncate">
+            <span className="text-xs text-muted-foreground truncate flex-1">
               {conversation.customerName || conversation.phone}
             </span>
+          )}
+          {onFinish && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onFinish}
+              className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-destructive"
+            >
+              <PhoneOff className="h-3.5 w-3.5" />
+              Finalizar
+            </Button>
           )}
         </div>
       )}

@@ -446,7 +446,8 @@ export function POSWhatsApp({ storeId }: Props) {
             variant="ghost"
             size="sm"
             className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
-            onClick={() => {
+            onClick={async () => {
+              if (selectedPhone) await finishConversation(selectedPhone);
               setSelectedPhone(null);
               setMessages([]);
               toast.success("Conversa finalizada");
