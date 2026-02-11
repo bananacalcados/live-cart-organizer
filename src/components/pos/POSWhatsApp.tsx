@@ -64,13 +64,29 @@ export function POSWhatsApp({ storeId }: Props) {
       if (data) {
         const nameMap: Record<string, string> = {};
         const photoMap: Record<string, string> = {};
+        const phonesWithoutPhotos: string[] = [];
         for (const c of data as any[]) {
           if (c.custom_name) nameMap[c.phone] = c.custom_name;
           else if (c.display_name) nameMap[c.phone] = c.display_name;
           if (c.profile_pic_url) photoMap[c.phone] = c.profile_pic_url;
+          else phonesWithoutPhotos.push(c.phone);
         }
         setChatContacts(nameMap);
         setContactPhotos(photoMap);
+
+        // Fetch missing profile pics from Z-API (batch of 20)
+        if (phonesWithoutPhotos.length > 0) {
+          try {
+            const resp = await supabase.functions.invoke("zapi-profile-picture", {
+              body: { phones: phonesWithoutPhotos.slice(0, 20) },
+            });
+            if (resp.data?.photos) {
+              setContactPhotos(prev => ({ ...prev, ...resp.data.photos }));
+            }
+          } catch (e) {
+            console.error("Error fetching profile pics:", e);
+          }
+        }
       }
     };
     load();
@@ -447,7 +463,7 @@ export function POSWhatsApp({ storeId }: Props) {
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {!selectedPhone ? (
           <ConversationList
             conversations={conversations}
@@ -462,6 +478,7 @@ export function POSWhatsApp({ storeId }: Props) {
             onInstanceFilterChange={setInstanceFilter}
             metaNumbers={metaNumbers}
             contactPhotos={contactPhotos}
+            contactNames={chatContacts}
           />
         ) : (
           <ChatView

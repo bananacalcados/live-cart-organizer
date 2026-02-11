@@ -175,6 +175,20 @@ serve(async (req) => {
           if (contactError) console.error('Error upserting chat contact:', contactError);
         }
 
+        // For groups, save the group name
+        if (isGroup) {
+          const groupName = asString(payload.chatName) || asString(payload.groupName) || asString(payload.name) || null;
+          if (groupName) {
+            const { error: groupContactError } = await supabase
+              .from('chat_contacts')
+              .upsert(
+                { phone, display_name: groupName },
+                { onConflict: 'phone', ignoreDuplicates: false }
+              );
+            if (groupContactError) console.error('Error upserting group contact:', groupContactError);
+          }
+        }
+
         if (error) {
           console.error('Error saving incoming message:', error);
         } else {
