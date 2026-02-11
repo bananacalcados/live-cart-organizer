@@ -2882,7 +2882,11 @@ export type Database = {
           label: string
           phone_display: string
           phone_number_id: string
+          provider: string
           updated_at: string
+          zapi_client_token: string | null
+          zapi_instance_id: string | null
+          zapi_token: string | null
         }
         Insert: {
           access_token: string
@@ -2894,7 +2898,11 @@ export type Database = {
           label: string
           phone_display: string
           phone_number_id: string
+          provider?: string
           updated_at?: string
+          zapi_client_token?: string | null
+          zapi_instance_id?: string | null
+          zapi_token?: string | null
         }
         Update: {
           access_token?: string
@@ -2906,7 +2914,11 @@ export type Database = {
           label?: string
           phone_display?: string
           phone_number_id?: string
+          provider?: string
           updated_at?: string
+          zapi_client_token?: string | null
+          zapi_instance_id?: string | null
+          zapi_token?: string | null
         }
         Relationships: []
       }
