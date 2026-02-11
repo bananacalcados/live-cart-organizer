@@ -1142,6 +1142,200 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_correction_queue: {
+        Row: {
+          attempts: number | null
+          count_id: string
+          count_item_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          max_attempts: number | null
+          new_quantity: number
+          old_quantity: number | null
+          processed_at: string | null
+          product_id: string
+          product_name: string
+          status: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number | null
+          count_id: string
+          count_item_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number | null
+          new_quantity: number
+          old_quantity?: number | null
+          processed_at?: string | null
+          product_id: string
+          product_name: string
+          status?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number | null
+          count_id?: string
+          count_item_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number | null
+          new_quantity?: number
+          old_quantity?: number | null
+          processed_at?: string | null
+          product_id?: string
+          product_name?: string
+          status?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_correction_queue_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_counts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_correction_queue_count_item_id_fkey"
+            columns: ["count_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_count_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_correction_queue_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_count_items: {
+        Row: {
+          barcode: string | null
+          corrected_at: string | null
+          correction_error: string | null
+          correction_status: string | null
+          count_id: string
+          counted_quantity: number
+          created_at: string
+          current_stock: number | null
+          divergence: number | null
+          id: string
+          product_id: string
+          product_name: string
+          sku: string | null
+          updated_at: string
+        }
+        Insert: {
+          barcode?: string | null
+          corrected_at?: string | null
+          correction_error?: string | null
+          correction_status?: string | null
+          count_id: string
+          counted_quantity?: number
+          created_at?: string
+          current_stock?: number | null
+          divergence?: number | null
+          id?: string
+          product_id: string
+          product_name: string
+          sku?: string | null
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string | null
+          corrected_at?: string | null
+          correction_error?: string | null
+          correction_status?: string | null
+          count_id?: string
+          counted_quantity?: number
+          created_at?: string
+          current_stock?: number | null
+          divergence?: number | null
+          id?: string
+          product_id?: string
+          product_name?: string
+          sku?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_count_items_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_counts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_counts: {
+        Row: {
+          categories: string[] | null
+          completed_at: string | null
+          corrected_products: number | null
+          correction_errors: number | null
+          counted_products: number | null
+          created_at: string
+          divergent_products: number | null
+          id: string
+          scope: string
+          started_at: string
+          status: string
+          store_id: string
+          total_products: number | null
+          updated_at: string
+        }
+        Insert: {
+          categories?: string[] | null
+          completed_at?: string | null
+          corrected_products?: number | null
+          correction_errors?: number | null
+          counted_products?: number | null
+          created_at?: string
+          divergent_products?: number | null
+          id?: string
+          scope?: string
+          started_at?: string
+          status?: string
+          store_id: string
+          total_products?: number | null
+          updated_at?: string
+        }
+        Update: {
+          categories?: string[] | null
+          completed_at?: string | null
+          corrected_products?: number | null
+          correction_errors?: number | null
+          counted_products?: number | null
+          created_at?: string
+          divergent_products?: number | null
+          id?: string
+          scope?: string
+          started_at?: string
+          status?: string
+          store_id?: string
+          total_products?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_counts_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketing_campaigns: {
         Row: {
           actual_cost: number | null

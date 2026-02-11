@@ -7,7 +7,8 @@ import {
   Truck, 
   LogOut,
   Instagram,
-  Store
+  Store,
+  Package
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,13 @@ const modules = [
     icon: Store,
     path: "/pos",
     color: "bg-primary/10 text-primary",
+  },
+  {
+    title: "Estoque",
+    description: "Balanço e correção de estoque",
+    icon: Package,
+    path: "/inventory",
+    color: "bg-stage-contacted/10 text-stage-contacted",
   },
 ];
 

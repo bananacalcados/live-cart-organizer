@@ -15,6 +15,7 @@ import CustomerRegister from "./pages/CustomerRegister";
 import TransparentCheckout from "./pages/TransparentCheckout";
 import Expedition from "./pages/Expedition";
 import POS from "./pages/POS";
+import Inventory from "./pages/Inventory";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
@@ -45,6 +46,7 @@ const App = () => (
           <Route path="/marketing/new" element={<ProtectedRoute><NewCampaign /></ProtectedRoute>} />
           <Route path="/expedition" element={<ProtectedRoute><Expedition /></ProtectedRoute>} />
           <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
+          <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
