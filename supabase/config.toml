@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.zoppy-sync-sales]
 verify_jwt = false
+
+[functions.ai-marketing-strategy]
+verify_jwt = false
