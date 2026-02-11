@@ -1,9 +1,12 @@
-import { Store, ChevronRight, Home } from "lucide-react";
+import { Store, ChevronRight, Home, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface POSStore {
   id: string;
@@ -19,6 +22,9 @@ export function POSStoreSelector({ onSelect }: Props) {
   const navigate = useNavigate();
   const [stores, setStores] = useState<POSStore[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddStore, setShowAddStore] = useState(false);
+  const [newStore, setNewStore] = useState({ name: "", tiny_token: "", address: "" });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadStores();
@@ -38,6 +44,26 @@ export function POSStoreSelector({ onSelect }: Props) {
       toast.error('Erro ao carregar lojas');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const addStore = async () => {
+    if (!newStore.name.trim() || !newStore.tiny_token.trim()) {
+      toast.error("Nome e Token do Tiny são obrigatórios");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('pos_stores').insert(newStore);
+      if (error) throw error;
+      toast.success("Loja adicionada!");
+      setNewStore({ name: "", tiny_token: "", address: "" });
+      setShowAddStore(false);
+      loadStores();
+    } catch (e) {
+      toast.error("Erro ao adicionar loja");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -72,30 +98,65 @@ export function POSStoreSelector({ onSelect }: Props) {
           ) : stores.length === 0 ? (
             <div className="text-center text-pos-white/50 py-8">
               <p>Nenhuma loja cadastrada.</p>
-              <p className="text-xs mt-2">Cadastre lojas na aba Configurações.</p>
+              <p className="text-xs mt-2 mb-4">Adicione sua primeira loja para começar.</p>
+              <Button className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2" onClick={() => setShowAddStore(true)}>
+                <Plus className="h-4 w-4" /> Adicionar Loja
+              </Button>
             </div>
           ) : (
-            stores.map(store => (
-              <div
-                key={store.id}
-                className="cursor-pointer rounded-xl border-2 border-pos-yellow/30 bg-pos-black hover:border-pos-yellow hover:shadow-[0_0_20px_hsl(48_100%_50%/0.15)] transition-all group p-6 flex items-center justify-between"
-                onClick={() => onSelect(store.id)}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-pos-yellow/10 text-pos-yellow group-hover:bg-pos-yellow group-hover:text-pos-black transition-all group-hover:scale-110">
-                    <Store className="h-6 w-6" />
+            <>
+              {stores.map(store => (
+                <div
+                  key={store.id}
+                  className="cursor-pointer rounded-xl border-2 border-pos-yellow/30 bg-pos-black hover:border-pos-yellow hover:shadow-[0_0_20px_hsl(48_100%_50%/0.15)] transition-all group p-6 flex items-center justify-between"
+                  onClick={() => onSelect(store.id)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-pos-yellow/10 text-pos-yellow group-hover:bg-pos-yellow group-hover:text-pos-black transition-all group-hover:scale-110">
+                      <Store className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-pos-white">{store.name}</h3>
+                      {store.address && <p className="text-sm text-pos-white/50">{store.address}</p>}
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-lg text-pos-white">{store.name}</h3>
-                    {store.address && <p className="text-sm text-pos-white/50">{store.address}</p>}
-                  </div>
+                  <ChevronRight className="h-5 w-5 text-pos-white/40 group-hover:text-pos-yellow transition-colors" />
                 </div>
-                <ChevronRight className="h-5 w-5 text-pos-white/40 group-hover:text-pos-yellow transition-colors" />
+              ))}
+              <div className="text-center pt-4">
+                <Button variant="outline" className="gap-2 border-pos-yellow/30 text-pos-yellow hover:bg-pos-yellow/10" onClick={() => setShowAddStore(true)}>
+                  <Plus className="h-4 w-4" /> Adicionar outra loja
+                </Button>
               </div>
-            ))
+            </>
           )}
         </div>
       </main>
+
+      {/* Add Store Dialog */}
+      <Dialog open={showAddStore} onOpenChange={setShowAddStore}>
+        <DialogContent className="bg-pos-black border-pos-yellow/30">
+          <DialogHeader><DialogTitle className="text-pos-white">Adicionar Loja</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-pos-white/70 text-xs">Nome da Loja *</Label>
+              <Input value={newStore.name} onChange={e => setNewStore(s => ({ ...s, name: e.target.value }))} placeholder="Ex: Loja Centro" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+            </div>
+            <div>
+              <Label className="text-pos-white/70 text-xs">Token da API Tiny *</Label>
+              <Input value={newStore.tiny_token} onChange={e => setNewStore(s => ({ ...s, tiny_token: e.target.value }))} placeholder="Cole o token do Tiny ERP aqui" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow font-mono text-xs" />
+              <p className="text-[10px] text-pos-white/30 mt-1">Encontre em Tiny ERP → Configurações → Tokens de API</p>
+            </div>
+            <div>
+              <Label className="text-pos-white/70 text-xs">Endereço (opcional)</Label>
+              <Input value={newStore.address} onChange={e => setNewStore(s => ({ ...s, address: e.target.value }))} placeholder="Rua, número, cidade" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+            </div>
+            <Button className="w-full bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold" onClick={addStore} disabled={saving}>
+              {saving ? "Salvando..." : "Adicionar Loja"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
