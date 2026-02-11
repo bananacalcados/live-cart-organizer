@@ -83,3 +83,12 @@ verify_jwt = false
 
 [functions.pos-tiny-sync-products]
 verify_jwt = false
+
+[functions.inventory-get-stock]
+verify_jwt = false
+
+[functions.inventory-correct-stock]
+verify_jwt = false
+
+[functions.inventory-fetch-all-stock]
+verify_jwt = false
