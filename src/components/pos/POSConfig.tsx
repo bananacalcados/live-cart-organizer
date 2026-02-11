@@ -32,6 +32,7 @@ export function POSConfig({ storeId }: Props) {
   const [newStore, setNewStore] = useState({ name: "", tiny_token: "", address: "" });
   const [autoEmit, setAutoEmit] = useState(false);
   const [autoEmitMinValue, setAutoEmitMinValue] = useState("");
+  const [autoEmitMethods, setAutoEmitMethods] = useState<string[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<{ status: string; products_synced: number; completed_at: string; total_products?: number } | null>(null);
   const [productCount, setProductCount] = useState(0);
@@ -55,6 +56,7 @@ export function POSConfig({ storeId }: Props) {
     if (data) {
       setAutoEmit(data.auto_emit_on_sale);
       setAutoEmitMinValue(String(data.auto_emit_min_value || 0));
+      setAutoEmitMethods((data as any).auto_emit_payment_methods || []);
     }
   };
 
@@ -112,18 +114,16 @@ export function POSConfig({ storeId }: Props) {
 
   const saveInvoiceConfig = async () => {
     try {
+      const payload = {
+        auto_emit_on_sale: autoEmit,
+        auto_emit_min_value: parseFloat(autoEmitMinValue) || 0,
+        auto_emit_payment_methods: autoEmitMethods,
+      };
       const existing = await supabase.from('pos_invoice_config').select('id').eq('store_id', storeId).maybeSingle();
       if (existing.data) {
-        await supabase.from('pos_invoice_config').update({
-          auto_emit_on_sale: autoEmit,
-          auto_emit_min_value: parseFloat(autoEmitMinValue) || 0,
-        }).eq('id', existing.data.id);
+        await supabase.from('pos_invoice_config').update(payload as any).eq('id', existing.data.id);
       } else {
-        await supabase.from('pos_invoice_config').insert({
-          store_id: storeId,
-          auto_emit_on_sale: autoEmit,
-          auto_emit_min_value: parseFloat(autoEmitMinValue) || 0,
-        });
+        await supabase.from('pos_invoice_config').insert({ store_id: storeId, ...payload } as any);
       }
       toast.success("Configuração salva!");
     } catch (e) {
@@ -313,10 +313,42 @@ export function POSConfig({ storeId }: Props) {
               <Switch checked={autoEmit} onCheckedChange={setAutoEmit} />
             </div>
             {autoEmit && (
-              <div>
-                <Label className="text-pos-white/70 text-xs">Valor mínimo para emissão automática</Label>
-                <Input type="number" value={autoEmitMinValue} onChange={e => setAutoEmitMinValue(e.target.value)} placeholder="0,00" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
-              </div>
+              <>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Valor mínimo para emissão automática</Label>
+                  <Input type="number" value={autoEmitMinValue} onChange={e => setAutoEmitMinValue(e.target.value)} placeholder="0,00" className="bg-pos-white/5 border-pos-yellow/30 text-pos-white focus:border-pos-yellow" />
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs mb-2 block">Formas de pagamento que geram NFC-e</Label>
+                  <p className="text-[10px] text-pos-white/40 mb-3">Marque quais formas de pagamento devem emitir nota fiscal automaticamente</p>
+                  <div className="space-y-2">
+                    {[
+                      { key: 'pix', label: 'PIX' },
+                      { key: 'credito', label: 'Cartão de Crédito' },
+                      { key: 'debito', label: 'Cartão de Débito' },
+                      { key: 'dinheiro', label: 'Dinheiro' },
+                      { key: 'crediario', label: 'Crediário' },
+                      { key: 'transferencia', label: 'Transferência' },
+                      { key: 'boleto', label: 'Boleto' },
+                    ].map(method => {
+                      const isChecked = autoEmitMethods.includes(method.key);
+                      return (
+                        <div key={method.key} className="flex items-center justify-between p-2 rounded-lg bg-pos-white/5">
+                          <span className="text-sm text-pos-white">{method.label}</span>
+                          <Switch
+                            checked={isChecked}
+                            onCheckedChange={(checked) => {
+                              setAutoEmitMethods(prev =>
+                                checked ? [...prev, method.key] : prev.filter(m => m !== method.key)
+                              );
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
             )}
             <Button className="bg-pos-yellow text-pos-black hover:bg-pos-yellow-muted font-bold gap-2" onClick={saveInvoiceConfig}>
               <Save className="h-4 w-4" /> Salvar
