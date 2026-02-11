@@ -2567,6 +2567,42 @@ export type Database = {
           },
         ]
       }
+      pos_store_whatsapp_numbers: {
+        Row: {
+          created_at: string
+          id: string
+          store_id: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          store_id: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          store_id?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_store_whatsapp_numbers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_store_whatsapp_numbers_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_stores: {
         Row: {
           address: string | null
