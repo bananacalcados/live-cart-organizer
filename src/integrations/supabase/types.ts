@@ -430,6 +430,30 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_finished_conversations: {
+        Row: {
+          created_at: string
+          finished_at: string
+          finished_by: string | null
+          id: string
+          phone: string
+        }
+        Insert: {
+          created_at?: string
+          finished_at?: string
+          finished_by?: string | null
+          id?: string
+          phone: string
+        }
+        Update: {
+          created_at?: string
+          finished_at?: string
+          finished_by?: string | null
+          id?: string
+          phone?: string
+        }
+        Relationships: []
+      }
       customer_registrations: {
         Row: {
           address: string

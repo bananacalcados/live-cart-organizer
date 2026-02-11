@@ -20,7 +20,8 @@ import { useZapi } from "@/hooks/useZapi";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import { toast } from "sonner";
-import { Message, Conversation, ChatFilter } from "@/components/chat/ChatTypes";
+import { Message, Conversation, ChatFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
+import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { STAGES } from "@/types/order";
 import {
   Select,
@@ -112,6 +113,7 @@ export default function ChatPage() {
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [numberFilter, setNumberFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>('all');
   const [chatContacts, setChatContacts] = useState<ChatContact[]>([]);
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
@@ -147,6 +149,7 @@ export default function ChatPage() {
   const { customers } = useCustomerStore();
   const { numbers, fetchNumbers, selectedNumberId, setSelectedNumberId } = useWhatsAppNumberStore();
   const { sendMessage: zapiSend, sendMedia: zapiSendMedia } = useZapi();
+  const { enrichConversations, finishConversation } = useConversationEnrichment();
 
   // ── Fetch numbers and contacts on mount ──
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
@@ -207,11 +210,15 @@ export default function ChatPage() {
     }
 
     const convs: Conversation[] = [];
+    const phoneMessages = new Map<string, { direction: string }[]>();
     phoneMap.forEach((value, phone) => {
       const lastMsg = value.messages[0];
       const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
       const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
       const isGroup = value.isGroup || phone.includes('@g.us') || phone.includes('-');
+      
+      phoneMessages.set(phone, value.messages.map(m => ({ direction: m.direction })));
+      
       convs.push({
         phone,
         lastMessage: lastMsg.message,
@@ -226,7 +233,7 @@ export default function ChatPage() {
       });
     });
     convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
-    setConversations(convs);
+    setConversations(enrichConversations(convs, phoneMessages));
   }, [orders, customers, numberFilter, getContactName]);
 
   useEffect(() => {
@@ -534,11 +541,25 @@ export default function ChatPage() {
   };
 
   // ── Filter conversations ──
+  const STATUS_TABS: { value: string; label: string }[] = [
+    { value: 'all', label: 'Todas' },
+    { value: 'not_started', label: 'Não Iniciadas' },
+    { value: 'awaiting_reply', label: 'Aguard. Resposta' },
+    { value: 'awaiting_customer', label: 'Aguard. Cliente' },
+    { value: 'finished', label: 'Finalizadas' },
+  ];
+
   const filteredConversations = conversations
     .filter(c => {
       if (chatFilter === 'contacts' && c.isGroup) return false;
       if (chatFilter === 'groups' && !c.isGroup) return false;
       return true;
+    })
+    .filter(c => {
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'finished') return c.isFinished;
+      if (c.isFinished) return false;
+      return c.conversationStatus === statusFilter;
     })
     .filter(c =>
       c.phone.includes(searchQuery) ||
@@ -606,7 +627,24 @@ export default function ChatPage() {
                 className="pl-10 h-9 bg-[#202c33] border-none text-[#e9edef] placeholder:text-[#8696a0] focus-visible:ring-0"
               />
             </div>
-            {/* Filter tabs */}
+            {/* Status filter tabs */}
+            <div className="flex gap-1 flex-wrap">
+              {STATUS_TABS.map(tab => (
+                <button
+                  key={tab.value}
+                  onClick={() => setStatusFilter(tab.value as ConversationStatusFilter)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors",
+                    statusFilter === tab.value
+                      ? "bg-[#00a884] text-[#111b21]"
+                      : "bg-[#202c33] text-[#8696a0] hover:bg-[#2a3942]"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {/* Chat type filter */}
             <div className="flex gap-1.5">
               {(['all', 'contacts', 'groups'] as const).map(f => (
                 <button
@@ -661,9 +699,22 @@ export default function ChatPage() {
                   </div>
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between">
-                      <span className="text-[#e9edef] font-medium text-[15px] truncate">
-                        {conv.customerName || conv.phone}
-                      </span>
+                      <div className="flex items-center gap-1 min-w-0 flex-1">
+                        <span className="text-[#e9edef] font-medium text-[15px] truncate">
+                          {conv.customerName || conv.phone}
+                        </span>
+                        {conv.instanceLabel && (
+                          <span className={cn(
+                            "text-[8px] px-1 py-0 rounded flex-shrink-0 font-medium",
+                            conv.whatsapp_number_id ? "bg-blue-500/20 text-blue-400" : "bg-green-500/20 text-green-400"
+                          )}>
+                            {conv.instanceLabel}
+                          </span>
+                        )}
+                        {conv.hasOtherInstances && (
+                          <span className="text-[8px] text-orange-400 flex-shrink-0">🔗</span>
+                        )}
+                      </div>
                       <span className={cn(
                         "text-xs flex-shrink-0 ml-2",
                         conv.unreadCount > 0 ? "text-[#00a884]" : "text-[#8696a0]"
@@ -749,6 +800,11 @@ export default function ChatPage() {
                   ) : (
                     <div className="flex items-center gap-2 group">
                       <p className="text-[#e9edef] font-medium truncate">{selectedConv?.customerName || selectedPhone}</p>
+                      {selectedConv?.instanceLabel && (
+                        <span className="text-[9px] bg-[#2a3942] px-1.5 py-0.5 rounded text-[#00a884] font-medium flex-shrink-0">
+                          {selectedConv.instanceLabel}
+                        </span>
+                      )}
                       <button
                         onClick={() => {
                           setEditNameValue(selectedConv?.customerName || '');

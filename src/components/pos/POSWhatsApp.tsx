@@ -10,7 +10,8 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatView } from "@/components/chat/ChatView";
-import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter } from "@/components/chat/ChatTypes";
+import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
+import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -45,6 +46,7 @@ export function POSWhatsApp({ storeId }: Props) {
   const [chatFilter, setChatFilter] = useState<ChatFilter>("all");
   const [stageFilter, setStageFilter] = useState<StageFilter>("all");
   const [instanceFilter, setInstanceFilter] = useState<InstanceFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>("all");
   const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [contactPhotos, setContactPhotos] = useState<Record<string, string>>({});
@@ -54,6 +56,7 @@ export function POSWhatsApp({ storeId }: Props) {
   const [showCrmPanel, setShowCrmPanel] = useState(false);
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+  const { enrichConversations, finishConversation } = useConversationEnrichment();
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
@@ -160,11 +163,14 @@ export function POSWhatsApp({ storeId }: Props) {
       }
 
       const convs: Conversation[] = [];
+      const phoneMessages = new Map<string, { direction: string }[]>();
       phoneMap.forEach((value, phone) => {
         const lastMsg = value.messages[0];
         const lastIncoming = value.messages.find(m => m.direction === "incoming");
         const lastIncomingInstance: "zapi" | "meta" | undefined = lastIncoming?.whatsapp_number_id ? "meta" : lastIncoming ? "zapi" : undefined;
         const msgWithNumberId = value.messages.find(m => m.whatsapp_number_id);
+
+        phoneMessages.set(phone, value.messages.map(m => ({ direction: m.direction })));
 
         convs.push({
           phone,
@@ -180,7 +186,7 @@ export function POSWhatsApp({ storeId }: Props) {
       });
 
       convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
-      setConversations(convs);
+      setConversations(enrichConversations(convs, phoneMessages));
     };
 
     loadConversations();
@@ -476,6 +482,8 @@ export function POSWhatsApp({ storeId }: Props) {
             onStageFilterChange={setStageFilter}
             instanceFilter={instanceFilter}
             onInstanceFilterChange={setInstanceFilter}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
             metaNumbers={metaNumbers}
             contactPhotos={contactPhotos}
             contactNames={chatContacts}

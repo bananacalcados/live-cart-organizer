@@ -9,6 +9,7 @@ export interface WhatsAppNumber {
   business_account_id: string;
   is_default: boolean;
   is_active: boolean;
+  provider?: string;
 }
 
 interface WhatsAppNumberStore {
@@ -21,16 +22,18 @@ interface WhatsAppNumberStore {
   getDefaultNumber: () => WhatsAppNumber | null;
 }
 
+const STORAGE_KEY = 'whatsapp_selected_number_id';
+
 export const useWhatsAppNumberStore = create<WhatsAppNumberStore>((set, get) => ({
   numbers: [],
-  selectedNumberId: null,
+  selectedNumberId: localStorage.getItem(STORAGE_KEY) || null,
   isLoading: false,
 
   fetchNumbers: async () => {
     set({ isLoading: true });
     const { data, error } = await supabase
       .from('whatsapp_numbers')
-      .select('id, label, phone_display, phone_number_id, business_account_id, is_default, is_active')
+      .select('id, label, phone_display, phone_number_id, business_account_id, is_default, is_active, provider')
       .eq('is_active', true)
       .order('is_default', { ascending: false });
 
@@ -41,16 +44,26 @@ export const useWhatsAppNumberStore = create<WhatsAppNumberStore>((set, get) => 
     }
 
     const numbers = (data || []) as WhatsAppNumber[];
+    const savedId = get().selectedNumberId;
+    const savedExists = savedId && numbers.some(n => n.id === savedId);
     const defaultNum = numbers.find(n => n.is_default);
+    
+    const resolvedId = savedExists ? savedId : (defaultNum?.id || numbers[0]?.id || null);
     
     set({
       numbers,
-      selectedNumberId: get().selectedNumberId || defaultNum?.id || numbers[0]?.id || null,
+      selectedNumberId: resolvedId,
       isLoading: false,
     });
+    
+    if (resolvedId) localStorage.setItem(STORAGE_KEY, resolvedId);
   },
 
-  setSelectedNumberId: (id) => set({ selectedNumberId: id }),
+  setSelectedNumberId: (id) => {
+    set({ selectedNumberId: id });
+    if (id) localStorage.setItem(STORAGE_KEY, id);
+    else localStorage.removeItem(STORAGE_KEY);
+  },
 
   getSelectedNumber: () => {
     const { numbers, selectedNumberId } = get();
