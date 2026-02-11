@@ -35,6 +35,7 @@ interface ConversationListProps {
   onInstanceFilterChange: (filter: InstanceFilter) => void;
   metaNumbers: WhatsAppNumber[];
   contactPhotos?: Record<string, string>;
+  contactNames?: Record<string, string>;
 }
 
 export function ConversationList({
@@ -50,6 +51,7 @@ export function ConversationList({
   onInstanceFilterChange,
   metaNumbers,
   contactPhotos = {},
+  contactNames = {},
 }: ConversationListProps) {
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) {
@@ -200,7 +202,7 @@ export function ConversationList({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-[15px] text-[#111b21] dark:text-[#e9edef] truncate">
-                      {conv.customerName || conv.phone}
+                      {conv.customerName || contactNames[conv.phone] || conv.phone}
                     </span>
                     <span className={cn(
                       "text-xs flex-shrink-0",
