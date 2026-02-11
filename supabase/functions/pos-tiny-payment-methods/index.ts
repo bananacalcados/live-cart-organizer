@@ -28,19 +28,23 @@ serve(async (req) => {
 
     if (!store?.tiny_token) throw new Error('Store token not configured');
 
-    const resp = await fetch('https://api.tiny.com.br/api2/formas.pagamento.pesquisa.php', {
+    const resp = await fetch('https://api.tiny.com.br/api2/formas.recebimento.pesquisa.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `token=${store.tiny_token}&formato=json`,
     });
 
     const data = await resp.json();
-    console.log('Tiny payment methods status:', data.retorno?.status);
+    console.log('Tiny payment methods response:', JSON.stringify(data.retorno?.status));
 
-    const methods = (data.retorno?.formasPagamento || []).map((item: any) => ({
-      id: String(item.formaPagamento?.id || item.id),
-      name: item.formaPagamento?.descricao || item.descricao || 'Sem nome',
-    }));
+    const rawMethods = data.retorno?.formas_recebimento || data.retorno?.formasPagamento || [];
+    const methods = rawMethods.map((item: any) => {
+      const inner = item.forma_recebimento || item.formaPagamento || item;
+      return {
+        id: String(inner.id || item.id),
+        name: inner.descricao || inner.nome || item.descricao || 'Sem nome',
+      };
+    });
 
     return new Response(JSON.stringify({ success: true, methods }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
