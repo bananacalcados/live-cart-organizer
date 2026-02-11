@@ -116,6 +116,13 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
     setLoadingId(orderId);
     try {
       const order = filtered.find(o => o.id === orderId);
+      
+      // Validate: freight must be quoted first
+      if (!order?.freight_carrier || !order?.freight_price) {
+        toast.error('O frete precisa ser cotado e selecionado antes de emitir a NF-e.');
+        return;
+      }
+
       if (!order?.tiny_order_id) {
         const { data: createData, error: createError } = await supabase.functions.invoke('expedition-tiny-invoice', {
           body: { order_id: orderId, action: 'create_order' },
@@ -144,6 +151,14 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
   const handleGenerateLabel = async (orderId: string) => {
     setLoadingId(orderId);
     try {
+      const order = filtered.find(o => o.id === orderId);
+
+      // Validate: NF-e must be emitted first
+      if (!order?.invoice_number && !order?.tiny_invoice_id) {
+        toast.error('A NF-e precisa ser emitida antes de gerar a etiqueta. Fluxo: Cotar Frete → Emitir NF-e → Gerar Etiqueta.');
+        return;
+      }
+
       // Generate internal barcode
       const internalBarcode = `EXP-${Date.now()}-${orderId.slice(0, 8)}`.toUpperCase();
       
@@ -152,19 +167,18 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
         .update({ internal_barcode: internalBarcode })
         .eq('id', orderId);
 
-      // Fetch official shipping label from Tiny/Frenet
+      // Fetch official shipping label from Tiny (sends NF-e to expedition)
       const { data, error } = await supabase.functions.invoke('expedition-fetch-label', {
         body: { order_id: orderId },
       });
 
       if (error) {
         console.error('Label fetch error:', error);
-        // Still update status even if label fetch fails
         await supabase
           .from('expedition_orders')
           .update({ expedition_status: 'label_generated' })
           .eq('id', orderId);
-        toast.success('Código interno gerado! Etiqueta oficial não encontrada no Tiny — verifique se a expedição foi criada.');
+        toast.success('Código interno gerado! Etiqueta oficial ainda sendo processada pelo Tiny.');
       } else if (data?.success && data?.label_url) {
         toast.success('Etiqueta oficial e código interno gerados!');
       } else {
@@ -172,7 +186,7 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
           .from('expedition_orders')
           .update({ expedition_status: 'label_generated' })
           .eq('id', orderId);
-        toast.success('Código interno gerado! Etiqueta oficial ainda não disponível no Tiny.');
+        toast.info(data?.error || 'Código interno gerado! Etiqueta oficial ainda não disponível.');
       }
 
       onRefresh();
@@ -347,6 +361,10 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
                             )}
                           </div>
                         </div>
+                      </div>
+                    ) : !order.freight_carrier ? (
+                      <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
+                        ⚠️ Cote e selecione o frete primeiro (aba Cotação de Frete) antes de emitir a NF-e.
                       </div>
                     ) : (
                       <Button

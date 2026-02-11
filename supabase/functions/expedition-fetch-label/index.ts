@@ -31,19 +31,32 @@ serve(async (req) => {
       .single();
 
     if (orderError || !order) throw new Error('Order not found');
-    if (!order.tiny_order_id) {
+
+    // Validate prerequisites: NF-e must be emitted first
+    if (!order.tiny_invoice_id && !order.invoice_number) {
       return new Response(JSON.stringify({
         success: false,
-        error: 'Pedido não cadastrado no Tiny ERP. Crie o pedido no Tiny primeiro (aba NF-e).',
+        error: 'A NF-e precisa ser emitida antes de gerar a etiqueta de envio. Fluxo correto: Cotar Frete → Emitir NF-e → Gerar Etiqueta.',
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Step 1: Send order to expedition (enviar objetos para expedição)
-    console.log('Step 1: Sending order to expedition...');
+    if (!order.freight_carrier) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'O frete precisa ser cotado e selecionado antes de gerar a etiqueta.',
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Use the NF-e ID (notafiscal) to send to expedition, NOT the order (venda)
+    const objectId = order.tiny_invoice_id;
+    const objectType = 'notafiscal';
+
+    // Step 1: Send NF-e to expedition
+    console.log(`Step 1: Sending ${objectType} ${objectId} to expedition...`);
     const sendResponse = await fetch('https://api.tiny.com.br/api2/enviar.objetos.para.expedicao.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${TINY_ERP_TOKEN}&formato=json&tipoObjetos=venda&idObjetos=${order.tiny_order_id}`,
+      body: `token=${TINY_ERP_TOKEN}&formato=json&tipoObjetos=${objectType}&idObjetos=${objectId}`,
     });
     const sendData = await sendResponse.json();
     console.log('Send to expedition response:', JSON.stringify(sendData));
@@ -51,20 +64,15 @@ serve(async (req) => {
     // It's OK if it fails with "already in expedition" - we continue
     if (sendData.retorno?.status === 'Erro') {
       const errMsg = sendData.retorno?.erros?.[0]?.erro || JSON.stringify(sendData.retorno);
-      console.log('Send to expedition error (may be already created):', errMsg);
-      // Only fail if it's not a "already exists" type error
-      if (!errMsg.includes('já') && !errMsg.includes('expedição') && !errMsg.includes('expedição')) {
-        // Don't throw, just log - try to fetch expedition anyway
-        console.warn('Non-critical error sending to expedition:', errMsg);
-      }
+      console.log('Send to expedition error (may be already sent):', errMsg);
     }
 
-    // Step 2: Get expedition info for this order
+    // Step 2: Get expedition info for this NF-e
     console.log('Step 2: Getting expedition info...');
     const expeditionResponse = await fetch('https://api.tiny.com.br/api2/expedicao.obter.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${TINY_ERP_TOKEN}&formato=json&tipoObjeto=venda&idObjeto=${order.tiny_order_id}`,
+      body: `token=${TINY_ERP_TOKEN}&formato=json&tipoObjeto=${objectType}&idObjeto=${objectId}`,
     });
     const expeditionData = await expeditionResponse.json();
     console.log('Expedition data:', JSON.stringify(expeditionData));
@@ -73,7 +81,7 @@ serve(async (req) => {
       const err = expeditionData.retorno?.erros?.[0]?.erro || JSON.stringify(expeditionData.retorno);
       return new Response(JSON.stringify({
         success: false,
-        error: `Expedição não encontrada no Tiny. O pedido pode ainda estar sendo processado. Tente novamente em alguns segundos.`,
+        error: `Expedição não encontrada no Tiny. O processamento pode demorar alguns segundos após o envio da NF-e. Tente novamente.`,
         details: err,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -137,14 +145,14 @@ serve(async (req) => {
       expedition_id: idExpedicao,
       message: hasLabel
         ? 'Etiqueta oficial obtida com sucesso!'
-        : 'Expedição criada no Tiny, mas a etiqueta ainda não foi gerada. A Frenet pode demorar alguns minutos para processar. Tente buscar novamente.',
+        : 'Expedição criada no Tiny, mas a etiqueta ainda não foi gerada pela transportadora. Tente buscar novamente em alguns instantes.',
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error fetching label:', error);
     return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 200, // Return 200 to avoid app crash
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

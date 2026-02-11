@@ -865,6 +865,7 @@ export type Database = {
           shopify_order_name: string | null
           shopify_order_number: string | null
           subtotal_price: number | null
+          tiny_invoice_id: string | null
           tiny_order_id: string | null
           total_discount: number | null
           total_price: number | null
@@ -905,6 +906,7 @@ export type Database = {
           shopify_order_name?: string | null
           shopify_order_number?: string | null
           subtotal_price?: number | null
+          tiny_invoice_id?: string | null
           tiny_order_id?: string | null
           total_discount?: number | null
           total_price?: number | null
@@ -945,6 +947,7 @@ export type Database = {
           shopify_order_name?: string | null
           shopify_order_number?: string | null
           subtotal_price?: number | null
+          tiny_invoice_id?: string | null
           tiny_order_id?: string | null
           total_discount?: number | null
           total_price?: number | null

@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 serve(async (req) => {
@@ -95,6 +95,11 @@ serve(async (req) => {
     if (action === 'emit_invoice') {
       if (!order.tiny_order_id) throw new Error('Order not registered in Tiny ERP yet');
 
+      // Check if freight was quoted first
+      if (!order.freight_carrier || !order.freight_price) {
+        throw new Error('O frete precisa ser cotado e selecionado antes de emitir a NF-e.');
+      }
+
       // Emit NF-e from Tiny order
       const tinyResponse = await fetch(`https://api.tiny.com.br/api2/gerar.nota.fiscal.pedido.php`, {
         method: 'POST',
@@ -103,6 +108,7 @@ serve(async (req) => {
       });
 
       const tinyData = await tinyResponse.json();
+      console.log('NF-e response:', JSON.stringify(tinyData));
 
       if (tinyData.retorno?.status === 'OK' || tinyData.retorno?.status === 'Processado') {
         const nfData = tinyData.retorno?.registros?.registro || tinyData.retorno?.registros;
@@ -122,6 +128,7 @@ serve(async (req) => {
           await supabase
             .from('expedition_orders')
             .update({
+              tiny_invoice_id: String(invoiceId),
               invoice_number: nf.numero || null,
               invoice_series: nf.serie || null,
               invoice_key: nf.chave_acesso || null,
@@ -131,7 +138,7 @@ serve(async (req) => {
             })
             .eq('id', order_id);
 
-          return new Response(JSON.stringify({ success: true, invoice: nf }), {
+          return new Response(JSON.stringify({ success: true, invoice: nf, tiny_invoice_id: invoiceId }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
@@ -145,7 +152,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error with Tiny ERP:', error);
     return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
