@@ -271,9 +271,21 @@ serve(async (req) => {
               case 'read': newStatus = 'read'; break;
               case 'failed': newStatus = 'failed'; break;
             }
+
+            const updateData: Record<string, unknown> = { status: newStatus };
+
+            // Capture error details for failed messages
+            if (newStatus === 'failed' && status.errors && status.errors.length > 0) {
+              const err = status.errors[0];
+              updateData.error_code = String(err.code || '');
+              const details = err.error_data?.details || err.message || err.title || 'Erro desconhecido';
+              updateData.error_message = `${err.title || 'Erro'} (${err.code || '?'}): ${details}`;
+              console.log(`Message ${messageId} failed: code=${err.code}, title=${err.title}, details=${details}`);
+            }
+
             await supabase
               .from('whatsapp_messages')
-              .update({ status: newStatus })
+              .update(updateData)
               .eq('message_id', messageId);
           }
         }

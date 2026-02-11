@@ -327,8 +327,22 @@ export function ChatView({
                   <video src={msg.media_url} controls className="max-w-full rounded mb-1" style={{ maxHeight: 200 }} />
                 )}
                 {msg.message && <p className="whitespace-pre-wrap break-words">{msg.message}</p>}
+                {msg.status === 'failed' && (msg as any).error_message && (
+                  <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                    ⚠️ {(msg as any).error_message}
+                  </div>
+                )}
+                {msg.status === 'failed' && !(msg as any).error_message && (
+                  <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                    ⚠️ Mensagem não entregue
+                  </div>
+                )}
                 <p className="text-[10px] text-muted-foreground text-right mt-1">
                   {formatMessageTime(new Date(msg.created_at))}
+                  {msg.direction === 'outgoing' && msg.status === 'failed' && ' ❌'}
+                  {msg.direction === 'outgoing' && msg.status === 'delivered' && ' ✓✓'}
+                  {msg.direction === 'outgoing' && msg.status === 'read' && ' ✓✓'}
+                  {msg.direction === 'outgoing' && msg.status === 'sent' && ' ✓'}
                 </p>
               </div>
             </div>

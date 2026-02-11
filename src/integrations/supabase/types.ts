@@ -3144,6 +3144,8 @@ export type Database = {
         Row: {
           created_at: string
           direction: string
+          error_code: string | null
+          error_message: string | null
           id: string
           is_group: boolean | null
           media_type: string | null
@@ -3158,6 +3160,8 @@ export type Database = {
         Insert: {
           created_at?: string
           direction: string
+          error_code?: string | null
+          error_message?: string | null
           id?: string
           is_group?: boolean | null
           media_type?: string | null
@@ -3172,6 +3176,8 @@ export type Database = {
         Update: {
           created_at?: string
           direction?: string
+          error_code?: string | null
+          error_message?: string | null
           id?: string
           is_group?: boolean | null
           media_type?: string | null

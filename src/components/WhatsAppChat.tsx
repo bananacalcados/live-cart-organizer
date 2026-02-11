@@ -37,6 +37,8 @@ interface Message {
   created_at: string;
   media_type?: string;
   media_url?: string;
+  error_code?: string | null;
+  error_message?: string | null;
 }
 
 interface MediaAttachment {
@@ -740,6 +742,16 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                     >
                       <MessageMedia msg={msg} />
                       {msg.message && <p className="whitespace-pre-wrap break-words pr-12">{msg.message}</p>}
+                      {msg.status === 'failed' && msg.error_message && (
+                        <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[11px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                          ⚠️ {msg.error_message}
+                        </div>
+                      )}
+                      {msg.status === 'failed' && !msg.error_message && (
+                        <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[11px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                          ⚠️ Mensagem não entregue — aguardando detalhes do erro
+                        </div>
+                      )}
                       <div className={cn(
                         "absolute bottom-1 right-2 flex items-center gap-1 text-[11px]",
                         msg.direction === 'outgoing' ? 'text-gray-500' : 'text-gray-400'
