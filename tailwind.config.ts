@@ -60,6 +60,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        pos: {
+          black: "hsl(var(--pos-black))",
+          yellow: "hsl(var(--pos-yellow))",
+          orange: "hsl(var(--pos-orange))",
+          white: "hsl(var(--pos-white))",
+          "yellow-muted": "hsl(var(--pos-yellow-muted))",
+          "orange-muted": "hsl(var(--pos-orange-muted))",
+        },
         stage: {
           new: "hsl(var(--stage-new))",
           contacted: "hsl(var(--stage-contacted))",
