@@ -46,6 +46,7 @@ const Index = () => {
     }
   }, [currentEventId, navigate]);
 
+
   // Fetch orders when event changes
   useEffect(() => {
     if (currentEventId) {
