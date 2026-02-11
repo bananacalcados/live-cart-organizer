@@ -183,6 +183,12 @@ export default function Inventory() {
   const [showLabelDialog, setShowLabelDialog] = useState(false);
   const [labelItems, setLabelItems] = useState<Array<{ barcode: string; productName: string; sku: string; qty: number }>>([]);
 
+  // Standalone label generator
+  const [labelSearchQuery, setLabelSearchQuery] = useState("");
+  const [labelSearchResults, setLabelSearchResults] = useState<PosProduct[]>([]);
+  const [isLabelSearching, setIsLabelSearching] = useState(false);
+  const [selectedLabelProducts, setSelectedLabelProducts] = useState<Array<{ product: PosProduct; qty: number }>>([]);
+
   // Load stores
   useEffect(() => {
     const loadStores = async () => {
@@ -554,6 +560,43 @@ export default function Inventory() {
     await handleGenerateGTIN(resolvedIds);
   };
 
+  // Standalone label search
+  const handleLabelSearch = async (query: string) => {
+    setLabelSearchQuery(query);
+    if (query.length < 2) { setLabelSearchResults([]); return; }
+    setIsLabelSearching(true);
+    const { data } = await supabase
+      .from('pos_products')
+      .select('id, tiny_id, name, variant, sku, barcode, category')
+      .eq('store_id', selectedStoreId)
+      .or(`name.ilike.%${query}%,sku.ilike.%${query}%,barcode.ilike.%${query}%,variant.ilike.%${query}%`)
+      .limit(20);
+    setLabelSearchResults((data || []) as unknown as PosProduct[]);
+    setIsLabelSearching(false);
+  };
+
+  const handleAddLabelProduct = (product: PosProduct) => {
+    const exists = selectedLabelProducts.find(p => p.product.id === product.id);
+    if (exists) {
+      setSelectedLabelProducts(prev => prev.map(p => p.product.id === product.id ? { ...p, qty: p.qty + 1 } : p));
+    } else {
+      setSelectedLabelProducts(prev => [...prev, { product, qty: 1 }]);
+    }
+    setLabelSearchQuery("");
+    setLabelSearchResults([]);
+  };
+
+  const handlePrintStandaloneLabels = () => {
+    if (selectedLabelProducts.length === 0) { toast.error('Adicione produtos para gerar etiquetas'); return; }
+    const items = selectedLabelProducts.flatMap(({ product, qty }) => {
+      const productName = product.name + (product.variant ? ` - ${product.variant}` : '');
+      const barcode = product.barcode || product.sku || '';
+      return Array(qty).fill({ barcode, productName, sku: product.sku || '' });
+    });
+    setLabelItems(items.map(i => ({ ...i, qty: 1 })));
+    setShowLabelDialog(true);
+  };
+
   const handleFinishCounting = async () => {
     if (!activeCount) return;
     setShowFinishDialog(false);
@@ -789,6 +832,101 @@ export default function Inventory() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Standalone Label Generator */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Printer className="h-5 w-5" />
+                  Gerar Etiquetas
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Pesquise produtos para gerar etiquetas com código de barras e descrição. Útil para devoluções ou produtos com etiqueta danificada.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Buscar por nome, SKU ou código de barras..."
+                    value={labelSearchQuery}
+                    onChange={(e) => handleLabelSearch(e.target.value)}
+                    className="flex-1"
+                  />
+                  {isLabelSearching && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-2" />}
+                </div>
+
+                {labelSearchResults.length > 0 && (
+                  <ScrollArea className="max-h-48 border rounded-lg">
+                    <div className="p-1">
+                      {labelSearchResults.map(p => {
+                        const fullName = p.name + (p.variant ? ` - ${p.variant}` : '');
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => handleAddLabelProduct(p)}
+                            className="w-full text-left p-2 hover:bg-muted/50 rounded text-sm flex items-center justify-between"
+                          >
+                            <div>
+                              <p className="font-medium">{fullName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                SKU: {p.sku || '—'} · Cod: {p.barcode || '—'}
+                              </p>
+                            </div>
+                            <Tag className="h-4 w-4 text-muted-foreground" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                )}
+
+                {selectedLabelProducts.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-muted-foreground">Produtos selecionados:</Label>
+                    {selectedLabelProducts.map(({ product, qty }, i) => {
+                      const fullName = product.name + (product.variant ? ` - ${product.variant}` : '');
+                      return (
+                        <div key={product.id} className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{fullName}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {product.barcode || product.sku || '—'}
+                            </p>
+                          </div>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={qty}
+                            onChange={(e) => {
+                              const newQty = parseInt(e.target.value) || 1;
+                              setSelectedLabelProducts(prev => prev.map((p, idx) => idx === i ? { ...p, qty: newQty } : p));
+                            }}
+                            className="w-16 h-8 text-center text-sm"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setSelectedLabelProducts(prev => prev.filter((_, idx) => idx !== i))}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                    <div className="flex gap-2">
+                      <Button onClick={handlePrintStandaloneLabels} className="flex-1 gap-2">
+                        <Printer className="h-4 w-4" />
+                        Gerar Etiquetas ({selectedLabelProducts.reduce((s, p) => s + p.qty, 0)})
+                      </Button>
+                      <Button variant="outline" onClick={() => setSelectedLabelProducts([])}>
+                        Limpar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         ) : (
           /* Active count */

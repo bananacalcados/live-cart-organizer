@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 
 interface Message {
   id: string;
@@ -652,6 +653,16 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           <p className="font-medium text-base truncate">{contactName}</p>
           <p className="text-xs text-white/70 truncate">{phone}</p>
         </div>
+
+        <CreateSupportTicketDialog
+          phone={phone}
+          customerName={contactName}
+          trigger={
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 h-8 w-8" title="Criar Suporte">
+              <HeadphonesIcon className="h-4 w-4" />
+            </Button>
+          }
+        />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
