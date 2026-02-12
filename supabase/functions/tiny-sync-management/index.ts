@@ -200,8 +200,97 @@ serve(async (req) => {
         if ((sync_stock || stock_only) && Date.now() - functionStart < TIME_LIMIT_MS) {
           if (logId) {
             await supabase.from('tiny_management_sync_log').update({
-              phase: 'stock', current_date_syncing: 'Estoque: carregando produtos...',
+              phase: 'stock', current_date_syncing: 'Estoque: verificando cache de produtos...',
             }).eq('id', logId);
+          }
+
+          // Check if we have cached products — if not, auto-populate from Tiny listing
+          const { count: cachedCount } = await supabase
+            .from('pos_products')
+            .select('*', { count: 'exact', head: true })
+            .eq('store_id', store.id);
+
+          // Check if catalog is incomplete by querying Tiny for total pages
+          // First, do a quick check to see expected total from Tiny
+          let tinyExpectedProducts = 0;
+          try {
+            const checkResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: `token=${token}&formato=json&pagina=1`,
+            });
+            const checkData = await checkResp.json();
+            if (checkData.retorno?.status !== 'Erro') {
+              const totalPages = parseInt(checkData.retorno?.numero_paginas || '1');
+              tinyExpectedProducts = totalPages * 100; // approximate
+            }
+            await new Promise(r => setTimeout(r, 600));
+          } catch {}
+
+          const cacheIsIncomplete = (cachedCount || 0) < tinyExpectedProducts * 0.8; // 80% threshold
+
+          if (cacheIsIncomplete) {
+            const resumeProdPage = Math.max(1, Math.floor((cachedCount || 0) / 100) + 1);
+            console.log(`Store ${store.name} cache incomplete (${cachedCount}/${tinyExpectedProducts}) — importing from page ${resumeProdPage}...`);
+            if (logId) {
+              await supabase.from('tiny_management_sync_log').update({
+                current_date_syncing: `Estoque: importando catálogo (pg ${resumeProdPage})...`,
+              }).eq('id', logId);
+            }
+
+            // Paginate through Tiny product listing to populate pos_products
+            let prodPage = resumeProdPage;
+            let prodHasMore = true;
+            let prodTotal = cachedCount || 0;
+            while (prodHasMore && Date.now() - functionStart < TIME_LIMIT_MS - 10000) {
+              const searchResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `token=${token}&formato=json&pagina=${prodPage}`,
+              });
+              const searchData = await searchResp.json();
+              if (searchData.retorno?.status === 'Erro') { prodHasMore = false; break; }
+
+              const totalPages = parseInt(searchData.retorno?.numero_paginas || '1');
+              const rawProducts = searchData.retorno?.produtos || [];
+              if (rawProducts.length === 0) { prodHasMore = false; break; }
+
+              const rows: any[] = [];
+              for (const item of rawProducts) {
+                const p = item.produto;
+                const parts = (p.nome || '').split(' - ');
+                let variant = '', size: string | null = null, color: string | null = null;
+                if (parts.length >= 3) {
+                  size = parts[parts.length - 2]?.trim() || null;
+                  color = parts[parts.length - 1]?.trim() || null;
+                  variant = `${size || ''} ${color || ''}`.trim();
+                } else if (parts.length === 2) {
+                  const last = parts[1]?.trim() || '';
+                  if (/^\d{2,3}$/.test(last)) { size = last; variant = last; }
+                  else { color = last; variant = last; }
+                }
+                rows.push({
+                  store_id: store.id, tiny_id: p.id, sku: p.codigo || '',
+                  name: p.nome || '', variant, size, color,
+                  price: parseFloat(p.preco || '0'), barcode: p.gtin || p.codigo || '',
+                  stock: 0, is_active: p.situacao === 'A',
+                  synced_at: new Date().toISOString(),
+                });
+              }
+              if (rows.length > 0) {
+                await supabase.from('pos_products').upsert(rows, { onConflict: 'store_id,tiny_id,sku,variant' });
+              }
+              prodTotal += rows.length;
+              if (logId) {
+                await supabase.from('tiny_management_sync_log').update({
+                  current_date_syncing: `Catálogo: ${prodTotal} produtos importados (pg ${prodPage}/${totalPages})`,
+                }).eq('id', logId);
+              }
+              prodPage++;
+              if (prodPage > totalPages) prodHasMore = false;
+              if (prodHasMore) await new Promise(r => setTimeout(r, 600));
+            }
+            console.log(`Auto-populated ${prodTotal} products for store ${store.name}`);
           }
 
           // Get total count of products for this store
