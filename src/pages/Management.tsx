@@ -19,7 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, subMonths } from "date-fns";
 import { toast } from "sonner";
 
 interface TinySyncedOrder {
@@ -99,6 +99,7 @@ function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt, onR
   const [apStoreFilter, setApStoreFilter] = useState(storeFilter);
   const [apDateFrom, setApDateFrom] = useState("");
   const [apDateTo, setApDateTo] = useState("");
+  const [apPeriod, setApPeriod] = useState<"all" | "today" | "week" | "month" | "year" | "custom">("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [markingPaid, setMarkingPaid] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
@@ -361,7 +362,7 @@ function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt, onR
         </>
       ) : (
         <>
-          {/* Filters */}
+           {/* Filters */}
           <div className="flex flex-wrap gap-2 items-center">
             <Select value={apStoreFilter} onValueChange={setApStoreFilter}>
               <SelectTrigger className="w-[160px] h-8 text-xs">
@@ -372,18 +373,51 @@ function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt, onR
                 {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground">De:</span>
-              <Input type="date" value={apDateFrom} onChange={e => setApDateFrom(e.target.value)} className="h-8 text-xs w-[140px]" />
+
+            <div className="flex items-center gap-1 border rounded-md p-0.5">
+              {([
+                { key: "all", label: "Tudo" },
+                { key: "today", label: "Hoje" },
+                { key: "week", label: "Semana" },
+                { key: "month", label: "Mês" },
+                { key: "year", label: "Ano" },
+                { key: "custom", label: "Período" },
+              ] as const).map(p => (
+                <Button
+                  key={p.key}
+                  variant={apPeriod === p.key ? "default" : "ghost"}
+                  size="sm"
+                  className="h-7 text-[11px] px-2.5"
+                  onClick={() => {
+                    setApPeriod(p.key);
+                    const today = new Date();
+                    if (p.key === "all") { setApDateFrom(""); setApDateTo(""); }
+                    else if (p.key === "today") { const d = format(today, "yyyy-MM-dd"); setApDateFrom(d); setApDateTo(d); }
+                    else if (p.key === "week") { setApDateFrom(format(startOfWeek(today, { weekStartsOn: 1 }), "yyyy-MM-dd")); setApDateTo(format(endOfWeek(today, { weekStartsOn: 1 }), "yyyy-MM-dd")); }
+                    else if (p.key === "month") { setApDateFrom(format(startOfMonth(today), "yyyy-MM-dd")); setApDateTo(format(endOfMonth(today), "yyyy-MM-dd")); }
+                    else if (p.key === "year") { setApDateFrom(format(startOfYear(today), "yyyy-MM-dd")); setApDateTo(format(endOfYear(today), "yyyy-MM-dd")); }
+                  }}
+                />
+              ))}
             </div>
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground">Até:</span>
-              <Input type="date" value={apDateTo} onChange={e => setApDateTo(e.target.value)} className="h-8 text-xs w-[140px]" />
-            </div>
-            {(apDateFrom || apDateTo) && (
-              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setApDateFrom(""); setApDateTo(""); }}>
-                Limpar datas
-              </Button>
+
+            {apPeriod === "custom" && (
+              <>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">De:</span>
+                  <Input type="date" value={apDateFrom} onChange={e => setApDateFrom(e.target.value)} className="h-8 text-xs w-[140px]" />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">Até:</span>
+                  <Input type="date" value={apDateTo} onChange={e => setApDateTo(e.target.value)} className="h-8 text-xs w-[140px]" />
+                </div>
+              </>
+            )}
+
+            {(apDateFrom || apDateTo) && apPeriod !== "custom" && (
+              <span className="text-[10px] text-muted-foreground">
+                {apDateFrom && formatDateBR(apDateFrom)} — {apDateTo && formatDateBR(apDateTo)}
+              </span>
             )}
           </div>
 
