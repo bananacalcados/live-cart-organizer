@@ -66,6 +66,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
   const [multiPaymentAmount, setMultiPaymentAmount] = useState("");
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string; cpf?: string; email?: string; whatsapp?: string; address?: string; cep?: string; city?: string; state?: string; age_range?: string; preferred_style?: string } | null>(null);
+  const [customerCashback, setCustomerCashback] = useState<{ code: string; amount: number; type: string; min_purchase: number; expiry_date: string } | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<CartItem[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -378,6 +379,37 @@ export function POSSalesView({ storeId, sellerId }: Props) {
     }
   };
 
+  // Lookup cashback from Zoppy when customer is selected
+  const lookupCashback = async (customer: { whatsapp?: string; cpf?: string; name?: string; email?: string }) => {
+    setCustomerCashback(null);
+    const phone = customer.whatsapp?.replace(/\D/g, '');
+    if (!phone) return;
+    try {
+      const { data } = await supabase
+        .from('zoppy_customers')
+        .select('coupon_code, coupon_amount, coupon_type, coupon_used, coupon_min_purchase, coupon_expiry_date')
+        .ilike('phone', `%${phone.slice(-8)}%`)
+        .eq('coupon_used', false)
+        .not('coupon_code', 'is', null)
+        .limit(1)
+        .maybeSingle();
+      if (data && data.coupon_code) {
+        const isExpired = data.coupon_expiry_date && new Date(data.coupon_expiry_date) < new Date();
+        if (!isExpired) {
+          setCustomerCashback({
+            code: data.coupon_code,
+            amount: data.coupon_amount || 0,
+            type: data.coupon_type || 'fixed_cart',
+            min_purchase: data.coupon_min_purchase || 0,
+            expiry_date: data.coupon_expiry_date || '',
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Cashback lookup error:', e);
+    }
+  };
+
   const finalizeSale = async () => {
     if (cart.length === 0) return;
     setFinalizingSale(true);
@@ -457,6 +489,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
   const resetSale = () => {
     setCart([]);
     setSelectedCustomer(null);
+    setCustomerCashback(null);
     setSelectedPayment("");
     setSelectedSeller("");
     setStep("scan");
@@ -734,7 +767,7 @@ export function POSSalesView({ storeId, sellerId }: Props) {
               {customerResults.length > 0 && !selectedCustomer && (
                 <div className="space-y-2">
                   {customerResults.map(c => (
-                    <div key={c.id} className="cursor-pointer rounded-lg border border-pos-orange/20 bg-pos-white/5 p-3 hover:border-pos-orange transition-all" onClick={() => setSelectedCustomer(c)}>
+                    <div key={c.id} className="cursor-pointer rounded-lg border border-pos-orange/20 bg-pos-white/5 p-3 hover:border-pos-orange transition-all" onClick={() => { setSelectedCustomer(c); lookupCashback(c); }}>
                       <p className="font-medium text-pos-white">{c.name || 'Sem nome'}</p>
                       <div className="flex gap-3 text-xs text-pos-white/50 mt-1">
                         {c.cpf && <span>CPF: {c.cpf}</span>}
@@ -754,10 +787,41 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                     <p className="font-semibold text-pos-white">{selectedCustomer.name}</p>
                     {selectedCustomer.cpf && <p className="text-sm text-pos-white/50">CPF: {selectedCustomer.cpf}</p>}
                   </div>
-                  <Button variant="ghost" size="sm" className="text-pos-white/70 hover:text-pos-orange hover:bg-pos-orange/10" onClick={() => { setSelectedCustomer(null); setCustomerResults([]); }}>Trocar</Button>
+                  <Button variant="ghost" size="sm" className="text-pos-white/70 hover:text-pos-orange hover:bg-pos-orange/10" onClick={() => { setSelectedCustomer(null); setCustomerResults([]); setCustomerCashback(null); }}>Trocar</Button>
                 </div>
               ) : (
                 <p className="text-xs text-pos-white/40">* Pule esta etapa para NFC-e sem identificação.</p>
+              )}
+
+              {/* Cashback Alert */}
+              {customerCashback && selectedCustomer && (
+                <div className="rounded-xl border-2 border-green-500/50 bg-green-500/10 p-4 animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
+                      <Tag className="h-6 w-6 text-green-400" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-green-400 text-lg">💰 CASHBACK DISPONÍVEL!</p>
+                      <p className="text-sm text-pos-white/80">
+                        Código: <span className="font-mono font-bold text-green-300">{customerCashback.code}</span>
+                      </p>
+                      <p className="text-sm text-pos-white/70">
+                        {customerCashback.type === 'percent' 
+                          ? `${customerCashback.amount}% de desconto` 
+                          : `R$ ${customerCashback.amount.toFixed(2)} de desconto`}
+                        {customerCashback.min_purchase > 0 && ` • Compra mín: R$ ${customerCashback.min_purchase.toFixed(2)}`}
+                      </p>
+                      {customerCashback.expiry_date && (
+                        <p className="text-xs text-pos-white/50 mt-1">
+                          Válido até: {new Date(customerCashback.expiry_date).toLocaleDateString('pt-BR')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-green-300/80 mt-2 text-center font-medium">
+                    ⬆️ Sugira ao cliente usar o cashback para comprar mais!
+                  </p>
+                </div>
               )}
             </div>
           )}
