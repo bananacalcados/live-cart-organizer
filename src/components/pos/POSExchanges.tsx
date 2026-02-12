@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { POSTinyProductPicker } from "./POSTinyProductPicker";
 
 interface Props {
   storeId: string;
@@ -24,6 +25,8 @@ interface ExchangeItem {
   sku: string;
   quantity: number;
   unit_price: number;
+  tiny_id?: number;
+  barcode?: string;
 }
 
 interface Exchange {
@@ -104,6 +107,44 @@ export function POSExchanges({ storeId }: Props) {
   const newTotal = newItems.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const differenceAmount = newTotal - returnedTotal;
 
+  const adjustStockInTiny = async (returned: ExchangeItem[], given: ExchangeItem[]) => {
+    const stockItems: { tiny_id: number; product_name: string; quantity: number; direction: "in" | "out" }[] = [];
+
+    // Returned items → stock IN (customer returned to store)
+    for (const item of returned) {
+      if (item.tiny_id && item.quantity > 0) {
+        stockItems.push({ tiny_id: item.tiny_id, product_name: item.product_name, quantity: item.quantity, direction: "in" });
+      }
+    }
+
+    // New items given → stock OUT (store gave to customer)
+    for (const item of given) {
+      if (item.tiny_id && item.quantity > 0) {
+        stockItems.push({ tiny_id: item.tiny_id, product_name: item.product_name, quantity: item.quantity, direction: "out" });
+      }
+    }
+
+    if (stockItems.length === 0) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-exchange-stock-adjust", {
+        body: { store_id: storeId, items: stockItems },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success("Estoque ajustado no Tiny automaticamente!");
+      } else {
+        const failed = data?.results?.filter((r: any) => !r.success) || [];
+        if (failed.length) {
+          toast.warning(`Estoque: ${failed.length} produto(s) com erro de ajuste`);
+        }
+      }
+    } catch (e: any) {
+      console.error("Stock adjust error:", e);
+      toast.error("Erro ao ajustar estoque no Tiny: " + e.message);
+    }
+  };
+
   const handleSave = async () => {
     if (returnedItems.every(i => !i.product_name.trim())) {
       toast.error("Adicione ao menos um produto devolvido");
@@ -119,13 +160,16 @@ export function POSExchanges({ storeId }: Props) {
         ? `VALE-${Date.now().toString(36).toUpperCase()}`
         : null;
 
+      const validReturnedItems = returnedItems.filter(i => i.product_name.trim());
+      const validNewItems = exchangeType !== "credit" ? newItems.filter(i => i.product_name.trim()) : [];
+
       const { error } = await supabase.from("pos_exchanges").insert({
         store_id: storeId,
         seller_id: selectedSeller || null,
         exchange_type: exchangeType,
-        returned_items: returnedItems.filter(i => i.product_name.trim()),
+        returned_items: validReturnedItems,
         returned_total: returnedTotal,
-        new_items: exchangeType !== "credit" ? newItems.filter(i => i.product_name.trim()) : [],
+        new_items: validNewItems,
         new_total: exchangeType !== "credit" ? newTotal : 0,
         difference_amount: exchangeType === "difference" ? differenceAmount : 0,
         difference_payment_method: exchangeType === "difference" ? diffPaymentMethod : null,
@@ -138,6 +182,10 @@ export function POSExchanges({ storeId }: Props) {
       } as any);
 
       if (error) throw error;
+
+      // Auto-adjust stock in Tiny
+      await adjustStockInTiny(validReturnedItems, validNewItems);
+
       toast.success("Troca registrada com sucesso!");
       setShowNew(false);
       resetForm();
@@ -160,10 +208,6 @@ export function POSExchanges({ storeId }: Props) {
     setCreditDays("30");
   };
 
-  const updateItem = (list: ExchangeItem[], setList: React.Dispatch<React.SetStateAction<ExchangeItem[]>>, idx: number, field: string, value: any) => {
-    setList(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
-  };
-
   const filtered = exchanges.filter(e => {
     if (statusFilter !== "all" && e.status !== statusFilter) return false;
     if (search) {
@@ -176,23 +220,31 @@ export function POSExchanges({ storeId }: Props) {
     return true;
   });
 
-  const ItemRow = ({ items, setItems, idx }: { items: ExchangeItem[]; setItems: React.Dispatch<React.SetStateAction<ExchangeItem[]>>; idx: number }) => (
-    <div className="grid grid-cols-[1fr_80px_60px_80px_32px] gap-2 items-end">
-      <div>
-        <Label className="text-pos-white/50 text-[10px]">Produto</Label>
-        <Input value={items[idx].product_name} onChange={e => updateItem(items, setItems, idx, "product_name", e.target.value)} placeholder="Nome ou SKU" className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
-      </div>
-      <div>
-        <Label className="text-pos-white/50 text-[10px]">SKU</Label>
-        <Input value={items[idx].sku} onChange={e => updateItem(items, setItems, idx, "sku", e.target.value)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
-      </div>
+  const ItemRow = ({ items, setItems, idx, labelPrefix }: { items: ExchangeItem[]; setItems: React.Dispatch<React.SetStateAction<ExchangeItem[]>>; idx: number; labelPrefix?: string }) => (
+    <div className="grid grid-cols-[1fr_60px_80px_32px] gap-2 items-end">
+      <POSTinyProductPicker
+        storeId={storeId}
+        label={labelPrefix || "Produto"}
+        value={items[idx].product_name}
+        placeholder="Buscar no Tiny..."
+        onSelect={(p) => {
+          setItems(prev => prev.map((item, i) => i === idx ? {
+            ...item,
+            product_name: p.product_name,
+            sku: p.sku,
+            unit_price: p.unit_price,
+            tiny_id: p.tiny_id,
+            barcode: p.barcode,
+          } : item));
+        }}
+      />
       <div>
         <Label className="text-pos-white/50 text-[10px]">Qtd</Label>
-        <Input type="number" value={items[idx].quantity} onChange={e => updateItem(items, setItems, idx, "quantity", parseInt(e.target.value) || 1)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
+        <Input type="number" value={items[idx].quantity} onChange={e => setItems(prev => prev.map((item, i) => i === idx ? { ...item, quantity: parseInt(e.target.value) || 1 } : item))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
       </div>
       <div>
         <Label className="text-pos-white/50 text-[10px]">Preço</Label>
-        <Input type="number" step="0.01" value={items[idx].unit_price} onChange={e => updateItem(items, setItems, idx, "unit_price", parseFloat(e.target.value) || 0)} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
+        <Input type="number" step="0.01" value={items[idx].unit_price} onChange={e => setItems(prev => prev.map((item, i) => i === idx ? { ...item, unit_price: parseFloat(e.target.value) || 0 } : item))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
       </div>
       <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} disabled={items.length <= 1}>
         <X className="h-3 w-3" />
@@ -337,7 +389,7 @@ export function POSExchanges({ storeId }: Props) {
               <div>
                 <Label className="text-pos-white text-sm font-bold mb-2 block">🔙 Produtos Devolvidos</Label>
                 <div className="space-y-2">
-                  {returnedItems.map((_, idx) => <ItemRow key={idx} items={returnedItems} setItems={setReturnedItems} idx={idx} />)}
+                  {returnedItems.map((_, idx) => <ItemRow key={idx} items={returnedItems} setItems={setReturnedItems} idx={idx} labelPrefix="Devolvido" />)}
                 </div>
                 <Button variant="ghost" className="mt-2 text-pos-orange text-xs gap-1" onClick={() => setReturnedItems(p => [...p, { product_name: "", sku: "", quantity: 1, unit_price: 0 }])}>
                   <Plus className="h-3 w-3" /> Adicionar Produto
@@ -352,7 +404,7 @@ export function POSExchanges({ storeId }: Props) {
                   <div>
                     <Label className="text-pos-white text-sm font-bold mb-2 block">📦 Novo(s) Produto(s)</Label>
                     <div className="space-y-2">
-                      {newItems.map((_, idx) => <ItemRow key={idx} items={newItems} setItems={setNewItems} idx={idx} />)}
+                      {newItems.map((_, idx) => <ItemRow key={idx} items={newItems} setItems={setNewItems} idx={idx} labelPrefix="Novo" />)}
                     </div>
                     <Button variant="ghost" className="mt-2 text-pos-orange text-xs gap-1" onClick={() => setNewItems(p => [...p, { product_name: "", sku: "", quantity: 1, unit_price: 0 }])}>
                       <Plus className="h-3 w-3" /> Adicionar Produto
@@ -426,7 +478,7 @@ export function POSExchanges({ storeId }: Props) {
 
               <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-12 gap-2" onClick={handleSave} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Registrar Troca
+                {saving ? "Registrando e ajustando estoque..." : "Registrar Troca"}
               </Button>
             </div>
           </DialogContent>
