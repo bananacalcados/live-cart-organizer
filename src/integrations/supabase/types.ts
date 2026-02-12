@@ -3196,6 +3196,124 @@ export type Database = {
         }
         Relationships: []
       }
+      tiny_accounts_payable: {
+        Row: {
+          categoria: string | null
+          competencia: string | null
+          created_at: string
+          data_emissao: string | null
+          data_pagamento: string | null
+          data_vencimento: string | null
+          historico: string | null
+          id: string
+          nome_fornecedor: string | null
+          nro_banco: string | null
+          numero_doc: string | null
+          observacoes: string | null
+          raw_data: Json | null
+          saldo: number | null
+          situacao: string | null
+          store_id: string
+          synced_at: string | null
+          tiny_conta_id: string
+          updated_at: string
+          valor: number | null
+          valor_pago: number | null
+        }
+        Insert: {
+          categoria?: string | null
+          competencia?: string | null
+          created_at?: string
+          data_emissao?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          historico?: string | null
+          id?: string
+          nome_fornecedor?: string | null
+          nro_banco?: string | null
+          numero_doc?: string | null
+          observacoes?: string | null
+          raw_data?: Json | null
+          saldo?: number | null
+          situacao?: string | null
+          store_id: string
+          synced_at?: string | null
+          tiny_conta_id: string
+          updated_at?: string
+          valor?: number | null
+          valor_pago?: number | null
+        }
+        Update: {
+          categoria?: string | null
+          competencia?: string | null
+          created_at?: string
+          data_emissao?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          historico?: string | null
+          id?: string
+          nome_fornecedor?: string | null
+          nro_banco?: string | null
+          numero_doc?: string | null
+          observacoes?: string | null
+          raw_data?: Json | null
+          saldo?: number | null
+          situacao?: string | null
+          store_id?: string
+          synced_at?: string | null
+          tiny_conta_id?: string
+          updated_at?: string
+          valor?: number | null
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiny_accounts_payable_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tiny_accounts_payable_sync_log: {
+        Row: {
+          completed_at: string | null
+          error_message: string | null
+          id: string
+          started_at: string
+          status: string
+          store_id: string | null
+          total_synced: number | null
+        }
+        Insert: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          store_id?: string | null
+          total_synced?: number | null
+        }
+        Update: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          store_id?: string | null
+          total_synced?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiny_accounts_payable_sync_log_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tiny_management_sync_log: {
         Row: {
           completed_at: string | null
