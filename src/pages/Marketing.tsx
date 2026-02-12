@@ -147,9 +147,28 @@ export default function Marketing() {
   const fetchCustomers = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.from('zoppy_customers').select('*').order('total_spent', { ascending: false }).limit(1000);
-      if (error) throw error;
-      setCustomers((data || []) as ZoppyCustomer[]);
+      // Fetch up to 10000 customers in batches to bypass the 1000-row default limit
+      let allCustomers: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      let keepFetching = true;
+      while (keepFetching) {
+        const { data, error } = await supabase
+          .from('zoppy_customers')
+          .select('*')
+          .order('total_spent', { ascending: false })
+          .range(from, from + batchSize - 1);
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allCustomers = allCustomers.concat(data);
+          from += batchSize;
+          if (data.length < batchSize) keepFetching = false;
+        } else {
+          keepFetching = false;
+        }
+        if (allCustomers.length >= 25000) keepFetching = false; // safety cap
+      }
+      setCustomers(allCustomers as ZoppyCustomer[]);
     } catch (err) { console.error(err); toast.error("Erro ao carregar clientes"); }
     finally { setIsLoading(false); }
   }, []);
@@ -236,16 +255,38 @@ export default function Marketing() {
       const headers = Object.keys(rows[0]);
       console.log('RFM Excel headers found:', headers);
 
-      const phoneCol = headers.find(h => /phone|telefone|whatsapp|celular|fone|tel\b/i.test(h));
-      const nameCol = headers.find(h => /^(name|nome|cliente|razao|fantasia|contato)$/i.test(h) || /first.?name|primeiro.?nome/i.test(h));
-      const lastNameCol = headers.find(h => /last.?name|sobrenome|ultimo.?nome/i.test(h));
-      const emailCol = headers.find(h => /email|e-mail|e_mail/i.test(h));
-      const cityCol = headers.find(h => /city|cidade|municipio/i.test(h));
-      const stateCol = headers.find(h => /state|estado|uf/i.test(h));
-      const ordersCol = headers.find(h => /orders|pedidos|compras|qtd|quantidade/i.test(h));
-      const spentCol = headers.find(h => /spent|gasto|total|valor|revenue|faturamento/i.test(h));
-      const lastPurchaseCol = headers.find(h => /last.?purchase|ultima.?compra|data.?ultima|last.?order/i.test(h));
-      const firstPurchaseCol = headers.find(h => /first.?purchase|primeira.?compra|data.?primeira|first.?order/i.test(h));
+      // Zoppy export columns: primeiro_nome, sobrenome, email, telefone, genero, data_nascimento,
+      // estado, perfil_rfm, data_ultima_compra, status_pedido, valor_da_ultima_compra,
+      // ticket_medio, total_compras, total_gasto, loja_ultima_compra
+      const phoneCol = headers.find(h => /^telefone$/i.test(h)) || headers.find(h => /phone|whatsapp|celular|fone|tel\b/i.test(h));
+      const nameCol = headers.find(h => /^primeiro_nome$/i.test(h)) || headers.find(h => /first.?name|nome|cliente/i.test(h));
+      const lastNameCol = headers.find(h => /^sobrenome$/i.test(h)) || headers.find(h => /last.?name|ultimo.?nome/i.test(h));
+      const emailCol = headers.find(h => /^email$/i.test(h)) || headers.find(h => /e-mail|e_mail/i.test(h));
+      const genderCol = headers.find(h => /^genero$/i.test(h)) || headers.find(h => /gender|sexo/i.test(h));
+      const birthCol = headers.find(h => /^data_nascimento$/i.test(h)) || headers.find(h => /birth|nascimento|aniversario/i.test(h));
+      const stateCol = headers.find(h => /^estado$/i.test(h)) || headers.find(h => /state|uf/i.test(h));
+      const cityCol = headers.find(h => /^cidade$/i.test(h)) || headers.find(h => /city|municipio/i.test(h));
+      const rfmProfileCol = headers.find(h => /^perfil_rfm$/i.test(h)) || headers.find(h => /rfm|segmento|segment|profile/i.test(h));
+      const lastPurchaseCol = headers.find(h => /^data_ultima_compra$/i.test(h)) || headers.find(h => /last.?purchase|ultima.?compra|data.?ultima/i.test(h));
+      const ordersCol = headers.find(h => /^total_compras$/i.test(h)) || headers.find(h => /orders|pedidos|compras|qtd/i.test(h));
+      const spentCol = headers.find(h => /^total_gasto$/i.test(h)) || headers.find(h => /spent|gasto|total|revenue|faturamento/i.test(h));
+      const avgTicketCol = headers.find(h => /^ticket_medio$/i.test(h)) || headers.find(h => /ticket.?medio|avg.?ticket/i.test(h));
+      const lastValueCol = headers.find(h => /^valor_da_ultima_compra$/i.test(h));
+
+      // Map Zoppy RFM profile slugs to Portuguese segment names
+      const RFM_SLUG_MAP: Record<string, string> = {
+        'champion': 'Campeões', 'champions': 'Campeões',
+        'loyal': 'Leais', 'loyals': 'Leais',
+        'possible-loyal': 'Potenciais Leais', 'potential-loyal': 'Potenciais Leais',
+        'new': 'Novos Clientes', 'new-customer': 'Novos Clientes', 'new-customers': 'Novos Clientes',
+        'promising': 'Promissores',
+        'need-attention': 'Precisam Atenção', 'needs-attention': 'Precisam Atenção',
+        'almost-sleeping': 'Quase Dormindo',
+        'at-risk': 'Em Risco', 'risk': 'Em Risco',
+        'cant-lose': 'Não Pode Perder', 'can-not-lose': 'Não Pode Perder',
+        'sleeping': 'Hibernando', 'hibernating': 'Hibernando',
+        'lost': 'Perdidos',
+      };
 
       if (!phoneCol && !emailCol) {
         setUploadStatus({ stage: 'error', progress: 100, detail: `Colunas: ${headers.join(', ')}`, error: 'Nenhuma coluna de telefone ou email detectada' });
@@ -253,6 +294,25 @@ export default function Marketing() {
       }
 
       const LOCAL_DDD = "33";
+      const parseDate = (raw: any): string | null => {
+        if (!raw) return null;
+        if (typeof raw === 'number') {
+          const d = new Date((raw - 25569) * 86400 * 1000);
+          return !isNaN(d.getTime()) ? d.toISOString() : null;
+        }
+        const str = String(raw);
+        // Try M/D/YY or M/D/YYYY format
+        const mdyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+        if (mdyMatch) {
+          const [, m, d, y] = mdyMatch;
+          const year = y.length === 2 ? (Number(y) > 50 ? `19${y}` : `20${y}`) : y;
+          const dt = new Date(`${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
+          return !isNaN(dt.getTime()) ? dt.toISOString() : null;
+        }
+        const dt = new Date(str);
+        return !isNaN(dt.getTime()) ? dt.toISOString() : null;
+      };
+
       const batch: any[] = [];
       for (const row of rows) {
         const phone = phoneCol ? String(row[phoneCol] || '').replace(/\D/g, '') : '';
@@ -284,31 +344,20 @@ export default function Marketing() {
 
         const totalOrders = ordersCol ? Number(row[ordersCol]) || 0 : 0;
         const totalSpent = spentCol ? Number(String(row[spentCol]).replace(/[R$\s.]/g, '').replace(',', '.')) || 0 : 0;
+        const avgTicket = avgTicketCol ? Number(String(row[avgTicketCol]).replace(/[R$\s.]/g, '').replace(',', '.')) || 0
+          : (totalOrders > 0 ? +(totalSpent / totalOrders).toFixed(2) : 0);
 
-        let lastPurchase: string | null = null;
-        if (lastPurchaseCol && row[lastPurchaseCol]) {
-          const raw = row[lastPurchaseCol];
-          if (typeof raw === 'number') {
-            // Excel serial date
-            const d = new Date((raw - 25569) * 86400 * 1000);
-            if (!isNaN(d.getTime())) lastPurchase = d.toISOString();
-          } else {
-            const d = new Date(String(raw));
-            if (!isNaN(d.getTime())) lastPurchase = d.toISOString();
-          }
+        const lastPurchase = parseDate(lastPurchaseCol ? row[lastPurchaseCol] : null);
+
+        // Map RFM segment from Zoppy slug to Portuguese
+        let rfmSegment: string | null = null;
+        if (rfmProfileCol && row[rfmProfileCol]) {
+          const slug = String(row[rfmProfileCol]).toLowerCase().trim();
+          rfmSegment = RFM_SLUG_MAP[slug] || slug;
         }
 
-        let firstPurchase: string | null = null;
-        if (firstPurchaseCol && row[firstPurchaseCol]) {
-          const raw = row[firstPurchaseCol];
-          if (typeof raw === 'number') {
-            const d = new Date((raw - 25569) * 86400 * 1000);
-            if (!isNaN(d.getTime())) firstPurchase = d.toISOString();
-          } else {
-            const d = new Date(String(raw));
-            if (!isNaN(d.getTime())) firstPurchase = d.toISOString();
-          }
-        }
+        const gender = genderCol ? String(row[genderCol] || '').substring(0, 1).toUpperCase() : null;
+        const birthDate = parseDate(birthCol ? row[birthCol] : null);
 
         batch.push({
           zoppy_id: zoppyId,
@@ -316,15 +365,17 @@ export default function Marketing() {
           last_name: lastName || null,
           phone: phone || null,
           email: email || null,
+          gender: gender || null,
+          birth_date: birthDate,
           city: city || null,
           state: state || null,
           region_type: regionType,
           ddd: ddd || null,
           total_orders: totalOrders,
           total_spent: totalSpent,
-          avg_ticket: totalOrders > 0 ? +(totalSpent / totalOrders).toFixed(2) : 0,
+          avg_ticket: avgTicket,
           last_purchase_at: lastPurchase,
-          first_purchase_at: firstPurchase,
+          rfm_segment: rfmSegment,
         });
       }
 
