@@ -394,7 +394,7 @@ export function POSWhatsApp({ storeId }: Props) {
   ) : null;
 
   return (
-    <div className="h-full flex flex-col bg-[#f0f2f5] dark:bg-[#111b21]">
+    <div className="h-full flex flex-col bg-[#f0f2f5] dark:bg-[#111b21] min-w-0 overflow-hidden">
       {/* WhatsApp-style Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-[#008069] dark:bg-[#202c33] flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -470,7 +470,7 @@ export function POSWhatsApp({ storeId }: Props) {
       )}
 
       {/* Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {!selectedPhone ? (
           <ConversationList
             conversations={conversations}
