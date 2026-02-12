@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart3, Home, TrendingUp, DollarSign, Package, ShoppingCart, Store,
-  ArrowDownRight, RefreshCw, Loader2, Box, ShoppingBag, Calendar
+  ArrowDownRight, RefreshCw, Loader2, Box, ShoppingBag, Calendar, Receipt,
+  AlertTriangle, CheckCircle2, Clock
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -86,6 +87,8 @@ export default function Management() {
   const [expeditionOrders, setExpeditionOrders] = useState<ExpeditionOrder[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [inventoryData, setInventoryData] = useState<InventorySummaryRow[]>([]);
+  const [accountsPayable, setAccountsPayable] = useState<any[]>([]);
+  const [syncingAP, setSyncingAP] = useState(false);
 
   const dateRange = useMemo(() => {
     const now = new Date();
@@ -105,19 +108,21 @@ export default function Management() {
     const endDate = dateRange.end.toISOString().split('T')[0];
     const iso = { start: dateRange.start.toISOString(), end: dateRange.end.toISOString() };
 
-    const [tinyRes, expRes, storesRes, invRes] = await Promise.all([
+    const [tinyRes, expRes, storesRes, invRes, apRes] = await Promise.all([
       supabase.from("tiny_synced_orders").select("*")
         .gte("order_date", startDate).lte("order_date", endDate),
       supabase.from("expedition_orders").select("id, shopify_order_name, total_price, subtotal_price, total_shipping, total_discount, financial_status, expedition_status, created_at, customer_name, shopify_created_at")
         .gte("shopify_created_at", iso.start).lte("shopify_created_at", iso.end),
       supabase.from("pos_stores").select("id, name").eq("is_active", true),
       supabase.rpc("get_inventory_summary"),
+      supabase.from("tiny_accounts_payable").select("*").order("data_vencimento", { ascending: true }),
     ]);
 
     setTinyOrders((tinyRes.data || []) as unknown as TinySyncedOrder[]);
     setExpeditionOrders(expRes.data || []);
     setStores(storesRes.data || []);
     setInventoryData((invRes.data || []) as unknown as InventorySummaryRow[]);
+    setAccountsPayable((apRes.data || []) as any[]);
     setLoading(false);
   };
 
@@ -292,6 +297,23 @@ export default function Management() {
       toast.error(`Erro sync Shopify: ${e.message}`);
     } finally {
       setSyncingShopify(false);
+    }
+  };
+
+  const syncAccountsPayable = async () => {
+    setSyncingAP(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('tiny-sync-accounts-payable', {
+        body: storeFilter !== 'all' ? { store_id: storeFilter } : {},
+      });
+      if (error) throw error;
+      const total = (data?.results || []).reduce((s: number, r: any) => s + (r.total_synced || 0), 0);
+      toast.success(`Contas a pagar sincronizadas: ${total} contas`);
+      fetchData();
+    } catch (e: any) {
+      toast.error(`Erro ao sincronizar contas a pagar: ${e.message}`);
+    } finally {
+      setSyncingAP(false);
     }
   };
 
@@ -502,6 +524,10 @@ export default function Management() {
                 <TabsTrigger value="products">Produtos</TabsTrigger>
                 <TabsTrigger value="stores">Lojas</TabsTrigger>
                 <TabsTrigger value="inventory">Estoque</TabsTrigger>
+                <TabsTrigger value="accounts_payable" className="gap-1">
+                  <Receipt className="h-3.5 w-3.5" />
+                  Contas a Pagar
+                </TabsTrigger>
               </TabsList>
 
               {/* Overview */}
@@ -659,6 +685,29 @@ export default function Management() {
                   ))}
                 </div>
               </TabsContent>
+
+              {/* Contas a Pagar */}
+              <TabsContent value="accounts_payable" className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Contas a Pagar — Todas as Contas Tiny</h3>
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={syncAccountsPayable}
+                    disabled={syncingAP || syncing}
+                    className="gap-1 h-8 text-xs"
+                  >
+                    {syncingAP ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    {syncingAP ? "Sincronizando..." : "Sincronizar Contas"}
+                  </Button>
+                </div>
+
+                <AccountsPayableContent
+                  accountsPayable={accountsPayable}
+                  stores={stores}
+                  storeFilter={storeFilter}
+                  fmt={fmt}
+                />
+              </TabsContent>
             </Tabs>
           </>
         )}
@@ -679,5 +728,153 @@ function KPICard({ title, value, icon: Icon, sub, variant }: { title: string; va
         {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
       </CardContent>
     </Card>
+  );
+}
+
+function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt }: {
+  accountsPayable: any[];
+  stores: StoreRow[];
+  storeFilter: string;
+  fmt: (v: number) => string;
+}) {
+  const filtered = storeFilter === "all"
+    ? accountsPayable
+    : accountsPayable.filter(ap => ap.store_id === storeFilter);
+
+  const openAP = filtered.filter(ap => ap.situacao === 'aberto' || ap.situacao === 'parcial');
+  const paidAP = filtered.filter(ap => ap.situacao === 'pago');
+  const overdueAP = openAP.filter(ap => ap.data_vencimento && new Date(ap.data_vencimento) < new Date());
+  const totalOpen = openAP.reduce((s: number, ap: any) => s + Number(ap.saldo || ap.valor || 0), 0);
+  const totalPaid = paidAP.reduce((s: number, ap: any) => s + Number(ap.valor_pago || ap.valor || 0), 0);
+  const totalOverdue = overdueAP.reduce((s: number, ap: any) => s + Number(ap.saldo || ap.valor || 0), 0);
+
+  const getStoreName = (storeId: string) => stores.find(s => s.id === storeId)?.name || "—";
+
+  const formatDateBR = (d: string | null) => {
+    if (!d) return "—";
+    const date = new Date(d + 'T12:00:00');
+    return date.toLocaleDateString("pt-BR");
+  };
+
+  const situacaoBadge = (sit: string) => {
+    switch (sit) {
+      case 'pago': return <Badge className="bg-primary text-primary-foreground text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Pago</Badge>;
+      case 'aberto': return <Badge variant="outline" className="text-[10px]"><Clock className="h-3 w-3 mr-1" />Aberto</Badge>;
+      case 'parcial': return <Badge className="bg-accent text-accent-foreground text-[10px]">Parcial</Badge>;
+      case 'cancelado': return <Badge variant="destructive" className="text-[10px]">Cancelado</Badge>;
+      default: return <Badge variant="secondary" className="text-[10px]">{sit}</Badge>;
+    }
+  };
+
+  const isOverdue = (ap: any) => ap.data_vencimento && new Date(ap.data_vencimento) < new Date() && (ap.situacao === 'aberto' || ap.situacao === 'parcial');
+
+  if (filtered.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          <Receipt className="h-10 w-10 mx-auto mb-3 opacity-40" />
+          <p className="text-sm">Nenhuma conta a pagar sincronizada.</p>
+          <p className="text-xs mt-1">Clique em "Sincronizar Contas" para importar do Tiny ERP.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KPICard title="Total em Aberto" value={fmt(totalOpen)} icon={Clock} variant={totalOpen > 0 ? "destructive" : undefined} />
+        <KPICard title="Vencidas" value={fmt(totalOverdue)} icon={AlertTriangle} variant="destructive" sub={`${overdueAP.length} contas`} />
+        <KPICard title="Total Pago" value={fmt(totalPaid)} icon={CheckCircle2} sub={`${paidAP.length} contas`} />
+        <KPICard title="Total de Contas" value={filtered.length.toString()} icon={Receipt} />
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Contas em Aberto e Vencidas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {openAP.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-6">Nenhuma conta em aberto 🎉</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Fornecedor</TableHead>
+                    <TableHead className="text-xs">Loja</TableHead>
+                    <TableHead className="text-xs">Nº Doc</TableHead>
+                    <TableHead className="text-xs">Vencimento</TableHead>
+                    <TableHead className="text-xs text-right">Valor</TableHead>
+                    <TableHead className="text-xs text-right">Saldo</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">Categoria</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {openAP.sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '')).map((ap: any) => (
+                    <TableRow key={ap.id} className={isOverdue(ap) ? "bg-destructive/5" : ""}>
+                      <TableCell className="text-xs font-medium max-w-[200px] truncate">{ap.nome_fornecedor || "—"}</TableCell>
+                      <TableCell className="text-xs">{getStoreName(ap.store_id)}</TableCell>
+                      <TableCell className="text-xs">{ap.numero_doc || "—"}</TableCell>
+                      <TableCell className="text-xs">
+                        <span className={isOverdue(ap) ? "text-destructive font-bold" : ""}>
+                          {formatDateBR(ap.data_vencimento)}
+                        </span>
+                        {isOverdue(ap) && <AlertTriangle className="h-3 w-3 inline ml-1 text-destructive" />}
+                      </TableCell>
+                      <TableCell className="text-xs text-right">{fmt(Number(ap.valor || 0))}</TableCell>
+                      <TableCell className="text-xs text-right font-semibold">{fmt(Number(ap.saldo || 0))}</TableCell>
+                      <TableCell>{situacaoBadge(ap.situacao)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{ap.categoria || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Contas Pagas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {paidAP.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-6">Nenhuma conta paga registrada.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Fornecedor</TableHead>
+                    <TableHead className="text-xs">Loja</TableHead>
+                    <TableHead className="text-xs">Nº Doc</TableHead>
+                    <TableHead className="text-xs">Pagamento</TableHead>
+                    <TableHead className="text-xs text-right">Valor</TableHead>
+                    <TableHead className="text-xs text-right">Pago</TableHead>
+                    <TableHead className="text-xs">Categoria</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paidAP.slice(0, 50).map((ap: any) => (
+                    <TableRow key={ap.id}>
+                      <TableCell className="text-xs font-medium max-w-[200px] truncate">{ap.nome_fornecedor || "—"}</TableCell>
+                      <TableCell className="text-xs">{getStoreName(ap.store_id)}</TableCell>
+                      <TableCell className="text-xs">{ap.numero_doc || "—"}</TableCell>
+                      <TableCell className="text-xs">{formatDateBR(ap.data_pagamento)}</TableCell>
+                      <TableCell className="text-xs text-right">{fmt(Number(ap.valor || 0))}</TableCell>
+                      <TableCell className="text-xs text-right font-semibold">{fmt(Number(ap.valor_pago || 0))}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{ap.categoria || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
   );
 }

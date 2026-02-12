@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.shopify-create-order]
 verify_jwt = false
+
+[functions.tiny-sync-accounts-payable]
+verify_jwt = false
