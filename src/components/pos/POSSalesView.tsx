@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { POSCustomerForm } from "./POSCustomerForm";
+import { POSBarcodeScanner } from "./POSBarcodeScanner";
 import { POSSellerGate } from "./POSSellerGate";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -1341,13 +1342,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               <Camera className="h-5 w-5 text-pos-orange" /> Scanner de Código de Barras
             </DialogTitle>
           </DialogHeader>
-          <div className="aspect-video bg-pos-white/5 rounded-xl flex items-center justify-center border border-pos-orange/10">
-            <div className="text-center text-pos-white/40">
-              <Camera className="h-12 w-12 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Câmera será ativada aqui</p>
-            </div>
-          </div>
-          <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => setShowCamera(false)}>Fechar</Button>
+          {showCamera && (
+            <POSBarcodeScanner
+              onScan={(code) => {
+                setBarcodeInput(code);
+                handleBarcodeScan(code);
+              }}
+              onClose={() => setShowCamera(false)}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
