@@ -637,58 +637,58 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       {/* Notification Dashboard */}
       {step === "scan" && (
-        <div className="flex items-stretch gap-3 px-4 pt-3 pb-1">
+        <div className="flex items-stretch gap-2 md:gap-3 px-3 md:px-4 pt-2 md:pt-3 pb-1 overflow-x-auto scrollbar-hide">
           <div className={cn(
-            "flex-1 flex items-center gap-3 rounded-xl p-3 border transition-all",
+            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[120px]",
             unreadWhatsApp > 0
               ? "bg-green-500/10 border-green-500/30"
               : "bg-gray-100 border-gray-200"
           )}>
-            <div className={cn("p-2 rounded-lg", unreadWhatsApp > 0 ? "bg-green-500/20" : "bg-gray-200")}>
-              <Phone className={cn("h-5 w-5", unreadWhatsApp > 0 ? "text-green-600" : "text-gray-400")} />
+            <div className={cn("p-1.5 md:p-2 rounded-lg", unreadWhatsApp > 0 ? "bg-green-500/20" : "bg-gray-200")}>
+              <Phone className={cn("h-4 w-4 md:h-5 md:w-5", unreadWhatsApp > 0 ? "text-green-600" : "text-gray-400")} />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">WhatsApp</p>
-              <p className={cn("text-lg font-bold leading-tight", unreadWhatsApp > 0 ? "text-green-600" : "text-gray-400")}>
+              <p className={cn("text-base md:text-lg font-bold leading-tight", unreadWhatsApp > 0 ? "text-green-600" : "text-gray-400")}>
                 {unreadWhatsApp}
               </p>
-              <p className="text-[10px] text-gray-400">sem resposta</p>
+              <p className="text-[10px] text-gray-400 hidden sm:block">sem resposta</p>
             </div>
           </div>
 
           <div className={cn(
-            "flex-1 flex items-center gap-3 rounded-xl p-3 border transition-all",
+            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[120px]",
             pendingReturns > 0
               ? "bg-orange-50 border-orange-300"
               : "bg-gray-100 border-gray-200"
           )}>
-            <div className={cn("p-2 rounded-lg", pendingReturns > 0 ? "bg-orange-100" : "bg-gray-200")}>
-              <RotateCcw className={cn("h-5 w-5", pendingReturns > 0 ? "text-orange-600" : "text-gray-400")} />
+            <div className={cn("p-1.5 md:p-2 rounded-lg", pendingReturns > 0 ? "bg-orange-100" : "bg-gray-200")}>
+              <RotateCcw className={cn("h-4 w-4 md:h-5 md:w-5", pendingReturns > 0 ? "text-orange-600" : "text-gray-400")} />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Trocas</p>
-              <p className={cn("text-lg font-bold leading-tight", pendingReturns > 0 ? "text-orange-600" : "text-gray-400")}>
+              <p className={cn("text-base md:text-lg font-bold leading-tight", pendingReturns > 0 ? "text-orange-600" : "text-gray-400")}>
                 {pendingReturns}
               </p>
-              <p className="text-[10px] text-gray-400">solicitações</p>
+              <p className="text-[10px] text-gray-400 hidden sm:block">solicitações</p>
             </div>
           </div>
 
           <div className={cn(
-            "flex-1 flex items-center gap-3 rounded-xl p-3 border transition-all",
+            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[120px]",
             unreadTeamChat > 0
               ? "bg-yellow-50 border-yellow-400"
               : "bg-gray-100 border-gray-200"
           )}>
-            <div className={cn("p-2 rounded-lg", unreadTeamChat > 0 ? "bg-yellow-100" : "bg-gray-200")}>
-              <MessageSquare className={cn("h-5 w-5", unreadTeamChat > 0 ? "text-yellow-600" : "text-gray-400")} />
+            <div className={cn("p-1.5 md:p-2 rounded-lg", unreadTeamChat > 0 ? "bg-yellow-100" : "bg-gray-200")}>
+              <MessageSquare className={cn("h-4 w-4 md:h-5 md:w-5", unreadTeamChat > 0 ? "text-yellow-600" : "text-gray-400")} />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Chat Equipe</p>
-              <p className={cn("text-lg font-bold leading-tight", unreadTeamChat > 0 ? "text-yellow-600" : "text-gray-400")}>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Chat</p>
+              <p className={cn("text-base md:text-lg font-bold leading-tight", unreadTeamChat > 0 ? "text-yellow-600" : "text-gray-400")}>
                 {unreadTeamChat}
               </p>
-              <p className="text-[10px] text-gray-400">não lidas</p>
+              <p className="text-[10px] text-gray-400 hidden sm:block">não lidas</p>
             </div>
           </div>
         </div>
@@ -715,11 +715,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       )}
 
       {/* Seller selector + Step Navigation */}
-      <div className="flex items-center gap-1 p-3 border-b border-gray-200 bg-white">
+      <div className="flex items-center gap-1 p-2 md:p-3 border-b border-gray-200 bg-white overflow-x-auto scrollbar-hide">
         {/* Seller */}
-        <div className="mr-3">
+        <div className="mr-2 md:mr-3 flex-shrink-0">
           <Select value={selectedSeller} onValueChange={setSelectedSeller}>
-            <SelectTrigger className="h-8 w-36 bg-gray-50 border-gray-300 text-gray-800 text-xs">
+            <SelectTrigger className="h-8 w-28 md:w-36 bg-gray-50 border-gray-300 text-gray-800 text-xs">
               <Users className="h-3 w-3 mr-1 text-orange-500" />
               <SelectValue placeholder="Vendedora" />
             </SelectTrigger>
@@ -739,7 +739,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               key={s.id}
               onClick={() => setStep(s.id)}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                "flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0",
                 isActive && "bg-pos-orange text-black shadow-md shadow-pos-orange/30",
                 isDone && "bg-orange-100 text-orange-600",
                 !isActive && !isDone && "text-gray-500 hover:bg-gray-100"
@@ -752,29 +752,29 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         })}
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Left: Step Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {step === "scan" && (
             <>
-              <div className="p-4 border-b border-pos-orange/10 bg-pos-black">
-                <div className="flex gap-2">
+              <div className="p-2 md:p-4 border-b border-pos-orange/10 bg-pos-black">
+                <div className="flex gap-1.5 md:gap-2">
                   <div className="relative flex-1">
                     <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-orange" />
                     <Input
-                      placeholder="Bipe o código de barras, SKU ou nome do produto..."
+                      placeholder="Código, SKU ou nome..."
                       value={barcodeInput}
                       onChange={(e) => setBarcodeInput(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleBarcodeScan()}
-                      className="pl-10 text-lg h-12 bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange focus:ring-pos-orange/30"
+                      className="pl-10 text-sm md:text-lg h-10 md:h-12 bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange focus:ring-pos-orange/30"
                       autoFocus
                     />
                   </div>
-                  <Button variant="outline" size="icon" className="h-12 w-12 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={() => setShowCamera(true)}>
+                  <Button variant="outline" size="icon" className="h-10 w-10 md:h-12 md:w-12 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={() => setShowCamera(true)}>
                     <Camera className="h-5 w-5" />
                   </Button>
-                  <Button className="h-12 px-6 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => handleBarcodeScan()} disabled={searching}>
-                    {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-4 w-4 mr-2" /> Buscar</>}
+                  <Button className="h-10 md:h-12 px-3 md:px-6 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => handleBarcodeScan()} disabled={searching}>
+                    {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
@@ -1204,8 +1204,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           )}
         </div>
 
-        {/* Right: Cart Summary */}
-        <div className="w-[280px] border-l border-pos-orange/20 bg-pos-black flex flex-col">
+        {/* Right: Cart Summary (desktop only) */}
+        <div className="hidden md:flex w-[280px] border-l border-pos-orange/20 bg-pos-black flex-col">
           <div className="p-3 border-b border-pos-orange/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1291,6 +1291,45 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               )}
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* Mobile: Fixed bottom cart bar */}
+      <div className="md:hidden flex-shrink-0 border-t border-pos-orange/20 bg-pos-black p-2 safe-area-pb">
+        <div className="flex items-center gap-3">
+          {selectedSeller && (
+            <div className="flex items-center gap-1 text-[10px] text-pos-white/50">
+              <Users className="h-3 w-3" /> {sellers.find(s => s.id === selectedSeller)?.name}
+            </div>
+          )}
+          <div className="flex-1" />
+          <div className="text-right mr-2">
+            <p className="text-[10px] text-pos-white/50">Subtotal</p>
+            <p className="font-bold text-pos-white text-sm">Total <span className="text-pos-orange">R$ {totalWithDiscount.toFixed(2)}</span></p>
+          </div>
+          <Button
+            className="h-10 px-4 text-sm gap-1 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
+            disabled={cart.length === 0 || finalizingSale}
+            onClick={() => {
+              if (step === "payment") {
+                finalizeSale();
+              } else if (step === "invoice") {
+                resetSale();
+              } else if (stepIndex < steps.length - 1) {
+                setStep(steps[stepIndex + 1].id);
+              }
+            }}
+          >
+            {finalizingSale ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : step === "payment" ? (
+              <><Check className="h-4 w-4" /> Finalizar</>
+            ) : step === "invoice" ? (
+              <><ShoppingCart className="h-4 w-4" /> Nova</>
+            ) : (
+              <>Avançar <ChevronRight className="h-4 w-4" /></>
+            )}
+          </Button>
         </div>
       </div>
 
