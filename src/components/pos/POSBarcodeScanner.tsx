@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Camera, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -12,53 +12,85 @@ export function POSBarcodeScanner({ onScan, onClose }: POSBarcodeScannerProps) {
   const html5QrCodeRef = useRef<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(true);
+  const scannedRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  // Stable refs for callbacks to avoid re-triggering useEffect
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const stopScanner = useCallback(async () => {
+    const scanner = html5QrCodeRef.current;
+    if (!scanner) return;
+    html5QrCodeRef.current = null;
+    try {
+      const state = scanner.getState?.();
+      // 2 = SCANNING, 3 = PAUSED
+      if (state === 2 || state === 3) {
+        await scanner.stop();
+      }
+    } catch {
+      // ignore stop errors
+    }
+    try {
+      scanner.clear();
+    } catch {
+      // ignore clear errors
+    }
+  }, []);
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
+    scannedRef.current = false;
+    let cancelled = false;
 
     const startScanner = async () => {
       try {
         const { Html5Qrcode } = await import("html5-qrcode");
+        if (cancelled || !mountedRef.current || !scannerRef.current) return;
 
-        if (!mounted || !scannerRef.current) return;
-
-        const scannerId = "pos-barcode-scanner";
-        // Ensure the element exists
-        if (!document.getElementById(scannerId)) {
-          const div = document.createElement("div");
-          div.id = scannerId;
-          scannerRef.current.appendChild(div);
-        }
+        const scannerId = "pos-barcode-scanner-" + Date.now();
+        const div = document.createElement("div");
+        div.id = scannerId;
+        scannerRef.current.appendChild(div);
 
         const scanner = new Html5Qrcode(scannerId);
         html5QrCodeRef.current = scanner;
 
         await scanner.start(
           { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 280, height: 120 },
-            aspectRatio: 1.5,
-          },
+          { fps: 10, qrbox: { width: 280, height: 120 }, aspectRatio: 1.5 },
           (decodedText: string) => {
-            // On successful scan
-            onScan(decodedText);
-            scanner.stop().catch(() => {});
-            onClose();
+            if (scannedRef.current || !mountedRef.current) return;
+            scannedRef.current = true;
+
+            // Stop scanner first, then notify parent after a tick
+            stopScanner().finally(() => {
+              if (mountedRef.current) {
+                onScanRef.current(decodedText);
+              }
+              // Delay close to let React process the scan result
+              setTimeout(() => {
+                onCloseRef.current();
+              }, 100);
+            });
           },
           () => {
-            // Ignore scan failures (no code found in frame)
+            // no code in frame – ignore
           }
         );
 
-        if (mounted) setStarting(false);
+        if (mountedRef.current && !cancelled) setStarting(false);
       } catch (err: any) {
         console.error("Camera error:", err);
-        if (mounted) {
+        if (mountedRef.current && !cancelled) {
           setStarting(false);
-          if (err?.toString?.().includes("NotAllowedError")) {
+          const msg = err?.toString?.() || "";
+          if (msg.includes("NotAllowedError")) {
             setError("Permissão da câmera negada. Habilite nas configurações do navegador.");
-          } else if (err?.toString?.().includes("NotFoundError")) {
+          } else if (msg.includes("NotFoundError")) {
             setError("Nenhuma câmera encontrada neste dispositivo.");
           } else {
             setError("Não foi possível iniciar a câmera. Verifique as permissões.");
@@ -70,14 +102,11 @@ export function POSBarcodeScanner({ onScan, onClose }: POSBarcodeScannerProps) {
     startScanner();
 
     return () => {
-      mounted = false;
-      if (html5QrCodeRef.current) {
-        html5QrCodeRef.current.stop().catch(() => {});
-        html5QrCodeRef.current.clear().catch(() => {});
-        html5QrCodeRef.current = null;
-      }
+      cancelled = true;
+      mountedRef.current = false;
+      stopScanner();
     };
-  }, [onScan, onClose]);
+  }, []); // no deps – start once only
 
   return (
     <div className="space-y-3">
@@ -98,7 +127,7 @@ export function POSBarcodeScanner({ onScan, onClose }: POSBarcodeScannerProps) {
               </div>
             </div>
           )}
-          <div ref={scannerRef} className="w-full [&_video]:!rounded-xl [&_#pos-barcode-scanner]:!border-0" />
+          <div ref={scannerRef} className="w-full [&_video]:!rounded-xl [&_video]:!object-cover" />
         </div>
       )}
       <p className="text-xs text-center text-pos-white/40">Aponte a câmera para o código de barras do produto</p>
