@@ -195,36 +195,27 @@ serve(async (req) => {
       console.log(`Starting sync from page ${startPage}, max ${maxPages} pages...`);
 
       while (hasMore && pagesProcessed < maxPages) {
-        // Try multiple date formats — Zoppy API is unstable with date params
-        const dateParams = [
-          'after=2020-01-01T00:00:00Z',
-          'after=2020-01-01',
-          '',  // no date filter as fallback
-        ];
+        const url = `${ZOPPY_BASE_URL}/customers?page=${page}&limit=100&after=2020-01-01T00:00:00.000Z`;
+        console.log(`Fetching page ${page}: ${url}`);
         
         let res: Response | null = null;
         let lastError = '';
         
-        for (const dp of dateParams) {
-          const separator = dp ? '&' : '';
-          const url = `${ZOPPY_BASE_URL}/customers?page=${page}&limit=100${separator}${dp}`;
-          console.log(`Fetching page ${page} with params: ${dp || 'none'}...`);
+        try {
+          res = await fetchWithRetry(url, {
+            headers: { 'Authorization': `Bearer ${zoppyToken}`, 'Content-Type': 'application/json' },
+          });
           
-          try {
-            res = await fetchWithRetry(url, {
-              headers: { 'Authorization': `Bearer ${zoppyToken}`, 'Content-Type': 'application/json' },
-            });
-            
-            if (res.ok) break;
-            
-            lastError = `Status ${res.status}`;
-            console.warn(`Zoppy returned ${res.status} with params "${dp}", trying next format...`);
-            res = null;
-          } catch (err) {
-            lastError = err.message;
-            console.warn(`Fetch failed with params "${dp}": ${err.message}`);
+          if (!res.ok) {
+            const text = await res.text();
+            lastError = `Status ${res.status}: ${text}`;
+            console.error(`Zoppy error ${res.status}: ${text}`);
             res = null;
           }
+        } catch (err) {
+          lastError = err.message;
+          console.error(`Fetch failed: ${err.message}`);
+          res = null;
         }
 
         if (!res || !res.ok) {
