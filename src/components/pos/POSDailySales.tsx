@@ -130,6 +130,17 @@ export function POSDailySales({ storeId }: Props) {
         }
       }
 
+      // Look up tiny_seller_id for the seller
+      let tinySellerId: string | undefined;
+      if (sale.seller_id) {
+        const { data: sellerData } = await supabase
+          .from("pos_sellers")
+          .select("tiny_seller_id")
+          .eq("id", sale.seller_id)
+          .maybeSingle();
+        tinySellerId = sellerData?.tiny_seller_id || undefined;
+      }
+
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-create-sale`, {
         method: "POST",
         headers: {
@@ -140,6 +151,7 @@ export function POSDailySales({ storeId }: Props) {
         body: JSON.stringify({
           store_id: storeId,
           seller_id: sale.seller_id || undefined,
+          tiny_seller_id: tinySellerId,
           customer,
           items: items.map((item: any) => ({
             tiny_id: item.tiny_product_id,
