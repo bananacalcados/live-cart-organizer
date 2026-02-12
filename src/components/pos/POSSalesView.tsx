@@ -218,14 +218,14 @@ export function POSSalesView({ storeId, sellerId }: Props) {
 
   // Auto-search with debounce when typing
   useEffect(() => {
-    if (!barcodeInput.trim() || barcodeInput.trim().length < 2) {
+    if (!barcodeInput.trim() || barcodeInput.trim().length < 3) {
       setSearchResults([]);
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       handleBarcodeScan(barcodeInput.trim());
-    }, 400);
+    }, 600);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [barcodeInput, storeId]);
 
@@ -380,29 +380,51 @@ export function POSSalesView({ storeId, sellerId }: Props) {
     }
   };
 
-  // Lookup cashback from Zoppy when customer is selected
+  // Lookup cashback from Zoppy AND internal cashback system
   const lookupCashback = async (customer: { whatsapp?: string; cpf?: string; name?: string; email?: string }) => {
     setCustomerCashback(null);
     const phone = customer.whatsapp?.replace(/\D/g, '');
     if (!phone) return;
     try {
-      const { data } = await supabase
-        .from('zoppy_customers')
-        .select('coupon_code, coupon_amount, coupon_type, coupon_used, coupon_min_purchase, coupon_expiry_date')
-        .ilike('phone', `%${phone.slice(-8)}%`)
-        .eq('coupon_used', false)
-        .not('coupon_code', 'is', null)
-        .limit(1)
-        .maybeSingle();
-      if (data && data.coupon_code) {
-        const isExpired = data.coupon_expiry_date && new Date(data.coupon_expiry_date) < new Date();
+      // Check both sources in parallel
+      const [zoppyRes, internalRes] = await Promise.all([
+        supabase
+          .from('zoppy_customers')
+          .select('coupon_code, coupon_amount, coupon_type, coupon_used, coupon_min_purchase, coupon_expiry_date')
+          .ilike('phone', `%${phone.slice(-8)}%`)
+          .eq('coupon_used', false)
+          .not('coupon_code', 'is', null)
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('internal_cashback')
+          .select('coupon_code, cashback_amount, min_purchase, expires_at')
+          .ilike('customer_phone', `%${phone.slice(-8)}%`)
+          .eq('is_used', false)
+          .gte('expires_at', new Date().toISOString())
+          .order('cashback_amount', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      // Prefer internal cashback (higher priority), fallback to Zoppy
+      if (internalRes.data) {
+        setCustomerCashback({
+          code: internalRes.data.coupon_code,
+          amount: internalRes.data.cashback_amount,
+          type: 'fixed_cart',
+          min_purchase: internalRes.data.min_purchase,
+          expiry_date: internalRes.data.expires_at,
+        });
+      } else if (zoppyRes.data && zoppyRes.data.coupon_code) {
+        const isExpired = zoppyRes.data.coupon_expiry_date && new Date(zoppyRes.data.coupon_expiry_date) < new Date();
         if (!isExpired) {
           setCustomerCashback({
-            code: data.coupon_code,
-            amount: data.coupon_amount || 0,
-            type: data.coupon_type || 'fixed_cart',
-            min_purchase: data.coupon_min_purchase || 0,
-            expiry_date: data.coupon_expiry_date || '',
+            code: zoppyRes.data.coupon_code,
+            amount: zoppyRes.data.coupon_amount || 0,
+            type: zoppyRes.data.coupon_type || 'fixed_cart',
+            min_purchase: zoppyRes.data.coupon_min_purchase || 0,
+            expiry_date: zoppyRes.data.coupon_expiry_date || '',
           });
         }
       }

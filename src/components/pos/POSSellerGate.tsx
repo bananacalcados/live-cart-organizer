@@ -55,59 +55,48 @@ export function POSSellerGate({ storeId, sellers, onSellerSelected }: Props) {
       const weekStart = startOfWeek(now, { weekStartsOn: 1 }).toISOString();
       const weekEnd = endOfWeek(now, { weekStartsOn: 1 }).toISOString();
 
-      // Fetch today's sales for this seller
-      const { data: todaySales } = await supabase
-        .from('pos_sales')
-        .select('total, id')
-        .eq('store_id', storeId)
-        .eq('seller_id', sellerId)
-        .gte('created_at', dayStart)
-        .lte('created_at', dayEnd)
-        .neq('status', 'cancelled');
+      // Run ALL queries in parallel
+      const [todaySalesRes, weekSalesRes, allWeekSalesRes, gamRes, allGamRes] = await Promise.all([
+        supabase.from('pos_sales').select('total, id').eq('store_id', storeId).eq('seller_id', sellerId)
+          .gte('created_at', dayStart).lte('created_at', dayEnd).neq('status', 'cancelled'),
+        supabase.from('pos_sales').select('total, id').eq('store_id', storeId).eq('seller_id', sellerId)
+          .gte('created_at', weekStart).lte('created_at', weekEnd).neq('status', 'cancelled'),
+        supabase.from('pos_sales').select('total, seller_id, id').eq('store_id', storeId)
+          .gte('created_at', weekStart).lte('created_at', weekEnd).neq('status', 'cancelled'),
+        supabase.from('pos_gamification').select('weekly_points, total_points')
+          .eq('seller_id', sellerId).eq('store_id', storeId).maybeSingle(),
+        supabase.from('pos_gamification').select('seller_id, weekly_points')
+          .eq('store_id', storeId).order('weekly_points', { ascending: false }),
+      ]);
 
-      // Fetch today's items for this seller
-      const todaySaleIds = (todaySales || []).map(s => s.id);
-      let todayItemsCount = 0;
-      if (todaySaleIds.length > 0) {
-        const { data: items } = await supabase
-          .from('pos_sale_items')
-          .select('quantity')
-          .in('sale_id', todaySaleIds);
-        todayItemsCount = (items || []).reduce((s, i) => s + (i.quantity || 0), 0);
-      }
+      const todaySales = todaySalesRes.data || [];
+      const weekSales = weekSalesRes.data || [];
+      const allWeekSales = allWeekSalesRes.data || [];
 
-      // Fetch week sales for this seller
-      const { data: weekSales } = await supabase
-        .from('pos_sales')
-        .select('total, id')
-        .eq('store_id', storeId)
-        .eq('seller_id', sellerId)
-        .gte('created_at', weekStart)
-        .lte('created_at', weekEnd)
-        .neq('status', 'cancelled');
+      // Fetch items in parallel (only if there are sales)
+      const todaySaleIds = todaySales.map(s => s.id);
+      const weekSaleIds = weekSales.map(s => s.id);
+      const allSaleIds = allWeekSales.map(s => s.id).slice(0, 500);
 
-      const weekSaleIds = (weekSales || []).map(s => s.id);
-      let weekItemsCount = 0;
-      if (weekSaleIds.length > 0) {
-        const { data: items } = await supabase
-          .from('pos_sale_items')
-          .select('quantity')
-          .in('sale_id', weekSaleIds);
-        weekItemsCount = (items || []).reduce((s, i) => s + (i.quantity || 0), 0);
-      }
+      const [todayItemsRes, weekItemsRes, allItemsRes] = await Promise.all([
+        todaySaleIds.length > 0
+          ? supabase.from('pos_sale_items').select('quantity').in('sale_id', todaySaleIds)
+          : Promise.resolve({ data: [] }),
+        weekSaleIds.length > 0
+          ? supabase.from('pos_sale_items').select('quantity').in('sale_id', weekSaleIds)
+          : Promise.resolve({ data: [] }),
+        allSaleIds.length > 0
+          ? supabase.from('pos_sale_items').select('quantity').in('sale_id', allSaleIds)
+          : Promise.resolve({ data: [] }),
+      ]);
 
-      // Fetch ALL sellers' week sales for team averages
-      const { data: allWeekSales } = await supabase
-        .from('pos_sales')
-        .select('total, seller_id, id')
-        .eq('store_id', storeId)
-        .gte('created_at', weekStart)
-        .lte('created_at', weekEnd)
-        .neq('status', 'cancelled');
+      const todayItemsCount = (todayItemsRes.data || []).reduce((s: number, i: any) => s + (i.quantity || 0), 0);
+      const weekItemsCount = (weekItemsRes.data || []).reduce((s: number, i: any) => s + (i.quantity || 0), 0);
+      const allItemsCount = (allItemsRes.data || []).reduce((s: number, i: any) => s + (i.quantity || 0), 0);
 
       // Group by seller for averages
       const sellerGroups: Record<string, { total: number; count: number }> = {};
-      for (const sale of (allWeekSales || [])) {
+      for (const sale of allWeekSales) {
         if (!sale.seller_id) continue;
         if (!sellerGroups[sale.seller_id]) sellerGroups[sale.seller_id] = { total: 0, count: 0 };
         sellerGroups[sale.seller_id].total += parseFloat(String(sale.total || 0));
@@ -117,56 +106,30 @@ export function POSSellerGate({ storeId, sellers, onSellerSelected }: Props) {
       const activeSellers = Object.keys(sellerGroups).length || 1;
       const teamTotalTicket = Object.values(sellerGroups).reduce((s, g) => s + (g.count > 0 ? g.total / g.count : 0), 0);
       const teamAvgTicket = teamTotalTicket / activeSellers;
-
-      // Items per sale for team
-      const allSaleIds = (allWeekSales || []).map(s => s.id);
-      let allItemsCount = 0;
-      if (allSaleIds.length > 0) {
-        const { data: allItems } = await supabase
-          .from('pos_sale_items')
-          .select('quantity')
-          .in('sale_id', allSaleIds.slice(0, 500)); // limit
-        allItemsCount = (allItems || []).reduce((s, i) => s + (i.quantity || 0), 0);
-      }
       const teamAvgItems = allSaleIds.length > 0 ? allItemsCount / allSaleIds.length : 0;
 
-      const sellerWeekTotal = (weekSales || []).reduce((s, sale) => s + parseFloat(String(sale.total || 0)), 0);
-      const sellerWeekCount = (weekSales || []).length;
+      const sellerWeekTotal = weekSales.reduce((s, sale) => s + parseFloat(String(sale.total || 0)), 0);
+      const sellerWeekCount = weekSales.length;
       const sellerAvgTicket = sellerWeekCount > 0 ? sellerWeekTotal / sellerWeekCount : 0;
       const sellerAvgItems = sellerWeekCount > 0 ? weekItemsCount / sellerWeekCount : 0;
 
-      // Gamification points
-      const { data: gamData } = await supabase
-        .from('pos_gamification')
-        .select('weekly_points, total_points')
-        .eq('seller_id', sellerId)
-        .eq('store_id', storeId)
-        .maybeSingle();
-
-      // Rank
-      const { data: allGam } = await supabase
-        .from('pos_gamification')
-        .select('seller_id, weekly_points')
-        .eq('store_id', storeId)
-        .order('weekly_points', { ascending: false });
-
-      const rankIndex = (allGam || []).findIndex(g => g.seller_id === sellerId);
+      const rankIndex = (allGamRes.data || []).findIndex(g => g.seller_id === sellerId);
 
       setStats({
-        todaySales: (todaySales || []).length,
-        todayRevenue: (todaySales || []).reduce((s, sale) => s + parseFloat(String(sale.total || 0)), 0),
+        todaySales: todaySales.length,
+        todayRevenue: todaySales.reduce((s, sale) => s + parseFloat(String(sale.total || 0)), 0),
         todayItems: todayItemsCount,
         weekSales: sellerWeekCount,
         weekRevenue: sellerWeekTotal,
         weekItems: weekItemsCount,
-        weeklyPoints: gamData?.weekly_points || 0,
-        totalPoints: gamData?.total_points || 0,
+        weeklyPoints: gamRes.data?.weekly_points || 0,
+        totalPoints: gamRes.data?.total_points || 0,
         teamAvgTicket,
         teamAvgItems,
         sellerAvgTicket,
         sellerAvgItems,
         rank: rankIndex >= 0 ? rankIndex + 1 : 0,
-        totalSellers: (allGam || []).length,
+        totalSellers: (allGamRes.data || []).length,
       });
     } catch (e) {
       console.error(e);
