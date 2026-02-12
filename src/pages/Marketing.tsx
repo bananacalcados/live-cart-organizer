@@ -7,7 +7,7 @@ import {
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles,
-  Target, Calendar, ListChecks
+  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,6 +137,7 @@ export default function Marketing() {
   const [sortField, setSortField] = useState<string>("total_spent");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<{ stage: string; progress: number; detail: string; error?: string; done?: boolean } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Fetch data ──────────────────────────────
@@ -214,15 +215,20 @@ export default function Marketing() {
   const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    toast.info("Processando planilha...");
+    setUploadStatus({ stage: 'reading', progress: 10, detail: 'Lendo arquivo...' });
     try {
       const xlsxModule = await import('xlsx');
       const XLSX = xlsxModule.default || xlsxModule;
+      setUploadStatus({ stage: 'parsing', progress: 20, detail: 'Analisando planilha...' });
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows: any[] = XLSX.utils.sheet_to_json(ws);
-      if (rows.length === 0) { toast.error("Planilha vazia"); return; }
+      if (rows.length === 0) {
+        setUploadStatus({ stage: 'error', progress: 100, detail: 'Planilha vazia', error: 'Nenhuma linha encontrada' });
+        return;
+      }
+      setUploadStatus({ stage: 'mapping', progress: 30, detail: `${rows.length} linhas encontradas. Mapeando colunas...` });
       const headers = Object.keys(rows[0]);
       console.log('Excel headers found:', headers);
       const phoneCol = headers.find(h => /phone|telefone|whatsapp|celular|fone|tel\b/i.test(h));
@@ -230,7 +236,7 @@ export default function Marketing() {
       const emailCol = headers.find(h => /email|e-mail|e_mail/i.test(h));
       const instagramCol = headers.find(h => /instagram|insta|ig/i.test(h));
       if (!phoneCol && !emailCol) {
-        toast.error(`Nenhuma coluna de telefone ou email encontrada. Colunas: ${headers.join(', ')}`);
+        setUploadStatus({ stage: 'error', progress: 100, detail: `Colunas encontradas: ${headers.join(', ')}`, error: 'Nenhuma coluna de telefone ou email detectada' });
         return;
       }
       const contacts = rows.map(row => ({
@@ -239,14 +245,22 @@ export default function Marketing() {
         email: emailCol ? String(row[emailCol] || '') : null,
         instagram: instagramCol ? String(row[instagramCol] || '') : null,
       })).filter(c => (c.phone && c.phone.length >= 8) || c.email);
-      if (contacts.length === 0) { toast.error("Nenhum contato válido encontrado na planilha"); return; }
+      if (contacts.length === 0) {
+        setUploadStatus({ stage: 'error', progress: 100, detail: `${rows.length} linhas lidas, mas nenhuma com telefone/email válido`, error: 'Nenhum contato válido' });
+        return;
+      }
+      setUploadStatus({ stage: 'saving', progress: 40, detail: `${contacts.length} contatos válidos. Criando lista...` });
       const { data: list, error: listError } = await supabase.from('marketing_contact_lists').insert({
         name: `Upload: ${file.name} (${new Date().toLocaleDateString('pt-BR')})`,
         source: 'excel_upload', contact_count: contacts.length,
         description: `${contacts.length} contatos importados de ${file.name}`,
       }).select().single();
       if (listError) throw listError;
+      const totalBatches = Math.ceil(contacts.length / 100);
       for (let i = 0; i < contacts.length; i += 100) {
+        const batchNum = Math.floor(i / 100) + 1;
+        const pct = 40 + Math.round((batchNum / totalBatches) * 55);
+        setUploadStatus({ stage: 'inserting', progress: pct, detail: `Salvando lote ${batchNum}/${totalBatches} (${Math.min(i + 100, contacts.length)}/${contacts.length} contatos)...` });
         const batch = contacts.slice(i, i + 100).map(c => ({
           list_id: list.id, phone: c.phone || null, name: c.name || null,
           email: c.email || null, instagram: c.instagram || null,
@@ -254,11 +268,10 @@ export default function Marketing() {
         const { error } = await supabase.from('marketing_contacts').insert(batch);
         if (error) throw error;
       }
-      toast.success(`${contacts.length} contatos importados com sucesso!`);
-      setUploadDialogOpen(false);
+      setUploadStatus({ stage: 'done', progress: 100, detail: `✅ ${contacts.length} contatos importados com sucesso!`, done: true });
     } catch (err: any) {
       console.error('Excel upload error:', err);
-      toast.error(`Erro ao processar planilha: ${err?.message || 'erro desconhecido'}`);
+      setUploadStatus({ stage: 'error', progress: 100, detail: err?.message || 'Erro desconhecido', error: 'Falha no upload' });
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -505,21 +518,82 @@ export default function Marketing() {
       />
 
       {/* Upload Dialog */}
-      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-        <DialogContent className="max-w-md">
+      <Dialog open={uploadDialogOpen} onOpenChange={(open) => {
+        if (!open && uploadStatus && !uploadStatus.done && !uploadStatus.error) return; // prevent close during upload
+        setUploadDialogOpen(open);
+        if (!open) setUploadStatus(null);
+      }}>
+        <DialogContent className="max-w-md" onPointerDownOutside={(e) => {
+          if (uploadStatus && !uploadStatus.done && !uploadStatus.error) e.preventDefault();
+        }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5" />Upload de Planilha Excel</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">
-              Faça upload de uma planilha .xlsx com seus contatos.
-            </p>
-            <div className="border-2 border-dashed rounded-lg p-6 text-center">
-              <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleExcelUpload}
-                className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
-              />
-            </div>
+            {!uploadStatus ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Faça upload de uma planilha .xlsx com seus contatos. O sistema detecta automaticamente colunas de telefone, nome, email e Instagram.
+                </p>
+                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+                  <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleExcelUpload}
+                    className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                {/* Status icon */}
+                <div className="flex items-center gap-3">
+                  {uploadStatus.error ? (
+                    <XCircle className="h-6 w-6 text-destructive shrink-0" />
+                  ) : uploadStatus.done ? (
+                    <CheckCircle className="h-6 w-6 text-primary shrink-0" />
+                  ) : (
+                    <Loader2 className="h-6 w-6 text-primary animate-spin shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">
+                      {uploadStatus.error ? uploadStatus.error : uploadStatus.done ? 'Concluído!' : 'Processando...'}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{uploadStatus.detail}</p>
+                  </div>
+                  <span className="text-sm font-mono font-bold text-primary">{uploadStatus.progress}%</span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      uploadStatus.error ? 'bg-destructive' : uploadStatus.done ? 'bg-primary' : 'bg-primary'
+                    }`}
+                    style={{ width: `${uploadStatus.progress}%` }}
+                  />
+                </div>
+
+                {/* Warning or actions */}
+                {!uploadStatus.done && !uploadStatus.error && (
+                  <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Não feche esta janela durante o processamento
+                  </p>
+                )}
+
+                {(uploadStatus.done || uploadStatus.error) && (
+                  <div className="flex justify-end gap-2">
+                    {uploadStatus.error && (
+                      <Button variant="outline" size="sm" onClick={() => { setUploadStatus(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}>
+                        Tentar novamente
+                      </Button>
+                    )}
+                    <Button size="sm" onClick={() => { setUploadDialogOpen(false); setUploadStatus(null); }}>
+                      {uploadStatus.done ? 'Fechar' : 'OK'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
