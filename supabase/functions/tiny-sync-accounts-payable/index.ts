@@ -55,86 +55,50 @@ serve(async (req) => {
       try {
         const token = store.tiny_token;
         let totalSynced = 0;
-        let page = 1;
-        let hasMore = true;
 
-        while (hasMore && Date.now() - functionStart < TIME_LIMIT_MS) {
-          const params: Record<string, string> = {
-            token,
-            formato: 'json',
-            pagina: String(page),
-          };
+        // Tiny requires at least one filter param — iterate over situações
+        const situacoes = situacao ? [situacao] : ['aberto', 'parcial', 'pago', 'cancelado'];
 
-          // Filter by situacao if provided (aberto, pago, parcial, cancelado)
-          if (situacao) {
-            params.situacao = situacao;
-          }
+        for (const sit of situacoes) {
+          if (Date.now() - functionStart > TIME_LIMIT_MS) break;
 
-          const resp = await fetch('https://api.tiny.com.br/api2/contas.pagar.pesquisa.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams(params).toString(),
-          });
+          let page = 1;
+          let hasMore = true;
 
-          const data = await resp.json();
+          while (hasMore && Date.now() - functionStart < TIME_LIMIT_MS) {
+            const params: Record<string, string> = {
+              token,
+              formato: 'json',
+              pagina: String(page),
+              situacao: sit,
+            };
 
-          if (data.retorno?.status === 'Erro') {
-            console.log(`Tiny AP search error page ${page}:`, data.retorno?.erros);
-            hasMore = false;
-            break;
-          }
+            const resp = await fetch('https://api.tiny.com.br/api2/contas.pagar.pesquisa.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams(params).toString(),
+            });
 
-          const totalPages = parseInt(data.retorno?.numero_paginas || '1');
-          const contas = data.retorno?.contas || [];
+            const data = await resp.json();
 
-          if (contas.length === 0) {
-            hasMore = false;
-            break;
-          }
+            if (data.retorno?.status === 'Erro') {
+              console.log(`Tiny AP search error sit=${sit} page ${page}:`, data.retorno?.erros);
+              hasMore = false;
+              break;
+            }
 
-          // For each conta, get full details
-          const rows: any[] = [];
-          for (const item of contas) {
-            if (Date.now() - functionStart > TIME_LIMIT_MS) break;
-            const conta = item.conta;
+            const totalPages = parseInt(data.retorno?.numero_paginas || '1');
+            const contas = data.retorno?.contas || [];
 
-            try {
-              // Rate limit: ~30 req/min
-              await new Promise(r => setTimeout(r, 2000));
+            if (contas.length === 0) {
+              hasMore = false;
+              break;
+            }
 
-              const detailResp = await fetch('https://api.tiny.com.br/api2/conta.pagar.obter.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `token=${token}&formato=json&id=${conta.id}`,
-              });
-              const detailData = await detailResp.json();
-              const full = detailData.retorno?.conta;
-
-              if (full) {
-                rows.push({
-                  store_id: store.id,
-                  tiny_conta_id: String(full.id || conta.id),
-                  nome_fornecedor: full.nome_cliente || full.cliente?.nome || conta.nome_cliente || null,
-                  numero_doc: full.numero_doc || conta.numero_doc || null,
-                  data_vencimento: parseDate(full.data_vencimento || conta.data_vencimento),
-                  data_emissao: parseDate(full.data_emissao || conta.data_emissao),
-                  data_pagamento: parseDate(full.data_pagamento),
-                  valor: parseFloat(full.valor || conta.valor || '0'),
-                  valor_pago: parseFloat(full.valor_pago || '0'),
-                  saldo: parseFloat(full.saldo || conta.saldo || '0'),
-                  situacao: full.situacao || conta.situacao || 'aberto',
-                  observacoes: full.obs || null,
-                  historico: full.historico || null,
-                  categoria: full.categoria || null,
-                  competencia: full.competencia || null,
-                  nro_banco: full.nro_banco || null,
-                  raw_data: full,
-                  synced_at: new Date().toISOString(),
-                });
-              }
-            } catch (e) {
-              console.error(`Error fetching AP detail ${conta.id}:`, e);
-              // Insert basic data from search result
+            // Use search results directly (no individual detail calls to avoid timeout)
+            const rows: any[] = [];
+            for (const item of contas) {
+              const conta = item.conta;
               rows.push({
                 store_id: store.id,
                 tiny_conta_id: String(conta.id),
@@ -144,23 +108,23 @@ serve(async (req) => {
                 data_emissao: parseDate(conta.data_emissao),
                 valor: parseFloat(conta.valor || '0'),
                 saldo: parseFloat(conta.saldo || '0'),
-                situacao: conta.situacao || 'aberto',
+                situacao: conta.situacao || sit,
+                historico: conta.historico || null,
                 synced_at: new Date().toISOString(),
               });
             }
+
+            if (rows.length > 0) {
+              await supabase.from('tiny_accounts_payable')
+                .upsert(rows, { onConflict: 'store_id,tiny_conta_id' });
+            }
+            totalSynced += rows.length;
+
+            page++;
+            if (page > totalPages) hasMore = false;
+
+            await new Promise(r => setTimeout(r, 500));
           }
-
-          if (rows.length > 0) {
-            await supabase.from('tiny_accounts_payable')
-              .upsert(rows, { onConflict: 'store_id,tiny_conta_id' });
-          }
-          totalSynced += rows.length;
-
-          page++;
-          if (page > totalPages) hasMore = false;
-
-          // Small delay between pages
-          await new Promise(r => setTimeout(r, 500));
         }
 
         // Mark complete
