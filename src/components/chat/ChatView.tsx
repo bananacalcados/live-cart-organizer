@@ -202,7 +202,7 @@ export function ChatView({
   }, [onSendMedia]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
       {/* Back button bar */}
       {onBack && (
         <div className="flex items-center gap-2 px-2 py-1.5 border-b bg-muted/30 flex-shrink-0">
@@ -299,8 +299,8 @@ export function ChatView({
       {customerInfoPanel}
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-3 bg-[#e5ddd5] dark:bg-[#0b141a]" style={{ minHeight: 0 }}>
-        <div className="space-y-2">
+      <ScrollArea className="flex-1 bg-[#e5ddd5] dark:bg-[#0b141a]" style={{ minHeight: 0 }}>
+        <div className="space-y-2 p-3 overflow-hidden">
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -311,7 +311,7 @@ export function ChatView({
             >
               <div
                 className={cn(
-                  "max-w-[80%] rounded-lg px-3 py-2 text-sm",
+                  "max-w-[85%] sm:max-w-[75%] rounded-lg px-3 py-2 text-sm overflow-hidden",
                   msg.direction === 'outgoing'
                     ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-foreground'
                     : 'bg-white dark:bg-[#202c33] text-foreground'
@@ -326,7 +326,7 @@ export function ChatView({
                 {msg.media_url && msg.media_type === 'video' && (
                   <video src={msg.media_url} controls className="max-w-full rounded mb-1" style={{ maxHeight: 200 }} />
                 )}
-                {msg.message && <p className="whitespace-pre-wrap break-words">{msg.message}</p>}
+                {msg.message && <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{msg.message}</p>}
                 {msg.status === 'failed' && (msg as any).error_message && (
                   <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
                     ⚠️ {(msg as any).error_message}
