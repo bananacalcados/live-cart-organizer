@@ -25,52 +25,63 @@ export function TeamChat() {
 
   useEffect(() => {
     const detectName = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user) {
-        // Check user_profiles first
-        const { data: profileById } = await supabase
-          .from('user_profiles')
-          .select('display_name')
-          .eq('user_id', user.id)
-          .maybeSingle();
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
         
-        if (profileById?.display_name) {
-          setSenderName(profileById.display_name);
-          localStorage.setItem('team_chat_name', profileById.display_name);
-          setIsReady(true);
-          return;
-        }
+        if (user) {
+          // Check user_profiles first
+          try {
+            const { data: profileById } = await supabase
+              .from('user_profiles')
+              .select('display_name')
+              .eq('user_id', user.id)
+              .maybeSingle();
+            
+            if (profileById?.display_name) {
+              setSenderName(profileById.display_name);
+              localStorage.setItem('team_chat_name', profileById.display_name);
+              setIsReady(true);
+              return;
+            }
 
-        // Check by email placeholder
-        const emailKey = `email:${(user.email || '').toLowerCase()}`;
-        const { data: profileByEmail } = await supabase
-          .from('user_profiles')
-          .select('id, display_name')
-          .eq('user_id', emailKey)
-          .maybeSingle();
-        
-        if (profileByEmail?.display_name) {
-          await supabase.from('user_profiles')
-            .update({ user_id: user.id } as any)
-            .eq('id', profileByEmail.id);
-          setSenderName(profileByEmail.display_name);
-          localStorage.setItem('team_chat_name', profileByEmail.display_name);
-          setIsReady(true);
-          return;
-        }
+            // Check by email placeholder
+            const emailKey = `email:${(user.email || '').toLowerCase()}`;
+            const { data: profileByEmail } = await supabase
+              .from('user_profiles')
+              .select('id, display_name')
+              .eq('user_id', emailKey)
+              .maybeSingle();
+            
+            if (profileByEmail?.display_name) {
+              await supabase.from('user_profiles')
+                .update({ user_id: user.id } as any)
+                .eq('id', profileByEmail.id);
+              setSenderName(profileByEmail.display_name);
+              localStorage.setItem('team_chat_name', profileByEmail.display_name);
+              setIsReady(true);
+              return;
+            }
+          } catch (profileErr) {
+            console.warn('user_profiles lookup failed, using fallback:', profileErr);
+          }
 
-        // Fallback to email name
-        const emailName = (user.email || '').split('@')[0]
-          .replace(/[._-]/g, ' ')
-          .replace(/\b\w/g, c => c.toUpperCase());
-        const displayName = user.user_metadata?.full_name || user.user_metadata?.name || emailName;
-        setSenderName(displayName);
-        localStorage.setItem('team_chat_name', displayName);
-        setIsReady(true);
-      } else {
+          // Fallback to email name
+          const emailName = (user.email || '').split('@')[0]
+            .replace(/[._-]/g, ' ')
+            .replace(/\b\w/g, c => c.toUpperCase());
+          const displayName = user.user_metadata?.full_name || user.user_metadata?.name || emailName;
+          setSenderName(displayName);
+          localStorage.setItem('team_chat_name', displayName);
+          setIsReady(true);
+        } else {
+          const stored = localStorage.getItem('team_chat_name');
+          if (stored) { setSenderName(stored); setIsReady(true); }
+        }
+      } catch (err) {
+        console.warn('TeamChat detectName error:', err);
         const stored = localStorage.getItem('team_chat_name');
-        if (stored) { setSenderName(stored); setIsReady(true); }
+        if (stored) { setSenderName(stored); }
+        setIsReady(true);
       }
     };
     detectName();
