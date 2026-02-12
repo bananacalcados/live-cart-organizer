@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { POSTinyProductPicker } from "./POSTinyProductPicker";
 
 interface Props {
   storeId: string;
@@ -88,7 +89,6 @@ export function POSInterStoreRequests({ storeId }: Props) {
   useEffect(() => {
     loadData();
 
-    // Realtime subscription for new requests
     const channel = supabase
       .channel("pos-requests-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "pos_inter_store_requests" }, () => {
@@ -204,6 +204,9 @@ export function POSInterStoreRequests({ storeId }: Props) {
     setResponseNotes("");
   };
 
+  // Use the target store for product search (searching products in the store you're requesting FROM)
+  const searchStoreId = targetStoreId || storeId;
+
   return (
     <ScrollArea className="h-full">
       <div className="p-6 space-y-4">
@@ -304,7 +307,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
 
         {/* New Request Dialog */}
         <Dialog open={showNew} onOpenChange={v => { if (!v) resetForm(); setShowNew(v); }}>
-          <DialogContent className="bg-pos-black border-pos-orange/30 max-w-lg">
+          <DialogContent className="bg-pos-black border-pos-orange/30 max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-pos-white flex items-center gap-2">
                 <Send className="h-5 w-5 text-pos-orange" /> Solicitar Produto
@@ -336,29 +339,45 @@ export function POSInterStoreRequests({ storeId }: Props) {
 
               <Separator className="bg-pos-white/10" />
 
-              {/* Items */}
-              <div className="space-y-2">
-                {items.map((_, idx) => (
-                  <div key={idx} className="grid grid-cols-[1fr_60px_60px_60px_32px] gap-2 items-end">
-                    <div>
-                      <Label className="text-pos-white/50 text-[10px]">Produto</Label>
-                      <Input value={items[idx].product_name} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, product_name: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
+              {/* Items with Tiny Product Picker */}
+              <div className="space-y-3">
+                {items.map((item, idx) => (
+                  <div key={idx} className="space-y-2 p-3 bg-pos-white/5 rounded-lg border border-pos-white/10">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1">
+                        <POSTinyProductPicker
+                          storeId={searchStoreId}
+                          label="Produto"
+                          value={item.product_name}
+                          placeholder="Buscar produto no Tiny..."
+                          onSelect={(p) => {
+                            setItems(prev => prev.map((it, i) => i === idx ? {
+                              ...it,
+                              product_name: p.product_name,
+                              sku: p.sku,
+                              size: p.size || it.size,
+                            } : it));
+                          }}
+                        />
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 mt-4" onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length <= 1}>
+                        <X className="h-3 w-3" />
+                      </Button>
                     </div>
-                    <div>
-                      <Label className="text-pos-white/50 text-[10px]">Tam</Label>
-                      <Input value={items[idx].size} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, size: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-pos-white/50 text-[10px]">Tam</Label>
+                        <Input value={item.size} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, size: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
+                      </div>
+                      <div>
+                        <Label className="text-pos-white/50 text-[10px]">Cor</Label>
+                        <Input value={item.color} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, color: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
+                      </div>
+                      <div>
+                        <Label className="text-pos-white/50 text-[10px]">Qtd</Label>
+                        <Input type="number" value={item.quantity} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, quantity: parseInt(e.target.value) || 1 } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
+                      </div>
                     </div>
-                    <div>
-                      <Label className="text-pos-white/50 text-[10px]">Cor</Label>
-                      <Input value={items[idx].color} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, color: e.target.value } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
-                    </div>
-                    <div>
-                      <Label className="text-pos-white/50 text-[10px]">Qtd</Label>
-                      <Input type="number" value={items[idx].quantity} onChange={e => setItems(p => p.map((it, i) => i === idx ? { ...it, quantity: parseInt(e.target.value) || 1 } : it))} className="h-8 text-xs bg-pos-white/5 border-pos-orange/30 text-pos-white" />
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length <= 1}>
-                      <X className="h-3 w-3" />
-                    </Button>
                   </div>
                 ))}
                 <Button variant="ghost" className="text-pos-orange text-xs gap-1" onClick={() => setItems(p => [...p, { product_name: "", sku: "", quantity: 1, size: "", color: "" }])}>
