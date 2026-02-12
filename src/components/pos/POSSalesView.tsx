@@ -1334,15 +1334,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         </div>
       </div>
 
-      {/* Camera Dialog */}
-      <Dialog open={showCamera} onOpenChange={setShowCamera}>
-        <DialogContent className="max-w-md bg-pos-black border-pos-orange/30">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-pos-white">
-              <Camera className="h-5 w-5 text-pos-orange" /> Scanner de Código de Barras
-            </DialogTitle>
-          </DialogHeader>
-          {showCamera && (
+      {/* Camera Overlay (not Dialog - avoids DOM conflicts with html5-qrcode) */}
+      {showCamera && (
+        <div className="fixed inset-0 z-50 bg-pos-black/95 flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-md space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-pos-white font-bold flex items-center gap-2">
+                <Camera className="h-5 w-5 text-pos-orange" /> Scanner de Código de Barras
+              </h3>
+            </div>
             <POSBarcodeScanner
               onScan={(code) => {
                 setBarcodeInput(code);
@@ -1350,9 +1350,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               }}
               onClose={() => setShowCamera(false)}
             />
-          )}
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      )}
 
       {/* Customer Form Dialog */}
       <POSCustomerForm
