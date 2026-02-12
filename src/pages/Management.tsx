@@ -234,7 +234,7 @@ export default function Management() {
       for (const sid of storesToSync) {
         let currentBody: any = { stock_only: true, store_id: sid };
         let attempts = 0;
-        const MAX_ATTEMPTS = 30;
+        const MAX_ATTEMPTS = 250;
 
         while (attempts < MAX_ATTEMPTS) {
           attempts++;
@@ -245,14 +245,15 @@ export default function Management() {
           const partial = partialResults.find((r: any) => r.status === 'partial');
           if (partial?.resume_stock_page) {
             const stName = stores.find(s => s.id === sid)?.name || "Loja";
-            toast.info(`Continuando estoque ${stName}... (pg ${partial.resume_stock_page})`);
+            const pct = partial.stock_updated && partial.resume_stock_page ? `${Math.round((partial.stock_updated / 5900) * 100)}%` : `pg ${partial.resume_stock_page}`;
+            toast.info(`Continuando estoque ${stName}... (${pct})`);
             currentBody = {
               store_id: partial.store_id,
               stock_only: true,
               resume_stock_page: partial.resume_stock_page,
               resume_log_id: partial.resume_log_id,
             };
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 500));
             continue;
           }
           break;

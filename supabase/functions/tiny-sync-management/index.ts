@@ -29,7 +29,7 @@ function addDays(date: Date, days: number): Date {
   return result;
 }
 
-const TIME_LIMIT_MS = 50_000;
+const TIME_LIMIT_MS = 55_000;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -218,7 +218,7 @@ serve(async (req) => {
           let stockTimedOut = false;
           let stockUpdated = (resume_stock_page || 0) * PAGE_SIZE; // estimate previous progress
           const BATCH_SIZE = 5; // parallel API calls per batch
-          const BATCH_DELAY = 10000; // 10s between batches = ~30 req/min
+          const BATCH_DELAY = 4000; // 4s between batches — ~75 req/min burst, well within Tiny limits
 
           while (!stockTimedOut && Date.now() - functionStart < TIME_LIMIT_MS) {
             // Fetch a page of products from local cache
