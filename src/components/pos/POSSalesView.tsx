@@ -941,15 +941,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                     if (missing.length === 0) return null;
                     const points = missing.length * 2;
                     return (
-                      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+                      <div className="rounded-xl border-2 border-pos-orange bg-pos-orange/20 p-3 space-y-2">
                         <div className="flex items-center gap-2">
-                          <Star className="h-4 w-4 text-amber-400" />
-                          <p className="text-sm font-bold text-amber-300">+{points} pts disponíveis!</p>
+                          <Star className="h-4 w-4 text-pos-orange" />
+                          <p className="text-sm font-bold text-pos-orange">+{points} pts disponíveis!</p>
                         </div>
-                        <p className="text-xs text-pos-white/60">
-                          Complete o cadastro deste cliente para ganhar pontos extras! Faltam: <span className="text-amber-300">{missing.join(', ')}</span>
+                        <p className="text-xs text-pos-black font-medium">
+                          Complete o cadastro deste cliente para ganhar pontos extras! Faltam: <span className="font-bold text-pos-black">{missing.join(', ')}</span>
                         </p>
-                        <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs gap-1" onClick={() => setShowCustomerForm(true)}>
+                        <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold text-xs gap-1" onClick={() => setShowCustomerForm(true)}>
                           <Plus className="h-3 w-3" /> Completar cadastro
                         </Button>
                       </div>
