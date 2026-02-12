@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.tiny-sync-accounts-payable]
 verify_jwt = false
+
+[functions.tiny-mark-account-paid]
+verify_jwt = false
