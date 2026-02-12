@@ -68,13 +68,49 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   };
 
   const handlePrint = () => {
-    const printContent = sortedItems.map(([, item]) => 
-      `${item.name} ${item.variant ? `(${item.variant})` : ''} - SKU: ${item.sku || 'N/A'} - Qtd: ${item.totalQty}`
-    ).join('\n');
+    const rows = sortedItems.map(([, item], i) => 
+      `<tr>
+        <td style="text-align:center;font-weight:bold;color:#333;">${i + 1}</td>
+        <td style="font-weight:600;">${item.name}${item.variant ? ` <span style="color:#e67e22;font-weight:500;">(${item.variant})</span>` : ''}</td>
+        <td style="font-family:monospace;color:#666;font-size:12px;">${item.sku || '—'}</td>
+        <td style="text-align:center;font-size:18px;font-weight:bold;color:#1a1a1a;background:#fff8e1;border-radius:4px;">${item.totalQty}</td>
+        <td style="text-align:center;width:60px;">☐</td>
+      </tr>`
+    ).join('');
     
     const w = window.open('', '_blank');
     if (w) {
-      w.document.write(`<pre style="font-family:monospace;font-size:14px;">LISTA DE SEPARAÇÃO\n${'='.repeat(60)}\n\n${printContent}\n\n${'='.repeat(60)}\nTotal: ${totalProducts} itens</pre>`);
+      w.document.write(`<html><head><title>Lista de Separação</title>
+<style>
+  @page { margin: 15mm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 20px; }
+  .header { background: linear-gradient(135deg, #1a1a1a 0%, #333 100%); color: #f5c518; padding: 20px 24px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { margin: 0; font-size: 22px; letter-spacing: 1px; }
+  .header .meta { text-align: right; color: #ccc; font-size: 13px; }
+  .header .meta strong { color: #f5c518; font-size: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #1a1a1a; color: #f5c518; padding: 10px 12px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  tbody tr:hover { background: #fff8e1; }
+  .footer { margin-top: 20px; padding: 12px 0; border-top: 2px solid #1a1a1a; display: flex; justify-content: space-between; font-size: 13px; color: #666; }
+  .footer .total { font-size: 16px; font-weight: bold; color: #1a1a1a; }
+  @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } tbody tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<div class="header">
+  <div><h1>📦 LISTA DE SEPARAÇÃO</h1></div>
+  <div class="meta">Data: ${new Date().toLocaleDateString('pt-BR')}<br><strong>${sortedItems.length} produtos • ${totalProducts} unidades</strong></div>
+</div>
+<table>
+  <thead><tr><th style="width:40px;text-align:center">#</th><th>Produto</th><th style="width:120px">SKU</th><th style="width:60px;text-align:center">Qtd</th><th style="width:60px;text-align:center">✓</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="footer">
+  <span>Impresso em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+  <span class="total">Total: ${totalProducts} itens</span>
+</div>
+</body></html>`);
+      w.document.close();
       w.print();
     }
   };

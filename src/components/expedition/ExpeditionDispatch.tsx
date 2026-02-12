@@ -98,29 +98,57 @@ export function ExpeditionDispatch({ orders, searchTerm, showManifest, onRefresh
   };
 
   const handlePrintManifest = (carrier: string, carrierOrders: any[]) => {
-    const lines = carrierOrders.map((o, i) => 
-      `${i + 1}. ${o.shopify_order_name} | ${o.customer_name} | ${o.freight_tracking_code || 'N/A'} | ${o.internal_barcode}`
-    ).join('\n');
+    const rows = carrierOrders.map((o, i) => 
+      `<tr>
+        <td style="text-align:center;font-weight:bold;">${i + 1}</td>
+        <td style="font-weight:600;">${o.shopify_order_name}</td>
+        <td>${o.customer_name || '—'}</td>
+        <td style="font-family:monospace;font-size:11px;">${o.freight_tracking_code || '—'}</td>
+        <td style="font-family:monospace;font-size:11px;">${o.internal_barcode || '—'}</td>
+        <td style="text-align:center;">☐</td>
+      </tr>`
+    ).join('');
     
     const w = window.open('', '_blank');
     if (w) {
-      w.document.write(`<pre style="font-family:monospace;font-size:12px;">
-ROMANEIO DE EXPEDIÇÃO
-Transportadora: ${carrier}
-Data: ${new Date().toLocaleDateString('pt-BR')}
-${'='.repeat(80)}
-
-# | Pedido | Cliente | Rastreio | Código Interno
-${'='.repeat(80)}
-${lines}
-
-${'='.repeat(80)}
-Total: ${carrierOrders.length} pedidos
-
-Assinatura do Coletor: ____________________________
-Nome: ____________________________
-Data/Hora: ____________________________
-</pre>`);
+      w.document.write(`<html><head><title>Romaneio - ${carrier}</title>
+<style>
+  @page { margin: 15mm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 20px; }
+  .header { background: linear-gradient(135deg, #1a1a1a 0%, #333 100%); color: #f5c518; padding: 20px 24px; border-radius: 8px; margin-bottom: 20px; }
+  .header h1 { margin: 0 0 4px 0; font-size: 22px; letter-spacing: 1px; }
+  .header .sub { color: #ccc; font-size: 13px; display: flex; justify-content: space-between; }
+  .header .sub strong { color: #f5c518; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #1a1a1a; color: #f5c518; padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  .sign-area { margin-top: 40px; border-top: 2px solid #1a1a1a; padding-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+  .sign-box { border-bottom: 1px solid #999; padding-bottom: 8px; margin-bottom: 4px; min-height: 30px; }
+  .sign-label { font-size: 11px; color: #666; text-transform: uppercase; }
+  .footer { margin-top: 16px; font-size: 11px; color: #999; text-align: center; }
+  @media print { body { padding: 0; } .header, thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } tbody tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<div class="header">
+  <h1>🚚 ROMANEIO DE EXPEDIÇÃO</h1>
+  <div class="sub">
+    <span>Transportadora: <strong>${carrier}</strong></span>
+    <span>Data: <strong>${new Date().toLocaleDateString('pt-BR')}</strong> • <strong>${carrierOrders.length} pedidos</strong></span>
+  </div>
+</div>
+<table>
+  <thead><tr><th style="width:35px;text-align:center">#</th><th>Pedido</th><th>Cliente</th><th>Rastreio</th><th>Código Interno</th><th style="width:40px;text-align:center">✓</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="sign-area">
+  <div><div class="sign-box"></div><div class="sign-label">Assinatura do Coletor</div></div>
+  <div><div class="sign-box"></div><div class="sign-label">Nome / Documento</div></div>
+  <div><div class="sign-box"></div><div class="sign-label">Data / Hora da Coleta</div></div>
+  <div><div class="sign-box"></div><div class="sign-label">Observações</div></div>
+</div>
+<div class="footer">Impresso em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+</body></html>`);
+      w.document.close();
       w.print();
     }
   };
