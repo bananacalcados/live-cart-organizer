@@ -137,8 +137,10 @@ export default function Marketing() {
   const [sortField, setSortField] = useState<string>("total_spent");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<'campaign' | 'rfm'>('campaign');
   const [uploadStatus, setUploadStatus] = useState<{ stage: string; progress: number; detail: string; error?: string; done?: boolean } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const rfmFileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Fetch data ──────────────────────────────
 
@@ -212,9 +214,162 @@ export default function Marketing() {
     finally { setIsSyncing(false); }
   };
 
+  const handleRfmExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadTarget('rfm');
+    setUploadDialogOpen(true);
+    setUploadStatus({ stage: 'reading', progress: 10, detail: 'Lendo arquivo...' });
+    try {
+      const xlsxModule = await import('xlsx');
+      const XLSX = xlsxModule.default || xlsxModule;
+      setUploadStatus({ stage: 'parsing', progress: 20, detail: 'Analisando planilha...' });
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(ws);
+      if (rows.length === 0) {
+        setUploadStatus({ stage: 'error', progress: 100, detail: 'Planilha vazia', error: 'Nenhuma linha encontrada' });
+        return;
+      }
+      setUploadStatus({ stage: 'mapping', progress: 30, detail: `${rows.length} linhas encontradas. Mapeando colunas...` });
+      const headers = Object.keys(rows[0]);
+      console.log('RFM Excel headers found:', headers);
+
+      const phoneCol = headers.find(h => /phone|telefone|whatsapp|celular|fone|tel\b/i.test(h));
+      const nameCol = headers.find(h => /^(name|nome|cliente|razao|fantasia|contato)$/i.test(h) || /first.?name|primeiro.?nome/i.test(h));
+      const lastNameCol = headers.find(h => /last.?name|sobrenome|ultimo.?nome/i.test(h));
+      const emailCol = headers.find(h => /email|e-mail|e_mail/i.test(h));
+      const cityCol = headers.find(h => /city|cidade|municipio/i.test(h));
+      const stateCol = headers.find(h => /state|estado|uf/i.test(h));
+      const ordersCol = headers.find(h => /orders|pedidos|compras|qtd|quantidade/i.test(h));
+      const spentCol = headers.find(h => /spent|gasto|total|valor|revenue|faturamento/i.test(h));
+      const lastPurchaseCol = headers.find(h => /last.?purchase|ultima.?compra|data.?ultima|last.?order/i.test(h));
+      const firstPurchaseCol = headers.find(h => /first.?purchase|primeira.?compra|data.?primeira|first.?order/i.test(h));
+
+      if (!phoneCol && !emailCol) {
+        setUploadStatus({ stage: 'error', progress: 100, detail: `Colunas: ${headers.join(', ')}`, error: 'Nenhuma coluna de telefone ou email detectada' });
+        return;
+      }
+
+      const LOCAL_DDD = "33";
+      const batch: any[] = [];
+      for (const row of rows) {
+        const phone = phoneCol ? String(row[phoneCol] || '').replace(/\D/g, '') : '';
+        const email = emailCol ? String(row[emailCol] || '') : '';
+        if (!phone && !email) continue;
+
+        const identifier = phone || email;
+        const zoppyId = `excel_${identifier}`;
+
+        let firstName = nameCol ? String(row[nameCol] || '') : '';
+        let lastName = lastNameCol ? String(row[lastNameCol] || '') : '';
+        if (firstName && !lastName && firstName.includes(' ')) {
+          const parts = firstName.split(' ');
+          firstName = parts[0];
+          lastName = parts.slice(1).join(' ');
+        }
+
+        let ddd = '';
+        if (phone && phone.length >= 10) {
+          ddd = phone.startsWith('55') ? phone.substring(2, 4) : phone.substring(0, 2);
+        }
+        const city = cityCol ? String(row[cityCol] || '') : '';
+        const state = stateCol ? String(row[stateCol] || '') : '';
+        const hasAddress = !!(city && city.trim());
+        let regionType = 'unknown';
+        if (ddd === LOCAL_DDD && !hasAddress) regionType = 'local';
+        else if (hasAddress) regionType = 'online';
+        else if (ddd === LOCAL_DDD) regionType = 'local';
+
+        const totalOrders = ordersCol ? Number(row[ordersCol]) || 0 : 0;
+        const totalSpent = spentCol ? Number(String(row[spentCol]).replace(/[R$\s.]/g, '').replace(',', '.')) || 0 : 0;
+
+        let lastPurchase: string | null = null;
+        if (lastPurchaseCol && row[lastPurchaseCol]) {
+          const raw = row[lastPurchaseCol];
+          if (typeof raw === 'number') {
+            // Excel serial date
+            const d = new Date((raw - 25569) * 86400 * 1000);
+            if (!isNaN(d.getTime())) lastPurchase = d.toISOString();
+          } else {
+            const d = new Date(String(raw));
+            if (!isNaN(d.getTime())) lastPurchase = d.toISOString();
+          }
+        }
+
+        let firstPurchase: string | null = null;
+        if (firstPurchaseCol && row[firstPurchaseCol]) {
+          const raw = row[firstPurchaseCol];
+          if (typeof raw === 'number') {
+            const d = new Date((raw - 25569) * 86400 * 1000);
+            if (!isNaN(d.getTime())) firstPurchase = d.toISOString();
+          } else {
+            const d = new Date(String(raw));
+            if (!isNaN(d.getTime())) firstPurchase = d.toISOString();
+          }
+        }
+
+        batch.push({
+          zoppy_id: zoppyId,
+          first_name: firstName || null,
+          last_name: lastName || null,
+          phone: phone || null,
+          email: email || null,
+          city: city || null,
+          state: state || null,
+          region_type: regionType,
+          ddd: ddd || null,
+          total_orders: totalOrders,
+          total_spent: totalSpent,
+          avg_ticket: totalOrders > 0 ? +(totalSpent / totalOrders).toFixed(2) : 0,
+          last_purchase_at: lastPurchase,
+          first_purchase_at: firstPurchase,
+        });
+      }
+
+      if (batch.length === 0) {
+        setUploadStatus({ stage: 'error', progress: 100, detail: 'Nenhum contato válido com telefone ou email', error: 'Sem dados válidos' });
+        return;
+      }
+
+      setUploadStatus({ stage: 'saving', progress: 40, detail: `${batch.length} clientes válidos. Salvando...` });
+      const totalBatches = Math.ceil(batch.length / 100);
+      let totalUpserted = 0;
+      for (let i = 0; i < batch.length; i += 100) {
+        const batchNum = Math.floor(i / 100) + 1;
+        const pct = 40 + Math.round((batchNum / totalBatches) * 50);
+        setUploadStatus({ stage: 'inserting', progress: pct, detail: `Salvando lote ${batchNum}/${totalBatches}...` });
+        const chunk = batch.slice(i, i + 100);
+        const { error } = await supabase.from('zoppy_customers').upsert(chunk, { onConflict: 'zoppy_id' });
+        if (error) throw error;
+        totalUpserted += chunk.length;
+      }
+
+      setUploadStatus({ stage: 'rfm', progress: 92, detail: 'Recalculando RFM...' });
+      try {
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zoppy-sync-customers`, {
+          method: 'POST', headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'calculate_rfm' }),
+        });
+        const rfmData = await res.json();
+        if (rfmData.success) console.log('RFM recalculated after Excel import');
+      } catch (rfmErr) { console.warn('RFM recalc failed, data still imported:', rfmErr); }
+
+      setUploadStatus({ stage: 'done', progress: 100, detail: `✅ ${totalUpserted} clientes importados e RFM recalculado!`, done: true });
+      fetchCustomers();
+    } catch (err: any) {
+      console.error('RFM Excel upload error:', err);
+      setUploadStatus({ stage: 'error', progress: 100, detail: err?.message || 'Erro desconhecido', error: 'Falha no upload' });
+    }
+    if (rfmFileInputRef.current) rfmFileInputRef.current.value = '';
+  };
+
   const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadTarget('campaign');
+    setUploadDialogOpen(true);
     setUploadStatus({ stage: 'reading', progress: 10, detail: 'Lendo arquivo...' });
     try {
       const xlsxModule = await import('xlsx');
@@ -424,6 +579,11 @@ export default function Marketing() {
                 </SelectContent>
               </Select>
               <div className="flex gap-1 ml-auto">
+                <Button variant="outline" size="sm" className="gap-1 relative overflow-hidden">
+                  <Upload className="h-3.5 w-3.5" />Upload Excel
+                  <input ref={rfmFileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleRfmExcelUpload}
+                    className="absolute inset-0 opacity-0 cursor-pointer" />
+                </Button>
                 <Button variant="outline" size="sm" onClick={handleSyncRfm} disabled={isSyncing} className="gap-1">
                   <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Recalcular RFM
                 </Button>
@@ -527,7 +687,7 @@ export default function Marketing() {
           if (uploadStatus && !uploadStatus.done && !uploadStatus.error) e.preventDefault();
         }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5" />Upload de Planilha Excel</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5" />{uploadTarget === 'rfm' ? 'Upload de Clientes para RFM' : 'Upload de Planilha Excel'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             {!uploadStatus ? (
