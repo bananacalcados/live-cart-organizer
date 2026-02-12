@@ -143,6 +143,8 @@ export default function Marketing() {
   const rfmFileInputRef = useRef<HTMLInputElement>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [ticketMin, setTicketMin] = useState("");
+  const [ticketMax, setTicketMax] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<ZoppyCustomer | null>(null);
   const [whatsAppMessage, setWhatsAppMessage] = useState("");
 
@@ -516,6 +518,8 @@ export default function Marketing() {
     if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) return false;
     if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo + 'T23:59:59') return false;
     if ((dateFrom || dateTo) && !c.last_purchase_at) return false;
+    if (ticketMin && c.avg_ticket < parseFloat(ticketMin)) return false;
+    if (ticketMax && c.avg_ticket > parseFloat(ticketMax)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
@@ -651,6 +655,8 @@ export default function Marketing() {
               </Select>
               <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-[140px] h-9" placeholder="De" title="Compras a partir de" />
               <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[140px] h-9" placeholder="Até" title="Compras até" />
+              <Input type="number" value={ticketMin} onChange={e => setTicketMin(e.target.value)} className="w-[120px] h-9" placeholder="Ticket mín" title="Ticket médio mínimo" />
+              <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="w-[120px] h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
               <div className="flex gap-1 ml-auto">
                 <Button variant="outline" size="sm" className="gap-1 relative overflow-hidden">
                   <Upload className="h-3.5 w-3.5" />Upload Excel
@@ -668,8 +674,8 @@ export default function Marketing() {
 
             <p className="text-xs text-muted-foreground">
               {filtered.length} clientes
-              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || searchQuery || dateFrom || dateTo) && (
-                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); }}>
+              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax) && (
+                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); }}>
                   <X className="h-3 w-3 mr-0.5" />Limpar
                 </Button>
               )}

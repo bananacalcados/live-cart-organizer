@@ -68,7 +68,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [multiPaymentMethodId, setMultiPaymentMethodId] = useState("");
   const [multiPaymentAmount, setMultiPaymentAmount] = useState("");
   const [showCustomerForm, setShowCustomerForm] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string; cpf?: string; email?: string; whatsapp?: string; address?: string; cep?: string; city?: string; state?: string; age_range?: string; preferred_style?: string } | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string; cpf?: string; email?: string; whatsapp?: string; address?: string; cep?: string; city?: string; state?: string; age_range?: string; preferred_style?: string; shoe_size?: string; gender?: string; neighborhood?: string; address_number?: string; complement?: string } | null>(null);
   const [customerCashback, setCustomerCashback] = useState<{ code: string; amount: number; type: string; min_purchase: number; expiry_date: string } | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<CartItem[]>([]);
@@ -83,6 +83,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [nfceResult, setNfceResult] = useState<any>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerResults, setCustomerResults] = useState<any[]>([]);
+  const [rfmMatches, setRfmMatches] = useState<any[]>([]);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [installments, setInstallments] = useState("1");
   const [cashReceived, setCashReceived] = useState("");
@@ -375,18 +376,56 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const searchCustomerByTerm = async () => {
     if (!customerSearch.trim()) return;
     setSearchingCustomer(true);
+    setRfmMatches([]);
     try {
       const term = customerSearch.trim();
-      const { data } = await supabase
+      // Search POS customers
+      const { data: posData } = await supabase
         .from('pos_customers')
         .select('*')
         .or(`cpf.ilike.%${term}%,name.ilike.%${term}%,whatsapp.ilike.%${term}%`)
         .limit(10);
-      setCustomerResults(data || []);
+      setCustomerResults(posData || []);
+
+      // Also search zoppy_customers (RFM) by phone or name
+      const phoneTerm = term.replace(/\D/g, '');
+      const { data: rfmData } = await supabase
+        .from('zoppy_customers')
+        .select('*')
+        .or(`phone.ilike.%${phoneTerm.length >= 4 ? phoneTerm : 'NOMATCH'}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%`)
+        .limit(10);
+      setRfmMatches(rfmData || []);
     } catch (e) {
       console.error(e);
     } finally {
       setSearchingCustomer(false);
+    }
+  };
+
+  const importRfmCustomer = async (rfm: any) => {
+    // Import RFM customer into pos_customers
+    const name = `${rfm.first_name || ''} ${rfm.last_name || ''}`.trim();
+    try {
+      const { data, error } = await supabase
+        .from('pos_customers')
+        .insert({
+          name: name || 'Cliente RFM',
+          whatsapp: rfm.phone || null,
+          email: rfm.email || null,
+          city: rfm.city || null,
+          state: rfm.state || null,
+        } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      toast.success("Cliente importado da Matriz RFM!");
+      setSelectedCustomer(data);
+      lookupCashback(data);
+      setRfmMatches([]);
+      setCustomerResults([]);
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao importar cliente");
     }
   };
 
@@ -830,6 +869,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               </div>
               {customerResults.length > 0 && !selectedCustomer && (
                 <div className="space-y-2">
+                  <p className="text-xs text-pos-orange font-medium">Clientes cadastrados:</p>
                   {customerResults.map(c => (
                     <div key={c.id} className="cursor-pointer rounded-lg border border-pos-orange/20 bg-pos-white/5 p-3 hover:border-pos-orange transition-all" onClick={() => { setSelectedCustomer(c); lookupCashback(c); }}>
                       <p className="font-medium text-pos-white">{c.name || 'Sem nome'}</p>
@@ -842,17 +882,80 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   ))}
                 </div>
               )}
-              {selectedCustomer ? (
-                <div className="rounded-xl border-2 border-pos-orange/50 bg-pos-orange/10 p-4 flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-full bg-pos-orange/20 flex items-center justify-center">
-                    <Check className="h-5 w-5 text-pos-orange" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-pos-white">{selectedCustomer.name}</p>
-                    {selectedCustomer.cpf && <p className="text-sm text-pos-white/50">CPF: {selectedCustomer.cpf}</p>}
-                  </div>
-                  <Button variant="ghost" size="sm" className="text-pos-white/70 hover:text-pos-orange hover:bg-pos-orange/10" onClick={() => { setSelectedCustomer(null); setCustomerResults([]); setCustomerCashback(null); }}>Trocar</Button>
+
+              {/* RFM Matches */}
+              {rfmMatches.length > 0 && !selectedCustomer && (
+                <div className="space-y-2">
+                  <p className="text-xs text-cyan-400 font-medium flex items-center gap-1"><Star className="h-3 w-3" /> Encontrado na Matriz RFM:</p>
+                  {rfmMatches.map(rfm => (
+                    <div key={rfm.id} className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-pos-white">{rfm.first_name} {rfm.last_name}</p>
+                          <div className="flex gap-3 text-xs text-pos-white/50 mt-1">
+                            {rfm.phone && <span>Tel: {rfm.phone}</span>}
+                            {rfm.email && <span>{rfm.email}</span>}
+                            {rfm.rfm_segment && <Badge className="text-[10px] bg-cyan-500/20 text-cyan-300 border-cyan-500/30">{rfm.rfm_segment}</Badge>}
+                          </div>
+                          <div className="flex gap-3 text-xs text-pos-white/40 mt-1">
+                            <span>{rfm.total_orders || 0} pedidos</span>
+                            <span>Total: R$ {(rfm.total_spent || 0).toFixed(2)}</span>
+                          </div>
+                        </div>
+                        <Button size="sm" className="bg-cyan-600 hover:bg-cyan-700 text-white text-xs gap-1" onClick={() => importRfmCustomer(rfm)}>
+                          <Check className="h-3 w-3" /> Usar este
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-pos-white/30">Ou cadastre um novo cliente clicando em "Novo"</p>
                 </div>
+              )}
+
+              {selectedCustomer ? (
+                <>
+                  <div className="rounded-xl border-2 border-pos-orange/50 bg-pos-orange/10 p-4 flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-full bg-pos-orange/20 flex items-center justify-center">
+                      <Check className="h-5 w-5 text-pos-orange" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-pos-white">{selectedCustomer.name}</p>
+                      {selectedCustomer.cpf && <p className="text-sm text-pos-white/50">CPF: {selectedCustomer.cpf}</p>}
+                    </div>
+                    <Button variant="ghost" size="sm" className="text-pos-white/70 hover:text-pos-orange hover:bg-pos-orange/10" onClick={() => { setSelectedCustomer(null); setCustomerResults([]); setRfmMatches([]); setCustomerCashback(null); }}>Trocar</Button>
+                  </div>
+
+                  {/* Incomplete data incentive */}
+                  {(() => {
+                    const missing: string[] = [];
+                    if (!selectedCustomer.email) missing.push('E-mail');
+                    if (!selectedCustomer.whatsapp) missing.push('WhatsApp');
+                    if (!selectedCustomer.cpf) missing.push('CPF');
+                    if (!selectedCustomer.cep) missing.push('CEP');
+                    if (!selectedCustomer.address) missing.push('Endereço');
+                    if (!selectedCustomer.city) missing.push('Cidade');
+                    if (!selectedCustomer.gender) missing.push('Gênero');
+                    if (!selectedCustomer.shoe_size) missing.push('Calçado');
+                    if (!selectedCustomer.age_range) missing.push('Faixa etária');
+                    if (!selectedCustomer.preferred_style) missing.push('Estilo');
+                    if (missing.length === 0) return null;
+                    const points = missing.length * 2;
+                    return (
+                      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Star className="h-4 w-4 text-amber-400" />
+                          <p className="text-sm font-bold text-amber-300">+{points} pts disponíveis!</p>
+                        </div>
+                        <p className="text-xs text-pos-white/60">
+                          Complete o cadastro deste cliente para ganhar pontos extras! Faltam: <span className="text-amber-300">{missing.join(', ')}</span>
+                        </p>
+                        <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs gap-1" onClick={() => setShowCustomerForm(true)}>
+                          <Plus className="h-3 w-3" /> Completar cadastro
+                        </Button>
+                      </div>
+                    );
+                  })()}
+                </>
               ) : (
                 <p className="text-xs text-pos-white/40">* Pule esta etapa para NFC-e sem identificação.</p>
               )}
@@ -1212,6 +1315,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       <POSCustomerForm
         open={showCustomerForm}
         onOpenChange={setShowCustomerForm}
+        existingCustomer={selectedCustomer}
         onSaved={(customer) => {
           setSelectedCustomer(customer);
           setShowCustomerForm(false);

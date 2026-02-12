@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -22,17 +22,24 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: (customer: { id: string; name: string; cpf?: string }) => void;
+  existingCustomer?: { id: string; name?: string; email?: string; whatsapp?: string; cpf?: string; cep?: string; address?: string; address_number?: string; complement?: string; neighborhood?: string; city?: string; state?: string; age_range?: string; preferred_style?: string; shoe_size?: string; gender?: string } | null;
 }
 
-export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
+export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer }: Props) {
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    name: "", email: "", whatsapp: "", cpf: "",
-    cep: "", address: "", address_number: "", complement: "",
-    neighborhood: "", city: "", state: "",
-    age_range: "", preferred_style: "", notes: "",
-    shoe_size: "", gender: "", has_children: false, children_age_range: "",
+  const initForm = () => ({
+    name: existingCustomer?.name || "", email: existingCustomer?.email || "", whatsapp: existingCustomer?.whatsapp || "", cpf: existingCustomer?.cpf || "",
+    cep: existingCustomer?.cep || "", address: existingCustomer?.address || "", address_number: existingCustomer?.address_number || "", complement: existingCustomer?.complement || "",
+    neighborhood: existingCustomer?.neighborhood || "", city: existingCustomer?.city || "", state: existingCustomer?.state || "",
+    age_range: existingCustomer?.age_range || "", preferred_style: existingCustomer?.preferred_style || "", notes: "",
+    shoe_size: existingCustomer?.shoe_size || "", gender: existingCustomer?.gender || "", has_children: false, children_age_range: "",
   });
+  const [form, setForm] = useState(initForm);
+
+  // Reset form when existingCustomer changes
+  useEffect(() => {
+    if (open) setForm(initForm());
+  }, [open, existingCustomer?.id]);
 
   const update = (field: string, value: string | boolean) => setForm(f => ({ ...f, [field]: value }));
 
@@ -65,9 +72,7 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
     }
     setSaving(true);
     try {
-      const { data, error } = await supabase
-        .from('pos_customers')
-        .insert({
+      const payload = {
           name: form.name,
           email: form.email || null,
           whatsapp: form.whatsapp || null,
@@ -86,12 +91,29 @@ export function POSCustomerForm({ open, onOpenChange, onSaved }: Props) {
           gender: form.gender || null,
           has_children: form.has_children,
           children_age_range: form.children_age_range || null,
-        } as any)
-        .select()
-        .single();
+        } as any;
 
-      if (error) throw error;
-      toast.success("Cliente cadastrado!");
+      let data: any;
+      if (existingCustomer?.id) {
+        const { data: updated, error } = await supabase
+          .from('pos_customers')
+          .update(payload)
+          .eq('id', existingCustomer.id)
+          .select()
+          .single();
+        if (error) throw error;
+        data = updated;
+        toast.success("Cadastro atualizado! +pontos de gamificação 🎯");
+      } else {
+        const { data: inserted, error } = await supabase
+          .from('pos_customers')
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        data = inserted;
+        toast.success("Cliente cadastrado!");
+      }
       onSaved({ id: data.id, name: data.name || '', cpf: data.cpf || undefined });
       setForm({ name: "", email: "", whatsapp: "", cpf: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", age_range: "", preferred_style: "", notes: "", shoe_size: "", gender: "", has_children: false, children_age_range: "" });
     } catch (e: any) {
