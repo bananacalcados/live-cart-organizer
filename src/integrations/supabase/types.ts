@@ -178,6 +178,42 @@ export type Database = {
           },
         ]
       }
+      bank_accounts: {
+        Row: {
+          account_type: string | null
+          balance: number
+          bank_name: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_type?: string | null
+          balance?: number
+          bank_name?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_type?: string | null
+          balance?: number
+          bank_name?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       campaign_channels: {
         Row: {
           campaign_id: string

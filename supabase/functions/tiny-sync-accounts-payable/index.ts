@@ -127,6 +127,41 @@ serve(async (req) => {
           }
         }
 
+        // Enrich open accounts with categories (detail endpoint)
+        if (Date.now() - functionStart < TIME_LIMIT_MS - 10000) {
+          const { data: openAccounts } = await supabase
+            .from('tiny_accounts_payable')
+            .select('id, tiny_conta_id, categoria')
+            .eq('store_id', store.id)
+            .in('situacao', ['aberto', 'parcial'])
+            .is('categoria', null)
+            .limit(8); // Process up to 8 per run
+
+          for (const acc of (openAccounts || [])) {
+            if (Date.now() - functionStart > TIME_LIMIT_MS - 3000) break;
+            try {
+              await new Promise(r => setTimeout(r, 2100));
+              const detailResp = await fetch('https://api.tiny.com.br/api2/conta.pagar.obter.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `token=${token}&formato=json&id=${acc.tiny_conta_id}`,
+              });
+              const detailData = await detailResp.json();
+              const full = detailData.retorno?.conta;
+              if (full) {
+                await supabase.from('tiny_accounts_payable').update({
+                  categoria: full.categoria || null,
+                  historico: full.historico || null,
+                  competencia: full.competencia || null,
+                  observacoes: full.obs || null,
+                }).eq('id', acc.id);
+              }
+            } catch (e) {
+              console.error(`Detail enrich error ${acc.tiny_conta_id}:`, e);
+            }
+          }
+        }
+
         // Mark complete
         if (logId) {
           await supabase.from('tiny_accounts_payable_sync_log').update({

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart3, Home, TrendingUp, DollarSign, Package, ShoppingCart, Store,
   ArrowDownRight, RefreshCw, Loader2, Box, ShoppingBag, Calendar, Receipt,
-  AlertTriangle, CheckCircle2, Clock
+  AlertTriangle, CheckCircle2, Clock, Wallet, Plus, Trash2, Check, Building2
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -15,6 +15,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { toast } from "sonner";
@@ -86,15 +89,74 @@ function KPICard({ title, value, icon: Icon, sub, variant }: { title: string; va
   );
 }
 
-function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt }: {
+function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt, onRefresh }: {
   accountsPayable: any[];
   stores: StoreRow[];
   storeFilter: string;
   fmt: (v: number) => string;
+  onRefresh: () => void;
 }) {
-  const filtered = storeFilter === "all"
+  const [apStoreFilter, setApStoreFilter] = useState(storeFilter);
+  const [apDateFrom, setApDateFrom] = useState("");
+  const [apDateTo, setApDateTo] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [markingPaid, setMarkingPaid] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [showAddBank, setShowAddBank] = useState(false);
+  const [newBank, setNewBank] = useState({ name: "", bank_name: "", balance: "", account_type: "corrente" });
+  const [savingBank, setSavingBank] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<"contas" | "bancos">("contas");
+
+  useEffect(() => {
+    loadBankAccounts();
+  }, []);
+
+  const loadBankAccounts = async () => {
+    const { data } = await supabase.from("bank_accounts").select("*").eq("is_active", true).order("name");
+    setBankAccounts(data || []);
+  };
+
+  const addBankAccount = async () => {
+    if (!newBank.name.trim()) { toast.error("Nome é obrigatório"); return; }
+    setSavingBank(true);
+    try {
+      const { error } = await supabase.from("bank_accounts").insert({
+        name: newBank.name,
+        bank_name: newBank.bank_name || null,
+        balance: parseFloat(newBank.balance || "0"),
+        account_type: newBank.account_type,
+      });
+      if (error) throw error;
+      toast.success("Conta bancária adicionada!");
+      setNewBank({ name: "", bank_name: "", balance: "", account_type: "corrente" });
+      setShowAddBank(false);
+      loadBankAccounts();
+    } catch { toast.error("Erro ao adicionar conta"); }
+    finally { setSavingBank(false); }
+  };
+
+  const updateBankBalance = async (id: string, balance: number) => {
+    await supabase.from("bank_accounts").update({ balance }).eq("id", id);
+    loadBankAccounts();
+  };
+
+  const deleteBankAccount = async (id: string) => {
+    await supabase.from("bank_accounts").update({ is_active: false }).eq("id", id);
+    toast.success("Conta removida");
+    loadBankAccounts();
+  };
+
+  // Filters
+  let filtered = apStoreFilter === "all"
     ? accountsPayable
-    : accountsPayable.filter(ap => ap.store_id === storeFilter);
+    : accountsPayable.filter(ap => ap.store_id === apStoreFilter);
+
+  if (apDateFrom) {
+    filtered = filtered.filter(ap => ap.data_vencimento && ap.data_vencimento >= apDateFrom);
+  }
+  if (apDateTo) {
+    filtered = filtered.filter(ap => ap.data_vencimento && ap.data_vencimento <= apDateTo);
+  }
 
   const openAP = filtered.filter(ap => ap.situacao === 'aberto' || ap.situacao === 'parcial');
   const paidAP = filtered.filter(ap => ap.situacao === 'pago');
@@ -102,6 +164,9 @@ function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt }: {
   const totalOpen = openAP.reduce((s: number, ap: any) => s + Number(ap.saldo || ap.valor || 0), 0);
   const totalPaid = paidAP.reduce((s: number, ap: any) => s + Number(ap.valor_pago || ap.valor || 0), 0);
   const totalOverdue = overdueAP.reduce((s: number, ap: any) => s + Number(ap.saldo || ap.valor || 0), 0);
+
+  const selectedTotal = openAP.filter(ap => selectedIds.has(ap.id)).reduce((s: number, ap: any) => s + Number(ap.saldo || ap.valor || 0), 0);
+  const totalBankBalance = bankAccounts.reduce((s, b) => s + Number(b.balance || 0), 0);
 
   const getStoreName = (storeId: string) => stores.find(s => s.id === storeId)?.name || "—";
 
@@ -123,113 +188,368 @@ function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt }: {
 
   const isOverdue = (ap: any) => ap.data_vencimento && new Date(ap.data_vencimento) < new Date() && (ap.situacao === 'aberto' || ap.situacao === 'parcial');
 
-  if (filtered.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <Receipt className="h-10 w-10 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">Nenhuma conta a pagar sincronizada.</p>
-          <p className="text-xs mt-1">Clique em "Sincronizar Contas" para importar do Tiny ERP.</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === openAP.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(openAP.map(ap => ap.id)));
+    }
+  };
+
+  const markSelectedAsPaid = async () => {
+    if (selectedIds.size === 0) return;
+    setMarkingPaid(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('tiny-mark-account-paid', {
+        body: { account_ids: [...selectedIds] },
+      });
+      if (error) throw error;
+      const successes = (data?.results || []).filter((r: any) => r.status === 'success' || r.status === 'local_only').length;
+      toast.success(`${successes} contas marcadas como pagas`);
+      setSelectedIds(new Set());
+      onRefresh();
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setMarkingPaid(false);
+    }
+  };
+
+  // Categories summary
+  const categorySummary = useMemo(() => {
+    const map = new Map<string, { count: number; total: number }>();
+    openAP.forEach(ap => {
+      const cat = ap.categoria || "Sem categoria";
+      const cur = map.get(cat) || { count: 0, total: 0 };
+      cur.count++;
+      cur.total += Number(ap.saldo || ap.valor || 0);
+      map.set(cat, cur);
+    });
+    return [...map.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.total - a.total);
+  }, [openAP]);
 
   return (
     <>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total em Aberto" value={fmt(totalOpen)} icon={Clock} variant={totalOpen > 0 ? "destructive" : undefined} />
-        <KPICard title="Vencidas" value={fmt(totalOverdue)} icon={AlertTriangle} variant="destructive" sub={`${overdueAP.length} contas`} />
-        <KPICard title="Total Pago" value={fmt(totalPaid)} icon={CheckCircle2} sub={`${paidAP.length} contas`} />
-        <KPICard title="Total de Contas" value={filtered.length.toString()} icon={Receipt} />
+      {/* Sub-tabs */}
+      <div className="flex gap-2 mb-4">
+        <Button
+          variant={activeSubTab === "contas" ? "default" : "outline"}
+          size="sm" className="gap-1 h-8 text-xs"
+          onClick={() => setActiveSubTab("contas")}
+        >
+          <Receipt className="h-3.5 w-3.5" /> Contas a Pagar
+        </Button>
+        <Button
+          variant={activeSubTab === "bancos" ? "default" : "outline"}
+          size="sm" className="gap-1 h-8 text-xs"
+          onClick={() => setActiveSubTab("bancos")}
+        >
+          <Building2 className="h-3.5 w-3.5" /> Contas Bancárias
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Contas em Aberto e Vencidas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {openAP.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-6">Nenhuma conta em aberto 🎉</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Fornecedor</TableHead>
-                    <TableHead className="text-xs">Loja</TableHead>
-                    <TableHead className="text-xs">Nº Doc</TableHead>
-                    <TableHead className="text-xs">Vencimento</TableHead>
-                    <TableHead className="text-xs text-right">Valor</TableHead>
-                    <TableHead className="text-xs text-right">Saldo</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                    <TableHead className="text-xs">Categoria</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {openAP.sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '')).map((ap: any) => (
-                    <TableRow key={ap.id} className={isOverdue(ap) ? "bg-destructive/5" : ""}>
-                      <TableCell className="text-xs font-medium max-w-[200px] truncate">{ap.nome_fornecedor || "—"}</TableCell>
-                      <TableCell className="text-xs">{getStoreName(ap.store_id)}</TableCell>
-                      <TableCell className="text-xs">{ap.numero_doc || "—"}</TableCell>
-                      <TableCell className="text-xs">
-                        <span className={isOverdue(ap) ? "text-destructive font-bold" : ""}>
-                          {formatDateBR(ap.data_vencimento)}
-                        </span>
-                        {isOverdue(ap) && <AlertTriangle className="h-3 w-3 inline ml-1 text-destructive" />}
-                      </TableCell>
-                      <TableCell className="text-xs text-right">{fmt(Number(ap.valor || 0))}</TableCell>
-                      <TableCell className="text-xs text-right font-semibold">{fmt(Number(ap.saldo || 0))}</TableCell>
-                      <TableCell>{situacaoBadge(ap.situacao)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{ap.categoria || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {activeSubTab === "bancos" ? (
+        <>
+          {/* Bank Accounts */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <KPICard title="Saldo Total" value={fmt(totalBankBalance)} icon={Wallet} />
+            <KPICard
+              title="Cobertura das Contas"
+              value={totalOpen > 0 ? `${Math.round((totalBankBalance / totalOpen) * 100)}%` : "—"}
+              icon={CheckCircle2}
+              variant={totalBankBalance < totalOpen ? "destructive" : undefined}
+              sub={totalBankBalance >= totalOpen ? "Cobre todas em aberto" : `Faltam ${fmt(totalOpen - totalBankBalance)}`}
+            />
+            <KPICard title="Total em Aberto" value={fmt(totalOpen)} icon={Clock} variant="destructive" />
+            <KPICard title="Contas Bancárias" value={bankAccounts.length.toString()} icon={Building2} />
+          </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Contas Pagas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {paidAP.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-6">Nenhuma conta paga registrada.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Fornecedor</TableHead>
-                    <TableHead className="text-xs">Loja</TableHead>
-                    <TableHead className="text-xs">Nº Doc</TableHead>
-                    <TableHead className="text-xs">Pagamento</TableHead>
-                    <TableHead className="text-xs text-right">Valor</TableHead>
-                    <TableHead className="text-xs text-right">Pago</TableHead>
-                    <TableHead className="text-xs">Categoria</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paidAP.slice(0, 50).map((ap: any) => (
-                    <TableRow key={ap.id}>
-                      <TableCell className="text-xs font-medium max-w-[200px] truncate">{ap.nome_fornecedor || "—"}</TableCell>
-                      <TableCell className="text-xs">{getStoreName(ap.store_id)}</TableCell>
-                      <TableCell className="text-xs">{ap.numero_doc || "—"}</TableCell>
-                      <TableCell className="text-xs">{formatDateBR(ap.data_pagamento)}</TableCell>
-                      <TableCell className="text-xs text-right">{fmt(Number(ap.valor || 0))}</TableCell>
-                      <TableCell className="text-xs text-right font-semibold">{fmt(Number(ap.valor_pago || 0))}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{ap.categoria || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {bankAccounts.map(bank => (
+              <Card key={bank.id}>
+                <CardContent className="pt-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-primary" />
+                      <div>
+                        <h4 className="font-semibold text-sm">{bank.name}</h4>
+                        {bank.bank_name && <p className="text-[10px] text-muted-foreground">{bank.bank_name}</p>}
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteBankAccount(bank.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">Saldo</span>
+                      <span className="text-lg font-bold">{fmt(Number(bank.balance))}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Novo saldo"
+                        className="h-7 text-xs flex-1"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            updateBankBalance(bank.id, parseFloat((e.target as HTMLInputElement).value || "0"));
+                            (e.target as HTMLInputElement).value = "";
+                          }
+                        }}
+                      />
+                      <Badge variant="secondary" className="text-[10px]">{bank.account_type}</Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {/* Add card */}
+            <Card className="border-dashed cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setShowAddBank(true)}>
+              <CardContent className="pt-5 flex flex-col items-center justify-center h-full min-h-[140px] text-muted-foreground">
+                <Plus className="h-6 w-6 mb-2" />
+                <p className="text-sm font-medium">Adicionar Conta</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Add Bank Dialog */}
+          <Dialog open={showAddBank} onOpenChange={setShowAddBank}>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Adicionar Conta Bancária</DialogTitle></DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">Nome da Conta *</Label>
+                  <Input value={newBank.name} onChange={e => setNewBank(s => ({ ...s, name: e.target.value }))} placeholder="Ex: Conta PJ Itaú" className="h-9" />
+                </div>
+                <div>
+                  <Label className="text-xs">Banco</Label>
+                  <Input value={newBank.bank_name} onChange={e => setNewBank(s => ({ ...s, bank_name: e.target.value }))} placeholder="Ex: Itaú, Bradesco, Nubank" className="h-9" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Saldo Atual (R$)</Label>
+                    <Input type="number" value={newBank.balance} onChange={e => setNewBank(s => ({ ...s, balance: e.target.value }))} placeholder="0,00" className="h-9" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Tipo</Label>
+                    <Select value={newBank.account_type} onValueChange={v => setNewBank(s => ({ ...s, account_type: v }))}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="corrente">Corrente</SelectItem>
+                        <SelectItem value="poupanca">Poupança</SelectItem>
+                        <SelectItem value="investimento">Investimento</SelectItem>
+                        <SelectItem value="caixa">Caixa</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button className="w-full" onClick={addBankAccount} disabled={savingBank}>
+                  {savingBank ? "Salvando..." : "Adicionar"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : (
+        <>
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <Select value={apStoreFilter} onValueChange={setApStoreFilter}>
+              <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectValue placeholder="Todas as lojas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as lojas</SelectItem>
+                {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">De:</span>
+              <Input type="date" value={apDateFrom} onChange={e => setApDateFrom(e.target.value)} className="h-8 text-xs w-[140px]" />
             </div>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">Até:</span>
+              <Input type="date" value={apDateTo} onChange={e => setApDateTo(e.target.value)} className="h-8 text-xs w-[140px]" />
+            </div>
+            {(apDateFrom || apDateTo) && (
+              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setApDateFrom(""); setApDateTo(""); }}>
+                Limpar datas
+              </Button>
+            )}
+          </div>
+
+          {filtered.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <Receipt className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                <p className="text-sm">Nenhuma conta a pagar encontrada.</p>
+                <p className="text-xs mt-1">Clique em "Sincronizar Contas" para importar do Tiny ERP.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <KPICard title="Total em Aberto" value={fmt(totalOpen)} icon={Clock} variant={totalOpen > 0 ? "destructive" : undefined} />
+                <KPICard title="Vencidas" value={fmt(totalOverdue)} icon={AlertTriangle} variant="destructive" sub={`${overdueAP.length} contas`} />
+                <KPICard title="Total Pago" value={fmt(totalPaid)} icon={CheckCircle2} sub={`${paidAP.length} contas`} />
+                <KPICard title="Total de Contas" value={filtered.length.toString()} icon={Receipt} />
+              </div>
+
+              {/* Categories breakdown */}
+              {categorySummary.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Por Categoria (Em Aberto)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {categorySummary.map((cat, i) => (
+                        <Badge key={i} variant="outline" className="text-xs py-1 px-2">
+                          {cat.name}: {fmt(cat.total)} ({cat.count})
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Selected actions bar */}
+              {selectedIds.size > 0 && (
+                <Card className="border-primary/50 bg-primary/5">
+                  <CardContent className="py-3 px-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Check className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">{selectedIds.size} contas selecionadas</span>
+                      <span className="text-sm font-bold">{fmt(selectedTotal)}</span>
+                      {totalBankBalance > 0 && (
+                        <Badge variant={totalBankBalance >= selectedTotal ? "default" : "destructive"} className="text-xs">
+                          {totalBankBalance >= selectedTotal
+                            ? `✓ Saldo cobre (${fmt(totalBankBalance)})`
+                            : `✗ Saldo insuficiente (${fmt(totalBankBalance)})`
+                          }
+                        </Badge>
+                      )}
+                    </div>
+                    <Button
+                      size="sm" className="gap-1"
+                      onClick={markSelectedAsPaid}
+                      disabled={markingPaid}
+                    >
+                      {markingPaid ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                      {markingPaid ? "Processando..." : "Marcar como Pago"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Contas em Aberto e Vencidas</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {openAP.length === 0 ? (
+                    <p className="text-muted-foreground text-sm text-center py-6">Nenhuma conta em aberto 🎉</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-8">
+                              <Checkbox
+                                checked={selectedIds.size === openAP.length && openAP.length > 0}
+                                onCheckedChange={toggleSelectAll}
+                              />
+                            </TableHead>
+                            <TableHead className="text-xs">Fornecedor</TableHead>
+                            <TableHead className="text-xs">Loja</TableHead>
+                            <TableHead className="text-xs">Nº Doc</TableHead>
+                            <TableHead className="text-xs">Vencimento</TableHead>
+                            <TableHead className="text-xs text-right">Valor</TableHead>
+                            <TableHead className="text-xs text-right">Saldo</TableHead>
+                            <TableHead className="text-xs">Status</TableHead>
+                            <TableHead className="text-xs">Categoria</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {openAP.sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '')).map((ap: any) => (
+                            <TableRow key={ap.id} className={`${isOverdue(ap) ? "bg-destructive/5" : ""} ${selectedIds.has(ap.id) ? "bg-primary/5" : ""}`}>
+                              <TableCell>
+                                <Checkbox checked={selectedIds.has(ap.id)} onCheckedChange={() => toggleSelect(ap.id)} />
+                              </TableCell>
+                              <TableCell className="text-xs font-medium max-w-[200px] truncate">{ap.nome_fornecedor || "—"}</TableCell>
+                              <TableCell className="text-xs">{getStoreName(ap.store_id)}</TableCell>
+                              <TableCell className="text-xs">{ap.numero_doc || "—"}</TableCell>
+                              <TableCell className="text-xs">
+                                <span className={isOverdue(ap) ? "text-destructive font-bold" : ""}>
+                                  {formatDateBR(ap.data_vencimento)}
+                                </span>
+                                {isOverdue(ap) && <AlertTriangle className="h-3 w-3 inline ml-1 text-destructive" />}
+                              </TableCell>
+                              <TableCell className="text-xs text-right">{fmt(Number(ap.valor || 0))}</TableCell>
+                              <TableCell className="text-xs text-right font-semibold">{fmt(Number(ap.saldo || 0))}</TableCell>
+                              <TableCell>{situacaoBadge(ap.situacao)}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{ap.categoria || "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Contas Pagas</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {paidAP.length === 0 ? (
+                    <p className="text-muted-foreground text-sm text-center py-6">Nenhuma conta paga registrada.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Fornecedor</TableHead>
+                            <TableHead className="text-xs">Loja</TableHead>
+                            <TableHead className="text-xs">Nº Doc</TableHead>
+                            <TableHead className="text-xs">Pagamento</TableHead>
+                            <TableHead className="text-xs text-right">Valor</TableHead>
+                            <TableHead className="text-xs text-right">Pago</TableHead>
+                            <TableHead className="text-xs">Categoria</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paidAP.slice(0, 50).map((ap: any) => (
+                            <TableRow key={ap.id}>
+                              <TableCell className="text-xs font-medium max-w-[200px] truncate">{ap.nome_fornecedor || "—"}</TableCell>
+                              <TableCell className="text-xs">{getStoreName(ap.store_id)}</TableCell>
+                              <TableCell className="text-xs">{ap.numero_doc || "—"}</TableCell>
+                              <TableCell className="text-xs">{formatDateBR(ap.data_pagamento)}</TableCell>
+                              <TableCell className="text-xs text-right">{fmt(Number(ap.valor || 0))}</TableCell>
+                              <TableCell className="text-xs text-right font-semibold">{fmt(Number(ap.valor_pago || 0))}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{ap.categoria || "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
           )}
-        </CardContent>
-      </Card>
+        </>
+      )}
     </>
   );
 }
@@ -869,6 +1189,7 @@ export default function Management() {
                   stores={stores}
                   storeFilter={storeFilter}
                   fmt={fmt}
+                  onRefresh={fetchData}
                 />
               </TabsContent>
             </Tabs>
