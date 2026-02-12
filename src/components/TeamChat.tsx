@@ -23,26 +23,54 @@ export function TeamChat() {
   const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-detect name from logged-in user's email
   useEffect(() => {
     const detectName = async () => {
-      const stored = localStorage.getItem('team_chat_name');
       const { data: { user } } = await supabase.auth.getUser();
       
-      if (user?.email) {
-        // Extract name from email: "joao.silva@gmail.com" -> "Joao Silva"
-        const emailName = user.email.split('@')[0]
+      if (user) {
+        // Check user_profiles first
+        const { data: profileById } = await supabase
+          .from('user_profiles')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (profileById?.display_name) {
+          setSenderName(profileById.display_name);
+          localStorage.setItem('team_chat_name', profileById.display_name);
+          setIsReady(true);
+          return;
+        }
+
+        // Check by email placeholder
+        const emailKey = `email:${(user.email || '').toLowerCase()}`;
+        const { data: profileByEmail } = await supabase
+          .from('user_profiles')
+          .select('id, display_name')
+          .eq('user_id', emailKey)
+          .maybeSingle();
+        
+        if (profileByEmail?.display_name) {
+          await supabase.from('user_profiles')
+            .update({ user_id: user.id } as any)
+            .eq('id', profileByEmail.id);
+          setSenderName(profileByEmail.display_name);
+          localStorage.setItem('team_chat_name', profileByEmail.display_name);
+          setIsReady(true);
+          return;
+        }
+
+        // Fallback to email name
+        const emailName = (user.email || '').split('@')[0]
           .replace(/[._-]/g, ' ')
           .replace(/\b\w/g, c => c.toUpperCase());
-        
-        // Use user metadata display name if available, otherwise email-derived name
         const displayName = user.user_metadata?.full_name || user.user_metadata?.name || emailName;
         setSenderName(displayName);
         localStorage.setItem('team_chat_name', displayName);
         setIsReady(true);
-      } else if (stored) {
-        setSenderName(stored);
-        setIsReady(true);
+      } else {
+        const stored = localStorage.getItem('team_chat_name');
+        if (stored) { setSenderName(stored); setIsReady(true); }
       }
     };
     detectName();

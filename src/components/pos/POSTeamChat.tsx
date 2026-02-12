@@ -59,13 +59,43 @@ export function POSTeamChat({ storeId }: Props) {
   useEffect(() => {
     const detectName = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) {
-        const emailName = user.email.split('@')[0]
-          .replace(/[._-]/g, ' ')
-          .replace(/\b\w/g, c => c.toUpperCase());
-        const displayName = user.user_metadata?.full_name || user.user_metadata?.name || emailName;
-        setSenderName(displayName);
-        setIsReady(true);
+      if (user) {
+        // Check user_profiles by user_id first
+        const { data: profileById } = await supabase
+          .from('user_profiles')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (profileById?.display_name) {
+          setSenderName(profileById.display_name);
+          setIsReady(true);
+        } else {
+          // Check by email placeholder (set by admin)
+          const emailKey = `email:${(user.email || '').toLowerCase()}`;
+          const { data: profileByEmail } = await supabase
+            .from('user_profiles')
+            .select('id, display_name')
+            .eq('user_id', emailKey)
+            .maybeSingle();
+          
+          if (profileByEmail?.display_name) {
+            // Update the profile to use the real user_id
+            await supabase.from('user_profiles')
+              .update({ user_id: user.id } as any)
+              .eq('id', profileByEmail.id);
+            setSenderName(profileByEmail.display_name);
+            setIsReady(true);
+          } else {
+            // Fallback to email-based name
+            const emailName = (user.email || '').split('@')[0]
+              .replace(/[._-]/g, ' ')
+              .replace(/\b\w/g, c => c.toUpperCase());
+            const displayName = user.user_metadata?.full_name || user.user_metadata?.name || emailName;
+            setSenderName(displayName);
+            setIsReady(true);
+          }
+        }
       } else {
         const stored = localStorage.getItem('team_chat_name');
         if (stored) { setSenderName(stored); setIsReady(true); }

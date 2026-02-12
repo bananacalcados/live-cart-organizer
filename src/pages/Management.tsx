@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart3, Home, TrendingUp, DollarSign, Package, ShoppingCart, Store,
   ArrowDownRight, RefreshCw, Loader2, Box, ShoppingBag, Calendar, Receipt,
-  AlertTriangle, CheckCircle2, Clock, Wallet, Plus, Trash2, Check, Building2
+  AlertTriangle, CheckCircle2, Clock, Wallet, Plus, Trash2, Check, Building2,
+  Users, Save, UserCheck
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -21,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, subMonths } from "date-fns";
 import { toast } from "sonner";
+import { TeamProfilesManager } from "@/components/TeamProfilesManager";
 
 interface TinySyncedOrder {
   id: string;
@@ -1045,6 +1047,10 @@ export default function Management() {
                   <Receipt className="h-3.5 w-3.5" />
                   Contas a Pagar
                 </TabsTrigger>
+                <TabsTrigger value="team" className="gap-1">
+                  <Users className="h-3.5 w-3.5" />
+                  Equipe
+                </TabsTrigger>
               </TabsList>
 
               {/* Overview */}
@@ -1225,6 +1231,11 @@ export default function Management() {
                   fmt={fmt}
                   onRefresh={fetchData}
                 />
+              </TabsContent>
+
+              {/* Equipe / Perfis */}
+              <TabsContent value="team" className="space-y-4">
+                <TeamProfilesManager stores={stores} />
               </TabsContent>
             </Tabs>
           </>
