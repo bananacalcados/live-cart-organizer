@@ -3432,6 +3432,13 @@ export type Database = {
           birth_date: string | null
           city: string | null
           country: string | null
+          coupon_amount: number | null
+          coupon_code: string | null
+          coupon_expiry_date: string | null
+          coupon_min_purchase: number | null
+          coupon_start_date: string | null
+          coupon_type: string | null
+          coupon_used: boolean | null
           created_at: string
           ddd: string | null
           email: string | null
@@ -3467,6 +3474,13 @@ export type Database = {
           birth_date?: string | null
           city?: string | null
           country?: string | null
+          coupon_amount?: number | null
+          coupon_code?: string | null
+          coupon_expiry_date?: string | null
+          coupon_min_purchase?: number | null
+          coupon_start_date?: string | null
+          coupon_type?: string | null
+          coupon_used?: boolean | null
           created_at?: string
           ddd?: string | null
           email?: string | null
@@ -3502,6 +3516,13 @@ export type Database = {
           birth_date?: string | null
           city?: string | null
           country?: string | null
+          coupon_amount?: number | null
+          coupon_code?: string | null
+          coupon_expiry_date?: string | null
+          coupon_min_purchase?: number | null
+          coupon_start_date?: string | null
+          coupon_type?: string | null
+          coupon_used?: boolean | null
           created_at?: string
           ddd?: string | null
           email?: string | null
