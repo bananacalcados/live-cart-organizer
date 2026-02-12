@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
@@ -45,7 +45,7 @@ export default function POS() {
   const [sellers, setSellers] = useState<{ id: string; name: string; tiny_seller_id?: string }[]>([]);
   const [sellersLoaded, setSellersLoaded] = useState(false);
 
-  useEffect(() => {
+  const loadSellers = useCallback(() => {
     if (!selectedStore) { setSellers([]); setSellersLoaded(false); return; }
     const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
     const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -59,6 +59,13 @@ export default function POS() {
       .catch(e => console.error('Pre-load sellers error:', e))
       .finally(() => setSellersLoaded(true));
   }, [selectedStore]);
+
+  useEffect(() => { loadSellers(); }, [loadSellers]);
+
+  // Reload sellers when switching back to sales (e.g. after toggling active in config)
+  useEffect(() => {
+    if (section === 'sales' && selectedStore) loadSellers();
+  }, [section]);
 
   // Realtime count of pending requests for this store
   useEffect(() => {
