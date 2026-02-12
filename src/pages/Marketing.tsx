@@ -214,23 +214,32 @@ export default function Marketing() {
   const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    toast.info("Processando planilha...");
     try {
-      const XLSX = await import('xlsx');
+      const xlsxModule = await import('xlsx');
+      const XLSX = xlsxModule.default || xlsxModule;
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows: any[] = XLSX.utils.sheet_to_json(ws);
       if (rows.length === 0) { toast.error("Planilha vazia"); return; }
       const headers = Object.keys(rows[0]);
-      const phoneCol = headers.find(h => /phone|telefone|whatsapp|celular|fone/i.test(h));
-      const nameCol = headers.find(h => /name|nome|cliente/i.test(h));
-      const emailCol = headers.find(h => /email|e-mail/i.test(h));
-      if (!phoneCol && !emailCol) { toast.error("Nenhuma coluna de telefone ou email"); return; }
+      console.log('Excel headers found:', headers);
+      const phoneCol = headers.find(h => /phone|telefone|whatsapp|celular|fone|tel\b/i.test(h));
+      const nameCol = headers.find(h => /name|nome|cliente|razao|fantasia|contato/i.test(h));
+      const emailCol = headers.find(h => /email|e-mail|e_mail/i.test(h));
+      const instagramCol = headers.find(h => /instagram|insta|ig/i.test(h));
+      if (!phoneCol && !emailCol) {
+        toast.error(`Nenhuma coluna de telefone ou email encontrada. Colunas: ${headers.join(', ')}`);
+        return;
+      }
       const contacts = rows.map(row => ({
         phone: phoneCol ? String(row[phoneCol] || '').replace(/\D/g, '') : null,
         name: nameCol ? String(row[nameCol] || '') : null,
         email: emailCol ? String(row[emailCol] || '') : null,
-      })).filter(c => c.phone || c.email);
+        instagram: instagramCol ? String(row[instagramCol] || '') : null,
+      })).filter(c => (c.phone && c.phone.length >= 8) || c.email);
+      if (contacts.length === 0) { toast.error("Nenhum contato válido encontrado na planilha"); return; }
       const { data: list, error: listError } = await supabase.from('marketing_contact_lists').insert({
         name: `Upload: ${file.name} (${new Date().toLocaleDateString('pt-BR')})`,
         source: 'excel_upload', contact_count: contacts.length,
@@ -238,13 +247,19 @@ export default function Marketing() {
       }).select().single();
       if (listError) throw listError;
       for (let i = 0; i < contacts.length; i += 100) {
-        const batch = contacts.slice(i, i + 100).map(c => ({ list_id: list.id, phone: c.phone || null, name: c.name || null, email: c.email || null }));
+        const batch = contacts.slice(i, i + 100).map(c => ({
+          list_id: list.id, phone: c.phone || null, name: c.name || null,
+          email: c.email || null, instagram: c.instagram || null,
+        }));
         const { error } = await supabase.from('marketing_contacts').insert(batch);
         if (error) throw error;
       }
-      toast.success(`${contacts.length} contatos importados!`);
+      toast.success(`${contacts.length} contatos importados com sucesso!`);
       setUploadDialogOpen(false);
-    } catch (err) { console.error(err); toast.error("Erro ao processar planilha"); }
+    } catch (err: any) {
+      console.error('Excel upload error:', err);
+      toast.error(`Erro ao processar planilha: ${err?.message || 'erro desconhecido'}`);
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
