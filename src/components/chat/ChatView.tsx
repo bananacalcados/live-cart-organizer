@@ -300,7 +300,7 @@ export function ChatView({
 
       {/* Messages */}
       <ScrollArea className="flex-1 bg-[#e5ddd5] dark:bg-[#0b141a]" style={{ minHeight: 0 }}>
-        <div className="space-y-2 p-3 overflow-hidden">
+        <div className="space-y-2 p-3 w-full max-w-full overflow-hidden">
           {messages.map((msg) => (
             <div
               key={msg.id}
