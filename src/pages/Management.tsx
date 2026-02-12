@@ -71,6 +71,169 @@ const CHART_COLORS = [
 
 type Period = "today" | "7d" | "30d" | "month" | "last_month" | "custom";
 
+function KPICard({ title, value, icon: Icon, sub, variant }: { title: string; value: string; icon: any; sub?: string; variant?: "destructive" }) {
+  return (
+    <Card>
+      <CardContent className="pt-4 pb-3 px-4">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] text-muted-foreground font-medium">{title}</span>
+          <Icon className={`h-3.5 w-3.5 ${variant === "destructive" ? "text-destructive" : "text-primary"}`} />
+        </div>
+        <p className={`text-lg font-bold ${variant === "destructive" ? "text-destructive" : ""}`}>{value}</p>
+        {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt }: {
+  accountsPayable: any[];
+  stores: StoreRow[];
+  storeFilter: string;
+  fmt: (v: number) => string;
+}) {
+  const filtered = storeFilter === "all"
+    ? accountsPayable
+    : accountsPayable.filter(ap => ap.store_id === storeFilter);
+
+  const openAP = filtered.filter(ap => ap.situacao === 'aberto' || ap.situacao === 'parcial');
+  const paidAP = filtered.filter(ap => ap.situacao === 'pago');
+  const overdueAP = openAP.filter(ap => ap.data_vencimento && new Date(ap.data_vencimento) < new Date());
+  const totalOpen = openAP.reduce((s: number, ap: any) => s + Number(ap.saldo || ap.valor || 0), 0);
+  const totalPaid = paidAP.reduce((s: number, ap: any) => s + Number(ap.valor_pago || ap.valor || 0), 0);
+  const totalOverdue = overdueAP.reduce((s: number, ap: any) => s + Number(ap.saldo || ap.valor || 0), 0);
+
+  const getStoreName = (storeId: string) => stores.find(s => s.id === storeId)?.name || "—";
+
+  const formatDateBR = (d: string | null) => {
+    if (!d) return "—";
+    const date = new Date(d + 'T12:00:00');
+    return date.toLocaleDateString("pt-BR");
+  };
+
+  const situacaoBadge = (sit: string) => {
+    switch (sit) {
+      case 'pago': return <Badge className="bg-primary text-primary-foreground text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Pago</Badge>;
+      case 'aberto': return <Badge variant="outline" className="text-[10px]"><Clock className="h-3 w-3 mr-1" />Aberto</Badge>;
+      case 'parcial': return <Badge className="bg-accent text-accent-foreground text-[10px]">Parcial</Badge>;
+      case 'cancelado': return <Badge variant="destructive" className="text-[10px]">Cancelado</Badge>;
+      default: return <Badge variant="secondary" className="text-[10px]">{sit}</Badge>;
+    }
+  };
+
+  const isOverdue = (ap: any) => ap.data_vencimento && new Date(ap.data_vencimento) < new Date() && (ap.situacao === 'aberto' || ap.situacao === 'parcial');
+
+  if (filtered.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          <Receipt className="h-10 w-10 mx-auto mb-3 opacity-40" />
+          <p className="text-sm">Nenhuma conta a pagar sincronizada.</p>
+          <p className="text-xs mt-1">Clique em "Sincronizar Contas" para importar do Tiny ERP.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KPICard title="Total em Aberto" value={fmt(totalOpen)} icon={Clock} variant={totalOpen > 0 ? "destructive" : undefined} />
+        <KPICard title="Vencidas" value={fmt(totalOverdue)} icon={AlertTriangle} variant="destructive" sub={`${overdueAP.length} contas`} />
+        <KPICard title="Total Pago" value={fmt(totalPaid)} icon={CheckCircle2} sub={`${paidAP.length} contas`} />
+        <KPICard title="Total de Contas" value={filtered.length.toString()} icon={Receipt} />
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Contas em Aberto e Vencidas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {openAP.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-6">Nenhuma conta em aberto 🎉</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Fornecedor</TableHead>
+                    <TableHead className="text-xs">Loja</TableHead>
+                    <TableHead className="text-xs">Nº Doc</TableHead>
+                    <TableHead className="text-xs">Vencimento</TableHead>
+                    <TableHead className="text-xs text-right">Valor</TableHead>
+                    <TableHead className="text-xs text-right">Saldo</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">Categoria</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {openAP.sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '')).map((ap: any) => (
+                    <TableRow key={ap.id} className={isOverdue(ap) ? "bg-destructive/5" : ""}>
+                      <TableCell className="text-xs font-medium max-w-[200px] truncate">{ap.nome_fornecedor || "—"}</TableCell>
+                      <TableCell className="text-xs">{getStoreName(ap.store_id)}</TableCell>
+                      <TableCell className="text-xs">{ap.numero_doc || "—"}</TableCell>
+                      <TableCell className="text-xs">
+                        <span className={isOverdue(ap) ? "text-destructive font-bold" : ""}>
+                          {formatDateBR(ap.data_vencimento)}
+                        </span>
+                        {isOverdue(ap) && <AlertTriangle className="h-3 w-3 inline ml-1 text-destructive" />}
+                      </TableCell>
+                      <TableCell className="text-xs text-right">{fmt(Number(ap.valor || 0))}</TableCell>
+                      <TableCell className="text-xs text-right font-semibold">{fmt(Number(ap.saldo || 0))}</TableCell>
+                      <TableCell>{situacaoBadge(ap.situacao)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{ap.categoria || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Contas Pagas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {paidAP.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-6">Nenhuma conta paga registrada.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Fornecedor</TableHead>
+                    <TableHead className="text-xs">Loja</TableHead>
+                    <TableHead className="text-xs">Nº Doc</TableHead>
+                    <TableHead className="text-xs">Pagamento</TableHead>
+                    <TableHead className="text-xs text-right">Valor</TableHead>
+                    <TableHead className="text-xs text-right">Pago</TableHead>
+                    <TableHead className="text-xs">Categoria</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paidAP.slice(0, 50).map((ap: any) => (
+                    <TableRow key={ap.id}>
+                      <TableCell className="text-xs font-medium max-w-[200px] truncate">{ap.nome_fornecedor || "—"}</TableCell>
+                      <TableCell className="text-xs">{getStoreName(ap.store_id)}</TableCell>
+                      <TableCell className="text-xs">{ap.numero_doc || "—"}</TableCell>
+                      <TableCell className="text-xs">{formatDateBR(ap.data_pagamento)}</TableCell>
+                      <TableCell className="text-xs text-right">{fmt(Number(ap.valor || 0))}</TableCell>
+                      <TableCell className="text-xs text-right font-semibold">{fmt(Number(ap.valor_pago || 0))}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{ap.categoria || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
 export default function Management() {
   const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>("30d");
@@ -713,168 +876,5 @@ export default function Management() {
         )}
       </main>
     </div>
-  );
-}
-
-function KPICard({ title, value, icon: Icon, sub, variant }: { title: string; value: string; icon: any; sub?: string; variant?: "destructive" }) {
-  return (
-    <Card>
-      <CardContent className="pt-4 pb-3 px-4">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[11px] text-muted-foreground font-medium">{title}</span>
-          <Icon className={`h-3.5 w-3.5 ${variant === "destructive" ? "text-destructive" : "text-primary"}`} />
-        </div>
-        <p className={`text-lg font-bold ${variant === "destructive" ? "text-destructive" : ""}`}>{value}</p>
-        {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
-      </CardContent>
-    </Card>
-  );
-}
-
-function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt }: {
-  accountsPayable: any[];
-  stores: StoreRow[];
-  storeFilter: string;
-  fmt: (v: number) => string;
-}) {
-  const filtered = storeFilter === "all"
-    ? accountsPayable
-    : accountsPayable.filter(ap => ap.store_id === storeFilter);
-
-  const openAP = filtered.filter(ap => ap.situacao === 'aberto' || ap.situacao === 'parcial');
-  const paidAP = filtered.filter(ap => ap.situacao === 'pago');
-  const overdueAP = openAP.filter(ap => ap.data_vencimento && new Date(ap.data_vencimento) < new Date());
-  const totalOpen = openAP.reduce((s: number, ap: any) => s + Number(ap.saldo || ap.valor || 0), 0);
-  const totalPaid = paidAP.reduce((s: number, ap: any) => s + Number(ap.valor_pago || ap.valor || 0), 0);
-  const totalOverdue = overdueAP.reduce((s: number, ap: any) => s + Number(ap.saldo || ap.valor || 0), 0);
-
-  const getStoreName = (storeId: string) => stores.find(s => s.id === storeId)?.name || "—";
-
-  const formatDateBR = (d: string | null) => {
-    if (!d) return "—";
-    const date = new Date(d + 'T12:00:00');
-    return date.toLocaleDateString("pt-BR");
-  };
-
-  const situacaoBadge = (sit: string) => {
-    switch (sit) {
-      case 'pago': return <Badge className="bg-primary text-primary-foreground text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Pago</Badge>;
-      case 'aberto': return <Badge variant="outline" className="text-[10px]"><Clock className="h-3 w-3 mr-1" />Aberto</Badge>;
-      case 'parcial': return <Badge className="bg-accent text-accent-foreground text-[10px]">Parcial</Badge>;
-      case 'cancelado': return <Badge variant="destructive" className="text-[10px]">Cancelado</Badge>;
-      default: return <Badge variant="secondary" className="text-[10px]">{sit}</Badge>;
-    }
-  };
-
-  const isOverdue = (ap: any) => ap.data_vencimento && new Date(ap.data_vencimento) < new Date() && (ap.situacao === 'aberto' || ap.situacao === 'parcial');
-
-  if (filtered.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <Receipt className="h-10 w-10 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">Nenhuma conta a pagar sincronizada.</p>
-          <p className="text-xs mt-1">Clique em "Sincronizar Contas" para importar do Tiny ERP.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KPICard title="Total em Aberto" value={fmt(totalOpen)} icon={Clock} variant={totalOpen > 0 ? "destructive" : undefined} />
-        <KPICard title="Vencidas" value={fmt(totalOverdue)} icon={AlertTriangle} variant="destructive" sub={`${overdueAP.length} contas`} />
-        <KPICard title="Total Pago" value={fmt(totalPaid)} icon={CheckCircle2} sub={`${paidAP.length} contas`} />
-        <KPICard title="Total de Contas" value={filtered.length.toString()} icon={Receipt} />
-      </div>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Contas em Aberto e Vencidas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {openAP.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-6">Nenhuma conta em aberto 🎉</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Fornecedor</TableHead>
-                    <TableHead className="text-xs">Loja</TableHead>
-                    <TableHead className="text-xs">Nº Doc</TableHead>
-                    <TableHead className="text-xs">Vencimento</TableHead>
-                    <TableHead className="text-xs text-right">Valor</TableHead>
-                    <TableHead className="text-xs text-right">Saldo</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                    <TableHead className="text-xs">Categoria</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {openAP.sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '')).map((ap: any) => (
-                    <TableRow key={ap.id} className={isOverdue(ap) ? "bg-destructive/5" : ""}>
-                      <TableCell className="text-xs font-medium max-w-[200px] truncate">{ap.nome_fornecedor || "—"}</TableCell>
-                      <TableCell className="text-xs">{getStoreName(ap.store_id)}</TableCell>
-                      <TableCell className="text-xs">{ap.numero_doc || "—"}</TableCell>
-                      <TableCell className="text-xs">
-                        <span className={isOverdue(ap) ? "text-destructive font-bold" : ""}>
-                          {formatDateBR(ap.data_vencimento)}
-                        </span>
-                        {isOverdue(ap) && <AlertTriangle className="h-3 w-3 inline ml-1 text-destructive" />}
-                      </TableCell>
-                      <TableCell className="text-xs text-right">{fmt(Number(ap.valor || 0))}</TableCell>
-                      <TableCell className="text-xs text-right font-semibold">{fmt(Number(ap.saldo || 0))}</TableCell>
-                      <TableCell>{situacaoBadge(ap.situacao)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{ap.categoria || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Contas Pagas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {paidAP.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-6">Nenhuma conta paga registrada.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Fornecedor</TableHead>
-                    <TableHead className="text-xs">Loja</TableHead>
-                    <TableHead className="text-xs">Nº Doc</TableHead>
-                    <TableHead className="text-xs">Pagamento</TableHead>
-                    <TableHead className="text-xs text-right">Valor</TableHead>
-                    <TableHead className="text-xs text-right">Pago</TableHead>
-                    <TableHead className="text-xs">Categoria</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paidAP.slice(0, 50).map((ap: any) => (
-                    <TableRow key={ap.id}>
-                      <TableCell className="text-xs font-medium max-w-[200px] truncate">{ap.nome_fornecedor || "—"}</TableCell>
-                      <TableCell className="text-xs">{getStoreName(ap.store_id)}</TableCell>
-                      <TableCell className="text-xs">{ap.numero_doc || "—"}</TableCell>
-                      <TableCell className="text-xs">{formatDateBR(ap.data_pagamento)}</TableCell>
-                      <TableCell className="text-xs text-right">{fmt(Number(ap.valor || 0))}</TableCell>
-                      <TableCell className="text-xs text-right font-semibold">{fmt(Number(ap.valor_pago || 0))}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{ap.categoria || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </>
   );
 }
