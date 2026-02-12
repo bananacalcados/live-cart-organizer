@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { store_id, seller_id, customer, items, payment_method_id, payment_method_name, discount, notes } = await req.json();
+    const { store_id, seller_id, tiny_seller_id, customer, items, payment_method_id, payment_method_name, discount, notes } = await req.json();
     if (!store_id) throw new Error('store_id is required');
     if (!items || items.length === 0) throw new Error('items is required');
 
@@ -64,8 +64,8 @@ serve(async (req) => {
         ...(payment_method_name && {
           forma_pagamento: payment_method_name,
         }),
-        ...(seller_id && {
-          id_vendedor: seller_id,
+        ...(tiny_seller_id && {
+          id_vendedor: tiny_seller_id,
         }),
         ...(notes && { obs: notes }),
       },
