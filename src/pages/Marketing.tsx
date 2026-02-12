@@ -342,9 +342,22 @@ export default function Marketing() {
         else if (hasAddress) regionType = 'online';
         else if (ddd === LOCAL_DDD) regionType = 'local';
 
-        const totalOrders = ordersCol ? Number(row[ordersCol]) || 0 : 0;
-        const totalSpent = spentCol ? Number(String(row[spentCol]).replace(/[R$\s.]/g, '').replace(',', '.')) || 0 : 0;
-        const avgTicket = avgTicketCol ? Number(String(row[avgTicketCol]).replace(/[R$\s.]/g, '').replace(',', '.')) || 0
+        const totalOrders = ordersCol ? Math.round(Number(row[ordersCol]) || 0) : 0;
+        const parseMoneyValue = (raw: any): number => {
+          if (raw == null) return 0;
+          if (typeof raw === 'number') {
+            // Excel stores numbers directly — cap at 10M to catch float errors
+            const val = Math.round(raw * 100) / 100;
+            return val > 10000000 ? 0 : val;
+          }
+          const str = String(raw).replace(/[R$\s]/g, '');
+          // Brazilian format: 8.215,50 → remove dots, replace comma
+          const cleaned = str.replace(/\./g, '').replace(',', '.');
+          const num = Number(cleaned) || 0;
+          return num > 10000000 ? 0 : Math.round(num * 100) / 100;
+        };
+        const totalSpent = spentCol ? parseMoneyValue(row[spentCol]) : 0;
+        const avgTicket = avgTicketCol ? parseMoneyValue(row[avgTicketCol])
           : (totalOrders > 0 ? +(totalSpent / totalOrders).toFixed(2) : 0);
 
         const lastPurchase = parseDate(lastPurchaseCol ? row[lastPurchaseCol] : null);
