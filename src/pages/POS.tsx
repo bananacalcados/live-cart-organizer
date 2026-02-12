@@ -17,7 +17,7 @@ import { POSInterStoreRequests } from "@/components/pos/POSInterStoreRequests";
 import { POSWhatsApp } from "@/components/pos/POSWhatsApp";
 import { POSProductSearchLog } from "@/components/pos/POSProductSearchLog";
 import { POSDailySales } from "@/components/pos/POSDailySales";
-import { TeamChat } from "@/components/TeamChat";
+import { POSTeamChat } from "@/components/pos/POSTeamChat";
 import { supabase } from "@/integrations/supabase/client";
 
 type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches";
@@ -138,13 +138,7 @@ export default function POS() {
         {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
         {section === "searches" && <POSProductSearchLog storeId={selectedStore} />}
-        {section === "chat" && (
-          <div className="flex-1 p-6 overflow-hidden">
-            <div className="h-full rounded-xl border border-pos-yellow/20 overflow-hidden">
-              <TeamChat />
-            </div>
-          </div>
-        )}
+        {section === "chat" && <POSTeamChat storeId={selectedStore} />}
       </div>
     </div>
   );

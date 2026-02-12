@@ -3166,6 +3166,8 @@ export type Database = {
           created_at: string
           id: string
           message: string
+          message_type: string
+          metadata: Json | null
           sender_name: string
         }
         Insert: {
@@ -3173,6 +3175,8 @@ export type Database = {
           created_at?: string
           id?: string
           message: string
+          message_type?: string
+          metadata?: Json | null
           sender_name: string
         }
         Update: {
@@ -3180,6 +3184,8 @@ export type Database = {
           created_at?: string
           id?: string
           message?: string
+          message_type?: string
+          metadata?: Json | null
           sender_name?: string
         }
         Relationships: []
