@@ -1,4 +1,4 @@
-import { Instagram, Plus, Home } from "lucide-react";
+import { Banana, Plus, Home } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { TemplateManager } from "./TemplateManager";
@@ -15,10 +15,10 @@ export function Header({ onNewOrder }: HeaderProps) {
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Instagram className="h-5 w-5" />
+            <Banana className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-foreground">Live CRM</h1>
+            <h1 className="text-lg font-bold text-foreground">GESTOR BANANA</h1>
             <p className="text-xs text-muted-foreground">Gerencie pedidos da sua Live</p>
           </div>
         </div>

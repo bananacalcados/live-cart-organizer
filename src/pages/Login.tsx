@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Instagram, Mail, Lock } from "lucide-react";
+import { Banana, Mail, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
@@ -67,10 +67,10 @@ export default function Login() {
         <CardHeader className="text-center space-y-2">
           <div className="flex justify-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Instagram className="h-6 w-6" />
+              <Banana className="h-6 w-6" />
             </div>
           </div>
-          <CardTitle className="text-xl">Live CRM</CardTitle>
+          <CardTitle className="text-xl">GESTOR BANANA</CardTitle>
           <CardDescription>Acesso exclusivo para a equipe</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
