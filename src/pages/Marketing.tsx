@@ -141,6 +141,10 @@ export default function Marketing() {
   const [uploadStatus, setUploadStatus] = useState<{ stage: string; progress: number; detail: string; error?: string; done?: boolean } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rfmFileInputRef = useRef<HTMLInputElement>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<ZoppyCustomer | null>(null);
+  const [whatsAppMessage, setWhatsAppMessage] = useState("");
 
   // ─── Fetch data ──────────────────────────────
 
@@ -509,6 +513,9 @@ export default function Marketing() {
     if (regionFilter !== "all" && c.region_type !== regionFilter) return false;
     if (rfmFilter !== "all" && c.rfm_segment !== rfmFilter) return false;
     if (dddFilter !== "all" && c.ddd !== dddFilter) return false;
+    if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) return false;
+    if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo + 'T23:59:59') return false;
+    if ((dateFrom || dateTo) && !c.last_purchase_at) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
@@ -642,6 +649,8 @@ export default function Marketing() {
                   {uniqueDdds.map(ddd => (<SelectItem key={ddd} value={ddd!}>DDD {ddd}</SelectItem>))}
                 </SelectContent>
               </Select>
+              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-[140px] h-9" placeholder="De" title="Compras a partir de" />
+              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[140px] h-9" placeholder="Até" title="Compras até" />
               <div className="flex gap-1 ml-auto">
                 <Button variant="outline" size="sm" className="gap-1 relative overflow-hidden">
                   <Upload className="h-3.5 w-3.5" />Upload Excel
@@ -659,8 +668,8 @@ export default function Marketing() {
 
             <p className="text-xs text-muted-foreground">
               {filtered.length} clientes
-              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || searchQuery) && (
-                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setSearchQuery(""); }}>
+              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || searchQuery || dateFrom || dateTo) && (
+                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); }}>
                   <X className="h-3 w-3 mr-0.5" />Limpar
                 </Button>
               )}
@@ -694,7 +703,7 @@ export default function Marketing() {
                   ) : filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>
                   ) : filtered.slice(0, 200).map(c => (
-                    <TableRow key={c.id} className="text-sm">
+                    <TableRow key={c.id} className="text-sm cursor-pointer hover:bg-muted/50" onClick={() => setSelectedCustomer(c)}>
                       <TableCell className="font-medium">{c.first_name} {c.last_name}</TableCell>
                       <TableCell className="text-xs">
                         <div className="space-y-0.5">
@@ -741,7 +750,111 @@ export default function Marketing() {
         onStatusChange={updateCampaignStatus}
       />
 
-      {/* Upload Dialog */}
+      {/* Customer Detail Dialog */}
+      <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setWhatsAppMessage(""); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              {selectedCustomer?.first_name} {selectedCustomer?.last_name}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedCustomer && (
+            <div className="space-y-4">
+              {/* RFM Badge */}
+              {selectedCustomer.rfm_segment && (
+                <Badge className={`${RFM_SEGMENT_COLORS[selectedCustomer.rfm_segment] || ''}`}>
+                  {selectedCustomer.rfm_segment}
+                </Badge>
+              )}
+
+              {/* Info Grid */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {selectedCustomer.phone && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Phone className="h-4 w-4" />{selectedCustomer.phone}
+                  </div>
+                )}
+                {selectedCustomer.email && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Mail className="h-4 w-4" />{selectedCustomer.email}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <ShoppingBag className="h-4 w-4" />{selectedCustomer.total_orders} pedidos
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <TrendingUp className="h-4 w-4" />{formatCurrency(selectedCustomer.total_spent)}
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Star className="h-4 w-4" />Ticket médio: {formatCurrency(selectedCustomer.avg_ticket)}
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Calendar className="h-4 w-4" />Última: {formatDate(selectedCustomer.last_purchase_at)}
+                </div>
+              </div>
+
+              {/* RFM Scores */}
+              {(selectedCustomer.rfm_recency_score || selectedCustomer.rfm_frequency_score || selectedCustomer.rfm_monetary_score) && (
+                <div className="flex gap-4 p-3 rounded-lg bg-muted/50">
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Recência</p>
+                    <p className="text-lg font-bold">{selectedCustomer.rfm_recency_score || '-'}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Frequência</p>
+                    <p className="text-lg font-bold">{selectedCustomer.rfm_frequency_score || '-'}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Monetário</p>
+                    <p className="text-lg font-bold">{selectedCustomer.rfm_monetary_score || '-'}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Total</p>
+                    <p className="text-lg font-bold text-primary">{selectedCustomer.rfm_total_score || '-'}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Contact Actions */}
+              {selectedCustomer.phone && (
+                <div className="space-y-2 border-t pt-3">
+                  <p className="text-sm font-medium">Entrar em contato</p>
+                  <Input
+                    placeholder="Mensagem para o cliente..."
+                    value={whatsAppMessage}
+                    onChange={e => setWhatsAppMessage(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" className="gap-1" onClick={() => {
+                      const phone = selectedCustomer.phone!.replace(/\D/g, '');
+                      const fullPhone = phone.startsWith('55') ? phone : `55${phone}`;
+                      const url = `https://wa.me/${fullPhone}${whatsAppMessage ? `?text=${encodeURIComponent(whatsAppMessage)}` : ''}`;
+                      window.open(url, '_blank');
+                    }}>
+                      <MessageSquare className="h-3.5 w-3.5" />WhatsApp
+                    </Button>
+                    <Button variant="outline" size="sm" className="gap-1" onClick={() => {
+                      const phone = selectedCustomer.phone!.replace(/\D/g, '');
+                      window.open(`tel:+55${phone}`, '_blank');
+                    }}>
+                      <Phone className="h-3.5 w-3.5" />Ligar
+                    </Button>
+                    {selectedCustomer.email && (
+                      <Button variant="outline" size="sm" className="gap-1" onClick={() => {
+                        window.open(`mailto:${selectedCustomer.email}`, '_blank');
+                      }}>
+                        <Mail className="h-3.5 w-3.5" />Email
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={uploadDialogOpen} onOpenChange={(open) => {
         if (!open && uploadStatus && !uploadStatus.done && !uploadStatus.error) return; // prevent close during upload
         setUploadDialogOpen(open);

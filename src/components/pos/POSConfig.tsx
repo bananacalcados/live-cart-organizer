@@ -292,8 +292,9 @@ export function POSConfig({ storeId }: Props) {
     }
   };
 
-  const removeSeller = async (id: string) => {
-    await supabase.from('pos_sellers').delete().eq('id', id);
+  const toggleSellerActive = async (id: string, currentActive: boolean) => {
+    const { error } = await supabase.from('pos_sellers').update({ is_active: !currentActive }).eq('id', id);
+    if (error) { toast.error("Erro ao atualizar"); return; }
     loadSellers();
   };
 
@@ -586,10 +587,8 @@ export function POSConfig({ storeId }: Props) {
               <p className="text-xs text-pos-white/40">Nenhuma vendedora cadastrada</p>
             ) : sellers.map(s => (
               <div key={s.id} className="flex items-center justify-between p-2 rounded-lg bg-pos-white/5">
-                <span className="text-sm text-pos-white">{s.name}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-300" onClick={() => removeSeller(s.id)}>
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                <span className={`text-sm ${s.is_active ? 'text-pos-white' : 'text-pos-white/40 line-through'}`}>{s.name}</span>
+                <Switch checked={s.is_active} onCheckedChange={() => toggleSellerActive(s.id, s.is_active)} />
               </div>
             ))}
           </CardContent>
