@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
-  ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3
+  ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3, SearchX
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,11 +15,12 @@ import { POSConfig } from "@/components/pos/POSConfig";
 import { POSExchanges } from "@/components/pos/POSExchanges";
 import { POSInterStoreRequests } from "@/components/pos/POSInterStoreRequests";
 import { POSWhatsApp } from "@/components/pos/POSWhatsApp";
+import { POSProductSearchLog } from "@/components/pos/POSProductSearchLog";
 import { POSDailySales } from "@/components/pos/POSDailySales";
 import { TeamChat } from "@/components/TeamChat";
 import { supabase } from "@/integrations/supabase/client";
 
-type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily";
+type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches";
 
 const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badge?: boolean }[] = [
   { id: "sales", label: "Venda", icon: ShoppingCart },
@@ -29,6 +30,7 @@ const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badg
   { id: "requests", label: "Solicitações", icon: ArrowRightLeft, badge: true },
   { id: "chat", label: "Chat Equipe", icon: MessageSquare },
   { id: "whatsapp", label: "WhatsApp", icon: Phone },
+  { id: "searches", label: "Procurados", icon: SearchX },
   { id: "gamification", label: "Ranking", icon: Trophy },
   { id: "config", label: "Config", icon: Settings },
 ];
@@ -135,6 +137,7 @@ export default function POS() {
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
         {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
+        {section === "searches" && <POSProductSearchLog storeId={selectedStore} />}
         {section === "chat" && (
           <div className="flex-1 p-6 overflow-hidden">
             <div className="h-full rounded-xl border border-pos-yellow/20 overflow-hidden">

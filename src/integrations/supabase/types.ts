@@ -2517,6 +2517,59 @@ export type Database = {
           },
         ]
       }
+      pos_product_searches: {
+        Row: {
+          brand: string | null
+          category: string | null
+          created_at: string
+          created_by: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          notes: string | null
+          product_description: string
+          searched_at: string
+          size: string | null
+          store_id: string
+        }
+        Insert: {
+          brand?: string | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          notes?: string | null
+          product_description: string
+          searched_at?: string
+          size?: string | null
+          store_id: string
+        }
+        Update: {
+          brand?: string | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          notes?: string | null
+          product_description?: string
+          searched_at?: string
+          size?: string | null
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_product_searches_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_product_sync_log: {
         Row: {
           completed_at: string | null

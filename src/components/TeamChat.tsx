@@ -18,11 +18,35 @@ export function TeamChat() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [senderName, setSenderName] = useState(() => localStorage.getItem('team_chat_name') || '');
-  const [showNameInput, setShowNameInput] = useState(!localStorage.getItem('team_chat_name'));
+  const [senderName, setSenderName] = useState('');
+  const [isReady, setIsReady] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const lastSeenRef = useRef<string | null>(null);
+
+  // Auto-detect name from logged-in user's email
+  useEffect(() => {
+    const detectName = async () => {
+      const stored = localStorage.getItem('team_chat_name');
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user?.email) {
+        // Extract name from email: "joao.silva@gmail.com" -> "Joao Silva"
+        const emailName = user.email.split('@')[0]
+          .replace(/[._-]/g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
+        
+        // Use user metadata display name if available, otherwise email-derived name
+        const displayName = user.user_metadata?.full_name || user.user_metadata?.name || emailName;
+        setSenderName(displayName);
+        localStorage.setItem('team_chat_name', displayName);
+        setIsReady(true);
+      } else if (stored) {
+        setSenderName(stored);
+        setIsReady(true);
+      }
+    };
+    detectName();
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -42,7 +66,6 @@ export function TeamChat() {
 
   useEffect(() => {
     if (!isOpen) {
-      // Listen for new messages while closed
       const channel = supabase
         .channel('team-chat-unread')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_chat_messages' }, () => {
@@ -85,12 +108,6 @@ export function TeamChat() {
     });
   };
 
-  const handleSetName = () => {
-    if (!senderName.trim()) return;
-    localStorage.setItem('team_chat_name', senderName.trim());
-    setShowNameInput(false);
-  };
-
   if (!isOpen) {
     return (
       <button
@@ -114,6 +131,7 @@ export function TeamChat() {
         <div className="flex items-center gap-2">
           <MessageCircle className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold">Chat da Equipe</span>
+          {senderName && <span className="text-[10px] text-muted-foreground">({senderName})</span>}
         </div>
         <div className="flex items-center gap-1">
           <button onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }} className="p-1 hover:bg-secondary rounded">
@@ -127,18 +145,9 @@ export function TeamChat() {
 
       {!isMinimized && (
         <>
-          {showNameInput ? (
+          {!isReady ? (
             <div className="flex-1 flex items-center justify-center p-4">
-              <div className="space-y-3 w-full">
-                <p className="text-sm text-center text-muted-foreground">Como você quer ser identificado?</p>
-                <Input
-                  value={senderName}
-                  onChange={(e) => setSenderName(e.target.value)}
-                  placeholder="Seu nome..."
-                  onKeyDown={(e) => e.key === 'Enter' && handleSetName()}
-                />
-                <Button onClick={handleSetName} className="w-full" size="sm">Entrar no Chat</Button>
-              </div>
+              <p className="text-sm text-muted-foreground">Carregando...</p>
             </div>
           ) : (
             <>
