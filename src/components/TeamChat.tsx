@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,7 @@ interface ChatMessage {
 }
 
 export function TeamChat() {
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -146,6 +148,9 @@ export function TeamChat() {
       channel: 'general',
     });
   };
+
+  // Hide on POS page (has its own chat)
+  if (location.pathname === '/pos') return null;
 
   if (!isOpen) {
     return (
