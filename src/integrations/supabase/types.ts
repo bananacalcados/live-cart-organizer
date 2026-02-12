@@ -2524,6 +2524,50 @@ export type Database = {
           },
         ]
       }
+      pos_prizes: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          min_points: number
+          name: string
+          prize_type: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          min_points?: number
+          name: string
+          prize_type?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          min_points?: number
+          name?: string
+          prize_type?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_prizes_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_product_requests: {
         Row: {
           answered_at: string | null
@@ -3009,6 +3053,71 @@ export type Database = {
           },
         ]
       }
+      pos_seller_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          customer_name: string | null
+          customer_phone: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          points_reward: number
+          rfm_segment: string | null
+          seller_id: string
+          source: string
+          status: string
+          store_id: string
+          task_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          points_reward?: number
+          rfm_segment?: string | null
+          seller_id: string
+          source?: string
+          status?: string
+          store_id: string
+          task_type?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          points_reward?: number
+          rfm_segment?: string | null
+          seller_id?: string
+          source?: string
+          status?: string
+          store_id?: string
+          task_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_seller_tasks_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_sellers: {
         Row: {
           created_at: string
@@ -3040,6 +3149,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "pos_sellers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_store_sellers: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          seller_id: string
+          seller_name: string
+          store_id: string
+          tiny_seller_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          seller_id: string
+          seller_name: string
+          store_id: string
+          tiny_seller_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          seller_id?: string
+          seller_name?: string
+          store_id?: string
+          tiny_seller_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_store_sellers_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "pos_stores"
