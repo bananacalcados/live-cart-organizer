@@ -1178,6 +1178,57 @@ export type Database = {
         }
         Relationships: []
       }
+      internal_cashback: {
+        Row: {
+          cashback_amount: number
+          coupon_code: string
+          created_at: string
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string
+          expires_at: string
+          id: string
+          is_used: boolean
+          min_purchase: number
+          origin_type: string
+          updated_at: string
+          used_at: string | null
+          used_sale_id: string | null
+        }
+        Insert: {
+          cashback_amount: number
+          coupon_code: string
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone: string
+          expires_at: string
+          id?: string
+          is_used?: boolean
+          min_purchase: number
+          origin_type?: string
+          updated_at?: string
+          used_at?: string | null
+          used_sale_id?: string | null
+        }
+        Update: {
+          cashback_amount?: number
+          coupon_code?: string
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string
+          expires_at?: string
+          id?: string
+          is_used?: boolean
+          min_purchase?: number
+          origin_type?: string
+          updated_at?: string
+          used_at?: string | null
+          used_sale_id?: string | null
+        }
+        Relationships: []
+      }
       inventory_barcode_aliases: {
         Row: {
           created_at: string
