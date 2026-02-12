@@ -274,10 +274,14 @@ export default function Management() {
   const syncShopifyOrders = async () => {
     setSyncingShopify(true);
     try {
+      // Sync ALL Shopify orders (not just the dashboard filter range)
+      // Use a wide date range to capture all historical orders
+      const syncStart = new Date('2025-01-01').toISOString();
+      const syncEnd = new Date().toISOString();
       const { data, error } = await supabase.functions.invoke('expedition-sync-orders', {
         body: {
-          created_at_min: dateRange.start.toISOString(),
-          created_at_max: dateRange.end.toISOString(),
+          created_at_min: syncStart,
+          created_at_max: syncEnd,
         },
       });
       if (error) throw error;

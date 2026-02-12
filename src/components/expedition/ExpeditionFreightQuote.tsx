@@ -225,25 +225,40 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
     if (!w) return;
     const items = order.expedition_order_items || [];
     const itemLines = items.map((it: any, i: number) =>
-      `<tr><td>${i + 1}</td><td>${it.product_name}${it.variant_name ? ' — ' + it.variant_name : ''}</td><td style="text-align:center">${it.quantity}</td><td style="font-family:monospace;font-size:10px">${it.sku || '-'}</td></tr>`
+      `<tr>
+        <td style="text-align:center;font-weight:bold;color:#666;">${i + 1}</td>
+        <td style="font-weight:600;">${it.product_name}${it.variant_name ? ` <span style="color:#e67e22;font-size:9px;">— ${it.variant_name}</span>` : ''}</td>
+        <td style="text-align:center;font-size:14px;font-weight:bold;background:#fff8e1;border-radius:3px;">${it.quantity}</td>
+        <td style="font-family:monospace;font-size:9px;color:#888;">${it.sku || '—'}</td>
+      </tr>`
     ).join('');
-    w.document.write(`<html><head><title>Etiqueta Interna - ${order.shopify_order_name}</title>
+    w.document.write(`<html><head><title>Etiqueta - ${order.shopify_order_name}</title>
 <style>
   @page { size: 100mm 80mm; margin: 2mm; }
-  body { font-family: Arial, sans-serif; font-size: 10px; margin: 0; padding: 6px; }
-  .box { border: 2px dashed #000; padding: 6px; }
-  .title { font-size: 14px; font-weight: bold; text-align: center; margin-bottom: 4px; }
-  .code { font-family: monospace; font-size: 16px; font-weight: bold; text-align: center; letter-spacing: 2px; margin: 6px 0; border: 1px solid #000; padding: 4px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-  th, td { border: 1px solid #ccc; padding: 2px 4px; text-align: left; font-size: 9px; }
-  th { background: #eee; }
-  .footer { margin-top: 6px; font-size: 9px; text-align: center; color: #666; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10px; margin: 0; padding: 4px; }
+  .box { border: 2px solid #1a1a1a; border-radius: 6px; padding: 6px; height: calc(80mm - 12px); display: flex; flex-direction: column; }
+  .header { background: #1a1a1a; color: #f5c518; padding: 6px 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .header .order { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
+  .header .customer { font-size: 10px; color: #ccc; max-width: 50%; text-align: right; }
+  .barcode { font-family: monospace; font-size: 14px; font-weight: bold; text-align: center; letter-spacing: 3px; padding: 4px; border: 1px dashed #999; border-radius: 3px; margin-bottom: 4px; background: #fafafa; }
+  table { width: 100%; border-collapse: collapse; flex: 1; }
+  th { background: #f0f0f0; font-size: 8px; text-transform: uppercase; padding: 2px 4px; text-align: left; color: #666; }
+  td { padding: 2px 4px; border-bottom: 1px solid #eee; font-size: 9px; }
+  .footer { margin-top: auto; padding-top: 3px; border-top: 1px solid #ddd; font-size: 8px; color: #999; text-align: center; display: flex; justify-content: space-between; }
+  .footer .carrier { color: #e67e22; font-weight: 600; }
+  @media print { .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
 <div class="box">
-  <div class="title">${order.shopify_order_name} — ${order.customer_name || ''}</div>
-  <div class="code">${order.internal_barcode}</div>
-  ${items.length > 0 ? `<table><thead><tr><th>#</th><th>Produto</th><th>Qtd</th><th>SKU</th></tr></thead><tbody>${itemLines}</tbody></table>` : ''}
-  <div class="footer">${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} • ${order.freight_carrier || ''} ${order.freight_tracking_code || ''}</div>
+  <div class="header">
+    <span class="order">${order.shopify_order_name}</span>
+    <span class="customer">${order.customer_name || ''}</span>
+  </div>
+  <div class="barcode">${order.internal_barcode || '—'}</div>
+  ${items.length > 0 ? `<table><thead><tr><th style="width:20px;text-align:center">#</th><th>Produto</th><th style="width:30px;text-align:center">Qtd</th><th style="width:60px">SKU</th></tr></thead><tbody>${itemLines}</tbody></table>` : ''}
+  <div class="footer">
+    <span>${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+    <span class="carrier">${order.freight_carrier || ''} ${order.freight_tracking_code || ''}</span>
+  </div>
 </div>
 </body></html>`);
     w.document.close();
