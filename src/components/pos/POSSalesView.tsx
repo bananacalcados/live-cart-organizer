@@ -3,7 +3,7 @@ import {
   ScanBarcode, Search, Plus, Minus, Trash2, User, CreditCard,
   Receipt, Printer, Camera, ShoppingCart, Package, Check,
   QrCode, Banknote, FileText, ChevronRight, Loader2, Users,
-  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag
+  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag, Star
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { POSCustomerForm } from "./POSCustomerForm";
+import { POSSellerGate } from "./POSSellerGate";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -547,6 +548,17 @@ export function POSSalesView({ storeId, sellerId }: Props) {
     );
   }
 
+  // Seller gate: must select seller before proceeding
+  if (!selectedSeller && sellers.length > 0 && !loadingSellers) {
+    return (
+      <POSSellerGate
+        storeId={storeId}
+        sellers={sellers}
+        onSellerSelected={(id) => setSelectedSeller(id)}
+      />
+    );
+  }
+
   const totalNotifications = unreadWhatsApp + unreadTeamChat + pendingReturns;
 
   return (
@@ -605,6 +617,26 @@ export function POSSalesView({ storeId, sellerId }: Props) {
                 {unreadTeamChat}
               </p>
               <p className="text-[10px] text-gray-400">não lidas</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Seller Welcome Banner */}
+      {step === "scan" && selectedSeller && (
+        <div className="px-4 pt-1 pb-1">
+          <div className="flex items-center gap-3 rounded-xl bg-pos-orange/10 border border-pos-orange/30 px-4 py-2">
+            <div className="h-8 w-8 rounded-full bg-pos-orange/20 flex items-center justify-center text-pos-orange font-bold text-sm">
+              {sellers.find(s => s.id === selectedSeller)?.name?.charAt(0) || '?'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-pos-white">
+                Olá, <span className="text-pos-orange font-bold">{sellers.find(s => s.id === selectedSeller)?.name}</span>! Boas vendas! 🔥
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 text-pos-orange">
+              <Star className="h-3.5 w-3.5" />
+              <span className="text-xs font-bold">Ranking</span>
             </div>
           </div>
         </div>
