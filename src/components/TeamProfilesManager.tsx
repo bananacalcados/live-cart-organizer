@@ -60,12 +60,17 @@ export function TeamProfilesManager({ stores }: Props) {
 
   const loadData = async () => {
     setLoading(true);
-    const [{ data: profilesData }, { data: sellersData }] = await Promise.all([
-      supabase.from('user_profiles').select('*').order('display_name'),
-      supabase.from('pos_sellers').select('*').order('name'),
-    ]);
-    setProfiles((profilesData || []) as UserProfile[]);
-    setSellers((sellersData || []) as Seller[]);
+    try {
+      const [{ data: profilesData }, { data: sellersData }] = await Promise.all([
+        supabase.from('user_profiles').select('*').order('display_name'),
+        supabase.from('pos_sellers').select('*').order('name'),
+      ]);
+      setProfiles((profilesData || []) as UserProfile[]);
+      setSellers((sellersData || []) as Seller[]);
+    } catch (err) {
+      console.warn('Failed to load team profiles:', err);
+      toast.error('Erro ao carregar perfis');
+    }
     setLoading(false);
   };
 
