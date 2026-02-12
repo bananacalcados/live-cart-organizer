@@ -53,15 +53,13 @@ interface StoreRow {
   name: string;
 }
 
-interface ProductRow {
-  id: string;
+interface InventorySummaryRow {
   store_id: string;
-  name: string;
-  variant: string | null;
-  category: string | null;
-  price: number;
-  cost_price: number;
-  stock: number;
+  total_items: number;
+  total_value: number;
+  total_cost: number;
+  zero_stock: number;
+  total_skus: number;
 }
 
 const CHART_COLORS = [
@@ -87,7 +85,7 @@ export default function Management() {
   const [tinyOrders, setTinyOrders] = useState<TinySyncedOrder[]>([]);
   const [expeditionOrders, setExpeditionOrders] = useState<ExpeditionOrder[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
-  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [inventoryData, setInventoryData] = useState<InventorySummaryRow[]>([]);
 
   const dateRange = useMemo(() => {
     const now = new Date();
@@ -107,19 +105,19 @@ export default function Management() {
     const endDate = dateRange.end.toISOString().split('T')[0];
     const iso = { start: dateRange.start.toISOString(), end: dateRange.end.toISOString() };
 
-    const [tinyRes, expRes, storesRes, prodsRes] = await Promise.all([
+    const [tinyRes, expRes, storesRes, invRes] = await Promise.all([
       supabase.from("tiny_synced_orders").select("*")
         .gte("order_date", startDate).lte("order_date", endDate),
       supabase.from("expedition_orders").select("id, shopify_order_name, total_price, subtotal_price, total_shipping, total_discount, financial_status, expedition_status, created_at, customer_name, shopify_created_at")
         .gte("shopify_created_at", iso.start).lte("shopify_created_at", iso.end),
       supabase.from("pos_stores").select("id, name").eq("is_active", true),
-      supabase.from("pos_products").select("id, store_id, name, variant, category, price, cost_price, stock").eq("is_active", true),
+      supabase.rpc("get_inventory_summary"),
     ]);
 
     setTinyOrders((tinyRes.data || []) as unknown as TinySyncedOrder[]);
     setExpeditionOrders(expRes.data || []);
     setStores(storesRes.data || []);
-    setProducts((prodsRes.data || []) as unknown as ProductRow[]);
+    setInventoryData((invRes.data || []) as unknown as InventorySummaryRow[]);
     setLoading(false);
   };
 
@@ -380,22 +378,20 @@ export default function Management() {
     return [...map.values(), shopifyData].filter(s => s.orders > 0).sort((a, b) => b.revenue - a.revenue);
   }, [tinyOrders, stores, shopifyRevenue, shopifyPaidOrders]);
 
-  // Inventory summary (from pos_products synced with Tiny)
+  // Inventory summary (from DB function — no row limit)
   const inventorySummary = useMemo(() => {
-    const byStore = new Map<string, { name: string; totalItems: number; totalValue: number; totalCost: number; zeroStock: number }>();
-    stores.forEach(st => byStore.set(st.id, { name: st.name, totalItems: 0, totalValue: 0, totalCost: 0, zeroStock: 0 }));
-    products.forEach(p => {
-      const cur = byStore.get(p.store_id);
-      if (cur) {
-        const stock = Number(p.stock || 0);
-        cur.totalItems += stock;
-        cur.totalValue += stock * Number(p.price || 0);
-        cur.totalCost += stock * Number(p.cost_price || 0);
-        if (stock <= 0) cur.zeroStock++;
-      }
+    return stores.map(st => {
+      const inv = inventoryData.find(i => i.store_id === st.id);
+      return {
+        name: st.name,
+        totalItems: Number(inv?.total_items || 0),
+        totalValue: Number(inv?.total_value || 0),
+        totalCost: Number(inv?.total_cost || 0),
+        zeroStock: Number(inv?.zero_stock || 0),
+        totalSkus: Number(inv?.total_skus || 0),
+      };
     });
-    return [...byStore.values()];
-  }, [products, stores]);
+  }, [inventoryData, stores]);
 
   const totalStockValue = inventorySummary.reduce((s, v) => s + v.totalValue, 0);
   const totalStockCost = inventorySummary.reduce((s, v) => s + v.totalCost, 0);

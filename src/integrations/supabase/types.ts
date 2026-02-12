@@ -3580,6 +3580,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_inventory_summary: {
+        Args: never
+        Returns: {
+          store_id: string
+          total_cost: number
+          total_items: number
+          total_skus: number
+          total_value: number
+          zero_stock: number
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }
