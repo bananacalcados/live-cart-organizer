@@ -50,12 +50,14 @@ type SaleStep = "scan" | "customer" | "payment" | "invoice";
 interface Props {
   storeId: string;
   sellerId?: string;
+  preloadedSellers?: Seller[];
+  sellersPreloaded?: boolean;
 }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-export function POSSalesView({ storeId, sellerId }: Props) {
+export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPreloaded }: Props) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [step, setStep] = useState<SaleStep>("scan");
@@ -154,30 +156,38 @@ export function POSSalesView({ storeId, sellerId }: Props) {
     }
   };
 
-  // Load sellers on mount
+  // Use preloaded sellers if available, otherwise load from edge function
   useEffect(() => {
-    if (!hasOpenRegister) return;
-    loadSellers();
-  }, [storeId, hasOpenRegister]);
-
-  const loadSellers = async () => {
-    setLoadingSellers(true);
-    try {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sellers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-        body: JSON.stringify({ store_id: storeId }),
-      });
-      const data = await resp.json();
-      if (data.success) {
-        setSellers(data.sellers || []);
-      }
-    } catch (e) {
-      console.error('Error loading sellers:', e);
-    } finally {
+    if (preloadedSellers && preloadedSellers.length > 0) {
+      setSellers(preloadedSellers);
       setLoadingSellers(false);
+      return;
     }
-  };
+    if (sellersPreloaded && preloadedSellers?.length === 0) {
+      setSellers([]);
+      setLoadingSellers(false);
+      return;
+    }
+    if (!hasOpenRegister) return;
+    // Fallback: load sellers ourselves if not preloaded
+    const loadSellers = async () => {
+      setLoadingSellers(true);
+      try {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sellers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+          body: JSON.stringify({ store_id: storeId }),
+        });
+        const data = await resp.json();
+        if (data.success) setSellers(data.sellers || []);
+      } catch (e) {
+        console.error('Error loading sellers:', e);
+      } finally {
+        setLoadingSellers(false);
+      }
+    };
+    loadSellers();
+  }, [storeId, hasOpenRegister, preloadedSellers, sellersPreloaded]);
 
   const loadPaymentMethods = useCallback(async () => {
     if (paymentMethods.length > 0) return;

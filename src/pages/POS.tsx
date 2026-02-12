@@ -41,6 +41,25 @@ export default function POS() {
   const [section, setSection] = useState<POSSection>("sales");
   const [pendingRequests, setPendingRequests] = useState(0);
 
+  // Pre-load sellers as soon as store is selected (before POSSalesView mounts)
+  const [sellers, setSellers] = useState<{ id: string; name: string; tiny_seller_id?: string }[]>([]);
+  const [sellersLoaded, setSellersLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!selectedStore) { setSellers([]); setSellersLoaded(false); return; }
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+    const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sellers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+      body: JSON.stringify({ store_id: selectedStore }),
+    })
+      .then(r => r.json())
+      .then(data => { if (data.success) setSellers(data.sellers || []); })
+      .catch(e => console.error('Pre-load sellers error:', e))
+      .finally(() => setSellersLoaded(true));
+  }, [selectedStore]);
+
   // Realtime count of pending requests for this store
   useEffect(() => {
     if (!selectedStore) return;
@@ -129,7 +148,7 @@ export default function POS() {
 
       {/* Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {section === "sales" && <POSSalesView storeId={selectedStore} />}
+        {section === "sales" && <POSSalesView storeId={selectedStore} preloadedSellers={sellers} sellersPreloaded={sellersLoaded} />}
         {section === "cash" && <POSCashRegister storeId={selectedStore} />}
         {section === "gamification" && <POSGamificationMini storeId={selectedStore} />}
         {section === "config" && <POSConfig storeId={selectedStore} />}
