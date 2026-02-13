@@ -221,6 +221,63 @@ serve(async (req) => {
               console.error('Error saving incoming message:', error);
             } else {
               console.log(`Saved incoming message from ${phone} (${senderName || 'unknown'})`);
+
+              // Check for active AI session and auto-respond
+              try {
+                const { data: aiSession } = await supabase
+                  .from('automation_ai_sessions')
+                  .select('*')
+                  .eq('phone', phone)
+                  .eq('is_active', true)
+                  .gt('expires_at', new Date().toISOString())
+                  .maybeSingle();
+
+                if (aiSession && messageText && msg.type === 'text') {
+                  console.log(`Active AI session found for ${phone}, auto-responding...`);
+
+                  // Call AI to generate response
+                  const aiRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-respond`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${supabaseKey}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      prompt: aiSession.prompt,
+                      phone: phone,
+                    }),
+                  });
+                  const aiData = await aiRes.json();
+
+                  if (aiRes.ok && aiData.reply) {
+                    // Send AI reply via the same WhatsApp number
+                    const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${supabaseKey}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        phone: phone,
+                        message: aiData.reply,
+                        whatsappNumberId: aiSession.whatsapp_number_id,
+                      }),
+                    });
+                    
+                    // Update session counter
+                    const newCount = (aiSession.messages_sent || 0) + 1;
+                    if (newCount >= (aiSession.max_messages || 50)) {
+                      await supabase.from('automation_ai_sessions').update({ is_active: false, messages_sent: newCount }).eq('id', aiSession.id);
+                    } else {
+                      await supabase.from('automation_ai_sessions').update({ messages_sent: newCount, updated_at: new Date().toISOString() }).eq('id', aiSession.id);
+                    }
+                    
+                    console.log(`AI auto-reply sent to ${phone}: ${aiData.reply.slice(0, 50)}...`);
+                  }
+                }
+              } catch (aiErr) {
+                console.error('AI auto-respond error:', aiErr);
+              }
             }
 
             // Upsert chat_contacts with display_name

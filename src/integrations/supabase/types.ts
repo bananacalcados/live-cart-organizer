@@ -38,6 +38,56 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_ai_sessions: {
+        Row: {
+          created_at: string
+          expires_at: string
+          flow_id: string | null
+          id: string
+          is_active: boolean
+          max_messages: number | null
+          messages_sent: number | null
+          phone: string
+          prompt: string | null
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          flow_id?: string | null
+          id?: string
+          is_active?: boolean
+          max_messages?: number | null
+          messages_sent?: number | null
+          phone: string
+          prompt?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          flow_id?: string | null
+          id?: string
+          is_active?: boolean
+          max_messages?: number | null
+          messages_sent?: number | null
+          phone?: string
+          prompt?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_ai_sessions_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_executions: {
         Row: {
           error_message: string | null

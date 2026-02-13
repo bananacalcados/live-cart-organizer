@@ -51,6 +51,9 @@ serve(async (req) => {
           const text = msg.message?.trim();
           if (!text) continue;
 
+          // Skip template messages (contain unresolved {{variables}})
+          if (/\{\{\d+\}\}/.test(text) || /\{\{[a-zA-Z_]+\}\}/.test(text)) continue;
+
           chatMessages.push({
             role: msg.direction === 'incoming' ? 'user' : 'assistant',
             content: text,
