@@ -13,12 +13,29 @@ interface SendTemplateRequest {
   whatsappNumberId?: string;
   components?: Array<{
     type: string;
+    sub_type?: string;
+    index?: number;
     parameters: Array<{
       type: string;
       text?: string;
       image?: { link: string };
       video?: { link: string };
       document?: { link: string; filename?: string };
+    }>;
+    // Carousel card support
+    cards?: Array<{
+      card_index: number;
+      components: Array<{
+        type: string;
+        sub_type?: string;
+        index?: number;
+        parameters: Array<{
+          type: string;
+          text?: string;
+          image?: { link: string };
+          video?: { link: string };
+        }>;
+      }>;
     }>;
   }>;
 }
