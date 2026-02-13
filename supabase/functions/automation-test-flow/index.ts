@@ -101,6 +101,19 @@ serve(async (req) => {
             });
             const sendData = await sendRes.json();
             results.push({ step: i + 1, type: 'ai_response', status: sendRes.ok ? 'sent' : 'error', detail: sendRes.ok ? aiData.reply.slice(0, 80) : sendData.error });
+
+            // Create AI session for continuous conversation
+            if (sendRes.ok && config.whatsappNumberId) {
+              await supabase.from('automation_ai_sessions').upsert({
+                phone: formattedPhone,
+                prompt: aiPrompt,
+                whatsapp_number_id: config.whatsappNumberId,
+                flow_id: flowId,
+                is_active: true,
+                messages_sent: 1,
+                expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+              }, { onConflict: 'phone' });
+            }
           } else {
             results.push({ step: i + 1, type: 'ai_response', status: 'error', detail: aiData.error || 'AI sem resposta' });
           }
