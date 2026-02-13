@@ -37,7 +37,7 @@ import {
   MessageSquare, Clock, Users, ShoppingBag, CreditCard,
   FileText, Send, Timer, Loader2, RefreshCw, Tag,
   Brain, Reply, Image, Mic, Smile, Paperclip, PlayCircle,
-  TestTube2, StopCircle, Volume2,
+  TestTube2, StopCircle, Volume2, GitBranch, AlertTriangle,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 
@@ -83,10 +83,23 @@ const TRIGGER_TYPES = [
 const ACTION_TYPES = [
   { value: "send_template", label: "Template Meta", icon: FileText, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900/30", description: "Template oficial aprovado" },
   { value: "send_text", label: "Mensagem Livre", icon: MessageSquare, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-900/30", description: "Texto, emoji, foto, áudio" },
-  { value: "wait_for_reply", label: "Aguardar Resposta", icon: Reply, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-100 dark:bg-orange-900/30", description: "Espera o lead responder" },
+  { value: "wait_for_reply", label: "Aguardar Resposta", icon: Reply, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-100 dark:bg-orange-900/30", description: "Espera o lead responder (com bifurcação)" },
   { value: "ai_response", label: "Resposta IA", icon: Brain, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-100 dark:bg-purple-900/30", description: "IA responde com prompt customizado" },
   { value: "add_tag", label: "Adicionar Tag", icon: Tag, color: "text-pink-600 dark:text-pink-400", bg: "bg-pink-100 dark:bg-pink-900/30", description: "Adiciona tag ao lead" },
-  { value: "delay", label: "Aguardar Tempo", icon: Timer, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/30", description: "Espera X minutos" },
+  { value: "delay", label: "Aguardar Tempo", icon: Timer, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900/30", description: "Espera tempo configurável" },
+];
+
+// Customer data variables for template mapping
+const CUSTOMER_VARIABLES = [
+  { value: "{{nome}}", label: "Nome do Cliente" },
+  { value: "{{telefone}}", label: "Telefone" },
+  { value: "{{email}}", label: "E-mail" },
+  { value: "{{instagram}}", label: "Instagram" },
+  { value: "{{cidade}}", label: "Cidade" },
+  { value: "{{pedido_total}}", label: "Total do Pedido" },
+  { value: "{{produtos}}", label: "Lista de Produtos" },
+  { value: "{{link_carrinho}}", label: "Link do Carrinho" },
+  { value: "{{cupom}}", label: "Código do Cupom" },
 ];
 
 // ─── Custom Nodes ──────────────────────────────────
@@ -144,14 +157,26 @@ function ActionNode({ data }: { data: any }) {
       {data.actionType === "send_template" && data.templateName && (
         <p className="text-xs text-foreground mt-1 truncate max-w-[180px]">📋 {data.templateName}</p>
       )}
+      {data.actionType === "send_template" && data.templateVars && Object.keys(data.templateVars).length > 0 && (
+        <p className="text-[10px] text-muted-foreground">📝 {Object.keys(data.templateVars).length} variáveis</p>
+      )}
       {data.actionType === "send_text" && data.message && (
         <p className="text-xs text-foreground mt-1 truncate max-w-[180px]">💬 {data.message.slice(0, 40)}</p>
       )}
       {data.actionType === "send_text" && data.mediaUrl && (
         <p className="text-xs text-muted-foreground mt-0.5">📎 Mídia anexada</p>
       )}
-      {isDelay && <p className="text-xs text-foreground mt-1">⏱ {data.minutes || 5} min</p>}
-      {isWait && <p className="text-xs text-foreground mt-1">⏳ Aguarda resposta do lead</p>}
+      {isDelay && (
+        <p className="text-xs text-foreground mt-1">⏱ {data.delayValue || data.minutes || 5} {data.delayUnit === "hours" ? "hora(s)" : data.delayUnit === "days" ? "dia(s)" : "min"}</p>
+      )}
+      {isWait && (
+        <div className="mt-1">
+          <p className="text-xs text-foreground">⏳ Aguarda resposta</p>
+          {data.timeoutAction && data.timeoutAction !== "cancel" && (
+            <p className="text-[10px] text-orange-500 flex items-center gap-0.5"><GitBranch className="h-2.5 w-2.5" />Bifurcação: {data.timeoutAction === "send_template" ? "Template" : data.timeoutAction === "send_text" ? "Mensagem" : data.timeoutAction === "add_tag" ? "Tag" : "Cancelar"}</p>
+          )}
+        </div>
+      )}
       {isAi && <p className="text-xs text-foreground mt-1 truncate max-w-[180px]">🤖 {data.promptPreview || "Prompt configurado"}</p>}
       {isTag && data.tags && <div className="flex flex-wrap gap-1 mt-1">{data.tags.map((t: string) => <Badge key={t} variant="secondary" className="text-[9px] px-1 py-0">{t}</Badge>)}</div>}
       <Handle type="source" position={Position.Bottom} className="!bg-primary !w-3 !h-3 !border-2 !border-primary/50" />
@@ -409,7 +434,11 @@ function StepEditorDialog({
     setConfig({ ...config, tags: (config.tags || []).filter((t: string) => t !== tag) });
   };
 
-  const delaySecs = actionType === "delay" ? (config.minutes || 5) * 60 : 0;
+  const delaySecs = actionType === "delay" ? (() => {
+    const val = config.delayValue || config.minutes || 5;
+    const unit = config.delayUnit || "minutes";
+    return unit === "days" ? val * 86400 : unit === "hours" ? val * 3600 : val * 60;
+  })() : 0;
 
   return (
     <>
@@ -496,12 +525,77 @@ function StepEditorDialog({
                 )}
 
                 {config.templateName && (
-                  <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-xs font-medium mb-1">Preview do Template:</p>
+                  <div className="space-y-3">
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-xs font-medium mb-1">Preview do Template:</p>
+                      {(() => {
+                        const tpl = templates.find(t => t.name === config.templateName);
+                        const body = tpl?.components?.find((c: any) => c.type === "BODY");
+                        return <p className="text-xs text-muted-foreground whitespace-pre-wrap">{body?.text || "—"}</p>;
+                      })()}
+                    </div>
+
+                    {/* Template Variable Mapping */}
                     {(() => {
                       const tpl = templates.find(t => t.name === config.templateName);
                       const body = tpl?.components?.find((c: any) => c.type === "BODY");
-                      return <p className="text-xs text-muted-foreground">{body?.text || "—"}</p>;
+                      const bodyText = body?.text || "";
+                      const varMatches = bodyText.match(/\{\{\d+\}\}/g) || [];
+                      const uniqueVars = [...new Set(varMatches)].sort();
+                      if (uniqueVars.length === 0) return null;
+                      
+                      const templateVars = config.templateVars || {};
+                      
+                      return (
+                        <div className="space-y-2 p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+                          <Label className="text-xs font-semibold flex items-center gap-1">
+                            <FileText className="h-3.5 w-3.5" />
+                            Variáveis do Template ({uniqueVars.length})
+                          </Label>
+                          <p className="text-[10px] text-muted-foreground">
+                            Mapeie cada variável para dados do cliente ou texto fixo.
+                          </p>
+                          {uniqueVars.map((v: string) => {
+                            const varNum = v.replace(/\{\{|\}\}/g, "");
+                            const currentVal = templateVars[varNum] || "";
+                            return (
+                              <div key={v} className="space-y-1">
+                                <Label className="text-[11px] text-muted-foreground">{v}</Label>
+                                <div className="flex gap-1.5">
+                                  <Select
+                                    value={CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) ? currentVal : "_custom"}
+                                    onValueChange={val => {
+                                      if (val === "_custom") {
+                                        setConfig({ ...config, templateVars: { ...templateVars, [varNum]: "" } });
+                                      } else {
+                                        setConfig({ ...config, templateVars: { ...templateVars, [varNum]: val } });
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectContent>
+                                      {CUSTOMER_VARIABLES.map(cv => (
+                                        <SelectItem key={cv.value} value={cv.value}>
+                                          <span className="text-xs">{cv.label}</span>
+                                        </SelectItem>
+                                      ))}
+                                      <SelectItem value="_custom">✏️ Texto fixo</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {!CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) && (
+                                  <Input
+                                    value={currentVal}
+                                    onChange={e => setConfig({ ...config, templateVars: { ...templateVars, [varNum]: e.target.value } })}
+                                    placeholder="Digite o valor fixo..."
+                                    className="h-8 text-xs"
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
                     })()}
                   </div>
                 )}
@@ -564,13 +658,13 @@ function StepEditorDialog({
               </div>
             )}
 
-            {/* ── WAIT FOR REPLY ── */}
+            {/* ── WAIT FOR REPLY (with bifurcation) ── */}
             {actionType === "wait_for_reply" && (
               <div className="space-y-3">
                 <div className="p-3 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-800">
                   <p className="text-xs text-orange-700 dark:text-orange-300">
                     <Reply className="h-3.5 w-3.5 inline mr-1" />
-                    O fluxo pausa aqui e só continua quando o lead responder. A próxima ação será executada após a resposta.
+                    O fluxo pausa aqui e só continua quando o lead responder. Se não responder no tempo definido, a ação de timeout será executada.
                   </p>
                 </div>
                 <div className="space-y-1">
@@ -582,7 +676,68 @@ function StepEditorDialog({
                     className="h-9"
                     min={1}
                   />
-                  <p className="text-[10px] text-muted-foreground">Se o lead não responder nesse tempo, o fluxo é cancelado.</p>
+                </div>
+
+                {/* Bifurcation: what to do on no reply */}
+                <div className="space-y-2 p-3 rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <GitBranch className="h-3.5 w-3.5 text-orange-500" />
+                    Se não responder (bifurcação)
+                  </Label>
+                  <Select value={config.timeoutAction || "cancel"} onValueChange={v => setConfig({ ...config, timeoutAction: v })}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cancel">❌ Cancelar fluxo</SelectItem>
+                      <SelectItem value="send_template">📋 Enviar Template Meta</SelectItem>
+                      <SelectItem value="send_text">💬 Enviar Mensagem Livre</SelectItem>
+                      <SelectItem value="add_tag">🏷️ Adicionar Tag</SelectItem>
+                      <SelectItem value="continue">▶️ Continuar para próxima ação</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {config.timeoutAction === "send_text" && (
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Mensagem de follow-up</Label>
+                      <Textarea
+                        value={config.timeoutMessage || ""}
+                        onChange={e => setConfig({ ...config, timeoutMessage: e.target.value })}
+                        placeholder="Oi! Vi que não respondeu ainda 😊 Posso te ajudar?"
+                        rows={3}
+                        className="text-xs"
+                      />
+                      <div className="flex flex-wrap gap-1">
+                        {CUSTOMER_VARIABLES.slice(0, 4).map(v => (
+                          <Badge key={v.value} variant="outline" className="text-[9px] cursor-pointer hover:bg-secondary" onClick={() => setConfig({ ...config, timeoutMessage: (config.timeoutMessage || "") + " " + v.value })}>
+                            {v.label}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {config.timeoutAction === "send_template" && (
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Nome do template</Label>
+                      <Input
+                        value={config.timeoutTemplateName || ""}
+                        onChange={e => setConfig({ ...config, timeoutTemplateName: e.target.value })}
+                        placeholder="Nome do template aprovado"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  )}
+
+                  {config.timeoutAction === "add_tag" && (
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Tag a adicionar</Label>
+                      <Input
+                        value={config.timeoutTag || ""}
+                        onChange={e => setConfig({ ...config, timeoutTag: e.target.value })}
+                        placeholder="Ex: nao-respondeu"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -665,17 +820,40 @@ function StepEditorDialog({
               </div>
             )}
 
-            {/* ── DELAY ── */}
+            {/* ── DELAY (minutes / hours / days) ── */}
             {actionType === "delay" && (
-              <div className="space-y-1">
-                <Label className="text-xs">Tempo de espera (minutos)</Label>
-                <Input
-                  type="number"
-                  value={config.minutes || 5}
-                  onChange={e => setConfig({ ...config, minutes: parseInt(e.target.value) || 0 })}
-                  className="h-9"
-                  min={1}
-                />
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs">Tempo de espera</Label>
+                    <Input
+                      type="number"
+                      value={config.delayValue || config.minutes || 5}
+                      onChange={e => setConfig({ ...config, delayValue: parseInt(e.target.value) || 1, minutes: undefined })}
+                      className="h-9"
+                      min={1}
+                    />
+                  </div>
+                  <div className="w-[130px] space-y-1">
+                    <Label className="text-xs">Unidade</Label>
+                    <Select value={config.delayUnit || "minutes"} onValueChange={v => setConfig({ ...config, delayUnit: v })}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="minutes">Minutos</SelectItem>
+                        <SelectItem value="hours">Horas</SelectItem>
+                        <SelectItem value="days">Dias</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  {(() => {
+                    const val = config.delayValue || config.minutes || 5;
+                    const unit = config.delayUnit || "minutes";
+                    const totalMin = unit === "days" ? val * 1440 : unit === "hours" ? val * 60 : val;
+                    return `= ${totalMin} minutos no total`;
+                  })()}
+                </p>
               </div>
             )}
           </div>
@@ -751,11 +929,15 @@ function FlowEditor({
           order: idx + 1,
           delaySeconds: step.delay_seconds,
           minutes: cfg.minutes,
+          delayValue: cfg.delayValue || cfg.minutes,
+          delayUnit: cfg.delayUnit || "minutes",
           templateName: cfg.templateName,
+          templateVars: cfg.templateVars,
           message: cfg.message,
           mediaUrl: cfg.mediaUrl,
           tags: cfg.tags,
           promptPreview: cfg.prompt?.slice(0, 40),
+          timeoutAction: cfg.timeoutAction,
           onDelete: () => deleteStep(step.id),
         },
         draggable: true,
