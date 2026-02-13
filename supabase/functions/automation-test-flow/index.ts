@@ -40,8 +40,16 @@ serve(async (req) => {
     }
 
     let formattedPhone = phone.replace(/\D/g, '');
-    if (!formattedPhone.startsWith('55')) {
+    if (formattedPhone.length >= 10 && formattedPhone.length <= 11) {
       formattedPhone = '55' + formattedPhone;
+    }
+    // Brazilian mobile normalization: ensure 13 digits (55 + DDD + 9XXXXXXXX)
+    if (formattedPhone.startsWith('55') && formattedPhone.length === 12) {
+      const ddd = formattedPhone.substring(2, 4);
+      const number = formattedPhone.substring(4);
+      if (!number.startsWith('9')) {
+        formattedPhone = '55' + ddd + '9' + number;
+      }
     }
 
     const results: Array<{ step: number; type: string; status: string; detail?: string }> = [];
