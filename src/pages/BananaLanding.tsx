@@ -7,7 +7,7 @@ const VIP_GROUP_LINK = "https://i.sendflow.pro/l/TxEwnIKQ10IXoG9rhc6X";
 type Step = "welcome" | "name" | "whatsapp" | "confirm" | "done";
 
 function DoneStep({ name }: { name: string }) {
-  const [countdown, setCountdown] = useState(5);
+  const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -91,6 +91,20 @@ export default function BananaLanding() {
     setSubmitting(true);
     try {
       const phone = whatsapp.replace(/\D/g, "");
+
+      // Check for duplicate registration
+      const { data: existingLead } = await supabase
+        .from("campaign_leads")
+        .select("id")
+        .eq("campaign_id", "banana-verao-2025")
+        .eq("phone", phone)
+        .maybeSingle();
+
+      if (existingLead) {
+        toast.error("Você já está cadastrado(a) neste evento! 😉");
+        setSubmitting(false);
+        return;
+      }
 
       // Save to campaign_leads
       await supabase.from("campaign_leads").insert({
@@ -192,9 +206,12 @@ export default function BananaLanding() {
                 <div>
                   <h1 className="text-2xl font-bold text-gray-800 leading-tight">
                     Nova Coleção<br />
-                    <span className="text-emerald-600">Verão com Conforto</span> 🌴
+                    <span className="text-emerald-600">Calçados Ortopédicos</span> 🦶✨
                   </h1>
                   <p className="text-sm text-gray-500 mt-2">
+                    Lançamentos em <strong>calçados ortopédicos</strong> com conforto e estilo!
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
                     Dias <strong>19, 20 e 21</strong> — Ofertas exclusivas nos Grupos VIP!
                   </p>
                 </div>
