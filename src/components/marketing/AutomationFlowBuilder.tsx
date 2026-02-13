@@ -173,7 +173,12 @@ function ActionNode({ data }: { data: any }) {
         <p className="text-xs text-muted-foreground mt-0.5">📎 Mídia anexada</p>
       )}
       {isDelay && (
-        <p className="text-xs text-foreground mt-1">⏱ {data.delayValue || data.minutes || 5} {data.delayUnit === "hours" ? "hora(s)" : data.delayUnit === "days" ? "dia(s)" : "min"}</p>
+        <div className="mt-1">
+          <p className="text-xs text-foreground">⏱ {data.delayValue || data.minutes || 5} {data.delayUnit === "hours" ? "hora(s)" : data.delayUnit === "days" ? "dia(s)" : "min"}</p>
+          {data.hasDeadline && data.deadline && (
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5">🚫 Limite: {new Date(data.deadline).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+          )}
+        </div>
       )}
       {isWait && (
         <div className="mt-1">
@@ -930,6 +935,58 @@ function StepEditorDialog({
                     return `= ${totalMin} minutos no total`;
                   })()}
                 </p>
+
+                {/* Deadline / Data Limite */}
+                <div className="space-y-2 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                      Data limite (não enviar após)
+                    </Label>
+                    <Switch
+                      checked={!!config.hasDeadline}
+                      onCheckedChange={v => setConfig({ ...config, hasDeadline: v, deadline: v ? config.deadline : undefined, deadlineAction: v ? (config.deadlineAction || "skip") : undefined })}
+                    />
+                  </div>
+                  {config.hasDeadline && (
+                    <>
+                      <p className="text-[10px] text-muted-foreground">
+                        Se o tempo de espera terminar após essa data, a mensagem seguinte <strong>não será enviada</strong>.
+                      </p>
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">Data e hora limite</Label>
+                        <Input
+                          type="datetime-local"
+                          value={config.deadline || ""}
+                          onChange={e => setConfig({ ...config, deadline: e.target.value })}
+                          className="h-9 text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">O que fazer se ultrapassar a data</Label>
+                        <Select value={config.deadlineAction || "skip"} onValueChange={v => setConfig({ ...config, deadlineAction: v })}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="skip">⏭️ Pular esta etapa e continuar</SelectItem>
+                            <SelectItem value="cancel">🛑 Cancelar todo o fluxo</SelectItem>
+                            <SelectItem value="add_tag">🏷️ Adicionar tag e parar</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {config.deadlineAction === "add_tag" && (
+                        <div className="space-y-1">
+                          <Label className="text-[11px]">Tag</Label>
+                          <Input
+                            value={config.deadlineTag || ""}
+                            onChange={e => setConfig({ ...config, deadlineTag: e.target.value })}
+                            placeholder="Ex: fora-do-prazo"
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             )}
           </div>
