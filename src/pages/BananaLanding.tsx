@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const VIP_GROUP_LINK = "https://chat.whatsapp.com/SEU_LINK_AQUI"; // ← Substituir pelo link real
+const VIP_GROUP_LINK = "https://i.sendflow.pro/l/TxEwnIKQ10IXoG9rhc6X";
 
 type Step = "welcome" | "name" | "whatsapp" | "confirm" | "done";
 
