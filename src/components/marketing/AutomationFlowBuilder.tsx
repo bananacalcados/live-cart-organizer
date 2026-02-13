@@ -123,8 +123,16 @@ function ActionNode({ data }: { data: any }) {
   if (isTag) { borderClass = "border-pink-300 dark:border-pink-700"; bgClass = "bg-pink-50 dark:bg-pink-950/30"; }
 
   return (
-    <div className={`rounded-xl shadow-lg px-5 py-4 min-w-[220px] border-2 ${borderClass} ${bgClass}`}>
+    <div className={`rounded-xl shadow-lg px-5 py-4 min-w-[220px] border-2 ${borderClass} ${bgClass} group relative`}>
       <Handle type="target" position={Position.Top} className="!bg-primary !w-3 !h-3 !border-2 !border-primary/50" />
+      {data.onDelete && (
+        <button
+          onClick={(e) => { e.stopPropagation(); data.onDelete(); }}
+          className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      )}
       <div className="flex items-center gap-2 mb-1">
         <div className={`p-1.5 rounded-lg ${action?.bg || "bg-primary/10"}`}>
           <Icon className={`h-4 w-4 ${action?.color || "text-primary"}`} />
@@ -716,12 +724,15 @@ function FlowEditor({
     setLoading(false);
   };
 
-  const { initialNodes, initialEdges } = useMemo(() => {
+  // Track saved positions so user-dragged positions persist
+  const nodePositionsRef = useRef<Record<string, { x: number; y: number }>>({});
+
+  const buildNodesAndEdges = useCallback(() => {
     const nodes: Node[] = [
       {
         id: "trigger",
         type: "trigger",
-        position: { x: 250, y: 50 },
+        position: nodePositionsRef.current["trigger"] || { x: 250, y: 50 },
         data: { triggerType, ...triggerConfig },
         draggable: true,
       },
@@ -734,7 +745,7 @@ function FlowEditor({
       nodes.push({
         id: nodeId,
         type: "action",
-        position: { x: 250, y: 180 + idx * 150 },
+        position: nodePositionsRef.current[nodeId] || { x: 250, y: 180 + idx * 150 },
         data: {
           actionType: step.action_type,
           order: idx + 1,
@@ -745,6 +756,7 @@ function FlowEditor({
           mediaUrl: cfg.mediaUrl,
           tags: cfg.tags,
           promptPreview: cfg.prompt?.slice(0, 40),
+          onDelete: () => deleteStep(step.id),
         },
         draggable: true,
       });
@@ -757,16 +769,33 @@ function FlowEditor({
         style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
       });
     });
-    return { initialNodes: nodes, initialEdges: edges };
+    return { nodes, edges };
   }, [steps, triggerType, triggerConfig]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
+  // Only rebuild nodes from DB when steps array changes (length or IDs)
+  const stepsKey = steps.map(s => s.id).join(",");
   useEffect(() => {
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-  }, [initialNodes, initialEdges]);
+    const { nodes: n, edges: e } = buildNodesAndEdges();
+    setNodes(n);
+    setEdges(e);
+  }, [stepsKey, triggerType, triggerConfig]);
+
+  // Save positions when nodes are dragged
+  const handleNodesChange = useCallback((changes: any) => {
+    onNodesChange(changes);
+    // After changes, save current positions
+    setTimeout(() => {
+      setNodes(currentNodes => {
+        currentNodes.forEach(n => {
+          nodePositionsRef.current[n.id] = { x: n.position.x, y: n.position.y };
+        });
+        return currentNodes;
+      });
+    }, 0);
+  }, [onNodesChange, setNodes]);
 
   const onConnect = useCallback((conn: Connection) => {
     setEdges(eds => addEdge({ ...conn, animated: true, markerEnd: { type: MarkerType.ArrowClosed } }, eds));
@@ -922,7 +951,7 @@ function FlowEditor({
             <ReactFlow
               nodes={nodes}
               edges={edges}
-              onNodesChange={onNodesChange}
+              onNodesChange={handleNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onNodeClick={handleNodeClick}
