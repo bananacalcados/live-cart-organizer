@@ -320,6 +320,25 @@ function StepEditorDialog({
   const [aiTestOpen, setAiTestOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [whatsappNumbers, setWhatsappNumbers] = useState<any[]>([]);
+  const [loadingNumbers, setLoadingNumbers] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      loadWhatsappNumbers();
+    }
+  }, [open]);
+
+  const loadWhatsappNumbers = async () => {
+    setLoadingNumbers(true);
+    const { data } = await supabase
+      .from('whatsapp_numbers')
+      .select('id, label, phone_display, provider, is_default')
+      .eq('is_active', true)
+      .eq('provider', 'meta');
+    setWhatsappNumbers(data || []);
+    setLoadingNumbers(false);
+  };
 
   useEffect(() => {
     if (step && open) {
@@ -329,17 +348,28 @@ function StepEditorDialog({
   }, [step, open]);
 
   useEffect(() => {
-    if (open && actionType === "send_template" && templates.length === 0) {
-      fetchTemplates();
+    if (open && actionType === "send_template" && config.whatsappNumberId) {
+      fetchTemplates(config.whatsappNumberId);
     }
-  }, [open, actionType]);
+  }, [open, actionType, config.whatsappNumberId]);
 
-  const fetchTemplates = async () => {
+  const fetchTemplates = async (numberId?: string) => {
+    const nId = numberId || config.whatsappNumberId;
+    if (!nId) return;
     setLoadingTemplates(true);
+    setTemplates([]);
     try {
-      const res = await supabase.functions.invoke("meta-whatsapp-get-templates", { body: {} });
-      if (res.data?.templates) {
-        setTemplates(res.data.templates.filter((t: MetaTemplate) => t.status === "APPROVED"));
+      const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-get-templates`);
+      url.searchParams.set('whatsappNumberId', nId);
+      const fetchRes = await fetch(url.toString(), {
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+      });
+      const data = await fetchRes.json();
+      if (data?.templates) {
+        setTemplates(data.templates.filter((t: MetaTemplate) => t.status === "APPROVED"));
       }
     } catch { /* silent */ }
     setLoadingTemplates(false);
@@ -401,21 +431,22 @@ function StepEditorDialog({
             {actionType === "send_template" && (
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Template Aprovado</Label>
-                  {loadingTemplates ? (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Carregando templates...</div>
+                  <Label className="text-xs">Número WhatsApp (Meta)</Label>
+                  {loadingNumbers ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Carregando números...</div>
                   ) : (
-                    <Select value={config.templateName || ""} onValueChange={v => {
-                      const tpl = templates.find(t => t.name === v);
-                      setConfig({ ...config, templateName: v, language: tpl?.language || "pt_BR" });
+                    <Select value={config.whatsappNumberId || ""} onValueChange={v => {
+                      setConfig({ ...config, whatsappNumberId: v, templateName: "", language: "" });
+                      setTemplates([]);
+                      fetchTemplates(v);
                     }}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione um template" /></SelectTrigger>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o número" /></SelectTrigger>
                       <SelectContent>
-                        {templates.map(t => (
-                          <SelectItem key={t.name} value={t.name}>
+                        {whatsappNumbers.map(n => (
+                          <SelectItem key={n.id} value={n.id}>
                             <span className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[9px]">{t.category}</Badge>
-                              {t.name}
+                              {n.label} {n.phone_display && <span className="text-muted-foreground text-[10px]">({n.phone_display})</span>}
+                              {n.is_default && <Badge variant="secondary" className="text-[9px] px-1 py-0">Padrão</Badge>}
                             </span>
                           </SelectItem>
                         ))}
@@ -423,6 +454,39 @@ function StepEditorDialog({
                     </Select>
                   )}
                 </div>
+
+                {config.whatsappNumberId && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Template Aprovado</Label>
+                    {loadingTemplates ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Carregando templates...</div>
+                    ) : templates.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">Nenhum template aprovado encontrado para este número.</p>
+                    ) : (
+                      <Select value={config.templateName || ""} onValueChange={v => {
+                        const tpl = templates.find(t => t.name === v);
+                        setConfig({ ...config, templateName: v, language: tpl?.language || "pt_BR" });
+                      }}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Selecione um template" /></SelectTrigger>
+                        <SelectContent>
+                          {templates.map(t => (
+                            <SelectItem key={t.name} value={t.name}>
+                              <span className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[9px]">{t.category}</Badge>
+                                {t.name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
+
+                {!config.whatsappNumberId && (
+                  <p className="text-xs text-muted-foreground">Selecione um número WhatsApp para ver os templates aprovados.</p>
+                )}
+
                 {config.templateName && (
                   <div className="p-3 bg-muted rounded-lg">
                     <p className="text-xs font-medium mb-1">Preview do Template:</p>
@@ -433,7 +497,7 @@ function StepEditorDialog({
                     })()}
                   </div>
                 )}
-                <Button variant="outline" size="sm" onClick={fetchTemplates} className="gap-1">
+                <Button variant="outline" size="sm" onClick={() => fetchTemplates()} className="gap-1" disabled={!config.whatsappNumberId}>
                   <RefreshCw className="h-3 w-3" />Atualizar lista
                 </Button>
               </div>
