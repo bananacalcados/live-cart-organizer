@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { 
   LayoutDashboard, 
   Calendar, 
@@ -9,7 +10,8 @@ import {
   Store,
   Package,
   BarChart3,
-  Banana
+  Banana,
+  Shield
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,48 +25,63 @@ const modules = [
     description: "Kanban de pedidos, promoções e roleta",
     icon: LayoutDashboard,
     path: "/dashboard",
+    module: "dashboard",
   },
   {
     title: "Eventos",
     description: "Gerencie suas lives e eventos",
     icon: Calendar,
     path: "/events",
+    module: "events",
   },
   {
     title: "Chat",
     description: "Conversas do WhatsApp",
     icon: MessageSquare,
     path: "/chat",
+    module: "chat",
   },
   {
     title: "Marketing",
     description: "Campanhas e listas de contatos",
     icon: Megaphone,
     path: "/marketing",
+    module: "marketing",
   },
   {
     title: "Expedição",
     description: "Picking, packing e despacho",
     icon: Truck,
     path: "/expedition",
+    module: "expedition",
   },
   {
     title: "Frente de Caixa",
     description: "PDV para vendas em loja física",
     icon: Store,
     path: "/pos",
+    module: "pos",
   },
   {
     title: "Estoque",
     description: "Balanço e correção de estoque",
     icon: Package,
     path: "/inventory",
+    module: "inventory",
   },
   {
     title: "Gestão",
     description: "Vendas, custos, margens e estoque consolidado",
     icon: BarChart3,
     path: "/management",
+    module: "management",
+  },
+  {
+    title: "Administração",
+    description: "Usuários e permissões de acesso",
+    icon: Shield,
+    path: "/admin",
+    module: "admin",
   },
 ];
 
