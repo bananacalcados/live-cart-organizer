@@ -102,9 +102,10 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
   const subtotal = cart.reduce((s, item) => s + item.price * item.quantity, 0);
   const totalItems = cart.reduce((s, item) => s + item.quantity, 0);
+  const parsedDiscount = parseFloat((discount || "0").replace(',', '.')) || 0;
   const discountValue = discountType === "percent"
-    ? subtotal * (parseFloat(discount || "0") / 100)
-    : parseFloat(discount || "0");
+    ? subtotal * (parsedDiscount / 100)
+    : parsedDiscount;
   const totalWithDiscount = Math.max(0, subtotal - discountValue);
 
   // Check if cash register is open
@@ -1148,10 +1149,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                     </SelectContent>
                   </Select>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={discount}
-                    onChange={e => setDiscount(e.target.value)}
-                    placeholder={discountType === "percent" ? "Ex: 10" : "Ex: 50.00"}
+                    onChange={e => {
+                      // Allow only digits, comma and dot
+                      const val = e.target.value.replace(/[^0-9.,]/g, '');
+                      setDiscount(val);
+                    }}
+                    placeholder={discountType === "percent" ? "Ex: 10" : "Ex: 50"}
                     className="flex-1 bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30"
                   />
                 </div>
