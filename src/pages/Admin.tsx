@@ -80,54 +80,68 @@ export default function Admin() {
     fetchUsers();
   }, []);
 
+  const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+
   const handleCreate = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+    if (creating) return;
+    setCreating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-    const res = await supabase.functions.invoke("admin-create-user", {
-      body: {
-        email: newEmail,
-        password: newPassword,
-        display_name: newDisplayName || newEmail,
-        role: newRole,
-        modules: newRole === "admin" ? [] : newModules,
-      },
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
+      const res = await supabase.functions.invoke("admin-create-user", {
+        body: {
+          email: newEmail,
+          password: newPassword,
+          display_name: newDisplayName || newEmail,
+          role: newRole,
+          modules: newRole === "admin" ? [] : newModules,
+        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
 
-    if (res.error || res.data?.error) {
-      toast({ title: "Erro", description: res.data?.error || "Erro ao criar usuário", variant: "destructive" });
-    } else {
-      toast({ title: "Usuário criado com sucesso!" });
-      setCreateOpen(false);
-      setNewEmail(""); setNewPassword(""); setNewDisplayName(""); setNewRole("user"); setNewModules([]);
-      fetchUsers();
+      if (res.error || res.data?.error) {
+        toast({ title: "Erro", description: res.data?.error || "Erro ao criar usuário", variant: "destructive" });
+      } else {
+        toast({ title: "Usuário criado com sucesso!" });
+        setCreateOpen(false);
+        setNewEmail(""); setNewPassword(""); setNewDisplayName(""); setNewRole("user"); setNewModules([]);
+        fetchUsers();
+      }
+    } finally {
+      setCreating(false);
     }
   };
 
   const handleUpdate = async () => {
-    if (!editUser) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+    if (!editUser || updating) return;
+    setUpdating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-    const res = await supabase.functions.invoke("admin-update-user", {
-      body: {
-        user_id: editUser.id,
-        role: editRole,
-        modules: editRole === "admin" ? [] : editModules,
-        display_name: editDisplayName,
-        password: editPassword || undefined,
-      },
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
+      const res = await supabase.functions.invoke("admin-update-user", {
+        body: {
+          user_id: editUser.id,
+          role: editRole,
+          modules: editRole === "admin" ? [] : editModules,
+          display_name: editDisplayName,
+          password: editPassword || undefined,
+        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
 
-    if (res.error || res.data?.error) {
-      toast({ title: "Erro", description: res.data?.error || "Erro ao atualizar", variant: "destructive" });
-    } else {
-      toast({ title: "Usuário atualizado!" });
-      setEditUser(null);
-      setEditPassword("");
-      fetchUsers();
+      if (res.error || res.data?.error) {
+        toast({ title: "Erro", description: res.data?.error || "Erro ao atualizar", variant: "destructive" });
+      } else {
+        toast({ title: "Usuário atualizado!" });
+        setEditUser(null);
+        setEditPassword("");
+        fetchUsers();
+      }
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -241,7 +255,9 @@ export default function Admin() {
                     </div>
                   </div>
                 )}
-                <Button onClick={handleCreate} className="w-full">Criar Usuário</Button>
+                <Button onClick={handleCreate} className="w-full" disabled={creating}>
+                  {creating ? "Criando..." : "Criar Usuário"}
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
