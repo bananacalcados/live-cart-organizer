@@ -38,6 +38,7 @@ import {
   FileText, Send, Timer, Loader2, RefreshCw, Tag,
   Brain, Reply, Image, Mic, Smile, Paperclip, PlayCircle,
   TestTube2, StopCircle, Volume2, GitBranch, AlertTriangle,
+  ShoppingCart, Sparkles, Package, ExternalLink,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 
@@ -75,14 +76,17 @@ interface MetaTemplate {
 
 const TRIGGER_TYPES = [
   { value: "new_lead", label: "Novo Lead", icon: Users, description: "Quando um lead se cadastra na landing page" },
-  { value: "new_order", label: "Novo Pedido", icon: ShoppingBag, description: "Quando um pedido é criado" },
+  { value: "new_order", label: "Novo Pedido", icon: ShoppingBag, description: "Quando um pedido é criado no CRM" },
   { value: "stage_change", label: "Mudança de Estágio", icon: RefreshCw, description: "Quando o pedido muda de etapa" },
   { value: "payment_confirmed", label: "Pagamento Confirmado", icon: CreditCard, description: "Quando o pagamento é confirmado" },
+  { value: "shopify_purchase", label: "Compra Shopify", icon: ShoppingCart, description: "Quando alguém finaliza uma compra na Shopify" },
+  { value: "yampi_abandoned_cart", label: "Carrinho Abandonado (Yampi)", icon: Package, description: "Quando um carrinho é abandonado na Yampi" },
 ];
 
 const ACTION_TYPES = [
   { value: "send_template", label: "Template Meta", icon: FileText, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900/30", description: "Template oficial aprovado" },
   { value: "send_text", label: "Mensagem Livre", icon: MessageSquare, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-900/30", description: "Texto, emoji, foto, áudio" },
+  { value: "ai_crosssell", label: "Cross-sell IA", icon: Sparkles, color: "text-yellow-600 dark:text-yellow-400", bg: "bg-yellow-100 dark:bg-yellow-900/30", description: "IA sugere produto + link Yampi direto" },
   { value: "wait_for_reply", label: "Aguardar Resposta", icon: Reply, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-100 dark:bg-orange-900/30", description: "Espera o lead responder (com bifurcação)" },
   { value: "ai_response", label: "Resposta IA", icon: Brain, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-100 dark:bg-purple-900/30", description: "IA responde com prompt customizado" },
   { value: "add_tag", label: "Adicionar Tag", icon: Tag, color: "text-pink-600 dark:text-pink-400", bg: "bg-pink-100 dark:bg-pink-900/30", description: "Adiciona tag ao lead" },
@@ -127,6 +131,7 @@ function ActionNode({ data }: { data: any }) {
   const isAi = data.actionType === "ai_response";
   const isDelay = data.actionType === "delay";
   const isTag = data.actionType === "add_tag";
+  const isCrossSell = data.actionType === "ai_crosssell";
 
   let borderClass = "border-border";
   let bgClass = "bg-card";
@@ -134,6 +139,7 @@ function ActionNode({ data }: { data: any }) {
   if (isAi) { borderClass = "border-purple-300 dark:border-purple-700"; bgClass = "bg-purple-50 dark:bg-purple-950/30"; }
   if (isDelay) { borderClass = "border-amber-300 dark:border-amber-700"; bgClass = "bg-amber-50 dark:bg-amber-950/30"; }
   if (isTag) { borderClass = "border-pink-300 dark:border-pink-700"; bgClass = "bg-pink-50 dark:bg-pink-950/30"; }
+  if (isCrossSell) { borderClass = "border-yellow-300 dark:border-yellow-700"; bgClass = "bg-yellow-50 dark:bg-yellow-950/30"; }
 
   return (
     <div className={`rounded-xl shadow-lg px-5 py-4 min-w-[220px] border-2 ${borderClass} ${bgClass} group relative`}>
@@ -178,6 +184,12 @@ function ActionNode({ data }: { data: any }) {
         </div>
       )}
       {isAi && <p className="text-xs text-foreground mt-1 truncate max-w-[180px]">🤖 {data.promptPreview || "Prompt configurado"}</p>}
+      {isCrossSell && (
+        <div className="mt-1">
+          <p className="text-xs text-foreground">✨ Cross-sell IA</p>
+          {data.productPool && <p className="text-[10px] text-muted-foreground">{data.productPool.length} produto(s) no pool</p>}
+        </div>
+      )}
       {isTag && data.tags && <div className="flex flex-wrap gap-1 mt-1">{data.tags.map((t: string) => <Badge key={t} variant="secondary" className="text-[9px] px-1 py-0">{t}</Badge>)}</div>}
       <Handle type="source" position={Position.Bottom} className="!bg-primary !w-3 !h-3 !border-2 !border-primary/50" />
     </div>
@@ -742,6 +754,70 @@ function StepEditorDialog({
               </div>
             )}
 
+            {/* ── AI CROSS-SELL ── */}
+            {actionType === "ai_crosssell" && (
+              <div className="space-y-3">
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                    <Sparkles className="h-3.5 w-3.5 inline mr-1" />
+                    A IA analisa os produtos comprados e sugere itens complementares do pool definido. Pergunta a variante ao cliente e envia link de checkout Yampi direto.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Prompt de Cross-sell</Label>
+                  <Textarea
+                    value={config.crosssellPrompt || ""}
+                    onChange={e => setConfig({ ...config, crosssellPrompt: e.target.value })}
+                    placeholder={"Você é consultora da Banana Calçados. O cliente acabou de comprar {{produtos_comprados}}. Sugira UM produto complementar do catálogo disponível, explicando por que combina. Seja simpática e use emojis. Quando confirmar interesse, pergunte o tamanho/numeração."}
+                    rows={5}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Pool de Produtos (handle Shopify, um por linha)</Label>
+                  <Textarea
+                    value={(config.productPool || []).join("\n")}
+                    onChange={e => setConfig({ ...config, productPool: e.target.value.split("\n").filter((l: string) => l.trim()) })}
+                    placeholder={"sandalia-rasteira-conforto\nsapatilha-malu-couro\nbolsa-transversal-mini"}
+                    rows={4}
+                  />
+                  <p className="text-[10px] text-muted-foreground">A IA escolherá o melhor produto para cada cliente.</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Mensagem de introdução</Label>
+                  <Textarea
+                    value={config.crosssellIntro || ""}
+                    onChange={e => setConfig({ ...config, crosssellIntro: e.target.value })}
+                    placeholder={"Oi {{nome}}! 😊 Vi que você acabou de comprar com a gente. Tenho uma sugestão especial..."}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Máx. interações</Label>
+                    <Input type="number" value={config.maxInteractions || 5} onChange={e => setConfig({ ...config, maxInteractions: parseInt(e.target.value) || 5 })} className="h-9" min={1} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Desconto (%)</Label>
+                    <Input type="number" value={config.discountPercent || 0} onChange={e => setConfig({ ...config, discountPercent: parseInt(e.target.value) || 0 })} className="h-9" min={0} max={100} />
+                  </div>
+                </div>
+
+                <div className="p-2 bg-muted rounded-lg space-y-1">
+                  <p className="text-[10px] font-medium">Fluxo automático:</p>
+                  <ol className="text-[10px] text-muted-foreground space-y-0.5 list-decimal list-inside">
+                    <li>Envia mensagem de introdução</li>
+                    <li>IA sugere produto complementar do pool</li>
+                    <li>Se aceitar, IA pergunta variante (numeração/cor)</li>
+                    <li>Gera link Yampi de checkout direto e envia</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+
             {/* ── AI RESPONSE ── */}
             {actionType === "ai_response" && (
               <div className="space-y-3">
@@ -936,8 +1012,9 @@ function FlowEditor({
           message: cfg.message,
           mediaUrl: cfg.mediaUrl,
           tags: cfg.tags,
-          promptPreview: cfg.prompt?.slice(0, 40),
+          promptPreview: cfg.prompt?.slice(0, 40) || cfg.crosssellPrompt?.slice(0, 40),
           timeoutAction: cfg.timeoutAction,
+          productPool: cfg.productPool,
           onDelete: () => deleteStep(step.id),
         },
         draggable: true,
@@ -996,7 +1073,7 @@ function FlowEditor({
 
   const addStep = async (actionType: string) => {
     const order = steps.length + 1;
-    const defaultConfig: any = actionType === "delay" ? { minutes: 5 } : actionType === "wait_for_reply" ? { timeoutHours: 24 } : actionType === "ai_response" ? { prompt: "", maxInteractions: 5 } : actionType === "add_tag" ? { tags: [], condition: "always" } : {};
+    const defaultConfig: any = actionType === "delay" ? { minutes: 5 } : actionType === "wait_for_reply" ? { timeoutHours: 24, timeoutAction: "cancel" } : actionType === "ai_response" ? { prompt: "", maxInteractions: 5 } : actionType === "add_tag" ? { tags: [], condition: "always" } : actionType === "ai_crosssell" ? { crosssellPrompt: "", crosssellIntro: "", productPool: [], maxInteractions: 5, discountPercent: 0 } : {};
     const delaySecs = actionType === "delay" ? 300 : 0;
     const { error } = await supabase.from("automation_steps").insert({
       flow_id: flow.id,
@@ -1083,6 +1160,30 @@ function FlowEditor({
                   <div className="space-y-1">
                     <Label className="text-xs">Para estágio</Label>
                     <Input value={triggerConfig.to_stage || ""} onChange={e => setTriggerConfig({ ...triggerConfig, to_stage: e.target.value })} placeholder="confirmed" className="h-8 text-xs" />
+                  </div>
+                )}
+                {triggerType === "shopify_purchase" && (
+                  <div className="space-y-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
+                    <p className="text-[10px] text-green-700 dark:text-green-300">
+                      <ShoppingCart className="h-3 w-3 inline mr-1" />
+                      Disparado automaticamente quando a Shopify envia o webhook de pedido pago. O cliente precisa ter telefone no pedido.
+                    </p>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Filtrar por tag do produto (opcional)</Label>
+                      <Input value={triggerConfig.product_tag || ""} onChange={e => setTriggerConfig({ ...triggerConfig, product_tag: e.target.value })} placeholder="Ex: calcado, acessorio" className="h-8 text-xs" />
+                    </div>
+                  </div>
+                )}
+                {triggerType === "yampi_abandoned_cart" && (
+                  <div className="space-y-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
+                    <p className="text-[10px] text-red-700 dark:text-red-300">
+                      <Package className="h-3 w-3 inline mr-1" />
+                      Disparado quando a Yampi envia o webhook de carrinho abandonado. O contato será identificado pelo telefone do cliente.
+                    </p>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Delay mínimo após abandono (min)</Label>
+                      <Input type="number" value={triggerConfig.min_delay_minutes || 30} onChange={e => setTriggerConfig({ ...triggerConfig, min_delay_minutes: parseInt(e.target.value) || 30 })} className="h-8 text-xs" min={5} />
+                    </div>
                   </div>
                 )}
               </div>
