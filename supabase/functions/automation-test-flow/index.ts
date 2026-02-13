@@ -97,7 +97,7 @@ serve(async (req) => {
                 'Authorization': `Bearer ${supabaseKey}`,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ phone: formattedPhone, message: aiData.reply }),
+              body: JSON.stringify({ phone: formattedPhone, message: aiData.reply, whatsappNumberId: config.whatsappNumberId }),
             });
             const sendData = await sendRes.json();
             results.push({ step: i + 1, type: 'ai_response', status: sendRes.ok ? 'sent' : 'error', detail: sendRes.ok ? aiData.reply.slice(0, 80) : sendData.error });
