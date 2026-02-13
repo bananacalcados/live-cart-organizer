@@ -2,6 +2,34 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID;
+
+// Initialize Meta Pixel
+function initMetaPixel() {
+  if (!META_PIXEL_ID || (window as any).fbq) return;
+  const f = window as any;
+  const n: any = function (...args: any[]) {
+    n.callMethod ? n.callMethod(...args) : n.queue.push(args);
+  };
+  f.fbq = n;
+  if (!f._fbq) f._fbq = n;
+  n.push = n;
+  n.loaded = true;
+  n.version = "2.0";
+  n.queue = [] as any[];
+  const s = document.createElement("script");
+  s.async = true;
+  s.src = "https://connect.facebook.net/en_US/fbevents.js";
+  document.head.appendChild(s);
+  f.fbq("init", META_PIXEL_ID);
+}
+
+function trackPixelEvent(event: string, data?: Record<string, any>) {
+  if ((window as any).fbq) {
+    (window as any).fbq("track", event, data);
+  }
+}
+
 const VIP_GROUP_LINK = "https://i.sendflow.pro/l/TxEwnIKQ10IXoG9rhc6X";
 
 type Step = "welcome" | "name" | "whatsapp" | "confirm" | "done";
@@ -66,6 +94,12 @@ export default function BananaLanding() {
   const [submitting, setSubmitting] = useState(false);
   const [visible, setVisible] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Init Meta Pixel + PageView
+  useEffect(() => {
+    initMetaPixel();
+    trackPixelEvent("PageView");
+  }, []);
 
   useEffect(() => {
     setVisible(false);
@@ -137,6 +171,9 @@ export default function BananaLanding() {
           tags: ["lp-banana-verao"],
         });
       }
+
+      // Track Lead event
+      trackPixelEvent("Lead", { content_name: "banana-verao-2025", content_category: "landing_page" });
 
       setStep("done");
     } catch (err) {
