@@ -88,12 +88,49 @@ const modules = [
 export default function Home() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [allowedModules, setAllowedModules] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    const checkPermissions = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Check if user is admin (has access to everything)
+      const { data: isAdmin } = await supabase.rpc("has_role", {
+        _user_id: session.user.id,
+        _role: "admin" as any,
+      });
+
+      if (isAdmin) {
+        setAllowedModules(modules.map(m => m.module));
+        return;
+      }
+
+      // Check each module
+      const checks = await Promise.all(
+        modules.map(async (mod) => {
+          const { data } = await supabase.rpc("has_module_access", {
+            _user_id: session.user.id,
+            _module: mod.module,
+          });
+          return data ? mod.module : null;
+        })
+      );
+      setAllowedModules(checks.filter(Boolean) as string[]);
+    };
+
+    checkPermissions();
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast({ title: "Logout realizado" });
     navigate("/login");
   };
+
+  const visibleModules = allowedModules
+    ? modules.filter(m => allowedModules.includes(m.module))
+    : [];
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'hsl(0 0% 6%)' }}>
@@ -124,7 +161,11 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {modules.map((mod) => (
+          {allowedModules === null ? (
+            <div className="col-span-full flex justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'hsl(48 95% 50%)' }} />
+            </div>
+          ) : visibleModules.map((mod) => (
             <Card
               key={mod.path}
               className="cursor-pointer transition-all group border-white/10 hover:border-[hsl(48,95%,50%)]/40"
