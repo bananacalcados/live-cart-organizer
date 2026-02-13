@@ -18,6 +18,7 @@ import Expedition from "./pages/Expedition";
 import POS from "./pages/POS";
 import Inventory from "./pages/Inventory";
 import Management from "./pages/Management";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
@@ -42,15 +43,16 @@ const App = () => (
 
             {/* Protected routes */}
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-            <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
-            <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-            <Route path="/marketing" element={<ProtectedRoute><Marketing /></ProtectedRoute>} />
-            <Route path="/marketing/new" element={<ProtectedRoute><NewCampaign /></ProtectedRoute>} />
-            <Route path="/expedition" element={<ProtectedRoute><Expedition /></ProtectedRoute>} />
-            <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
-            <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-            <Route path="/management" element={<ProtectedRoute><Management /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute requiredModule="dashboard"><Index /></ProtectedRoute>} />
+            <Route path="/events" element={<ProtectedRoute requiredModule="events"><Events /></ProtectedRoute>} />
+            <Route path="/chat" element={<ProtectedRoute requiredModule="chat"><Chat /></ProtectedRoute>} />
+            <Route path="/marketing" element={<ProtectedRoute requiredModule="marketing"><Marketing /></ProtectedRoute>} />
+            <Route path="/marketing/new" element={<ProtectedRoute requiredModule="marketing"><NewCampaign /></ProtectedRoute>} />
+            <Route path="/expedition" element={<ProtectedRoute requiredModule="expedition"><Expedition /></ProtectedRoute>} />
+            <Route path="/pos" element={<ProtectedRoute requiredModule="pos"><POS /></ProtectedRoute>} />
+            <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><Inventory /></ProtectedRoute>} />
+            <Route path="/management" element={<ProtectedRoute requiredModule="management"><Management /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute requiredModule="admin"><Admin /></ProtectedRoute>} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
