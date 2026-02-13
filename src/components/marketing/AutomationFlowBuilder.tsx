@@ -1089,6 +1089,26 @@ function StepEditorDialog({
                   </p>
                 </div>
                 <div className="space-y-1">
+                  <Label className="text-xs">Número WhatsApp (para enviar resposta)</Label>
+                  {loadingNumbers ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Carregando números...</div>
+                  ) : (
+                    <Select value={config.whatsappNumberId || ""} onValueChange={v => setConfig({ ...config, whatsappNumberId: v })}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o número" /></SelectTrigger>
+                      <SelectContent>
+                        {whatsappNumbers.map(n => (
+                          <SelectItem key={n.id} value={n.id}>
+                            <span className="flex items-center gap-2">
+                              {n.label} {n.phone_display && <span className="text-muted-foreground text-[10px]">({n.phone_display})</span>}
+                              {n.is_default && <Badge variant="secondary" className="text-[9px] px-1 py-0">Padrão</Badge>}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <div className="space-y-1">
                   <Label className="text-xs">Prompt da IA</Label>
                   <Textarea
                     value={config.prompt || ""}
