@@ -38,7 +38,8 @@ import {
   FileText, Send, Timer, Loader2, RefreshCw, Tag,
   Brain, Reply, Image, Mic, Smile, Paperclip, PlayCircle,
   TestTube2, StopCircle, Volume2, GitBranch, AlertTriangle,
-  ShoppingCart, Sparkles, Package, ExternalLink,
+  ShoppingCart, Sparkles, Package, ExternalLink, LayoutGrid,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 
@@ -162,6 +163,9 @@ function ActionNode({ data }: { data: any }) {
       </div>
       {data.actionType === "send_template" && data.templateName && (
         <p className="text-xs text-foreground mt-1 truncate max-w-[180px]">📋 {data.templateName}</p>
+      )}
+      {data.actionType === "send_template" && data.carouselCards && Object.keys(data.carouselCards).length > 0 && (
+        <p className="text-[10px] text-muted-foreground flex items-center gap-0.5"><LayoutGrid className="h-2.5 w-2.5" />Carrossel: {Object.keys(data.carouselCards).length} cards</p>
       )}
       {data.actionType === "send_template" && data.templateVars && Object.keys(data.templateVars).length > 0 && (
         <p className="text-[10px] text-muted-foreground">📝 {Object.keys(data.templateVars).length} variáveis</p>
@@ -367,6 +371,7 @@ function StepEditorDialog({
   const [templates, setTemplates] = useState<MetaTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [expandedCarouselCard, setExpandedCarouselCard] = useState<number | null>(0);
   const [aiTestOpen, setAiTestOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -543,16 +548,66 @@ function StepEditorDialog({
 
                 {config.templateName && (
                   <div className="space-y-3">
+                    {/* Template Preview */}
                     <div className="p-3 bg-muted rounded-lg">
                       <p className="text-xs font-medium mb-1">Preview do Template:</p>
                       {(() => {
                         const tpl = templates.find(t => t.name === config.templateName);
                         const body = tpl?.components?.find((c: any) => c.type === "BODY");
-                        return <p className="text-xs text-muted-foreground whitespace-pre-wrap">{body?.text || "—"}</p>;
+                        const header = tpl?.components?.find((c: any) => c.type === "HEADER");
+                        const carousel = tpl?.components?.find((c: any) => c.type === "CAROUSEL");
+                        const buttons = tpl?.components?.find((c: any) => c.type === "BUTTONS");
+                        return (
+                          <div className="space-y-1.5">
+                            {header && (
+                              <p className="text-[10px] text-muted-foreground">
+                                📎 Header: {header.format || "TEXT"} {header.text && `— ${header.text}`}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground whitespace-pre-wrap">{body?.text || "—"}</p>
+                            {carousel && (
+                              <Badge variant="secondary" className="text-[9px] gap-1">
+                                <LayoutGrid className="h-2.5 w-2.5" />
+                                Carrossel — {carousel.cards?.length || 0} cards
+                              </Badge>
+                            )}
+                            {buttons && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {buttons.buttons?.map((b: any, i: number) => (
+                                  <Badge key={i} variant="outline" className="text-[9px]">
+                                    {b.type === "URL" ? "🔗" : b.type === "QUICK_REPLY" ? "↩️" : "📞"} {b.text}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
                       })()}
                     </div>
 
-                    {/* Template Variable Mapping */}
+                    {/* HEADER variable mapping (for image/video/document headers) */}
+                    {(() => {
+                      const tpl = templates.find(t => t.name === config.templateName);
+                      const header = tpl?.components?.find((c: any) => c.type === "HEADER");
+                      if (!header || header.format === "TEXT") return null;
+                      const headerType = (header.format || "").toLowerCase(); // IMAGE, VIDEO, DOCUMENT
+                      return (
+                        <div className="space-y-2 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30">
+                          <Label className="text-xs font-semibold flex items-center gap-1">
+                            <Image className="h-3.5 w-3.5" />
+                            Header ({header.format})
+                          </Label>
+                          <Input
+                            value={config.headerMediaUrl || ""}
+                            onChange={e => setConfig({ ...config, headerMediaUrl: e.target.value })}
+                            placeholder={`URL da ${headerType === "image" ? "imagem" : headerType === "video" ? "vídeo" : "documento"}...`}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      );
+                    })()}
+
+                    {/* Body Variable Mapping */}
                     {(() => {
                       const tpl = templates.find(t => t.name === config.templateName);
                       const body = tpl?.components?.find((c: any) => c.type === "BODY");
@@ -567,7 +622,7 @@ function StepEditorDialog({
                         <div className="space-y-2 p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
                           <Label className="text-xs font-semibold flex items-center gap-1">
                             <FileText className="h-3.5 w-3.5" />
-                            Variáveis do Template ({uniqueVars.length})
+                            Variáveis do Body ({uniqueVars.length})
                           </Label>
                           <p className="text-[10px] text-muted-foreground">
                             Mapeie cada variável para dados do cliente ou texto fixo.
@@ -611,6 +666,207 @@ function StepEditorDialog({
                               </div>
                             );
                           })}
+                        </div>
+                      );
+                    })()}
+
+                    {/* CAROUSEL card-by-card configuration */}
+                    {(() => {
+                      const tpl = templates.find(t => t.name === config.templateName);
+                      const carousel = tpl?.components?.find((c: any) => c.type === "CAROUSEL");
+                      if (!carousel || !carousel.cards?.length) return null;
+
+                      const carouselConfig = config.carouselCards || {};
+
+                      return (
+                        <div className="space-y-2 p-3 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/30">
+                          <Label className="text-xs font-semibold flex items-center gap-1">
+                            <LayoutGrid className="h-3.5 w-3.5" />
+                            Carrossel — {carousel.cards.length} Cards
+                          </Label>
+                          <p className="text-[10px] text-muted-foreground">
+                            Configure a mídia do header, variáveis e botões de cada card.
+                          </p>
+                          
+                          {carousel.cards.map((card: any, cardIdx: number) => {
+                            const cardHeader = card.components?.find((c: any) => c.type === "HEADER");
+                            const cardBody = card.components?.find((c: any) => c.type === "BODY");
+                            const cardButtons = card.components?.find((c: any) => c.type === "BUTTONS");
+                            const cardConf = carouselConfig[cardIdx] || {};
+                            const isExpanded = expandedCarouselCard === cardIdx;
+
+                            // Detect body variables in this card
+                            const cardBodyText = cardBody?.text || "";
+                            const cardVarMatches = cardBodyText.match(/\{\{\d+\}\}/g) || [];
+                            const cardUniqueVars = [...new Set(cardVarMatches)].sort();
+
+                            // Detect URL buttons with variables
+                            const urlButtons = cardButtons?.buttons?.filter((b: any) => b.type === "URL") || [];
+
+                            return (
+                              <div key={cardIdx} className="border rounded-lg overflow-hidden border-border">
+                                <button
+                                  type="button"
+                                  className="w-full flex items-center justify-between px-3 py-2 bg-muted/50 hover:bg-muted transition-colors text-left"
+                                  onClick={() => setExpandedCarouselCard(isExpanded ? null : cardIdx)}
+                                >
+                                  <span className="text-xs font-medium">Card {cardIdx + 1}</span>
+                                  <div className="flex items-center gap-2">
+                                    {cardHeader && <Badge variant="outline" className="text-[8px] px-1">{cardHeader.format || "IMG"}</Badge>}
+                                    {cardUniqueVars.length > 0 && <Badge variant="outline" className="text-[8px] px-1">{cardUniqueVars.length} var</Badge>}
+                                    {urlButtons.length > 0 && <Badge variant="outline" className="text-[8px] px-1">{urlButtons.length} btn</Badge>}
+                                    {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                  </div>
+                                </button>
+                                
+                                {isExpanded && (
+                                  <div className="p-3 space-y-3">
+                                    {/* Card Header (image/video URL) */}
+                                    {cardHeader && (cardHeader.format === "IMAGE" || cardHeader.format === "VIDEO") && (
+                                      <div className="space-y-1">
+                                        <Label className="text-[11px]">
+                                          {cardHeader.format === "IMAGE" ? "🖼️ URL da Imagem" : "🎬 URL do Vídeo"}
+                                        </Label>
+                                        <Input
+                                          value={cardConf.headerUrl || ""}
+                                          onChange={e => setConfig({
+                                            ...config,
+                                            carouselCards: { ...carouselConfig, [cardIdx]: { ...cardConf, headerUrl: e.target.value } }
+                                          })}
+                                          placeholder={`URL da ${cardHeader.format === "IMAGE" ? "imagem" : "vídeo"} do card...`}
+                                          className="h-8 text-xs"
+                                        />
+                                      </div>
+                                    )}
+
+                                    {/* Card Body Preview */}
+                                    {cardBody?.text && (
+                                      <div className="p-2 bg-muted rounded text-[10px] text-muted-foreground whitespace-pre-wrap">
+                                        {cardBody.text}
+                                      </div>
+                                    )}
+
+                                    {/* Card Body Variables */}
+                                    {cardUniqueVars.length > 0 && (
+                                      <div className="space-y-1.5">
+                                        <Label className="text-[11px] font-medium">Variáveis do card</Label>
+                                        {cardUniqueVars.map((v: string) => {
+                                          const varNum = v.replace(/\{\{|\}\}/g, "");
+                                          const cardVars = cardConf.bodyVars || {};
+                                          const currentVal = cardVars[varNum] || "";
+                                          return (
+                                            <div key={v} className="space-y-0.5">
+                                              <Label className="text-[10px] text-muted-foreground">{v}</Label>
+                                              <div className="flex gap-1">
+                                                <Select
+                                                  value={CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) ? currentVal : "_custom"}
+                                                  onValueChange={val => {
+                                                    const newVars = { ...cardVars, [varNum]: val === "_custom" ? "" : val };
+                                                    setConfig({
+                                                      ...config,
+                                                      carouselCards: { ...carouselConfig, [cardIdx]: { ...cardConf, bodyVars: newVars } }
+                                                    });
+                                                  }}
+                                                >
+                                                  <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="..." /></SelectTrigger>
+                                                  <SelectContent>
+                                                    {CUSTOMER_VARIABLES.map(cv => (
+                                                      <SelectItem key={cv.value} value={cv.value}>
+                                                        <span className="text-[11px]">{cv.label}</span>
+                                                      </SelectItem>
+                                                    ))}
+                                                    <SelectItem value="_custom">✏️ Fixo</SelectItem>
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                              {!CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) && (
+                                                <Input
+                                                  value={currentVal}
+                                                  onChange={e => {
+                                                    const newVars = { ...cardVars, [varNum]: e.target.value };
+                                                    setConfig({
+                                                      ...config,
+                                                      carouselCards: { ...carouselConfig, [cardIdx]: { ...cardConf, bodyVars: newVars } }
+                                                    });
+                                                  }}
+                                                  placeholder="Valor fixo..."
+                                                  className="h-7 text-[11px]"
+                                                />
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+
+                                    {/* Card Buttons */}
+                                    {urlButtons.length > 0 && (
+                                      <div className="space-y-1.5">
+                                        <Label className="text-[11px] font-medium">Botões URL</Label>
+                                        {urlButtons.map((btn: any, btnIdx: number) => {
+                                          const btnVarMatch = btn.url?.match(/\{\{\d+\}\}/);
+                                          const cardBtnVars = cardConf.buttonVars || {};
+                                          return (
+                                            <div key={btnIdx} className="space-y-0.5">
+                                              <Label className="text-[10px] text-muted-foreground">
+                                                🔗 {btn.text} {btn.url && <span className="opacity-60">({btn.url})</span>}
+                                              </Label>
+                                              {btnVarMatch && (
+                                                <Input
+                                                  value={cardBtnVars[btnIdx] || ""}
+                                                  onChange={e => {
+                                                    const newBtnVars = { ...cardBtnVars, [btnIdx]: e.target.value };
+                                                    setConfig({
+                                                      ...config,
+                                                      carouselCards: { ...carouselConfig, [cardIdx]: { ...cardConf, buttonVars: newBtnVars } }
+                                                    });
+                                                  }}
+                                                  placeholder="Sufixo da URL (ex: produto-123)"
+                                                  className="h-7 text-[11px]"
+                                                />
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Top-level Button variables (non-carousel templates) */}
+                    {(() => {
+                      const tpl = templates.find(t => t.name === config.templateName);
+                      const carousel = tpl?.components?.find((c: any) => c.type === "CAROUSEL");
+                      if (carousel) return null; // handled above
+                      const buttons = tpl?.components?.find((c: any) => c.type === "BUTTONS");
+                      if (!buttons?.buttons?.length) return null;
+                      const urlButtons = buttons.buttons.filter((b: any) => b.type === "URL" && b.url?.includes("{{"));
+                      if (urlButtons.length === 0) return null;
+
+                      const buttonVars = config.buttonVars || {};
+                      return (
+                        <div className="space-y-2 p-3 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30">
+                          <Label className="text-xs font-semibold flex items-center gap-1">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Botões URL com variável
+                          </Label>
+                          {urlButtons.map((btn: any, i: number) => (
+                            <div key={i} className="space-y-1">
+                              <Label className="text-[11px] text-muted-foreground">🔗 {btn.text} — {btn.url}</Label>
+                              <Input
+                                value={buttonVars[i] || ""}
+                                onChange={e => setConfig({ ...config, buttonVars: { ...buttonVars, [i]: e.target.value } })}
+                                placeholder="Sufixo da URL dinâmica..."
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                          ))}
                         </div>
                       );
                     })()}
