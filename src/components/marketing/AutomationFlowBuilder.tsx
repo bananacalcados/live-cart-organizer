@@ -1277,6 +1277,11 @@ function FlowEditor({
   const [isActive, setIsActive] = useState(flow.is_active);
   const [editingStep, setEditingStep] = useState<AutomationStep | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [testPhone, setTestPhone] = useState("");
+  const [testName, setTestName] = useState("Teste");
+  const [testing, setTesting] = useState(false);
+  const [testResults, setTestResults] = useState<any[] | null>(null);
 
   useEffect(() => { fetchSteps(); }, [flow.id]);
 
@@ -1328,6 +1333,9 @@ function FlowEditor({
           promptPreview: cfg.prompt?.slice(0, 40) || cfg.crosssellPrompt?.slice(0, 40),
           timeoutAction: cfg.timeoutAction,
           productPool: cfg.productPool,
+          carouselCards: cfg.carouselCards,
+          hasDeadline: cfg.hasDeadline,
+          deadline: cfg.deadline,
           onDelete: () => deleteStep(step.id),
         },
         draggable: true,
@@ -1414,6 +1422,25 @@ function FlowEditor({
     fetchSteps();
   };
 
+  const runTestFlow = async () => {
+    if (!testPhone.trim()) { toast.error("Informe o número de WhatsApp"); return; }
+    setTesting(true);
+    setTestResults(null);
+    try {
+      const res = await supabase.functions.invoke("automation-test-flow", {
+        body: { flowId: flow.id, phone: testPhone, testName },
+      });
+      if (res.error) throw new Error(res.error.message);
+      setTestResults(res.data?.results || []);
+      const sent = (res.data?.results || []).filter((r: any) => r.status === "sent").length;
+      toast.success(`Teste concluído! ${sent} mensagem(ns) enviada(s)`);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao testar fluxo");
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const saveFlow = async () => {
     setSaving(true);
     const { error } = await supabase
@@ -1435,6 +1462,9 @@ function FlowEditor({
         </Button>
         <Input value={flowName} onChange={e => setFlowName(e.target.value)} className="max-w-[250px] h-8 font-semibold" />
         <div className="flex items-center gap-2 ml-auto">
+          <Button variant="outline" size="sm" onClick={() => { setTestDialogOpen(true); setTestResults(null); }} disabled={steps.length === 0} className="gap-1">
+            <PlayCircle className="h-3.5 w-3.5" />Testar Fluxo
+          </Button>
           <span className="text-xs text-muted-foreground">{isActive ? "Ativa" : "Inativa"}</span>
           <Switch checked={isActive} onCheckedChange={setIsActive} />
           <Button size="sm" onClick={saveFlow} disabled={saving} className="gap-1">
@@ -1568,6 +1598,100 @@ function FlowEditor({
         step={editingStep}
         onSave={handleStepSave}
       />
+
+      {/* Test Flow Dialog */}
+      <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PlayCircle className="h-5 w-5 text-green-500" />
+              Testar Fluxo em Tempo Real
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-3.5 w-3.5 inline mr-1" />
+              Todas as mensagens serão enviadas <strong>imediatamente</strong> para o número informado. Delays e esperas são ignorados no modo teste.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Número WhatsApp (com DDD)</Label>
+              <Input
+                value={testPhone}
+                onChange={e => setTestPhone(e.target.value)}
+                placeholder="11999999999"
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Nome para variáveis</Label>
+              <Input
+                value={testName}
+                onChange={e => setTestName(e.target.value)}
+                placeholder="Teste"
+                className="h-9"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Usado como {"{{nome}}"} nas mensagens. Outros dados usam valores fictícios.
+              </p>
+            </div>
+          </div>
+
+          {/* Step summary */}
+          <div className="p-2 bg-muted rounded-lg space-y-1">
+            <p className="text-[10px] font-medium">Etapas que serão executadas:</p>
+            {steps.map((s, i) => {
+              const a = ACTION_TYPES.find(a => a.value === s.action_type);
+              const Icon = a?.icon || Send;
+              const isSkippable = ["delay", "wait_for_reply", "ai_response", "ai_crosssell"].includes(s.action_type);
+              return (
+                <div key={s.id} className={`flex items-center gap-2 text-[10px] ${isSkippable ? "opacity-50" : ""}`}>
+                  <span className="text-muted-foreground w-4">{i + 1}.</span>
+                  <Icon className={`h-3 w-3 ${a?.color || "text-primary"}`} />
+                  <span>{a?.label}</span>
+                  {isSkippable && <Badge variant="outline" className="text-[8px] px-1">skip</Badge>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Results */}
+          {testResults && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Resultado do Teste</Label>
+              {testResults.map((r: any, i: number) => (
+                <div key={i} className={`flex items-center gap-2 p-2 rounded-lg text-xs border ${
+                  r.status === "sent" ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800" :
+                  r.status === "skipped" ? "bg-muted border-border" :
+                  r.status === "logged" ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800" :
+                  "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800"
+                }`}>
+                  <span className="font-mono text-muted-foreground w-5">{r.step}</span>
+                  <span className={`font-medium ${
+                    r.status === "sent" ? "text-green-700 dark:text-green-300" :
+                    r.status === "error" ? "text-red-700 dark:text-red-300" :
+                    "text-muted-foreground"
+                  }`}>
+                    {r.status === "sent" ? "✅" : r.status === "skipped" ? "⏭️" : r.status === "logged" ? "📝" : "❌"} {r.type}
+                  </span>
+                  {r.detail && <span className="text-muted-foreground truncate flex-1 text-[10px]">{r.detail}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTestDialogOpen(false)}>Fechar</Button>
+            <Button onClick={runTestFlow} disabled={testing || !testPhone.trim()} className="gap-1">
+              {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              {testing ? "Enviando..." : "Disparar Teste"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

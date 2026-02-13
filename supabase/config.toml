@@ -155,3 +155,6 @@ verify_jwt = false
 
 [functions.pos-exchange-stock-adjust]
 verify_jwt = false
+
+[functions.automation-test-flow]
+verify_jwt = false
