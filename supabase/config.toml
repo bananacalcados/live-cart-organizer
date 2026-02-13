@@ -101,3 +101,57 @@ verify_jwt = false
 
 [functions.tiny-mark-account-paid]
 verify_jwt = false
+
+[functions.automation-ai-respond]
+verify_jwt = false
+
+[functions.tiny-sync-management]
+verify_jwt = false
+
+[functions.expedition-fetch-label]
+verify_jwt = false
+
+[functions.shopify-webhook]
+verify_jwt = false
+
+[functions.shopify-oauth-install]
+verify_jwt = false
+
+[functions.shopify-oauth-callback]
+verify_jwt = false
+
+[functions.zapi-send-message]
+verify_jwt = false
+
+[functions.zapi-send-media]
+verify_jwt = false
+
+[functions.zapi-get-messages]
+verify_jwt = false
+
+[functions.zapi-webhook]
+verify_jwt = false
+
+[functions.zapi-qrcode]
+verify_jwt = false
+
+[functions.zapi-connection-status]
+verify_jwt = false
+
+[functions.zapi-profile-picture]
+verify_jwt = false
+
+[functions.admin-create-user]
+verify_jwt = false
+
+[functions.admin-delete-user]
+verify_jwt = false
+
+[functions.admin-list-users]
+verify_jwt = false
+
+[functions.admin-update-user]
+verify_jwt = false
+
+[functions.pos-exchange-stock-adjust]
+verify_jwt = false
