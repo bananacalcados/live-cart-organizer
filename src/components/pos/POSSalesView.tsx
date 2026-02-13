@@ -405,24 +405,51 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   };
 
   const importRfmCustomer = async (rfm: any) => {
-    // Import RFM customer into pos_customers
     const name = `${rfm.first_name || ''} ${rfm.last_name || ''}`.trim();
+    const phone = rfm.phone?.replace(/\D/g, '') || '';
     try {
-      const { data, error } = await supabase
-        .from('pos_customers')
-        .insert({
-          name: name || 'Cliente RFM',
-          whatsapp: rfm.phone || null,
-          email: rfm.email || null,
-          city: rfm.city || null,
-          state: rfm.state || null,
-        } as any)
-        .select()
-        .single();
-      if (error) throw error;
-      toast.success("Cliente importado da Matriz RFM!");
-      setSelectedCustomer(data);
-      lookupCashback(data);
+      // Check if customer already exists by phone or email
+      let existing: any = null;
+      if (phone.length >= 8) {
+        const { data } = await supabase
+          .from('pos_customers')
+          .select('*')
+          .ilike('whatsapp', `%${phone.slice(-8)}%`)
+          .limit(1)
+          .maybeSingle();
+        existing = data;
+      }
+      if (!existing && rfm.email) {
+        const { data } = await supabase
+          .from('pos_customers')
+          .select('*')
+          .ilike('email', rfm.email)
+          .limit(1)
+          .maybeSingle();
+        existing = data;
+      }
+
+      if (existing) {
+        toast.success("Cliente já cadastrado — selecionado automaticamente!");
+        setSelectedCustomer(existing);
+        lookupCashback(existing);
+      } else {
+        const { data, error } = await supabase
+          .from('pos_customers')
+          .insert({
+            name: name || 'Cliente RFM',
+            whatsapp: rfm.phone || null,
+            email: rfm.email || null,
+            city: rfm.city || null,
+            state: rfm.state || null,
+          } as any)
+          .select()
+          .single();
+        if (error) throw error;
+        toast.success("Cliente importado da Matriz RFM!");
+        setSelectedCustomer(data);
+        lookupCashback(data);
+      }
       setRfmMatches([]);
       setCustomerResults([]);
     } catch (e) {
@@ -1365,8 +1392,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         open={showCustomerForm}
         onOpenChange={setShowCustomerForm}
         existingCustomer={selectedCustomer}
-        onSaved={(customer) => {
-          setSelectedCustomer(customer);
+        onSaved={async (customer) => {
+          // Fetch full customer data to preserve all fields
+          const { data } = await supabase
+            .from('pos_customers')
+            .select('*')
+            .eq('id', customer.id)
+            .single();
+          setSelectedCustomer(data || customer);
           setShowCustomerForm(false);
         }}
       />
