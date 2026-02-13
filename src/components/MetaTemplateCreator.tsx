@@ -115,6 +115,13 @@ export function MetaTemplateCreator() {
       return;
     }
 
+    // Validate: Meta doesn't allow variables at start or end of body
+    const trimmedBody = bodyText.trim();
+    if (/^\{\{\d+\}\}/.test(trimmedBody) || /\{\{\d+\}\}$/.test(trimmedBody)) {
+      toast.error("A Meta não permite variáveis no início ou no final do corpo da mensagem. Adicione texto antes/depois da variável.");
+      return;
+    }
+
     setIsCreating(true);
     try {
       const components: Array<Record<string, unknown>> = [];
