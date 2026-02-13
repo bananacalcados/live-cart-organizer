@@ -76,9 +76,42 @@ serve(async (req) => {
         continue;
       }
 
-      // Skip AI-based steps (they need real conversation context)
-      if (step.action_type === 'ai_response' || step.action_type === 'ai_crosssell') {
-        results.push({ step: i + 1, type: step.action_type, status: 'skipped', detail: 'Requer conversa real' });
+      // AI response — call with phone so it reads conversation history
+      if (step.action_type === 'ai_response') {
+        const aiPrompt = config.prompt || '';
+        try {
+          const aiRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-respond`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ prompt: aiPrompt, phone: formattedPhone }),
+          });
+          const aiData = await aiRes.json();
+          if (aiRes.ok && aiData.reply) {
+            // Send the AI reply via WhatsApp
+            const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${supabaseKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ phone: formattedPhone, message: aiData.reply }),
+            });
+            const sendData = await sendRes.json();
+            results.push({ step: i + 1, type: 'ai_response', status: sendRes.ok ? 'sent' : 'error', detail: sendRes.ok ? aiData.reply.slice(0, 80) : sendData.error });
+          } else {
+            results.push({ step: i + 1, type: 'ai_response', status: 'error', detail: aiData.error || 'AI sem resposta' });
+          }
+        } catch (e) {
+          results.push({ step: i + 1, type: 'ai_response', status: 'error', detail: e instanceof Error ? e.message : 'Unknown' });
+        }
+        continue;
+      }
+
+      if (step.action_type === 'ai_crosssell') {
+        results.push({ step: i + 1, type: step.action_type, status: 'skipped', detail: 'Requer contexto de pedido' });
         continue;
       }
 
