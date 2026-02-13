@@ -21,6 +21,7 @@ import Management from "./pages/Management";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
+import BananaLanding from "./pages/BananaLanding";
 import Login from "./pages/Login";
 import { TeamChat } from "./components/TeamChat";
 
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/checkout/order/:orderId" element={<TransparentCheckout />} />
             <Route path="/register/:orderId" element={<CustomerRegister />} />
             <Route path="/lp/:slug" element={<LandingPage />} />
+            <Route path="/banana-verao" element={<BananaLanding />} />
 
             {/* Protected routes */}
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
