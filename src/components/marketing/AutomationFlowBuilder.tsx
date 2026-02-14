@@ -1277,6 +1277,52 @@ function StepEditorDialog({
   );
 }
 
+// ─── New Lead Campaign Selector ──────────────────
+
+function NewLeadCampaignSelector({ triggerConfig, onChange }: { triggerConfig: any; onChange: (c: any) => void }) {
+  const [campaigns, setCampaigns] = useState<string[]>([]);
+  const selectedTags: string[] = triggerConfig.campaign_tags || [];
+
+  useEffect(() => {
+    supabase.from("lp_leads").select("campaign_tag").then(({ data }) => {
+      if (data) {
+        const unique = [...new Set(data.map((d: any) => d.campaign_tag))].filter(Boolean).sort();
+        setCampaigns(unique as string[]);
+      }
+    });
+  }, []);
+
+  const toggle = (tag: string) => {
+    const current = [...selectedTags];
+    const idx = current.indexOf(tag);
+    if (idx >= 0) current.splice(idx, 1);
+    else current.push(tag);
+    onChange({ ...triggerConfig, campaign_tags: current });
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">Campanhas (vazio = todas)</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {campaigns.map(tag => (
+          <Badge
+            key={tag}
+            variant={selectedTags.includes(tag) ? "default" : "outline"}
+            className="cursor-pointer text-[10px] px-2 py-0.5"
+            onClick={() => toggle(tag)}
+          >
+            {tag}
+          </Badge>
+        ))}
+        {campaigns.length === 0 && <span className="text-[10px] text-muted-foreground">Nenhuma campanha encontrada</span>}
+      </div>
+      {selectedTags.length > 0 && (
+        <p className="text-[10px] text-muted-foreground">{selectedTags.length} campanha(s) selecionada(s)</p>
+      )}
+    </div>
+  );
+}
+
 // ─── Flow Editor ──────────────────────────────────
 
 function FlowEditor({
@@ -1514,10 +1560,7 @@ function FlowEditor({
                   {TRIGGER_TYPES.find(t => t.value === triggerType)?.description}
                 </p>
                 {triggerType === "new_lead" && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">ID da Campanha</Label>
-                    <Input value={triggerConfig.campaign_id || ""} onChange={e => setTriggerConfig({ ...triggerConfig, campaign_id: e.target.value })} placeholder="banana-verao-2025" className="h-8 text-xs" />
-                  </div>
+                  <NewLeadCampaignSelector triggerConfig={triggerConfig} onChange={setTriggerConfig} />
                 )}
                 {triggerType === "stage_change" && (
                   <div className="space-y-1">
