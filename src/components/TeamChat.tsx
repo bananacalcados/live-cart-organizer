@@ -149,8 +149,8 @@ export function TeamChat() {
     });
   };
 
-  // Hide on POS page (has its own chat)
-  if (location.pathname === '/pos') return null;
+  // Hide on POS page (has its own chat) and landing pages
+  if (location.pathname === '/pos' || location.pathname.startsWith('/banana-') || location.pathname.startsWith('/lp/')) return null;
 
   if (!isOpen) {
     return (
