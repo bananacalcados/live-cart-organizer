@@ -7,7 +7,7 @@ import {
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles,
-  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle
+  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -125,7 +125,8 @@ export default function Marketing() {
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
-  
+  const [landingPages, setLandingPages] = useState<any[]>([]);
+
 
   // Customers state
   const [customers, setCustomers] = useState<ZoppyCustomer[]>([]);
@@ -188,7 +189,14 @@ export default function Marketing() {
     } catch (err) { console.error(err); }
   }, []);
 
-  useEffect(() => { fetchCustomers(); fetchCampaigns(); }, [fetchCustomers, fetchCampaigns]);
+  const fetchLandingPages = useCallback(async () => {
+    try {
+      const { data } = await supabase.from('campaign_landing_pages').select('*, marketing_campaigns(name)').order('created_at', { ascending: false });
+      setLandingPages(data || []);
+    } catch (err) { console.error(err); }
+  }, []);
+
+  useEffect(() => { fetchCustomers(); fetchCampaigns(); fetchLandingPages(); }, [fetchCustomers, fetchCampaigns, fetchLandingPages]);
 
   // ─── Campaign actions ──────────────────────────────
 
@@ -573,6 +581,7 @@ export default function Marketing() {
             <TabsTrigger value="customers" className="gap-1"><Users className="h-3.5 w-3.5" />Clientes RFM</TabsTrigger>
             <TabsTrigger value="templates" className="gap-1"><Megaphone className="h-3.5 w-3.5" />Templates Meta</TabsTrigger>
             <TabsTrigger value="automations" className="gap-1"><Zap className="h-3.5 w-3.5" />Automações</TabsTrigger>
+            <TabsTrigger value="landing_pages" className="gap-1"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
           </TabsList>
 
           {/* ── CAMPANHAS ── */}
@@ -751,6 +760,81 @@ export default function Marketing() {
           {/* ── AUTOMAÇÕES ── */}
           <TabsContent value="automations" className="space-y-4">
             <AutomationFlowBuilder />
+          </TabsContent>
+
+          {/* ── LANDING PAGES ── */}
+          <TabsContent value="landing_pages" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Links das suas landing pages</p>
+            </div>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Landing Pages Fixas</CardTitle>
+                <CardDescription className="text-xs">Páginas interativas com rotas fixas no app</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {[
+                  { name: 'Banana Verão', path: '/banana-verao', description: 'Funil interativo de captação de leads' },
+                ].map(lp => {
+                  const publishedUrl = `https://live-cart-organizer.lovable.app${lp.path}`;
+                  return (
+                    <div key={lp.path} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{lp.name}</p>
+                        <p className="text-xs text-muted-foreground">{lp.description}</p>
+                        <p className="text-xs text-muted-foreground mt-1 font-mono truncate">{publishedUrl}</p>
+                      </div>
+                      <div className="flex gap-1 shrink-0 ml-2">
+                        <Button variant="outline" size="sm" className="gap-1" onClick={() => { navigator.clipboard.writeText(publishedUrl); toast.success('Link copiado!'); }}>
+                          <Copy className="h-3.5 w-3.5" />Copiar
+                        </Button>
+                        <Button variant="outline" size="sm" className="gap-1" onClick={() => window.open(publishedUrl, '_blank')}>
+                          <ExternalLink className="h-3.5 w-3.5" />Abrir
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Landing Pages de Campanhas</CardTitle>
+                <CardDescription className="text-xs">Páginas criadas dentro de campanhas (rota /lp/:slug)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {landingPages.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-6">Nenhuma landing page de campanha criada ainda</p>
+                ) : (
+                  landingPages.map(lp => {
+                    const publishedUrl = `https://live-cart-organizer.lovable.app/lp/${lp.slug}`;
+                    return (
+                      <div key={lp.id} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium">{lp.title}</p>
+                            <Badge variant={lp.is_active ? 'default' : 'secondary'} className="text-[10px]">{lp.is_active ? 'Ativa' : 'Inativa'}</Badge>
+                          </div>
+                          {lp.marketing_campaigns?.name && <p className="text-xs text-muted-foreground">Campanha: {lp.marketing_campaigns.name}</p>}
+                          <p className="text-xs text-muted-foreground mt-1 font-mono truncate">{publishedUrl}</p>
+                          <p className="text-xs text-muted-foreground">{lp.views || 0} views · {lp.submissions || 0} submissões</p>
+                        </div>
+                        <div className="flex gap-1 shrink-0 ml-2">
+                          <Button variant="outline" size="sm" className="gap-1" onClick={() => { navigator.clipboard.writeText(publishedUrl); toast.success('Link copiado!'); }}>
+                            <Copy className="h-3.5 w-3.5" />Copiar
+                          </Button>
+                          <Button variant="outline" size="sm" className="gap-1" onClick={() => window.open(publishedUrl, '_blank')}>
+                            <ExternalLink className="h-3.5 w-3.5" />Abrir
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
