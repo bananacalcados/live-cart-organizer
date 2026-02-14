@@ -64,10 +64,20 @@ serve(async (req) => {
     const results: Array<{ flowId: string; flowName: string; status: string; detail?: string }> = [];
 
     for (const flow of flows) {
-      // Optional: filter by campaign if trigger_config has campaignId
+      // Optional: filter by campaign tags in trigger_config
       const triggerConfig = flow.trigger_config as Record<string, unknown> | null;
-      if (triggerConfig?.campaignId && campaignTag && triggerConfig.campaignId !== campaignTag) {
-        results.push({ flowId: flow.id, flowName: flow.name, status: 'skipped', detail: 'Campaign mismatch' });
+      const configTags = triggerConfig?.campaign_tags as string[] | undefined;
+      // If flow has campaign_tags configured, check if incoming campaignTag matches any
+      if (configTags && configTags.length > 0 && campaignTag) {
+        if (!configTags.includes(campaignTag)) {
+          results.push({ flowId: flow.id, flowName: flow.name, status: 'skipped', detail: 'Campaign mismatch' });
+          continue;
+        }
+      }
+      // Legacy support: single campaign_id field
+      const legacyCampaignId = triggerConfig?.campaign_id as string | undefined;
+      if (!configTags?.length && legacyCampaignId && campaignTag && legacyCampaignId !== campaignTag) {
+        results.push({ flowId: flow.id, flowName: flow.name, status: 'skipped', detail: 'Campaign mismatch (legacy)' });
         continue;
       }
 
