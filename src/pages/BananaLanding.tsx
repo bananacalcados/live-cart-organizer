@@ -24,9 +24,18 @@ function initMetaPixel() {
   f.fbq("init", META_PIXEL_ID);
 }
 
+function getTestEventCode() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("test_event_code");
+  } catch { return null; }
+}
+
 function trackPixelEvent(event: string, data?: Record<string, any>) {
   if ((window as any).fbq) {
-    (window as any).fbq("track", event, data);
+    const testCode = getTestEventCode();
+    const eventData = testCode ? { ...data, test_event_code: testCode } : data;
+    (window as any).fbq("track", event, eventData);
   }
 }
 
