@@ -154,6 +154,11 @@ export default function BananaLandingGV() {
         metadata: { event: "Nova Coleção Verão - GV", dates: "19, 20, 21", city: "Governador Valadares" },
       });
 
+      // Trigger automation flows for new leads (fire and forget)
+      supabase.functions.invoke("automation-trigger-new-lead", {
+        body: { phone, name, campaignTag: "banana-verao-2025-gv" },
+      }).catch((err) => console.error("Automation trigger error:", err));
+
       const existing = await supabase
         .from("customers")
         .select("id, tags")

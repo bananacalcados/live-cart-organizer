@@ -158,6 +158,11 @@ export default function BananaLanding() {
         metadata: { event: "Nova Coleção Verão", dates: "19, 20, 21" },
       });
 
+      // Trigger automation flows for new leads (fire and forget)
+      supabase.functions.invoke("automation-trigger-new-lead", {
+        body: { phone, name, campaignTag: "banana-verao-2025" },
+      }).catch((err) => console.error("Automation trigger error:", err));
+
       // Also save/update in customers table with tag
       const existing = await supabase
         .from("customers")
