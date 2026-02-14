@@ -19,7 +19,18 @@ serve(async (req) => {
       });
     }
 
-    const systemPrompt = prompt || 'Você é um assistente da Banana Calçados. Responda de forma simpática, curta e objetiva em português brasileiro.';
+    // Append anti-repetition instruction to whatever prompt the flow provides
+    const basePrompt = prompt || 'Você é um assistente da Banana Calçados. Responda de forma simpática, curta e objetiva em português brasileiro.';
+    const antiRepetition = `
+
+REGRA CRÍTICA SOBRE REPETIÇÃO:
+- NUNCA repita informações (endereço, horário, preços, etc.) que você já mencionou nas últimas mensagens da conversa.
+- Só repita uma informação se o cliente PERGUNTAR explicitamente de novo ou se já faz MUITAS mensagens desde a última vez que você disse.
+- Releia o histórico antes de responder. Se a informação já está lá em cima, NÃO repita.
+- Foque apenas em responder o que o cliente perguntou AGORA, de forma natural e humana.
+- Evite parecer robótico. Varie suas respostas, não siga sempre o mesmo padrão de estrutura.
+- Não termine TODAS as mensagens com uma pergunta. Às vezes apenas responda.`;
+    const systemPrompt = basePrompt + antiRepetition;
 
     // Build conversation history from DB if phone is provided
     let chatMessages: Array<{ role: string; content: string }> = [
