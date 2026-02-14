@@ -250,6 +250,10 @@ serve(async (req) => {
                   const aiData = await aiRes.json();
 
                   if (aiRes.ok && aiData.reply) {
+                    // Simulate human typing delay (30-70ms per char, min 2s, max 12s)
+                    const typingDelay = Math.min(Math.max(aiData.reply.length * 50, 2000), 12000);
+                    await new Promise(r => setTimeout(r, typingDelay));
+
                     // Send AI reply via the same WhatsApp number
                     const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
                       method: 'POST',
