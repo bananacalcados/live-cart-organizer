@@ -134,9 +134,9 @@ export default function BananaLandingGV() {
       const phone = whatsapp.replace(/\D/g, "");
 
       const { data: existingLead } = await supabase
-        .from("campaign_leads")
+        .from("lp_leads")
         .select("id")
-        .eq("campaign_id", "banana-verao-2025-gv")
+        .eq("campaign_tag", "banana-verao-2025-gv")
         .eq("phone", phone)
         .maybeSingle();
 
@@ -146,12 +146,12 @@ export default function BananaLandingGV() {
         return;
       }
 
-      await supabase.from("campaign_leads").insert({
-        campaign_id: "banana-verao-2025-gv",
+      await supabase.from("lp_leads").insert({
+        campaign_tag: "banana-verao-2025-gv",
         name,
         phone,
         source: "landing_page_typebot",
-        metadata: { event: "Nova Coleção Verão - GV", dates: "19, 20, 21", city: "Governador Valadares" } as any,
+        metadata: { event: "Nova Coleção Verão - GV", dates: "19, 20, 21", city: "Governador Valadares" },
       });
 
       const existing = await supabase
