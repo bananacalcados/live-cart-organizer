@@ -206,7 +206,7 @@ export default function Marketing() {
     setLeadsLoading(true);
     try {
       const { data, error } = await supabase
-        .from('campaign_leads')
+        .from('lp_leads')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(5000);
@@ -862,9 +862,9 @@ export default function Marketing() {
           {/* ── LEADS ── */}
           <TabsContent value="leads" className="space-y-4">
             {(() => {
-              const campaignIds = [...new Set(leads.map(l => l.campaign_id))].sort();
+              const campaignIds = [...new Set(leads.map(l => l.campaign_tag))].sort();
               const filteredLeads = leads.filter(l => {
-                if (leadsCampaignFilter !== "all" && l.campaign_id !== leadsCampaignFilter) return false;
+                if (leadsCampaignFilter !== "all" && l.campaign_tag !== leadsCampaignFilter) return false;
                 if (leadsSearch) {
                   const q = leadsSearch.toLowerCase();
                   return (l.name?.toLowerCase().includes(q) || l.phone?.includes(q) || l.email?.toLowerCase().includes(q) || l.instagram?.toLowerCase().includes(q));
@@ -882,7 +882,7 @@ export default function Marketing() {
                       <SelectContent>
                         <SelectItem value="all">Todas as campanhas ({leads.length})</SelectItem>
                         {campaignIds.map(cid => (
-                          <SelectItem key={cid} value={cid}>{cid} ({leads.filter(l => l.campaign_id === cid).length})</SelectItem>
+                          <SelectItem key={cid} value={cid}>{cid} ({leads.filter(l => l.campaign_tag === cid).length})</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -924,7 +924,7 @@ export default function Marketing() {
                                   <TableCell className="text-xs">{lead.phone || '—'}</TableCell>
                                   <TableCell className="text-xs">{lead.email || '—'}</TableCell>
                                   <TableCell className="text-xs">{lead.instagram || '—'}</TableCell>
-                                  <TableCell><Badge variant="outline" className="text-[10px]">{lead.campaign_id}</Badge></TableCell>
+                                  <TableCell><Badge variant="outline" className="text-[10px]">{lead.campaign_tag}</Badge></TableCell>
                                   <TableCell className="text-xs">{lead.source || '—'}</TableCell>
                                   <TableCell className="text-xs">{new Date(lead.created_at).toLocaleDateString('pt-BR')}</TableCell>
                                   <TableCell>{lead.converted ? <CheckCircle className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-muted-foreground/40" />}</TableCell>

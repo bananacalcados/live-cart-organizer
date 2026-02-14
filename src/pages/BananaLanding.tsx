@@ -137,9 +137,9 @@ export default function BananaLanding() {
 
       // Check for duplicate registration
       const { data: existingLead } = await supabase
-        .from("campaign_leads")
+        .from("lp_leads")
         .select("id")
-        .eq("campaign_id", "banana-verao-2025")
+        .eq("campaign_tag", "banana-verao-2025")
         .eq("phone", phone)
         .maybeSingle();
 
@@ -149,13 +149,13 @@ export default function BananaLanding() {
         return;
       }
 
-      // Save to campaign_leads
-      await supabase.from("campaign_leads").insert({
-        campaign_id: "banana-verao-2025",
+      // Save to lp_leads
+      await supabase.from("lp_leads").insert({
+        campaign_tag: "banana-verao-2025",
         name,
         phone,
         source: "landing_page_typebot",
-        metadata: { event: "Nova Coleção Verão", dates: "19, 20, 21" } as any,
+        metadata: { event: "Nova Coleção Verão", dates: "19, 20, 21" },
       });
 
       // Also save/update in customers table with tag

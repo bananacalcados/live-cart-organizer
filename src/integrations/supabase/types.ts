@@ -1577,6 +1577,48 @@ export type Database = {
           },
         ]
       }
+      lp_leads: {
+        Row: {
+          campaign_tag: string
+          converted: boolean | null
+          converted_at: string | null
+          created_at: string
+          email: string | null
+          id: string
+          instagram: string | null
+          metadata: Json | null
+          name: string | null
+          phone: string | null
+          source: string | null
+        }
+        Insert: {
+          campaign_tag: string
+          converted?: boolean | null
+          converted_at?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          instagram?: string | null
+          metadata?: Json | null
+          name?: string | null
+          phone?: string | null
+          source?: string | null
+        }
+        Update: {
+          campaign_tag?: string
+          converted?: boolean | null
+          converted_at?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          instagram?: string | null
+          metadata?: Json | null
+          name?: string | null
+          phone?: string | null
+          source?: string | null
+        }
+        Relationships: []
+      }
       marketing_campaigns: {
         Row: {
           actual_cost: number | null
