@@ -777,7 +777,7 @@ export default function Marketing() {
                 {[
                   { name: 'Banana Verão', path: '/banana-verao', description: 'Funil interativo de captação de leads' },
                 ].map(lp => {
-                  const publishedUrl = `https://bananacalcados.com.br${lp.path}`;
+                  const publishedUrl = `https://checkout.bananacalcados.com.br${lp.path}`;
                   return (
                     <div key={lp.path} className="flex items-center justify-between p-3 rounded-lg border bg-card">
                       <div className="flex-1 min-w-0">
@@ -809,7 +809,7 @@ export default function Marketing() {
                   <p className="text-xs text-muted-foreground text-center py-6">Nenhuma landing page de campanha criada ainda</p>
                 ) : (
                   landingPages.map(lp => {
-                    const publishedUrl = `https://bananacalcados.com.br/lp/${lp.slug}`;
+                    const publishedUrl = `https://checkout.bananacalcados.com.br/lp/${lp.slug}`;
                     return (
                       <div key={lp.id} className="flex items-center justify-between p-3 rounded-lg border bg-card">
                         <div className="flex-1 min-w-0">
