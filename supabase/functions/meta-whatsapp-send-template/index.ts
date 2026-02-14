@@ -259,6 +259,35 @@ serve(async (req) => {
 
     const messageId = data.messages?.[0]?.id || null;
 
+    // Save the sent template message to whatsapp_messages so it appears in the chat
+    try {
+      // Find the whatsapp_numbers DB id for this number
+      let whatsappNumberDbId: string | null = null;
+      if (whatsappNumberId) {
+        whatsappNumberDbId = whatsappNumberId;
+      } else {
+        const { data: defaultNum } = await supabase
+          .from('whatsapp_numbers')
+          .select('id')
+          .eq('is_default', true)
+          .eq('is_active', true)
+          .maybeSingle();
+        whatsappNumberDbId = defaultNum?.id || null;
+      }
+
+      await supabase.from('whatsapp_messages').insert({
+        phone: formattedPhone,
+        message: `[Template: ${templateName}]`,
+        direction: 'outgoing',
+        message_id: messageId,
+        status: 'sent',
+        media_type: 'text',
+        whatsapp_number_id: whatsappNumberDbId,
+      });
+    } catch (saveErr) {
+      console.error('Failed to save template message to DB:', saveErr);
+    }
+
     console.log('Meta template sent successfully:', data);
     return new Response(
       JSON.stringify({ success: true, messageId, data }),
