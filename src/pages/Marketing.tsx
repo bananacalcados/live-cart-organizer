@@ -127,6 +127,12 @@ export default function Marketing() {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [landingPages, setLandingPages] = useState<any[]>([]);
 
+  // Leads state
+  const [leads, setLeads] = useState<any[]>([]);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsCampaignFilter, setLeadsCampaignFilter] = useState<string>("all");
+  const [leadsSearch, setLeadsSearch] = useState("");
+
 
   // Customers state
   const [customers, setCustomers] = useState<ZoppyCustomer[]>([]);
@@ -196,7 +202,21 @@ export default function Marketing() {
     } catch (err) { console.error(err); }
   }, []);
 
-  useEffect(() => { fetchCustomers(); fetchCampaigns(); fetchLandingPages(); }, [fetchCustomers, fetchCampaigns, fetchLandingPages]);
+  const fetchLeads = useCallback(async () => {
+    setLeadsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('campaign_leads')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5000);
+      if (error) throw error;
+      setLeads(data || []);
+    } catch (err) { console.error(err); }
+    finally { setLeadsLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchCustomers(); fetchCampaigns(); fetchLandingPages(); fetchLeads(); }, [fetchCustomers, fetchCampaigns, fetchLandingPages, fetchLeads]);
 
   // ─── Campaign actions ──────────────────────────────
 
@@ -582,6 +602,7 @@ export default function Marketing() {
             <TabsTrigger value="templates" className="gap-1"><Megaphone className="h-3.5 w-3.5" />Templates Meta</TabsTrigger>
             <TabsTrigger value="automations" className="gap-1"><Zap className="h-3.5 w-3.5" />Automações</TabsTrigger>
             <TabsTrigger value="landing_pages" className="gap-1"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
+            <TabsTrigger value="leads" className="gap-1"><FileSpreadsheet className="h-3.5 w-3.5" />Leads</TabsTrigger>
           </TabsList>
 
           {/* ── CAMPANHAS ── */}
@@ -836,6 +857,89 @@ export default function Marketing() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ── LEADS ── */}
+          <TabsContent value="leads" className="space-y-4">
+            {(() => {
+              const campaignIds = [...new Set(leads.map(l => l.campaign_id))].sort();
+              const filteredLeads = leads.filter(l => {
+                if (leadsCampaignFilter !== "all" && l.campaign_id !== leadsCampaignFilter) return false;
+                if (leadsSearch) {
+                  const q = leadsSearch.toLowerCase();
+                  return (l.name?.toLowerCase().includes(q) || l.phone?.includes(q) || l.email?.toLowerCase().includes(q) || l.instagram?.toLowerCase().includes(q));
+                }
+                return true;
+              });
+
+              return (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select value={leadsCampaignFilter} onValueChange={setLeadsCampaignFilter}>
+                      <SelectTrigger className="w-[250px]">
+                        <SelectValue placeholder="Filtrar por campanha" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas as campanhas ({leads.length})</SelectItem>
+                        {campaignIds.map(cid => (
+                          <SelectItem key={cid} value={cid}>{cid} ({leads.filter(l => l.campaign_id === cid).length})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input placeholder="Buscar por nome, telefone, email..." value={leadsSearch} onChange={e => setLeadsSearch(e.target.value)} className="pl-9" />
+                    </div>
+                    <Badge variant="secondary">{filteredLeads.length} leads</Badge>
+                    <Button variant="outline" size="sm" onClick={fetchLeads} className="gap-1">
+                      <RefreshCw className="h-3.5 w-3.5" />Atualizar
+                    </Button>
+                  </div>
+
+                  <Card>
+                    <CardContent className="p-0">
+                      {leadsLoading ? (
+                        <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                      ) : filteredLeads.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-12">Nenhum lead encontrado</p>
+                      ) : (
+                        <ScrollArea className="h-[500px]">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Nome</TableHead>
+                                <TableHead>Telefone</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Instagram</TableHead>
+                                <TableHead>Campanha</TableHead>
+                                <TableHead>Fonte</TableHead>
+                                <TableHead>Data</TableHead>
+                                <TableHead>Convertido</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {filteredLeads.slice(0, 500).map(lead => (
+                                <TableRow key={lead.id}>
+                                  <TableCell className="font-medium">{lead.name || '—'}</TableCell>
+                                  <TableCell className="text-xs">{lead.phone || '—'}</TableCell>
+                                  <TableCell className="text-xs">{lead.email || '—'}</TableCell>
+                                  <TableCell className="text-xs">{lead.instagram || '—'}</TableCell>
+                                  <TableCell><Badge variant="outline" className="text-[10px]">{lead.campaign_id}</Badge></TableCell>
+                                  <TableCell className="text-xs">{lead.source || '—'}</TableCell>
+                                  <TableCell className="text-xs">{new Date(lead.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                                  <TableCell>{lead.converted ? <CheckCircle className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-muted-foreground/40" />}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          {filteredLeads.length > 500 && <p className="text-xs text-muted-foreground text-center py-2">Mostrando 500 de {filteredLeads.length}</p>}
+                        </ScrollArea>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
+              );
+            })()}
           </TabsContent>
         </Tabs>
       </div>
