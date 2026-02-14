@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID;
+const META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "722468550447865";
 
 // Initialize Meta Pixel
 function initMetaPixel() {
