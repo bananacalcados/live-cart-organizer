@@ -776,6 +776,7 @@ export default function Marketing() {
               <CardContent className="space-y-2">
                 {[
                   { name: 'Banana Verão', path: '/banana-verao', description: 'Funil interativo de captação de leads' },
+                  { name: 'Banana Verão - GV', path: '/banana-verao-gv', description: 'Funil para público de Gov. Valadares (Centro e Jardim Pérola)' },
                 ].map(lp => {
                   const publishedUrl = `https://checkout.bananacalcados.com.br${lp.path}`;
                   return (
