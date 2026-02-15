@@ -32,6 +32,7 @@ import { CampaignDetail } from "@/components/marketing/CampaignDetail";
 import { CampaignCardExpanded } from "@/components/marketing/CampaignCardExpanded";
 import { AutomationFlowBuilder } from "@/components/marketing/AutomationFlowBuilder";
 import { LeadWhatsAppDialog } from "@/components/marketing/LeadWhatsAppDialog";
+import { SectorManager } from "@/components/marketing/SectorManager";
 
 // ─── Types ──────────────────────────────────────
 
@@ -604,6 +605,7 @@ export default function Marketing() {
             <TabsTrigger value="customers" className="gap-1"><Users className="h-3.5 w-3.5" />Clientes RFM</TabsTrigger>
             <TabsTrigger value="templates" className="gap-1"><Megaphone className="h-3.5 w-3.5" />Templates Meta</TabsTrigger>
             <TabsTrigger value="automations" className="gap-1"><Zap className="h-3.5 w-3.5" />Automações</TabsTrigger>
+            <TabsTrigger value="sectors" className="gap-1"><Store className="h-3.5 w-3.5" />Setores</TabsTrigger>
             <TabsTrigger value="landing_pages" className="gap-1"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
             <TabsTrigger value="leads" className="gap-1"><FileSpreadsheet className="h-3.5 w-3.5" />Leads</TabsTrigger>
           </TabsList>
@@ -784,6 +786,11 @@ export default function Marketing() {
           {/* ── AUTOMAÇÕES ── */}
           <TabsContent value="automations" className="space-y-4">
             <AutomationFlowBuilder />
+          </TabsContent>
+
+          {/* ── SETORES ── */}
+          <TabsContent value="sectors" className="space-y-4">
+            <SectorManager />
           </TabsContent>
 
           {/* ── LANDING PAGES ── */}

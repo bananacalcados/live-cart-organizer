@@ -355,6 +355,65 @@ function AudioRecorder({ onRecorded }: { onRecorded: (url: string) => void }) {
   );
 }
 
+// ─── AI Instance Multi-Selector ──────────────────────
+
+function AiInstanceSelector({ config, setConfig, whatsappNumbers, loadingNumbers }: {
+  config: any;
+  setConfig: (c: any) => void;
+  whatsappNumbers: any[];
+  loadingNumbers: boolean;
+}) {
+  const selectedIds: string[] = config.whatsappNumberIds || (config.whatsappNumberId ? [config.whatsappNumberId] : []);
+  const includeZapi = config.includeZapi || false;
+
+  const allInstances = [
+    { id: 'zapi', label: 'Z-API', type: 'zapi' as const },
+    ...whatsappNumbers.map(n => ({ id: n.id, label: n.label || n.phone_display, type: 'meta' as const })),
+  ];
+
+  const toggleInstance = (id: string) => {
+    if (id === 'zapi') {
+      setConfig({ ...config, includeZapi: !includeZapi });
+      return;
+    }
+    const current = [...selectedIds];
+    const idx = current.indexOf(id);
+    if (idx >= 0) current.splice(idx, 1);
+    else current.push(id);
+    setConfig({ ...config, whatsappNumberIds: current, whatsappNumberId: current[0] || null });
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">Instâncias WhatsApp (para enviar resposta)</Label>
+      {loadingNumbers ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Carregando...</div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {allInstances.map(inst => {
+            const isSelected = inst.id === 'zapi' ? includeZapi : selectedIds.includes(inst.id);
+            return (
+              <Badge
+                key={inst.id}
+                variant={isSelected ? "default" : "outline"}
+                className="cursor-pointer text-[10px] px-2 py-0.5"
+                onClick={() => toggleInstance(inst.id)}
+              >
+                {inst.type === 'zapi' ? '📱' : '☁️'} {inst.label}
+              </Badge>
+            );
+          })}
+        </div>
+      )}
+      {(selectedIds.length > 0 || includeZapi) && (
+        <p className="text-[10px] text-muted-foreground">
+          {(includeZapi ? 1 : 0) + selectedIds.length} instância(s) selecionada(s) — a IA responderá pela mesma instância que recebeu a mensagem
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Step Editor Dialog ──────────────────────────────
 
 function StepEditorDialog({
@@ -1090,26 +1149,7 @@ function StepEditorDialog({
                     A IA responde automaticamente com base no prompt configurado. Ideal para responder dúvidas dos leads.
                   </p>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Número WhatsApp (para enviar resposta)</Label>
-                  {loadingNumbers ? (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Carregando números...</div>
-                  ) : (
-                    <Select value={config.whatsappNumberId || ""} onValueChange={v => setConfig({ ...config, whatsappNumberId: v })}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione o número" /></SelectTrigger>
-                      <SelectContent>
-                        {whatsappNumbers.map(n => (
-                          <SelectItem key={n.id} value={n.id}>
-                            <span className="flex items-center gap-2">
-                              {n.label} {n.phone_display && <span className="text-muted-foreground text-[10px]">({n.phone_display})</span>}
-                              {n.is_default && <Badge variant="secondary" className="text-[9px] px-1 py-0">Padrão</Badge>}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
+                <AiInstanceSelector config={config} setConfig={setConfig} whatsappNumbers={whatsappNumbers} loadingNumbers={loadingNumbers} />
                 <div className="space-y-1">
                   <Label className="text-xs">Prompt da IA</Label>
                   <Textarea
