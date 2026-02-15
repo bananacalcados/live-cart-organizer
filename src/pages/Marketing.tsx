@@ -31,6 +31,7 @@ import { useNavigate } from "react-router-dom";
 import { CampaignDetail } from "@/components/marketing/CampaignDetail";
 import { CampaignCardExpanded } from "@/components/marketing/CampaignCardExpanded";
 import { AutomationFlowBuilder } from "@/components/marketing/AutomationFlowBuilder";
+import { LeadWhatsAppDialog } from "@/components/marketing/LeadWhatsAppDialog";
 
 // ─── Types ──────────────────────────────────────
 
@@ -132,6 +133,8 @@ export default function Marketing() {
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadsCampaignFilter, setLeadsCampaignFilter] = useState<string>("all");
   const [leadsSearch, setLeadsSearch] = useState("");
+  const [leadChatPhone, setLeadChatPhone] = useState<string | null>(null);
+  const [leadChatName, setLeadChatName] = useState<string>("");
 
 
   // Customers state
@@ -915,6 +918,7 @@ export default function Marketing() {
                                 <TableHead>Fonte</TableHead>
                                 <TableHead>Data</TableHead>
                                 <TableHead>Convertido</TableHead>
+                                <TableHead className="w-10"></TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -928,6 +932,14 @@ export default function Marketing() {
                                   <TableCell className="text-xs">{lead.source || '—'}</TableCell>
                                   <TableCell className="text-xs">{new Date(lead.created_at).toLocaleDateString('pt-BR')}</TableCell>
                                   <TableCell>{lead.converted ? <CheckCircle className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-muted-foreground/40" />}</TableCell>
+                                  <TableCell>
+                                    {lead.phone && (
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Ver chat WhatsApp"
+                                        onClick={() => { setLeadChatPhone(lead.phone); setLeadChatName(lead.name || ''); }}>
+                                        <MessageSquare className="h-4 w-4 text-stage-paid" />
+                                      </Button>
+                                    )}
+                                  </TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -941,6 +953,14 @@ export default function Marketing() {
               );
             })()}
           </TabsContent>
+
+          {/* Lead WhatsApp Chat Dialog */}
+          <LeadWhatsAppDialog
+            open={!!leadChatPhone}
+            onOpenChange={(open) => { if (!open) setLeadChatPhone(null); }}
+            phone={leadChatPhone || ''}
+            leadName={leadChatName}
+          />
         </Tabs>
       </div>
 
