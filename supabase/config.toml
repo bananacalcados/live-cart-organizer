@@ -158,3 +158,6 @@ verify_jwt = false
 
 [functions.automation-test-flow]
 verify_jwt = false
+
+[functions.automation-trigger-incoming]
+verify_jwt = false

@@ -222,6 +222,13 @@ serve(async (req) => {
             } else {
               console.log(`Saved incoming message from ${phone} (${senderName || 'unknown'})`);
 
+              // Trigger incoming_message automations (fire-and-forget)
+              fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone, messageText, instance: whatsappNumberDbId || 'meta' }),
+              }).catch(err => console.error('automation-trigger-incoming error:', err));
+
               // Check for active AI session and auto-respond
               try {
                 const { data: aiSession } = await supabase
