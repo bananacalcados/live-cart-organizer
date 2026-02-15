@@ -486,6 +486,56 @@ export type Database = {
           },
         ]
       }
+      chat_assignments: {
+        Row: {
+          ai_classification: string | null
+          assigned_by: string
+          assigned_to: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          phone: string
+          resolved_at: string | null
+          sector_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ai_classification?: string | null
+          assigned_by?: string
+          assigned_to?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          phone: string
+          resolved_at?: string | null
+          sector_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_classification?: string | null
+          assigned_by?: string
+          assigned_to?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          phone?: string
+          resolved_at?: string | null
+          sector_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_assignments_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_contacts: {
         Row: {
           created_at: string
@@ -537,6 +587,109 @@ export type Database = {
           finished_by?: string | null
           id?: string
           phone?: string
+        }
+        Relationships: []
+      }
+      chat_sector_agents: {
+        Row: {
+          created_at: string
+          current_load: number
+          id: string
+          is_active: boolean
+          is_online: boolean
+          last_assigned_at: string | null
+          max_concurrent: number
+          sector_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_load?: number
+          id?: string
+          is_active?: boolean
+          is_online?: boolean
+          last_assigned_at?: string | null
+          max_concurrent?: number
+          sector_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_load?: number
+          id?: string
+          is_active?: boolean
+          is_online?: boolean
+          last_assigned_at?: string | null
+          max_concurrent?: number
+          sector_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_sector_agents_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sector_round_robin: {
+        Row: {
+          last_agent_index: number
+          sector_id: string
+          updated_at: string
+        }
+        Insert: {
+          last_agent_index?: number
+          sector_id: string
+          updated_at?: string
+        }
+        Update: {
+          last_agent_index?: number
+          sector_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_sector_round_robin_sector_id_fkey"
+            columns: ["sector_id"]
+            isOneToOne: true
+            referencedRelation: "chat_sectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sectors: {
+        Row: {
+          ai_routing_keywords: string[] | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          ai_routing_keywords?: string[] | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          ai_routing_keywords?: string[] | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
         }
         Relationships: []
       }

@@ -249,11 +249,11 @@ serve(async (req) => {
               flow_id: flow.id,
             }, { onConflict: 'phone' });
 
-            // Generate first AI response
+            // Generate first AI response with routing and tracking enabled
             const aiRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-respond`, {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ prompt, phone }),
+              body: JSON.stringify({ prompt, phone, enableRouting: true, enableTracking: true }),
             });
             const aiData = await aiRes.json();
 
