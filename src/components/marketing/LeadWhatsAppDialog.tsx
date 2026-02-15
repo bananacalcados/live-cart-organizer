@@ -42,17 +42,29 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
   const { numbers: metaNumbers, selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
 
   const cleanPhone = phone?.replace(/\D/g, '') || '';
+  // Build phone variants: raw, with DDI 55, without DDI 55
+  const phoneVariants = (() => {
+    if (!cleanPhone) return [];
+    const variants = new Set<string>();
+    variants.add(cleanPhone);
+    if (cleanPhone.startsWith('55') && cleanPhone.length >= 12) {
+      variants.add(cleanPhone.slice(2)); // without DDI
+    } else {
+      variants.add('55' + cleanPhone); // with DDI
+    }
+    return [...variants];
+  })();
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
   const loadMessages = useCallback(async () => {
-    if (!cleanPhone) return;
+    if (phoneVariants.length === 0) return;
     setLoading(true);
     try {
       const { data } = await supabase
         .from('whatsapp_messages')
         .select('*')
-        .eq('phone', cleanPhone)
+        .in('phone', phoneVariants)
         .order('created_at', { ascending: true });
       setMessages(data || []);
     } catch (err) {
@@ -60,19 +72,23 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
     } finally {
       setLoading(false);
     }
-  }, [cleanPhone]);
+  }, [phoneVariants.join(',')]); // eslint-disable-line
 
   useEffect(() => {
-    if (open && cleanPhone) {
+    if (open && phoneVariants.length > 0) {
       loadMessages();
-      // Set up realtime
       const channel = supabase
         .channel(`lead-chat-${cleanPhone}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages', filter: `phone=eq.${cleanPhone}` }, () => loadMessages())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' }, (payload: any) => {
+          if (phoneVariants.includes(payload.new?.phone)) loadMessages();
+        })
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }
-  }, [open, cleanPhone, loadMessages]);
+  }, [open, phoneVariants.join(','), loadMessages]); // eslint-disable-line
+
+  // Determine which phone format exists in messages for sending
+  const sendPhone = messages.length > 0 ? messages[0].phone : (cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone);
 
   const handleSend = async () => {
     if (!newMessage.trim() || !cleanPhone || isSending) return;
@@ -82,17 +98,17 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
     try {
       if (sendVia === 'meta' && selectedNumberId) {
         const { error } = await supabase.functions.invoke('meta-whatsapp-send', {
-          body: { phone: cleanPhone, message: text, whatsapp_number_id: selectedNumberId },
+          body: { phone: sendPhone, message: text, whatsapp_number_id: selectedNumberId },
         });
         if (error) throw error;
       } else {
         const { error } = await supabase.functions.invoke('zapi-send-message', {
-          body: { phone: cleanPhone, message: text },
+          body: { phone: sendPhone, message: text },
         });
         if (error) throw error;
       }
       await supabase.from('whatsapp_messages').insert({
-        phone: cleanPhone, message: text, direction: 'outgoing', status: 'sent',
+        phone: sendPhone, message: text, direction: 'outgoing', status: 'sent',
         whatsapp_number_id: sendVia === 'meta' ? selectedNumberId : null,
       });
       loadMessages();
