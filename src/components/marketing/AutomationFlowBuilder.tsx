@@ -1768,6 +1768,10 @@ export function AutomationFlowBuilder() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newTrigger, setNewTrigger] = useState("new_lead");
+  const [execStats, setExecStats] = useState<Record<string, { total: number; success: number; failed: number; lastAt: string | null }>>({});
+  const [showExecLog, setShowExecLog] = useState(false);
+  const [execLog, setExecLog] = useState<any[]>([]);
+  const [execLogLoading, setExecLogLoading] = useState(false);
 
   const fetchFlows = useCallback(async () => {
     setLoading(true);
@@ -1776,7 +1780,33 @@ export function AutomationFlowBuilder() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchFlows(); }, [fetchFlows]);
+  const fetchExecStats = useCallback(async () => {
+    const { data } = await supabase.from("automation_executions").select("flow_id, status, executed_at").order("executed_at", { ascending: false });
+    if (!data) return;
+    const stats: Record<string, { total: number; success: number; failed: number; lastAt: string | null }> = {};
+    for (const row of data) {
+      if (!stats[row.flow_id]) stats[row.flow_id] = { total: 0, success: 0, failed: 0, lastAt: null };
+      const s = stats[row.flow_id];
+      s.total++;
+      if (row.status === 'success') s.success++;
+      else if (row.status === 'error' || row.status === 'failed') s.failed++;
+      if (!s.lastAt) s.lastAt = row.executed_at;
+    }
+    setExecStats(stats);
+  }, []);
+
+  const fetchExecLog = useCallback(async () => {
+    setExecLogLoading(true);
+    const { data } = await supabase
+      .from("automation_executions")
+      .select("*, automation_flows(name), automation_steps(action_type, step_order)")
+      .order("executed_at", { ascending: false })
+      .limit(100);
+    setExecLog(data || []);
+    setExecLogLoading(false);
+  }, []);
+
+  useEffect(() => { fetchFlows(); fetchExecStats(); }, [fetchFlows, fetchExecStats]);
 
   const createFlow = async () => {
     if (!newName.trim()) { toast.error("Nome é obrigatório"); return; }
@@ -1808,7 +1838,12 @@ export function AutomationFlowBuilder() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Crie automações de disparo por gatilhos com IA, templates e mensagens ricas.</p>
-        <Button size="sm" onClick={() => setCreateDialogOpen(true)} className="gap-1"><Plus className="h-3.5 w-3.5" />Nova Automação</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => { setShowExecLog(true); fetchExecLog(); }} className="gap-1">
+            <FileText className="h-3.5 w-3.5" />Log de Disparos
+          </Button>
+          <Button size="sm" onClick={() => setCreateDialogOpen(true)} className="gap-1"><Plus className="h-3.5 w-3.5" />Nova Automação</Button>
+        </div>
       </div>
 
       {loading ? (
@@ -1824,9 +1859,10 @@ export function AutomationFlowBuilder() {
         </Card>
       ) : (
         <div className="grid gap-3">
-          {flows.map(flow => {
+           {flows.map(flow => {
             const trigger = TRIGGER_TYPES.find(t => t.value === flow.trigger_type);
             const TriggerIcon = trigger?.icon || Zap;
+            const stats = execStats[flow.id];
             return (
               <Card key={flow.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedFlow(flow)}>
                 <CardContent className="flex items-center gap-4 py-4">
@@ -1839,6 +1875,14 @@ export function AutomationFlowBuilder() {
                       <Badge variant={flow.is_active ? "default" : "secondary"} className="text-[10px]">{flow.is_active ? "Ativa" : "Inativa"}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{trigger?.label} → {flow.description || "Sem descrição"}</p>
+                    {stats && (
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-[10px] text-muted-foreground">{stats.total} disparos</span>
+                        <span className="text-[10px] text-emerald-600">{stats.success} ✓</span>
+                        {stats.failed > 0 && <span className="text-[10px] text-destructive">{stats.failed} ✗</span>}
+                        {stats.lastAt && <span className="text-[10px] text-muted-foreground">Último: {new Date(stats.lastAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                     <Switch checked={flow.is_active} onCheckedChange={() => toggleActive(flow)} />
@@ -1874,6 +1918,47 @@ export function AutomationFlowBuilder() {
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
             <Button onClick={createFlow}>Criar</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Execution Log Dialog */}
+      <Dialog open={showExecLog} onOpenChange={setShowExecLog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileText className="h-5 w-5" />Log de Disparos</DialogTitle>
+          </DialogHeader>
+          {execLogLoading ? (
+            <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+          ) : execLog.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-12">Nenhuma execução registrada</p>
+          ) : (
+            <ScrollArea className="flex-1 max-h-[60vh]">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-2 font-medium">Data/Hora</th>
+                    <th className="text-left py-2 px-2 font-medium">Fluxo</th>
+                    <th className="text-left py-2 px-2 font-medium">Ação</th>
+                    <th className="text-left py-2 px-2 font-medium">Status</th>
+                    <th className="text-left py-2 px-2 font-medium">Erro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {execLog.map(ex => (
+                    <tr key={ex.id} className="border-b hover:bg-muted/50">
+                      <td className="py-1.5 px-2 whitespace-nowrap">{new Date(ex.executed_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                      <td className="py-1.5 px-2">{ex.automation_flows?.name || '—'}</td>
+                      <td className="py-1.5 px-2">{ex.automation_steps?.action_type || '—'} {ex.automation_steps?.step_order != null ? `(#${ex.automation_steps.step_order})` : ''}</td>
+                      <td className="py-1.5 px-2">
+                        <Badge variant={ex.status === 'success' ? 'default' : 'destructive'} className="text-[10px]">{ex.status}</Badge>
+                      </td>
+                      <td className="py-1.5 px-2 text-destructive max-w-[200px] truncate">{ex.error_message || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </ScrollArea>
+          )}
         </DialogContent>
       </Dialog>
     </div>
