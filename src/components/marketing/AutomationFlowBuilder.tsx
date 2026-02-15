@@ -16,6 +16,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { supabase } from "@/integrations/supabase/client";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +78,7 @@ interface MetaTemplate {
 
 const TRIGGER_TYPES = [
   { value: "new_lead", label: "Novo Lead", icon: Users, description: "Quando um lead se cadastra na landing page" },
+  { value: "incoming_message", label: "Mensagem Recebida", icon: MessageSquare, description: "Quando um cliente manda mensagem (com proteção anti-conflito)" },
   { value: "new_order", label: "Novo Pedido", icon: ShoppingBag, description: "Quando um pedido é criado no CRM" },
   { value: "stage_change", label: "Mudança de Estágio", icon: RefreshCw, description: "Quando o pedido muda de etapa" },
   { value: "payment_confirmed", label: "Pagamento Confirmado", icon: CreditCard, description: "Quando o pagamento é confirmado" },
@@ -1323,6 +1325,49 @@ function NewLeadCampaignSelector({ triggerConfig, onChange }: { triggerConfig: a
   );
 }
 
+// ─── Instance Selector for Automations ──────────────────
+
+function AutomationInstanceSelector({ triggerConfig, onChange }: { triggerConfig: any; onChange: (c: any) => void }) {
+  const { numbers, fetchNumbers } = useWhatsAppNumberStore();
+  const selectedInstances: string[] = triggerConfig.whatsapp_instances || [];
+
+  useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
+
+  const allInstances = [
+    { id: 'zapi', label: 'Z-API', type: 'zapi' },
+    ...numbers.map(n => ({ id: n.id, label: n.label || n.phone_display, type: 'meta' })),
+  ];
+
+  const toggle = (id: string) => {
+    const current = [...selectedInstances];
+    const idx = current.indexOf(id);
+    if (idx >= 0) current.splice(idx, 1);
+    else current.push(id);
+    onChange({ ...triggerConfig, whatsapp_instances: current });
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs">Instâncias WhatsApp (vazio = todas)</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {allInstances.map(inst => (
+          <Badge
+            key={inst.id}
+            variant={selectedInstances.includes(inst.id) ? "default" : "outline"}
+            className="cursor-pointer text-[10px] px-2 py-0.5"
+            onClick={() => toggle(inst.id)}
+          >
+            {inst.type === 'zapi' ? '📱' : '☁️'} {inst.label}
+          </Badge>
+        ))}
+      </div>
+      {selectedInstances.length > 0 && (
+        <p className="text-[10px] text-muted-foreground">{selectedInstances.length} instância(s) selecionada(s)</p>
+      )}
+    </div>
+  );
+}
+
 // ─── Flow Editor ──────────────────────────────────
 
 function FlowEditor({
@@ -1562,6 +1607,23 @@ function FlowEditor({
                 {triggerType === "new_lead" && (
                   <NewLeadCampaignSelector triggerConfig={triggerConfig} onChange={setTriggerConfig} />
                 )}
+                {triggerType === "incoming_message" && (
+                  <div className="space-y-2 p-2 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                    <p className="text-[10px] text-blue-700 dark:text-blue-300">
+                      <MessageSquare className="h-3 w-3 inline mr-1" />
+                      Dispara quando o cliente envia mensagem e <b>não recebeu resposta</b> nas últimas X horas. Evita conflito com vendedoras que já estão atendendo.
+                    </p>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Cooldown (horas sem resposta)</Label>
+                      <Input type="number" value={triggerConfig.cooldown_hours ?? 2} onChange={e => setTriggerConfig({ ...triggerConfig, cooldown_hours: parseInt(e.target.value) || 2 })} className="h-8 text-xs" min={1} max={168} />
+                      <p className="text-[10px] text-muted-foreground">Só ativa se nenhuma mensagem outgoing foi enviada nesse período</p>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Máx. ativações por contato/dia</Label>
+                      <Input type="number" value={triggerConfig.max_per_day ?? 1} onChange={e => setTriggerConfig({ ...triggerConfig, max_per_day: parseInt(e.target.value) || 1 })} className="h-8 text-xs" min={1} max={10} />
+                    </div>
+                  </div>
+                )}
                 {triggerType === "stage_change" && (
                   <div className="space-y-1">
                     <Label className="text-xs">Para estágio</Label>
@@ -1592,6 +1654,11 @@ function FlowEditor({
                     </div>
                   </div>
                 )}
+
+                {/* Instance selector for all triggers */}
+                <div className="mt-3">
+                  <AutomationInstanceSelector triggerConfig={triggerConfig} onChange={setTriggerConfig} />
+                </div>
               </div>
 
               <div className="border-t border-border pt-3 space-y-2">
