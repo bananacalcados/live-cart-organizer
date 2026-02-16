@@ -187,6 +187,63 @@ export type Database = {
           },
         ]
       }
+      automation_pending_replies: {
+        Row: {
+          button_branches: Json | null
+          created_at: string
+          expires_at: string
+          flow_id: string
+          id: string
+          is_active: boolean
+          pending_step_index: number
+          phone: string
+          recipient_data: Json | null
+          step_id: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          button_branches?: Json | null
+          created_at?: string
+          expires_at?: string
+          flow_id: string
+          id?: string
+          is_active?: boolean
+          pending_step_index: number
+          phone: string
+          recipient_data?: Json | null
+          step_id?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          button_branches?: Json | null
+          created_at?: string
+          expires_at?: string
+          flow_id?: string
+          id?: string
+          is_active?: boolean
+          pending_step_index?: number
+          phone?: string
+          recipient_data?: Json | null
+          step_id?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_pending_replies_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_pending_replies_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "automation_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_steps: {
         Row: {
           action_config: Json

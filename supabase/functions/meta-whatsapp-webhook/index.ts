@@ -162,6 +162,21 @@ serve(async (req) => {
               case 'text':
                 messageText = msg.text?.body || '';
                 break;
+              case 'button':
+                // Quick reply button response from template
+                messageText = msg.button?.text || '';
+                mediaType = 'text';
+                break;
+              case 'interactive':
+                // Interactive button/list response
+                if (msg.interactive?.type === 'button_reply') {
+                  messageText = msg.interactive.button_reply?.title || '';
+                } else if (msg.interactive?.type === 'list_reply') {
+                  messageText = msg.interactive.list_reply?.title || '';
+                } else {
+                  messageText = '[interativo]';
+                }
+                break;
               case 'image':
                 messageText = msg.image?.caption || '[imagem]';
                 mediaType = 'image';
@@ -221,6 +236,55 @@ serve(async (req) => {
               console.error('Error saving incoming message:', error);
             } else {
               console.log(`Saved incoming message from ${phone} (${senderName || 'unknown'})`);
+
+              // Check for pending automation flow continuation (button reply)
+              if (msg.type === 'button' || msg.type === 'interactive') {
+                const buttonText = messageText.trim().toLowerCase();
+                try {
+                  const { data: pendingReply } = await supabase
+                    .from('automation_pending_replies')
+                    .select('*')
+                    .eq('phone', phone)
+                    .eq('is_active', true)
+                    .gt('expires_at', new Date().toISOString())
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (pendingReply) {
+                    console.log(`Found pending reply for ${phone}, button: "${buttonText}"`);
+                    // Mark as consumed
+                    await supabase.from('automation_pending_replies').update({ is_active: false }).eq('id', pendingReply.id);
+
+                    // Determine which branch to follow
+                    const branches = (pendingReply.button_branches || {}) as Record<string, number>;
+                    let nextStepIndex = pendingReply.pending_step_index + 1; // default: continue to next step
+                    
+                    // Check if button text matches any branch
+                    for (const [branchLabel, branchStepIdx] of Object.entries(branches)) {
+                      if (branchLabel.toLowerCase() === buttonText) {
+                        nextStepIndex = branchStepIdx;
+                        break;
+                      }
+                    }
+
+                    // Continue flow execution from the next step
+                    fetch(`${supabaseUrl}/functions/v1/automation-continue-flow`, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        flowId: pendingReply.flow_id,
+                        phone,
+                        startFromStep: nextStepIndex,
+                        recipientData: pendingReply.recipient_data,
+                        whatsappNumberId: pendingReply.whatsapp_number_id,
+                      }),
+                    }).catch(err => console.error('automation-continue-flow error:', err));
+                  }
+                } catch (prErr) {
+                  console.error('Pending reply check error:', prErr);
+                }
+              }
 
               // Trigger incoming_message automations (fire-and-forget)
               fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {

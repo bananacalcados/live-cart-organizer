@@ -119,9 +119,23 @@ serve(async (req) => {
         const step = steps[i];
         const config = step.action_config as Record<string, unknown> || {};
 
-        // Execute only first action (typically send_template), then stop at delays/waits
-        if (step.action_type === 'delay' || step.action_type === 'wait_for_reply') {
-          console.log(`Step ${i + 1}: ${step.action_type} — stopping execution (async continuation not yet implemented)`);
+        // Stop at delays (async not implemented) but handle wait_for_reply by creating pending reply
+        if (step.action_type === 'delay') {
+          console.log(`Step ${i + 1}: delay — stopping execution (async continuation not yet implemented)`);
+          break;
+        }
+        if (step.action_type === 'wait_for_reply') {
+          const branches = (config.branches || {}) as Record<string, number>;
+          await supabase.from('automation_pending_replies').insert({
+            phone: formattedPhone,
+            flow_id: flow.id,
+            pending_step_index: i,
+            step_id: step.id,
+            button_branches: branches,
+            whatsapp_number_id: (config.whatsappNumberId as string) || null,
+            recipient_data: { name: name || '', firstName: name ? name.split(' ')[0] : '' },
+          });
+          console.log(`Step ${i + 1}: wait_for_reply — created pending reply for ${formattedPhone}`);
           break;
         }
 
