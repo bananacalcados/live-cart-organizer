@@ -1381,6 +1381,123 @@ export type Database = {
         }
         Relationships: []
       }
+      group_campaign_messages: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          error_message: string | null
+          group_id: string
+          id: string
+          message_id: string | null
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          error_message?: string | null
+          group_id: string
+          id?: string
+          message_id?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          error_message?: string | null
+          group_id?: string
+          id?: string
+          message_id?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_campaign_messages_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "group_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_campaign_messages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_campaigns: {
+        Row: {
+          ai_generated_content: string | null
+          ai_prompt: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_log: Json | null
+          failed_count: number | null
+          id: string
+          media_url: string | null
+          message_content: string | null
+          message_type: string
+          name: string
+          poll_options: Json | null
+          scheduled_at: string | null
+          sent_count: number | null
+          started_at: string | null
+          status: string
+          target_groups: string[] | null
+          total_groups: number | null
+          updated_at: string
+        }
+        Insert: {
+          ai_generated_content?: string | null
+          ai_prompt?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_log?: Json | null
+          failed_count?: number | null
+          id?: string
+          media_url?: string | null
+          message_content?: string | null
+          message_type?: string
+          name: string
+          poll_options?: Json | null
+          scheduled_at?: string | null
+          sent_count?: number | null
+          started_at?: string | null
+          status?: string
+          target_groups?: string[] | null
+          total_groups?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ai_generated_content?: string | null
+          ai_prompt?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_log?: Json | null
+          failed_count?: number | null
+          id?: string
+          media_url?: string | null
+          message_content?: string | null
+          message_type?: string
+          name?: string
+          poll_options?: Json | null
+          scheduled_at?: string | null
+          sent_count?: number | null
+          started_at?: string | null
+          status?: string
+          target_groups?: string[] | null
+          total_groups?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       internal_cashback: {
         Row: {
           cashback_amount: number
@@ -4034,8 +4151,60 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_groups: {
+        Row: {
+          created_at: string
+          description: string | null
+          group_id: string
+          id: string
+          instance_id: string | null
+          is_active: boolean | null
+          is_admin: boolean | null
+          is_vip: boolean | null
+          last_synced_at: string | null
+          name: string
+          participant_count: number | null
+          photo_url: string | null
+          tags: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          group_id: string
+          id?: string
+          instance_id?: string | null
+          is_active?: boolean | null
+          is_admin?: boolean | null
+          is_vip?: boolean | null
+          last_synced_at?: string | null
+          name: string
+          participant_count?: number | null
+          photo_url?: string | null
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          group_id?: string
+          id?: string
+          instance_id?: string | null
+          is_active?: boolean | null
+          is_admin?: boolean | null
+          is_vip?: boolean | null
+          last_synced_at?: string | null
+          name?: string
+          participant_count?: number | null
+          photo_url?: string | null
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       whatsapp_messages: {
         Row: {
+          channel: string
           created_at: string
           direction: string
           error_code: string | null
@@ -4052,6 +4221,7 @@ export type Database = {
           whatsapp_number_id: string | null
         }
         Insert: {
+          channel?: string
           created_at?: string
           direction: string
           error_code?: string | null
@@ -4068,6 +4238,7 @@ export type Database = {
           whatsapp_number_id?: string | null
         }
         Update: {
+          channel?: string
           created_at?: string
           direction?: string
           error_code?: string | null
