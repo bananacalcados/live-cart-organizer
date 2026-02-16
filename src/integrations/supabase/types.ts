@@ -1847,6 +1847,39 @@ export type Database = {
           },
         ]
       }
+      live_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          selected_products: Json
+          title: string
+          updated_at: string
+          whatsapp_link: string | null
+          youtube_video_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          selected_products?: Json
+          title: string
+          updated_at?: string
+          whatsapp_link?: string | null
+          youtube_video_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          selected_products?: Json
+          title?: string
+          updated_at?: string
+          whatsapp_link?: string | null
+          youtube_video_id?: string | null
+        }
+        Relationships: []
+      }
       lp_leads: {
         Row: {
           campaign_tag: string
