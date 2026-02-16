@@ -199,13 +199,40 @@ serve(async (req) => {
             if (sendRes.ok) {
               console.log(`Step ${i + 1}: Template "${templateName}" sent successfully`);
 
-              // Log execution
               await supabase.from('automation_executions').insert({
                 flow_id: flow.id,
                 step_id: step.id,
                 status: 'success',
                 result: { messageId: sendData.messageId, phone: formattedPhone },
               });
+
+              // If template has buttonBranches, create pending reply and stop
+              if (config.quickReplyButtons?.length > 0 && config.buttonBranches) {
+                const textBranches: Record<string, string> = {};
+                const qrButtons = config.quickReplyButtons as string[];
+                const branches = config.buttonBranches as Record<string, string>;
+                for (const [handleId, targetStepId] of Object.entries(branches)) {
+                  if (handleId === 'btn-timeout') {
+                    textBranches['__timeout__'] = targetStepId;
+                  } else {
+                    const idx = parseInt(handleId.replace('btn-', ''));
+                    if (qrButtons[idx]) {
+                      textBranches[qrButtons[idx].toLowerCase()] = targetStepId;
+                    }
+                  }
+                }
+                await supabase.from('automation_pending_replies').insert({
+                  phone: formattedPhone,
+                  flow_id: flow.id,
+                  pending_step_index: i,
+                  step_id: step.id,
+                  button_branches: textBranches,
+                  whatsapp_number_id: (config.whatsappNumberId as string) || null,
+                  recipient_data: { name: name || '', firstName },
+                });
+                console.log(`Step ${i + 1}: Created pending reply for button branches: ${qrButtons.join(', ')}`);
+                break; // Stop execution, wait for button click
+              }
             } else {
               console.error(`Step ${i + 1}: Template send failed:`, sendData);
               await supabase.from('automation_executions').insert({

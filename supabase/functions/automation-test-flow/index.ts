@@ -87,8 +87,9 @@ serve(async (req) => {
         continue;
       }
 
-      // Skip wait_for_reply in test mode
+      // Skip wait_for_reply in test mode (but template-level branching is handled below)
       if (step.action_type === 'wait_for_reply') {
+        // If previous step was a template with buttonBranches, pending reply was already created
         results.push({ step: i + 1, type: 'wait_for_reply', status: 'skipped', detail: 'Espera ignorada no teste' });
         continue;
       }
@@ -263,6 +264,34 @@ serve(async (req) => {
           const sendData = await sendRes.json();
           if (sendRes.ok) {
             results.push({ step: i + 1, type: 'send_template', status: 'sent', detail: `Template: ${config.templateName}` });
+
+            // If template has buttonBranches, create a pending reply and stop
+            if (config.quickReplyButtons?.length > 0 && config.buttonBranches) {
+              const textBranches: Record<string, string> = {};
+              const qrButtons = config.quickReplyButtons as string[];
+              const branches = config.buttonBranches as Record<string, string>;
+              for (const [handleId, targetStepId] of Object.entries(branches)) {
+                if (handleId === 'btn-timeout') {
+                  textBranches['__timeout__'] = targetStepId;
+                } else {
+                  const idx = parseInt(handleId.replace('btn-', ''));
+                  if (qrButtons[idx]) {
+                    textBranches[qrButtons[idx].toLowerCase()] = targetStepId;
+                  }
+                }
+              }
+              await supabase.from('automation_pending_replies').insert({
+                phone: formattedPhone,
+                flow_id: flowId,
+                pending_step_index: i,
+                step_id: step.id,
+                button_branches: textBranches,
+                whatsapp_number_id: config.whatsappNumberId || null,
+                recipient_data: { name: testName || 'Teste', firstName },
+              });
+              results.push({ step: i + 1, type: 'wait_for_reply', status: 'created', detail: `Aguardando botão: ${qrButtons.join(', ')}` });
+              break; // Stop execution, wait for button click
+            }
           } else {
             results.push({ step: i + 1, type: 'send_template', status: 'error', detail: sendData.error || JSON.stringify(sendData) });
           }
