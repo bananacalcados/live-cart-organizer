@@ -42,20 +42,52 @@ async function fetchAllRows(supabase: ReturnType<typeof createClient>, table: st
   return allData;
 }
 
+function buildAudience(
+  rfmData: any[],
+  leadsData: any[],
+  filters: { selectedStates: string[]; selectedCities: string[]; selectedRegions: string[]; selectedGenders: string[] },
+  seenPhones: Set<string>
+): Array<{ phone: string; name: string; email?: string; city?: string; state?: string }> {
+  const audience: Array<{ phone: string; name: string; email?: string; city?: string; state?: string }> = [];
+
+  for (const row of rfmData) {
+    if (!row.phone) continue;
+    if (filters.selectedStates.length > 0 && !filters.selectedStates.includes(row.state)) continue;
+    if (filters.selectedCities.length > 0 && !filters.selectedCities.includes(row.city)) continue;
+    if (filters.selectedRegions.length > 0 && !filters.selectedRegions.includes(row.region_type)) continue;
+    if (filters.selectedGenders.length > 0 && !filters.selectedGenders.includes(row.gender)) continue;
+    const phone = normalizePhone(row.phone);
+    if (phone.length < 12 || seenPhones.has(phone)) continue;
+    seenPhones.add(phone);
+    const fullName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || 'Cliente';
+    audience.push({ phone, name: fullName, email: row.email, city: row.city, state: row.state });
+  }
+
+  for (const row of leadsData) {
+    if (!row.phone) continue;
+    const phone = normalizePhone(row.phone);
+    if (phone.length < 12 || seenPhones.has(phone)) continue;
+    seenPhones.add(phone);
+    audience.push({ phone, name: row.name || 'Cliente', email: row.email });
+  }
+
+  return audience;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   const startTime = Date.now();
-  const MAX_RUNTIME_MS = 50000; // 50 seconds safety limit
+  const MAX_RUNTIME_MS = 50000;
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { flowId, dryRun } = await req.json();
+    const { flowId, dryRun, offset = 0, batchSize = 400 } = await req.json();
 
     if (!flowId) {
       return new Response(JSON.stringify({ error: 'flowId is required' }), {
@@ -87,41 +119,22 @@ serve(async (req) => {
     const selectedGenders = (triggerConfig.audience_genders as string[]) || [];
     const whatsappInstances = (triggerConfig.whatsapp_instances as string[]) || [];
 
-    // Build audience phone list with names
-    const audience: Array<{ phone: string; name: string; email?: string; city?: string; state?: string }> = [];
+    // Build full audience
     const seenPhones = new Set<string>();
+    let rfmData: any[] = [];
+    let leadsData: any[] = [];
 
-    // RFM / CRM audience
-    if (audienceSource === 'rfm' || audienceSource === 'both') {
-      let rfmData: any[] = [];
-      if (rfmSelectAll) {
+    if (audienceSource === 'rfm' || audienceSource === 'both' || audienceSource === 'crm') {
+      if (audienceSource === 'crm' || rfmSelectAll) {
         rfmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, rfm_segment, region_type, gender');
       } else if (selectedRfmSegments.length > 0) {
         rfmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, rfm_segment, region_type, gender', {
           rfm_segment: selectedRfmSegments,
         });
       }
-
-      // Apply additional filters
-      for (const row of rfmData) {
-        if (!row.phone) continue;
-        if (selectedStates.length > 0 && !selectedStates.includes(row.state)) continue;
-        if (selectedCities.length > 0 && !selectedCities.includes(row.city)) continue;
-        if (selectedRegions.length > 0 && !selectedRegions.includes(row.region_type)) continue;
-        if (selectedGenders.length > 0 && !selectedGenders.includes(row.gender)) continue;
-
-        const phone = normalizePhone(row.phone);
-        if (phone.length < 12 || seenPhones.has(phone)) continue;
-        seenPhones.add(phone);
-
-        const fullName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || 'Cliente';
-        audience.push({ phone, name: fullName, email: row.email, city: row.city, state: row.state });
-      }
     }
 
-    // Leads audience
     if (audienceSource === 'leads' || audienceSource === 'both') {
-      let leadsData: any[];
       if (selectedCampaigns.length > 0) {
         leadsData = await fetchAllRows(supabase, 'lp_leads', 'phone, name, email, campaign_tag', {
           campaign_tag: selectedCampaigns,
@@ -129,39 +142,29 @@ serve(async (req) => {
       } else {
         leadsData = await fetchAllRows(supabase, 'lp_leads', 'phone, name, email, campaign_tag');
       }
-
-      for (const row of leadsData) {
-        if (!row.phone) continue;
-        const phone = normalizePhone(row.phone);
-        if (phone.length < 12 || seenPhones.has(phone)) continue;
-        seenPhones.add(phone);
-        audience.push({ phone, name: row.name || 'Cliente', email: row.email });
-      }
     }
 
-    // CRM source (all zoppy_customers without segment filter)
-    if (audienceSource === 'crm') {
-      const crmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, region_type, gender');
-      for (const row of crmData) {
-        if (!row.phone) continue;
-        if (selectedStates.length > 0 && !selectedStates.includes(row.state)) continue;
-        if (selectedCities.length > 0 && !selectedCities.includes(row.city)) continue;
-        if (selectedRegions.length > 0 && !selectedRegions.includes(row.region_type)) continue;
-        if (selectedGenders.length > 0 && !selectedGenders.includes(row.gender)) continue;
+    const filters = { selectedStates, selectedCities, selectedRegions, selectedGenders };
+    const fullAudience = buildAudience(rfmData, leadsData, filters, seenPhones);
+    const totalAudience = fullAudience.length;
 
-        const phone = normalizePhone(row.phone);
-        if (phone.length < 12 || seenPhones.has(phone)) continue;
-        seenPhones.add(phone);
-        const fullName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || 'Cliente';
-        audience.push({ phone, name: fullName, email: row.email, city: row.city, state: row.state });
-      }
-    }
-
-    console.log(`[dispatch] Audience size: ${audience.length} for flow "${flow.name}"`);
+    console.log(`[dispatch] Total audience: ${totalAudience}, offset: ${offset}, batchSize: ${batchSize}`);
 
     // Dry run: just return count
     if (dryRun) {
-      return new Response(JSON.stringify({ success: true, audienceCount: audience.length }), {
+      return new Response(JSON.stringify({ success: true, audienceCount: totalAudience }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Slice audience for this batch
+    const batch = fullAudience.slice(offset, offset + batchSize);
+
+    if (batch.length === 0) {
+      return new Response(JSON.stringify({
+        success: true, sent: 0, failed: 0, skipped: 0,
+        totalAudience, nextOffset: null, done: true,
+      }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -179,17 +182,14 @@ serve(async (req) => {
       });
     }
 
-    // Determine which WhatsApp number to use
     const defaultNumberId = whatsappInstances.length > 0 ? whatsappInstances[0] : null;
-
     let sent = 0;
     let failed = 0;
     let skipped = 0;
 
-    for (const recipient of audience) {
-      // Check time limit
+    for (const recipient of batch) {
       if (Date.now() - startTime > MAX_RUNTIME_MS) {
-        console.log(`[dispatch] Time limit reached after ${sent} sent, ${failed} failed. Remaining: ${audience.length - sent - failed - skipped}`);
+        console.log(`[dispatch] Time limit hit at offset ${offset + sent + failed + skipped}`);
         break;
       }
 
@@ -209,20 +209,13 @@ serve(async (req) => {
           .replace(/\{\{cidade\}\}/g, recipient.city || '');
       }
 
-      // Execute first step only (subsequent steps handled by continue-flow or pending replies)
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
         const config = step.action_config as Record<string, unknown> || {};
         const sendNumberId = (config.whatsappNumberId as string) || defaultNumberId;
 
-        if (step.action_type === 'delay') {
-          // Don't wait for delays in mass dispatch — note for future: queue these
-          continue;
-        }
-
-        if (step.action_type === 'wait_for_reply') {
-          break; // Already handled by template step below
-        }
+        if (step.action_type === 'delay') continue;
+        if (step.action_type === 'wait_for_reply') break;
 
         if (step.action_type === 'send_template') {
           const templateName = config.templateName as string;
@@ -230,7 +223,6 @@ serve(async (req) => {
 
           const components: unknown[] = [];
 
-          // Header media
           if (config.headerMediaUrl) {
             const isVideo = /\.(mp4|mov|avi|webm)/i.test(config.headerMediaUrl as string);
             const isDocument = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx)/i.test(config.headerMediaUrl as string);
@@ -243,7 +235,6 @@ serve(async (req) => {
             });
           }
 
-          // Body variables
           const templateVars = config.templateVars as Record<string, string> | undefined;
           if (templateVars && Object.keys(templateVars).length > 0) {
             const bodyParams = Object.keys(templateVars)
@@ -252,7 +243,6 @@ serve(async (req) => {
             components.push({ type: 'BODY', parameters: bodyParams });
           }
 
-          // Button variables
           const buttonVars = config.buttonVars as Record<string, string> | undefined;
           if (buttonVars && Object.keys(buttonVars).length > 0) {
             Object.keys(buttonVars).forEach(idx => {
@@ -263,7 +253,6 @@ serve(async (req) => {
             });
           }
 
-          // Carousel cards
           const carouselCards = config.carouselCards as Record<string, any> | undefined;
           if (carouselCards && Object.keys(carouselCards).length > 0) {
             const cards: any[] = [];
@@ -304,8 +293,6 @@ serve(async (req) => {
 
             if (sendRes.ok) {
               sent++;
-
-              // If template has button branches, create pending reply for this recipient
               if (config.quickReplyButtons && (config.quickReplyButtons as string[]).length > 0 && config.buttonBranches) {
                 const textBranches: Record<string, string> = {};
                 const qrButtons = config.quickReplyButtons as string[];
@@ -330,15 +317,10 @@ serve(async (req) => {
                   recipient_data: { name: recipient.name, firstName, email: recipient.email, city: recipient.city, state: recipient.state },
                 });
               }
-
-              // Log execution
-              if (sent % 100 === 0) {
-                console.log(`[dispatch] Progress: ${sent} sent, ${failed} failed`);
-              }
             } else {
-              const errData = await sendRes.json().catch(() => ({}));
               failed++;
-              if (failed <= 5) {
+              if (failed <= 3) {
+                const errData = await sendRes.json().catch(() => ({}));
                 console.error(`[dispatch] Failed for ${recipient.phone}:`, errData);
               }
             }
@@ -346,9 +328,8 @@ serve(async (req) => {
             failed++;
           }
 
-          // Rate limiting: ~80 msgs/sec is Meta's limit, we go slower for safety
-          await new Promise(r => setTimeout(r, 100));
-          break; // Only execute first actionable step
+          await new Promise(r => setTimeout(r, 80));
+          break;
         }
 
         if (step.action_type === 'send_text') {
@@ -373,42 +354,47 @@ serve(async (req) => {
             failed++;
           }
 
-          await new Promise(r => setTimeout(r, 100));
+          await new Promise(r => setTimeout(r, 80));
           break;
         }
 
-        if (step.action_type === 'add_tag') {
-          continue; // Skip tags, proceed to next step
-        }
-
-        // For other types, skip
+        if (step.action_type === 'add_tag') continue;
         break;
       }
     }
 
-    // Log execution summary
-    await supabase.from('automation_executions').insert({
-      flow_id: flowId,
-      status: 'success',
-      result: {
-        type: 'mass_dispatch',
-        audienceSize: audience.length,
-        sent,
-        failed,
-        skipped,
-        durationMs: Date.now() - startTime,
-      },
-    });
+    const processed = sent + failed + skipped;
+    const nextOffset = offset + processed;
+    const done = nextOffset >= totalAudience;
 
-    console.log(`[dispatch] Complete: ${sent} sent, ${failed} failed, ${skipped} skipped in ${Date.now() - startTime}ms`);
+    // Log only on last batch or periodically
+    if (done || offset === 0) {
+      await supabase.from('automation_executions').insert({
+        flow_id: flowId,
+        status: 'success',
+        result: {
+          type: 'mass_dispatch_batch',
+          totalAudience,
+          batchOffset: offset,
+          sent,
+          failed,
+          skipped,
+          durationMs: Date.now() - startTime,
+          done,
+        },
+      });
+    }
+
+    console.log(`[dispatch] Batch done: offset=${offset}, sent=${sent}, failed=${failed}, next=${nextOffset}, done=${done}, ${Date.now() - startTime}ms`);
 
     return new Response(JSON.stringify({
       success: true,
-      audienceSize: audience.length,
+      totalAudience,
       sent,
       failed,
       skipped,
-      timedOut: Date.now() - startTime > MAX_RUNTIME_MS,
+      nextOffset: done ? null : nextOffset,
+      done,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
