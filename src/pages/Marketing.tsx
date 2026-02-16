@@ -35,6 +35,7 @@ import { LeadWhatsAppDialog } from "@/components/marketing/LeadWhatsAppDialog";
 import { SectorManager } from "@/components/marketing/SectorManager";
 import { GroupsVipManager } from "@/components/marketing/GroupsVipManager";
 import { LiveSessionManager } from "@/components/LiveSessionManager";
+import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispatcher";
 
 // ─── Types ──────────────────────────────────────
 
@@ -606,6 +607,7 @@ export default function Marketing() {
             <TabsTrigger value="campaigns" className="gap-1"><Target className="h-3.5 w-3.5" />Campanhas 360°</TabsTrigger>
             <TabsTrigger value="customers" className="gap-1"><Users className="h-3.5 w-3.5" />Clientes RFM</TabsTrigger>
             <TabsTrigger value="templates" className="gap-1"><Megaphone className="h-3.5 w-3.5" />Templates Meta</TabsTrigger>
+            <TabsTrigger value="disparos" className="gap-1"><Send className="h-3.5 w-3.5" />Disparos</TabsTrigger>
             <TabsTrigger value="automations" className="gap-1"><Zap className="h-3.5 w-3.5" />Automações</TabsTrigger>
             <TabsTrigger value="sectors" className="gap-1"><Store className="h-3.5 w-3.5" />Setores</TabsTrigger>
             <TabsTrigger value="landing_pages" className="gap-1"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
@@ -785,6 +787,11 @@ export default function Marketing() {
               </CardHeader>
               <CardContent><MetaTemplateCreator /></CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ── DISPAROS ── */}
+          <TabsContent value="disparos" className="space-y-4">
+            <MassTemplateDispatcher />
           </TabsContent>
 
           {/* ── AUTOMAÇÕES ── */}

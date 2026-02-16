@@ -9,6 +9,7 @@ const corsHeaders = {
 interface SendTemplateRequest {
   phone: string;
   templateName: string;
+  renderedMessage?: string;
   language?: string;
   whatsappNumberId?: string;
   components?: Array<{
@@ -199,7 +200,7 @@ serve(async (req) => {
     }
 
     // === Single template send ===
-    const { phone, templateName, language = 'pt_BR', components, whatsappNumberId } = body as SendTemplateRequest;
+    const { phone, templateName, language = 'pt_BR', components, whatsappNumberId, renderedMessage } = body as SendTemplateRequest;
 
     if (!phone || !templateName) {
       return new Response(
@@ -277,7 +278,7 @@ serve(async (req) => {
 
       await supabase.from('whatsapp_messages').insert({
         phone: formattedPhone,
-        message: `[Template: ${templateName}]`,
+        message: renderedMessage || `[Template: ${templateName}]`,
         direction: 'outgoing',
         message_id: messageId,
         status: 'sent',
