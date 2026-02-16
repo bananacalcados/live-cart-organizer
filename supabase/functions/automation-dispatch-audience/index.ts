@@ -119,8 +119,12 @@ serve(async (req) => {
     const selectedGenders = (triggerConfig.audience_genders as string[]) || [];
     const whatsappInstances = (triggerConfig.whatsapp_instances as string[]) || [];
 
-    // Build full audience
-    const seenPhones = new Set<string>();
+    // Fetch already-sent phones for this flow to avoid duplicates
+    const alreadySentRows = await fetchAllRows(supabase, 'automation_dispatch_sent', 'phone', { flow_id: [flowId] });
+    const seenPhones = new Set<string>(alreadySentRows.map((r: any) => r.phone));
+    const alreadySentCount = seenPhones.size;
+    console.log(`[dispatch] Already sent to ${alreadySentCount} phones for this flow`);
+
     let rfmData: any[] = [];
     let leadsData: any[] = [];
 
@@ -148,11 +152,11 @@ serve(async (req) => {
     const fullAudience = buildAudience(rfmData, leadsData, filters, seenPhones);
     const totalAudience = fullAudience.length;
 
-    console.log(`[dispatch] Total audience: ${totalAudience}, offset: ${offset}, batchSize: ${batchSize}`);
+    console.log(`[dispatch] New audience (after dedup): ${totalAudience}, offset: ${offset}, batchSize: ${batchSize}`);
 
-    // Dry run: just return count
+    // Dry run: return counts
     if (dryRun) {
-      return new Response(JSON.stringify({ success: true, audienceCount: totalAudience }), {
+      return new Response(JSON.stringify({ success: true, audienceCount: totalAudience, alreadySent: alreadySentCount }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -293,6 +297,8 @@ serve(async (req) => {
 
             if (sendRes.ok) {
               sent++;
+              // Record sent phone to avoid future duplicates
+              await supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' });
               if (config.quickReplyButtons && (config.quickReplyButtons as string[]).length > 0 && config.buttonBranches) {
                 const textBranches: Record<string, string> = {};
                 const qrButtons = config.quickReplyButtons as string[];
@@ -348,7 +354,10 @@ serve(async (req) => {
                 whatsappNumberId: (config.whatsappNumberId as string) || defaultNumberId,
               }),
             });
-            if (sendRes.ok) sent++;
+            if (sendRes.ok) {
+              sent++;
+              await supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' });
+            }
             else failed++;
           } catch {
             failed++;

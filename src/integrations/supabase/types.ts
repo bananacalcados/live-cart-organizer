@@ -88,6 +88,35 @@ export type Database = {
           },
         ]
       }
+      automation_dispatch_sent: {
+        Row: {
+          flow_id: string
+          id: string
+          phone: string
+          sent_at: string
+        }
+        Insert: {
+          flow_id: string
+          id?: string
+          phone: string
+          sent_at?: string
+        }
+        Update: {
+          flow_id?: string
+          id?: string
+          phone?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_dispatch_sent_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_executions: {
         Row: {
           error_message: string | null
