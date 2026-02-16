@@ -34,6 +34,7 @@ import { AutomationFlowBuilder } from "@/components/marketing/AutomationFlowBuil
 import { LeadWhatsAppDialog } from "@/components/marketing/LeadWhatsAppDialog";
 import { SectorManager } from "@/components/marketing/SectorManager";
 import { GroupsVipManager } from "@/components/marketing/GroupsVipManager";
+import { LiveSessionManager } from "@/components/LiveSessionManager";
 
 // ─── Types ──────────────────────────────────────
 
@@ -610,6 +611,7 @@ export default function Marketing() {
             <TabsTrigger value="landing_pages" className="gap-1"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
             <TabsTrigger value="leads" className="gap-1"><FileSpreadsheet className="h-3.5 w-3.5" />Leads</TabsTrigger>
             <TabsTrigger value="groups_vip" className="gap-1"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
+            <TabsTrigger value="live_commerce" className="gap-1"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
           </TabsList>
 
           {/* ── CAMPANHAS ── */}
@@ -966,6 +968,11 @@ export default function Marketing() {
           {/* ── GRUPOS VIP ── */}
           <TabsContent value="groups_vip" className="space-y-4">
             <GroupsVipManager />
+          </TabsContent>
+
+          {/* ── LIVE COMMERCE ── */}
+          <TabsContent value="live_commerce" className="space-y-4">
+            <LiveSessionManager />
           </TabsContent>
 
           {/* Lead WhatsApp Chat Dialog */}

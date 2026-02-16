@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
 import { ShoppingBag, MessageCircle, X, ChevronUp, ChevronDown, Plus, Minus, ShoppingCart, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface CartItem {
@@ -15,20 +15,64 @@ interface CartItem {
   image?: string;
 }
 
+interface ProductRef {
+  handle: string;
+  title: string;
+  image?: string;
+  price: number;
+}
+
+interface LiveSessionData {
+  youtube_video_id: string | null;
+  whatsapp_link: string | null;
+  selected_products: ProductRef[];
+  title: string;
+}
+
 const LiveCommerce = () => {
-  const [searchParams] = useSearchParams();
-  const videoId = searchParams.get("v") || "";
+  const [session, setSession] = useState<LiveSessionData | null>(null);
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
   const [drawerView, setDrawerView] = useState<"closed" | "products" | "cart">("closed");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [checkingOut, setCheckingOut] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShopifyProduct | null>(null);
-  const isLive = !!videoId;
+  const [loading, setLoading] = useState(true);
 
+  // Fetch active session from DB
   useEffect(() => {
-    fetchProducts(50).then(setProducts);
+    const load = async () => {
+      const { data } = await supabase
+        .from("live_sessions")
+        .select("*")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        const s = data as any;
+        setSession({
+          youtube_video_id: s.youtube_video_id,
+          whatsapp_link: s.whatsapp_link,
+          selected_products: s.selected_products || [],
+          title: s.title,
+        });
+
+        // Fetch full product data for selected handles
+        const handles = (s.selected_products || []).map((p: ProductRef) => p.handle);
+        if (handles.length > 0) {
+          const allProds = await fetchProducts(250);
+          const filtered = allProds.filter(p => handles.includes(p.node.handle));
+          setProducts(filtered);
+        }
+      }
+      setLoading(false);
+    };
+    load();
   }, []);
 
+  const isLive = !!session?.youtube_video_id;
+  const videoId = session?.youtube_video_id || "";
+  const whatsappLink = session?.whatsapp_link || "";
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
   const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
 
@@ -76,7 +120,6 @@ const LiveCommerce = () => {
         shopifyId: item.variantId,
         image: item.image,
       }));
-
       const checkoutUrl = await createShopifyCartFromOrder(orderProducts);
       if (checkoutUrl) {
         window.location.href = checkoutUrl;
@@ -90,7 +133,23 @@ const LiveCommerce = () => {
     }
   };
 
-  const whatsappLink = "https://wa.me/5500000000000?text=Oi!%20Vim%20da%20live!";
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <p className="text-zinc-400">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-3">
+        <ShoppingBag className="w-16 h-16 text-zinc-600" />
+        <p className="text-zinc-400 text-lg font-medium">Nenhuma live no momento</p>
+        <p className="text-zinc-500 text-sm">Volte em breve! 🎉</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
@@ -107,11 +166,8 @@ const LiveCommerce = () => {
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 gap-3">
-            <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
-              <ShoppingBag className="w-8 h-8 text-zinc-500" />
-            </div>
-            <p className="text-zinc-400 text-lg font-medium">Nenhuma live no momento</p>
-            <p className="text-zinc-500 text-sm">Volte em breve! 🎉</p>
+            <ShoppingBag className="w-8 h-8 text-zinc-500" />
+            <p className="text-zinc-400">Aguardando transmissão...</p>
           </div>
         )}
       </div>
@@ -131,17 +187,21 @@ const LiveCommerce = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <a href={whatsappLink} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors">
-            <MessageCircle className="w-4 h-4" />
-            WhatsApp
-          </a>
-          <Button size="sm" variant="outline" className="border-zinc-700 text-white hover:bg-zinc-800 gap-1.5"
-            onClick={() => setDrawerView(v => v === "products" ? "closed" : "products")}>
-            <ShoppingBag className="w-4 h-4" />
-            Produtos
-            {drawerView === "products" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-          </Button>
+          {whatsappLink && (
+            <a href={whatsappLink} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors">
+              <MessageCircle className="w-4 h-4" />
+              WhatsApp
+            </a>
+          )}
+          {products.length > 0 && (
+            <Button size="sm" variant="outline" className="border-zinc-700 text-white hover:bg-zinc-800 gap-1.5"
+              onClick={() => setDrawerView(v => v === "products" ? "closed" : "products")}>
+              <ShoppingBag className="w-4 h-4" />
+              Produtos
+              {drawerView === "products" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+            </Button>
+          )}
           <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-bold gap-1.5 relative"
             onClick={() => setDrawerView(v => v === "cart" ? "closed" : "cart")}>
             <ShoppingCart className="w-4 h-4" />
@@ -180,9 +240,6 @@ const LiveCommerce = () => {
                   </button>
                 ))}
               </div>
-              {selectedProduct.node.variants.edges.filter(v => v.node.availableForSale).length === 0 && (
-                <p className="text-zinc-500 text-sm text-center py-4">Produto esgotado</p>
-              )}
             </div>
           </div>
         </div>
@@ -195,54 +252,47 @@ const LiveCommerce = () => {
             <h2 className="text-sm font-bold">Produtos da Live</h2>
             <button onClick={() => setDrawerView("closed")} className="text-zinc-400 hover:text-white"><X className="w-4 h-4" /></button>
           </div>
-          {products.length === 0 ? (
-            <p className="text-center text-zinc-500 py-8 text-sm">Carregando produtos...</p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4">
-              {products.map((p) => {
-                const product = p.node;
-                const image = product.images.edges[0]?.node.url;
-                const price = parseFloat(product.priceRange.minVariantPrice.amount);
-                const hasVariants = product.variants.edges.length > 1;
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4">
+            {products.map((p) => {
+              const product = p.node;
+              const image = product.images.edges[0]?.node.url;
+              const price = parseFloat(product.priceRange.minVariantPrice.amount);
+              const hasVariants = product.variants.edges.length > 1;
 
-                return (
-                  <button key={product.id}
-                    className="bg-zinc-800 rounded-lg overflow-hidden hover:ring-1 hover:ring-amber-500/50 transition-all group text-left"
-                    onClick={() => {
-                      if (hasVariants) {
-                        setSelectedProduct(p);
+              return (
+                <button key={product.id}
+                  className="bg-zinc-800 rounded-lg overflow-hidden hover:ring-1 hover:ring-amber-500/50 transition-all group text-left"
+                  onClick={() => {
+                    if (hasVariants) {
+                      setSelectedProduct(p);
+                    } else {
+                      const v = product.variants.edges[0]?.node;
+                      if (v?.availableForSale) {
+                        addToCart({ id: v.id, title: v.title, price: parseFloat(v.price.amount) }, product.title, image);
                       } else {
-                        const v = product.variants.edges[0]?.node;
-                        if (v?.availableForSale) {
-                          addToCart(
-                            { id: v.id, title: v.title, price: parseFloat(v.price.amount) },
-                            product.title, image
-                          );
-                        } else {
-                          toast.error("Produto esgotado");
-                        }
+                        toast.error("Produto esgotado");
                       }
-                    }}>
-                    {image && (
-                      <div className="aspect-square overflow-hidden">
-                        <img src={image} alt={product.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                      </div>
-                    )}
-                    <div className="p-2">
-                      <p className="text-xs font-medium line-clamp-2 leading-tight">{product.title}</p>
-                      <p className="text-sm font-bold text-green-400 mt-1">
-                        R$ {price.toFixed(2).replace(".", ",")}
-                      </p>
-                      <span className="text-[10px] text-amber-400 flex items-center gap-1 mt-1">
-                        <Plus className="w-3 h-3" /> {hasVariants ? "Escolher tamanho" : "Adicionar"}
-                      </span>
+                    }
+                  }}>
+                  {image && (
+                    <div className="aspect-square overflow-hidden">
+                      <img src={image} alt={product.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                  )}
+                  <div className="p-2">
+                    <p className="text-xs font-medium line-clamp-2 leading-tight">{product.title}</p>
+                    <p className="text-sm font-bold text-green-400 mt-1">
+                      R$ {price.toFixed(2).replace(".", ",")}
+                    </p>
+                    <span className="text-[10px] text-amber-400 flex items-center gap-1 mt-1">
+                      <Plus className="w-3 h-3" /> {hasVariants ? "Escolher tamanho" : "Adicionar"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -265,9 +315,7 @@ const LiveCommerce = () => {
             <div className="p-4 space-y-3">
               {cart.map(item => (
                 <div key={item.variantId} className="flex items-center gap-3 bg-zinc-800 rounded-lg p-3">
-                  {item.image && (
-                    <img src={item.image} alt="" className="w-12 h-12 rounded object-cover flex-shrink-0" />
-                  )}
+                  {item.image && <img src={item.image} alt="" className="w-12 h-12 rounded object-cover flex-shrink-0" />}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{item.productTitle}</p>
                     {item.variantTitle && <p className="text-[10px] text-zinc-400">{item.variantTitle}</p>}
@@ -292,8 +340,6 @@ const LiveCommerce = () => {
                   </div>
                 </div>
               ))}
-
-              {/* Total & Checkout */}
               <div className="border-t border-zinc-700 pt-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-zinc-400">Total</span>
