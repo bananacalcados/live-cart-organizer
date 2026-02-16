@@ -41,7 +41,7 @@ function trackPixelEvent(event: string, data?: Record<string, any>) {
 
 const VIP_GROUP_LINK = "https://i.sendflow.pro/l/TxEwnIKQ10IXoG9rhc6X";
 
-type Step = "welcome" | "name" | "whatsapp" | "confirm" | "done";
+type Step = "welcome" | "name" | "whatsapp" | "confirm" | "done" | "already_registered";
 
 function DoneStep({ name }: { name: string }) {
   const [countdown, setCountdown] = useState(3);
@@ -144,8 +144,8 @@ export default function BananaLanding() {
         .maybeSingle();
 
       if (existingLead) {
-        toast.error("Você já está cadastrado(a) neste evento! 😉");
         setSubmitting(false);
+        setStep("already_registered");
         return;
       }
 
@@ -399,6 +399,39 @@ export default function BananaLanding() {
             {/* STEP: Done */}
             {step === "done" && (
               <DoneStep name={name} />
+            )}
+
+            {/* STEP: Already Registered */}
+            {step === "already_registered" && (
+              <div className="flex flex-col items-center text-center gap-4 flex-1 justify-center">
+                <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+                  <span className="text-3xl">😉</span>
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    Você já está cadastrado(a)!
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                    Seu cadastro já foi realizado, então você não precisa se inscrever novamente. 🎉
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                    Caso tenha saído do grupo VIP, entre novamente pelo botão abaixo:
+                  </p>
+                </div>
+                <a
+                  href={VIP_GROUP_LINK}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 rounded-xl font-bold text-white text-lg shadow-lg active:scale-95 transition-transform text-center flex items-center justify-center gap-2"
+                  style={{ background: "#25D366" }}
+                >
+                  <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.11.546 4.093 1.504 5.82L0 24l6.335-1.652A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.82c-1.89 0-3.64-.5-5.16-1.387l-.37-.22-3.84 1.007 1.024-3.742-.24-.382A9.77 9.77 0 012.18 12c0-5.422 4.398-9.82 9.82-9.82 5.422 0 9.82 4.398 9.82 9.82 0 5.422-4.398 9.82-9.82 9.82z"/>
+                  </svg>
+                  Entrar no Grupo VIP
+                </a>
+              </div>
             )}
           </div>
         </div>
