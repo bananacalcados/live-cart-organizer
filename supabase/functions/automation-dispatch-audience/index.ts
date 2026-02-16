@@ -87,7 +87,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { flowId, dryRun, offset = 0, batchSize = 400 } = await req.json();
+    const { flowId, dryRun, offset = 0, batchSize = 2000 } = await req.json();
 
     if (!flowId) {
       return new Response(JSON.stringify({ error: 'flowId is required' }), {
@@ -334,7 +334,6 @@ serve(async (req) => {
             failed++;
           }
 
-          await new Promise(r => setTimeout(r, 80));
           break;
         }
 
@@ -363,7 +362,6 @@ serve(async (req) => {
             failed++;
           }
 
-          await new Promise(r => setTimeout(r, 80));
           break;
         }
 
