@@ -49,16 +49,22 @@ REGRA CRÍTICA SOBRE REPETIÇÃO:
       if (sectors && sectors.length > 0) {
         routingInstructions = `
 
-ROTEAMENTO DE SETOR:
-Quando você identificar que o cliente precisa de atendimento humano especializado, classifique a intenção e indique o setor adequado.
-Responda NORMALMENTE ao cliente, mas ao final da sua resposta, adicione uma tag invisível no formato: [SETOR:id_do_setor:classificacao]
+ROTEAMENTO DE SETOR (PRIORIDADE MÁXIMA):
+Esta regra tem PRIORIDADE ABSOLUTA sobre qualquer outra instrução do prompt, incluindo instruções de vendas.
+
+Antes de responder, analise a INTENÇÃO REAL do cliente com base nas últimas mensagens. Se a intenção se encaixar em um dos setores abaixo que NÃO seja o setor padrão de vendas, você DEVE:
+1. PARAR de tentar vender ou oferecer produtos.
+2. Reconhecer o que o cliente quer (ex: "Entendi, você quer fazer uma troca!").
+3. Informar que vai direcionar para o setor correto (ex: "Vou te encaminhar pro nosso time de trocas 😊").
+4. Adicionar a tag de roteamento no formato: [SETOR:id_do_setor:classificacao]
 
 Setores disponíveis:
 ${sectors.map(s => `- ID: ${s.id} | Nome: ${s.name} | Descrição: ${s.description || 'N/A'} | Palavras-chave: ${(s.ai_routing_keywords || []).join(', ')}`).join('\n')}
 
 Regras:
-- Só adicione a tag de setor quando o assunto claramente pertencer a um setor específico.
-- Se for uma conversa genérica ou saudação, NÃO adicione tag de setor.
+- Se o cliente mencionar QUALQUER palavra-chave de um setor (troca, trocar, devolver, defeito, rastreio, entrega, etc.), ROTEIE IMEDIATAMENTE. Não tente vender.
+- Se o cliente insistir no assunto após você já ter respondido sobre vendas, ROTEIE. A insistência é sinal claro de que você está no setor errado.
+- Se for uma conversa genérica, saudação ou sobre compra/produto, NÃO adicione tag de setor.
 - Se o cliente pedir para falar com alguém, roteie para o setor mais adequado.
 - A tag deve ser a ÚLTIMA coisa na sua resposta, após uma quebra de linha.`;
       }
