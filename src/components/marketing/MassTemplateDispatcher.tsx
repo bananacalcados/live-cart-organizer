@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Send, Search, Users, Filter, Loader2, CheckCircle, TestTube,
   ChevronDown, ChevronUp, Phone, MapPin, Crown, FileSpreadsheet,
-  AlertTriangle, Eye, Zap, RefreshCw, Image
+  AlertTriangle, Eye, Zap, RefreshCw, Image, Paperclip
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -193,6 +193,21 @@ export function MassTemplateDispatcher() {
 
   // Header media state
   const [headerMediaUrl, setHeaderMediaUrl] = useState("");
+  const [uploadingHeaderFile, setUploadingHeaderFile] = useState(false);
+  const headerUploadRef = useRef<HTMLInputElement>(null);
+  const handleHeaderFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingHeaderFile(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `template-header-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("chat-media").upload(fileName, file);
+    if (error) { toast.error("Erro ao enviar arquivo"); setUploadingHeaderFile(false); return; }
+    const { data } = supabase.storage.from("chat-media").getPublicUrl(fileName);
+    setHeaderMediaUrl(data.publicUrl);
+    toast.success("Arquivo enviado!");
+    setUploadingHeaderFile(false);
+  };
 
   // Extract variables from template
   const templateVariables = useMemo(() => {
@@ -705,17 +720,24 @@ export function MassTemplateDispatcher() {
                 <Label className="text-xs font-medium flex items-center gap-1">
                   📎 Header ({headerComponent.format})
                 </Label>
-                <Input
-                  className="h-7 text-xs"
-                  placeholder={`URL da ${headerComponent.format === 'IMAGE' ? 'imagem' : headerComponent.format === 'VIDEO' ? 'vídeo' : 'documento'}...`}
-                  value={headerMediaUrl}
-                  onChange={e => setHeaderMediaUrl(e.target.value)}
-                />
+                <div className="flex gap-1.5">
+                  <Input
+                    className="h-7 text-xs flex-1"
+                    placeholder={`URL da ${headerComponent.format === 'IMAGE' ? 'imagem' : headerComponent.format === 'VIDEO' ? 'vídeo' : 'documento'}...`}
+                    value={headerMediaUrl}
+                    onChange={e => setHeaderMediaUrl(e.target.value)}
+                  />
+                  <input ref={headerUploadRef} type="file" className="hidden" accept={headerComponent.format === 'IMAGE' ? 'image/*' : headerComponent.format === 'VIDEO' ? 'video/*' : '*/*'} onChange={handleHeaderFileUpload} />
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] gap-1 shrink-0" onClick={() => headerUploadRef.current?.click()} disabled={uploadingHeaderFile}>
+                    {uploadingHeaderFile ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />}
+                    Upload
+                  </Button>
+                </div>
                 {headerMediaUrl && headerComponent.format === 'IMAGE' && (
                   <img src={headerMediaUrl} alt="Header preview" className="max-h-24 rounded object-cover" />
                 )}
                 <p className="text-[10px] text-muted-foreground">
-                  Cole a URL pública da mídia que será enviada no header
+                  Envie um arquivo ou cole a URL pública da mídia
                 </p>
               </div>
             )}

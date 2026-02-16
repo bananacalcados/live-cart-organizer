@@ -712,19 +712,44 @@ function StepEditorDialog({
                       const tpl = templates.find(t => t.name === config.templateName);
                       const header = tpl?.components?.find((c: any) => c.type === "HEADER");
                       if (!header || header.format === "TEXT") return null;
-                      const headerType = (header.format || "").toLowerCase(); // IMAGE, VIDEO, DOCUMENT
+                      const headerType = (header.format || "").toLowerCase();
+                      const headerFileRef = useRef<HTMLInputElement>(null);
+                      const [uploadingHeader, setUploadingHeader] = useState(false);
+                      const handleHeaderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingHeader(true);
+                        const ext = file.name.split('.').pop();
+                        const fileName = `template-header-${Date.now()}.${ext}`;
+                        const { error } = await supabase.storage.from("chat-media").upload(fileName, file);
+                        if (error) { toast.error("Erro ao enviar arquivo"); setUploadingHeader(false); return; }
+                        const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(fileName);
+                        setConfig({ ...config, headerMediaUrl: urlData.publicUrl });
+                        toast.success("Arquivo enviado!");
+                        setUploadingHeader(false);
+                      };
                       return (
                         <div className="space-y-2 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30">
                           <Label className="text-xs font-semibold flex items-center gap-1">
                             <Image className="h-3.5 w-3.5" />
                             Header ({header.format})
                           </Label>
-                          <Input
-                            value={config.headerMediaUrl || ""}
-                            onChange={e => setConfig({ ...config, headerMediaUrl: e.target.value })}
-                            placeholder={`URL da ${headerType === "image" ? "imagem" : headerType === "video" ? "vídeo" : "documento"}...`}
-                            className="h-8 text-xs"
-                          />
+                          <div className="flex gap-1.5">
+                            <Input
+                              value={config.headerMediaUrl || ""}
+                              onChange={e => setConfig({ ...config, headerMediaUrl: e.target.value })}
+                              placeholder={`URL da ${headerType === "image" ? "imagem" : headerType === "video" ? "vídeo" : "documento"}...`}
+                              className="h-8 text-xs flex-1"
+                            />
+                            <input ref={headerFileRef} type="file" className="hidden" accept={headerType === "image" ? "image/*" : headerType === "video" ? "video/*" : "*/*"} onChange={handleHeaderUpload} />
+                            <Button variant="outline" size="sm" className="h-8 px-2 text-[10px] gap-1 shrink-0" onClick={() => headerFileRef.current?.click()} disabled={uploadingHeader}>
+                              {uploadingHeader ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />}
+                              Upload
+                            </Button>
+                          </div>
+                          {config.headerMediaUrl && headerType === "image" && (
+                            <img src={config.headerMediaUrl} alt="Header preview" className="max-h-24 rounded object-cover" />
+                          )}
                         </div>
                       );
                     })()}
