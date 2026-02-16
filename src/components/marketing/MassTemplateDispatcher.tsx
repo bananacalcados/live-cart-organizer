@@ -42,10 +42,44 @@ interface MetaTemplate {
 interface Recipient {
   phone: string;
   name: string;
+  firstName: string;
+  lastName: string;
   source: 'crm' | 'lead';
   segment?: string;
   city?: string;
   state?: string;
+  email?: string;
+}
+
+// Dynamic variable options that pull from recipient data
+const DYNAMIC_VARIABLE_OPTIONS = [
+  { value: '__static__', label: '✏️ Texto fixo' },
+  { value: '__first_name__', label: '👤 Primeiro Nome' },
+  { value: '__full_name__', label: '👤 Nome Completo' },
+  { value: '__phone__', label: '📱 Telefone' },
+  { value: '__city__', label: '🏙️ Cidade' },
+  { value: '__state__', label: '📍 Estado' },
+  { value: '__segment__', label: '🏷️ Segmento RFM' },
+  { value: '__email__', label: '📧 Email' },
+];
+
+function resolveVariableForRecipient(varConfig: { mode: string; staticValue: string }, recipient: Recipient): string {
+  switch (varConfig.mode) {
+    case '__first_name__': return recipient.firstName || recipient.name.split(' ')[0] || 'Cliente';
+    case '__full_name__': return recipient.name || 'Cliente';
+    case '__phone__': return recipient.phone;
+    case '__city__': return recipient.city || '';
+    case '__state__': return recipient.state || '';
+    case '__segment__': return recipient.segment || '';
+    case '__email__': return recipient.email || '';
+    default: return varConfig.staticValue;
+  }
+}
+
+function getPreviewLabel(mode: string, staticValue: string): string {
+  const opt = DYNAMIC_VARIABLE_OPTIONS.find(o => o.value === mode);
+  if (mode === '__static__') return staticValue || '{{?}}';
+  return opt ? `[${opt.label}]` : staticValue || '{{?}}';
 }
 
 export function MassTemplateDispatcher() {
@@ -54,7 +88,7 @@ export function MassTemplateDispatcher() {
   const [templates, setTemplates] = useState<MetaTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<MetaTemplate | null>(null);
-  const [variables, setVariables] = useState<Record<string, string>>({});
+  const [variables, setVariables] = useState<Record<string, { mode: string; staticValue: string }>>({});
 
   // Audience
   const [audienceSource, setAudienceSource] = useState<'crm' | 'leads' | 'both'>('crm');
@@ -127,7 +161,7 @@ export function MassTemplateDispatcher() {
       while (keepFetching) {
         const { data, error } = await supabase
           .from('zoppy_customers')
-          .select('id, first_name, last_name, phone, city, state, ddd, rfm_segment, region_type')
+          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type')
           .not('phone', 'is', null)
           .order('total_spent', { ascending: false })
           .range(from, from + 999);
@@ -173,19 +207,25 @@ export function MassTemplateDispatcher() {
     return vars;
   }, [selectedTemplate]);
 
-  // Build rendered message text
+  // Build rendered message text (for preview, uses placeholder labels for dynamic vars)
   const renderedMessage = useMemo(() => {
     if (!selectedTemplate) return "";
     let parts: string[] = [];
     for (const comp of selectedTemplate.components) {
       if (comp.type === 'HEADER' && comp.text) {
         let text = comp.text;
-        text = text.replace(/\{\{(\d+)\}\}/g, (_, n) => variables[`header_${n}`] || `{{${n}}}`);
+        text = text.replace(/\{\{(\d+)\}\}/g, (_, n) => {
+          const vc = variables[`header_${n}`];
+          return vc ? getPreviewLabel(vc.mode, vc.staticValue) : `{{${n}}}`;
+        });
         parts.push(`*${text}*`);
       }
       if (comp.type === 'BODY' && comp.text) {
         let text = comp.text;
-        text = text.replace(/\{\{(\d+)\}\}/g, (_, n) => variables[`body_${n}`] || `{{${n}}}`);
+        text = text.replace(/\{\{(\d+)\}\}/g, (_, n) => {
+          const vc = variables[`body_${n}`];
+          return vc ? getPreviewLabel(vc.mode, vc.staticValue) : `{{${n}}}`;
+        });
         parts.push(text);
       }
       if (comp.type === 'FOOTER' && comp.text) {
@@ -220,10 +260,13 @@ export function MassTemplateDispatcher() {
         list.push({
           phone,
           name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || phone,
+          firstName: c.first_name || '',
+          lastName: c.last_name || '',
           source: 'crm',
           segment: c.rfm_segment || undefined,
           city: c.city || undefined,
           state: c.state || undefined,
+          email: c.email || undefined,
         });
       }
     }
@@ -236,9 +279,13 @@ export function MassTemplateDispatcher() {
         if (leadCampaignFilter !== 'all' && l.campaign_tag !== leadCampaignFilter) continue;
         if (addedPhones.has(phone)) continue;
         addedPhones.add(phone);
+        const leadName = l.name || phone;
+        const leadFirstName = leadName.split(' ')[0];
         list.push({
           phone,
-          name: l.name || phone,
+          name: leadName,
+          firstName: leadFirstName,
+          lastName: leadName.split(' ').slice(1).join(' '),
           source: 'lead',
         });
       }
@@ -275,26 +322,68 @@ export function MassTemplateDispatcher() {
     setSelectAll(false);
   };
 
-  // Build API components from variables
-  const buildComponents = () => {
+  // Build API components from variables for a specific recipient (or static only for test)
+  const buildComponentsForRecipient = (recipient?: Recipient) => {
     const components: any[] = [];
     const bodyVars = templateVariables.filter(v => v.component === 'BODY');
     const headerVars = templateVariables.filter(v => v.component === 'HEADER');
 
+    const resolve = (key: string) => {
+      const vc = variables[key];
+      if (!vc) return '';
+      if (vc.mode === '__static__' || !recipient) return vc.staticValue;
+      return resolveVariableForRecipient(vc, recipient);
+    };
+
     if (headerVars.length > 0) {
       components.push({
         type: 'header',
-        parameters: headerVars.map(v => ({ type: 'text', text: variables[v.key] || '' })),
+        parameters: headerVars.map(v => ({ type: 'text', text: resolve(v.key) })),
       });
     }
     if (bodyVars.length > 0) {
       components.push({
         type: 'body',
-        parameters: bodyVars.map(v => ({ type: 'text', text: variables[v.key] || '' })),
+        parameters: bodyVars.map(v => ({ type: 'text', text: resolve(v.key) })),
       });
     }
     return components;
   };
+
+  // Build rendered message for a specific recipient
+  const buildRenderedForRecipient = (recipient: Recipient) => {
+    if (!selectedTemplate) return "";
+    let parts: string[] = [];
+    for (const comp of selectedTemplate.components) {
+      if (comp.type === 'HEADER' && comp.text) {
+        let text = comp.text;
+        text = text.replace(/\{\{(\d+)\}\}/g, (_, n) => {
+          const vc = variables[`header_${n}`];
+          if (!vc) return `{{${n}}}`;
+          return vc.mode === '__static__' ? vc.staticValue : resolveVariableForRecipient(vc, recipient);
+        });
+        parts.push(`*${text}*`);
+      }
+      if (comp.type === 'BODY' && comp.text) {
+        let text = comp.text;
+        text = text.replace(/\{\{(\d+)\}\}/g, (_, n) => {
+          const vc = variables[`body_${n}`];
+          if (!vc) return `{{${n}}}`;
+          return vc.mode === '__static__' ? vc.staticValue : resolveVariableForRecipient(vc, recipient);
+        });
+        parts.push(text);
+      }
+      if (comp.type === 'FOOTER' && comp.text) {
+        parts.push(`_${comp.text}_`);
+      }
+    }
+    return parts.join('\n\n');
+  };
+
+  // Check if any variable uses dynamic mode
+  const hasDynamicVars = useMemo(() => {
+    return Object.values(variables).some(v => v.mode !== '__static__');
+  }, [variables]);
 
   // Test send
   const handleTestSend = async () => {
@@ -305,7 +394,7 @@ export function MassTemplateDispatcher() {
     }
     setIsTesting(true);
     try {
-      const components = buildComponents();
+      const components = buildComponentsForRecipient(); // static only for test
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
         method: 'POST',
         headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
@@ -340,59 +429,90 @@ export function MassTemplateDispatcher() {
     setSendProgress({ sent: 0, total: phones.length, failed: 0 });
 
     try {
-      const components = buildComponents();
-      // Queue all messages
-      const queueItems = phones.map(phone => ({
-        phone,
-        template_name: selectedTemplate.name,
-        template_language: selectedTemplate.language,
-        template_params: components.length > 0 ? components : null,
-        status: 'pending',
-        max_attempts: 3,
-      }));
+      if (hasDynamicVars) {
+        // Per-recipient send: each person gets personalized variables
+        let sent = 0, failed = 0;
+        const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
 
-      // Insert in batches
-      const allIds: string[] = [];
-      for (let i = 0; i < queueItems.length; i += 100) {
-        const batch = queueItems.slice(i, i + 100);
-        const { data, error } = await supabase
-          .from('meta_message_queue')
-          .insert(batch)
-          .select('id');
-        if (error) throw error;
-        allIds.push(...(data || []).map((d: any) => d.id));
-      }
+        for (const phone of phones) {
+          const recipient = recipientMap.get(phone);
+          const components = buildComponentsForRecipient(recipient);
+          const rendered = recipient ? buildRenderedForRecipient(recipient) : renderedMessage;
 
-      // Send in batches of 50
-      let sent = 0, failed = 0;
-      for (let i = 0; i < allIds.length; i += 50) {
-        const batchIds = allIds.slice(i, i + 50);
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
-          method: 'POST',
-          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            queueIds: batchIds,
-            whatsappNumberId: selectedNumber,
-          }),
-        });
-        const data = await res.json();
-        if (data.results) {
-          for (const r of data.results) {
-            if (r.success) sent++;
+          try {
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
+              method: 'POST',
+              headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                phone,
+                templateName: selectedTemplate.name,
+                language: selectedTemplate.language,
+                whatsappNumberId: selectedNumber,
+                components: components.length > 0 ? components : undefined,
+                renderedMessage: rendered,
+              }),
+            });
+            const data = await res.json();
+            if (data.success) sent++;
             else failed++;
-          }
+          } catch { failed++; }
+
+          setSendProgress({ sent, total: phones.length, failed });
+          // Small delay to avoid rate limiting
+          if (sent + failed < phones.length) await new Promise(r => setTimeout(r, 200));
         }
-        setSendProgress({ sent, total: phones.length, failed });
+      } else {
+        // Static vars: use bulk queue
+        const components = buildComponentsForRecipient();
+        const queueItems = phones.map(phone => ({
+          phone,
+          template_name: selectedTemplate.name,
+          template_language: selectedTemplate.language,
+          template_params: components.length > 0 ? components : null,
+          status: 'pending',
+          max_attempts: 3,
+        }));
+
+        const allIds: string[] = [];
+        for (let i = 0; i < queueItems.length; i += 100) {
+          const batch = queueItems.slice(i, i + 100);
+          const { data, error } = await supabase
+            .from('meta_message_queue')
+            .insert(batch)
+            .select('id');
+          if (error) throw error;
+          allIds.push(...(data || []).map((d: any) => d.id));
+        }
+
+        let sent = 0, failed = 0;
+        for (let i = 0; i < allIds.length; i += 50) {
+          const batchIds = allIds.slice(i, i + 50);
+          const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
+            method: 'POST',
+            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              queueIds: batchIds,
+              whatsappNumberId: selectedNumber,
+            }),
+          });
+          const data = await res.json();
+          if (data.results) {
+            for (const r of data.results) {
+              if (r.success) sent++;
+              else failed++;
+            }
+          }
+          setSendProgress({ sent, total: phones.length, failed });
+        }
       }
 
-      // Now update all sent messages to include rendered body
-      if (renderedMessage) {
+      // Update sent messages to show rendered body (for static vars only)
+      if (!hasDynamicVars && renderedMessage) {
         const phoneList = phones.map(p => {
           let fp = p.replace(/\D/g, '');
           if (!fp.startsWith('55')) fp = '55' + fp;
           return fp;
         });
-        // Update recently sent template messages to show rendered body
         await supabase
           .from('whatsapp_messages')
           .update({ message: renderedMessage })
@@ -401,7 +521,7 @@ export function MassTemplateDispatcher() {
           .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());
       }
 
-      toast.success(`Disparo concluído! ✅ ${sent} enviados, ${failed > 0 ? `❌ ${failed} falharam` : 'nenhuma falha'}`);
+      toast.success("Disparo concluído!");
     } catch (err) {
       console.error(err);
       toast.error("Erro durante o disparo em massa");
@@ -483,21 +603,53 @@ export function MassTemplateDispatcher() {
 
             {/* Variables */}
             {templateVariables.length > 0 && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <Label className="text-xs font-medium">Variáveis</Label>
-                {templateVariables.map(v => (
-                  <div key={v.key} className="space-y-1">
-                    <Label className="text-[10px] text-muted-foreground">
-                      {v.component} - {`{{${v.index}}}`}
-                    </Label>
-                    <Input
-                      className="h-8 text-xs"
-                      placeholder={`Valor para {{${v.index}}}`}
-                      value={variables[v.key] || ''}
-                      onChange={e => setVariables(prev => ({ ...prev, [v.key]: e.target.value }))}
-                    />
-                  </div>
-                ))}
+                {templateVariables.map(v => {
+                  const vc = variables[v.key] || { mode: '__static__', staticValue: '' };
+                  return (
+                    <div key={v.key} className="space-y-1.5 p-2 rounded-md border bg-muted/20">
+                      <Label className="text-[10px] text-muted-foreground">
+                        {v.component} - {`{{${v.index}}}`}
+                      </Label>
+                      <Select
+                        value={vc.mode}
+                        onValueChange={mode => setVariables(prev => ({
+                          ...prev,
+                          [v.key]: { mode, staticValue: prev[v.key]?.staticValue || '' },
+                        }))}
+                      >
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DYNAMIC_VARIABLE_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {vc.mode === '__static__' && (
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder={`Texto fixo para {{${v.index}}}`}
+                          value={vc.staticValue}
+                          onChange={e => setVariables(prev => ({
+                            ...prev,
+                            [v.key]: { ...prev[v.key], staticValue: e.target.value },
+                          }))}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+                {hasDynamicVars && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Variáveis dinâmicas: cada destinatário receberá dados personalizados
+                  </p>
+                )}
               </div>
             )}
 
