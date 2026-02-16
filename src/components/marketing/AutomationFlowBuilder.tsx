@@ -40,7 +40,7 @@ import {
   Brain, Reply, Image, Mic, Smile, Paperclip, PlayCircle,
   TestTube2, StopCircle, Volume2, GitBranch, AlertTriangle,
   ShoppingCart, Sparkles, Package, ExternalLink, LayoutGrid,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Filter, MapPin,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 
@@ -77,6 +77,7 @@ interface MetaTemplate {
 // ─── Trigger / Action config ──────────────────────
 
 const TRIGGER_TYPES = [
+  { value: "mass_audience", label: "Disparo por Audiência", icon: Users, description: "Selecione leads, clientes CRM ou segmentos RFM para disparo em massa" },
   { value: "new_lead", label: "Novo Lead", icon: Users, description: "Quando um lead se cadastra na landing page" },
   { value: "incoming_message", label: "Mensagem Recebida", icon: MessageSquare, description: "Quando um cliente manda mensagem (com proteção anti-conflito)" },
   { value: "new_order", label: "Novo Pedido", icon: ShoppingBag, description: "Quando um pedido é criado no CRM" },
@@ -127,6 +128,8 @@ const DYNAMIC_FIELD_OPTIONS = [
 function TriggerNode({ data }: { data: any }) {
   const trigger = TRIGGER_TYPES.find(t => t.value === data.triggerType);
   const Icon = trigger?.icon || Zap;
+  const isMassAudience = data.triggerType === "mass_audience";
+  const source = data.audience_source;
   return (
     <div className="bg-gradient-to-br from-violet-500 to-purple-600 text-white rounded-xl shadow-lg px-5 py-4 min-w-[220px] border-2 border-violet-400/50">
       <div className="flex items-center gap-2 mb-1">
@@ -134,7 +137,15 @@ function TriggerNode({ data }: { data: any }) {
         <span className="text-xs font-semibold uppercase tracking-wide opacity-80">Gatilho</span>
       </div>
       <p className="font-bold text-sm">{trigger?.label || data.triggerType}</p>
-      {data.campaign_id && <p className="text-[10px] opacity-70 mt-1">Campanha: {data.campaign_id}</p>}
+      {isMassAudience && source && (
+        <p className="text-[10px] opacity-80 mt-0.5">
+          {source === "rfm" ? "📊 Clientes RFM" : source === "leads" ? "📋 Leads" : source === "crm" ? "👥 CRM" : "📋+📊 Leads + RFM"}
+          {data.audience_rfm_segments?.length > 0 && ` · ${data.audience_rfm_segments.length} seg.`}
+          {data.audience_states?.length > 0 && ` · ${data.audience_states.join(",")}`}
+          {data.audience_campaigns?.length > 0 && ` · ${data.audience_campaigns.length} camp.`}
+        </p>
+      )}
+      {!isMassAudience && data.campaign_id && <p className="text-[10px] opacity-70 mt-1">Campanha: {data.campaign_id}</p>}
       <Handle type="source" position={Position.Bottom} className="!bg-white !w-3 !h-3 !border-2 !border-violet-400" />
     </div>
   );
@@ -1483,7 +1494,307 @@ function NewLeadCampaignSelector({ triggerConfig, onChange }: { triggerConfig: a
   );
 }
 
-// ─── Audience Selector (Campaign Leads + RFM) ──────────────────
+// ─── Mass Audience Config (full trigger config for mass_audience) ──────────
+
+function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; onChange: (c: any) => void }) {
+  const [campaigns, setCampaigns] = useState<{ tag: string; count: number }[]>([]);
+  const [rfmSegments, setRfmSegments] = useState<{ segment: string; count: number }[]>([]);
+  const [states, setStates] = useState<{ state: string; count: number }[]>([]);
+  const [cities, setCities] = useState<{ city: string; count: number }[]>([]);
+  const [regionTypes, setRegionTypes] = useState<{ region: string; count: number }[]>([]);
+  const [genders, setGenders] = useState<{ gender: string; count: number }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showCityFilter, setShowCityFilter] = useState(false);
+  const [citySearch, setCitySearch] = useState("");
+
+  const audienceSource: string = triggerConfig.audience_source || "rfm"; // "leads" | "rfm" | "both" | "crm"
+  const selectedCampaigns: string[] = triggerConfig.audience_campaigns || [];
+  const selectedRfmSegments: string[] = triggerConfig.audience_rfm_segments || [];
+  const selectedStates: string[] = triggerConfig.audience_states || [];
+  const selectedCities: string[] = triggerConfig.audience_cities || [];
+  const selectedRegions: string[] = triggerConfig.audience_regions || [];
+  const selectedGenders: string[] = triggerConfig.audience_genders || [];
+  const rfmSelectAll: boolean = triggerConfig.audience_rfm_all ?? false;
+
+  useEffect(() => { loadAll(); }, []);
+
+  const loadAll = async () => {
+    setLoading(true);
+    const [campaignsRes, rfmRes, statesRes, citiesRes, regionsRes, gendersRes] = await Promise.all([
+      supabase.from("lp_leads").select("campaign_tag"),
+      supabase.from("zoppy_customers").select("rfm_segment"),
+      supabase.from("zoppy_customers").select("state"),
+      supabase.from("zoppy_customers").select("city"),
+      supabase.from("zoppy_customers").select("region_type"),
+      supabase.from("zoppy_customers").select("gender"),
+    ]);
+
+    // Campaigns
+    if (campaignsRes.data) {
+      const counts: Record<string, number> = {};
+      campaignsRes.data.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
+      setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
+    }
+
+    // RFM
+    if (rfmRes.data) {
+      const counts: Record<string, number> = {};
+      rfmRes.data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
+      setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
+    }
+
+    // States
+    if (statesRes.data) {
+      const counts: Record<string, number> = {};
+      statesRes.data.forEach((d: any) => { const s = d.state?.trim(); if (s && s.length === 2 && s !== '0') counts[s] = (counts[s] || 0) + 1; });
+      setStates(Object.entries(counts).map(([state, count]) => ({ state, count })).sort((a, b) => b.count - a.count));
+    }
+
+    // Cities
+    if (citiesRes.data) {
+      const counts: Record<string, number> = {};
+      citiesRes.data.forEach((d: any) => { const c = d.city?.trim(); if (c) counts[c] = (counts[c] || 0) + 1; });
+      setCities(Object.entries(counts).map(([city, count]) => ({ city, count })).sort((a, b) => b.count - a.count));
+    }
+
+    // Regions
+    if (regionsRes.data) {
+      const counts: Record<string, number> = {};
+      regionsRes.data.forEach((d: any) => { if (d.region_type) counts[d.region_type] = (counts[d.region_type] || 0) + 1; });
+      setRegionTypes(Object.entries(counts).map(([region, count]) => ({ region, count })).sort((a, b) => b.count - a.count));
+    }
+
+    // Genders
+    if (gendersRes.data) {
+      const counts: Record<string, number> = {};
+      gendersRes.data.forEach((d: any) => { const g = d.gender?.trim(); if (g) counts[g] = (counts[g] || 0) + 1; });
+      setGenders(Object.entries(counts).map(([gender, count]) => ({ gender, count })).sort((a, b) => b.count - a.count));
+    }
+
+    setLoading(false);
+  };
+
+  const toggleArray = (key: string, value: string) => {
+    const current: string[] = triggerConfig[key] || [];
+    const idx = current.indexOf(value);
+    const updated = idx >= 0 ? current.filter(v => v !== value) : [...current, value];
+    onChange({ ...triggerConfig, [key]: updated });
+  };
+
+  const filteredCities = cities.filter(c => 
+    !citySearch || c.city.toLowerCase().includes(citySearch.toLowerCase())
+  ).slice(0, 30);
+
+  const regionLabels: Record<string, string> = { local: "🏪 Loja Física", online: "🌐 Online", unknown: "❓ Desconhecido" };
+  const genderLabels: Record<string, string> = { male: "♂️ Masculino", female: "♀️ Feminino", other: "⚧ Outro" };
+
+  if (loading) {
+    return (
+      <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground py-4 justify-center">
+          <Loader2 className="h-4 w-4 animate-spin" />Carregando dados da base...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800">
+      <Label className="text-xs font-semibold flex items-center gap-1">
+        <Users className="h-3.5 w-3.5" />
+        Fonte de Audiência
+      </Label>
+
+      <Select value={audienceSource} onValueChange={v => onChange({ ...triggerConfig, audience_source: v })}>
+        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="rfm">📊 Clientes da Matriz RFM</SelectItem>
+          <SelectItem value="leads">📋 Leads de Campanhas</SelectItem>
+          <SelectItem value="crm">👥 Clientes do CRM</SelectItem>
+          <SelectItem value="both">📋+📊 Leads + RFM</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {/* ── LEADS CONFIG ── */}
+      {(audienceSource === "leads" || audienceSource === "both") && (
+        <div className="space-y-1.5 p-2 rounded-lg bg-card border border-border">
+          <Label className="text-[11px] font-medium">📋 Leads por Campanha</Label>
+          {campaigns.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground">Nenhuma campanha encontrada</p>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {campaigns.map(c => (
+                <Badge
+                  key={c.tag}
+                  variant={selectedCampaigns.includes(c.tag) ? "default" : "outline"}
+                  className="cursor-pointer text-[10px] px-2 py-0.5"
+                  onClick={() => toggleArray("audience_campaigns", c.tag)}
+                >
+                  {c.tag} ({c.count})
+                </Badge>
+              ))}
+            </div>
+          )}
+          {selectedCampaigns.length > 0 && (
+            <p className="text-[10px] text-indigo-600 dark:text-indigo-400">{selectedCampaigns.length} campanha(s)</p>
+          )}
+        </div>
+      )}
+
+      {/* ── CRM CUSTOMERS CONFIG ── */}
+      {audienceSource === "crm" && (
+        <div className="space-y-1.5 p-2 rounded-lg bg-card border border-border">
+          <Label className="text-[11px] font-medium">👥 Clientes do CRM</Label>
+          <p className="text-[10px] text-muted-foreground">
+            Todos os clientes cadastrados na base de clientes serão incluídos. Use tags para filtrar (em breve).
+          </p>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={triggerConfig.crm_include_all ?? true}
+              onCheckedChange={v => onChange({ ...triggerConfig, crm_include_all: v })}
+            />
+            <Label className="text-[11px]">Incluir todos os clientes com WhatsApp</Label>
+          </div>
+        </div>
+      )}
+
+      {/* ── RFM CONFIG ── */}
+      {(audienceSource === "rfm" || audienceSource === "both") && (
+        <div className="space-y-2 p-2 rounded-lg bg-card border border-border">
+          <Label className="text-[11px] font-medium">📊 Segmentação da Matriz RFM</Label>
+
+          {/* All or segments */}
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={rfmSelectAll}
+              onCheckedChange={v => onChange({ ...triggerConfig, audience_rfm_all: v, audience_rfm_segments: v ? [] : selectedRfmSegments })}
+            />
+            <Label className="text-[11px]">Todos os clientes da matriz</Label>
+          </div>
+
+          {!rfmSelectAll && (
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Segmentos RFM</Label>
+              <div className="flex flex-wrap gap-1">
+                {rfmSegments.map(s => (
+                  <Badge
+                    key={s.segment}
+                    variant={selectedRfmSegments.includes(s.segment) ? "default" : "outline"}
+                    className="cursor-pointer text-[10px] px-2 py-0.5"
+                    onClick={() => toggleArray("audience_rfm_segments", s.segment)}
+                  >
+                    {s.segment} ({s.count})
+                  </Badge>
+                ))}
+              </div>
+              {selectedRfmSegments.length > 0 && (
+                <p className="text-[10px] text-indigo-600 dark:text-indigo-400">{selectedRfmSegments.length} segmento(s)</p>
+              )}
+            </div>
+          )}
+
+          {/* Region filter */}
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">Tipo de Cliente</Label>
+            <div className="flex flex-wrap gap-1">
+              {regionTypes.map(r => (
+                <Badge
+                  key={r.region}
+                  variant={selectedRegions.includes(r.region) ? "default" : "outline"}
+                  className="cursor-pointer text-[10px] px-2 py-0.5"
+                  onClick={() => toggleArray("audience_regions", r.region)}
+                >
+                  {regionLabels[r.region] || r.region} ({r.count})
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* State filter */}
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">Estado (UF)</Label>
+            <div className="flex flex-wrap gap-1 max-h-[100px] overflow-y-auto">
+              {states.map(s => (
+                <Badge
+                  key={s.state}
+                  variant={selectedStates.includes(s.state) ? "default" : "outline"}
+                  className="cursor-pointer text-[9px] px-1.5 py-0"
+                  onClick={() => toggleArray("audience_states", s.state)}
+                >
+                  {s.state} ({s.count})
+                </Badge>
+              ))}
+            </div>
+            {selectedStates.length > 0 && (
+              <p className="text-[10px] text-indigo-600 dark:text-indigo-400">{selectedStates.length} estado(s)</p>
+            )}
+          </div>
+
+          {/* City filter */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-muted-foreground">Cidade</Label>
+              <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1" onClick={() => setShowCityFilter(!showCityFilter)}>
+                {showCityFilter ? "Ocultar" : "Filtrar cidades"}
+              </Button>
+            </div>
+            {showCityFilter && (
+              <div className="space-y-1">
+                <Input
+                  value={citySearch}
+                  onChange={e => setCitySearch(e.target.value)}
+                  placeholder="Buscar cidade..."
+                  className="h-7 text-[11px]"
+                />
+                <div className="flex flex-wrap gap-1 max-h-[80px] overflow-y-auto">
+                  {filteredCities.map(c => (
+                    <Badge
+                      key={c.city}
+                      variant={selectedCities.includes(c.city) ? "default" : "outline"}
+                      className="cursor-pointer text-[9px] px-1.5 py-0"
+                      onClick={() => toggleArray("audience_cities", c.city)}
+                    >
+                      {c.city} ({c.count})
+                    </Badge>
+                  ))}
+                  {filteredCities.length === 0 && <span className="text-[10px] text-muted-foreground">Nenhuma cidade encontrada</span>}
+                </div>
+              </div>
+            )}
+            {selectedCities.length > 0 && (
+              <p className="text-[10px] text-indigo-600 dark:text-indigo-400">{selectedCities.length} cidade(s): {selectedCities.join(", ")}</p>
+            )}
+          </div>
+
+          {/* Gender filter */}
+          {genders.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Gênero</Label>
+              <div className="flex flex-wrap gap-1">
+                {genders.map(g => (
+                  <Badge
+                    key={g.gender}
+                    variant={selectedGenders.includes(g.gender) ? "default" : "outline"}
+                    className="cursor-pointer text-[10px] px-2 py-0.5"
+                    onClick={() => toggleArray("audience_genders", g.gender)}
+                  >
+                    {genderLabels[g.gender] || g.gender} ({g.count})
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="text-[10px] text-muted-foreground">
+        💡 As variáveis dinâmicas (Primeiro Nome, etc.) serão preenchidas com dados reais de cada destinatário no momento do disparo.
+      </p>
+    </div>
+  );
+}
+
+// ─── Audience Selector (legacy, for other triggers) ──────────────────
 
 function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onChange: (c: any) => void }) {
   const [campaigns, setCampaigns] = useState<{ tag: string; count: number }[]>([]);
@@ -1493,34 +1804,30 @@ function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onC
 
   const selectedCampaigns: string[] = triggerConfig.audience_campaigns || [];
   const selectedRfmSegments: string[] = triggerConfig.audience_rfm_segments || [];
-  const audienceMode: string = triggerConfig.audience_mode || "trigger"; // "trigger" | "campaigns" | "rfm" | "both"
+  const audienceMode: string = triggerConfig.audience_mode || "trigger";
 
   useEffect(() => {
-    loadCampaigns();
-    loadRfmSegments();
-  }, []);
-
-  const loadCampaigns = async () => {
     setLoadingCampaigns(true);
-    const { data } = await supabase.from("lp_leads").select("campaign_tag");
-    if (data) {
-      const counts: Record<string, number> = {};
-      data.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
-      setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
-    }
-    setLoadingCampaigns(false);
-  };
-
-  const loadRfmSegments = async () => {
     setLoadingRfm(true);
-    const { data } = await supabase.from("zoppy_customers").select("rfm_segment");
-    if (data) {
-      const counts: Record<string, number> = {};
-      data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
-      setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
-    }
-    setLoadingRfm(false);
-  };
+    Promise.all([
+      supabase.from("lp_leads").select("campaign_tag").then(({ data }) => {
+        if (data) {
+          const counts: Record<string, number> = {};
+          data.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
+          setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
+        }
+        setLoadingCampaigns(false);
+      }),
+      supabase.from("zoppy_customers").select("rfm_segment").then(({ data }) => {
+        if (data) {
+          const counts: Record<string, number> = {};
+          data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
+          setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
+        }
+        setLoadingRfm(false);
+      }),
+    ]);
+  }, []);
 
   const toggleCampaign = (tag: string) => {
     const current = [...selectedCampaigns];
@@ -1542,7 +1849,7 @@ function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onC
     <div className="space-y-3 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800">
       <Label className="text-xs font-semibold flex items-center gap-1">
         <Users className="h-3.5 w-3.5" />
-        Audiência / Destinatários
+        Audiência Adicional
       </Label>
 
       <Select value={audienceMode} onValueChange={v => onChange({ ...triggerConfig, audience_mode: v })}>
@@ -1560,26 +1867,14 @@ function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onC
           <Label className="text-[11px] text-muted-foreground">Leads por Campanha</Label>
           {loadingCampaigns ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-1"><Loader2 className="h-3 w-3 animate-spin" />Carregando...</div>
-          ) : campaigns.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground">Nenhuma campanha com leads encontrada</p>
           ) : (
             <div className="flex flex-wrap gap-1">
               {campaigns.map(c => (
-                <Badge
-                  key={c.tag}
-                  variant={selectedCampaigns.includes(c.tag) ? "default" : "outline"}
-                  className="cursor-pointer text-[10px] px-2 py-0.5"
-                  onClick={() => toggleCampaign(c.tag)}
-                >
+                <Badge key={c.tag} variant={selectedCampaigns.includes(c.tag) ? "default" : "outline"} className="cursor-pointer text-[10px] px-2 py-0.5" onClick={() => toggleCampaign(c.tag)}>
                   {c.tag} ({c.count})
                 </Badge>
               ))}
             </div>
-          )}
-          {selectedCampaigns.length > 0 && (
-            <p className="text-[10px] text-indigo-600 dark:text-indigo-400">
-              {selectedCampaigns.length} campanha(s) selecionada(s)
-            </p>
           )}
         </div>
       )}
@@ -1589,34 +1884,16 @@ function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onC
           <Label className="text-[11px] text-muted-foreground">Segmentos RFM</Label>
           {loadingRfm ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground py-1"><Loader2 className="h-3 w-3 animate-spin" />Carregando...</div>
-          ) : rfmSegments.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground">Nenhum segmento RFM encontrado</p>
           ) : (
             <div className="flex flex-wrap gap-1">
               {rfmSegments.map(s => (
-                <Badge
-                  key={s.segment}
-                  variant={selectedRfmSegments.includes(s.segment) ? "default" : "outline"}
-                  className="cursor-pointer text-[10px] px-2 py-0.5"
-                  onClick={() => toggleRfmSegment(s.segment)}
-                >
+                <Badge key={s.segment} variant={selectedRfmSegments.includes(s.segment) ? "default" : "outline"} className="cursor-pointer text-[10px] px-2 py-0.5" onClick={() => toggleRfmSegment(s.segment)}>
                   {s.segment} ({s.count})
                 </Badge>
               ))}
             </div>
           )}
-          {selectedRfmSegments.length > 0 && (
-            <p className="text-[10px] text-indigo-600 dark:text-indigo-400">
-              {selectedRfmSegments.length} segmento(s) selecionado(s)
-            </p>
-          )}
         </div>
-      )}
-
-      {audienceMode !== "trigger" && (
-        <p className="text-[10px] text-muted-foreground">
-          💡 As variáveis dinâmicas (Primeiro Nome, etc.) serão preenchidas com dados reais de cada destinatário.
-        </p>
       )}
     </div>
   );
@@ -1966,6 +2243,9 @@ function FlowEditor({
                 <p className="text-[10px] text-muted-foreground">
                   {TRIGGER_TYPES.find(t => t.value === triggerType)?.description}
                 </p>
+                {triggerType === "mass_audience" && (
+                  <MassAudienceConfig triggerConfig={triggerConfig} onChange={setTriggerConfig} />
+                )}
                 {triggerType === "new_lead" && (
                   <NewLeadCampaignSelector triggerConfig={triggerConfig} onChange={setTriggerConfig} />
                 )}
