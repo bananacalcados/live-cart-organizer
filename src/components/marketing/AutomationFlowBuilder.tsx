@@ -109,6 +109,19 @@ const CUSTOMER_VARIABLES = [
   { value: "{{cupom}}", label: "Código do Cupom" },
 ];
 
+// Dynamic field options (pulled from lead/customer data at send time)
+const DYNAMIC_FIELD_OPTIONS = [
+  { value: "__first_name__", label: "👤 Primeiro Nome", description: "Extrai o primeiro nome do lead/cliente" },
+  { value: "__full_name__", label: "👤 Nome Completo", description: "Nome completo do lead/cliente" },
+  { value: "__phone__", label: "📱 Telefone", description: "Número de telefone" },
+  { value: "__email__", label: "📧 E-mail", description: "E-mail do lead/cliente" },
+  { value: "__city__", label: "🏙️ Cidade", description: "Cidade do cliente" },
+  { value: "__state__", label: "📍 Estado", description: "Estado/UF do cliente" },
+  { value: "__rfm_segment__", label: "📊 Segmento RFM", description: "Segmento RFM (Campeão, Em Risco, etc.)" },
+  { value: "__instagram__", label: "📸 Instagram", description: "Handle do Instagram" },
+  { value: "__last_purchase__", label: "🛍️ Última Compra", description: "Data da última compra" },
+];
+
 // ─── Custom Nodes ──────────────────────────────────
 
 function TriggerNode({ data }: { data: any }) {
@@ -714,7 +727,7 @@ function StepEditorDialog({
                       const uniqueVars = [...new Set(varMatches)].sort();
                       if (uniqueVars.length === 0) return null;
                       
-                      const templateVars = config.templateVars || {};
+                       const templateVars = config.templateVars || {};
                       
                       return (
                         <div className="space-y-2 p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
@@ -723,17 +736,20 @@ function StepEditorDialog({
                             Variáveis do Body ({uniqueVars.length})
                           </Label>
                           <p className="text-[10px] text-muted-foreground">
-                            Mapeie cada variável para dados do cliente ou texto fixo.
+                            Mapeie cada variável para dados dinâmicos do lead/cliente ou texto fixo.
                           </p>
                           {uniqueVars.map((v: string) => {
                             const varNum = v.replace(/\{\{|\}\}/g, "");
                             const currentVal = templateVars[varNum] || "";
+                            const isDynamic = DYNAMIC_FIELD_OPTIONS.some(df => df.value === currentVal);
+                            const isLegacy = CUSTOMER_VARIABLES.some(cv => cv.value === currentVal);
+                            const isCustom = !isDynamic && !isLegacy;
                             return (
                               <div key={v} className="space-y-1">
                                 <Label className="text-[11px] text-muted-foreground">{v}</Label>
                                 <div className="flex gap-1.5">
                                   <Select
-                                    value={CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) ? currentVal : "_custom"}
+                                    value={isDynamic ? currentVal : isLegacy ? currentVal : "_custom"}
                                     onValueChange={val => {
                                       if (val === "_custom") {
                                         setConfig({ ...config, templateVars: { ...templateVars, [varNum]: "" } });
@@ -744,16 +760,26 @@ function StepEditorDialog({
                                   >
                                     <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                     <SelectContent>
-                                      {CUSTOMER_VARIABLES.map(cv => (
-                                        <SelectItem key={cv.value} value={cv.value}>
-                                          <span className="text-xs">{cv.label}</span>
+                                      <SelectItem value="_custom">✏️ Texto fixo</SelectItem>
+                                      {DYNAMIC_FIELD_OPTIONS.map(df => (
+                                        <SelectItem key={df.value} value={df.value}>
+                                          <span className="text-xs">{df.label}</span>
                                         </SelectItem>
                                       ))}
-                                      <SelectItem value="_custom">✏️ Texto fixo</SelectItem>
+                                      {CUSTOMER_VARIABLES.map(cv => (
+                                        <SelectItem key={cv.value} value={cv.value}>
+                                          <span className="text-xs">📋 {cv.label}</span>
+                                        </SelectItem>
+                                      ))}
                                     </SelectContent>
                                   </Select>
                                 </div>
-                                {!CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) && (
+                                {isDynamic && (
+                                  <p className="text-[10px] text-blue-600 dark:text-blue-400">
+                                    🔄 {DYNAMIC_FIELD_OPTIONS.find(df => df.value === currentVal)?.description}
+                                  </p>
+                                )}
+                                {isCustom && (
                                   <Input
                                     value={currentVal}
                                     onChange={e => setConfig({ ...config, templateVars: { ...templateVars, [varNum]: e.target.value } })}
@@ -857,7 +883,7 @@ function StepEditorDialog({
                                               <Label className="text-[10px] text-muted-foreground">{v}</Label>
                                               <div className="flex gap-1">
                                                 <Select
-                                                  value={CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) ? currentVal : "_custom"}
+                                                  value={DYNAMIC_FIELD_OPTIONS.some(df => df.value === currentVal) ? currentVal : CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) ? currentVal : "_custom"}
                                                   onValueChange={val => {
                                                     const newVars = { ...cardVars, [varNum]: val === "_custom" ? "" : val };
                                                     setConfig({
@@ -868,16 +894,26 @@ function StepEditorDialog({
                                                 >
                                                   <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue placeholder="..." /></SelectTrigger>
                                                   <SelectContent>
-                                                    {CUSTOMER_VARIABLES.map(cv => (
-                                                      <SelectItem key={cv.value} value={cv.value}>
-                                                        <span className="text-[11px]">{cv.label}</span>
+                                                    <SelectItem value="_custom">✏️ Fixo</SelectItem>
+                                                    {DYNAMIC_FIELD_OPTIONS.map(df => (
+                                                      <SelectItem key={df.value} value={df.value}>
+                                                        <span className="text-[11px]">{df.label}</span>
                                                       </SelectItem>
                                                     ))}
-                                                    <SelectItem value="_custom">✏️ Fixo</SelectItem>
+                                                    {CUSTOMER_VARIABLES.map(cv => (
+                                                      <SelectItem key={cv.value} value={cv.value}>
+                                                        <span className="text-[11px]">📋 {cv.label}</span>
+                                                      </SelectItem>
+                                                    ))}
                                                   </SelectContent>
                                                 </Select>
                                               </div>
-                                              {!CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) && (
+                                              {DYNAMIC_FIELD_OPTIONS.some(df => df.value === currentVal) && (
+                                                <p className="text-[9px] text-blue-600 dark:text-blue-400">
+                                                  🔄 {DYNAMIC_FIELD_OPTIONS.find(df => df.value === currentVal)?.description}
+                                                </p>
+                                              )}
+                                              {!DYNAMIC_FIELD_OPTIONS.some(df => df.value === currentVal) && !CUSTOMER_VARIABLES.some(cv => cv.value === currentVal) && (
                                                 <Input
                                                   value={currentVal}
                                                   onChange={e => {
@@ -1447,6 +1483,145 @@ function NewLeadCampaignSelector({ triggerConfig, onChange }: { triggerConfig: a
   );
 }
 
+// ─── Audience Selector (Campaign Leads + RFM) ──────────────────
+
+function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onChange: (c: any) => void }) {
+  const [campaigns, setCampaigns] = useState<{ tag: string; count: number }[]>([]);
+  const [rfmSegments, setRfmSegments] = useState<{ segment: string; count: number }[]>([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [loadingRfm, setLoadingRfm] = useState(false);
+
+  const selectedCampaigns: string[] = triggerConfig.audience_campaigns || [];
+  const selectedRfmSegments: string[] = triggerConfig.audience_rfm_segments || [];
+  const audienceMode: string = triggerConfig.audience_mode || "trigger"; // "trigger" | "campaigns" | "rfm" | "both"
+
+  useEffect(() => {
+    loadCampaigns();
+    loadRfmSegments();
+  }, []);
+
+  const loadCampaigns = async () => {
+    setLoadingCampaigns(true);
+    const { data } = await supabase.from("lp_leads").select("campaign_tag");
+    if (data) {
+      const counts: Record<string, number> = {};
+      data.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
+      setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
+    }
+    setLoadingCampaigns(false);
+  };
+
+  const loadRfmSegments = async () => {
+    setLoadingRfm(true);
+    const { data } = await supabase.from("zoppy_customers").select("rfm_segment");
+    if (data) {
+      const counts: Record<string, number> = {};
+      data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
+      setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
+    }
+    setLoadingRfm(false);
+  };
+
+  const toggleCampaign = (tag: string) => {
+    const current = [...selectedCampaigns];
+    const idx = current.indexOf(tag);
+    if (idx >= 0) current.splice(idx, 1);
+    else current.push(tag);
+    onChange({ ...triggerConfig, audience_campaigns: current });
+  };
+
+  const toggleRfmSegment = (seg: string) => {
+    const current = [...selectedRfmSegments];
+    const idx = current.indexOf(seg);
+    if (idx >= 0) current.splice(idx, 1);
+    else current.push(seg);
+    onChange({ ...triggerConfig, audience_rfm_segments: current });
+  };
+
+  return (
+    <div className="space-y-3 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800">
+      <Label className="text-xs font-semibold flex items-center gap-1">
+        <Users className="h-3.5 w-3.5" />
+        Audiência / Destinatários
+      </Label>
+
+      <Select value={audienceMode} onValueChange={v => onChange({ ...triggerConfig, audience_mode: v })}>
+        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="trigger">🎯 Apenas por gatilho (padrão)</SelectItem>
+          <SelectItem value="campaigns">📋 Leads de Campanhas</SelectItem>
+          <SelectItem value="rfm">📊 Clientes RFM</SelectItem>
+          <SelectItem value="both">📋+📊 Leads + RFM</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {(audienceMode === "campaigns" || audienceMode === "both") && (
+        <div className="space-y-1.5">
+          <Label className="text-[11px] text-muted-foreground">Leads por Campanha</Label>
+          {loadingCampaigns ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-1"><Loader2 className="h-3 w-3 animate-spin" />Carregando...</div>
+          ) : campaigns.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground">Nenhuma campanha com leads encontrada</p>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {campaigns.map(c => (
+                <Badge
+                  key={c.tag}
+                  variant={selectedCampaigns.includes(c.tag) ? "default" : "outline"}
+                  className="cursor-pointer text-[10px] px-2 py-0.5"
+                  onClick={() => toggleCampaign(c.tag)}
+                >
+                  {c.tag} ({c.count})
+                </Badge>
+              ))}
+            </div>
+          )}
+          {selectedCampaigns.length > 0 && (
+            <p className="text-[10px] text-indigo-600 dark:text-indigo-400">
+              {selectedCampaigns.length} campanha(s) selecionada(s)
+            </p>
+          )}
+        </div>
+      )}
+
+      {(audienceMode === "rfm" || audienceMode === "both") && (
+        <div className="space-y-1.5">
+          <Label className="text-[11px] text-muted-foreground">Segmentos RFM</Label>
+          {loadingRfm ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-1"><Loader2 className="h-3 w-3 animate-spin" />Carregando...</div>
+          ) : rfmSegments.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground">Nenhum segmento RFM encontrado</p>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {rfmSegments.map(s => (
+                <Badge
+                  key={s.segment}
+                  variant={selectedRfmSegments.includes(s.segment) ? "default" : "outline"}
+                  className="cursor-pointer text-[10px] px-2 py-0.5"
+                  onClick={() => toggleRfmSegment(s.segment)}
+                >
+                  {s.segment} ({s.count})
+                </Badge>
+              ))}
+            </div>
+          )}
+          {selectedRfmSegments.length > 0 && (
+            <p className="text-[10px] text-indigo-600 dark:text-indigo-400">
+              {selectedRfmSegments.length} segmento(s) selecionado(s)
+            </p>
+          )}
+        </div>
+      )}
+
+      {audienceMode !== "trigger" && (
+        <p className="text-[10px] text-muted-foreground">
+          💡 As variáveis dinâmicas (Primeiro Nome, etc.) serão preenchidas com dados reais de cada destinatário.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Instance Selector for Automations ──────────────────
 
 function AutomationInstanceSelector({ triggerConfig, onChange }: { triggerConfig: any; onChange: (c: any) => void }) {
@@ -1845,6 +2020,11 @@ function FlowEditor({
                 {/* Instance selector for all triggers */}
                 <div className="mt-3">
                   <AutomationInstanceSelector triggerConfig={triggerConfig} onChange={setTriggerConfig} />
+                </div>
+
+                {/* Audience selector */}
+                <div className="mt-3">
+                  <AudienceSelector triggerConfig={triggerConfig} onChange={setTriggerConfig} />
                 </div>
               </div>
 
