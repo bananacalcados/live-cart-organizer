@@ -33,6 +33,7 @@ import { CampaignCardExpanded } from "@/components/marketing/CampaignCardExpande
 import { AutomationFlowBuilder } from "@/components/marketing/AutomationFlowBuilder";
 import { LeadWhatsAppDialog } from "@/components/marketing/LeadWhatsAppDialog";
 import { SectorManager } from "@/components/marketing/SectorManager";
+import { GroupsVipManager } from "@/components/marketing/GroupsVipManager";
 
 // ─── Types ──────────────────────────────────────
 
@@ -608,6 +609,7 @@ export default function Marketing() {
             <TabsTrigger value="sectors" className="gap-1"><Store className="h-3.5 w-3.5" />Setores</TabsTrigger>
             <TabsTrigger value="landing_pages" className="gap-1"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
             <TabsTrigger value="leads" className="gap-1"><FileSpreadsheet className="h-3.5 w-3.5" />Leads</TabsTrigger>
+            <TabsTrigger value="groups_vip" className="gap-1"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
           </TabsList>
 
           {/* ── CAMPANHAS ── */}
@@ -959,6 +961,11 @@ export default function Marketing() {
                 </>
               );
             })()}
+          </TabsContent>
+
+          {/* ── GRUPOS VIP ── */}
+          <TabsContent value="groups_vip" className="space-y-4">
+            <GroupsVipManager />
           </TabsContent>
 
           {/* Lead WhatsApp Chat Dialog */}

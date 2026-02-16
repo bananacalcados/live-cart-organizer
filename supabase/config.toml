@@ -161,3 +161,21 @@ verify_jwt = false
 
 [functions.automation-trigger-incoming]
 verify_jwt = false
+
+[functions.zapi-list-groups]
+verify_jwt = false
+
+[functions.zapi-send-group-message]
+verify_jwt = false
+
+[functions.zapi-group-settings]
+verify_jwt = false
+
+[functions.zapi-group-campaign-execute]
+verify_jwt = false
+
+[functions.meta-messenger-webhook]
+verify_jwt = false
+
+[functions.meta-messenger-send]
+verify_jwt = false
