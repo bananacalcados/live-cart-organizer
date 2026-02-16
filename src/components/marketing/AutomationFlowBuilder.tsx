@@ -2065,6 +2065,7 @@ function FlowEditor({
   const [dispatching, setDispatching] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<any | null>(null);
   const [audienceCount, setAudienceCount] = useState<number | null>(null);
+  const [alreadySentCount, setAlreadySentCount] = useState<number>(0);
   const [loadingAudienceCount, setLoadingAudienceCount] = useState(false);
 
   useEffect(() => { fetchSteps(); }, [flow.id]);
@@ -2323,11 +2324,10 @@ function FlowEditor({
   const openDispatchDialog = async () => {
     setDispatchResult(null);
     setAudienceCount(null);
+    setAlreadySentCount(0);
     setDispatchDialogOpen(true);
-    // Save flow first to ensure config is up to date
     const configWithPositions = { ...triggerConfig, node_positions: nodePositionsRef.current };
     await supabase.from("automation_flows").update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive }).eq("id", flow.id);
-    // Fetch audience count (dry run)
     setLoadingAudienceCount(true);
     try {
       const res = await supabase.functions.invoke("automation-dispatch-audience", {
@@ -2335,6 +2335,9 @@ function FlowEditor({
       });
       if (res.data?.audienceCount !== undefined) {
         setAudienceCount(res.data.audienceCount);
+      }
+      if (res.data?.alreadySent !== undefined) {
+        setAlreadySentCount(res.data.alreadySent);
       }
     } catch { /* silent */ }
     setLoadingAudienceCount(false);
@@ -2716,6 +2719,14 @@ function FlowEditor({
                   </Badge>
                 )}
               </div>
+              {alreadySentCount > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Já enviados anteriormente</span>
+                  <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                    {alreadySentCount.toLocaleString("pt-BR")} pulados
+                  </Badge>
+                </div>
+              )}
             </div>
 
             {/* Step summary */}
