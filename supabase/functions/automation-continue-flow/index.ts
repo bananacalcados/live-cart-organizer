@@ -132,6 +132,31 @@ serve(async (req) => {
           flow_id: flowId, step_id: step.id, status: 'success',
           result: { phone, action: 'send_template', template: templateName, continued: true },
         });
+
+        // If template has buttonBranches, create pending reply and stop
+        if (config.quickReplyButtons?.length > 0 && config.buttonBranches) {
+          const textBranches: Record<string, string> = {};
+          const qrButtons = config.quickReplyButtons as string[];
+          const branches = config.buttonBranches as Record<string, string>;
+          for (const [handleId, targetStepId] of Object.entries(branches)) {
+            if (handleId === 'btn-timeout') {
+              textBranches['__timeout__'] = targetStepId;
+            } else {
+              const idx = parseInt(handleId.replace('btn-', ''));
+              if (qrButtons[idx]) {
+                textBranches[qrButtons[idx].toLowerCase()] = targetStepId;
+              }
+            }
+          }
+          await supabase.from('automation_pending_replies').insert({
+            phone, flow_id: flowId, pending_step_index: i,
+            step_id: step.id, button_branches: textBranches,
+            whatsapp_number_id: sendNumberId || null,
+            recipient_data: recipientData || {},
+          });
+          console.log(`[continue-flow] Created pending reply for button branches at step ${i}`);
+          break;
+        }
       }
 
       if (step.action_type === 'send_text') {

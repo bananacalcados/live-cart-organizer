@@ -252,30 +252,46 @@ serve(async (req) => {
                     .maybeSingle();
 
                   if (pendingReply) {
-                    console.log(`Found pending reply for ${phone}, button: "${buttonText}"`);
+                    console.log(`Found pending reply for ${phone}, button: "${buttonText}", branches:`, JSON.stringify(pendingReply.button_branches));
                     // Mark as consumed
                     await supabase.from('automation_pending_replies').update({ is_active: false }).eq('id', pendingReply.id);
 
                     // Determine which branch to follow
-                    const branches = (pendingReply.button_branches || {}) as Record<string, number>;
-                    let nextStepIndex = pendingReply.pending_step_index + 1; // default: continue to next step
+                    const branches = (pendingReply.button_branches || {}) as Record<string, string>;
+                    let targetStepId: string | null = null;
                     
-                    // Check if button text matches any branch
-                    for (const [branchLabel, branchStepIdx] of Object.entries(branches)) {
+                    // Check if button text matches any branch (text→stepId format)
+                    for (const [branchLabel, branchTarget] of Object.entries(branches)) {
                       if (branchLabel.toLowerCase() === buttonText) {
-                        nextStepIndex = branchStepIdx;
+                        targetStepId = branchTarget;
                         break;
                       }
                     }
 
-                    // Continue flow execution from the next step
+                    // Resolve target: find step index by step ID, or default to next step
+                    const { data: flowSteps } = await supabase
+                      .from('automation_steps')
+                      .select('id, step_order')
+                      .eq('flow_id', pendingReply.flow_id)
+                      .order('step_order');
+
+                    let startFromStep = pendingReply.pending_step_index + 1; // default
+                    if (targetStepId && flowSteps) {
+                      const targetIdx = flowSteps.findIndex(s => s.id === targetStepId);
+                      if (targetIdx >= 0) {
+                        startFromStep = targetIdx;
+                        console.log(`Branch resolved: "${buttonText}" → step ${targetIdx} (${targetStepId})`);
+                      }
+                    }
+
+                    // Continue flow execution from the resolved step
                     fetch(`${supabaseUrl}/functions/v1/automation-continue-flow`, {
                       method: 'POST',
                       headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         flowId: pendingReply.flow_id,
                         phone,
-                        startFromStep: nextStepIndex,
+                        startFromStep,
                         recipientData: pendingReply.recipient_data,
                         whatsappNumberId: pendingReply.whatsapp_number_id,
                       }),
