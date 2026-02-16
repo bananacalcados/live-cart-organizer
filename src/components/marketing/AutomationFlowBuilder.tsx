@@ -2343,20 +2343,52 @@ function FlowEditor({
   const runDispatch = async () => {
     setDispatching(true);
     setDispatchResult(null);
+    let totalSent = 0;
+    let totalFailed = 0;
+    let totalSkipped = 0;
+    let currentOffset = 0;
+    let totalAudience = audienceCount || 0;
+    const BATCH_SIZE = 400;
+
     try {
-      const res = await supabase.functions.invoke("automation-dispatch-audience", {
-        body: { flowId: flow.id },
-      });
-      if (res.error) throw new Error(res.error.message);
-      setDispatchResult(res.data);
-      if (res.data?.sent > 0) {
-        toast.success(`Disparo concluído! ${res.data.sent} mensagen(s) enviada(s)`);
-      } else {
-        toast.error("Nenhuma mensagem enviada");
+      let done = false;
+      while (!done) {
+        const res = await supabase.functions.invoke("automation-dispatch-audience", {
+          body: { flowId: flow.id, offset: currentOffset, batchSize: BATCH_SIZE },
+        });
+        if (res.error) throw new Error(res.error.message);
+        const d = res.data;
+        if (!d?.success) throw new Error(d?.error || "Erro no disparo");
+
+        totalSent += d.sent || 0;
+        totalFailed += d.failed || 0;
+        totalSkipped += d.skipped || 0;
+        totalAudience = d.totalAudience || totalAudience;
+        done = d.done;
+        currentOffset = d.nextOffset ?? totalAudience;
+
+        // Update progress live
+        setDispatchResult({
+          sent: totalSent,
+          failed: totalFailed,
+          skipped: totalSkipped,
+          totalAudience,
+          done,
+          processing: !done,
+        });
       }
+
+      toast.success(`Disparo concluído! ${totalSent} mensagen(s) enviada(s)`);
     } catch (err: any) {
       toast.error(err.message || "Erro ao disparar");
-      setDispatchResult({ error: err.message });
+      setDispatchResult({
+        sent: totalSent,
+        failed: totalFailed,
+        skipped: totalSkipped,
+        totalAudience,
+        error: err.message,
+        done: false,
+      });
     } finally {
       setDispatching(false);
     }
@@ -2706,45 +2738,60 @@ function FlowEditor({
 
           {/* Dispatch Result */}
           {dispatchResult && !dispatchResult.error && (
-            <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 space-y-1">
-              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">✅ Disparo concluído!</p>
+            <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 space-y-2">
+              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                {dispatchResult.done ? "✅ Disparo concluído!" : "⏳ Disparando em lotes..."}
+              </p>
+              {/* Progress bar */}
+              {dispatchResult.totalAudience > 0 && (
+                <div className="space-y-1">
+                  <div className="w-full bg-emerald-100 dark:bg-emerald-900 rounded-full h-2">
+                    <div
+                      className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(100, ((dispatchResult.sent + dispatchResult.failed + dispatchResult.skipped) / dispatchResult.totalAudience) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground text-right">
+                    {(dispatchResult.sent + dispatchResult.failed + dispatchResult.skipped).toLocaleString("pt-BR")} / {dispatchResult.totalAudience.toLocaleString("pt-BR")}
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
-                  <p className="text-lg font-bold text-emerald-600">{dispatchResult.sent}</p>
+                  <p className="text-lg font-bold text-emerald-600">{dispatchResult.sent.toLocaleString("pt-BR")}</p>
                   <p className="text-[10px] text-muted-foreground">Enviadas</p>
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-red-500">{dispatchResult.failed}</p>
+                  <p className="text-lg font-bold text-red-500">{dispatchResult.failed.toLocaleString("pt-BR")}</p>
                   <p className="text-[10px] text-muted-foreground">Falhas</p>
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-muted-foreground">{dispatchResult.skipped}</p>
+                  <p className="text-lg font-bold text-muted-foreground">{dispatchResult.skipped.toLocaleString("pt-BR")}</p>
                   <p className="text-[10px] text-muted-foreground">Puladas</p>
                 </div>
               </div>
-              {dispatchResult.timedOut && (
-                <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  Tempo limite atingido. {dispatchResult.audienceSize - dispatchResult.sent - dispatchResult.failed - dispatchResult.skipped} restantes não foram processados.
+            </div>
+          )}
+          {dispatchResult?.error && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 space-y-1">
+              <p className="text-xs text-red-700 dark:text-red-300">❌ {dispatchResult.error}</p>
+              {dispatchResult.sent > 0 && (
+                <p className="text-[10px] text-muted-foreground">
+                  Progresso antes do erro: {dispatchResult.sent.toLocaleString("pt-BR")} enviadas, {dispatchResult.failed.toLocaleString("pt-BR")} falhas
                 </p>
               )}
             </div>
           )}
-          {dispatchResult?.error && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
-              <p className="text-xs text-red-700 dark:text-red-300">❌ {dispatchResult.error}</p>
-            </div>
-          )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDispatchDialogOpen(false)}>Fechar</Button>
+            <Button variant="outline" onClick={() => { if (!dispatching) setDispatchDialogOpen(false); }} disabled={dispatching}>Fechar</Button>
             <Button
               onClick={runDispatch}
-              disabled={dispatching || audienceCount === 0 || loadingAudienceCount}
+              disabled={dispatching || audienceCount === 0 || loadingAudienceCount || (dispatchResult?.done === true)}
               className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
             >
               {dispatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-              {dispatching ? "Disparando..." : `Confirmar Disparo${audienceCount ? ` (${audienceCount.toLocaleString("pt-BR")})` : ""}`}
+              {dispatching ? "Disparando..." : dispatchResult?.done ? "Concluído" : `Confirmar Disparo${audienceCount ? ` (${audienceCount.toLocaleString("pt-BR")})` : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>
