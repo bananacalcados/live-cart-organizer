@@ -55,8 +55,17 @@ serve(async (req) => {
     const results: Array<{ step: number; type: string; status: string; detail?: string }> = [];
 
     // Replace customer variables with test data
+    const firstName = testName ? testName.split(' ')[0] : 'Teste';
     function replaceVars(text: string): string {
       return text
+        // Dynamic field markers (used by audience dispatch)
+        .replace(/__first_name__/g, firstName)
+        .replace(/__full_name__/g, testName || 'Teste')
+        .replace(/__phone__/g, formattedPhone)
+        .replace(/__email__/g, 'teste@teste.com')
+        .replace(/__city__/g, 'São Paulo')
+        .replace(/__state__/g, 'SP')
+        // Legacy {{var}} markers
         .replace(/\{\{nome\}\}/g, testName || 'Teste')
         .replace(/\{\{telefone\}\}/g, phone)
         .replace(/\{\{email\}\}/g, 'teste@teste.com')
