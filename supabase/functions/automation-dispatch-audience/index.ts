@@ -191,12 +191,9 @@ serve(async (req) => {
     let failed = 0;
     let skipped = 0;
 
-    for (const recipient of batch) {
-      if (Date.now() - startTime > MAX_RUNTIME_MS) {
-        console.log(`[dispatch] Time limit hit at offset ${offset + sent + failed + skipped}`);
-        break;
-      }
+    const CONCURRENCY = 50;
 
+    async function processRecipient(recipient: typeof batch[0]): Promise<void> {
       const firstName = recipient.name.split(' ')[0];
 
       function replaceVars(text: string): string {
@@ -297,7 +294,6 @@ serve(async (req) => {
 
             if (sendRes.ok) {
               sent++;
-              // Record sent phone to avoid future duplicates
               await supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' });
               if (config.quickReplyButtons && (config.quickReplyButtons as string[]).length > 0 && config.buttonBranches) {
                 const textBranches: Record<string, string> = {};
@@ -368,6 +364,17 @@ serve(async (req) => {
         if (step.action_type === 'add_tag') continue;
         break;
       }
+    }
+
+    // Process batch with concurrency pool
+    for (let i = 0; i < batch.length; i += CONCURRENCY) {
+      if (Date.now() - startTime > MAX_RUNTIME_MS) {
+        console.log(`[dispatch] Time limit hit at chunk starting ${offset + i}`);
+        break;
+      }
+      const chunk = batch.slice(i, i + CONCURRENCY);
+      await Promise.all(chunk.map(r => processRecipient(r)));
+      console.log(`[dispatch] Chunk done: ${i + chunk.length}/${batch.length}, sent=${sent}, failed=${failed}`);
     }
 
     const processed = sent + failed + skipped;
