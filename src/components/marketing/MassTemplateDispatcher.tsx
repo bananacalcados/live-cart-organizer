@@ -298,6 +298,7 @@ export function MassTemplateDispatcher() {
 
   // Test send
   const handleTestSend = async () => {
+    if (!selectedNumber) { toast.error("Selecione um número de WhatsApp primeiro"); return; }
     if (!selectedTemplate || !testPhone.trim()) {
       toast.error("Selecione um template e insira um número para teste");
       return;
@@ -327,7 +328,7 @@ export function MassTemplateDispatcher() {
   // Mass send
   const handleMassSend = async () => {
     setConfirmOpen(false);
-    if (!selectedTemplate) return;
+    if (!selectedTemplate || !selectedNumber) return;
 
     const phones = [...selectedPhones];
     if (phones.length === 0) {
@@ -424,18 +425,17 @@ export function MassTemplateDispatcher() {
             Selecione um template, configure variáveis e dispare para sua audiência
           </p>
         </div>
-        {numbers.length > 1 && (
-          <Select value={selectedNumber} onValueChange={setSelectedNumber}>
-            <SelectTrigger className="w-[200px] h-8 text-xs">
-              <SelectValue placeholder="Selecionar número" />
-            </SelectTrigger>
-            <SelectContent>
-              {numbers.map(num => (
-                <SelectItem key={num.id} value={num.id}>{num.label} - {num.phone_display}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <Select value={selectedNumber} onValueChange={setSelectedNumber}>
+          <SelectTrigger className="w-[260px] h-9 text-xs">
+            <Phone className="h-3.5 w-3.5 mr-1" />
+            <SelectValue placeholder="Selecionar número de WhatsApp" />
+          </SelectTrigger>
+          <SelectContent>
+            {numbers.map(num => (
+              <SelectItem key={num.id} value={num.id}>{num.label} - {num.phone_display}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
