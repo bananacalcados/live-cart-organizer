@@ -2061,6 +2061,11 @@ function FlowEditor({
   const [testName, setTestName] = useState("Teste");
   const [testing, setTesting] = useState(false);
   const [testResults, setTestResults] = useState<any[] | null>(null);
+  const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
+  const [dispatching, setDispatching] = useState(false);
+  const [dispatchResult, setDispatchResult] = useState<any | null>(null);
+  const [audienceCount, setAudienceCount] = useState<number | null>(null);
+  const [loadingAudienceCount, setLoadingAudienceCount] = useState(false);
 
   useEffect(() => { fetchSteps(); }, [flow.id]);
 
@@ -2315,6 +2320,48 @@ function FlowEditor({
     }
   };
 
+  const openDispatchDialog = async () => {
+    setDispatchResult(null);
+    setAudienceCount(null);
+    setDispatchDialogOpen(true);
+    // Save flow first to ensure config is up to date
+    const configWithPositions = { ...triggerConfig, node_positions: nodePositionsRef.current };
+    await supabase.from("automation_flows").update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive }).eq("id", flow.id);
+    // Fetch audience count (dry run)
+    setLoadingAudienceCount(true);
+    try {
+      const res = await supabase.functions.invoke("automation-dispatch-audience", {
+        body: { flowId: flow.id, dryRun: true },
+      });
+      if (res.data?.audienceCount !== undefined) {
+        setAudienceCount(res.data.audienceCount);
+      }
+    } catch { /* silent */ }
+    setLoadingAudienceCount(false);
+  };
+
+  const runDispatch = async () => {
+    setDispatching(true);
+    setDispatchResult(null);
+    try {
+      const res = await supabase.functions.invoke("automation-dispatch-audience", {
+        body: { flowId: flow.id },
+      });
+      if (res.error) throw new Error(res.error.message);
+      setDispatchResult(res.data);
+      if (res.data?.sent > 0) {
+        toast.success(`Disparo concluído! ${res.data.sent} mensagen(s) enviada(s)`);
+      } else {
+        toast.error("Nenhuma mensagem enviada");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao disparar");
+      setDispatchResult({ error: err.message });
+    } finally {
+      setDispatching(false);
+    }
+  };
+
   const saveFlow = async () => {
     setSaving(true);
     const configWithPositions = { ...triggerConfig, node_positions: nodePositionsRef.current };
@@ -2338,8 +2385,13 @@ function FlowEditor({
         <Input value={flowName} onChange={e => setFlowName(e.target.value)} className="max-w-[250px] h-8 font-semibold" />
         <div className="flex items-center gap-2 ml-auto">
           <Button variant="outline" size="sm" onClick={() => { setTestDialogOpen(true); setTestResults(null); }} disabled={steps.length === 0} className="gap-1">
-            <PlayCircle className="h-3.5 w-3.5" />Testar Fluxo
+            <PlayCircle className="h-3.5 w-3.5" />Testar
           </Button>
+          {triggerType === "mass_audience" && (
+            <Button variant="default" size="sm" onClick={openDispatchDialog} disabled={steps.length === 0 || dispatching} className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Send className="h-3.5 w-3.5" />Disparar Audiência
+            </Button>
+          )}
           <span className="text-xs text-muted-foreground">{isActive ? "Ativa" : "Inativa"}</span>
           <Switch checked={isActive} onCheckedChange={setIsActive} />
           <Button size="sm" onClick={saveFlow} disabled={saving} className="gap-1">
@@ -2590,6 +2642,109 @@ function FlowEditor({
             <Button onClick={runTestFlow} disabled={testing || !testPhone.trim()} className="gap-1">
               {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
               {testing ? "Enviando..." : "Disparar Teste"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dispatch Audience Dialog */}
+      <Dialog open={dispatchDialogOpen} onOpenChange={setDispatchDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-emerald-500" />
+              Disparar para Audiência
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+            <p className="text-xs text-red-700 dark:text-red-300">
+              <AlertTriangle className="h-3.5 w-3.5 inline mr-1" />
+              Esta ação enviará mensagens para <strong>todos os destinatários</strong> da audiência configurada. Essa operação <strong>não pode ser desfeita</strong>.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg bg-muted border border-border space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Fluxo</span>
+                <span className="text-xs font-semibold">{flowName}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Etapas</span>
+                <span className="text-xs font-semibold">{steps.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Audiência estimada</span>
+                {loadingAudienceCount ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                ) : (
+                  <Badge className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+                    {audienceCount !== null ? `${audienceCount.toLocaleString("pt-BR")} destinatário(s)` : "—"}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Step summary */}
+            <div className="p-2 bg-muted rounded-lg space-y-1">
+              <p className="text-[10px] font-medium">Primeira ação do fluxo:</p>
+              {steps.slice(0, 3).map((s, i) => {
+                const a = ACTION_TYPES.find(a => a.value === s.action_type);
+                const Icon = a?.icon || Send;
+                return (
+                  <div key={s.id} className="flex items-center gap-2 text-[10px]">
+                    <span className="text-muted-foreground w-4">{i + 1}.</span>
+                    <Icon className={`h-3 w-3 ${a?.color || "text-primary"}`} />
+                    <span>{a?.label}</span>
+                  </div>
+                );
+              })}
+              {steps.length > 3 && <p className="text-[9px] text-muted-foreground">+{steps.length - 3} etapa(s) adicionais</p>}
+            </div>
+          </div>
+
+          {/* Dispatch Result */}
+          {dispatchResult && !dispatchResult.error && (
+            <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 space-y-1">
+              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">✅ Disparo concluído!</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-lg font-bold text-emerald-600">{dispatchResult.sent}</p>
+                  <p className="text-[10px] text-muted-foreground">Enviadas</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-red-500">{dispatchResult.failed}</p>
+                  <p className="text-[10px] text-muted-foreground">Falhas</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-muted-foreground">{dispatchResult.skipped}</p>
+                  <p className="text-[10px] text-muted-foreground">Puladas</p>
+                </div>
+              </div>
+              {dispatchResult.timedOut && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Tempo limite atingido. {dispatchResult.audienceSize - dispatchResult.sent - dispatchResult.failed - dispatchResult.skipped} restantes não foram processados.
+                </p>
+              )}
+            </div>
+          )}
+          {dispatchResult?.error && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+              <p className="text-xs text-red-700 dark:text-red-300">❌ {dispatchResult.error}</p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDispatchDialogOpen(false)}>Fechar</Button>
+            <Button
+              onClick={runDispatch}
+              disabled={dispatching || audienceCount === 0 || loadingAudienceCount}
+              className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {dispatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              {dispatching ? "Disparando..." : `Confirmar Disparo${audienceCount ? ` (${audienceCount.toLocaleString("pt-BR")})` : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>
