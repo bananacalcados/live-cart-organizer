@@ -2063,10 +2063,12 @@ function FlowEditor({
   const [testResults, setTestResults] = useState<any[] | null>(null);
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
   const [dispatching, setDispatching] = useState(false);
+  const [dispatchPaused, setDispatchPaused] = useState(false);
   const [dispatchResult, setDispatchResult] = useState<any | null>(null);
   const [audienceCount, setAudienceCount] = useState<number | null>(null);
   const [alreadySentCount, setAlreadySentCount] = useState<number>(0);
   const [loadingAudienceCount, setLoadingAudienceCount] = useState(false);
+  const pauseRef = useRef(false);
 
   useEffect(() => { fetchSteps(); }, [flow.id]);
 
@@ -2345,40 +2347,70 @@ function FlowEditor({
 
   const runDispatch = async () => {
     setDispatching(true);
+    setDispatchPaused(false);
+    pauseRef.current = false;
     setDispatchResult(null);
     let totalSent = 0;
     let totalFailed = 0;
     let totalSkipped = 0;
     let currentOffset = 0;
     let totalAudience = audienceCount || 0;
-    const BATCH_SIZE = 400;
+    const BATCH_SIZE = 2000;
+    const MAX_RETRIES = 3;
 
     try {
       let done = false;
       while (!done) {
-        const res = await supabase.functions.invoke("automation-dispatch-audience", {
-          body: { flowId: flow.id, offset: currentOffset, batchSize: BATCH_SIZE },
-        });
-        if (res.error) throw new Error(res.error.message);
-        const d = res.data;
-        if (!d?.success) throw new Error(d?.error || "Erro no disparo");
+        // Check pause
+        if (pauseRef.current) {
+          setDispatchResult(prev => ({ ...prev, paused: true, processing: false }));
+          toast.info(`Disparo pausado. ${totalSent} enviadas até agora.`);
+          setDispatching(false);
+          return;
+        }
 
-        totalSent += d.sent || 0;
-        totalFailed += d.failed || 0;
-        totalSkipped += d.skipped || 0;
-        totalAudience = d.totalAudience || totalAudience;
-        done = d.done;
-        currentOffset = d.nextOffset ?? totalAudience;
+        let retries = 0;
+        let batchSuccess = false;
+        while (retries < MAX_RETRIES && !batchSuccess) {
+          try {
+            const res = await supabase.functions.invoke("automation-dispatch-audience", {
+              body: { flowId: flow.id, offset: currentOffset, batchSize: BATCH_SIZE },
+            });
+            if (res.error) throw new Error(res.error.message);
+            const d = res.data;
+            if (!d?.success) throw new Error(d?.error || "Erro no disparo");
 
-        // Update progress live
-        setDispatchResult({
-          sent: totalSent,
-          failed: totalFailed,
-          skipped: totalSkipped,
-          totalAudience,
-          done,
-          processing: !done,
-        });
+            totalSent += d.sent || 0;
+            totalFailed += d.failed || 0;
+            totalSkipped += d.skipped || 0;
+            totalAudience = d.totalAudience || totalAudience;
+            done = d.done;
+            currentOffset = d.nextOffset ?? totalAudience;
+            batchSuccess = true;
+
+            setDispatchResult({
+              sent: totalSent,
+              failed: totalFailed,
+              skipped: totalSkipped,
+              totalAudience,
+              done,
+              processing: !done,
+              paused: false,
+            });
+          } catch (batchErr: any) {
+            retries++;
+            console.warn(`[dispatch] Batch retry ${retries}/${MAX_RETRIES}:`, batchErr.message);
+            if (retries >= MAX_RETRIES) {
+              // Even on error, don't stop — skip this offset and move forward
+              console.error(`[dispatch] Max retries hit, advancing offset from ${currentOffset}`);
+              currentOffset += BATCH_SIZE;
+              if (currentOffset >= totalAudience) done = true;
+              batchSuccess = true; // break inner loop
+            } else {
+              await new Promise(r => setTimeout(r, 2000)); // wait 2s before retry
+            }
+          }
+        }
       }
 
       toast.success(`Disparo concluído! ${totalSent} mensagen(s) enviada(s)`);
@@ -2394,7 +2426,13 @@ function FlowEditor({
       });
     } finally {
       setDispatching(false);
+      setDispatchPaused(false);
     }
+  };
+
+  const handlePauseDispatch = () => {
+    pauseRef.current = true;
+    setDispatchPaused(true);
   };
 
   const saveFlow = async () => {
@@ -2751,7 +2789,7 @@ function FlowEditor({
           {dispatchResult && !dispatchResult.error && (
             <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 space-y-2">
               <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                {dispatchResult.done ? "✅ Disparo concluído!" : "⏳ Disparando em lotes..."}
+                {dispatchResult.done ? "✅ Disparo concluído!" : dispatchResult.paused ? "⏸️ Disparo pausado" : "⏳ Disparando em lotes..."}
               </p>
               {/* Progress bar */}
               {dispatchResult.totalAudience > 0 && (
@@ -2794,15 +2832,31 @@ function FlowEditor({
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex gap-2">
             <Button variant="outline" onClick={() => { if (!dispatching) setDispatchDialogOpen(false); }} disabled={dispatching}>Fechar</Button>
+            {dispatching && !dispatchPaused && (
+              <Button
+                onClick={handlePauseDispatch}
+                variant="destructive"
+                className="gap-1"
+              >
+                <StopCircle className="h-3.5 w-3.5" />
+                Pausar
+              </Button>
+            )}
             <Button
               onClick={runDispatch}
               disabled={dispatching || audienceCount === 0 || loadingAudienceCount || (dispatchResult?.done === true)}
               className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
             >
               {dispatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-              {dispatching ? "Disparando..." : dispatchResult?.done ? "Concluído" : `Confirmar Disparo${audienceCount ? ` (${audienceCount.toLocaleString("pt-BR")})` : ""}`}
+              {dispatching
+                ? "Disparando..."
+                : dispatchResult?.done
+                  ? "Concluído"
+                  : dispatchResult?.paused
+                    ? "Retomar Disparo"
+                    : `Confirmar Disparo${audienceCount ? ` (${audienceCount.toLocaleString("pt-BR")})` : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>
