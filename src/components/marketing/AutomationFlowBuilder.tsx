@@ -1588,6 +1588,22 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
   const regionLabels: Record<string, string> = { local: "🏪 Loja Física", online: "🌐 Online", unknown: "❓ Desconhecido" };
   const genderLabels: Record<string, string> = { male: "♂️ Masculino", female: "♀️ Feminino", other: "⚧ Outro" };
 
+  // Compute estimated audience count
+  const estimatedLeadsCount = useMemo(() => {
+    if (audienceSource !== "leads" && audienceSource !== "both") return 0;
+    if (selectedCampaigns.length === 0) return campaigns.reduce((sum, c) => sum + c.count, 0);
+    return campaigns.filter(c => selectedCampaigns.includes(c.tag)).reduce((sum, c) => sum + c.count, 0);
+  }, [audienceSource, selectedCampaigns, campaigns]);
+
+  const estimatedRfmCount = useMemo(() => {
+    if (audienceSource !== "rfm" && audienceSource !== "both") return 0;
+    if (rfmSelectAll) return rfmSegments.reduce((sum, s) => sum + s.count, 0);
+    if (selectedRfmSegments.length === 0) return 0;
+    return rfmSegments.filter(s => selectedRfmSegments.includes(s.segment)).reduce((sum, s) => sum + s.count, 0);
+  }, [audienceSource, rfmSelectAll, selectedRfmSegments, rfmSegments]);
+
+  const totalEstimated = estimatedLeadsCount + estimatedRfmCount;
+
   if (loading) {
     return (
       <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800">
@@ -1600,10 +1616,17 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
 
   return (
     <div className="space-y-3 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800">
-      <Label className="text-xs font-semibold flex items-center gap-1">
-        <Users className="h-3.5 w-3.5" />
-        Fonte de Audiência
-      </Label>
+      <div className="flex items-center justify-between">
+        <Label className="text-xs font-semibold flex items-center gap-1">
+          <Users className="h-3.5 w-3.5" />
+          Fonte de Audiência
+        </Label>
+        {totalEstimated > 0 && (
+          <Badge className="text-[10px] px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+            ~{totalEstimated.toLocaleString("pt-BR")} destinatário(s)
+          </Badge>
+        )}
+      </div>
 
       <Select value={audienceSource} onValueChange={v => onChange({ ...triggerConfig, audience_source: v })}>
         <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -1618,7 +1641,14 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
       {/* ── LEADS CONFIG ── */}
       {(audienceSource === "leads" || audienceSource === "both") && (
         <div className="space-y-1.5 p-2 rounded-lg bg-card border border-border">
-          <Label className="text-[11px] font-medium">📋 Leads por Campanha</Label>
+          <div className="flex items-center justify-between">
+            <Label className="text-[11px] font-medium">📋 Leads por Campanha</Label>
+            {estimatedLeadsCount > 0 && (
+              <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
+                {estimatedLeadsCount.toLocaleString("pt-BR")} lead(s)
+              </Badge>
+            )}
+          </div>
           {campaigns.length === 0 ? (
             <p className="text-[10px] text-muted-foreground">Nenhuma campanha encontrada</p>
           ) : (
@@ -1636,7 +1666,9 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
             </div>
           )}
           {selectedCampaigns.length > 0 && (
-            <p className="text-[10px] text-indigo-600 dark:text-indigo-400">{selectedCampaigns.length} campanha(s)</p>
+            <p className="text-[10px] text-indigo-600 dark:text-indigo-400">
+              {selectedCampaigns.length} campanha(s) · <strong>{estimatedLeadsCount.toLocaleString("pt-BR")} lead(s)</strong>
+            </p>
           )}
         </div>
       )}
@@ -1661,7 +1693,14 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
       {/* ── RFM CONFIG ── */}
       {(audienceSource === "rfm" || audienceSource === "both") && (
         <div className="space-y-2 p-2 rounded-lg bg-card border border-border">
-          <Label className="text-[11px] font-medium">📊 Segmentação da Matriz RFM</Label>
+          <div className="flex items-center justify-between">
+            <Label className="text-[11px] font-medium">📊 Segmentação da Matriz RFM</Label>
+            {estimatedRfmCount > 0 && (
+              <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
+                {estimatedRfmCount.toLocaleString("pt-BR")} cliente(s)
+              </Badge>
+            )}
+          </div>
 
           {/* All or segments */}
           <div className="flex items-center gap-2">
