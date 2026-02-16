@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Send, Search, Users, Filter, Loader2, CheckCircle, TestTube,
   ChevronDown, ChevronUp, Phone, MapPin, Crown, FileSpreadsheet,
-  AlertTriangle, Eye, Zap, RefreshCw
+  AlertTriangle, Eye, Zap, RefreshCw, Image
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -191,6 +191,9 @@ export function MassTemplateDispatcher() {
     finally { setIsLoadingAudience(false); }
   };
 
+  // Header media state
+  const [headerMediaUrl, setHeaderMediaUrl] = useState("");
+
   // Extract variables from template
   const templateVariables = useMemo(() => {
     if (!selectedTemplate) return [];
@@ -207,12 +210,27 @@ export function MassTemplateDispatcher() {
     return vars;
   }, [selectedTemplate]);
 
+  // Extract header info
+  const headerComponent = useMemo(() => {
+    if (!selectedTemplate) return null;
+    return selectedTemplate.components.find(c => c.type === 'HEADER') || null;
+  }, [selectedTemplate]);
+
+  // Extract buttons
+  const templateButtons = useMemo(() => {
+    if (!selectedTemplate) return [];
+    const btnComp = selectedTemplate.components.find(c => c.type === 'BUTTONS');
+    return btnComp?.buttons || [];
+  }, [selectedTemplate]);
+
   // Build rendered message text (for preview, uses placeholder labels for dynamic vars)
   const renderedMessage = useMemo(() => {
     if (!selectedTemplate) return "";
     let parts: string[] = [];
     for (const comp of selectedTemplate.components) {
-      if (comp.type === 'HEADER' && comp.text) {
+      if (comp.type === 'HEADER' && comp.format && comp.format !== 'TEXT') {
+        parts.push(`[📎 ${comp.format}]`);
+      } else if (comp.type === 'HEADER' && comp.text) {
         let text = comp.text;
         text = text.replace(/\{\{(\d+)\}\}/g, (_, n) => {
           const vc = variables[`header_${n}`];
@@ -232,8 +250,12 @@ export function MassTemplateDispatcher() {
         parts.push(`_${comp.text}_`);
       }
     }
+    // Add buttons to preview
+    if (templateButtons.length > 0) {
+      parts.push(templateButtons.map((b: any) => `[ ${b.type === 'QUICK_REPLY' ? '↩️' : b.type === 'URL' ? '🔗' : '📞'} ${b.text} ]`).join('\n'));
+    }
     return parts.join('\n\n');
-  }, [selectedTemplate, variables]);
+  }, [selectedTemplate, variables, templateButtons]);
 
   // Filtered recipients
   const filteredRecipients = useMemo((): Recipient[] => {
@@ -335,18 +357,41 @@ export function MassTemplateDispatcher() {
       return resolveVariableForRecipient(vc, recipient);
     };
 
-    if (headerVars.length > 0) {
+    // Header: media (IMAGE/VIDEO/DOCUMENT) or text variables
+    if (headerComponent && headerComponent.format && headerComponent.format !== 'TEXT' && headerMediaUrl) {
+      const mediaType = headerComponent.format.toLowerCase(); // image, video, document
+      components.push({
+        type: 'header',
+        parameters: [{ type: mediaType, [mediaType]: { link: headerMediaUrl } }],
+      });
+    } else if (headerVars.length > 0) {
       components.push({
         type: 'header',
         parameters: headerVars.map(v => ({ type: 'text', text: resolve(v.key) })),
       });
     }
+
     if (bodyVars.length > 0) {
       components.push({
         type: 'body',
         parameters: bodyVars.map(v => ({ type: 'text', text: resolve(v.key) })),
       });
     }
+
+    // URL buttons with dynamic suffixes
+    const urlButtons = templateButtons.filter((b: any) => b.type === 'URL' && b.url?.includes('{{'));
+    urlButtons.forEach((btn: any, idx: number) => {
+      const suffix = variables[`button_url_${idx}`]?.staticValue || '';
+      if (suffix) {
+        components.push({
+          type: 'button',
+          sub_type: 'url',
+          index: idx.toString(),
+          parameters: [{ type: 'text', text: suffix }],
+        });
+      }
+    });
+
     return components;
   };
 
@@ -582,6 +627,7 @@ export function MassTemplateDispatcher() {
                     const t = templates.find(t => t.name === name);
                     setSelectedTemplate(t || null);
                     setVariables({});
+                    setHeaderMediaUrl("");
                   }}
                 >
                   <SelectTrigger className="text-xs">
@@ -653,12 +699,73 @@ export function MassTemplateDispatcher() {
               </div>
             )}
 
+            {/* Header Media (IMAGE/VIDEO/DOCUMENT) */}
+            {headerComponent && headerComponent.format && headerComponent.format !== 'TEXT' && (
+              <div className="space-y-2 p-2 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20">
+                <Label className="text-xs font-medium flex items-center gap-1">
+                  📎 Header ({headerComponent.format})
+                </Label>
+                <Input
+                  className="h-7 text-xs"
+                  placeholder={`URL da ${headerComponent.format === 'IMAGE' ? 'imagem' : headerComponent.format === 'VIDEO' ? 'vídeo' : 'documento'}...`}
+                  value={headerMediaUrl}
+                  onChange={e => setHeaderMediaUrl(e.target.value)}
+                />
+                {headerMediaUrl && headerComponent.format === 'IMAGE' && (
+                  <img src={headerMediaUrl} alt="Header preview" className="max-h-24 rounded object-cover" />
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  Cole a URL pública da mídia que será enviada no header
+                </p>
+              </div>
+            )}
+
+            {/* URL Button variables */}
+            {templateButtons.filter((b: any) => b.type === 'URL' && b.url?.includes('{{')).length > 0 && (
+              <div className="space-y-2 p-2 rounded-md border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
+                <Label className="text-xs font-medium flex items-center gap-1">
+                  🔗 Botões URL com variável
+                </Label>
+                {templateButtons.filter((b: any) => b.type === 'URL' && b.url?.includes('{{')).map((btn: any, idx: number) => (
+                  <div key={idx} className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">{btn.text} — {btn.url}</Label>
+                    <Input
+                      className="h-7 text-xs"
+                      placeholder="Sufixo da URL dinâmica..."
+                      value={variables[`button_url_${idx}`]?.staticValue || ''}
+                      onChange={e => setVariables(prev => ({
+                        ...prev,
+                        [`button_url_${idx}`]: { mode: '__static__', staticValue: e.target.value },
+                      }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Buttons preview */}
+            {templateButtons.length > 0 && (
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Botões do template:</Label>
+                <div className="flex flex-wrap gap-1">
+                  {templateButtons.map((b: any, i: number) => (
+                    <Badge key={i} variant="outline" className="text-[9px]">
+                      {b.type === 'QUICK_REPLY' ? '↩️' : b.type === 'URL' ? '🔗' : '📞'} {b.text}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Preview */}
             {selectedTemplate && (
               <div className="space-y-2">
                 <Label className="text-xs font-medium flex items-center gap-1">
                   <Eye className="h-3 w-3" />Preview
                 </Label>
+                {headerMediaUrl && headerComponent?.format === 'IMAGE' && (
+                  <img src={headerMediaUrl} alt="Header" className="rounded-lg max-h-32 w-full object-cover" />
+                )}
                 <div className="bg-[#dcf8c6] dark:bg-[#005c4b] rounded-lg p-3 text-sm whitespace-pre-wrap">
                   {renderedMessage || "Selecione um template"}
                 </div>

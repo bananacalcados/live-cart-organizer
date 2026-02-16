@@ -135,6 +135,9 @@ function ActionNode({ data }: { data: any }) {
   const isDelay = data.actionType === "delay";
   const isTag = data.actionType === "add_tag";
   const isCrossSell = data.actionType === "ai_crosssell";
+  const isTemplate = data.actionType === "send_template";
+  const quickReplyButtons: string[] = data.quickReplyButtons || [];
+  const hasButtonBranches = isTemplate && quickReplyButtons.length > 0;
 
   let borderClass = "border-border";
   let bgClass = "bg-card";
@@ -163,13 +166,16 @@ function ActionNode({ data }: { data: any }) {
           {action?.label || data.actionType}
         </span>
       </div>
-      {data.actionType === "send_template" && data.templateName && (
+      {isTemplate && data.templateName && (
         <p className="text-xs text-foreground mt-1 truncate max-w-[180px]">📋 {data.templateName}</p>
       )}
-      {data.actionType === "send_template" && data.carouselCards && Object.keys(data.carouselCards).length > 0 && (
+      {isTemplate && data.headerMediaUrl && (
+        <p className="text-[10px] text-muted-foreground flex items-center gap-0.5">📎 Header com mídia</p>
+      )}
+      {isTemplate && data.carouselCards && Object.keys(data.carouselCards).length > 0 && (
         <p className="text-[10px] text-muted-foreground flex items-center gap-0.5"><LayoutGrid className="h-2.5 w-2.5" />Carrossel: {Object.keys(data.carouselCards).length} cards</p>
       )}
-      {data.actionType === "send_template" && data.templateVars && Object.keys(data.templateVars).length > 0 && (
+      {isTemplate && data.templateVars && Object.keys(data.templateVars).length > 0 && (
         <p className="text-[10px] text-muted-foreground">📝 {Object.keys(data.templateVars).length} variáveis</p>
       )}
       {data.actionType === "send_text" && data.message && (
@@ -202,7 +208,38 @@ function ActionNode({ data }: { data: any }) {
         </div>
       )}
       {isTag && data.tags && <div className="flex flex-wrap gap-1 mt-1">{data.tags.map((t: string) => <Badge key={t} variant="secondary" className="text-[9px] px-1 py-0">{t}</Badge>)}</div>}
-      <Handle type="source" position={Position.Bottom} className="!bg-primary !w-3 !h-3 !border-2 !border-primary/50" />
+      
+      {/* Button branches: show each quick reply as a labeled output handle */}
+      {hasButtonBranches ? (
+        <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+          <p className="text-[10px] text-muted-foreground flex items-center gap-1"><GitBranch className="h-2.5 w-2.5" />Caminhos por botão:</p>
+          {quickReplyButtons.map((btnText, i) => (
+            <div key={i} className="relative flex items-center gap-1">
+              <Badge variant="outline" className="text-[9px]">↩️ {btnText}</Badge>
+              <Handle
+                type="source"
+                position={Position.Bottom}
+                id={`btn-${i}`}
+                className="!bg-blue-500 !w-2.5 !h-2.5 !border-2 !border-blue-300"
+                style={{ left: `${((i + 1) / (quickReplyButtons.length + 1)) * 100}%` }}
+              />
+            </div>
+          ))}
+          {/* Default/fallback handle for "no button click" */}
+          <div className="relative flex items-center gap-1">
+            <Badge variant="secondary" className="text-[9px]">⏳ Sem resposta</Badge>
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id="btn-timeout"
+              className="!bg-orange-500 !w-2.5 !h-2.5 !border-2 !border-orange-300"
+              style={{ left: `${(quickReplyButtons.length + 1) / (quickReplyButtons.length + 2) * 100}%` }}
+            />
+          </div>
+        </div>
+      ) : (
+        <Handle type="source" position={Position.Bottom} className="!bg-primary !w-3 !h-3 !border-2 !border-primary/50" />
+      )}
     </div>
   );
 }
@@ -931,6 +968,51 @@ function StepEditorDialog({
                         </div>
                       );
                     })()}
+
+                    {/* QUICK_REPLY button branching */}
+                    {(() => {
+                      const tpl = templates.find(t => t.name === config.templateName);
+                      const buttons = tpl?.components?.find((c: any) => c.type === "BUTTONS");
+                      if (!buttons?.buttons?.length) return null;
+                      const quickReplies = buttons.buttons.filter((b: any) => b.type === "QUICK_REPLY");
+                      if (quickReplies.length === 0) return null;
+
+                      // Auto-save quick reply button texts to config
+                      const currentQr = config.quickReplyButtons || [];
+                      const qrTexts = quickReplies.map((b: any) => b.text);
+                      if (JSON.stringify(currentQr) !== JSON.stringify(qrTexts)) {
+                        setTimeout(() => setConfig({ ...config, quickReplyButtons: qrTexts }), 0);
+                      }
+
+                      return (
+                        <div className="space-y-2 p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+                          <Label className="text-xs font-semibold flex items-center gap-1">
+                            <GitBranch className="h-3.5 w-3.5" />
+                            Botões Quick Reply — Bifurcação
+                          </Label>
+                          <p className="text-[10px] text-muted-foreground">
+                            Este template tem {quickReplies.length} botão(ões) de resposta rápida. 
+                            Você pode configurar caminhos diferentes no fluxo para cada botão clicado. 
+                            Conecte as setas no canvas para definir os caminhos.
+                          </p>
+                          <div className="space-y-1">
+                            {quickReplies.map((btn: any, i: number) => (
+                              <div key={i} className="flex items-center gap-2 p-2 bg-card rounded border border-border">
+                                <Badge variant="outline" className="text-[9px]">↩️ {btn.text}</Badge>
+                                <span className="text-[10px] text-muted-foreground flex-1">→ Saída {i + 1}</span>
+                              </div>
+                            ))}
+                            <div className="flex items-center gap-2 p-2 bg-card rounded border border-orange-200 dark:border-orange-800">
+                              <Badge variant="secondary" className="text-[9px]">⏳ Sem resposta</Badge>
+                              <span className="text-[10px] text-muted-foreground flex-1">→ Timeout</span>
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-blue-600 dark:text-blue-400">
+                            💡 Após salvar, arraste as setas de cada botão para a ação desejada no canvas.
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
                 <Button variant="outline" size="sm" onClick={() => fetchTemplates()} className="gap-1" disabled={!config.whatsappNumberId}>
@@ -1478,6 +1560,7 @@ function FlowEditor({
           delayUnit: cfg.delayUnit || "minutes",
           templateName: cfg.templateName,
           templateVars: cfg.templateVars,
+          headerMediaUrl: cfg.headerMediaUrl,
           message: cfg.message,
           mediaUrl: cfg.mediaUrl,
           tags: cfg.tags,
@@ -1487,18 +1570,59 @@ function FlowEditor({
           carouselCards: cfg.carouselCards,
           hasDeadline: cfg.hasDeadline,
           deadline: cfg.deadline,
+          quickReplyButtons: cfg.quickReplyButtons || [],
+          buttonBranches: cfg.buttonBranches || {},
           onDelete: () => deleteStep(step.id),
         },
         draggable: true,
       });
-      edges.push({
-        id: `e-${idx}`,
-        source: idx === 0 ? "trigger" : `step-${steps[idx - 1].id}`,
-        target: nodeId,
-        animated: true,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
-      });
+
+      // Build edges: if previous step has button branches, connect via sourceHandle
+      const prevStep = idx > 0 ? steps[idx - 1] : null;
+      const prevNodeId = idx === 0 ? "trigger" : `step-${prevStep!.id}`;
+      const prevCfg = prevStep ? (prevStep.action_config || {}) as any : null;
+      const prevHasButtons = prevCfg && prevCfg.quickReplyButtons && prevCfg.quickReplyButtons.length > 0;
+
+      if (prevHasButtons) {
+        // Check if this step is connected via a specific button branch
+        const prevBranches = prevCfg.buttonBranches || {};
+        let connectedViaButton = false;
+        for (const [handleId, targetStepId] of Object.entries(prevBranches)) {
+          if (targetStepId === step.id) {
+            edges.push({
+              id: `e-${idx}-${handleId}`,
+              source: prevNodeId,
+              sourceHandle: handleId,
+              target: nodeId,
+              animated: true,
+              markerEnd: { type: MarkerType.ArrowClosed },
+              label: handleId.startsWith('btn-timeout') ? '⏳ Sem resposta' : `↩️ ${prevCfg.quickReplyButtons[parseInt(handleId.replace('btn-', ''))] || '?'}`,
+              style: { stroke: handleId.startsWith('btn-timeout') ? "hsl(30, 90%, 50%)" : "hsl(217, 91%, 60%)", strokeWidth: 2 },
+            });
+            connectedViaButton = true;
+          }
+        }
+        // If not connected via any button, use default edge
+        if (!connectedViaButton) {
+          edges.push({
+            id: `e-${idx}`,
+            source: prevNodeId,
+            target: nodeId,
+            animated: true,
+            markerEnd: { type: MarkerType.ArrowClosed },
+            style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
+          });
+        }
+      } else {
+        edges.push({
+          id: `e-${idx}`,
+          source: prevNodeId,
+          target: nodeId,
+          animated: true,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
+        });
+      }
     });
     return { nodes, edges };
   }, [steps, triggerType, triggerConfig]);
@@ -1528,9 +1652,32 @@ function FlowEditor({
     }, 0);
   }, [onNodesChange, setNodes]);
 
-  const onConnect = useCallback((conn: Connection) => {
-    setEdges(eds => addEdge({ ...conn, animated: true, markerEnd: { type: MarkerType.ArrowClosed } }, eds));
-  }, []);
+  const onConnect = useCallback(async (conn: Connection) => {
+    // If connection comes from a button handle (btn-0, btn-1, btn-timeout), save to step config
+    if (conn.sourceHandle && conn.sourceHandle.startsWith('btn-') && conn.source) {
+      const sourceStepId = conn.source.replace('step-', '');
+      const targetStepId = conn.target?.replace('step-', '');
+      const sourceStep = steps.find(s => s.id === sourceStepId);
+      if (sourceStep && targetStepId) {
+        const cfg = (sourceStep.action_config || {}) as any;
+        const buttonBranches = { ...(cfg.buttonBranches || {}), [conn.sourceHandle]: targetStepId };
+        await supabase
+          .from("automation_steps")
+          .update({ action_config: { ...cfg, buttonBranches } })
+          .eq("id", sourceStepId);
+        fetchSteps();
+      }
+    }
+    setEdges(eds => addEdge({
+      ...conn,
+      animated: true,
+      markerEnd: { type: MarkerType.ArrowClosed },
+      label: conn.sourceHandle?.startsWith('btn-') ? (conn.sourceHandle === 'btn-timeout' ? '⏳' : `↩️`) : undefined,
+      style: conn.sourceHandle?.startsWith('btn-')
+        ? { stroke: conn.sourceHandle === 'btn-timeout' ? "hsl(30, 90%, 50%)" : "hsl(217, 91%, 60%)", strokeWidth: 2 }
+        : undefined,
+    }, eds));
+  }, [steps]);
 
   const handleNodeClick = useCallback((_: any, node: Node) => {
     if (node.type === "action") {
