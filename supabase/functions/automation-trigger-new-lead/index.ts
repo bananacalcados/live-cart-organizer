@@ -94,8 +94,17 @@ serve(async (req) => {
       }
 
       // Replace variables
+      const firstName = name ? name.split(' ')[0] : 'Cliente';
       function replaceVars(text: string): string {
         return text
+          // Dynamic field markers
+          .replace(/__first_name__/g, firstName)
+          .replace(/__full_name__/g, name || 'Cliente')
+          .replace(/__phone__/g, phone || '')
+          .replace(/__email__/g, '')
+          .replace(/__city__/g, '')
+          .replace(/__state__/g, '')
+          // Legacy {{var}} markers
           .replace(/\{\{nome\}\}/g, name || 'Cliente')
           .replace(/\{\{telefone\}\}/g, phone || '')
           .replace(/\{\{email\}\}/g, '')
