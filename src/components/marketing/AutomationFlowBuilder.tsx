@@ -2071,8 +2071,11 @@ function FlowEditor({
     setLoading(false);
   };
 
-  // Track saved positions so user-dragged positions persist
-  const nodePositionsRef = useRef<Record<string, { x: number; y: number }>>({});
+  // Track saved positions so user-dragged positions persist across rebuilds AND page refreshes
+  const nodePositionsRef = useRef<Record<string, { x: number; y: number }>>(
+    (flow.trigger_config as any)?.node_positions || {}
+  );
+  const positionSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const buildNodesAndEdges = useCallback(() => {
     const nodes: Node[] = [
@@ -2183,7 +2186,7 @@ function FlowEditor({
   // Save positions when nodes are dragged
   const handleNodesChange = useCallback((changes: any) => {
     onNodesChange(changes);
-    // After changes, save current positions
+    // After changes, save current positions in ref and debounce-persist to DB
     setTimeout(() => {
       setNodes(currentNodes => {
         currentNodes.forEach(n => {
@@ -2192,7 +2195,16 @@ function FlowEditor({
         return currentNodes;
       });
     }, 0);
-  }, [onNodesChange, setNodes]);
+    // Debounce saving positions to the database
+    if (positionSaveTimerRef.current) clearTimeout(positionSaveTimerRef.current);
+    positionSaveTimerRef.current = setTimeout(() => {
+      supabase
+        .from("automation_flows")
+        .update({ trigger_config: { ...triggerConfig, node_positions: nodePositionsRef.current } })
+        .eq("id", flow.id)
+        .then();
+    }, 1000);
+  }, [onNodesChange, setNodes, triggerConfig, flow.id]);
 
   const onConnect = useCallback(async (conn: Connection) => {
     // If connection comes from a button handle (btn-0, btn-1, btn-timeout), save to step config
@@ -2283,9 +2295,10 @@ function FlowEditor({
 
   const saveFlow = async () => {
     setSaving(true);
+    const configWithPositions = { ...triggerConfig, node_positions: nodePositionsRef.current };
     const { error } = await supabase
       .from("automation_flows")
-      .update({ name: flowName, trigger_type: triggerType, trigger_config: triggerConfig, is_active: isActive })
+      .update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive })
       .eq("id", flow.id);
     setSaving(false);
     if (error) { toast.error("Erro ao salvar"); return; }
