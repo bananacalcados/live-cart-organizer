@@ -158,11 +158,20 @@ serve(async (req) => {
 
         // Header media
         if (config.headerMediaUrl) {
-          const headerFormat = config.headerMediaUrl.match(/\.(mp4|mov|avi)/i) ? 'video' : 'image';
+          const isVideo = /\.(mp4|mov|avi|webm)/i.test(config.headerMediaUrl);
+          const isDocument = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx)/i.test(config.headerMediaUrl);
+          let headerType = 'image';
+          if (isVideo) headerType = 'video';
+          if (isDocument) headerType = 'document';
+          const param: Record<string, unknown> = { type: headerType };
+          param[headerType] = { link: config.headerMediaUrl };
           components.push({
             type: 'HEADER',
-            parameters: [{ type: headerFormat, [headerFormat]: { link: config.headerMediaUrl } }],
+            parameters: [param],
           });
+        } else if (config.headerType === 'IMAGE' || config.headerType === 'VIDEO' || config.headerType === 'DOCUMENT') {
+          // Template expects a header but no media URL was provided — log warning
+          console.warn(`Template ${config.templateName} expects ${config.headerType} header but no headerMediaUrl provided`);
         }
 
         // Body variables
