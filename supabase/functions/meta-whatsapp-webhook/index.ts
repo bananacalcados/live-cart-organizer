@@ -12,12 +12,11 @@ function normalizePhone(rawPhone: string): string {
     phone = '55' + phone;
   }
   // Brazilian mobile normalization: ensure 13 digits (55 + DDD + 9XXXXXXXX)
+  // Always add 9 prefix for 8-digit local numbers, even if they happen to start with 9
   if (phone.startsWith('55') && phone.length === 12) {
     const ddd = phone.substring(2, 4);
     const number = phone.substring(4);
-    if (!number.startsWith('9')) {
-      phone = '55' + ddd + '9' + number;
-    }
+    phone = '55' + ddd + '9' + number;
   }
   return phone;
 }
