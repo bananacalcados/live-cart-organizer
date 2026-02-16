@@ -497,6 +497,8 @@ function StepEditorDialog({
   const [aiTestOpen, setAiTestOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const headerFileRef = useRef<HTMLInputElement>(null);
+  const [uploadingHeader, setUploadingHeader] = useState(false);
   const [whatsappNumbers, setWhatsappNumbers] = useState<any[]>([]);
   const [loadingNumbers, setLoadingNumbers] = useState(false);
 
@@ -713,8 +715,6 @@ function StepEditorDialog({
                       const header = tpl?.components?.find((c: any) => c.type === "HEADER");
                       if (!header || header.format === "TEXT") return null;
                       const headerType = (header.format || "").toLowerCase();
-                      const headerFileRef = useRef<HTMLInputElement>(null);
-                      const [uploadingHeader, setUploadingHeader] = useState(false);
                       const handleHeaderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
@@ -1543,56 +1543,71 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
 
   useEffect(() => { loadAll(); }, []);
 
+  const fetchAllRows = async (table: string, column: string): Promise<any[]> => {
+    const allData: any[] = [];
+    const pageSize = 1000;
+    let from = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await (supabase as any).from(table).select(column).range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) { hasMore = false; break; }
+      allData.push(...data);
+      if (data.length < pageSize) hasMore = false;
+      else from += pageSize;
+    }
+    return allData;
+  };
+
   const loadAll = async () => {
     setLoading(true);
-    const [campaignsRes, rfmRes, statesRes, citiesRes, regionsRes, gendersRes] = await Promise.all([
-      supabase.from("lp_leads").select("campaign_tag"),
-      supabase.from("zoppy_customers").select("rfm_segment"),
-      supabase.from("zoppy_customers").select("state"),
-      supabase.from("zoppy_customers").select("city"),
-      supabase.from("zoppy_customers").select("region_type"),
-      supabase.from("zoppy_customers").select("gender"),
+    const [campaignsData, rfmData, statesData, citiesData, regionsData, gendersData] = await Promise.all([
+      fetchAllRows("lp_leads", "campaign_tag"),
+      fetchAllRows("zoppy_customers", "rfm_segment"),
+      fetchAllRows("zoppy_customers", "state"),
+      fetchAllRows("zoppy_customers", "city"),
+      fetchAllRows("zoppy_customers", "region_type"),
+      fetchAllRows("zoppy_customers", "gender"),
     ]);
 
     // Campaigns
-    if (campaignsRes.data) {
+    {
       const counts: Record<string, number> = {};
-      campaignsRes.data.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
+      campaignsData.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
       setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
     }
 
     // RFM
-    if (rfmRes.data) {
+    {
       const counts: Record<string, number> = {};
-      rfmRes.data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
+      rfmData.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
       setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
     }
 
     // States
-    if (statesRes.data) {
+    {
       const counts: Record<string, number> = {};
-      statesRes.data.forEach((d: any) => { const s = d.state?.trim(); if (s && s.length === 2 && s !== '0') counts[s] = (counts[s] || 0) + 1; });
+      statesData.forEach((d: any) => { const s = d.state?.trim(); if (s && s.length === 2 && s !== '0') counts[s] = (counts[s] || 0) + 1; });
       setStates(Object.entries(counts).map(([state, count]) => ({ state, count })).sort((a, b) => b.count - a.count));
     }
 
     // Cities
-    if (citiesRes.data) {
+    {
       const counts: Record<string, number> = {};
-      citiesRes.data.forEach((d: any) => { const c = d.city?.trim(); if (c) counts[c] = (counts[c] || 0) + 1; });
+      citiesData.forEach((d: any) => { const c = d.city?.trim(); if (c) counts[c] = (counts[c] || 0) + 1; });
       setCities(Object.entries(counts).map(([city, count]) => ({ city, count })).sort((a, b) => b.count - a.count));
     }
 
     // Regions
-    if (regionsRes.data) {
+    {
       const counts: Record<string, number> = {};
-      regionsRes.data.forEach((d: any) => { if (d.region_type) counts[d.region_type] = (counts[d.region_type] || 0) + 1; });
+      regionsData.forEach((d: any) => { if (d.region_type) counts[d.region_type] = (counts[d.region_type] || 0) + 1; });
       setRegionTypes(Object.entries(counts).map(([region, count]) => ({ region, count })).sort((a, b) => b.count - a.count));
     }
 
     // Genders
-    if (gendersRes.data) {
+    {
       const counts: Record<string, number> = {};
-      gendersRes.data.forEach((d: any) => { const g = d.gender?.trim(); if (g) counts[g] = (counts[g] || 0) + 1; });
+      gendersData.forEach((d: any) => { const g = d.gender?.trim(); if (g) counts[g] = (counts[g] || 0) + 1; });
       setGenders(Object.entries(counts).map(([gender, count]) => ({ gender, count })).sort((a, b) => b.count - a.count));
     }
 
@@ -1870,24 +1885,35 @@ function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onC
   const selectedRfmSegments: string[] = triggerConfig.audience_rfm_segments || [];
   const audienceMode: string = triggerConfig.audience_mode || "trigger";
 
+  const fetchAllPaginated = async (table: string, column: string): Promise<any[]> => {
+    const allData: any[] = [];
+    const pageSize = 1000;
+    let from = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await (supabase as any).from(table).select(column).range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) { hasMore = false; break; }
+      allData.push(...data);
+      if (data.length < pageSize) hasMore = false;
+      else from += pageSize;
+    }
+    return allData;
+  };
+
   useEffect(() => {
     setLoadingCampaigns(true);
     setLoadingRfm(true);
     Promise.all([
-      supabase.from("lp_leads").select("campaign_tag").then(({ data }) => {
-        if (data) {
-          const counts: Record<string, number> = {};
-          data.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
-          setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
-        }
+      fetchAllPaginated("lp_leads", "campaign_tag").then((data) => {
+        const counts: Record<string, number> = {};
+        data.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
+        setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
         setLoadingCampaigns(false);
       }),
-      supabase.from("zoppy_customers").select("rfm_segment").then(({ data }) => {
-        if (data) {
-          const counts: Record<string, number> = {};
-          data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
-          setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
-        }
+      fetchAllPaginated("zoppy_customers", "rfm_segment").then((data) => {
+        const counts: Record<string, number> = {};
+        data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
+        setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
         setLoadingRfm(false);
       }),
     ]);
