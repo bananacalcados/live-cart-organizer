@@ -2043,15 +2043,19 @@ function FlowEditor({
   onBack: () => void;
   onSave: () => void;
 }) {
-  const [steps, setSteps] = useState<AutomationStep[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [flowName, setFlowName] = useState(flow.name);
   const [triggerType, setTriggerType] = useState(flow.trigger_type);
-  const [triggerConfig, setTriggerConfig] = useState<any>(flow.trigger_config || {});
+  const [triggerConfig, setTriggerConfig] = useState<any>(() => {
+    // Strip node_positions from triggerConfig state to avoid unnecessary rebuilds
+    const { node_positions, ...rest } = (flow.trigger_config || {}) as any;
+    return rest;
+  });
   const [isActive, setIsActive] = useState(flow.is_active);
   const [editingStep, setEditingStep] = useState<AutomationStep | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [steps, setSteps] = useState<AutomationStep[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [testPhone, setTestPhone] = useState("");
   const [testName, setTestName] = useState("Teste");
@@ -2076,6 +2080,22 @@ function FlowEditor({
     (flow.trigger_config as any)?.node_positions || {}
   );
   const positionSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerConfigRef = useRef(triggerConfig);
+  useEffect(() => { triggerConfigRef.current = triggerConfig; }, [triggerConfig]);
+
+  // Save positions to DB on unmount if there's a pending save
+  useEffect(() => {
+    return () => {
+      if (positionSaveTimerRef.current) {
+        clearTimeout(positionSaveTimerRef.current);
+        supabase
+          .from("automation_flows")
+          .update({ trigger_config: { ...triggerConfigRef.current, node_positions: nodePositionsRef.current } })
+          .eq("id", flow.id)
+          .then();
+      }
+    };
+  }, [flow.id]);
 
   const buildNodesAndEdges = useCallback(() => {
     const nodes: Node[] = [
@@ -2200,11 +2220,13 @@ function FlowEditor({
     positionSaveTimerRef.current = setTimeout(() => {
       supabase
         .from("automation_flows")
-        .update({ trigger_config: { ...triggerConfig, node_positions: nodePositionsRef.current } })
+        .update({ trigger_config: { ...triggerConfigRef.current, node_positions: nodePositionsRef.current } })
         .eq("id", flow.id)
-        .then();
+        .then(({ error }) => {
+          if (error) console.error('Failed to save node positions:', error);
+        });
     }, 1000);
-  }, [onNodesChange, setNodes, triggerConfig, flow.id]);
+  }, [onNodesChange, setNodes, flow.id]);
 
   const onConnect = useCallback(async (conn: Connection) => {
     // If connection comes from a button handle (btn-0, btn-1, btn-timeout), save to step config
@@ -2648,7 +2670,7 @@ export function AutomationFlowBuilder() {
   };
 
   if (selectedFlow) {
-    return <FlowEditor flow={selectedFlow} onBack={() => { setSelectedFlow(null); fetchFlows(); }} onSave={fetchFlows} />;
+    return <FlowEditor key={selectedFlow.id} flow={selectedFlow} onBack={async () => { setSelectedFlow(null); await fetchFlows(); }} onSave={fetchFlows} />;
   }
 
   return (
