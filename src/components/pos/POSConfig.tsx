@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle, Phone, Trophy, Target, ListChecks, Check, Sparkles, Calendar } from "lucide-react";
+import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle, Phone, Trophy, Target, ListChecks, Check, Sparkles, Calendar, Star, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,6 +64,19 @@ export function POSConfig({ storeId }: Props) {
   const [showAddSegment, setShowAddSegment] = useState(false);
   const [newSegment, setNewSegment] = useState({ label: "", color: "#FF6B00", prize_type: "discount_percent", prize_value: "10", probability: "10", expiry_days: "30" });
 
+  // Loyalty Config
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(true);
+  const [pointsPerReal, setPointsPerReal] = useState("0.1");
+  const [pointsExpiryDays, setPointsExpiryDays] = useState("365");
+  const [wheelEnabled, setWheelEnabled] = useState(false);
+  const [loyaltyConfigId, setLoyaltyConfigId] = useState<string | null>(null);
+  const [savingLoyalty, setSavingLoyalty] = useState(false);
+
+  // Loyalty Prize Tiers
+  const [loyaltyTiers, setLoyaltyTiers] = useState<any[]>([]);
+  const [showAddTier, setShowAddTier] = useState(false);
+  const [newTier, setNewTier] = useState({ name: "", min_points: "50", prize_type: "discount_percent", prize_value: "10", prize_label: "", color: "#FFD700" });
+
   const SEGMENT_COLORS = ["#FF6B00", "#E91E63", "#9C27B0", "#3F51B5", "#00BCD4", "#4CAF50", "#FFEB3B", "#FF5722", "#795548", "#607D8B"];
 
   useEffect(() => {
@@ -74,8 +87,77 @@ export function POSConfig({ storeId }: Props) {
     loadPrizes();
     loadTasks();
     loadWheelSegments();
+    loadLoyaltyConfig();
+    loadLoyaltyTiers();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [storeId]);
+
+  const loadLoyaltyConfig = async () => {
+    const { data } = await supabase.from('loyalty_config').select('*').eq('store_id', storeId).maybeSingle() as any;
+    if (data) {
+      setLoyaltyConfigId(data.id);
+      setLoyaltyEnabled(data.is_enabled);
+      setPointsPerReal(String(data.points_per_real));
+      setPointsExpiryDays(String(data.points_expiry_days));
+      setWheelEnabled(data.wheel_enabled);
+    }
+  };
+
+  const saveLoyaltyConfig = async () => {
+    setSavingLoyalty(true);
+    try {
+      const payload = {
+        is_enabled: loyaltyEnabled,
+        points_per_real: parseFloat(pointsPerReal) || 0.1,
+        points_expiry_days: parseInt(pointsExpiryDays) || 365,
+        wheel_enabled: wheelEnabled,
+      };
+      if (loyaltyConfigId) {
+        await supabase.from('loyalty_config').update(payload).eq('id', loyaltyConfigId);
+      } else {
+        const { data } = await supabase.from('loyalty_config').insert({ store_id: storeId, ...payload } as any).select('id').single();
+        if (data) setLoyaltyConfigId(data.id);
+      }
+      toast.success("Configuração de fidelidade salva!");
+    } catch { toast.error("Erro ao salvar"); }
+    finally { setSavingLoyalty(false); }
+  };
+
+  const loadLoyaltyTiers = async () => {
+    const { data } = await supabase.from('loyalty_prize_tiers').select('*').eq('store_id', storeId).order('min_points') as any;
+    setLoyaltyTiers(data || []);
+  };
+
+  const addLoyaltyTier = async () => {
+    if (!newTier.name.trim() || !newTier.prize_label.trim()) return;
+    try {
+      const { error } = await supabase.from('loyalty_prize_tiers').insert({
+        store_id: storeId,
+        name: newTier.name,
+        min_points: parseInt(newTier.min_points) || 50,
+        prize_type: newTier.prize_type,
+        prize_value: parseFloat(newTier.prize_value) || 0,
+        prize_label: newTier.prize_label,
+        color: newTier.color,
+        sort_order: loyaltyTiers.length,
+      } as any);
+      if (error) throw error;
+      toast.success("Tier adicionado!");
+      setNewTier({ name: "", min_points: "50", prize_type: "discount_percent", prize_value: "10", prize_label: "", color: "#FFD700" });
+      setShowAddTier(false);
+      loadLoyaltyTiers();
+    } catch { toast.error("Erro ao adicionar tier"); }
+  };
+
+  const removeLoyaltyTier = async (id: string) => {
+    await supabase.from('loyalty_prize_tiers').delete().eq('id', id);
+    loadLoyaltyTiers();
+  };
+
+  const toggleLoyaltyTier = async (id: string, isActive: boolean) => {
+    await supabase.from('loyalty_prize_tiers').update({ is_active: !isActive }).eq('id', id);
+    loadLoyaltyTiers();
+  };
 
   const loadWheelSegments = async () => {
     const { data } = await supabase.from('prize_wheel_segments').select('*').eq('store_id', storeId).order('sort_order') as any;
@@ -677,6 +759,87 @@ export function POSConfig({ storeId }: Props) {
           </CardContent>
         </Card>
 
+        {/* ─── Loyalty Points Config ─── */}
+        <Card className="bg-pos-white/5 border-pos-orange/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center justify-between text-pos-white">
+              <span className="flex items-center gap-2"><Star className="h-4 w-4 text-yellow-400" /> Programa de Fidelidade (Pontos)</span>
+              <Switch checked={loyaltyEnabled} onCheckedChange={setLoyaltyEnabled} />
+            </CardTitle>
+          </CardHeader>
+          {loyaltyEnabled && (
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Pontos por R$ 1,00 gasto</Label>
+                  <Input type="number" step="0.01" value={pointsPerReal} onChange={e => setPointsPerReal(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">Ex: 0.1 = 1 ponto a cada R$10</p>
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Validade dos pontos (dias)</Label>
+                  <Input type="number" value={pointsExpiryDays} onChange={e => setPointsExpiryDays(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5">
+                <div>
+                  <p className="text-sm text-pos-white">Roleta de Prêmios (Eventos)</p>
+                  <p className="text-xs text-pos-white/40">Ativar roleta para situações especiais</p>
+                </div>
+                <Switch checked={wheelEnabled} onCheckedChange={setWheelEnabled} />
+              </div>
+              <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={saveLoyaltyConfig} disabled={savingLoyalty}>
+                <Save className="h-4 w-4" /> {savingLoyalty ? 'Salvando...' : 'Salvar Config Fidelidade'}
+              </Button>
+            </CardContent>
+          )}
+        </Card>
+
+        {/* ─── Loyalty Prize Tiers ─── */}
+        {loyaltyEnabled && (
+          <Card className="bg-pos-white/5 border-pos-orange/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center justify-between text-pos-white">
+                <span className="flex items-center gap-2"><Gift className="h-4 w-4 text-yellow-400" /> Prêmios por Pontos (Tiers)</span>
+                <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddTier(true)}>
+                  <Plus className="h-3 w-3" /> Novo Tier
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-pos-white/50">Quanto mais pontos o cliente acumular, melhor o prêmio. Configure os tiers de recompensa.</p>
+              {loyaltyTiers.length === 0 ? (
+                <p className="text-xs text-pos-white/40">Nenhum tier configurado. Adicione tiers para definir os prêmios.</p>
+              ) : loyaltyTiers.map((tier: any) => (
+                <div key={tier.id} className="flex items-center gap-3 p-3 rounded-lg bg-pos-white/5 border border-pos-white/10">
+                  <div className="h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold text-white" style={{ backgroundColor: tier.color }}>
+                    {tier.min_points}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-pos-white">{tier.name}</span>
+                      <Badge className={`text-[10px] ${tier.is_active ? 'bg-green-500/20 text-green-400' : 'bg-pos-white/10 text-pos-white/40'}`}>
+                        {tier.is_active ? 'Ativo' : 'Inativo'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-pos-white/50 mt-0.5">
+                      {tier.prize_label} · Mínimo: {tier.min_points} pts ·
+                      {tier.prize_type === 'discount_percent' ? ` ${tier.prize_value}% desc` :
+                       tier.prize_type === 'discount_fixed' ? ` R$${Number(tier.prize_value).toFixed(2)} desc` :
+                       tier.prize_type === 'free_shipping' ? ' Frete grátis' : ` ${tier.prize_label}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Switch checked={tier.is_active} onCheckedChange={() => toggleLoyaltyTier(tier.id, tier.is_active)} />
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-300" onClick={() => removeLoyaltyTier(tier.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         {/* ─── Prize Wheel Config ─── */}
         <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
@@ -1005,6 +1168,55 @@ export function POSConfig({ storeId }: Props) {
                 </div>
               </div>
               <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addWheelSegment}>Criar Segmento</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Loyalty Tier Dialog */}
+        <Dialog open={showAddTier} onOpenChange={setShowAddTier}>
+          <DialogContent className="bg-pos-black border-pos-orange/30">
+            <DialogHeader><DialogTitle className="text-pos-white">Novo Tier de Prêmio</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-pos-white/70 text-xs">Nome do Tier</Label>
+                <Input value={newTier.name} onChange={e => setNewTier(s => ({ ...s, name: e.target.value }))} placeholder="Ex: Bronze, Prata, Ouro" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+              </div>
+              <div>
+                <Label className="text-pos-white/70 text-xs">Pontos Mínimos</Label>
+                <Input type="number" value={newTier.min_points} onChange={e => setNewTier(s => ({ ...s, min_points: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+              </div>
+              <div>
+                <Label className="text-pos-white/70 text-xs">Tipo de Prêmio</Label>
+                <Select value={newTier.prize_type} onValueChange={v => setNewTier(s => ({ ...s, prize_type: v }))}>
+                  <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="discount_percent">Desconto %</SelectItem>
+                    <SelectItem value="discount_fixed">Desconto R$</SelectItem>
+                    <SelectItem value="free_shipping">Frete Grátis</SelectItem>
+                    <SelectItem value="gift">Brinde / Presente</SelectItem>
+                    <SelectItem value="custom">Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Valor do Prêmio</Label>
+                  <Input type="number" value={newTier.prize_value} onChange={e => setNewTier(s => ({ ...s, prize_value: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Cor</Label>
+                  <div className="flex gap-1.5 flex-wrap mt-1">
+                    {["#FFD700", "#C0C0C0", "#CD7F32", "#E91E63", "#9C27B0", "#3F51B5", "#00BCD4", "#4CAF50"].map(c => (
+                      <button key={c} className={`h-7 w-7 rounded-full border-2 ${newTier.color === c ? 'border-white scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} onClick={() => setNewTier(s => ({ ...s, color: c }))} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <Label className="text-pos-white/70 text-xs">Descrição do Prêmio (aparece pro cliente)</Label>
+                <Input value={newTier.prize_label} onChange={e => setNewTier(s => ({ ...s, prize_label: e.target.value }))} placeholder="Ex: 10% de desconto na próxima compra" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+              </div>
+              <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addLoyaltyTier}>Criar Tier</Button>
             </div>
           </DialogContent>
         </Dialog>

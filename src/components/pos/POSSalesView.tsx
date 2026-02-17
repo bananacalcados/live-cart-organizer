@@ -19,6 +19,8 @@ import { POSCustomerForm } from "./POSCustomerForm";
 import { POSBarcodeScanner } from "./POSBarcodeScanner";
 import { POSSellerGate } from "./POSSellerGate";
 import { POSPrizeWheel } from "./POSPrizeWheel";
+import { POSSlotMachine } from "./POSSlotMachine";
+import { POSGiftBox } from "./POSGiftBox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -75,6 +77,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [customerPrizes, setCustomerPrizes] = useState<{ id: string; prize_label: string; coupon_code: string; prize_type: string; prize_value: number; expires_at: string }[]>([]);
   const [wheelSegments, setWheelSegments] = useState<any[]>([]);
   const [showWheel, setShowWheel] = useState(false);
+  // Loyalty points
+  const [loyaltyConfig, setLoyaltyConfig] = useState<{ is_enabled: boolean; points_per_real: number; points_expiry_days: number; wheel_enabled: boolean } | null>(null);
+  const [loyaltyTiers, setLoyaltyTiers] = useState<any[]>([]);
+  const [showSlotMachine, setShowSlotMachine] = useState(false);
+  const [earnedPoints, setEarnedPoints] = useState(0);
+  const [showGiftBox, setShowGiftBox] = useState(false);
+  const [wonPrize, setWonPrize] = useState<any>(null);
+  const [wonCouponCode, setWonCouponCode] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<CartItem[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -528,7 +538,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
-  // Load wheel segments for this store
+  // Load wheel segments and loyalty config for this store
   const loadWheelSegments = async () => {
     const { data } = await supabase
       .from('prize_wheel_segments')
@@ -539,8 +549,18 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setWheelSegments(data || []);
   };
 
+  const loadLoyaltyConfig = async () => {
+    const { data } = await supabase.from('loyalty_config').select('*').eq('store_id', storeId).maybeSingle() as any;
+    if (data) setLoyaltyConfig(data);
+    const { data: tiers } = await supabase.from('loyalty_prize_tiers').select('*').eq('store_id', storeId).eq('is_active', true).order('min_points') as any;
+    setLoyaltyTiers(tiers || []);
+  };
+
   useEffect(() => {
-    if (hasOpenRegister) loadWheelSegments();
+    if (hasOpenRegister) {
+      loadWheelSegments();
+      loadLoyaltyConfig();
+    }
   }, [storeId, hasOpenRegister]);
 
   const finalizeSale = async () => {
@@ -583,6 +603,97 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         toast.success("Venda criada no Tiny ERP!");
         setSaleResult(data);
         setStep("invoice");
+
+        // Award loyalty points if enabled and customer identified
+        if (loyaltyConfig?.is_enabled && selectedCustomer?.whatsapp) {
+          const phone = selectedCustomer.whatsapp.replace(/\D/g, '');
+          const points = Math.floor(totalWithDiscount * (loyaltyConfig.points_per_real || 0.1));
+          if (points > 0) {
+            setEarnedPoints(points);
+            setShowSlotMachine(true);
+
+            // Upsert customer points
+            const { data: existing } = await supabase
+              .from('customer_loyalty_points')
+              .select('*')
+              .eq('customer_phone', phone)
+              .eq('store_id', storeId)
+              .maybeSingle() as any;
+
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + (loyaltyConfig.points_expiry_days || 365));
+
+            let newTotal = points;
+            if (existing) {
+              newTotal = existing.total_points + points;
+              await supabase.from('customer_loyalty_points').update({
+                total_points: newTotal,
+                lifetime_points: existing.lifetime_points + points,
+                last_earn_at: new Date().toISOString(),
+                expires_at: expiresAt.toISOString(),
+              } as any).eq('id', existing.id);
+            } else {
+              await supabase.from('customer_loyalty_points').insert({
+                customer_phone: phone,
+                customer_name: selectedCustomer.name || null,
+                store_id: storeId,
+                total_points: points,
+                lifetime_points: points,
+                expires_at: expiresAt.toISOString(),
+              } as any);
+            }
+
+            // Log the transaction
+            await supabase.from('loyalty_points_log').insert({
+              customer_phone: phone,
+              store_id: storeId,
+              points,
+              type: 'earn',
+              sale_id: data.sale_id || null,
+              description: `Venda R$ ${totalWithDiscount.toFixed(2)}`,
+            } as any);
+
+            // Check if customer earned a prize tier
+            const eligibleTier = loyaltyTiers
+              .filter(t => t.is_active && newTotal >= t.min_points)
+              .sort((a: any, b: any) => b.min_points - a.min_points)[0];
+
+            if (eligibleTier) {
+              const code = `FID-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+              setWonPrize(eligibleTier);
+              setWonCouponCode(code);
+
+              // Save prize
+              const prizeExpiry = new Date();
+              prizeExpiry.setDate(prizeExpiry.getDate() + 30);
+              await supabase.from('customer_prizes').insert({
+                customer_phone: phone,
+                customer_name: selectedCustomer.name || null,
+                customer_email: selectedCustomer.email || null,
+                store_id: storeId,
+                prize_label: eligibleTier.prize_label,
+                prize_type: eligibleTier.prize_type,
+                prize_value: eligibleTier.prize_value,
+                coupon_code: code,
+                expires_at: prizeExpiry.toISOString(),
+                source: 'loyalty',
+              } as any);
+
+              // Deduct points used
+              await supabase.from('customer_loyalty_points').update({
+                total_points: newTotal - eligibleTier.min_points,
+              } as any).eq('customer_phone', phone).eq('store_id', storeId);
+
+              await supabase.from('loyalty_points_log').insert({
+                customer_phone: phone,
+                store_id: storeId,
+                points: -eligibleTier.min_points,
+                type: 'redeem',
+                description: `Prêmio: ${eligibleTier.prize_label}`,
+              } as any);
+            }
+          }
+        }
       } else {
         toast.error(data.error || "Erro ao criar venda");
       }
@@ -640,6 +751,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setDiscount("");
     setDiscountType("value");
     setShowWheel(false);
+    setShowSlotMachine(false);
+    setShowGiftBox(false);
+    setWonPrize(null);
+    setWonCouponCode("");
+    setEarnedPoints(0);
   };
 
   const steps: { id: SaleStep; label: string; icon: typeof ScanBarcode }[] = [
@@ -1287,7 +1403,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                     <Printer className="h-5 w-5" /> Imprimir Nota
                   </Button>
                 )}
-                {wheelSegments.length > 0 && !showWheel && (
+                {loyaltyConfig?.wheel_enabled && wheelSegments.length > 0 && !showWheel && (
                   <Button
                     className="h-14 gap-2 text-base bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-bold col-span-2 hover:from-yellow-500 hover:via-orange-600 hover:to-red-600 shadow-lg"
                     onClick={() => setShowWheel(true)}
@@ -1300,7 +1416,29 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 </Button>
               </div>
 
-              {/* Prize Wheel */}
+              {/* Slot Machine - Loyalty Points */}
+              {showSlotMachine && (
+                <POSSlotMachine
+                  pointsEarned={earnedPoints}
+                  onComplete={() => {
+                    setShowSlotMachine(false);
+                    if (wonPrize) {
+                      setShowGiftBox(true);
+                    }
+                  }}
+                />
+              )}
+
+              {/* Gift Box - Prize Reveal */}
+              {showGiftBox && wonPrize && (
+                <POSGiftBox
+                  prize={wonPrize}
+                  couponCode={wonCouponCode}
+                  onClose={() => setShowGiftBox(false)}
+                />
+              )}
+
+              {/* Prize Wheel (events only) */}
               {showWheel && (
                 <POSPrizeWheel
                   segments={wheelSegments}
