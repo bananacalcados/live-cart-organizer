@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { ShoppingBag, MessageCircle, X, ChevronUp, ChevronDown, Plus, Minus, ShoppingCart, Trash2 } from "lucide-react";
+import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LiveLeadGate } from "@/components/live/LiveLeadGate";
-import { LiveChatOverlay } from "@/components/live/LiveChatOverlay";
 
 interface CartItem {
   variantId: string;
@@ -15,6 +13,7 @@ interface CartItem {
   price: number;
   quantity: number;
   image?: string;
+  handle?: string;
 }
 
 interface ProductRef {
@@ -29,6 +28,7 @@ interface LiveSessionData {
   youtube_video_id: string | null;
   whatsapp_link: string | null;
   selected_products: ProductRef[];
+  spotlight_products: ProductRef[];
   title: string;
 }
 
@@ -43,28 +43,33 @@ const LiveCommerce = () => {
   const [selectedProduct, setSelectedProduct] = useState<ShopifyProduct | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Viewer state
+  // Viewer / lead gate state
   const [viewer, setViewer] = useState<{ name: string; phone: string } | null>(null);
+  const [showGate, setShowGate] = useState(false);
+  const [gatePurpose, setGatePurpose] = useState<"chat" | "cart">("chat");
+  const [gateName, setGateName] = useState("");
+  const [gatePhone, setGatePhone] = useState("");
   const [viewerCount, setViewerCount] = useState(0);
+
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [sendingChat, setSendingChat] = useState(false);
+
+  // Pending action after gate
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   // Restore viewer from localStorage
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try { setViewer(JSON.parse(stored)); } catch {}
-    }
+    if (stored) { try { setViewer(JSON.parse(stored)); } catch {} }
   }, []);
 
-  // Fetch active session from DB
+  // Fetch active session
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase
-        .from("live_sessions")
-        .select("*")
-        .eq("is_active", true)
-        .limit(1)
-        .maybeSingle();
-
+        .from("live_sessions").select("*").eq("is_active", true).limit(1).maybeSingle();
       if (data) {
         const s = data as any;
         setSession({
@@ -72,23 +77,18 @@ const LiveCommerce = () => {
           youtube_video_id: s.youtube_video_id,
           whatsapp_link: s.whatsapp_link,
           selected_products: s.selected_products || [],
+          spotlight_products: s.spotlight_products || [],
           title: s.title,
         });
-
-        // Fetch full product data for selected handles
-        const handles = (s.selected_products || []).map((p: ProductRef) => p.handle);
-        if (handles.length > 0) {
+        // Load spotlight products from Shopify
+        const spotlightHandles = (s.spotlight_products || []).map((p: ProductRef) => p.handle);
+        if (spotlightHandles.length > 0) {
           const allProds = await fetchProducts(250);
-          const filtered = allProds.filter(p => handles.includes(p.node.handle));
-          setProducts(filtered);
+          setProducts(allProds.filter(p => spotlightHandles.includes(p.node.handle)));
         }
-
-        // Viewer count
         const { count } = await supabase
-          .from("live_viewers")
-          .select("*", { count: "exact", head: true })
-          .eq("session_id", s.id)
-          .eq("is_online", true);
+          .from("live_viewers").select("*", { count: "exact", head: true })
+          .eq("session_id", s.id).eq("is_online", true);
         setViewerCount(count || 0);
       }
       setLoading(false);
@@ -96,45 +96,95 @@ const LiveCommerce = () => {
     load();
   }, []);
 
-  // Subscribe to viewer count changes
+  // Realtime: spotlight products + session changes
+  useEffect(() => {
+    if (!session?.id) return;
+    const channel = supabase
+      .channel(`live-session-${session.id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "live_sessions", filter: `id=eq.${session.id}` }, async (payload) => {
+        const s = payload.new as any;
+        const newSpotlight: ProductRef[] = s.spotlight_products || [];
+        setSession(prev => prev ? { ...prev, spotlight_products: newSpotlight, selected_products: s.selected_products || prev.selected_products } : prev);
+        // Reload products for new spotlight
+        const handles = newSpotlight.map(p => p.handle);
+        if (handles.length > 0) {
+          const allProds = await fetchProducts(250);
+          setProducts(allProds.filter(p => handles.includes(p.node.handle)));
+        } else {
+          setProducts([]);
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session?.id]);
+
+  // Realtime: viewer count
   useEffect(() => {
     if (!session?.id) return;
     const channel = supabase
       .channel(`live-viewers-${session.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "live_viewers", filter: `session_id=eq.${session.id}` }, async () => {
         const { count } = await supabase
-          .from("live_viewers")
-          .select("*", { count: "exact", head: true })
-          .eq("session_id", session.id)
-          .eq("is_online", true);
+          .from("live_viewers").select("*", { count: "exact", head: true })
+          .eq("session_id", session.id).eq("is_online", true);
         setViewerCount(count || 0);
-      })
-      .subscribe();
+      }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [session?.id]);
 
-  // Register viewer
-  const handleLeadSubmit = async (name: string, phone: string) => {
-    const viewerData = { name, phone };
+  // Realtime: chat messages
+  useEffect(() => {
+    if (!session?.id) return;
+    const loadMsgs = async () => {
+      const { data } = await supabase
+        .from("live_chat_messages").select("id, viewer_name, message, message_type, created_at")
+        .eq("session_id", session.id).order("created_at", { ascending: true }).limit(100);
+      if (data) setChatMessages(data);
+    };
+    loadMsgs();
+    const channel = supabase
+      .channel(`live-chat-${session.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat_messages", filter: `session_id=eq.${session.id}` }, (payload) => {
+        setChatMessages(prev => [...prev.slice(-99), payload.new]);
+      }).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session?.id]);
+
+  // Gate logic: require registration only for chat/cart
+  const requireViewer = (purpose: "chat" | "cart", action: () => void) => {
+    if (viewer) { action(); return; }
+    setGatePurpose(purpose);
+    setPendingAction(() => action);
+    setShowGate(true);
+  };
+
+  const formatPhone = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
+
+  const handleGateSubmit = async () => {
+    const rawPhone = gatePhone.replace(/\D/g, "");
+    if (gateName.trim().length < 2 || rawPhone.length < 10) return;
+    const phone = `55${rawPhone}`;
+    const viewerData = { name: gateName.trim(), phone };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(viewerData));
     setViewer(viewerData);
+    setShowGate(false);
 
     if (session?.id) {
-      // Upsert viewer
       await supabase.from("live_viewers").upsert(
-        { session_id: session.id, name, phone, is_online: true, last_seen_at: new Date().toISOString() },
+        { session_id: session.id, name: viewerData.name, phone, is_online: true, last_seen_at: new Date().toISOString() },
         { onConflict: "session_id,phone" }
       );
-
-      // System message
       await supabase.from("live_chat_messages").insert({
-        session_id: session.id,
-        viewer_name: name,
-        viewer_phone: phone,
-        message: `${name} entrou na live! 🎉`,
-        message_type: "system",
+        session_id: session.id, viewer_name: viewerData.name, viewer_phone: phone,
+        message: `${viewerData.name} entrou na live! 🎉`, message_type: "system",
       });
     }
+    if (pendingAction) { pendingAction(); setPendingAction(null); }
   };
 
   const isLive = !!session?.youtube_video_id;
@@ -146,100 +196,88 @@ const LiveCommerce = () => {
   const addToCart = useCallback((variant: { id: string; title: string; price: number }, productTitle: string, image?: string) => {
     setCart(prev => {
       const existing = prev.find(i => i.variantId === variant.id);
-      if (existing) {
-        return prev.map(i => i.variantId === variant.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      return [...prev, {
-        variantId: variant.id,
-        productTitle,
-        variantTitle: variant.title === "Default Title" ? "" : variant.title,
-        price: variant.price,
-        quantity: 1,
-        image,
-      }];
+      if (existing) return prev.map(i => i.variantId === variant.id ? { ...i, quantity: i.quantity + 1 } : i);
+      return [...prev, { variantId: variant.id, productTitle, variantTitle: variant.title === "Default Title" ? "" : variant.title, price: variant.price, quantity: 1, image }];
     });
     toast.success("Adicionado ao carrinho!");
     setSelectedProduct(null);
   }, []);
 
   const updateQty = (variantId: string, delta: number) => {
-    setCart(prev => prev.map(i => {
-      if (i.variantId !== variantId) return i;
-      const newQty = i.quantity + delta;
-      return newQty <= 0 ? null! : { ...i, quantity: newQty };
-    }).filter(Boolean));
+    setCart(prev => prev.map(i => { if (i.variantId !== variantId) return i; const q = i.quantity + delta; return q <= 0 ? null! : { ...i, quantity: q }; }).filter(Boolean));
   };
 
-  const removeItem = (variantId: string) => {
-    setCart(prev => prev.filter(i => i.variantId !== variantId));
-  };
+  const removeItem = (variantId: string) => setCart(prev => prev.filter(i => i.variantId !== variantId));
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     setCheckingOut(true);
     try {
-      const orderProducts = cart.map(item => ({
-        id: item.variantId,
-        title: item.productTitle,
-        variant: item.variantTitle || "Default",
-        price: item.price,
-        quantity: item.quantity,
-        shopifyId: item.variantId,
-        image: item.image,
-      }));
+      const orderProducts = cart.map(item => ({ id: item.variantId, title: item.productTitle, variant: item.variantTitle || "Default", price: item.price, quantity: item.quantity, shopifyId: item.variantId, image: item.image }));
       const checkoutUrl = await createShopifyCartFromOrder(orderProducts);
-      if (checkoutUrl) {
-        window.location.href = checkoutUrl;
-      } else {
-        toast.error("Erro ao criar carrinho. Tente novamente.");
-      }
-    } catch {
-      toast.error("Erro ao processar. Tente novamente.");
-    } finally {
-      setCheckingOut(false);
-    }
+      if (checkoutUrl) { window.location.href = checkoutUrl; } else { toast.error("Erro ao criar carrinho."); }
+    } catch { toast.error("Erro ao processar."); } finally { setCheckingOut(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <p className="text-zinc-400">Carregando...</p>
-      </div>
-    );
-  }
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || sendingChat || !viewer || !session?.id) return;
+    setSendingChat(true);
+    const text = chatInput.trim();
+    setChatInput("");
+    await supabase.from("live_chat_messages").insert({ session_id: session.id, viewer_name: viewer.name, viewer_phone: viewer.phone, message: text, message_type: "text" });
+    setSendingChat(false);
+  };
 
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-3">
-        <ShoppingBag className="w-16 h-16 text-zinc-600" />
-        <p className="text-zinc-400 text-lg font-medium">Nenhuma live no momento</p>
-        <p className="text-zinc-500 text-sm">Volte em breve! 🎉</p>
-      </div>
-    );
-  }
+  const getNameColor = (name: string) => {
+    const colors = ["text-amber-400", "text-pink-400", "text-cyan-400", "text-green-400", "text-purple-400", "text-orange-400"];
+    let hash = 0; for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
+  };
 
-  // Show lead gate if viewer not registered
-  if (!viewer) {
-    return <LiveLeadGate sessionTitle={session.title} onSubmit={handleLeadSubmit} />;
-  }
+  if (loading) return <div className="min-h-screen bg-black text-white flex items-center justify-center"><p className="text-zinc-400">Carregando...</p></div>;
+
+  if (!session) return (
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-3">
+      <ShoppingBag className="w-16 h-16 text-zinc-600" /><p className="text-zinc-400 text-lg font-medium">Nenhuma live no momento</p><p className="text-zinc-500 text-sm">Volte em breve! 🎉</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
+      {/* Lead Gate Modal */}
+      {showGate && (
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center px-4" onClick={() => setShowGate(false)}>
+          <div className="bg-zinc-900 rounded-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="text-center space-y-2">
+              <img src="/images/banana-logo.png" alt="" className="w-12 h-12 rounded-full mx-auto object-cover" />
+              <h3 className="font-bold text-base">
+                {gatePurpose === "chat" ? "Cadastre-se para comentar" : "Cadastre-se para comprar"}
+              </h3>
+              <p className="text-zinc-400 text-xs">Seus dados são protegidos 🔒</p>
+            </div>
+            <div className="space-y-3">
+              <input value={gateName} onChange={e => setGateName(e.target.value)} placeholder="Seu nome"
+                className="w-full bg-zinc-800 rounded-lg px-4 py-3 text-sm text-white placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-amber-500/50" autoFocus />
+              <input value={gatePhone} onChange={e => setGatePhone(formatPhone(e.target.value))} placeholder="(11) 99999-9999" inputMode="tel"
+                className="w-full bg-zinc-800 rounded-lg px-4 py-3 text-sm text-white placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-amber-500/50" />
+              <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold" onClick={handleGateSubmit}
+                disabled={gateName.trim().length < 2 || gatePhone.replace(/\D/g, "").length < 10}>
+                Continuar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Video */}
       <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
         {isLive ? (
-          <iframe
-            className="absolute inset-0 w-full h-full"
+          <iframe className="absolute inset-0 w-full h-full"
             src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`}
-            title="Live"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            loading="lazy"
-          />
+            title="Live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen loading="lazy" />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 gap-3">
-            <ShoppingBag className="w-8 h-8 text-zinc-500" />
-            <p className="text-zinc-400">Aguardando transmissão...</p>
+            <ShoppingBag className="w-8 h-8 text-zinc-500" /><p className="text-zinc-400">Aguardando transmissão...</p>
           </div>
         )}
       </div>
@@ -249,43 +287,36 @@ const LiveCommerce = () => {
         <div className="flex items-center gap-3">
           <img src="/images/banana-logo.png" alt="Banana Calçados" className="w-8 h-8 rounded-full object-cover" loading="lazy" />
           <div>
-            <h1 className="text-sm font-bold leading-tight">Banana Calçados</h1>
-            {isLive && (
-              <span className="inline-flex items-center gap-1 text-xs">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                AO VIVO • {viewerCount} assistindo
-              </span>
-            )}
+            <h1 className="text-sm font-bold leading-tight">{session.title}</h1>
+            <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+              {isLive && <><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> AO VIVO • </>}
+              <Users className="w-3 h-3" /> {viewerCount}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
           {whatsappLink && (
             <a href={whatsappLink} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white text-[10px] font-semibold px-2 py-1.5 rounded-lg transition-colors">
+              className="inline-flex items-center bg-green-600 hover:bg-green-700 text-white text-[10px] font-semibold px-2 py-1.5 rounded-lg">
               <MessageCircle className="w-3.5 h-3.5" />
             </a>
           )}
           <Button size="sm" variant="outline"
-            className={`border-zinc-700 text-white hover:bg-zinc-800 gap-1 h-8 px-2 text-xs ${drawerView === "chat" ? "bg-zinc-700" : ""}`}
-            onClick={() => setDrawerView(v => v === "chat" ? "closed" : "chat")}>
-            💬 Chat
+            className={`border-zinc-700 text-white hover:bg-zinc-800 h-8 px-2 text-xs ${drawerView === "chat" ? "bg-zinc-700" : ""}`}
+            onClick={() => requireViewer("chat", () => setDrawerView(v => v === "chat" ? "closed" : "chat"))}>
+            💬
           </Button>
           {products.length > 0 && (
             <Button size="sm" variant="outline"
               className={`border-zinc-700 text-white hover:bg-zinc-800 gap-1 h-8 px-2 text-xs ${drawerView === "products" ? "bg-zinc-700" : ""}`}
               onClick={() => setDrawerView(v => v === "products" ? "closed" : "products")}>
-              <ShoppingBag className="w-3.5 h-3.5" />
-              {products.length}
+              <ShoppingBag className="w-3.5 h-3.5" /> {products.length}
             </Button>
           )}
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-bold gap-1 h-8 px-2 relative"
+          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-bold h-8 px-2 relative"
             onClick={() => setDrawerView(v => v === "cart" ? "closed" : "cart")}>
             <ShoppingCart className="w-3.5 h-3.5" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                {cartCount}
-              </span>
-            )}
+            {cartCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{cartCount}</span>}
           </Button>
         </div>
       </div>
@@ -302,17 +333,10 @@ const LiveCommerce = () => {
               <p className="text-xs text-zinc-400 mb-3">{selectedProduct.node.title}</p>
               <div className="grid grid-cols-2 gap-2">
                 {selectedProduct.node.variants.edges.filter(v => v.node.availableForSale).map(v => (
-                  <button key={v.node.id}
-                    className="bg-zinc-800 hover:bg-zinc-700 rounded-lg p-3 text-left transition-colors"
-                    onClick={() => addToCart(
-                      { id: v.node.id, title: v.node.title, price: parseFloat(v.node.price.amount) },
-                      selectedProduct.node.title,
-                      selectedProduct.node.images.edges[0]?.node.url
-                    )}>
+                  <button key={v.node.id} className="bg-zinc-800 hover:bg-zinc-700 rounded-lg p-3 text-left transition-colors"
+                    onClick={() => requireViewer("cart", () => addToCart({ id: v.node.id, title: v.node.title, price: parseFloat(v.node.price.amount) }, selectedProduct.node.title, selectedProduct.node.images.edges[0]?.node.url))}>
                     <p className="text-xs font-medium">{v.node.title}</p>
-                    <p className="text-sm font-bold text-green-400 mt-1">
-                      R$ {parseFloat(v.node.price.amount).toFixed(2).replace(".", ",")}
-                    </p>
+                    <p className="text-sm font-bold text-green-400 mt-1">R$ {parseFloat(v.node.price.amount).toFixed(2).replace(".", ",")}</p>
                   </button>
                 ))}
               </div>
@@ -322,14 +346,35 @@ const LiveCommerce = () => {
       )}
 
       {/* Chat Drawer */}
-      {drawerView === "chat" && session?.id && viewer && (
-        <div className="bg-zinc-900 border-t border-zinc-800 h-[45vh]">
-          <LiveChatOverlay
-            sessionId={session.id}
-            viewerName={viewer.name}
-            viewerPhone={viewer.phone}
-            viewerCount={viewerCount}
-          />
+      {drawerView === "chat" && viewer && (
+        <div className="bg-zinc-900 border-t border-zinc-800 h-[40vh] flex flex-col">
+          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 min-h-0">
+            {chatMessages.map((msg: any) => (
+              <div key={msg.id} className="animate-fade-in">
+                {msg.message_type === "system" ? (
+                  <p className="text-[11px] text-zinc-500 text-center italic">{msg.message}</p>
+                ) : (
+                  <p className="text-[12px] leading-tight">
+                    <span className={`font-bold ${getNameColor(msg.viewer_name)}`}>{msg.viewer_name}</span>
+                    <span className="text-zinc-300 ml-1.5">{msg.message}</span>
+                  </p>
+                )}
+              </div>
+            ))}
+            {chatMessages.length === 0 && <p className="text-zinc-600 text-xs text-center py-4">Seja o primeiro a comentar! 💬</p>}
+          </div>
+          <div className="px-3 py-2 border-t border-zinc-800">
+            <div className="flex items-center gap-2">
+              <input value={chatInput} onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") sendChatMessage(); }}
+                placeholder="Comente aqui..." maxLength={200}
+                className="flex-1 bg-zinc-800 rounded-full px-4 py-2 text-xs text-white placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-amber-500/50" />
+              <button onClick={sendChatMessage} disabled={!chatInput.trim() || sendingChat}
+                className="w-8 h-8 rounded-full bg-amber-500 hover:bg-amber-600 disabled:opacity-40 flex items-center justify-center">
+                <Send className="w-3.5 h-3.5 text-black" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -337,45 +382,30 @@ const LiveCommerce = () => {
       {drawerView === "products" && (
         <div className="bg-zinc-900 border-t border-zinc-800 max-h-[50vh] overflow-y-auto">
           <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-800">
-            <h2 className="text-sm font-bold">Produtos da Live</h2>
+            <h2 className="text-sm font-bold">Produtos em Destaque 🔥</h2>
             <button onClick={() => setDrawerView("closed")} className="text-zinc-400 hover:text-white"><X className="w-4 h-4" /></button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4">
-            {products.map((p) => {
+            {products.map(p => {
               const product = p.node;
               const image = product.images.edges[0]?.node.url;
               const price = parseFloat(product.priceRange.minVariantPrice.amount);
               const hasVariants = product.variants.edges.length > 1;
-
               return (
-                <button key={product.id}
-                  className="bg-zinc-800 rounded-lg overflow-hidden hover:ring-1 hover:ring-amber-500/50 transition-all group text-left"
+                <button key={product.id} className="bg-zinc-800 rounded-lg overflow-hidden hover:ring-1 hover:ring-amber-500/50 transition-all group text-left"
                   onClick={() => {
-                    if (hasVariants) {
-                      setSelectedProduct(p);
-                    } else {
+                    if (hasVariants) { requireViewer("cart", () => setSelectedProduct(p)); }
+                    else {
                       const v = product.variants.edges[0]?.node;
-                      if (v?.availableForSale) {
-                        addToCart({ id: v.id, title: v.title, price: parseFloat(v.price.amount) }, product.title, image);
-                      } else {
-                        toast.error("Produto esgotado");
-                      }
+                      if (v?.availableForSale) requireViewer("cart", () => addToCart({ id: v.id, title: v.title, price: parseFloat(v.price.amount) }, product.title, image));
+                      else toast.error("Produto esgotado");
                     }
                   }}>
-                  {image && (
-                    <div className="aspect-square overflow-hidden">
-                      <img src={image} alt={product.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                    </div>
-                  )}
+                  {image && <div className="aspect-square overflow-hidden"><img src={image} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" /></div>}
                   <div className="p-2">
                     <p className="text-xs font-medium line-clamp-2 leading-tight">{product.title}</p>
-                    <p className="text-sm font-bold text-green-400 mt-1">
-                      R$ {price.toFixed(2).replace(".", ",")}
-                    </p>
-                    <span className="text-[10px] text-amber-400 flex items-center gap-1 mt-1">
-                      <Plus className="w-3 h-3" /> {hasVariants ? "Escolher tamanho" : "Adicionar"}
-                    </span>
+                    <p className="text-sm font-bold text-green-400 mt-1">R$ {price.toFixed(2).replace(".", ",")}</p>
+                    <span className="text-[10px] text-amber-400 flex items-center gap-1 mt-1"><Plus className="w-3 h-3" /> {hasVariants ? "Escolher tamanho" : "Adicionar"}</span>
                   </div>
                 </button>
               );
@@ -393,11 +423,8 @@ const LiveCommerce = () => {
           </div>
           {cart.length === 0 ? (
             <div className="text-center py-8">
-              <ShoppingCart className="w-10 h-10 text-zinc-600 mx-auto mb-2" />
-              <p className="text-zinc-500 text-sm">Seu carrinho está vazio</p>
-              <button className="text-amber-400 text-xs mt-2 underline" onClick={() => setDrawerView("products")}>
-                Ver produtos
-              </button>
+              <ShoppingCart className="w-10 h-10 text-zinc-600 mx-auto mb-2" /><p className="text-zinc-500 text-sm">Seu carrinho está vazio</p>
+              <button className="text-amber-400 text-xs mt-2 underline" onClick={() => setDrawerView("products")}>Ver produtos</button>
             </div>
           ) : (
             <div className="p-4 space-y-3">
@@ -407,36 +434,22 @@ const LiveCommerce = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{item.productTitle}</p>
                     {item.variantTitle && <p className="text-[10px] text-zinc-400">{item.variantTitle}</p>}
-                    <p className="text-sm font-bold text-green-400">
-                      R$ {(item.price * item.quantity).toFixed(2).replace(".", ",")}
-                    </p>
+                    <p className="text-sm font-bold text-green-400">R$ {(item.price * item.quantity).toFixed(2).replace(".", ",")}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => updateQty(item.variantId, -1)}
-                      className="w-7 h-7 rounded bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center">
-                      <Minus className="w-3 h-3" />
-                    </button>
+                    <button onClick={() => updateQty(item.variantId, -1)} className="w-7 h-7 rounded bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center"><Minus className="w-3 h-3" /></button>
                     <span className="text-xs w-6 text-center font-bold">{item.quantity}</span>
-                    <button onClick={() => updateQty(item.variantId, 1)}
-                      className="w-7 h-7 rounded bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center">
-                      <Plus className="w-3 h-3" />
-                    </button>
-                    <button onClick={() => removeItem(item.variantId)}
-                      className="w-7 h-7 rounded bg-red-900/50 hover:bg-red-800/50 flex items-center justify-center ml-1">
-                      <Trash2 className="w-3 h-3 text-red-400" />
-                    </button>
+                    <button onClick={() => updateQty(item.variantId, 1)} className="w-7 h-7 rounded bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center"><Plus className="w-3 h-3" /></button>
+                    <button onClick={() => removeItem(item.variantId)} className="w-7 h-7 rounded bg-red-900/50 hover:bg-red-800/50 flex items-center justify-center ml-1"><Trash2 className="w-3 h-3 text-red-400" /></button>
                   </div>
                 </div>
               ))}
               <div className="border-t border-zinc-700 pt-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-zinc-400">Total</span>
-                  <span className="text-lg font-bold text-green-400">
-                    R$ {cartTotal.toFixed(2).replace(".", ",")}
-                  </span>
+                  <span className="text-lg font-bold text-green-400">R$ {cartTotal.toFixed(2).replace(".", ",")}</span>
                 </div>
-                <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold text-sm py-5"
-                  onClick={handleCheckout} disabled={checkingOut}>
+                <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold text-sm py-5" onClick={handleCheckout} disabled={checkingOut}>
                   {checkingOut ? "Gerando checkout..." : "Finalizar Compra"}
                 </Button>
               </div>
