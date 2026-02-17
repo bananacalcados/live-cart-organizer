@@ -3,7 +3,7 @@ import {
   ScanBarcode, Search, Plus, Minus, Trash2, User, CreditCard,
   Receipt, Printer, Camera, ShoppingCart, Package, Check,
   QrCode, Banknote, FileText, ChevronRight, Loader2, Users,
-  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag, Star
+  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag, Star, Gift
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { POSCustomerForm } from "./POSCustomerForm";
 import { POSBarcodeScanner } from "./POSBarcodeScanner";
 import { POSSellerGate } from "./POSSellerGate";
+import { POSPrizeWheel } from "./POSPrizeWheel";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -71,6 +72,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string; cpf?: string; email?: string; whatsapp?: string; address?: string; cep?: string; city?: string; state?: string; age_range?: string; preferred_style?: string; shoe_size?: string; gender?: string; neighborhood?: string; address_number?: string; complement?: string } | null>(null);
   const [customerCashback, setCustomerCashback] = useState<{ code: string; amount: number; type: string; min_purchase: number; expiry_date: string } | null>(null);
+  const [customerPrizes, setCustomerPrizes] = useState<{ id: string; prize_label: string; coupon_code: string; prize_type: string; prize_value: number; expires_at: string }[]>([]);
+  const [wheelSegments, setWheelSegments] = useState<any[]>([]);
+  const [showWheel, setShowWheel] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<CartItem[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -458,14 +462,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
-  // Lookup cashback from Zoppy AND internal cashback system
+  // Lookup cashback from Zoppy AND internal cashback system + customer prizes
   const lookupCashback = async (customer: { whatsapp?: string; cpf?: string; name?: string; email?: string }) => {
     setCustomerCashback(null);
+    setCustomerPrizes([]);
     const phone = customer.whatsapp?.replace(/\D/g, '');
     if (!phone) return;
     try {
-      // Check both sources in parallel
-      const [zoppyRes, internalRes] = await Promise.all([
+      // Check all sources in parallel
+      const [zoppyRes, internalRes, prizesRes] = await Promise.all([
         supabase
           .from('zoppy_customers')
           .select('coupon_code, coupon_amount, coupon_type, coupon_used, coupon_min_purchase, coupon_expiry_date')
@@ -483,7 +488,19 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           .order('cashback_amount', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase
+          .from('customer_prizes')
+          .select('id, prize_label, coupon_code, prize_type, prize_value, expires_at')
+          .ilike('customer_phone', `%${phone.slice(-8)}%`)
+          .eq('is_redeemed', false)
+          .gte('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false }) as any,
       ]);
+
+      // Set customer prizes
+      if (prizesRes.data && prizesRes.data.length > 0) {
+        setCustomerPrizes(prizesRes.data);
+      }
 
       // Prefer internal cashback (higher priority), fallback to Zoppy
       if (internalRes.data) {
@@ -510,6 +527,21 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       console.error('Cashback lookup error:', e);
     }
   };
+
+  // Load wheel segments for this store
+  const loadWheelSegments = async () => {
+    const { data } = await supabase
+      .from('prize_wheel_segments')
+      .select('*')
+      .eq('store_id', storeId)
+      .eq('is_active', true)
+      .order('sort_order') as any;
+    setWheelSegments(data || []);
+  };
+
+  useEffect(() => {
+    if (hasOpenRegister) loadWheelSegments();
+  }, [storeId, hasOpenRegister]);
 
   const finalizeSale = async () => {
     if (cart.length === 0) return;
@@ -592,6 +624,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setCart([]);
     setSelectedCustomer(null);
     setCustomerCashback(null);
+    setCustomerPrizes([]);
     setSelectedPayment("");
     setSelectedSeller("");
     setStep("scan");
@@ -606,6 +639,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setMultiPaymentAmount("");
     setDiscount("");
     setDiscountType("value");
+    setShowWheel(false);
   };
 
   const steps: { id: SaleStep; label: string; icon: typeof ScanBarcode }[] = [
@@ -1020,6 +1054,34 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   </p>
                 </div>
               )}
+
+              {/* Customer Prizes Alert */}
+              {customerPrizes.length > 0 && selectedCustomer && (
+                <div className="rounded-xl border-2 border-purple-500/50 bg-purple-500/10 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Gift className="h-5 w-5 text-purple-400" />
+                    <p className="font-bold text-purple-400">🎁 PRÊMIOS DISPONÍVEIS!</p>
+                  </div>
+                  <div className="space-y-2">
+                    {customerPrizes.map(p => (
+                      <div key={p.id} className="flex items-center justify-between bg-purple-500/10 rounded-lg px-3 py-2">
+                        <div>
+                          <p className="text-sm text-pos-white font-medium">{p.prize_label}</p>
+                          <p className="text-xs text-pos-white/50">
+                            Código: <span className="font-mono text-purple-300">{p.coupon_code}</span>
+                          </p>
+                        </div>
+                        <p className="text-[10px] text-pos-white/40">
+                          até {new Date(p.expires_at).toLocaleDateString('pt-BR')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-purple-300/80 mt-2 text-center">
+                    💡 Sugira ao cliente resgatar o prêmio nesta compra!
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1230,10 +1292,30 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                     <Printer className="h-5 w-5" /> Imprimir Nota
                   </Button>
                 )}
+                {wheelSegments.length > 0 && !showWheel && (
+                  <Button
+                    className="h-14 gap-2 text-base bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-bold col-span-2 hover:from-yellow-500 hover:via-orange-600 hover:to-red-600 shadow-lg"
+                    onClick={() => setShowWheel(true)}
+                  >
+                    🎰 Girar Roleta de Prêmios
+                  </Button>
+                )}
                 <Button className="h-14 gap-2 text-base bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold col-span-2" onClick={resetSale}>
                   <ShoppingCart className="h-5 w-5" /> Nova Venda
                 </Button>
               </div>
+
+              {/* Prize Wheel */}
+              {showWheel && (
+                <POSPrizeWheel
+                  segments={wheelSegments}
+                  storeId={storeId}
+                  customerPhone={selectedCustomer?.whatsapp?.replace(/\D/g, '')}
+                  customerName={selectedCustomer?.name}
+                  customerEmail={selectedCustomer?.email}
+                  onClose={() => setShowWheel(false)}
+                />
+              )}
             </div>
           )}
         </div>

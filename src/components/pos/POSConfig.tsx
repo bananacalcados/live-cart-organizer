@@ -59,6 +59,13 @@ export function POSConfig({ storeId }: Props) {
   const [newTask, setNewTask] = useState({ seller_id: "", title: "", description: "", customer_phone: "", customer_name: "", task_type: "contact", points_reward: "5", due_date: "" });
   const [generatingTasks, setGeneratingTasks] = useState(false);
 
+  // Prize Wheel Segments
+  const [wheelSegments, setWheelSegments] = useState<any[]>([]);
+  const [showAddSegment, setShowAddSegment] = useState(false);
+  const [newSegment, setNewSegment] = useState({ label: "", color: "#FF6B00", prize_type: "discount_percent", prize_value: "10", probability: "10", expiry_days: "30" });
+
+  const SEGMENT_COLORS = ["#FF6B00", "#E91E63", "#9C27B0", "#3F51B5", "#00BCD4", "#4CAF50", "#FFEB3B", "#FF5722", "#795548", "#607D8B"];
+
   useEffect(() => {
     loadSellers();
     loadInvoiceConfig();
@@ -66,8 +73,45 @@ export function POSConfig({ storeId }: Props) {
     loadWhatsAppNumbers();
     loadPrizes();
     loadTasks();
+    loadWheelSegments();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [storeId]);
+
+  const loadWheelSegments = async () => {
+    const { data } = await supabase.from('prize_wheel_segments').select('*').eq('store_id', storeId).order('sort_order') as any;
+    setWheelSegments(data || []);
+  };
+
+  const addWheelSegment = async () => {
+    if (!newSegment.label.trim()) return;
+    try {
+      const { error } = await supabase.from('prize_wheel_segments').insert({
+        store_id: storeId,
+        label: newSegment.label,
+        color: newSegment.color,
+        prize_type: newSegment.prize_type,
+        prize_value: parseFloat(newSegment.prize_value) || 0,
+        probability: parseFloat(newSegment.probability) || 10,
+        expiry_days: parseInt(newSegment.expiry_days) || 30,
+        sort_order: wheelSegments.length,
+      } as any);
+      if (error) throw error;
+      toast.success("Segmento adicionado!");
+      setNewSegment({ label: "", color: SEGMENT_COLORS[(wheelSegments.length + 1) % SEGMENT_COLORS.length], prize_type: "discount_percent", prize_value: "10", probability: "10", expiry_days: "30" });
+      setShowAddSegment(false);
+      loadWheelSegments();
+    } catch { toast.error("Erro ao adicionar segmento"); }
+  };
+
+  const removeWheelSegment = async (id: string) => {
+    await supabase.from('prize_wheel_segments').delete().eq('id', id);
+    loadWheelSegments();
+  };
+
+  const toggleWheelSegment = async (id: string, isActive: boolean) => {
+    await supabase.from('prize_wheel_segments').update({ is_active: !isActive }).eq('id', id);
+    loadWheelSegments();
+  };
 
   const loadWhatsAppNumbers = async () => {
     const [{ data: allNums }, { data: linked }] = await Promise.all([
@@ -633,6 +677,53 @@ export function POSConfig({ storeId }: Props) {
           </CardContent>
         </Card>
 
+        {/* ─── Prize Wheel Config ─── */}
+        <Card className="bg-pos-white/5 border-pos-orange/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center justify-between text-pos-white">
+              <span className="flex items-center gap-2">🎰 Roleta de Prêmios</span>
+              <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddSegment(true)}>
+                <Plus className="h-3 w-3" /> Novo Segmento
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-xs text-pos-white/50">Configure os segmentos da roleta que aparece após cada venda. Cada segmento tem uma probabilidade de ser sorteado.</p>
+            {wheelSegments.length === 0 ? (
+              <p className="text-xs text-pos-white/40">Nenhum segmento configurado. A roleta não aparecerá no PDV.</p>
+            ) : wheelSegments.map((seg: any) => (
+              <div key={seg.id} className="flex items-center gap-3 p-3 rounded-lg bg-pos-white/5 border border-pos-white/10">
+                <div className="h-8 w-8 rounded-full flex-shrink-0" style={{ backgroundColor: seg.color }} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-pos-white">{seg.label}</span>
+                    <Badge className={`text-[10px] ${seg.is_active ? 'bg-green-500/20 text-green-400' : 'bg-pos-white/10 text-pos-white/40'}`}>
+                      {seg.is_active ? 'Ativo' : 'Inativo'}
+                    </Badge>
+                  </div>
+                  <div className="flex gap-3 text-xs text-pos-white/50 mt-0.5">
+                    <span>
+                      {seg.prize_type === 'discount_percent' ? `${seg.prize_value}% desconto` :
+                       seg.prize_type === 'discount_fixed' ? `R$ ${Number(seg.prize_value).toFixed(2)} desconto` :
+                       seg.prize_type === 'free_shipping' ? 'Frete grátis' :
+                       seg.prize_type === 'gift' ? `Brinde: ${seg.prize_value}` :
+                       seg.label}
+                    </span>
+                    <span>Prob: {seg.probability}%</span>
+                    <span>Validade: {seg.expiry_days}d</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Switch checked={seg.is_active} onCheckedChange={() => toggleWheelSegment(seg.id, seg.is_active)} />
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:text-red-300" onClick={() => removeWheelSegment(seg.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
         {/* ─── Seller Tasks ─── */}
         <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
@@ -865,6 +956,55 @@ export function POSConfig({ storeId }: Props) {
                 <Input type="date" value={newTask.due_date} onChange={e => setNewTask(s => ({ ...s, due_date: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
               </div>
               <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addTask}>Criar Tarefa</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Wheel Segment Dialog */}
+        <Dialog open={showAddSegment} onOpenChange={setShowAddSegment}>
+          <DialogContent className="bg-pos-black border-pos-orange/30">
+            <DialogHeader><DialogTitle className="text-pos-white">Novo Segmento da Roleta</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-pos-white/70 text-xs">Nome do Prêmio (aparece na roleta)</Label>
+                <Input value={newSegment.label} onChange={e => setNewSegment(s => ({ ...s, label: e.target.value }))} placeholder="Ex: 10% OFF" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+              </div>
+              <div>
+                <Label className="text-pos-white/70 text-xs">Cor do Segmento</Label>
+                <div className="flex gap-2 flex-wrap mt-1">
+                  {SEGMENT_COLORS.map(c => (
+                    <button key={c} className={`h-8 w-8 rounded-full border-2 transition-all ${newSegment.color === c ? 'border-white scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} onClick={() => setNewSegment(s => ({ ...s, color: c }))} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label className="text-pos-white/70 text-xs">Tipo de Prêmio</Label>
+                <Select value={newSegment.prize_type} onValueChange={v => setNewSegment(s => ({ ...s, prize_type: v }))}>
+                  <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="discount_percent">Desconto %</SelectItem>
+                    <SelectItem value="discount_fixed">Desconto R$</SelectItem>
+                    <SelectItem value="free_shipping">Frete Grátis</SelectItem>
+                    <SelectItem value="gift">Brinde / Presente</SelectItem>
+                    <SelectItem value="custom">Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Valor</Label>
+                  <Input type="number" value={newSegment.prize_value} onChange={e => setNewSegment(s => ({ ...s, prize_value: e.target.value }))} placeholder="10" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Prob. %</Label>
+                  <Input type="number" value={newSegment.probability} onChange={e => setNewSegment(s => ({ ...s, probability: e.target.value }))} placeholder="10" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Validade (dias)</Label>
+                  <Input type="number" value={newSegment.expiry_days} onChange={e => setNewSegment(s => ({ ...s, expiry_days: e.target.value }))} placeholder="30" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                </div>
+              </div>
+              <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addWheelSegment}>Criar Segmento</Button>
             </div>
           </DialogContent>
         </Dialog>

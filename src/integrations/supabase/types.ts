@@ -779,6 +779,90 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_prizes: {
+        Row: {
+          campaign_id: string | null
+          coupon_code: string
+          created_at: string
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string
+          expires_at: string
+          id: string
+          is_redeemed: boolean
+          live_session_id: string | null
+          notes: string | null
+          prize_label: string
+          prize_type: string
+          prize_value: number
+          redeemed_at: string | null
+          redeemed_sale_id: string | null
+          segment_id: string | null
+          source: string
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          coupon_code: string
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone: string
+          expires_at: string
+          id?: string
+          is_redeemed?: boolean
+          live_session_id?: string | null
+          notes?: string | null
+          prize_label: string
+          prize_type: string
+          prize_value?: number
+          redeemed_at?: string | null
+          redeemed_sale_id?: string | null
+          segment_id?: string | null
+          source?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string | null
+          coupon_code?: string
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string
+          expires_at?: string
+          id?: string
+          is_redeemed?: boolean
+          live_session_id?: string | null
+          notes?: string | null
+          prize_label?: string
+          prize_type?: string
+          prize_value?: number
+          redeemed_at?: string | null
+          redeemed_sale_id?: string | null
+          segment_id?: string | null
+          source?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_prizes_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "prize_wheel_segments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_prizes_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_registrations: {
         Row: {
           address: string
@@ -3743,6 +3827,59 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      prize_wheel_segments: {
+        Row: {
+          color: string
+          created_at: string
+          expiry_days: number
+          id: string
+          is_active: boolean
+          label: string
+          prize_type: string
+          prize_value: number
+          probability: number
+          sort_order: number
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          expiry_days?: number
+          id?: string
+          is_active?: boolean
+          label: string
+          prize_type?: string
+          prize_value?: number
+          probability?: number
+          sort_order?: number
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          expiry_days?: number
+          id?: string
+          is_active?: boolean
+          label?: string
+          prize_type?: string
+          prize_value?: number
+          probability?: number
+          sort_order?: number
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prize_wheel_segments_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
