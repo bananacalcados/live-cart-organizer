@@ -7,7 +7,7 @@ import {
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles,
-  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink
+  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,7 @@ import { SectorManager } from "@/components/marketing/SectorManager";
 import { GroupsVipManager } from "@/components/marketing/GroupsVipManager";
 import { LiveSessionManager } from "@/components/LiveSessionManager";
 import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispatcher";
+import { PrizeManager } from "@/components/marketing/PrizeManager";
 
 // ─── Types ──────────────────────────────────────
 
@@ -613,6 +614,7 @@ export default function Marketing() {
             <TabsTrigger value="landing_pages" className="gap-1"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
             <TabsTrigger value="leads" className="gap-1"><FileSpreadsheet className="h-3.5 w-3.5" />Leads</TabsTrigger>
             <TabsTrigger value="groups_vip" className="gap-1"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
+            <TabsTrigger value="prizes" className="gap-1"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
             <TabsTrigger value="live_commerce" className="gap-1"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
           </TabsList>
 
@@ -975,6 +977,11 @@ export default function Marketing() {
           {/* ── GRUPOS VIP ── */}
           <TabsContent value="groups_vip" className="space-y-4">
             <GroupsVipManager />
+          </TabsContent>
+
+          {/* ── PRÊMIOS ── */}
+          <TabsContent value="prizes" className="space-y-4">
+            <PrizeManager />
           </TabsContent>
 
           {/* ── LIVE COMMERCE ── */}
