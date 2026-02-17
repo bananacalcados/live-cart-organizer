@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff } from "lucide-react";
+import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,6 +52,13 @@ interface ChatMsg {
   created_at: string;
 }
 
+// ---- TEST SIMULATION HELPERS ----
+const FAKE_NAMES = ["Ana Silva", "Bruno Costa", "Camila Santos", "Diego Oliveira", "Fernanda Lima", "Gabriel Rocha", "Helena Souza", "Igor Mendes"];
+const FAKE_MESSAGES = ["Amei! 😍", "Quanto custa?", "Tem na cor preta?", "Quero!", "Lindo demais!", "Qual tamanho?", "Entrega pra SP?", "Pix tem desconto?", "Quero 2!", "Esse é perfeito ❤️"];
+
+function randomItem<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+function randomPhone() { return `5511${Math.floor(900000000 + Math.random() * 99999999)}`; }
+
 export function LiveSessionManager() {
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,9 +82,13 @@ export function LiveSessionManager() {
   const [viewers, setViewers] = useState<LiveViewer[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [adminChatInput, setAdminChatInput] = useState("");
-  const [adminTab, setAdminTab] = useState("chat");
+  const [adminTab, setAdminTab] = useState("dashboard");
   const [spotlightProducts, setSpotlightProducts] = useState<ProductRef[]>([]);
   const [freightConfig, setFreightConfig] = useState<any>({ free_above: null, flat_rate: null, enabled: false });
+
+  // Test mode
+  const [testRunning, setTestRunning] = useState(false);
+  const [testInterval, setTestIntervalState] = useState<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { fetchSessions(); }, []);
 
@@ -135,6 +146,25 @@ export function LiveSessionManager() {
   const copyUrl = () => { navigator.clipboard.writeText(getLiveUrl()); toast.success("Link copiado!"); };
 
   const filteredProducts = allProducts.filter(p => p.node.title.toLowerCase().includes(productSearch.toLowerCase()));
+
+  // ---- REVENUE CALCULATIONS ----
+  const getRevenueStats = () => {
+    const viewersWithCarts = viewers.filter(v => v.cart_items && (v.cart_items as any[]).length > 0);
+    const totalCartValue = viewersWithCarts.reduce((sum, v) => {
+      return sum + (v.cart_items as any[]).reduce((s: number, item: any) => s + (item.price || 0) * (item.quantity || 1), 0);
+    }, 0);
+    const totalItems = viewersWithCarts.reduce((sum, v) => {
+      return sum + (v.cart_items as any[]).reduce((s: number, item: any) => s + (item.quantity || 1), 0);
+    }, 0);
+    return {
+      totalCartValue,
+      totalItems,
+      cartsCount: viewersWithCarts.length,
+      leadsCount: viewers.length,
+      onlineCount: viewers.filter(v => v.is_online && !v.is_banned).length,
+      messagesCount: chatMessages.length,
+    };
+  };
 
   // ---- ADMIN PANEL ----
   const openAdmin = (s: LiveSession) => {
@@ -204,8 +234,105 @@ export function LiveSessionManager() {
     toast.success("Frete atualizado!");
   };
 
+  // ---- TEST MODE ----
+  const startTestMode = async () => {
+    if (!adminSessionId) return;
+    setTestRunning(true);
+    toast.success("🧪 Modo teste iniciado! Simulando viewers e mensagens...");
+
+    const sessionProducts = spotlightProducts.length > 0 ? spotlightProducts : (adminSession?.selected_products || []);
+
+    // Create initial batch of fake viewers
+    const initialViewers = FAKE_NAMES.slice(0, 4).map(name => ({
+      session_id: adminSessionId,
+      name,
+      phone: randomPhone(),
+      is_online: true,
+      last_seen_at: new Date().toISOString(),
+      messages_count: 0,
+      cart_items: [] as any,
+    }));
+    await supabase.from("live_viewers").upsert(initialViewers, { onConflict: "session_id,phone" });
+
+    // System messages for joining
+    const joinMsgs = initialViewers.map(v => ({
+      session_id: adminSessionId,
+      viewer_name: v.name,
+      viewer_phone: v.phone,
+      message: `${v.name} entrou na live! 🎉`,
+      message_type: "system",
+    }));
+    await supabase.from("live_chat_messages").insert(joinMsgs);
+
+    // Start interval for ongoing simulation
+    const interval = setInterval(async () => {
+      const action = Math.random();
+
+      if (action < 0.5) {
+        // Send a chat message from a random viewer
+        const { data: activeViewers } = await supabase.from("live_viewers").select("name, phone").eq("session_id", adminSessionId).eq("is_online", true).limit(20);
+        if (activeViewers && activeViewers.length > 0) {
+          const v = randomItem(activeViewers);
+          await supabase.from("live_chat_messages").insert({
+            session_id: adminSessionId,
+            viewer_name: v.name,
+            viewer_phone: v.phone,
+            message: randomItem(FAKE_MESSAGES),
+            message_type: "text",
+          });
+        }
+      } else if (action < 0.75 && sessionProducts.length > 0) {
+        // Add a product to a random viewer's cart
+        const { data: activeViewers } = await supabase.from("live_viewers").select("*").eq("session_id", adminSessionId).eq("is_online", true).limit(20);
+        if (activeViewers && activeViewers.length > 0) {
+          const v = randomItem(activeViewers) as any;
+          const product = randomItem(sessionProducts);
+          const existingCart = Array.isArray(v.cart_items) ? v.cart_items : [];
+          const existingItem = existingCart.find((i: any) => i.handle === product.handle);
+          let newCart;
+          if (existingItem) {
+            newCart = existingCart.map((i: any) => i.handle === product.handle ? { ...i, quantity: (i.quantity || 1) + 1 } : i);
+          } else {
+            newCart = [...existingCart, { handle: product.handle, productTitle: product.title, price: product.price, quantity: 1, image: product.image }];
+          }
+          await supabase.from("live_viewers").update({ cart_items: newCart as any }).eq("id", v.id);
+        }
+      } else if (action < 0.9) {
+        // New viewer joins
+        const name = `${randomItem(FAKE_NAMES)} ${Math.floor(Math.random() * 99)}`;
+        const phone = randomPhone();
+        await supabase.from("live_viewers").upsert({ session_id: adminSessionId, name, phone, is_online: true, last_seen_at: new Date().toISOString(), messages_count: 0, cart_items: [] as any }, { onConflict: "session_id,phone" });
+        await supabase.from("live_chat_messages").insert({ session_id: adminSessionId, viewer_name: name, viewer_phone: phone, message: `${name} entrou na live! 🎉`, message_type: "system" });
+      }
+    }, 2500);
+
+    setTestIntervalState(interval);
+  };
+
+  const stopTestMode = async () => {
+    if (testInterval) { clearInterval(testInterval); setTestIntervalState(null); }
+    setTestRunning(false);
+    toast.success("🧪 Modo teste finalizado!");
+  };
+
+  const clearTestData = async () => {
+    if (!adminSessionId) return;
+    // Remove fake viewers (phones starting with 5511 and 12 digits)
+    await supabase.from("live_chat_messages").delete().eq("session_id", adminSessionId);
+    await supabase.from("live_viewers").delete().eq("session_id", adminSessionId);
+    setChatMessages([]);
+    setViewers([]);
+    toast.success("Dados de teste limpos!");
+  };
+
+  // Cleanup test interval on unmount
+  useEffect(() => {
+    return () => { if (testInterval) clearInterval(testInterval); };
+  }, [testInterval]);
+
   const adminSession = sessions.find(s => s.id === adminSessionId);
   const onlineViewers = viewers.filter(v => v.is_online && !v.is_banned);
+  const stats = getRevenueStats();
 
   // Admin Panel View
   if (adminSessionId && adminSession) {
@@ -213,26 +340,167 @@ export function LiveSessionManager() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={() => setAdminSessionId(null)}>← Voltar</Button>
+            <Button size="sm" variant="ghost" onClick={() => { stopTestMode(); setAdminSessionId(null); }}>← Voltar</Button>
             <h2 className="text-lg font-bold flex items-center gap-2">
               <Radio className="w-5 h-5 text-green-500 animate-pulse" />
               {adminSession.title}
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="gap-1"><Users className="w-3 h-3" /> {onlineViewers.length} online</Badge>
-            <Badge variant="outline" className="gap-1"><Eye className="w-3 h-3" /> {viewers.length} total</Badge>
+            {testRunning ? (
+              <Button size="sm" variant="destructive" className="gap-1 text-xs" onClick={stopTestMode}>
+                <TestTube2 className="w-3 h-3" /> Parar Teste
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={startTestMode}>
+                <TestTube2 className="w-3 h-3" /> Modo Teste
+              </Button>
+            )}
           </div>
         </div>
 
+        {/* Revenue Stats Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+          <Card className="border-green-500/20 bg-green-500/5">
+            <CardContent className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Faturamento Carrinhos</p>
+              <p className="text-lg font-bold text-green-500">R$ {stats.totalCartValue.toFixed(2).replace(".", ",")}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Carrinhos Ativos</p>
+              <p className="text-lg font-bold">{stats.cartsCount}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Itens nos Carrinhos</p>
+              <p className="text-lg font-bold">{stats.totalItems}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Leads Cadastrados</p>
+              <p className="text-lg font-bold">{stats.leadsCount}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Online Agora</p>
+              <p className="text-lg font-bold text-green-500">{stats.onlineCount}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Mensagens</p>
+              <p className="text-lg font-bold">{stats.messagesCount}</p>
+            </CardContent>
+          </Card>
+        </div>
+
         <Tabs value={adminTab} onValueChange={setAdminTab}>
-          <TabsList className="w-full grid grid-cols-5">
+          <TabsList className="w-full grid grid-cols-6">
+            <TabsTrigger value="dashboard" className="gap-1 text-xs"><BarChart3 className="w-3 h-3" /> Dashboard</TabsTrigger>
             <TabsTrigger value="chat" className="gap-1 text-xs"><MessageCircle className="w-3 h-3" /> Chat</TabsTrigger>
             <TabsTrigger value="products" className="gap-1 text-xs"><Star className="w-3 h-3" /> Produtos</TabsTrigger>
             <TabsTrigger value="viewers" className="gap-1 text-xs"><Users className="w-3 h-3" /> Viewers</TabsTrigger>
             <TabsTrigger value="carts" className="gap-1 text-xs"><ShoppingCart className="w-3 h-3" /> Carrinhos</TabsTrigger>
             <TabsTrigger value="config" className="gap-1 text-xs"><Settings className="w-3 h-3" /> Config</TabsTrigger>
           </TabsList>
+
+          {/* DASHBOARD TAB */}
+          <TabsContent value="dashboard" className="mt-3 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Top Cart Viewers */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2"><DollarSign className="w-4 h-4 text-green-500" /> Maiores Carrinhos</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {viewers
+                    .filter(v => v.cart_items && (v.cart_items as any[]).length > 0)
+                    .sort((a, b) => {
+                      const aVal = (a.cart_items as any[]).reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0);
+                      const bVal = (b.cart_items as any[]).reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0);
+                      return bVal - aVal;
+                    })
+                    .slice(0, 10)
+                    .map(v => {
+                      const cartVal = (v.cart_items as any[]).reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0);
+                      const itemCount = (v.cart_items as any[]).reduce((s: number, i: any) => s + (i.quantity || 1), 0);
+                      return (
+                        <div key={v.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${v.is_online ? "bg-green-500" : "bg-zinc-400"}`} />
+                            <div>
+                              <p className="text-sm font-medium">{v.name}</p>
+                              <p className="text-[10px] text-muted-foreground">{itemCount} itens</p>
+                            </div>
+                          </div>
+                          <span className="text-sm font-bold text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</span>
+                        </div>
+                      );
+                    })}
+                  {viewers.filter(v => v.cart_items && (v.cart_items as any[]).length > 0).length === 0 && (
+                    <p className="text-muted-foreground text-sm text-center py-4">Nenhum carrinho ativo</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Recent Activity */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2"><MessageCircle className="w-4 h-4" /> Atividade Recente</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                    {chatMessages.slice(-20).reverse().map(msg => (
+                      <div key={msg.id} className="text-xs">
+                        {msg.message_type === "system" ? (
+                          <p className="text-muted-foreground italic">{msg.message}</p>
+                        ) : (
+                          <p><span className="font-bold text-primary">{msg.viewer_name}:</span> {msg.message}</p>
+                        )}
+                      </div>
+                    ))}
+                    {chatMessages.length === 0 && <p className="text-muted-foreground text-sm text-center py-4">Sem atividade</p>}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Test Mode Controls */}
+            <Card className="border-dashed border-amber-500/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2"><TestTube2 className="w-4 h-4 text-amber-500" /> Modo de Teste / Ensaio</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Simule viewers, mensagens e carrinhos para testar o funcionamento da live antes dela acontecer. Os dados simulados podem ser limpos a qualquer momento.
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {testRunning ? (
+                    <Button size="sm" variant="destructive" className="gap-1" onClick={stopTestMode}>
+                      <TestTube2 className="w-3.5 h-3.5" /> Parar Simulação
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="gap-1 border-amber-500/50 text-amber-500 hover:bg-amber-500/10" onClick={startTestMode}>
+                      <TestTube2 className="w-3.5 h-3.5" /> Iniciar Simulação
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" className="gap-1 text-destructive" onClick={clearTestData}>
+                    <Trash2 className="w-3.5 h-3.5" /> Limpar Dados de Teste
+                  </Button>
+                </div>
+                {testRunning && (
+                  <Badge variant="outline" className="border-amber-500/50 text-amber-500 animate-pulse gap-1">
+                    <TestTube2 className="w-3 h-3" /> Simulação em andamento...
+                  </Badge>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* CHAT TAB */}
           <TabsContent value="chat" className="mt-3">
@@ -340,22 +608,38 @@ export function LiveSessionManager() {
           <TabsContent value="carts" className="mt-3">
             <Card>
               <CardContent className="p-4">
-                <p className="text-muted-foreground text-sm text-center py-4">
-                  Os carrinhos dos viewers são exibidos aqui em tempo real quando eles adicionam produtos.
-                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold">Carrinhos Ativos ({stats.cartsCount})</h3>
+                  <Badge variant="outline" className="text-green-500 border-green-500/30">
+                    Total: R$ {stats.totalCartValue.toFixed(2).replace(".", ",")}
+                  </Badge>
+                </div>
                 {viewers.filter(v => v.cart_items && (v.cart_items as any[]).length > 0).length === 0 ? (
-                  <p className="text-muted-foreground text-xs text-center">Nenhum carrinho ativo</p>
-                ) : viewers.filter(v => v.cart_items && (v.cart_items as any[]).length > 0).map(v => (
-                  <div key={v.id} className="border rounded-lg p-3 mb-2">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">{v.name}</span>
-                      <Badge variant="outline" className="text-xs">{(v.cart_items as any[]).length} itens</Badge>
+                  <p className="text-muted-foreground text-xs text-center py-4">Nenhum carrinho ativo</p>
+                ) : viewers.filter(v => v.cart_items && (v.cart_items as any[]).length > 0).map(v => {
+                  const cartVal = (v.cart_items as any[]).reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0);
+                  return (
+                    <div key={v.id} className="border rounded-lg p-3 mb-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{v.name}</span>
+                          <a href={`https://wa.me/${v.phone}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-500">
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                        <Badge variant="outline" className="text-xs text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</Badge>
+                      </div>
+                      {(v.cart_items as any[]).map((item: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          {item.image && <img src={item.image} className="w-6 h-6 rounded object-cover" />}
+                          <span className="flex-1">{item.productTitle}</span>
+                          <span>x{item.quantity || 1}</span>
+                          <span className="font-medium text-foreground">R$ {((item.price || 0) * (item.quantity || 1)).toFixed(2).replace(".", ",")}</span>
+                        </div>
+                      ))}
                     </div>
-                    {(v.cart_items as any[]).map((item: any, idx: number) => (
-                      <p key={idx} className="text-xs text-muted-foreground">{item.productTitle} x{item.quantity}</p>
-                    ))}
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           </TabsContent>
@@ -496,11 +780,9 @@ export function LiveSessionManager() {
                   <Button size="sm" variant="outline" className="gap-1 text-xs" asChild>
                     <a href={getLiveUrl()} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3 h-3" /> Abrir</a>
                   </Button>
-                  {s.is_active && (
-                    <Button size="sm" className="gap-1 text-xs" onClick={() => openAdmin(s)}>
-                      <Radio className="w-3 h-3" /> Gerenciar Live
-                    </Button>
-                  )}
+                  <Button size="sm" className="gap-1 text-xs" onClick={() => openAdmin(s)}>
+                    <Radio className="w-3 h-3" /> Gerenciar Live
+                  </Button>
                 </div>
               </CardContent>
             </Card>
