@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3, Link2, Lock, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
 import { toast } from "sonner";
 
 interface LiveSession {
@@ -89,6 +90,19 @@ export function LiveSessionManager() {
   // Test mode
   const [testRunning, setTestRunning] = useState(false);
   const [testInterval, setTestIntervalState] = useState<ReturnType<typeof setInterval> | null>(null);
+
+  // Private chat
+  const [privateChatViewer, setPrivateChatViewer] = useState<LiveViewer | null>(null);
+  const [privateChatInput, setPrivateChatInput] = useState("");
+  const [privateChatMessages, setPrivateChatMessages] = useState<ChatMsg[]>([]);
+
+  // Add product to viewer cart dialog
+  const [addCartViewer, setAddCartViewer] = useState<LiveViewer | null>(null);
+  const [addCartSearch, setAddCartSearch] = useState("");
+
+  // Chat auto-scroll refs
+  const adminChatScrollRef = useRef<HTMLDivElement>(null);
+  const privateChatScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchSessions(); }, []);
 
@@ -178,7 +192,7 @@ export function LiveSessionManager() {
   const loadAdminData = async (sessionId: string) => {
     const [viewersRes, chatRes] = await Promise.all([
       supabase.from("live_viewers").select("*").eq("session_id", sessionId).order("joined_at", { ascending: false }),
-      supabase.from("live_chat_messages").select("*").eq("session_id", sessionId).order("created_at", { ascending: true }).limit(200),
+      supabase.from("live_chat_messages").select("*").eq("session_id", sessionId).order("created_at", { ascending: true }).limit(500),
     ]);
     setViewers((viewersRes.data as any[]) || []);
     setChatMessages((chatRes.data as any[]) || []);
@@ -188,8 +202,12 @@ export function LiveSessionManager() {
   useEffect(() => {
     if (!adminSessionId) return;
     const ch1 = supabase.channel(`admin-chat-${adminSessionId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat_messages", filter: `session_id=eq.${adminSessionId}` }, (p) => {
-        setChatMessages(prev => [...prev.slice(-199), p.new as ChatMsg]);
+      .on("postgres_changes", { event: "*", schema: "public", table: "live_chat_messages", filter: `session_id=eq.${adminSessionId}` }, (p) => {
+        if (p.eventType === "INSERT") {
+          setChatMessages(prev => [...prev.slice(-499), p.new as ChatMsg]);
+        } else if (p.eventType === "DELETE") {
+          setChatMessages(prev => prev.filter(m => m.id !== (p.old as any).id));
+        }
       }).subscribe();
     const ch2 = supabase.channel(`admin-viewers-${adminSessionId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "live_viewers", filter: `session_id=eq.${adminSessionId}` }, () => {
@@ -197,6 +215,20 @@ export function LiveSessionManager() {
       }).subscribe();
     return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2); };
   }, [adminSessionId]);
+
+  // Auto-scroll admin chat
+  useEffect(() => {
+    if (adminChatScrollRef.current) {
+      adminChatScrollRef.current.scrollTop = adminChatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+
+  // Auto-scroll private chat
+  useEffect(() => {
+    if (privateChatScrollRef.current) {
+      privateChatScrollRef.current.scrollTop = privateChatScrollRef.current.scrollHeight;
+    }
+  }, [privateChatMessages]);
 
   const toggleSpotlight = async (product: ProductRef) => {
     const exists = spotlightProducts.find(p => p.handle === product.handle);
@@ -234,6 +266,79 @@ export function LiveSessionManager() {
     toast.success("Frete atualizado!");
   };
 
+  // ---- PRIVATE CHAT ----
+  const openPrivateChat = (viewer: LiveViewer) => {
+    setPrivateChatViewer(viewer);
+    setPrivateChatInput("");
+    // Load private messages between admin and this viewer
+    const privateMessages = chatMessages.filter(m =>
+      m.message_type === "private" && (m.viewer_phone === viewer.phone || (m.viewer_phone === "admin" && m.message.startsWith(`[DM→${viewer.name}]`)))
+    );
+    setPrivateChatMessages(privateMessages);
+  };
+
+  const sendPrivateMessage = async () => {
+    if (!privateChatInput.trim() || !adminSessionId || !privateChatViewer) return;
+    await supabase.from("live_chat_messages").insert({
+      session_id: adminSessionId,
+      viewer_name: "🏪 Banana Calçados",
+      viewer_phone: "admin",
+      message: `[DM→${privateChatViewer.name}] ${privateChatInput.trim()}`,
+      message_type: "private",
+    });
+    setPrivateChatInput("");
+    // Reload private messages
+    setTimeout(() => {
+      const msgs = chatMessages.filter(m =>
+        m.message_type === "private" && (m.viewer_phone === privateChatViewer.phone || (m.viewer_phone === "admin" && m.message.startsWith(`[DM→${privateChatViewer.name}]`)))
+      );
+      setPrivateChatMessages(msgs);
+    }, 500);
+  };
+
+  // ---- ADD PRODUCT TO VIEWER CART ----
+  const addProductToViewerCart = async (viewer: LiveViewer, product: ProductRef) => {
+    const existingCart = Array.isArray(viewer.cart_items) ? viewer.cart_items : [];
+    const existingItem = existingCart.find((i: any) => i.handle === product.handle);
+    let newCart;
+    if (existingItem) {
+      newCart = existingCart.map((i: any) => i.handle === product.handle ? { ...i, quantity: (i.quantity || 1) + 1 } : i);
+    } else {
+      newCart = [...existingCart, { handle: product.handle, productTitle: product.title, price: product.price, quantity: 1, image: product.image }];
+    }
+    await supabase.from("live_viewers").update({ cart_items: newCart as any }).eq("id", viewer.id);
+    toast.success(`${product.title} adicionado ao carrinho de ${viewer.name}`);
+    loadAdminData(adminSessionId!);
+    setAddCartViewer(null);
+  };
+
+  // ---- GENERATE PAYMENT LINK ----
+  const generatePaymentLink = async (viewer: LiveViewer) => {
+    const cartItems = Array.isArray(viewer.cart_items) ? viewer.cart_items : [];
+    if (cartItems.length === 0) { toast.error("Carrinho vazio"); return; }
+
+    try {
+      const orderProducts = cartItems.map((item: any) => ({
+        id: item.handle || item.variantId || "unknown",
+        title: item.productTitle,
+        variant: "Default",
+        price: item.price,
+        quantity: item.quantity || 1,
+        shopifyId: item.handle || item.variantId || "unknown",
+        image: item.image,
+      }));
+      const checkoutUrl = await createShopifyCartFromOrder(orderProducts);
+      if (checkoutUrl) {
+        navigator.clipboard.writeText(checkoutUrl);
+        toast.success("Link de pagamento copiado! Envie para o cliente via WhatsApp.");
+      } else {
+        toast.error("Erro ao gerar link de pagamento");
+      }
+    } catch {
+      toast.error("Erro ao gerar link");
+    }
+  };
+
   // ---- TEST MODE ----
   const startTestMode = async () => {
     if (!adminSessionId) return;
@@ -242,7 +347,6 @@ export function LiveSessionManager() {
 
     const sessionProducts = spotlightProducts.length > 0 ? spotlightProducts : (adminSession?.selected_products || []);
 
-    // Create initial batch of fake viewers
     const initialViewers = FAKE_NAMES.slice(0, 4).map(name => ({
       session_id: adminSessionId,
       name,
@@ -254,7 +358,6 @@ export function LiveSessionManager() {
     }));
     await supabase.from("live_viewers").upsert(initialViewers, { onConflict: "session_id,phone" });
 
-    // System messages for joining
     const joinMsgs = initialViewers.map(v => ({
       session_id: adminSessionId,
       viewer_name: v.name,
@@ -264,25 +367,19 @@ export function LiveSessionManager() {
     }));
     await supabase.from("live_chat_messages").insert(joinMsgs);
 
-    // Start interval for ongoing simulation
     const interval = setInterval(async () => {
       const action = Math.random();
 
       if (action < 0.5) {
-        // Send a chat message from a random viewer
         const { data: activeViewers } = await supabase.from("live_viewers").select("name, phone").eq("session_id", adminSessionId).eq("is_online", true).limit(20);
         if (activeViewers && activeViewers.length > 0) {
           const v = randomItem(activeViewers);
           await supabase.from("live_chat_messages").insert({
-            session_id: adminSessionId,
-            viewer_name: v.name,
-            viewer_phone: v.phone,
-            message: randomItem(FAKE_MESSAGES),
-            message_type: "text",
+            session_id: adminSessionId, viewer_name: v.name, viewer_phone: v.phone,
+            message: randomItem(FAKE_MESSAGES), message_type: "text",
           });
         }
       } else if (action < 0.75 && sessionProducts.length > 0) {
-        // Add a product to a random viewer's cart
         const { data: activeViewers } = await supabase.from("live_viewers").select("*").eq("session_id", adminSessionId).eq("is_online", true).limit(20);
         if (activeViewers && activeViewers.length > 0) {
           const v = randomItem(activeViewers) as any;
@@ -298,7 +395,6 @@ export function LiveSessionManager() {
           await supabase.from("live_viewers").update({ cart_items: newCart as any }).eq("id", v.id);
         }
       } else if (action < 0.9) {
-        // New viewer joins
         const name = `${randomItem(FAKE_NAMES)} ${Math.floor(Math.random() * 99)}`;
         const phone = randomPhone();
         await supabase.from("live_viewers").upsert({ session_id: adminSessionId, name, phone, is_online: true, last_seen_at: new Date().toISOString(), messages_count: 0, cart_items: [] as any }, { onConflict: "session_id,phone" });
@@ -317,7 +413,6 @@ export function LiveSessionManager() {
 
   const clearTestData = async () => {
     if (!adminSessionId) return;
-    // Remove fake viewers (phones starting with 5511 and 12 digits)
     await supabase.from("live_chat_messages").delete().eq("session_id", adminSessionId);
     await supabase.from("live_viewers").delete().eq("session_id", adminSessionId);
     setChatMessages([]);
@@ -325,7 +420,6 @@ export function LiveSessionManager() {
     toast.success("Dados de teste limpos!");
   };
 
-  // Cleanup test interval on unmount
   useEffect(() => {
     return () => { if (testInterval) clearInterval(testInterval); };
   }, [testInterval]);
@@ -333,6 +427,8 @@ export function LiveSessionManager() {
   const adminSession = sessions.find(s => s.id === adminSessionId);
   const onlineViewers = viewers.filter(v => v.is_online && !v.is_banned);
   const stats = getRevenueStats();
+
+  const addCartFilteredProducts = allProducts.filter(p => p.node.title.toLowerCase().includes(addCartSearch.toLowerCase()));
 
   // Admin Panel View
   if (adminSessionId && adminSession) {
@@ -347,6 +443,9 @@ export function LiveSessionManager() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-1 text-xs" asChild>
+              <a href={getLiveUrl()} target="_blank" rel="noopener noreferrer"><Eye className="w-3 h-3" /> Simular Página Pública</a>
+            </Button>
             {testRunning ? (
               <Button size="sm" variant="destructive" className="gap-1 text-xs" onClick={stopTestMode}>
                 <TestTube2 className="w-3 h-3" /> Parar Teste
@@ -387,7 +486,7 @@ export function LiveSessionManager() {
           </Card>
           <Card>
             <CardContent className="p-3 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Online Agora</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Online Real</p>
               <p className="text-lg font-bold text-green-500">{stats.onlineCount}</p>
             </CardContent>
           </Card>
@@ -400,19 +499,19 @@ export function LiveSessionManager() {
         </div>
 
         <Tabs value={adminTab} onValueChange={setAdminTab}>
-          <TabsList className="w-full grid grid-cols-6">
+          <TabsList className="w-full grid grid-cols-7">
             <TabsTrigger value="dashboard" className="gap-1 text-xs"><BarChart3 className="w-3 h-3" /> Dashboard</TabsTrigger>
             <TabsTrigger value="chat" className="gap-1 text-xs"><MessageCircle className="w-3 h-3" /> Chat</TabsTrigger>
             <TabsTrigger value="products" className="gap-1 text-xs"><Star className="w-3 h-3" /> Produtos</TabsTrigger>
             <TabsTrigger value="viewers" className="gap-1 text-xs"><Users className="w-3 h-3" /> Viewers</TabsTrigger>
             <TabsTrigger value="carts" className="gap-1 text-xs"><ShoppingCart className="w-3 h-3" /> Carrinhos</TabsTrigger>
+            <TabsTrigger value="messages" className="gap-1 text-xs"><Send className="w-3 h-3" /> Mensagens</TabsTrigger>
             <TabsTrigger value="config" className="gap-1 text-xs"><Settings className="w-3 h-3" /> Config</TabsTrigger>
           </TabsList>
 
           {/* DASHBOARD TAB */}
           <TabsContent value="dashboard" className="mt-3 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Top Cart Viewers */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2"><DollarSign className="w-4 h-4 text-green-500" /> Maiores Carrinhos</CardTitle>
@@ -438,7 +537,12 @@ export function LiveSessionManager() {
                               <p className="text-[10px] text-muted-foreground">{itemCount} itens</p>
                             </div>
                           </div>
-                          <span className="text-sm font-bold text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</span>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => generatePaymentLink(v)} title="Gerar link de pagamento">
+                              <Link2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </div>
                       );
                     })}
@@ -448,14 +552,13 @@ export function LiveSessionManager() {
                 </CardContent>
               </Card>
 
-              {/* Recent Activity */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2"><MessageCircle className="w-4 h-4" /> Atividade Recente</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
-                    {chatMessages.slice(-20).reverse().map(msg => (
+                    {chatMessages.filter(m => m.message_type !== "private").slice(-20).reverse().map(msg => (
                       <div key={msg.id} className="text-xs">
                         {msg.message_type === "system" ? (
                           <p className="text-muted-foreground italic">{msg.message}</p>
@@ -477,7 +580,7 @@ export function LiveSessionManager() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Simule viewers, mensagens e carrinhos para testar o funcionamento da live antes dela acontecer. Os dados simulados podem ser limpos a qualquer momento.
+                  Simule viewers, mensagens e carrinhos para testar o funcionamento da live. Os dados simulados podem ser limpos a qualquer momento.
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">
                   {testRunning ? (
@@ -507,8 +610,8 @@ export function LiveSessionManager() {
             <Card>
               <CardContent className="p-0">
                 <div className="h-[400px] flex flex-col">
-                  <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
-                    {chatMessages.map(msg => (
+                  <div ref={adminChatScrollRef} className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
+                    {chatMessages.filter(m => m.message_type !== "private").map(msg => (
                       <div key={msg.id} className="group flex items-start gap-2">
                         <div className="flex-1 min-w-0">
                           {msg.message_type === "system" ? (
@@ -520,9 +623,19 @@ export function LiveSessionManager() {
                             </p>
                           )}
                         </div>
-                        <button onClick={() => deleteMessage(msg.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {msg.viewer_phone !== "admin" && (
+                            <button onClick={() => {
+                              const v = viewers.find(vw => vw.phone === msg.viewer_phone);
+                              if (v) openPrivateChat(v);
+                            }} className="text-muted-foreground hover:text-primary" title="Chat privado">
+                              <Lock className="w-3 h-3" />
+                            </button>
+                          )}
+                          <button onClick={() => deleteMessage(msg.id)} className="text-destructive">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {chatMessages.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">Nenhuma mensagem ainda</p>}
@@ -590,6 +703,12 @@ export function LiveSessionManager() {
                         <p className="text-xs text-muted-foreground">{v.phone} • {v.messages_count || 0} msgs</p>
                       </div>
                       <div className="flex items-center gap-1">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openPrivateChat(v)} title="Chat privado">
+                          <Lock className="w-3.5 h-3.5 text-primary" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setAddCartViewer(v); setAddCartSearch(""); }} title="Adicionar produto ao carrinho">
+                          <Plus className="w-3.5 h-3.5 text-green-600" />
+                        </Button>
                         <a href={`https://wa.me/${v.phone}`} target="_blank" rel="noopener noreferrer">
                           <Button size="icon" variant="ghost" className="h-7 w-7"><MessageCircle className="w-3.5 h-3.5 text-green-600" /></Button>
                         </a>
@@ -627,7 +746,15 @@ export function LiveSessionManager() {
                             <MessageCircle className="w-3.5 h-3.5" />
                           </a>
                         </div>
-                        <Badge variant="outline" className="text-xs text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</Badge>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => generatePaymentLink(v)}>
+                            <Link2 className="w-3 h-3" /> Gerar Link
+                          </Button>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => { setAddCartViewer(v); setAddCartSearch(""); }}>
+                            <Plus className="w-3 h-3" /> Produto
+                          </Button>
+                        </div>
                       </div>
                       {(v.cart_items as any[]).map((item: any, idx: number) => (
                         <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -640,6 +767,40 @@ export function LiveSessionManager() {
                     </div>
                   );
                 })}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* MESSAGES TAB - All messages saved for follow-up */}
+          <TabsContent value="messages" className="mt-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Todas as Mensagens da Live (Salvas para Follow-up)</CardTitle>
+                <p className="text-xs text-muted-foreground">As mensagens ficam salvas após a live para você entrar em contato com leads que não compraram.</p>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-[60vh] overflow-y-auto space-y-1.5">
+                  {chatMessages.filter(m => m.message_type !== "system" && m.viewer_phone !== "admin").map(msg => (
+                    <div key={msg.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm">
+                          <span className="font-bold text-primary">{msg.viewer_name}</span>
+                          <span className="text-muted-foreground text-[10px] ml-2">{msg.viewer_phone}</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">{msg.message}</p>
+                        <p className="text-[10px] text-muted-foreground/60">{new Date(msg.created_at).toLocaleString("pt-BR")}</p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <a href={`https://wa.me/${msg.viewer_phone}`} target="_blank" rel="noopener noreferrer">
+                          <Button size="icon" variant="ghost" className="h-7 w-7"><MessageCircle className="w-3.5 h-3.5 text-green-600" /></Button>
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                  {chatMessages.filter(m => m.message_type !== "system" && m.viewer_phone !== "admin").length === 0 && (
+                    <p className="text-muted-foreground text-sm text-center py-8">Nenhuma mensagem de leads</p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -683,6 +844,74 @@ export function LiveSessionManager() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Private Chat Dialog */}
+        <Dialog open={!!privateChatViewer} onOpenChange={o => { if (!o) setPrivateChatViewer(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-sm">
+                <Lock className="w-4 h-4" /> Chat Privado com {privateChatViewer?.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>{privateChatViewer?.phone}</span>
+                <a href={`https://wa.me/${privateChatViewer?.phone}`} target="_blank" rel="noopener noreferrer" className="text-green-600 underline">Abrir WhatsApp</a>
+              </div>
+              <div ref={privateChatScrollRef} className="h-[250px] overflow-y-auto border rounded-lg p-3 space-y-2 bg-muted/30">
+                {privateChatMessages.length === 0 ? (
+                  <p className="text-muted-foreground text-xs text-center py-8">Nenhuma mensagem privada ainda</p>
+                ) : privateChatMessages.map(msg => (
+                  <div key={msg.id} className="text-sm">
+                    <span className="font-bold text-primary">{msg.viewer_name}:</span>
+                    <span className="ml-1.5">{msg.message.replace(`[DM→${privateChatViewer?.name}] `, "")}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <Input value={privateChatInput} onChange={e => setPrivateChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") sendPrivateMessage(); }}
+                  placeholder="Mensagem privada..." className="text-sm" />
+                <Button size="sm" onClick={sendPrivateMessage} disabled={!privateChatInput.trim()}><Send className="w-4 h-4" /></Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Product to Viewer Cart Dialog */}
+        <Dialog open={!!addCartViewer} onOpenChange={o => { if (!o) setAddCartViewer(null); }}>
+          <DialogContent className="max-w-md max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="text-sm">Adicionar produto ao carrinho de {addCartViewer?.name}</DialogTitle>
+            </DialogHeader>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+              <Input className="pl-8" placeholder="Buscar produto..." value={addCartSearch} onChange={e => setAddCartSearch(e.target.value)} />
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto space-y-1">
+              {loadingProducts ? <p className="text-center text-muted-foreground py-8 text-sm">Carregando...</p> :
+                addCartFilteredProducts.slice(0, 30).map(p => (
+                  <button key={p.node.id} onClick={() => {
+                    if (addCartViewer) {
+                      addProductToViewerCart(addCartViewer, {
+                        handle: p.node.handle, title: p.node.title,
+                        image: p.node.images.edges[0]?.node.url,
+                        price: parseFloat(p.node.priceRange.minVariantPrice.amount),
+                      });
+                    }
+                  }}
+                    className="w-full flex items-center gap-2 p-2 rounded-lg text-left hover:bg-muted transition-colors">
+                    {p.node.images.edges[0]?.node.url && <img src={p.node.images.edges[0].node.url} className="w-10 h-10 rounded object-cover" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{p.node.title}</p>
+                      <p className="text-xs text-muted-foreground">R$ {parseFloat(p.node.priceRange.minVariantPrice.amount).toFixed(2).replace(".", ",")}</p>
+                    </div>
+                    <Plus className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  </button>
+                ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
