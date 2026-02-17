@@ -1024,62 +1024,57 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <p className="text-xs text-pos-white/40">* Pule esta etapa para NFC-e sem identificação.</p>
               )}
 
-              {/* Cashback Alert */}
-              {customerCashback && selectedCustomer && (
-                <div className="rounded-xl border-2 border-green-500/50 bg-green-500/10 p-4 animate-pulse">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                      <Tag className="h-6 w-6 text-green-400" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-bold text-green-400 text-lg">💰 CASHBACK DISPONÍVEL!</p>
-                      <p className="text-sm text-pos-white/80">
-                        Código: <span className="font-mono font-bold text-green-300">{customerCashback.code}</span>
-                      </p>
-                      <p className="text-sm text-pos-white/70">
-                        {customerCashback.type === 'percent' 
-                          ? `${customerCashback.amount}% de desconto` 
-                          : `R$ ${customerCashback.amount.toFixed(2)} de desconto`}
-                        {customerCashback.min_purchase > 0 && ` • Compra mín: R$ ${customerCashback.min_purchase.toFixed(2)}`}
-                      </p>
-                      {customerCashback.expiry_date && (
-                        <p className="text-xs text-pos-white/50 mt-1">
-                          Válido até: {new Date(customerCashback.expiry_date).toLocaleDateString('pt-BR')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-xs text-green-300/80 mt-2 text-center font-medium">
-                    ⬆️ Sugira ao cliente usar o cashback para comprar mais!
-                  </p>
-                </div>
-              )}
-
-              {/* Customer Prizes Alert */}
-              {customerPrizes.length > 0 && selectedCustomer && (
-                <div className="rounded-xl border-2 border-purple-500/50 bg-purple-500/10 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Gift className="h-5 w-5 text-purple-400" />
-                    <p className="font-bold text-purple-400">🎁 PRÊMIOS DISPONÍVEIS!</p>
-                  </div>
-                  <div className="space-y-2">
-                    {customerPrizes.map(p => (
-                      <div key={p.id} className="flex items-center justify-between bg-purple-500/10 rounded-lg px-3 py-2">
-                        <div>
-                          <p className="text-sm text-pos-white font-medium">{p.prize_label}</p>
-                          <p className="text-xs text-pos-white/50">
-                            Código: <span className="font-mono text-purple-300">{p.coupon_code}</span>
-                          </p>
+              {/* Discrete Benefits Bar */}
+              {selectedCustomer && (customerCashback || customerPrizes.length > 0) && (
+                <div className="space-y-2">
+                  {/* Cashback - discrete suggestion */}
+                  {customerCashback && (
+                    <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-3 py-2.5">
+                      <div className="h-8 w-8 rounded-full bg-green-500/15 flex items-center justify-center flex-shrink-0">
+                        <Tag className="h-4 w-4 text-green-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-green-400">Cashback</span>
+                          <span className="font-mono text-xs font-bold text-green-300 bg-green-500/10 px-1.5 py-0.5 rounded">
+                            {customerCashback.code}
+                          </span>
                         </div>
-                        <p className="text-[10px] text-pos-white/40">
-                          até {new Date(p.expires_at).toLocaleDateString('pt-BR')}
+                        <p className="text-[11px] text-pos-white/60 truncate">
+                          {customerCashback.type === 'percent' 
+                            ? `${customerCashback.amount}% off` 
+                            : `R$ ${customerCashback.amount.toFixed(2)} off`}
+                          {customerCashback.min_purchase > 0 && ` · min R$ ${customerCashback.min_purchase.toFixed(2)}`}
+                          {customerCashback.expiry_date && ` · até ${new Date(customerCashback.expiry_date).toLocaleDateString('pt-BR')}`}
                         </p>
                       </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-purple-300/80 mt-2 text-center">
-                    💡 Sugira ao cliente resgatar o prêmio nesta compra!
-                  </p>
+                      <span className="text-[10px] text-green-400/60 italic flex-shrink-0">sugerir</span>
+                    </div>
+                  )}
+
+                  {/* Prizes - discrete list */}
+                  {customerPrizes.map(p => (
+                    <div key={p.id} className="flex items-center gap-3 rounded-lg border border-purple-500/30 bg-purple-500/5 px-3 py-2.5">
+                      <div className="h-8 w-8 rounded-full bg-purple-500/15 flex items-center justify-center flex-shrink-0">
+                        <Gift className="h-4 w-4 text-purple-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-purple-400">{p.prize_label}</span>
+                          <span className="font-mono text-xs font-bold text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                            {p.coupon_code}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-pos-white/60 truncate">
+                          {p.prize_type === 'discount_percent' ? `${p.prize_value}% off` : 
+                           p.prize_type === 'free_shipping' ? 'Frete grátis' :
+                           `R$ ${p.prize_value.toFixed(2)} off`}
+                          {` · até ${new Date(p.expires_at).toLocaleDateString('pt-BR')}`}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-purple-400/60 italic flex-shrink-0">sugerir</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
