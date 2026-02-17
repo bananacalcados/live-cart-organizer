@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
-import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
+import { createYampiPaymentLinkFromOrder } from "@/lib/yampi";
 import { toast } from "sonner";
 
 interface LiveSession {
@@ -99,6 +99,11 @@ export function LiveSessionManager() {
   // Add product to viewer cart dialog
   const [addCartViewer, setAddCartViewer] = useState<LiveViewer | null>(null);
   const [addCartSearch, setAddCartSearch] = useState("");
+  const [addCartSelectedProduct, setAddCartSelectedProduct] = useState<ShopifyProduct | null>(null);
+
+  // Payment link dialog
+  const [paymentLinkViewer, setPaymentLinkViewer] = useState<LiveViewer | null>(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
 
   // Chat auto-scroll refs
   const adminChatScrollRef = useRef<HTMLDivElement>(null);
@@ -270,7 +275,6 @@ export function LiveSessionManager() {
   const openPrivateChat = (viewer: LiveViewer) => {
     setPrivateChatViewer(viewer);
     setPrivateChatInput("");
-    // Load private messages between admin and this viewer
     const privateMessages = chatMessages.filter(m =>
       m.message_type === "private" && (m.viewer_phone === viewer.phone || (m.viewer_phone === "admin" && m.message.startsWith(`[DM→${viewer.name}]`)))
     );
@@ -287,7 +291,6 @@ export function LiveSessionManager() {
       message_type: "private",
     });
     setPrivateChatInput("");
-    // Reload private messages
     setTimeout(() => {
       const msgs = chatMessages.filter(m =>
         m.message_type === "private" && (m.viewer_phone === privateChatViewer.phone || (m.viewer_phone === "admin" && m.message.startsWith(`[DM→${privateChatViewer.name}]`)))
@@ -296,46 +299,102 @@ export function LiveSessionManager() {
     }, 500);
   };
 
-  // ---- ADD PRODUCT TO VIEWER CART ----
-  const addProductToViewerCart = async (viewer: LiveViewer, product: ProductRef) => {
+  // ---- ADD PRODUCT TO VIEWER CART (with variant selection) ----
+  const addVariantToViewerCart = async (viewer: LiveViewer, variant: { id: string; title: string; price: number; sku: string | null }, productTitle: string, image?: string) => {
     const existingCart = Array.isArray(viewer.cart_items) ? viewer.cart_items : [];
-    const existingItem = existingCart.find((i: any) => i.handle === product.handle);
+    const existingItem = existingCart.find((i: any) => i.variantId === variant.id);
     let newCart;
     if (existingItem) {
-      newCart = existingCart.map((i: any) => i.handle === product.handle ? { ...i, quantity: (i.quantity || 1) + 1 } : i);
+      newCart = existingCart.map((i: any) => i.variantId === variant.id ? { ...i, quantity: (i.quantity || 1) + 1 } : i);
     } else {
-      newCart = [...existingCart, { handle: product.handle, productTitle: product.title, price: product.price, quantity: 1, image: product.image }];
+      newCart = [...existingCart, {
+        variantId: variant.id,
+        productTitle,
+        variantTitle: variant.title === "Default Title" ? "" : variant.title,
+        price: variant.price,
+        quantity: 1,
+        image,
+        sku: variant.sku,
+      }];
     }
     await supabase.from("live_viewers").update({ cart_items: newCart as any }).eq("id", viewer.id);
-    toast.success(`${product.title} adicionado ao carrinho de ${viewer.name}`);
+    toast.success(`${productTitle} (${variant.title}) adicionado ao carrinho de ${viewer.name}`);
     loadAdminData(adminSessionId!);
+    setAddCartSelectedProduct(null);
     setAddCartViewer(null);
   };
 
   // ---- GENERATE PAYMENT LINK ----
-  const generatePaymentLink = async (viewer: LiveViewer) => {
+  const generateCheckoutTransparente = async (viewer: LiveViewer) => {
     const cartItems = Array.isArray(viewer.cart_items) ? viewer.cart_items : [];
     if (cartItems.length === 0) { toast.error("Carrinho vazio"); return; }
 
+    setGeneratingLink(true);
     try {
-      const orderProducts = cartItems.map((item: any) => ({
-        id: item.handle || item.variantId || "unknown",
+      const products = cartItems.map((item: any) => ({
         title: item.productTitle,
-        variant: "Default",
+        variant: item.variantTitle || "Default",
         price: item.price,
         quantity: item.quantity || 1,
-        shopifyId: item.handle || item.variantId || "unknown",
         image: item.image,
+        variantId: item.variantId,
+        sku: item.sku,
       }));
-      const checkoutUrl = await createShopifyCartFromOrder(orderProducts);
-      if (checkoutUrl) {
-        navigator.clipboard.writeText(checkoutUrl);
-        toast.success("Link de pagamento copiado! Envie para o cliente via WhatsApp.");
+
+      // Encode cart data in base64 for the checkout URL
+      const cartData = {
+        customerName: viewer.name,
+        customerPhone: viewer.phone,
+        products,
+        source: "live",
+      };
+      const encoded = btoa(encodeURIComponent(JSON.stringify(cartData)));
+      const checkoutUrl = `${window.location.origin}/checkout?live=${encoded}`;
+      navigator.clipboard.writeText(checkoutUrl);
+      toast.success("Link do Checkout Transparente copiado!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao gerar link de checkout");
+    } finally {
+      setGeneratingLink(false);
+      setPaymentLinkViewer(null);
+    }
+  };
+
+  const generateYampiLink = async (viewer: LiveViewer) => {
+    const cartItems = Array.isArray(viewer.cart_items) ? viewer.cart_items : [];
+    if (cartItems.length === 0) { toast.error("Carrinho vazio"); return; }
+
+    setGeneratingLink(true);
+    try {
+      const dbProducts = cartItems.map((item: any) => ({
+        id: item.variantId || item.handle || "unknown",
+        title: item.productTitle,
+        variant: item.variantTitle || "Default",
+        price: item.price,
+        quantity: item.quantity || 1,
+        shopifyId: item.variantId || item.handle || "unknown",
+        image: item.image,
+        sku: item.sku || null,
+      }));
+
+      const paymentLink = await createYampiPaymentLinkFromOrder(dbProducts, {
+        customerName: viewer.name,
+        customerPhone: viewer.phone,
+      });
+
+      if (paymentLink) {
+        navigator.clipboard.writeText(paymentLink);
+        toast.success("Link Yampi copiado!");
       } else {
-        toast.error("Erro ao gerar link de pagamento");
+        toast.error("Erro ao gerar link Yampi");
       }
-    } catch {
-      toast.error("Erro ao gerar link");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Erro ao gerar link Yampi");
+    } finally {
+      setGeneratingLink(false);
+      setPaymentLinkViewer(null);
     }
   };
 
@@ -385,12 +444,12 @@ export function LiveSessionManager() {
           const v = randomItem(activeViewers) as any;
           const product = randomItem(sessionProducts);
           const existingCart = Array.isArray(v.cart_items) ? v.cart_items : [];
-          const existingItem = existingCart.find((i: any) => i.handle === product.handle);
+          const existingItem = existingCart.find((i: any) => i.productTitle === product.title);
           let newCart;
           if (existingItem) {
-            newCart = existingCart.map((i: any) => i.handle === product.handle ? { ...i, quantity: (i.quantity || 1) + 1 } : i);
+            newCart = existingCart.map((i: any) => i.productTitle === product.title ? { ...i, quantity: (i.quantity || 1) + 1 } : i);
           } else {
-            newCart = [...existingCart, { handle: product.handle, productTitle: product.title, price: product.price, quantity: 1, image: product.image }];
+            newCart = [...existingCart, { variantId: `gid://shopify/ProductVariant/test-${Date.now()}`, productTitle: product.title, variantTitle: "Teste", price: product.price, quantity: 1, image: product.image }];
           }
           await supabase.from("live_viewers").update({ cart_items: newCart as any }).eq("id", v.id);
         }
@@ -539,7 +598,7 @@ export function LiveSessionManager() {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</span>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => generatePaymentLink(v)} title="Gerar link de pagamento">
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setPaymentLinkViewer(v)} title="Gerar link de pagamento">
                               <Link2 className="w-3 h-3" />
                             </Button>
                           </div>
@@ -706,7 +765,7 @@ export function LiveSessionManager() {
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openPrivateChat(v)} title="Chat privado">
                           <Lock className="w-3.5 h-3.5 text-primary" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setAddCartViewer(v); setAddCartSearch(""); }} title="Adicionar produto ao carrinho">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setAddCartViewer(v); setAddCartSearch(""); setAddCartSelectedProduct(null); }} title="Adicionar produto ao carrinho">
                           <Plus className="w-3.5 h-3.5 text-green-600" />
                         </Button>
                         <a href={`https://wa.me/${v.phone}`} target="_blank" rel="noopener noreferrer">
@@ -748,10 +807,10 @@ export function LiveSessionManager() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="text-xs text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</Badge>
-                          <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => generatePaymentLink(v)}>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => setPaymentLinkViewer(v)}>
                             <Link2 className="w-3 h-3" /> Gerar Link
                           </Button>
-                          <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => { setAddCartViewer(v); setAddCartSearch(""); }}>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => { setAddCartViewer(v); setAddCartSearch(""); setAddCartSelectedProduct(null); }}>
                             <Plus className="w-3 h-3" /> Produto
                           </Button>
                         </div>
@@ -759,7 +818,7 @@ export function LiveSessionManager() {
                       {(v.cart_items as any[]).map((item: any, idx: number) => (
                         <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
                           {item.image && <img src={item.image} className="w-6 h-6 rounded object-cover" />}
-                          <span className="flex-1">{item.productTitle}</span>
+                          <span className="flex-1">{item.productTitle} {item.variantTitle && <span className="text-[10px]">({item.variantTitle})</span>}</span>
                           <span>x{item.quantity || 1}</span>
                           <span className="font-medium text-foreground">R$ {((item.price || 0) * (item.quantity || 1)).toFixed(2).replace(".", ",")}</span>
                         </div>
@@ -771,7 +830,7 @@ export function LiveSessionManager() {
             </Card>
           </TabsContent>
 
-          {/* MESSAGES TAB - All messages saved for follow-up */}
+          {/* MESSAGES TAB */}
           <TabsContent value="messages" className="mt-3">
             <Card>
               <CardHeader className="pb-2">
@@ -878,38 +937,156 @@ export function LiveSessionManager() {
           </DialogContent>
         </Dialog>
 
-        {/* Add Product to Viewer Cart Dialog */}
-        <Dialog open={!!addCartViewer} onOpenChange={o => { if (!o) setAddCartViewer(null); }}>
+        {/* Add Product to Viewer Cart Dialog - WITH VARIANT SELECTION */}
+        <Dialog open={!!addCartViewer} onOpenChange={o => { if (!o) { setAddCartViewer(null); setAddCartSelectedProduct(null); } }}>
           <DialogContent className="max-w-md max-h-[80vh]">
             <DialogHeader>
-              <DialogTitle className="text-sm">Adicionar produto ao carrinho de {addCartViewer?.name}</DialogTitle>
+              <DialogTitle className="text-sm">
+                {addCartSelectedProduct
+                  ? `Escolher variação: ${addCartSelectedProduct.node.title}`
+                  : `Adicionar produto ao carrinho de ${addCartViewer?.name}`
+                }
+              </DialogTitle>
             </DialogHeader>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-              <Input className="pl-8" placeholder="Buscar produto..." value={addCartSearch} onChange={e => setAddCartSearch(e.target.value)} />
-            </div>
-            <div className="max-h-[50vh] overflow-y-auto space-y-1">
-              {loadingProducts ? <p className="text-center text-muted-foreground py-8 text-sm">Carregando...</p> :
-                addCartFilteredProducts.slice(0, 30).map(p => (
-                  <button key={p.node.id} onClick={() => {
-                    if (addCartViewer) {
-                      addProductToViewerCart(addCartViewer, {
-                        handle: p.node.handle, title: p.node.title,
-                        image: p.node.images.edges[0]?.node.url,
-                        price: parseFloat(p.node.priceRange.minVariantPrice.amount),
-                      });
-                    }
-                  }}
-                    className="w-full flex items-center gap-2 p-2 rounded-lg text-left hover:bg-muted transition-colors">
-                    {p.node.images.edges[0]?.node.url && <img src={p.node.images.edges[0].node.url} className="w-10 h-10 rounded object-cover" />}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{p.node.title}</p>
-                      <p className="text-xs text-muted-foreground">R$ {parseFloat(p.node.priceRange.minVariantPrice.amount).toFixed(2).replace(".", ",")}</p>
+
+            {/* Variant selection step */}
+            {addCartSelectedProduct ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  {addCartSelectedProduct.node.images.edges[0]?.node.url && (
+                    <img src={addCartSelectedProduct.node.images.edges[0].node.url} className="w-12 h-12 rounded object-cover" />
+                  )}
+                  <div>
+                    <p className="text-xs font-medium">{addCartSelectedProduct.node.title}</p>
+                    <button onClick={() => setAddCartSelectedProduct(null)} className="text-xs text-primary underline">← Voltar aos produtos</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto">
+                  {addCartSelectedProduct.node.variants.edges
+                    .filter(v => v.node.availableForSale)
+                    .map(v => (
+                      <button
+                        key={v.node.id}
+                        onClick={() => {
+                          if (addCartViewer) {
+                            addVariantToViewerCart(
+                              addCartViewer,
+                              { id: v.node.id, title: v.node.title, price: parseFloat(v.node.price.amount), sku: v.node.sku },
+                              addCartSelectedProduct.node.title,
+                              addCartSelectedProduct.node.images.edges[0]?.node.url
+                            );
+                          }
+                        }}
+                        className="rounded-lg border p-3 text-left hover:bg-muted transition-colors"
+                      >
+                        <p className="text-xs font-medium">{v.node.title}</p>
+                        {v.node.sku && <p className="text-[10px] text-muted-foreground">SKU: {v.node.sku}</p>}
+                        <p className="text-sm font-bold text-green-500 mt-1">
+                          R$ {parseFloat(v.node.price.amount).toFixed(2).replace(".", ",")}
+                        </p>
+                      </button>
+                    ))}
+                  {addCartSelectedProduct.node.variants.edges.filter(v => v.node.availableForSale).length === 0 && (
+                    <p className="col-span-2 text-muted-foreground text-xs text-center py-4">Nenhuma variação disponível</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Product search step */
+              <>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+                  <Input className="pl-8" placeholder="Buscar produto..." value={addCartSearch} onChange={e => setAddCartSearch(e.target.value)} />
+                </div>
+                <div className="max-h-[50vh] overflow-y-auto space-y-1">
+                  {loadingProducts ? <p className="text-center text-muted-foreground py-8 text-sm">Carregando...</p> :
+                    addCartFilteredProducts.slice(0, 30).map(p => {
+                      const hasVariants = p.node.variants.edges.length > 1;
+                      return (
+                        <button key={p.node.id} onClick={() => {
+                          if (hasVariants) {
+                            setAddCartSelectedProduct(p);
+                          } else {
+                            // Single variant - add directly
+                            const v = p.node.variants.edges[0]?.node;
+                            if (v && addCartViewer) {
+                              addVariantToViewerCart(
+                                addCartViewer,
+                                { id: v.id, title: v.title, price: parseFloat(v.price.amount), sku: v.sku },
+                                p.node.title,
+                                p.node.images.edges[0]?.node.url
+                              );
+                            }
+                          }
+                        }}
+                          className="w-full flex items-center gap-2 p-2 rounded-lg text-left hover:bg-muted transition-colors">
+                          {p.node.images.edges[0]?.node.url && <img src={p.node.images.edges[0].node.url} className="w-10 h-10 rounded object-cover" />}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">{p.node.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              R$ {parseFloat(p.node.priceRange.minVariantPrice.amount).toFixed(2).replace(".", ",")}
+                              {hasVariants && <span className="ml-1 text-primary">• {p.node.variants.edges.length} variações</span>}
+                            </p>
+                          </div>
+                          {hasVariants ? <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <Plus className="w-4 h-4 text-green-600 flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Payment Link Dialog - Checkout Transparente or Yampi */}
+        <Dialog open={!!paymentLinkViewer} onOpenChange={o => { if (!o) setPaymentLinkViewer(null); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-sm">Gerar Link de Pagamento</DialogTitle>
+            </DialogHeader>
+            {paymentLinkViewer && (
+              <div className="space-y-4">
+                <div className="text-xs text-muted-foreground">
+                  <p><strong>Cliente:</strong> {paymentLinkViewer.name}</p>
+                  <p><strong>WhatsApp:</strong> {paymentLinkViewer.phone}</p>
+                  <p><strong>Itens:</strong> {(paymentLinkViewer.cart_items as any[])?.length || 0} produtos</p>
+                  <p><strong>Total:</strong> R$ {(paymentLinkViewer.cart_items as any[])?.reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0).toFixed(2).replace(".", ",")}</p>
+                </div>
+
+                <div className="space-y-2">
+                  {(paymentLinkViewer.cart_items as any[])?.map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-center gap-2 text-xs bg-muted/50 rounded p-2">
+                      {item.image && <img src={item.image} className="w-6 h-6 rounded object-cover" />}
+                      <span className="flex-1 truncate">{item.productTitle} {item.variantTitle && `(${item.variantTitle})`}</span>
+                      <span>x{item.quantity || 1}</span>
                     </div>
-                    <Plus className="w-4 h-4 text-green-600 flex-shrink-0" />
-                  </button>
-                ))}
-            </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  <Button
+                    className="w-full gap-2"
+                    variant="outline"
+                    disabled={generatingLink}
+                    onClick={() => generateCheckoutTransparente(paymentLinkViewer)}
+                  >
+                    <Lock className="w-4 h-4" />
+                    {generatingLink ? "Gerando..." : "Checkout Transparente"}
+                  </Button>
+                  <Button
+                    className="w-full gap-2"
+                    variant="outline"
+                    disabled={generatingLink}
+                    onClick={() => generateYampiLink(paymentLinkViewer)}
+                  >
+                    <Link2 className="w-4 h-4" />
+                    {generatingLink ? "Gerando..." : "Link Yampi"}
+                  </Button>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground text-center">O link será copiado automaticamente para a área de transferência</p>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -979,39 +1156,29 @@ export function LiveSessionManager() {
       </Dialog>
 
       {/* Sessions List */}
-      {loading ? <p className="text-muted-foreground text-sm">Carregando...</p> : sessions.length === 0 ? (
-        <Card className="border-dashed"><CardContent className="flex flex-col items-center py-8"><Video className="w-10 h-10 text-muted-foreground mb-2" /><p className="text-sm text-muted-foreground">Nenhuma sessão de live criada</p></CardContent></Card>
+      {loading ? (
+        <p className="text-muted-foreground text-sm text-center py-8">Carregando sessões...</p>
+      ) : sessions.length === 0 ? (
+        <Card><CardContent className="py-8 text-center"><p className="text-muted-foreground text-sm">Nenhuma sessão criada. Clique em "Nova Sessão" para começar.</p></CardContent></Card>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {sessions.map(s => (
-            <Card key={s.id} className={s.is_active ? "ring-2 ring-green-500" : ""}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
+            <Card key={s.id} className={`${s.is_active ? "ring-2 ring-green-500" : ""}`}>
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    {s.is_active && <Radio className="w-4 h-4 text-green-500 animate-pulse" />}
-                    <CardTitle className="text-sm">{s.title}</CardTitle>
+                    <h3 className="font-bold text-sm">{s.title}</h3>
+                    {s.is_active && <Badge className="bg-green-500/10 text-green-500 text-[10px]">AO VIVO</Badge>}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Switch checked={s.is_active} onCheckedChange={v => toggleActive(s.id, v)} />
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEdit(s)}><Video className="w-3.5 h-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteSession(s.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{s.selected_products?.length || 0} produtos • {new Date(s.created_at).toLocaleDateString("pt-BR")}</p>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{s.selected_products?.length || 0} produtos</span>
-                  <span>• {(s.spotlight_products || []).length} em destaque</span>
-                  {s.youtube_video_id && <span>• YouTube: {s.youtube_video_id}</span>}
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => copyUrl()}><Copy className="w-3 h-3" /> Copiar Link</Button>
-                  <Button size="sm" variant="outline" className="gap-1 text-xs" asChild>
-                    <a href={getLiveUrl()} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3 h-3" /> Abrir</a>
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => openAdmin(s)}>
+                    <Radio className="w-3 h-3" /> Gerenciar
                   </Button>
-                  <Button size="sm" className="gap-1 text-xs" onClick={() => openAdmin(s)}>
-                    <Radio className="w-3 h-3" /> Gerenciar Live
-                  </Button>
+                  <Switch checked={s.is_active} onCheckedChange={v => toggleActive(s.id, v)} />
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEdit(s)}><Settings className="w-3.5 h-3.5" /></Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteSession(s.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                 </div>
               </CardContent>
             </Card>
@@ -1019,5 +1186,14 @@ export function LiveSessionManager() {
         </div>
       )}
     </div>
+  );
+}
+
+// Missing icon used in the component
+function ChevronRight(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="m9 18 6-6-6-6" />
+    </svg>
   );
 }
