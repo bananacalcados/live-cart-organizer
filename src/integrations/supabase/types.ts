@@ -2064,6 +2064,44 @@ export type Database = {
           },
         ]
       }
+      live_chat_messages: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          message_type: string
+          session_id: string
+          viewer_name: string
+          viewer_phone: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          message_type?: string
+          session_id: string
+          viewer_name: string
+          viewer_phone: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          message_type?: string
+          session_id?: string
+          viewer_name?: string
+          viewer_phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "live_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_sessions: {
         Row: {
           created_at: string
@@ -2096,6 +2134,50 @@ export type Database = {
           youtube_video_id?: string | null
         }
         Relationships: []
+      }
+      live_viewers: {
+        Row: {
+          cart_value: number | null
+          id: string
+          is_online: boolean
+          joined_at: string
+          last_seen_at: string
+          messages_count: number | null
+          name: string
+          phone: string
+          session_id: string
+        }
+        Insert: {
+          cart_value?: number | null
+          id?: string
+          is_online?: boolean
+          joined_at?: string
+          last_seen_at?: string
+          messages_count?: number | null
+          name: string
+          phone: string
+          session_id: string
+        }
+        Update: {
+          cart_value?: number | null
+          id?: string
+          is_online?: boolean
+          joined_at?: string
+          last_seen_at?: string
+          messages_count?: number | null
+          name?: string
+          phone?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_viewers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "live_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       loyalty_config: {
         Row: {

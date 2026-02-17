@@ -5,6 +5,8 @@ import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { LiveLeadGate } from "@/components/live/LiveLeadGate";
+import { LiveChatOverlay } from "@/components/live/LiveChatOverlay";
 
 interface CartItem {
   variantId: string;
@@ -23,20 +25,35 @@ interface ProductRef {
 }
 
 interface LiveSessionData {
+  id: string;
   youtube_video_id: string | null;
   whatsapp_link: string | null;
   selected_products: ProductRef[];
   title: string;
 }
 
+const STORAGE_KEY = "live_viewer";
+
 const LiveCommerce = () => {
   const [session, setSession] = useState<LiveSessionData | null>(null);
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
-  const [drawerView, setDrawerView] = useState<"closed" | "products" | "cart">("closed");
+  const [drawerView, setDrawerView] = useState<"closed" | "products" | "cart" | "chat">("closed");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [checkingOut, setCheckingOut] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShopifyProduct | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Viewer state
+  const [viewer, setViewer] = useState<{ name: string; phone: string } | null>(null);
+  const [viewerCount, setViewerCount] = useState(0);
+
+  // Restore viewer from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try { setViewer(JSON.parse(stored)); } catch {}
+    }
+  }, []);
 
   // Fetch active session from DB
   useEffect(() => {
@@ -51,6 +68,7 @@ const LiveCommerce = () => {
       if (data) {
         const s = data as any;
         setSession({
+          id: s.id,
           youtube_video_id: s.youtube_video_id,
           whatsapp_link: s.whatsapp_link,
           selected_products: s.selected_products || [],
@@ -64,11 +82,60 @@ const LiveCommerce = () => {
           const filtered = allProds.filter(p => handles.includes(p.node.handle));
           setProducts(filtered);
         }
+
+        // Viewer count
+        const { count } = await supabase
+          .from("live_viewers")
+          .select("*", { count: "exact", head: true })
+          .eq("session_id", s.id)
+          .eq("is_online", true);
+        setViewerCount(count || 0);
       }
       setLoading(false);
     };
     load();
   }, []);
+
+  // Subscribe to viewer count changes
+  useEffect(() => {
+    if (!session?.id) return;
+    const channel = supabase
+      .channel(`live-viewers-${session.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "live_viewers", filter: `session_id=eq.${session.id}` }, async () => {
+        const { count } = await supabase
+          .from("live_viewers")
+          .select("*", { count: "exact", head: true })
+          .eq("session_id", session.id)
+          .eq("is_online", true);
+        setViewerCount(count || 0);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session?.id]);
+
+  // Register viewer
+  const handleLeadSubmit = async (name: string, phone: string) => {
+    const viewerData = { name, phone };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(viewerData));
+    setViewer(viewerData);
+
+    if (session?.id) {
+      // Upsert viewer
+      await supabase.from("live_viewers").upsert(
+        { session_id: session.id, name, phone, is_online: true, last_seen_at: new Date().toISOString() },
+        { onConflict: "session_id,phone" }
+      );
+
+      // System message
+      await supabase.from("live_chat_messages").insert({
+        session_id: session.id,
+        viewer_name: name,
+        viewer_phone: phone,
+        message: `${name} entrou na live! 🎉`,
+        message_type: "system",
+      });
+    }
+  };
 
   const isLive = !!session?.youtube_video_id;
   const videoId = session?.youtube_video_id || "";
@@ -151,6 +218,11 @@ const LiveCommerce = () => {
     );
   }
 
+  // Show lead gate if viewer not registered
+  if (!viewer) {
+    return <LiveLeadGate sessionTitle={session.title} onSubmit={handleLeadSubmit} />;
+  }
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       {/* Video */}
@@ -181,32 +253,36 @@ const LiveCommerce = () => {
             {isLive && (
               <span className="inline-flex items-center gap-1 text-xs">
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                AO VIVO
+                AO VIVO • {viewerCount} assistindo
               </span>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {whatsappLink && (
             <a href={whatsappLink} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors">
-              <MessageCircle className="w-4 h-4" />
-              WhatsApp
+              className="inline-flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white text-[10px] font-semibold px-2 py-1.5 rounded-lg transition-colors">
+              <MessageCircle className="w-3.5 h-3.5" />
             </a>
           )}
+          <Button size="sm" variant="outline"
+            className={`border-zinc-700 text-white hover:bg-zinc-800 gap-1 h-8 px-2 text-xs ${drawerView === "chat" ? "bg-zinc-700" : ""}`}
+            onClick={() => setDrawerView(v => v === "chat" ? "closed" : "chat")}>
+            💬 Chat
+          </Button>
           {products.length > 0 && (
-            <Button size="sm" variant="outline" className="border-zinc-700 text-white hover:bg-zinc-800 gap-1.5"
+            <Button size="sm" variant="outline"
+              className={`border-zinc-700 text-white hover:bg-zinc-800 gap-1 h-8 px-2 text-xs ${drawerView === "products" ? "bg-zinc-700" : ""}`}
               onClick={() => setDrawerView(v => v === "products" ? "closed" : "products")}>
-              <ShoppingBag className="w-4 h-4" />
-              Produtos
-              {drawerView === "products" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+              <ShoppingBag className="w-3.5 h-3.5" />
+              {products.length}
             </Button>
           )}
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-bold gap-1.5 relative"
+          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-bold gap-1 h-8 px-2 relative"
             onClick={() => setDrawerView(v => v === "cart" ? "closed" : "cart")}>
-            <ShoppingCart className="w-4 h-4" />
+            <ShoppingCart className="w-3.5 h-3.5" />
             {cartCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                 {cartCount}
               </span>
             )}
@@ -242,6 +318,18 @@ const LiveCommerce = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Chat Drawer */}
+      {drawerView === "chat" && session?.id && viewer && (
+        <div className="bg-zinc-900 border-t border-zinc-800 h-[45vh]">
+          <LiveChatOverlay
+            sessionId={session.id}
+            viewerName={viewer.name}
+            viewerPhone={viewer.phone}
+            viewerCount={viewerCount}
+          />
         </div>
       )}
 
