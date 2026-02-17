@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
@@ -33,6 +33,7 @@ interface LiveSessionData {
 }
 
 const STORAGE_KEY = "live_viewer";
+const MIN_PUBLIC_VIEWERS = 200;
 
 const LiveCommerce = () => {
   const [session, setSession] = useState<LiveSessionData | null>(null);
@@ -55,11 +56,12 @@ const LiveCommerce = () => {
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // Pending action after gate
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
-  // Restore viewer from localStorage
+  // Restore viewer from localStorage (persisted across lives)
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) { try { setViewer(JSON.parse(stored)); } catch {} }
@@ -80,7 +82,6 @@ const LiveCommerce = () => {
           spotlight_products: s.spotlight_products || [],
           title: s.title,
         });
-        // Load spotlight products from Shopify
         const spotlightHandles = (s.spotlight_products || []).map((p: ProductRef) => p.handle);
         if (spotlightHandles.length > 0) {
           const allProds = await fetchProducts(250);
@@ -90,6 +91,18 @@ const LiveCommerce = () => {
           .from("live_viewers").select("*", { count: "exact", head: true })
           .eq("session_id", s.id).eq("is_online", true);
         setViewerCount(count || 0);
+
+        // Auto-register viewer if already known
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          try {
+            const v = JSON.parse(stored);
+            await supabase.from("live_viewers").upsert(
+              { session_id: s.id, name: v.name, phone: v.phone, is_online: true, last_seen_at: new Date().toISOString() },
+              { onConflict: "session_id,phone" }
+            );
+          } catch {}
+        }
       }
       setLoading(false);
     };
@@ -105,7 +118,6 @@ const LiveCommerce = () => {
         const s = payload.new as any;
         const newSpotlight: ProductRef[] = s.spotlight_products || [];
         setSession(prev => prev ? { ...prev, spotlight_products: newSpotlight, selected_products: s.selected_products || prev.selected_products } : prev);
-        // Reload products for new spotlight
         const handles = newSpotlight.map(p => p.handle);
         if (handles.length > 0) {
           const allProds = await fetchProducts(250);
@@ -144,13 +156,24 @@ const LiveCommerce = () => {
     loadMsgs();
     const channel = supabase
       .channel(`live-chat-${session.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_chat_messages", filter: `session_id=eq.${session.id}` }, (payload) => {
-        setChatMessages(prev => [...prev.slice(-99), payload.new]);
+      .on("postgres_changes", { event: "*", schema: "public", table: "live_chat_messages", filter: `session_id=eq.${session.id}` }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          setChatMessages(prev => [...prev.slice(-99), payload.new]);
+        } else if (payload.eventType === "DELETE") {
+          setChatMessages(prev => prev.filter((m: any) => m.id !== payload.old.id));
+        }
       }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [session?.id]);
 
-  // Gate logic: require registration only for chat/cart
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+
+  // Gate logic
   const requireViewer = (purpose: "chat" | "cart", action: () => void) => {
     if (viewer) { action(); return; }
     setGatePurpose(purpose);
@@ -193,6 +216,9 @@ const LiveCommerce = () => {
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
   const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
 
+  // Public viewer count: always show at least MIN_PUBLIC_VIEWERS
+  const publicViewerCount = Math.max(viewerCount, MIN_PUBLIC_VIEWERS) + Math.floor(Math.random() * 15);
+
   const addToCart = useCallback((variant: { id: string; title: string; price: number }, productTitle: string, image?: string) => {
     setCart(prev => {
       const existing = prev.find(i => i.variantId === variant.id);
@@ -201,7 +227,17 @@ const LiveCommerce = () => {
     });
     toast.success("Adicionado ao carrinho!");
     setSelectedProduct(null);
-  }, []);
+
+    // Sync cart to viewer record for admin visibility
+    if (viewer && session?.id) {
+      setTimeout(async () => {
+        // Re-read cart after state update
+        const currentCart = [...cart, { variantId: variant.id, productTitle, price: variant.price, quantity: 1, image }];
+        const cartItems = currentCart.map(i => ({ handle: i.variantId, productTitle: i.productTitle, price: i.price, quantity: i.quantity, image: i.image }));
+        await supabase.from("live_viewers").update({ cart_items: cartItems as any }).eq("session_id", session.id).eq("phone", viewer.phone);
+      }, 100);
+    }
+  }, [cart, viewer, session?.id]);
 
   const updateQty = (variantId: string, delta: number) => {
     setCart(prev => prev.map(i => { if (i.variantId !== variantId) return i; const q = i.quantity + delta; return q <= 0 ? null! : { ...i, quantity: q }; }).filter(Boolean));
@@ -290,7 +326,7 @@ const LiveCommerce = () => {
             <h1 className="text-sm font-bold leading-tight">{session.title}</h1>
             <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
               {isLive && <><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> AO VIVO • </>}
-              <Users className="w-3 h-3" /> {viewerCount}
+              <Users className="w-3 h-3" /> {publicViewerCount}
             </span>
           </div>
         </div>
@@ -345,10 +381,10 @@ const LiveCommerce = () => {
         </div>
       )}
 
-      {/* Chat Drawer */}
+      {/* Chat Drawer - with fixed auto-scroll */}
       {drawerView === "chat" && viewer && (
         <div className="bg-zinc-900 border-t border-zinc-800 h-[40vh] flex flex-col">
-          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 min-h-0">
+          <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 min-h-0">
             {chatMessages.map((msg: any) => (
               <div key={msg.id} className="animate-fade-in">
                 {msg.message_type === "system" ? (
