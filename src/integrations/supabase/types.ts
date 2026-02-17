@@ -779,6 +779,53 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_loyalty_points: {
+        Row: {
+          created_at: string
+          customer_name: string | null
+          customer_phone: string
+          expires_at: string
+          id: string
+          last_earn_at: string
+          lifetime_points: number
+          store_id: string
+          total_points: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_name?: string | null
+          customer_phone: string
+          expires_at?: string
+          id?: string
+          last_earn_at?: string
+          lifetime_points?: number
+          store_id: string
+          total_points?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string
+          expires_at?: string
+          id?: string
+          last_earn_at?: string
+          lifetime_points?: number
+          store_id?: string
+          total_points?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_loyalty_points_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_prizes: {
         Row: {
           campaign_id: string | null
@@ -2049,6 +2096,144 @@ export type Database = {
           youtube_video_id?: string | null
         }
         Relationships: []
+      }
+      loyalty_config: {
+        Row: {
+          created_at: string
+          id: string
+          is_enabled: boolean
+          points_expiry_days: number
+          points_per_real: number
+          store_id: string
+          updated_at: string
+          wheel_enabled: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          points_expiry_days?: number
+          points_per_real?: number
+          store_id: string
+          updated_at?: string
+          wheel_enabled?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          points_expiry_days?: number
+          points_per_real?: number
+          store_id?: string
+          updated_at?: string
+          wheel_enabled?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_config_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loyalty_points_log: {
+        Row: {
+          created_at: string
+          customer_phone: string
+          description: string | null
+          id: string
+          points: number
+          prize_id: string | null
+          sale_id: string | null
+          store_id: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          customer_phone: string
+          description?: string | null
+          id?: string
+          points: number
+          prize_id?: string | null
+          sale_id?: string | null
+          store_id: string
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          customer_phone?: string
+          description?: string | null
+          id?: string
+          points?: number
+          prize_id?: string | null
+          sale_id?: string | null
+          store_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_points_log_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loyalty_prize_tiers: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_active: boolean
+          min_points: number
+          name: string
+          prize_label: string
+          prize_type: string
+          prize_value: number
+          sort_order: number
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          min_points?: number
+          name: string
+          prize_label: string
+          prize_type?: string
+          prize_value?: number
+          sort_order?: number
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          min_points?: number
+          name?: string
+          prize_label?: string
+          prize_type?: string
+          prize_value?: number
+          sort_order?: number
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_prize_tiers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lp_leads: {
         Row: {
