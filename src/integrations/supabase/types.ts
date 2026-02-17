@@ -2105,9 +2105,11 @@ export type Database = {
       live_sessions: {
         Row: {
           created_at: string
+          freight_config: Json | null
           id: string
           is_active: boolean
           selected_products: Json
+          spotlight_products: Json | null
           title: string
           updated_at: string
           whatsapp_link: string | null
@@ -2115,9 +2117,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          freight_config?: Json | null
           id?: string
           is_active?: boolean
           selected_products?: Json
+          spotlight_products?: Json | null
           title: string
           updated_at?: string
           whatsapp_link?: string | null
@@ -2125,9 +2129,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          freight_config?: Json | null
           id?: string
           is_active?: boolean
           selected_products?: Json
+          spotlight_products?: Json | null
           title?: string
           updated_at?: string
           whatsapp_link?: string | null
@@ -2137,8 +2143,11 @@ export type Database = {
       }
       live_viewers: {
         Row: {
+          ban_reason: string | null
+          cart_items: Json | null
           cart_value: number | null
           id: string
+          is_banned: boolean
           is_online: boolean
           joined_at: string
           last_seen_at: string
@@ -2148,8 +2157,11 @@ export type Database = {
           session_id: string
         }
         Insert: {
+          ban_reason?: string | null
+          cart_items?: Json | null
           cart_value?: number | null
           id?: string
+          is_banned?: boolean
           is_online?: boolean
           joined_at?: string
           last_seen_at?: string
@@ -2159,8 +2171,11 @@ export type Database = {
           session_id: string
         }
         Update: {
+          ban_reason?: string | null
+          cart_items?: Json | null
           cart_value?: number | null
           id?: string
+          is_banned?: boolean
           is_online?: boolean
           joined_at?: string
           last_seen_at?: string
