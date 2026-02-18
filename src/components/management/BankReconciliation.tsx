@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Upload, Brain, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Clock,
   TrendingUp, TrendingDown, DollarSign, FileText, Filter, ChevronDown,
-  ChevronRight, Plus, X, Building2, Wallet, BarChart3, PieChart as PieChartIcon
+  ChevronRight, Plus, X, Building2, Wallet, BarChart3, PieChart as PieChartIcon, Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -379,6 +379,26 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
     setTransactions(prev => prev.map(t => t.id === txId ? { ...t, category_id: categoryId, classification_status: "manual" } : t));
   };
 
+  // Delete transaction(s)
+  const deleteTransaction = async (txId: string) => {
+    await supabase.from("bank_transactions").delete().eq("id", txId);
+    setTransactions(prev => prev.filter(t => t.id !== txId));
+    setSelectedTxIds(prev => { const n = new Set(prev); n.delete(txId); return n; });
+    toast.success("Transação excluída");
+  };
+
+  const bulkDelete = async () => {
+    if (selectedTxIds.size === 0) return;
+    const ids = Array.from(selectedTxIds);
+    for (let i = 0; i < ids.length; i += 100) {
+      const batch = ids.slice(i, i + 100);
+      await supabase.from("bank_transactions").delete().in("id", batch);
+    }
+    setTransactions(prev => prev.filter(t => !selectedTxIds.has(t.id)));
+    toast.success(`${selectedTxIds.size} transações excluídas`);
+    setSelectedTxIds(new Set());
+  };
+
   // Bulk classification
   const toggleSelect = (txId: string) => {
     setSelectedTxIds(prev => {
@@ -685,6 +705,9 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
                 <Button size="sm" className="h-8 text-xs gap-1" onClick={bulkClassify} disabled={!bulkCategoryId}>
                   <CheckCircle2 className="h-3.5 w-3.5" /> Aplicar
                 </Button>
+                <Button variant="destructive" size="sm" className="h-8 text-xs gap-1" onClick={bulkDelete}>
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir
+                </Button>
                 <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSelectedTxIds(new Set())}>
                   <X className="h-3.5 w-3.5 mr-1" /> Limpar
                 </Button>
@@ -718,6 +741,7 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
                         <TableHead className="w-[160px]">Categoria IA</TableHead>
                         <TableHead className="w-[200px]">Categoria Final</TableHead>
                         <TableHead className="w-[80px]">Status</TableHead>
+                        <TableHead className="w-[40px]"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -772,6 +796,11 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
                             {tx.classification_status === "manual" && <span className="text-[9px] text-accent-foreground font-medium">Manual</span>}
                             {tx.classification_status === "ai_suggested" && <span className="text-[9px] text-muted-foreground">IA</span>}
                             {tx.classification_status === "pending" && <span className="text-[9px] text-muted-foreground">Pendente</span>}
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteTransaction(tx.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
