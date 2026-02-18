@@ -305,7 +305,15 @@ const LiveCommerce = () => {
     try {
       const orderProducts = cart.map(item => ({ id: item.variantId, title: item.productTitle, variant: item.variantTitle || "Default", price: item.price, quantity: item.quantity, shopifyId: item.variantId, image: item.image }));
       const checkoutUrl = await createShopifyCartFromOrder(orderProducts);
-      if (checkoutUrl) { window.location.href = checkoutUrl; } else { toast.error("Erro ao criar carrinho."); }
+      if (checkoutUrl) {
+        // When embedded in iframe (Shopify widget), open checkout in new tab
+        const isEmbed = new URLSearchParams(window.location.search).has("embed");
+        if (isEmbed || window.self !== window.top) {
+          window.open(checkoutUrl, "_blank");
+        } else {
+          window.location.href = checkoutUrl;
+        }
+      } else { toast.error("Erro ao criar carrinho."); }
     } catch { toast.error("Erro ao processar."); } finally { setCheckingOut(false); }
   };
 
