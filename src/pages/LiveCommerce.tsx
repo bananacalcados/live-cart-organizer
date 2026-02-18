@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users } from "lucide-react";
+import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users, PictureInPicture2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
@@ -57,6 +57,8 @@ const LiveCommerce = () => {
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
+  const [pipActive, setPipActive] = useState(false);
 
   // Pending action after gate
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -213,6 +215,58 @@ const LiveCommerce = () => {
   const isLive = !!session?.youtube_video_id;
   const videoId = session?.youtube_video_id || "";
   const whatsappLink = session?.whatsapp_link || "";
+
+  // Picture-in-Picture toggle
+  const togglePiP = useCallback(async () => {
+    try {
+      // Check if there's already a PiP window
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setPipActive(false);
+        return;
+      }
+
+      // For YouTube iframes, we need to use the experimental documentPictureInPicture API
+      // or fallback to creating a video element from the iframe
+      const iframe = videoContainerRef.current?.querySelector("iframe");
+      if (!iframe) return;
+
+      // Try Document PiP API (Chrome 116+)
+      if ("documentPictureInPicture" in window) {
+        const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
+          width: 400,
+          height: 225,
+        });
+        const pipDoc = pipWindow.document;
+        pipDoc.body.style.margin = "0";
+        pipDoc.body.style.overflow = "hidden";
+        pipDoc.body.style.background = "#000";
+        const pipIframe = pipDoc.createElement("iframe");
+        pipIframe.src = iframe.src;
+        pipIframe.style.width = "100%";
+        pipIframe.style.height = "100%";
+        pipIframe.style.border = "none";
+        pipIframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+        pipDoc.body.appendChild(pipIframe);
+        setPipActive(true);
+        pipWindow.addEventListener("pagehide", () => setPipActive(false));
+        return;
+      }
+
+      // Fallback: open in small floating window
+      const pipUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
+      const pipWin = window.open(pipUrl, "live_pip", "width=400,height=225,top=50,left=" + (screen.width - 420));
+      if (pipWin) {
+        setPipActive(true);
+        const timer = setInterval(() => { if (pipWin.closed) { setPipActive(false); clearInterval(timer); } }, 1000);
+      }
+    } catch (err) {
+      console.error("PiP error:", err);
+      // Ultimate fallback: small window
+      const pipUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
+      window.open(pipUrl, "live_pip", "width=400,height=225,top=50,left=" + (screen.width - 420));
+    }
+  }, [videoId]);
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
   const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
 
@@ -306,11 +360,23 @@ const LiveCommerce = () => {
       )}
 
       {/* Video */}
-      <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
+      <div ref={videoContainerRef} className="relative w-full" style={{ paddingTop: "56.25%" }}>
         {isLive ? (
-          <iframe className="absolute inset-0 w-full h-full"
-            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`}
-            title="Live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen loading="lazy" />
+          <>
+            <iframe className="absolute inset-0 w-full h-full"
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`}
+              title="Live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen loading="lazy" />
+            {/* PiP Button */}
+            <button
+              onClick={togglePiP}
+              className={`absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                pipActive ? "bg-amber-500 text-black" : "bg-black/60 text-white hover:bg-black/80"
+              }`}
+              title={pipActive ? "Fechar Picture-in-Picture" : "Assistir em miniatura"}
+            >
+              <PictureInPicture2 className="w-4 h-4" />
+            </button>
+          </>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 gap-3">
             <ShoppingBag className="w-8 h-8 text-zinc-500" /><p className="text-zinc-400">Aguardando transmissão...</p>
