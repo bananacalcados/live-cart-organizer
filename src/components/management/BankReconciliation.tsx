@@ -439,14 +439,23 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
     setBulkCategoryId("");
   };
 
-  // Add custom category
+  // Add custom category (root = parent group, with parent = subcategory)
   const addCategory = async () => {
     if (!newCatName.trim()) return;
-    const { error } = await supabase.from("financial_categories").insert({
-      name: newCatName, type: newCatType, is_custom: true, parent_id: newCatParent || null,
-    } as any);
-    if (error) { toast.error("Erro ao criar categoria"); return; }
-    toast.success("Categoria criada");
+    const isRoot = !newCatParent;
+    const insertData: any = {
+      name: newCatName,
+      type: newCatType,
+      is_custom: true,
+      parent_id: newCatParent || null,
+    };
+    // If creating a root/group category, set the _parent_ prefix so it appears as a group header
+    if (isRoot) {
+      insertData.tiny_category_id = `_parent_custom_${Date.now()}`;
+    }
+    const { error } = await supabase.from("financial_categories").insert(insertData);
+    if (error) { toast.error("Erro ao criar categoria: " + error.message); return; }
+    toast.success(isRoot ? "Categoria raiz criada" : "Subcategoria criada");
     setNewCatName(""); setNewCatParent(""); setShowAddCategory(false);
     loadData();
   };
@@ -1138,7 +1147,7 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
           {/* Add Category Dialog */}
           <Dialog open={showAddCategory} onOpenChange={setShowAddCategory}>
             <DialogContent>
-              <DialogHeader><DialogTitle>Nova Categoria</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Nova Categoria / Subcategoria</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <div>
                   <Label className="text-xs">Nome</Label>
@@ -1155,18 +1164,21 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Categoria Pai (opcional)</Label>
-                  <Select value={newCatParent} onValueChange={setNewCatParent}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Nenhuma (raiz)" /></SelectTrigger>
+                  <Label className="text-xs">Categoria Pai (opcional — deixe vazio para criar categoria raiz)</Label>
+                  <Select value={newCatParent || "__none__"} onValueChange={v => setNewCatParent(v === "__none__" ? "" : v)}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Nenhuma (nova categoria raiz)" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nenhuma (raiz)</SelectItem>
+                      <SelectItem value="__none__">Nenhuma (nova categoria raiz)</SelectItem>
                       {parentCategories.filter(p => p.type === newCatType).map(p => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <Button className="w-full" onClick={addCategory}>Criar Categoria</Button>
+                <p className="text-[10px] text-muted-foreground">
+                  Para criar uma <strong>subcategoria</strong>, selecione uma categoria pai acima. Para criar uma nova <strong>categoria raiz</strong> (grupo), deixe como "Nenhuma".
+                </p>
+                <Button className="w-full" onClick={addCategory} disabled={!newCatName.trim()}>Criar</Button>
               </div>
             </DialogContent>
           </Dialog>
