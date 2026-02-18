@@ -324,6 +324,7 @@ export type Database = {
           is_active: boolean
           name: string
           notes: string | null
+          store_id: string | null
           updated_at: string
         }
         Insert: {
@@ -335,6 +336,7 @@ export type Database = {
           is_active?: boolean
           name: string
           notes?: string | null
+          store_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -346,9 +348,97 @@ export type Database = {
           is_active?: boolean
           name?: string
           notes?: string | null
+          store_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bank_accounts_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_transactions: {
+        Row: {
+          ai_category_id: string | null
+          ai_confidence: number | null
+          amount: number
+          bank_account_id: string
+          category_id: string | null
+          classification_status: string
+          created_at: string
+          description: string
+          fitid: string | null
+          id: string
+          import_batch_id: string | null
+          memo: string | null
+          notes: string | null
+          transaction_date: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          ai_category_id?: string | null
+          ai_confidence?: number | null
+          amount: number
+          bank_account_id: string
+          category_id?: string | null
+          classification_status?: string
+          created_at?: string
+          description: string
+          fitid?: string | null
+          id?: string
+          import_batch_id?: string | null
+          memo?: string | null
+          notes?: string | null
+          transaction_date: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_category_id?: string | null
+          ai_confidence?: number | null
+          amount?: number
+          bank_account_id?: string
+          category_id?: string | null
+          classification_status?: string
+          created_at?: string
+          description?: string
+          fitid?: string | null
+          id?: string
+          import_batch_id?: string | null
+          memo?: string | null
+          notes?: string | null
+          transaction_date?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_transactions_ai_category_id_fkey"
+            columns: ["ai_category_id"]
+            isOneToOne: false
+            referencedRelation: "financial_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "financial_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       campaign_channels: {
         Row: {
@@ -1597,6 +1687,50 @@ export type Database = {
           sync_type?: string
         }
         Relationships: []
+      }
+      financial_categories: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean | null
+          is_custom: boolean | null
+          name: string
+          parent_id: string | null
+          tiny_category_id: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_custom?: boolean | null
+          name: string
+          parent_id?: string | null
+          tiny_category_id?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_custom?: boolean | null
+          name?: string
+          parent_id?: string | null
+          tiny_category_id?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "financial_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       group_campaign_messages: {
         Row: {
