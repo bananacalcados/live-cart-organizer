@@ -12,7 +12,6 @@ serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   try {
-    // Get all active stores with tiny tokens
     const { data: stores } = await supabase
       .from('pos_stores').select('id, name, tiny_token')
       .not('tiny_token', 'is', null).eq('is_active', true);
@@ -21,70 +20,69 @@ serve(async (req) => {
 
     const allCategories = new Map<string, { name: string; tipo: string }>();
 
-    // Fetch categories from each store (they share similar categories)
-    for (const store of stores) {
-      try {
-        // Tiny doesn't have a dedicated categories endpoint, but we can extract from accounts payable
-        // Use contas.pagar.pesquisa to extract unique categories
-        const resp = await fetch('https://api.tiny.com.br/api2/contas.pagar.pesquisa.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ token: store.tiny_token, formato: 'json', situacao: 'aberto', pagina: '1' }).toString(),
-        });
-        const data = await resp.json();
-        const contas = data.retorno?.contas || [];
-
-        for (const item of contas) {
-          const conta = item.conta;
-          if (conta.categoria && !allCategories.has(conta.categoria)) {
-            allCategories.set(conta.categoria, { name: conta.categoria, tipo: 'expense' });
+    async function fetchAllPages(token: string, endpoint: string, situacao: string, tipo: string) {
+      let page = 1;
+      let hasMore = true;
+      while (hasMore && page <= 20) {
+        await new Promise(r => setTimeout(r, 1200));
+        try {
+          const resp = await fetch(`https://api.tiny.com.br/api2/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ token, formato: 'json', situacao, pagina: String(page) }).toString(),
+          });
+          const data = await resp.json();
+          const contas = data.retorno?.contas || [];
+          if (contas.length === 0) { hasMore = false; break; }
+          
+          for (const item of contas) {
+            const conta = item.conta;
+            if (conta.categoria && !allCategories.has(conta.categoria)) {
+              allCategories.set(conta.categoria, { name: conta.categoria, tipo });
+            }
           }
+          
+          const numPages = data.retorno?.numero_paginas || 1;
+          if (page >= numPages) hasMore = false;
+          page++;
+        } catch (e) {
+          console.error(`Error page ${page}:`, e);
+          hasMore = false;
         }
-
-        // Also fetch paid ones for more categories
-        const resp2 = await fetch('https://api.tiny.com.br/api2/contas.pagar.pesquisa.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ token: store.tiny_token, formato: 'json', situacao: 'pago', pagina: '1' }).toString(),
-        });
-        const data2 = await resp2.json();
-        for (const item of (data2.retorno?.contas || [])) {
-          const conta = item.conta;
-          if (conta.categoria && !allCategories.has(conta.categoria)) {
-            allCategories.set(conta.categoria, { name: conta.categoria, tipo: 'expense' });
-          }
-        }
-
-        // Also try contas a receber for income categories
-        await new Promise(r => setTimeout(r, 1000));
-        const resp3 = await fetch('https://api.tiny.com.br/api2/contas.receber.pesquisa.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ token: store.tiny_token, formato: 'json', situacao: 'aberto', pagina: '1' }).toString(),
-        });
-        const data3 = await resp3.json();
-        for (const item of (data3.retorno?.contas || [])) {
-          const conta = item.conta;
-          if (conta.categoria && !allCategories.has(conta.categoria)) {
-            allCategories.set(conta.categoria, { name: conta.categoria, tipo: 'income' });
-          }
-        }
-      } catch (e) {
-        console.error(`Error fetching categories from ${store.name}:`, e);
       }
-      await new Promise(r => setTimeout(r, 1500));
     }
 
-    // Upsert categories
+    for (const store of stores) {
+      // Fetch ALL pages of contas a pagar (open + paid)
+      await fetchAllPages(store.tiny_token, 'contas.pagar.pesquisa.php', 'aberto', 'expense');
+      await fetchAllPages(store.tiny_token, 'contas.pagar.pesquisa.php', 'pago', 'expense');
+      // Fetch ALL pages of contas a receber (open + received)
+      await fetchAllPages(store.tiny_token, 'contas.receber.pesquisa.php', 'aberto', 'income');
+      await fetchAllPages(store.tiny_token, 'contas.receber.pesquisa.php', 'recebido', 'income');
+    }
+
+    // Upsert categories - check existing first to avoid duplicates
     let synced = 0;
     for (const [name, info] of allCategories) {
-      const { error } = await supabase.from('financial_categories').upsert({
+      const { data: existing } = await supabase
+        .from('financial_categories')
+        .select('id')
+        .eq('tiny_category_id', name)
+        .maybeSingle();
+      
+      if (existing) {
+        synced++;
+        continue;
+      }
+
+      const { error } = await supabase.from('financial_categories').insert({
         name,
         type: info.tipo,
-        tiny_category_id: name, // Use name as ID since Tiny doesn't have numeric category IDs in search
+        tiny_category_id: name,
         is_custom: false,
-      }, { onConflict: 'tiny_category_id' });
+      });
       if (!error) synced++;
+      else console.error('Insert error:', error);
     }
 
     return new Response(JSON.stringify({ success: true, synced, total: allCategories.size }), {
