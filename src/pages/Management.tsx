@@ -23,6 +23,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, subMonths } from "date-fns";
 import { toast } from "sonner";
 import { TeamProfilesManager } from "@/components/TeamProfilesManager";
+import { BankReconciliation } from "@/components/management/BankReconciliation";
 
 interface TinySyncedOrder {
   id: string;
@@ -1047,6 +1048,10 @@ export default function Management() {
                   <Receipt className="h-3.5 w-3.5" />
                   Contas a Pagar
                 </TabsTrigger>
+                <TabsTrigger value="financeiro" className="gap-1">
+                  <Wallet className="h-3.5 w-3.5" />
+                  Financeiro
+                </TabsTrigger>
                 <TabsTrigger value="team" className="gap-1">
                   <Users className="h-3.5 w-3.5" />
                   Equipe
@@ -1231,6 +1236,11 @@ export default function Management() {
                   fmt={fmt}
                   onRefresh={fetchData}
                 />
+              </TabsContent>
+
+              {/* Financeiro / Conciliação Bancária */}
+              <TabsContent value="financeiro" className="space-y-4">
+                <BankReconciliation stores={stores} />
               </TabsContent>
 
               {/* Equipe / Perfis */}
