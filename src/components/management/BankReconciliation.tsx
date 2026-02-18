@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from "recharts";
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, startOfWeek, endOfWeek } from "date-fns";
 import { toast } from "sonner";
@@ -81,16 +82,14 @@ function KPICard({ title, value, icon: Icon, sub, variant }: { title: string; va
   );
 }
 
-// OFX Parser (SGML-based format)
+// OFX Parser - extracts all available fields including PIX descriptions, bank info
 function parseOFX(content: string): { transactions: Array<{ date: string; description: string; amount: number; type: string; fitid: string; memo: string }>; accountId: string } {
   const transactions: Array<{ date: string; description: string; amount: number; type: string; fitid: string; memo: string }> = [];
   let accountId = "";
 
-  // Extract account ID
   const acctMatch = content.match(/<ACCTID>([^<\n]+)/);
   if (acctMatch) accountId = acctMatch[1].trim();
 
-  // Extract transactions
   const stmtTrnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
   let match;
   while ((match = stmtTrnRegex.exec(content)) !== null) {
@@ -104,9 +103,30 @@ function parseOFX(content: string): { transactions: Array<{ date: string; descri
     const date = rawDate.length >= 8 ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}` : "";
     const amount = parseFloat(getField("TRNAMT") || "0");
     const fitid = getField("FITID");
-    const description = getField("NAME") || getField("MEMO") || "Sem descrição";
-    const memo = getField("MEMO");
     const trnType = getField("TRNTYPE");
+
+    // Extract all descriptive fields
+    const name = getField("NAME");
+    const memo = getField("MEMO");
+    const checkNum = getField("CHECKNUM");
+    const refNum = getField("REFNUM");
+    const payeeId = getField("PAYEEID");
+    const payee = getField("PAYEE");
+
+    // Build comprehensive description: combine NAME + extra info
+    const descParts: string[] = [];
+    if (name) descParts.push(name);
+    if (payee && payee !== name) descParts.push(payee);
+    const description = descParts.length > 0 ? descParts.join(" | ") : "Sem descrição";
+
+    // Build comprehensive memo: combine MEMO + CHECKNUM + REFNUM + PAYEEID
+    // PIX descriptions and bank info typically come in MEMO
+    const memoParts: string[] = [];
+    if (memo && memo !== name) memoParts.push(memo);
+    if (checkNum) memoParts.push(`Ref: ${checkNum}`);
+    if (refNum && refNum !== checkNum) memoParts.push(`RefNum: ${refNum}`);
+    if (payeeId) memoParts.push(`PayeeID: ${payeeId}`);
+    const fullMemo = memoParts.join(" | ");
 
     transactions.push({
       date,
@@ -114,7 +134,7 @@ function parseOFX(content: string): { transactions: Array<{ date: string; descri
       amount: Math.abs(amount),
       type: amount >= 0 ? "credit" : "debit",
       fitid,
-      memo: memo !== description ? memo : "",
+      memo: fullMemo,
     });
   }
 
@@ -144,6 +164,7 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatType, setNewCatType] = useState<"income" | "expense">("expense");
+  const [newCatParent, setNewCatParent] = useState<string>("");
 
   // Bank account management
   const [showAddAccount, setShowAddAccount] = useState(false);
@@ -157,16 +178,51 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [importAccountId, setImportAccountId] = useState("");
 
+  // Bulk selection
+  const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Category hierarchy helpers
+  const parentCategories = useMemo(() => categories.filter(c => c.parent_id === null && c.tiny_category_id?.startsWith('_parent_')), [categories]);
+  const childCategories = useMemo(() => categories.filter(c => c.parent_id !== null), [categories]);
+  const leafCategories = useMemo(() => categories.filter(c => !c.tiny_category_id?.startsWith('_parent_')), [categories]);
+
+  const getCategoryTree = useCallback((type: "income" | "expense") => {
+    const parents = parentCategories.filter(p => p.type === type);
+    return parents.map(parent => ({
+      ...parent,
+      children: childCategories.filter(c => c.parent_id === parent.id).sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+  }, [parentCategories, childCategories]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [txRes, catRes, bankRes] = await Promise.all([
-      supabase.from("bank_transactions").select("*").gte("transaction_date", dateFrom).lte("transaction_date", dateTo).order("transaction_date", { ascending: false }),
+    // Paginated fetch for transactions
+    let allTx: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    while (hasMore) {
+      const { data } = await supabase.from("bank_transactions").select("*")
+        .gte("transaction_date", dateFrom).lte("transaction_date", dateTo)
+        .order("transaction_date", { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+      if (data && data.length > 0) {
+        allTx.push(...data);
+        if (data.length < pageSize) hasMore = false;
+        page++;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    const [catRes, bankRes] = await Promise.all([
       supabase.from("financial_categories").select("*").eq("is_active", true).order("name"),
       supabase.from("bank_accounts").select("*").eq("is_active", true).order("name"),
     ]);
-    setTransactions((txRes.data || []) as unknown as BankTransaction[]);
+    setTransactions(allTx as unknown as BankTransaction[]);
     setCategories((catRes.data || []) as unknown as FinancialCategory[]);
     setBankAccounts((bankRes.data || []) as unknown as BankAccount[]);
     setLoading(false);
@@ -203,7 +259,7 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
   const balance = totalIncome - totalExpense;
   const pendingCount = filtered.filter(t => t.classification_status === "pending" || t.classification_status === "ai_suggested").length;
 
-  // Handle file selection - open dialog to pick account
+  // Handle file selection
   const handleFileSelect = (files: FileList | null) => {
     if (!files?.length) return;
     setPendingFiles(Array.from(files));
@@ -216,7 +272,7 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
     setShowImportDialog(true);
   };
 
-  // OFX Import with selected account
+  // OFX Import
   const executeOFXImport = async () => {
     if (!importAccountId) { toast.error("Selecione uma conta bancária"); return; }
     setShowImportDialog(false);
@@ -242,15 +298,12 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
           classification_status: "pending" as const,
         }));
 
-        // Insert individually to handle partial unique index
         for (const row of rows) {
           if (row.fitid) {
             const { data: existing } = await supabase
-              .from("bank_transactions")
-              .select("id")
+              .from("bank_transactions").select("id")
               .eq("bank_account_id", row.bank_account_id)
-              .eq("fitid", row.fitid)
-              .maybeSingle();
+              .eq("fitid", row.fitid).maybeSingle();
             if (existing) continue;
           }
           const { error } = await supabase.from("bank_transactions").insert(row as any);
@@ -271,19 +324,12 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
   const addBankAccount = async () => {
     if (!newAccName.trim()) return;
     const { error, data } = await supabase.from("bank_accounts").insert({
-      name: newAccName,
-      bank_name: newAccBank || null,
-      store_id: newAccStore || null,
-      account_type: newAccType,
+      name: newAccName, bank_name: newAccBank || null, store_id: newAccStore || null, account_type: newAccType,
     } as any).select("id").single();
     if (error) { toast.error("Erro ao criar conta"); return; }
     toast.success("Conta bancária criada");
-    setNewAccName("");
-    setNewAccBank("");
-    setNewAccStore("");
-    setShowAddAccount(false);
+    setNewAccName(""); setNewAccBank(""); setNewAccStore(""); setShowAddAccount(false);
     await loadData();
-    // If we had pending files, open import dialog
     if (pendingFiles.length > 0 && data) {
       setImportAccountId(data.id);
       setShowImportDialog(true);
@@ -296,7 +342,7 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
     try {
       const { data, error } = await supabase.functions.invoke("ai-classify-transactions");
       if (error) throw error;
-      toast.success(`${data.classified} transações classificadas pela IA`);
+      toast.success(`${data.classified} transações classificadas pela IA (de ${data.total} pendentes)`);
       loadData();
     } catch (e: any) {
       toast.error(`Erro: ${e.message}`);
@@ -321,35 +367,111 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
   // Confirm/change classification
   const confirmClassification = async (txId: string, categoryId: string) => {
     await supabase.from("bank_transactions").update({
-      category_id: categoryId,
-      classification_status: "confirmed",
+      category_id: categoryId, classification_status: "confirmed",
     } as any).eq("id", txId);
     setTransactions(prev => prev.map(t => t.id === txId ? { ...t, category_id: categoryId, classification_status: "confirmed" } : t));
   };
 
   const manualClassify = async (txId: string, categoryId: string) => {
     await supabase.from("bank_transactions").update({
-      category_id: categoryId,
-      classification_status: "manual",
+      category_id: categoryId, classification_status: "manual",
     } as any).eq("id", txId);
     setTransactions(prev => prev.map(t => t.id === txId ? { ...t, category_id: categoryId, classification_status: "manual" } : t));
+  };
+
+  // Bulk classification
+  const toggleSelect = (txId: string) => {
+    setSelectedTxIds(prev => {
+      const next = new Set(prev);
+      if (next.has(txId)) next.delete(txId); else next.add(txId);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedTxIds.size === filtered.length) {
+      setSelectedTxIds(new Set());
+    } else {
+      setSelectedTxIds(new Set(filtered.map(t => t.id)));
+    }
+  };
+
+  const bulkClassify = async () => {
+    if (!bulkCategoryId || selectedTxIds.size === 0) return;
+    const ids = Array.from(selectedTxIds);
+    // Update in batches of 100
+    for (let i = 0; i < ids.length; i += 100) {
+      const batch = ids.slice(i, i + 100);
+      await supabase.from("bank_transactions").update({
+        category_id: bulkCategoryId, classification_status: "manual",
+      } as any).in("id", batch);
+    }
+    setTransactions(prev => prev.map(t =>
+      selectedTxIds.has(t.id) ? { ...t, category_id: bulkCategoryId, classification_status: "manual" } : t
+    ));
+    toast.success(`${selectedTxIds.size} transações classificadas`);
+    setSelectedTxIds(new Set());
+    setBulkCategoryId("");
   };
 
   // Add custom category
   const addCategory = async () => {
     if (!newCatName.trim()) return;
     const { error } = await supabase.from("financial_categories").insert({
-      name: newCatName, type: newCatType, is_custom: true,
+      name: newCatName, type: newCatType, is_custom: true, parent_id: newCatParent || null,
     } as any);
     if (error) { toast.error("Erro ao criar categoria"); return; }
     toast.success("Categoria criada");
-    setNewCatName("");
-    setShowAddCategory(false);
+    setNewCatName(""); setNewCatParent(""); setShowAddCategory(false);
     loadData();
   };
 
-  const getCategoryName = (id: string | null) => categories.find(c => c.id === id)?.name || "—";
+  const getCategoryName = (id: string | null) => {
+    const cat = categories.find(c => c.id === id);
+    if (!cat) return "—";
+    const parent = cat.parent_id ? categories.find(p => p.id === cat.parent_id) : null;
+    return parent ? `${cat.name}` : cat.name;
+  };
+
+  const getFullCategoryName = (id: string | null) => {
+    const cat = categories.find(c => c.id === id);
+    if (!cat) return "—";
+    const parent = cat.parent_id ? categories.find(p => p.id === cat.parent_id) : null;
+    return parent ? `${parent.name} › ${cat.name}` : cat.name;
+  };
+
   const getAccountName = (id: string) => bankAccounts.find(a => a.id === id)?.name || "—";
+
+  // Grouped select for categories (parent > children)
+  const renderCategoryOptions = (type?: "income" | "expense") => {
+    const tree = type ? getCategoryTree(type) : [...getCategoryTree("income"), ...getCategoryTree("expense")];
+    const ungrouped = leafCategories.filter(c =>
+      !c.parent_id && !c.tiny_category_id?.startsWith('_parent_') && (!type || c.type === type)
+    );
+
+    return (
+      <>
+        {tree.map(group => (
+          <div key={group.id}>
+            <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              {group.name}
+            </div>
+            {group.children.map(c => (
+              <SelectItem key={c.id} value={c.id} className="text-xs pl-6">{c.name}</SelectItem>
+            ))}
+          </div>
+        ))}
+        {ungrouped.length > 0 && (
+          <div>
+            <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Outros</div>
+            {ungrouped.map(c => (
+              <SelectItem key={c.id} value={c.id} className="text-xs pl-6">{c.name}</SelectItem>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  };
 
   // Cash Flow chart data
   const cashFlowData = useMemo(() => {
@@ -369,7 +491,7 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
     const map = new Map<string, { name: string; income: number; expense: number }>();
     filtered.forEach(t => {
       const catId = t.category_id || t.ai_category_id;
-      const catName = catId ? getCategoryName(catId) : "Sem categoria";
+      const catName = catId ? getFullCategoryName(catId) : "Sem categoria";
       const cur = map.get(catName) || { name: catName, income: 0, expense: 0 };
       if (t.type === "credit") cur.income += Number(t.amount);
       else cur.expense += Number(t.amount);
@@ -378,13 +500,13 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
     return [...map.values()].sort((a, b) => (b.expense + b.income) - (a.expense + a.income));
   }, [filtered, categories]);
 
-  // DRE data
+  // DRE data with hierarchy
   const dreData = useMemo(() => {
     const incomeByCategory = new Map<string, number>();
     const expenseByCategory = new Map<string, number>();
     filtered.forEach(t => {
       const catId = t.category_id || t.ai_category_id;
-      const catName = catId ? getCategoryName(catId) : "Sem categoria";
+      const catName = catId ? getFullCategoryName(catId) : "Sem categoria";
       if (t.type === "credit") {
         incomeByCategory.set(catName, (incomeByCategory.get(catName) || 0) + Number(t.amount));
       } else {
@@ -547,6 +669,29 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
 
         {/* Transactions */}
         <TabsContent value="transactions" className="space-y-4">
+          {/* Bulk action bar */}
+          {selectedTxIds.size > 0 && (
+            <Card className="border-primary/50 bg-primary/5">
+              <CardContent className="py-3 px-4 flex items-center gap-3">
+                <span className="text-xs font-medium">{selectedTxIds.size} selecionada(s)</span>
+                <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
+                  <SelectTrigger className="h-8 text-xs w-[220px]">
+                    <SelectValue placeholder="Selecionar categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {renderCategoryOptions()}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" className="h-8 text-xs gap-1" onClick={bulkClassify} disabled={!bulkCategoryId}>
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Aplicar
+                </Button>
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSelectedTxIds(new Set())}>
+                  <X className="h-3.5 w-3.5 mr-1" /> Limpar
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardContent className="pt-4">
               {filtered.length === 0 ? (
@@ -560,33 +705,49 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-[40px]">
+                          <Checkbox
+                            checked={selectedTxIds.size > 0 && selectedTxIds.size === filtered.length}
+                            onCheckedChange={selectAll}
+                          />
+                        </TableHead>
                         <TableHead className="w-[90px]">Data</TableHead>
                         <TableHead>Descrição</TableHead>
                         <TableHead className="w-[100px]">Conta</TableHead>
                         <TableHead className="text-right w-[100px]">Valor</TableHead>
                         <TableHead className="w-[160px]">Categoria IA</TableHead>
-                        <TableHead className="w-[160px]">Categoria Final</TableHead>
+                        <TableHead className="w-[200px]">Categoria Final</TableHead>
                         <TableHead className="w-[80px]">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.slice(0, 200).map(tx => (
-                        <TableRow key={tx.id} className={tx.classification_status === "pending" ? "bg-muted/30" : ""}>
-                          <TableCell className="text-xs">{format(new Date(tx.transaction_date + "T12:00:00"), "dd/MM/yy")}</TableCell>
-                          <TableCell className="text-xs max-w-[250px] truncate" title={tx.description}>
-                            {tx.description}
-                            {tx.memo && <span className="text-muted-foreground ml-1">({tx.memo})</span>}
+                      {filtered.slice(0, 500).map(tx => (
+                        <TableRow key={tx.id} className={`${tx.classification_status === "pending" ? "bg-muted/30" : ""} ${selectedTxIds.has(tx.id) ? "bg-primary/10" : ""}`}>
+                          <TableCell className="py-1.5">
+                            <Checkbox
+                              checked={selectedTxIds.has(tx.id)}
+                              onCheckedChange={() => toggleSelect(tx.id)}
+                            />
                           </TableCell>
-                          <TableCell className="text-xs">{getAccountName(tx.bank_account_id)}</TableCell>
-                          <TableCell className={`text-right text-xs font-semibold ${tx.type === "credit" ? "text-primary" : "text-destructive"}`}>
+                          <TableCell className="text-xs py-1.5">{format(new Date(tx.transaction_date + "T12:00:00"), "dd/MM/yy")}</TableCell>
+                          <TableCell className="text-xs max-w-[300px] py-1.5">
+                            <div className="truncate font-medium" title={tx.description}>{tx.description}</div>
+                            {tx.memo && (
+                              <div className="text-[10px] text-muted-foreground truncate mt-0.5" title={tx.memo}>
+                                {tx.memo}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs py-1.5">{getAccountName(tx.bank_account_id)}</TableCell>
+                          <TableCell className={`text-right text-xs font-semibold py-1.5 ${tx.type === "credit" ? "text-primary" : "text-destructive"}`}>
                             {tx.type === "credit" ? "+" : "-"}{fmt(Number(tx.amount))}
                           </TableCell>
-                          <TableCell className="text-xs">
+                          <TableCell className="text-xs py-1.5">
                             {tx.ai_category_id ? (
                               <div className="flex items-center gap-1">
                                 <span className="truncate">{getCategoryName(tx.ai_category_id)}</span>
                                 {tx.ai_confidence && (
-                                  <Badge variant="secondary" className="text-[9px] px-1">{Math.round(Number(tx.ai_confidence) * 100)}%</Badge>
+                                  <span className="text-[9px] text-muted-foreground">{Math.round(Number(tx.ai_confidence) * 100)}%</span>
                                 )}
                                 {tx.classification_status === "ai_suggested" && (
                                   <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => confirmClassification(tx.id, tx.ai_category_id!)}>
@@ -596,29 +757,27 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
                               </div>
                             ) : "—"}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-1.5">
                             <Select value={tx.category_id || ""} onValueChange={v => manualClassify(tx.id, v)}>
-                              <SelectTrigger className="h-7 text-[11px] w-[140px]">
+                              <SelectTrigger className="h-7 text-[11px] w-[180px]">
                                 <SelectValue placeholder="Selecionar" />
                               </SelectTrigger>
                               <SelectContent>
-                                {categories.map(c => (
-                                  <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>
-                                ))}
+                                {renderCategoryOptions(tx.type === "credit" ? "income" : "expense")}
                               </SelectContent>
                             </Select>
                           </TableCell>
-                          <TableCell>
-                            {tx.classification_status === "confirmed" && <Badge className="text-[9px] bg-primary/20 text-primary">✓</Badge>}
-                            {tx.classification_status === "manual" && <Badge className="text-[9px] bg-accent/20 text-accent-foreground">Manual</Badge>}
-                            {tx.classification_status === "ai_suggested" && <Badge variant="outline" className="text-[9px]">IA</Badge>}
-                            {tx.classification_status === "pending" && <Badge variant="secondary" className="text-[9px]">Pendente</Badge>}
+                          <TableCell className="py-1.5">
+                            {tx.classification_status === "confirmed" && <span className="text-[9px] text-primary font-medium">✓ OK</span>}
+                            {tx.classification_status === "manual" && <span className="text-[9px] text-accent-foreground font-medium">Manual</span>}
+                            {tx.classification_status === "ai_suggested" && <span className="text-[9px] text-muted-foreground">IA</span>}
+                            {tx.classification_status === "pending" && <span className="text-[9px] text-muted-foreground">Pendente</span>}
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
-                  {filtered.length > 200 && <p className="text-xs text-muted-foreground text-center py-2">Mostrando 200 de {filtered.length} transações</p>}
+                  {filtered.length > 500 && <p className="text-xs text-muted-foreground text-center py-2">Mostrando 500 de {filtered.length} transações</p>}
                 </div>
               )}
             </CardContent>
@@ -632,7 +791,7 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
             <CardContent className="space-y-4">
               {/* Income */}
               <div>
-                <h4 className="text-xs font-bold text-primary mb-2 flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" /> RECEITAS</h4>
+                <h4 className="text-xs font-bold text-primary mb-2 flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" /> RECEITAS (ENTRADAS)</h4>
                 <Table>
                   <TableBody>
                     {dreData.income.map((item, i) => (
@@ -651,7 +810,7 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
 
               {/* Expenses */}
               <div>
-                <h4 className="text-xs font-bold text-destructive mb-2 flex items-center gap-1"><TrendingDown className="h-3.5 w-3.5" /> DESPESAS</h4>
+                <h4 className="text-xs font-bold text-destructive mb-2 flex items-center gap-1"><TrendingDown className="h-3.5 w-3.5" /> DESPESAS (SAÍDAS)</h4>
                 <Table>
                   <TableBody>
                     {dreData.expense.map((item, i) => (
@@ -690,53 +849,76 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
         <TabsContent value="categories" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Categorias Financeiras</h3>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="gap-1 h-8 text-xs" onClick={() => setShowAddCategory(true)}>
-                <Plus className="h-3.5 w-3.5" /> Nova Categoria
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" className="gap-1 h-8 text-xs" onClick={() => setShowAddCategory(true)}>
+              <Plus className="h-3.5 w-3.5" /> Nova Categoria
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Income categories */}
+            {/* Income categories tree */}
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm text-primary">Receitas</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-1">
-                  {categories.filter(c => c.type === "income").map(c => (
-                    <div key={c.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 text-xs">
-                      <span>{c.name}</span>
-                      <div className="flex items-center gap-1">
-                        {c.is_custom && <Badge variant="secondary" className="text-[9px]">Custom</Badge>}
-                        {!c.is_custom && <Badge variant="outline" className="text-[9px]">Tiny</Badge>}
-                      </div>
-                    </div>
-                  ))}
-                  {categories.filter(c => c.type === "income").length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-4">Sincronize categorias do Tiny</p>
-                  )}
-                </div>
+              <CardHeader className="pb-2"><CardTitle className="text-sm text-primary">Entradas (Receitas)</CardTitle></CardHeader>
+              <CardContent className="space-y-1">
+                {getCategoryTree("income").map(group => (
+                  <Collapsible key={group.id} defaultOpen>
+                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full py-1.5 px-2 rounded hover:bg-muted/50 text-xs font-semibold">
+                      <ChevronRight className="h-3 w-3 transition-transform data-[state=open]:rotate-90" />
+                      {group.name}
+                      <span className="text-muted-foreground font-normal ml-auto">({group.children.length})</span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      {group.children.map(c => (
+                        <div key={c.id} className="flex items-center justify-between py-1 px-2 pl-7 rounded hover:bg-muted/50 text-xs">
+                          <span>{c.name}</span>
+                          <div className="flex items-center gap-1">
+                            {c.is_custom ? <span className="text-[9px] text-muted-foreground">Custom</span> : <span className="text-[9px] text-muted-foreground">Tiny</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
+                {/* Ungrouped income */}
+                {leafCategories.filter(c => c.type === "income" && !c.parent_id && !c.tiny_category_id?.startsWith('_parent_')).map(c => (
+                  <div key={c.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 text-xs">
+                    <span>{c.name}</span>
+                  </div>
+                ))}
+                {getCategoryTree("income").length === 0 && leafCategories.filter(c => c.type === "income").length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">Nenhuma categoria de entrada</p>
+                )}
               </CardContent>
             </Card>
 
-            {/* Expense categories */}
+            {/* Expense categories tree */}
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm text-destructive">Despesas</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-1">
-                  {categories.filter(c => c.type === "expense").map(c => (
-                    <div key={c.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 text-xs">
-                      <span>{c.name}</span>
-                      <div className="flex items-center gap-1">
-                        {c.is_custom && <Badge variant="secondary" className="text-[9px]">Custom</Badge>}
-                        {!c.is_custom && <Badge variant="outline" className="text-[9px]">Tiny</Badge>}
-                      </div>
-                    </div>
-                  ))}
-                  {categories.filter(c => c.type === "expense").length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-4">Sincronize categorias do Tiny</p>
-                  )}
-                </div>
+              <CardHeader className="pb-2"><CardTitle className="text-sm text-destructive">Saídas (Despesas)</CardTitle></CardHeader>
+              <CardContent className="space-y-1">
+                {getCategoryTree("expense").map(group => (
+                  <Collapsible key={group.id} defaultOpen>
+                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full py-1.5 px-2 rounded hover:bg-muted/50 text-xs font-semibold">
+                      <ChevronRight className="h-3 w-3 transition-transform data-[state=open]:rotate-90" />
+                      {group.name}
+                      <span className="text-muted-foreground font-normal ml-auto">({group.children.length})</span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      {group.children.map(c => (
+                        <div key={c.id} className="flex items-center justify-between py-1 px-2 pl-7 rounded hover:bg-muted/50 text-xs">
+                          <span>{c.name}</span>
+                          <div className="flex items-center gap-1">
+                            {c.is_custom ? <span className="text-[9px] text-muted-foreground">Custom</span> : <span className="text-[9px] text-muted-foreground">Tiny</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
+                {/* Ungrouped expense */}
+                {leafCategories.filter(c => c.type === "expense" && !c.parent_id && !c.tiny_category_id?.startsWith('_parent_')).map(c => (
+                  <div key={c.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 text-xs">
+                    <span>{c.name}</span>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </div>
@@ -786,8 +968,20 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
                   <Select value={newCatType} onValueChange={(v: any) => setNewCatType(v)}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="income">Receita</SelectItem>
-                      <SelectItem value="expense">Despesa</SelectItem>
+                      <SelectItem value="income">Receita (Entrada)</SelectItem>
+                      <SelectItem value="expense">Despesa (Saída)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Categoria Pai (opcional)</Label>
+                  <Select value={newCatParent} onValueChange={setNewCatParent}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Nenhuma (raiz)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Nenhuma (raiz)</SelectItem>
+                      {parentCategories.filter(p => p.type === newCatType).map(p => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

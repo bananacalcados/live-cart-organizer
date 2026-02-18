@@ -28,14 +28,37 @@ serve(async (req) => {
       });
     }
 
-    // Get pending transactions
-    let query = supabase.from('bank_transactions').select('id, description, memo, amount, type, transaction_date');
+    // Get pending transactions - fetch ALL using pagination
+    let allTransactions: any[] = [];
     if (transaction_ids?.length) {
-      query = query.in('id', transaction_ids);
+      // Fetch specific transactions in chunks of 500
+      for (let i = 0; i < transaction_ids.length; i += 500) {
+        const chunk = transaction_ids.slice(i, i + 500);
+        const { data } = await supabase.from('bank_transactions')
+          .select('id, description, memo, amount, type, transaction_date')
+          .in('id', chunk);
+        if (data) allTransactions.push(...data);
+      }
     } else {
-      query = query.eq('classification_status', 'pending').limit(50);
+      // Fetch ALL pending using pagination (no limit)
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await supabase.from('bank_transactions')
+          .select('id, description, memo, amount, type, transaction_date')
+          .eq('classification_status', 'pending')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        if (data && data.length > 0) {
+          allTransactions.push(...data);
+          if (data.length < pageSize) hasMore = false;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
     }
-    const { data: transactions } = await query;
+    const transactions = allTransactions;
 
     if (!transactions?.length) {
       return new Response(JSON.stringify({ success: true, classified: 0, message: 'Nenhuma transação pendente' }), {
