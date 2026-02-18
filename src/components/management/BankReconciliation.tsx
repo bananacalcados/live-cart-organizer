@@ -166,6 +166,11 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
   const [newCatType, setNewCatType] = useState<"income" | "expense">("expense");
   const [newCatParent, setNewCatParent] = useState<string>("");
 
+  // Category move/delete
+  const [movingCatId, setMovingCatId] = useState<string | null>(null);
+  const [movingCatNewParent, setMovingCatNewParent] = useState("");
+  const [selectedCatIds, setSelectedCatIds] = useState<Set<string>>(new Set());
+
   // Bank account management
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [newAccName, setNewAccName] = useState("");
@@ -444,6 +449,71 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
     toast.success("Categoria criada");
     setNewCatName(""); setNewCatParent(""); setShowAddCategory(false);
     loadData();
+  };
+
+  // Move category to a new parent
+  const moveCategory = async (catId: string, newParentId: string | null) => {
+    const { error } = await supabase.from("financial_categories").update({
+      parent_id: newParentId,
+    } as any).eq("id", catId);
+    if (error) { toast.error("Erro ao mover categoria"); return; }
+    toast.success("Categoria movida");
+    setMovingCatId(null);
+    setMovingCatNewParent("");
+    loadData();
+  };
+
+  // Delete single category
+  const deleteCategory = async (catId: string) => {
+    // First, unlink children
+    await supabase.from("financial_categories").update({ parent_id: null } as any).eq("parent_id", catId);
+    // Unlink transactions using this category
+    await supabase.from("bank_transactions").update({ category_id: null, classification_status: "pending" } as any).eq("category_id", catId);
+    await supabase.from("bank_transactions").update({ ai_category_id: null } as any).eq("ai_category_id", catId);
+    // Delete
+    const { error } = await supabase.from("financial_categories").delete().eq("id", catId);
+    if (error) { toast.error("Erro ao excluir categoria"); return; }
+    toast.success("Categoria excluída");
+    loadData();
+  };
+
+  // Delete parent category with all children
+  const deleteCategoryWithChildren = async (parentId: string) => {
+    const children = categories.filter(c => c.parent_id === parentId);
+    for (const child of children) {
+      await supabase.from("bank_transactions").update({ category_id: null, classification_status: "pending" } as any).eq("category_id", child.id);
+      await supabase.from("bank_transactions").update({ ai_category_id: null } as any).eq("ai_category_id", child.id);
+      await supabase.from("financial_categories").delete().eq("id", child.id);
+    }
+    await supabase.from("bank_transactions").update({ category_id: null, classification_status: "pending" } as any).eq("category_id", parentId);
+    await supabase.from("bank_transactions").update({ ai_category_id: null } as any).eq("ai_category_id", parentId);
+    await supabase.from("financial_categories").delete().eq("id", parentId);
+    toast.success(`Categoria e ${children.length} subcategorias excluídas`);
+    setSelectedCatIds(new Set());
+    loadData();
+  };
+
+  // Bulk delete selected categories
+  const bulkDeleteCategories = async () => {
+    const ids = Array.from(selectedCatIds);
+    for (const id of ids) {
+      await supabase.from("bank_transactions").update({ category_id: null, classification_status: "pending" } as any).eq("category_id", id);
+      await supabase.from("bank_transactions").update({ ai_category_id: null } as any).eq("ai_category_id", id);
+      // Also unlink children if it's a parent
+      await supabase.from("financial_categories").update({ parent_id: null } as any).eq("parent_id", id);
+      await supabase.from("financial_categories").delete().eq("id", id);
+    }
+    toast.success(`${ids.length} categorias excluídas`);
+    setSelectedCatIds(new Set());
+    loadData();
+  };
+
+  const toggleCatSelect = (catId: string) => {
+    setSelectedCatIds(prev => {
+      const n = new Set(prev);
+      if (n.has(catId)) n.delete(catId); else n.add(catId);
+      return n;
+    });
   };
 
   const getCategoryName = (id: string | null) => {
@@ -878,10 +948,44 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
         <TabsContent value="categories" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Categorias Financeiras</h3>
-            <Button variant="outline" size="sm" className="gap-1 h-8 text-xs" onClick={() => setShowAddCategory(true)}>
-              <Plus className="h-3.5 w-3.5" /> Nova Categoria
-            </Button>
+            <div className="flex gap-1">
+              {selectedCatIds.size > 0 && (
+                <Button variant="destructive" size="sm" className="gap-1 h-8 text-xs" onClick={bulkDeleteCategories}>
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir {selectedCatIds.size} selecionada(s)
+                </Button>
+              )}
+              <Button variant="outline" size="sm" className="gap-1 h-8 text-xs" onClick={() => setShowAddCategory(true)}>
+                <Plus className="h-3.5 w-3.5" /> Nova Categoria
+              </Button>
+            </div>
           </div>
+
+          {/* Move category dialog */}
+          <Dialog open={!!movingCatId} onOpenChange={open => { if (!open) setMovingCatId(null); }}>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Mover Categoria</DialogTitle></DialogHeader>
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Movendo: <strong>{categories.find(c => c.id === movingCatId)?.name}</strong>
+                </p>
+                <div>
+                  <Label className="text-xs">Nova categoria pai</Label>
+                  <Select value={movingCatNewParent} onValueChange={setMovingCatNewParent}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecionar destino" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sem pai (raiz)</SelectItem>
+                      {parentCategories.filter(p => p.id !== movingCatId).map(p => (
+                        <SelectItem key={p.id} value={p.id}>{p.name} ({p.type === "income" ? "Entrada" : "Saída"})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button className="w-full" onClick={() => moveCategory(movingCatId!, movingCatNewParent === "__none__" ? null : movingCatNewParent || null)}>
+                  Mover
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Income categories tree */}
@@ -890,17 +994,32 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
               <CardContent className="space-y-1">
                 {getCategoryTree("income").map(group => (
                   <Collapsible key={group.id} defaultOpen>
-                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full py-1.5 px-2 rounded hover:bg-muted/50 text-xs font-semibold">
-                      <ChevronRight className="h-3 w-3 transition-transform data-[state=open]:rotate-90" />
-                      {group.name}
-                      <span className="text-muted-foreground font-normal ml-auto">({group.children.length})</span>
-                    </CollapsibleTrigger>
+                    <div className="flex items-center gap-1">
+                      <Checkbox checked={selectedCatIds.has(group.id)} onCheckedChange={() => toggleCatSelect(group.id)} className="h-3.5 w-3.5" />
+                      <CollapsibleTrigger className="flex items-center gap-1.5 flex-1 py-1.5 px-2 rounded hover:bg-muted/50 text-xs font-semibold">
+                        <ChevronRight className="h-3 w-3 transition-transform data-[state=open]:rotate-90" />
+                        {group.name}
+                        <span className="text-muted-foreground font-normal ml-auto">({group.children.length})</span>
+                      </CollapsibleTrigger>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setMovingCatId(group.id); setMovingCatNewParent(""); }} title="Mover">
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteCategoryWithChildren(group.id)} title="Excluir com subcategorias">
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                     <CollapsibleContent>
                       {group.children.map(c => (
-                        <div key={c.id} className="flex items-center justify-between py-1 px-2 pl-7 rounded hover:bg-muted/50 text-xs">
-                          <span>{c.name}</span>
-                          <div className="flex items-center gap-1">
-                            {c.is_custom ? <span className="text-[9px] text-muted-foreground">Custom</span> : <span className="text-[9px] text-muted-foreground">Tiny</span>}
+                        <div key={c.id} className="flex items-center gap-1 py-1 px-2 pl-7 rounded hover:bg-muted/50 text-xs group">
+                          <Checkbox checked={selectedCatIds.has(c.id)} onCheckedChange={() => toggleCatSelect(c.id)} className="h-3.5 w-3.5" />
+                          <span className="flex-1 ml-1">{c.name}</span>
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setMovingCatId(c.id); setMovingCatNewParent(""); }} title="Mover">
+                              <ChevronRight className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteCategory(c.id)} title="Excluir">
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -909,8 +1028,17 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
                 ))}
                 {/* Ungrouped income */}
                 {leafCategories.filter(c => c.type === "income" && !c.parent_id && !c.tiny_category_id?.startsWith('_parent_')).map(c => (
-                  <div key={c.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 text-xs">
-                    <span>{c.name}</span>
+                  <div key={c.id} className="flex items-center gap-1 py-1.5 px-2 rounded hover:bg-muted/50 text-xs group">
+                    <Checkbox checked={selectedCatIds.has(c.id)} onCheckedChange={() => toggleCatSelect(c.id)} className="h-3.5 w-3.5" />
+                    <span className="flex-1 ml-1">{c.name}</span>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setMovingCatId(c.id); setMovingCatNewParent(""); }} title="Mover">
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteCategory(c.id)} title="Excluir">
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
                 {getCategoryTree("income").length === 0 && leafCategories.filter(c => c.type === "income").length === 0 && (
@@ -925,17 +1053,32 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
               <CardContent className="space-y-1">
                 {getCategoryTree("expense").map(group => (
                   <Collapsible key={group.id} defaultOpen>
-                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full py-1.5 px-2 rounded hover:bg-muted/50 text-xs font-semibold">
-                      <ChevronRight className="h-3 w-3 transition-transform data-[state=open]:rotate-90" />
-                      {group.name}
-                      <span className="text-muted-foreground font-normal ml-auto">({group.children.length})</span>
-                    </CollapsibleTrigger>
+                    <div className="flex items-center gap-1">
+                      <Checkbox checked={selectedCatIds.has(group.id)} onCheckedChange={() => toggleCatSelect(group.id)} className="h-3.5 w-3.5" />
+                      <CollapsibleTrigger className="flex items-center gap-1.5 flex-1 py-1.5 px-2 rounded hover:bg-muted/50 text-xs font-semibold">
+                        <ChevronRight className="h-3 w-3 transition-transform data-[state=open]:rotate-90" />
+                        {group.name}
+                        <span className="text-muted-foreground font-normal ml-auto">({group.children.length})</span>
+                      </CollapsibleTrigger>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setMovingCatId(group.id); setMovingCatNewParent(""); }} title="Mover">
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteCategoryWithChildren(group.id)} title="Excluir com subcategorias">
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                     <CollapsibleContent>
                       {group.children.map(c => (
-                        <div key={c.id} className="flex items-center justify-between py-1 px-2 pl-7 rounded hover:bg-muted/50 text-xs">
-                          <span>{c.name}</span>
-                          <div className="flex items-center gap-1">
-                            {c.is_custom ? <span className="text-[9px] text-muted-foreground">Custom</span> : <span className="text-[9px] text-muted-foreground">Tiny</span>}
+                        <div key={c.id} className="flex items-center gap-1 py-1 px-2 pl-7 rounded hover:bg-muted/50 text-xs group">
+                          <Checkbox checked={selectedCatIds.has(c.id)} onCheckedChange={() => toggleCatSelect(c.id)} className="h-3.5 w-3.5" />
+                          <span className="flex-1 ml-1">{c.name}</span>
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setMovingCatId(c.id); setMovingCatNewParent(""); }} title="Mover">
+                              <ChevronRight className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteCategory(c.id)} title="Excluir">
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -944,8 +1087,17 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
                 ))}
                 {/* Ungrouped expense */}
                 {leafCategories.filter(c => c.type === "expense" && !c.parent_id && !c.tiny_category_id?.startsWith('_parent_')).map(c => (
-                  <div key={c.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 text-xs">
-                    <span>{c.name}</span>
+                  <div key={c.id} className="flex items-center gap-1 py-1.5 px-2 rounded hover:bg-muted/50 text-xs group">
+                    <Checkbox checked={selectedCatIds.has(c.id)} onCheckedChange={() => toggleCatSelect(c.id)} className="h-3.5 w-3.5" />
+                    <span className="flex-1 ml-1">{c.name}</span>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setMovingCatId(c.id); setMovingCatNewParent(""); }} title="Mover">
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteCategory(c.id)} title="Excluir">
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </CardContent>
