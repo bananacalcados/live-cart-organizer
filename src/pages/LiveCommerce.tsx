@@ -299,6 +299,37 @@ const LiveCommerce = () => {
 
   const removeItem = (variantId: string) => setCart(prev => prev.filter(i => i.variantId !== variantId));
 
+  const activatePiPForCheckout = useCallback(async () => {
+    if (!videoId) return;
+    try {
+      if ("documentPictureInPicture" in window) {
+        const pipWindow = await (window as any).documentPictureInPicture.requestWindow({ width: 400, height: 225 });
+        const pipDoc = pipWindow.document;
+        pipDoc.body.style.margin = "0";
+        pipDoc.body.style.overflow = "hidden";
+        pipDoc.body.style.background = "#000";
+        const pipIframe = pipDoc.createElement("iframe");
+        pipIframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
+        pipIframe.style.width = "100%";
+        pipIframe.style.height = "100%";
+        pipIframe.style.border = "none";
+        pipIframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+        pipDoc.body.appendChild(pipIframe);
+        setPipActive(true);
+        pipWindow.addEventListener("pagehide", () => setPipActive(false));
+      } else {
+        const pipUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
+        const pipWin = window.open(pipUrl, "live_pip", "width=400,height=225,top=50,left=" + (screen.width - 420));
+        if (pipWin) {
+          setPipActive(true);
+          const timer = setInterval(() => { if (pipWin.closed) { setPipActive(false); clearInterval(timer); } }, 1000);
+        }
+      }
+    } catch (err) {
+      console.error("PiP for checkout error:", err);
+    }
+  }, [videoId]);
+
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     setCheckingOut(true);
@@ -306,13 +337,10 @@ const LiveCommerce = () => {
       const orderProducts = cart.map(item => ({ id: item.variantId, title: item.productTitle, variant: item.variantTitle || "Default", price: item.price, quantity: item.quantity, shopifyId: item.variantId, image: item.image }));
       const checkoutUrl = await createShopifyCartFromOrder(orderProducts);
       if (checkoutUrl) {
-        // When embedded in iframe (Shopify widget), open checkout in new tab
-        const isEmbed = new URLSearchParams(window.location.search).has("embed");
-        if (isEmbed || window.self !== window.top) {
-          window.open(checkoutUrl, "_blank");
-        } else {
-          window.location.href = checkoutUrl;
-        }
+        // Activate PiP so viewer keeps watching while checking out
+        if (!pipActive) await activatePiPForCheckout();
+        // Open checkout in new tab (especially when embedded via Shopify widget)
+        window.open(checkoutUrl, "_blank");
       } else { toast.error("Erro ao criar carrinho."); }
     } catch { toast.error("Erro ao processar."); } finally { setCheckingOut(false); }
   };
