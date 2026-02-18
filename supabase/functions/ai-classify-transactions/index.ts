@@ -20,7 +20,7 @@ serve(async (req) => {
 
     // Get categories
     const { data: categories } = await supabase
-      .from('financial_categories').select('id, name, type').eq('is_active', true);
+      .from('financial_categories').select('id, name, type, parent_id').eq('is_active', true);
 
     if (!categories?.length) {
       return new Response(JSON.stringify({ success: false, error: 'Nenhuma categoria cadastrada. Sincronize do Tiny primeiro.' }), {
@@ -28,10 +28,40 @@ serve(async (req) => {
       });
     }
 
-    // Get pending transactions - fetch ALL using pagination
+    // Build category hierarchy for better context
+    const parentCats = categories.filter(c => !c.parent_id || categories.every(p => p.id !== c.parent_id));
+    const childCats = categories.filter(c => c.parent_id && categories.some(p => p.id === c.parent_id));
+
+    // Fetch confirmed transactions as learning examples (up to 200 most recent)
+    const { data: confirmedTxs } = await supabase
+      .from('bank_transactions')
+      .select('description, memo, amount, type, category_id')
+      .eq('classification_status', 'confirmed')
+      .not('category_id', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(200);
+
+    // Build examples grouped by category for the prompt
+    let examplesBlock = '';
+    if (confirmedTxs?.length) {
+      const byCat: Record<string, { name: string; examples: string[] }> = {};
+      for (const tx of confirmedTxs) {
+        const cat = categories.find(c => c.id === tx.category_id);
+        if (!cat) continue;
+        if (!byCat[cat.id]) byCat[cat.id] = { name: cat.name, examples: [] };
+        if (byCat[cat.id].examples.length < 8) {
+          byCat[cat.id].examples.push(`"${tx.description}"${tx.memo ? ` (memo: "${tx.memo}")` : ''} R$${Math.abs(tx.amount)}`);
+        }
+      }
+      const lines = Object.entries(byCat).map(([id, info]) =>
+        `Categoria "${info.name}" (id: ${id}):\n${info.examples.map(e => `  - ${e}`).join('\n')}`
+      );
+      examplesBlock = `\n\nEXEMPLOS JÁ CONFIRMADOS PELO USUÁRIO (use como referência principal):\n${lines.join('\n\n')}`;
+    }
+
+    // Get pending transactions
     let allTransactions: any[] = [];
     if (transaction_ids?.length) {
-      // Fetch specific transactions in chunks of 500
       for (let i = 0; i < transaction_ids.length; i += 500) {
         const chunk = transaction_ids.slice(i, i + 500);
         const { data } = await supabase.from('bank_transactions')
@@ -40,7 +70,6 @@ serve(async (req) => {
         if (data) allTransactions.push(...data);
       }
     } else {
-      // Fetch ALL pending using pagination (no limit)
       let page = 0;
       const pageSize = 1000;
       let hasMore = true;
@@ -66,7 +95,10 @@ serve(async (req) => {
       });
     }
 
-    const categoryList = categories.map(c => `- "${c.name}" (${c.type}, id: ${c.id})`).join('\n');
+    const categoryList = categories.map(c => {
+      const parent = c.parent_id ? categories.find(p => p.id === c.parent_id) : null;
+      return `- "${c.name}" (${c.type}${parent ? `, sub de "${parent.name}"` : ''}, id: ${c.id})`;
+    }).join('\n');
 
     // Process in batches of 10
     let classified = 0;
@@ -89,11 +121,21 @@ serve(async (req) => {
           messages: [
             {
               role: 'system',
-              content: `Você é um classificador financeiro. Classifique cada transação bancária na categoria mais adequada.
+              content: `Você é um classificador financeiro especialista. Classifique cada transação bancária na categoria mais adequada.
+
+REGRAS IMPORTANTES:
+1. Priorize os exemplos confirmados pelo usuário — se a descrição for similar a um exemplo, use a MESMA categoria.
+2. Busque padrões: palavras-chave, prefixos, nomes de fornecedores, padrões de valor.
+3. Para débitos/saídas, prefira categorias de "despesa". Para créditos/entradas, prefira categorias de "receita".
+4. Se a descrição contém nome de banco, cartão, ou termos como "TAR", "IOF", "JUROS" → despesas bancárias/financeiras.
+5. Transferências entre contas (PIX, TED, DOC) com mesmo titular → pode ser transferência interna.
+6. Pagamentos recorrentes com valores similares → mesma categoria que exemplos anteriores.
+
 CATEGORIAS DISPONÍVEIS:
 ${categoryList}
+${examplesBlock}
 
-Responda APENAS com o JSON, sem markdown. Para cada transação, retorne o category_id e confidence (0-1).`
+Responda APENAS com o JSON via tool call. Para cada transação, retorne category_id e confidence (0-1). Use confidence alta (>0.85) quando a descrição for muito similar a exemplos confirmados.`
             },
             {
               role: 'user',
@@ -168,7 +210,10 @@ Responda APENAS com o JSON, sem markdown. Para cada transação, retorne o categ
       await new Promise(r => setTimeout(r, 1000));
     }
 
-    return new Response(JSON.stringify({ success: true, classified, total: transactions.length }), {
+    return new Response(JSON.stringify({ 
+      success: true, classified, total: transactions.length,
+      examples_used: confirmedTxs?.length || 0
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
