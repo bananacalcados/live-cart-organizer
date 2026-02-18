@@ -145,6 +145,18 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
   const [newCatName, setNewCatName] = useState("");
   const [newCatType, setNewCatType] = useState<"income" | "expense">("expense");
 
+  // Bank account management
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [newAccName, setNewAccName] = useState("");
+  const [newAccBank, setNewAccBank] = useState("");
+  const [newAccStore, setNewAccStore] = useState("");
+  const [newAccType, setNewAccType] = useState("checking");
+
+  // OFX import dialog
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [importAccountId, setImportAccountId] = useState("");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = useCallback(async () => {
@@ -191,25 +203,35 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
   const balance = totalIncome - totalExpense;
   const pendingCount = filtered.filter(t => t.classification_status === "pending" || t.classification_status === "ai_suggested").length;
 
-  // OFX Import
-  const handleOFXImport = async (files: FileList | null) => {
+  // Handle file selection - open dialog to pick account
+  const handleFileSelect = (files: FileList | null) => {
     if (!files?.length) return;
+    setPendingFiles(Array.from(files));
+    if (bankAccounts.length === 0) {
+      setShowAddAccount(true);
+      toast.info("Cadastre uma conta bancária primeiro para importar OFX");
+      return;
+    }
+    setImportAccountId(accountFilter !== "all" ? accountFilter : bankAccounts[0]?.id || "");
+    setShowImportDialog(true);
+  };
+
+  // OFX Import with selected account
+  const executeOFXImport = async () => {
+    if (!importAccountId) { toast.error("Selecione uma conta bancária"); return; }
+    setShowImportDialog(false);
     setImporting(true);
     const batchId = `import_${Date.now()}`;
     let totalImported = 0;
 
-    for (const file of Array.from(files)) {
+    for (const file of pendingFiles) {
       try {
         const content = await file.text();
         const { transactions: parsed } = parseOFX(content);
-        if (!parsed.length) { toast.error(`${file.name}: nenhuma transação encontrada`); continue; }
-
-        // Determine bank account - ask user to select
-        const accountId = accountFilter !== "all" ? accountFilter : bankAccounts[0]?.id;
-        if (!accountId) { toast.error("Selecione uma conta bancária antes de importar"); continue; }
+        if (!parsed.length) { toast.error(`${file.name}: nenhuma transação encontrada no OFX`); continue; }
 
         const rows = parsed.map(t => ({
-          bank_account_id: accountId,
+          bank_account_id: importAccountId,
           transaction_date: t.date,
           description: t.description,
           memo: t.memo || null,
@@ -220,20 +242,52 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
           classification_status: "pending" as const,
         }));
 
-        const { error, data } = await supabase.from("bank_transactions").upsert(rows as any, {
-          onConflict: "bank_account_id,fitid",
-          ignoreDuplicates: true,
-        }).select("id");
-
-        totalImported += data?.length || 0;
+        // Insert individually to handle partial unique index
+        for (const row of rows) {
+          if (row.fitid) {
+            const { data: existing } = await supabase
+              .from("bank_transactions")
+              .select("id")
+              .eq("bank_account_id", row.bank_account_id)
+              .eq("fitid", row.fitid)
+              .maybeSingle();
+            if (existing) continue;
+          }
+          const { error } = await supabase.from("bank_transactions").insert(row as any);
+          if (!error) totalImported++;
+        }
       } catch (e: any) {
         toast.error(`Erro no arquivo ${file.name}: ${e.message}`);
       }
     }
 
     toast.success(`${totalImported} transações importadas`);
+    setPendingFiles([]);
     setImporting(false);
     loadData();
+  };
+
+  // Add bank account
+  const addBankAccount = async () => {
+    if (!newAccName.trim()) return;
+    const { error, data } = await supabase.from("bank_accounts").insert({
+      name: newAccName,
+      bank_name: newAccBank || null,
+      store_id: newAccStore || null,
+      account_type: newAccType,
+    } as any).select("id").single();
+    if (error) { toast.error("Erro ao criar conta"); return; }
+    toast.success("Conta bancária criada");
+    setNewAccName("");
+    setNewAccBank("");
+    setNewAccStore("");
+    setShowAddAccount(false);
+    await loadData();
+    // If we had pending files, open import dialog
+    if (pendingFiles.length > 0 && data) {
+      setImportAccountId(data.id);
+      setShowImportDialog(true);
+    }
   };
 
   // AI Classification
@@ -368,9 +422,12 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
           <SelectTrigger className="w-[180px] h-8 text-xs"><SelectValue placeholder="Todas as contas" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as contas</SelectItem>
-            {bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+            {bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} {a.bank_name ? `(${a.bank_name})` : ''}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setShowAddAccount(true)} title="Nova conta bancária">
+          <Plus className="h-3.5 w-3.5" />
+        </Button>
         <div className="flex items-center gap-1 border rounded-md p-0.5">
           {[
             { key: "week", label: "Semana" },
@@ -393,7 +450,7 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
           </div>
         )}
         <div className="ml-auto flex gap-1">
-          <input ref={fileInputRef} type="file" accept=".ofx,.OFX" multiple className="hidden" onChange={e => handleOFXImport(e.target.files)} />
+          <input ref={fileInputRef} type="file" accept=".ofx,.OFX" multiple className="hidden" onChange={e => handleFileSelect(e.target.files)} />
           <Button variant="outline" size="sm" className="gap-1 h-8 text-xs" onClick={() => fileInputRef.current?.click()} disabled={importing}>
             {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
             Importar OFX
@@ -740,6 +797,74 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
           </Dialog>
         </TabsContent>
       </Tabs>
+
+      {/* Add Bank Account Dialog */}
+      <Dialog open={showAddAccount} onOpenChange={setShowAddAccount}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Nova Conta Bancária</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Nome da Conta</Label>
+              <Input value={newAccName} onChange={e => setNewAccName(e.target.value)} placeholder="Ex: Bradesco PJ - Loja Centro" className="h-9" />
+            </div>
+            <div>
+              <Label className="text-xs">Banco</Label>
+              <Input value={newAccBank} onChange={e => setNewAccBank(e.target.value)} placeholder="Ex: Bradesco, Itaú, Nubank..." className="h-9" />
+            </div>
+            <div>
+              <Label className="text-xs">Empresa (Loja)</Label>
+              <Select value={newAccStore} onValueChange={setNewAccStore}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
+                <SelectContent>
+                  {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Tipo</Label>
+              <Select value={newAccType} onValueChange={setNewAccType}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="checking">Conta Corrente</SelectItem>
+                  <SelectItem value="savings">Poupança</SelectItem>
+                  <SelectItem value="investment">Investimento</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full" onClick={addBankAccount} disabled={!newAccName.trim()}>Criar Conta</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* OFX Import Account Selection Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Importar OFX — Selecionar Conta</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {pendingFiles.length} arquivo(s) selecionado(s). Escolha a conta bancária destino:
+            </p>
+            <Select value={importAccountId} onValueChange={setImportAccountId}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+              <SelectContent>
+                {bankAccounts.map(a => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name} {a.bank_name ? `(${a.bank_name})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowImportDialog(false); setShowAddAccount(true); }}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Nova Conta
+              </Button>
+              <Button className="flex-1" onClick={executeOFXImport} disabled={!importAccountId}>
+                <Upload className="h-3.5 w-3.5 mr-1" /> Importar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
