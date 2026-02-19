@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, X, Loader2, MessageCircle, Phone, Image, Video, Mic, MicOff, Paperclip, FileText, Check, CheckCheck, AlertCircle, Clock } from "lucide-react";
+import { Send, X, Loader2, MessageCircle, Phone, Image, Video, Mic, MicOff, Paperclip, FileText, Check, CheckCheck, AlertCircle, Clock, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -449,6 +449,15 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
             <p className="font-semibold text-sm truncate">{viewerName}</p>
             <p className="text-xs text-white/70">{viewerPhone}</p>
           </div>
+          <a
+            href={`https://wa.me/${viewerPhone.replace(/\D/g, '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center h-8 w-8 rounded-md text-white/80 hover:text-white hover:bg-white/10"
+            title="Abrir no WhatsApp"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
           <Button
             variant="ghost"
             size="sm"
