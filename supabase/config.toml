@@ -188,3 +188,6 @@ verify_jwt = false
 
 [functions.ai-classify-transactions]
 verify_jwt = false
+
+[functions.live-send-verification]
+verify_jwt = false
