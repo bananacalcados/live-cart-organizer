@@ -1056,7 +1056,7 @@ export function LiveSessionManager() {
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={async () => {
                           const cartItems = Array.isArray(v.cart_items) ? v.cart_items : [];
                           if (cartItems.length === 0) { toast.error("Carrinho vazio"); return; }
@@ -1081,6 +1081,9 @@ export function LiveSessionManager() {
                           }
                         }} title="Criar pedido forçado na Shopify">
                           <Store className="w-3 h-3" /> Criar na Shopify
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => setPaymentLinkViewer(v)} title="Gerar link de pagamento">
+                          <Link2 className="w-3 h-3" /> Gerar Link Pagamento
                         </Button>
                       </div>
                       {(v.cart_items as any[]).map((item: any, idx: number) => (
@@ -1396,6 +1399,44 @@ export function LiveSessionManager() {
                   >
                     <Link2 className="w-4 h-4" />
                     {generatingLink ? "Gerando..." : "Link Yampi"}
+                  </Button>
+                  <Button
+                    className="w-full gap-2"
+                    variant="outline"
+                    disabled={generatingLink}
+                    onClick={async () => {
+                      const cartItems = Array.isArray(paymentLinkViewer.cart_items) ? paymentLinkViewer.cart_items : [];
+                      if (cartItems.length === 0) { toast.error("Carrinho vazio"); return; }
+                      setGeneratingLink(true);
+                      try {
+                        const products = cartItems.map((item: any) => ({
+                          title: item.productTitle,
+                          price: item.price,
+                          quantity: item.quantity || 1,
+                          variantId: item.variantId,
+                        }));
+                        const cartData = {
+                          customerName: paymentLinkViewer.name,
+                          customerPhone: paymentLinkViewer.phone,
+                          products,
+                          source: "live",
+                          paymentMethod: "paypal",
+                        };
+                        const encoded = btoa(encodeURIComponent(JSON.stringify(cartData)));
+                        const checkoutUrl = `${window.location.origin}/checkout?live=${encoded}&method=paypal`;
+                        navigator.clipboard.writeText(checkoutUrl);
+                        toast.success("Link PayPal copiado!");
+                      } catch (err: any) {
+                        console.error(err);
+                        toast.error("Erro ao gerar link PayPal");
+                      } finally {
+                        setGeneratingLink(false);
+                        setPaymentLinkViewer(null);
+                      }
+                    }}
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    {generatingLink ? "Gerando..." : "Link PayPal"}
                   </Button>
                 </div>
 
