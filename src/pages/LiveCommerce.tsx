@@ -301,8 +301,9 @@ const LiveCommerce = () => {
       });
       // Use encodeURIComponent only (btoa can fail with unicode)
       const encoded = encodeURIComponent(payload);
-      // Navigate in same tab to avoid popup blockers
-      window.location.href = `/checkout/live?live=${encoded}`;
+      // Navigate in same tab to avoid popup blockers; pass videoId for mini-player
+      const videoParam = videoId ? `&videoId=${encodeURIComponent(videoId)}` : "";
+      window.location.href = `/checkout/live?live=${encoded}${videoParam}`;
     } catch (err) {
       console.error("[Live Checkout] Error:", err);
       toast.error("Erro ao processar checkout.");
@@ -341,7 +342,7 @@ const LiveCommerce = () => {
   );
 
   return (
-    <div className="h-[100dvh] bg-black text-white flex flex-col overflow-hidden relative">
+    <div className="h-[100dvh] bg-black text-white flex flex-col overflow-hidden relative" translate="no">
       {/* Lead Gate Modal */}
       {showGate && (
         <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center px-4" onClick={() => setShowGate(false)}>
@@ -442,7 +443,7 @@ const LiveCommerce = () => {
         {isLive ? (
           <iframe
             className="absolute inset-0 w-full h-full object-cover"
-            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&controls=0`}
+            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1&controls=0`}
             title="Live"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
