@@ -51,7 +51,7 @@ export function LiveLeadGate({ onSubmit, sessionTitle }: LiveLeadGateProps) {
               placeholder="Maria Silva"
               value={name}
               onChange={e => setName(e.target.value)}
-              className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 h-12"
+              className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 h-12 text-[16px]"
               autoFocus
             />
           </div>
@@ -61,7 +61,7 @@ export function LiveLeadGate({ onSubmit, sessionTitle }: LiveLeadGateProps) {
               placeholder="(11) 99999-9999"
               value={phone}
               onChange={e => setPhone(formatPhone(e.target.value))}
-              className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 h-12"
+              className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 h-12 text-[16px]"
               inputMode="tel"
             />
           </div>

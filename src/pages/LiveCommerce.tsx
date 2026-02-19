@@ -89,7 +89,8 @@ const LiveCommerce = () => {
   const [sendingChat, setSendingChat] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
-  
+  const [iframeMuted, setIframeMuted] = useState(true); // iOS requires muted autoplay
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Sync cart to localStorage whenever it changes
   useEffect(() => {
@@ -473,15 +474,31 @@ const LiveCommerce = () => {
       {/* ===== VERTICAL FULLSCREEN VIDEO ===== */}
       <div ref={videoContainerRef} className="flex-1 relative overflow-hidden bg-black">
         {isLive ? (
-          <iframe
-            className="absolute inset-0 w-full h-full object-cover"
-            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&rel=0&modestbranding=1&playsinline=1&controls=0`}
-            title="Live"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            loading="lazy"
-            style={{ pointerEvents: "auto" }}
-          />
+          <>
+            <iframe
+              ref={iframeRef}
+              className="absolute inset-0 w-full h-full object-cover"
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1&controls=0&enablejsapi=1`}
+              title="Live"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              loading="eager"
+              style={{ pointerEvents: "auto" }}
+            />
+            {iframeMuted && (
+              <button
+                onClick={() => {
+                  if (iframeRef.current) {
+                    iframeRef.current.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&rel=0&modestbranding=1&playsinline=1&controls=0&enablejsapi=1`;
+                  }
+                  setIframeMuted(false);
+                }}
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-black/60 backdrop-blur-sm rounded-full p-4 flex items-center gap-2 text-white text-sm font-bold animate-pulse"
+              >
+                🔊 Tocar com áudio
+              </button>
+            )}
+          </>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 gap-3">
             <ShoppingBag className="w-8 h-8 text-zinc-500" />
