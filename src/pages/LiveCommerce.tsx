@@ -475,7 +475,7 @@ const LiveCommerce = () => {
         {isLive ? (
           <iframe
             className="absolute inset-0 w-full h-full object-cover"
-            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1&controls=0`}
+            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&rel=0&modestbranding=1&playsinline=1&controls=0`}
             title="Live"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -513,8 +513,8 @@ const LiveCommerce = () => {
           </div>
         </div>
 
-        {/* Chat overlay (inline on video, bottom-left) */}
-        <div className="absolute bottom-20 left-0 right-16 z-10 max-h-[35vh] flex flex-col pointer-events-none">
+        {/* Chat overlay (inline on video, bottom-left) — raised when cart has items to avoid overlap with checkout button */}
+        <div className={`absolute left-0 right-16 z-10 max-h-[35vh] flex flex-col pointer-events-none ${cartCount > 0 ? 'bottom-36' : 'bottom-20'}`}>
           <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-3 space-y-1 scrollbar-hide pointer-events-auto">
             {chatMessages.slice(-30).map((msg: any) => (
               <div key={msg.id} className="animate-fade-in">
@@ -568,7 +568,7 @@ const LiveCommerce = () => {
 
         {/* ===== PRODUCT CARDS (TikTok-style, bottom-right) ===== */}
         {products.length > 0 && showProducts && (
-          <div className="absolute bottom-20 right-2 z-10 flex flex-col gap-2 items-end max-h-[50vh] overflow-y-auto scrollbar-hide">
+          <div className={`absolute right-2 z-10 flex flex-col gap-2 items-end max-h-[50vh] overflow-y-auto scrollbar-hide ${cartCount > 0 ? 'bottom-36' : 'bottom-20'}`}>
             {products.slice(0, 3).map(p => {
               const product = p.node;
               const image = product.images.edges[0]?.node.url;
@@ -614,7 +614,7 @@ const LiveCommerce = () => {
 
         {/* ===== FLOATING CHECKOUT BUTTON (visible when cart has items) ===== */}
         {cartCount > 0 && (
-          <div className="absolute bottom-20 left-3 right-20 z-10">
+          <div className="absolute bottom-14 left-3 right-20 z-10">
             <button
               onClick={() => requireViewer("cart", handleCheckout)}
               disabled={checkingOut}
