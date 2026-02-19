@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, X, Loader2, MessageCircle, Phone } from "lucide-react";
+import { Send, X, Loader2, MessageCircle, Phone, Image, Video, Mic, MicOff, Paperclip, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,6 +11,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { useZapi } from "@/hooks/useZapi";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 
 interface LiveWhatsAppChatDialogProps {
   open: boolean;
@@ -31,6 +32,14 @@ interface WaMessage {
   created_at: string;
 }
 
+interface MetaTemplate {
+  name: string;
+  status: string;
+  language: string;
+  category: string;
+  components: any[];
+}
+
 export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerPhone, cartSummary }: LiveWhatsAppChatDialogProps) {
   const [messages, setMessages] = useState<WaMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -39,6 +48,25 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
   const scrollRef = useRef<HTMLDivElement>(null);
   const { sendMessage: zapiSendMessage } = useZapi();
   const { fetchNumbers, getSelectedNumber } = useWhatsAppNumberStore();
+
+  // Media state
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Meta templates state
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templates, setTemplates] = useState<MetaTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [sendingTemplate, setSendingTemplate] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -92,28 +120,214 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
       const selectedNum = getSelectedNumber();
       if (selectedNum?.provider === "meta") {
         const { error } = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: viewerPhone, message: text, whatsapp_number_id: selectedNum.id },
+          body: { phone: viewerPhone, message: text, whatsappNumberId: selectedNum.id },
         });
         if (error) throw error;
       } else {
         const result = await zapiSendMessage(viewerPhone, text);
         if (!result.success) throw new Error(result.error);
       }
-      // Save to DB
       await supabase.from("whatsapp_messages").insert({
         phone: viewerPhone,
         message: text,
         direction: "outgoing",
         status: "sent",
-        whatsapp_number_id: selectedNum?.provider === "meta" ? selectedNum.id : null,
+        whatsapp_number_id: getSelectedNumber()?.provider === "meta" ? getSelectedNumber()?.id : null,
       });
       toast.success("Mensagem enviada!");
     } catch (err: any) {
       console.error("Error sending:", err);
       toast.error("Erro ao enviar mensagem");
-      setNewMessage(text); // Restore message
+      setNewMessage(text);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // ── Media sending ──
+  const handleMediaFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = "";
+
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("Arquivo muito grande. Máximo 16MB.");
+      return;
+    }
+
+    setIsUploadingMedia(true);
+    try {
+      const publicUrl = await uploadMediaToStorage(file);
+      if (!publicUrl) throw new Error("Upload falhou");
+
+      let mediaType: "image" | "video" | "audio" | "document" = "document";
+      if (file.type.startsWith("image/")) mediaType = "image";
+      else if (file.type.startsWith("video/")) mediaType = "video";
+      else if (file.type.startsWith("audio/")) mediaType = "audio";
+
+      const selectedNum = getSelectedNumber();
+      if (selectedNum?.provider === "meta") {
+        const { error } = await supabase.functions.invoke("meta-whatsapp-send", {
+          body: { phone: viewerPhone, message: "", type: mediaType, mediaUrl: publicUrl, whatsappNumberId: selectedNum.id },
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.functions.invoke("zapi-send-media", {
+          body: { phone: viewerPhone, mediaUrl: publicUrl, mediaType, caption: "" },
+        });
+        if (error) throw error;
+      }
+
+      await supabase.from("whatsapp_messages").insert({
+        phone: viewerPhone,
+        message: mediaType === "image" ? "📷 Imagem" : mediaType === "video" ? "🎥 Vídeo" : mediaType === "audio" ? "🎤 Áudio" : "📎 Documento",
+        direction: "outgoing",
+        status: "sent",
+        media_type: mediaType,
+        media_url: publicUrl,
+        whatsapp_number_id: selectedNum?.provider === "meta" ? selectedNum.id : null,
+      });
+      toast.success(`${mediaType === "image" ? "Imagem" : mediaType === "video" ? "Vídeo" : "Arquivo"} enviado!`);
+    } catch (err: any) {
+      console.error("Error sending media:", err);
+      toast.error("Erro ao enviar mídia");
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
+  // ── Audio recording ──
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        if (audioBlob.size === 0) return;
+
+        setIsUploadingMedia(true);
+        try {
+          const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: "audio/webm" });
+          const publicUrl = await uploadMediaToStorage(file);
+          if (!publicUrl) throw new Error("Upload falhou");
+
+          const selectedNum = getSelectedNumber();
+          if (selectedNum?.provider === "meta") {
+            const { error } = await supabase.functions.invoke("meta-whatsapp-send", {
+              body: { phone: viewerPhone, message: "", type: "audio", mediaUrl: publicUrl, whatsappNumberId: selectedNum.id },
+            });
+            if (error) throw error;
+          } else {
+            const { error } = await supabase.functions.invoke("zapi-send-media", {
+              body: { phone: viewerPhone, mediaUrl: publicUrl, mediaType: "audio", caption: "" },
+            });
+            if (error) throw error;
+          }
+
+          await supabase.from("whatsapp_messages").insert({
+            phone: viewerPhone,
+            message: "🎤 Áudio",
+            direction: "outgoing",
+            status: "sent",
+            media_type: "audio",
+            media_url: publicUrl,
+            whatsapp_number_id: selectedNum?.provider === "meta" ? selectedNum.id : null,
+          });
+          toast.success("Áudio enviado!");
+        } catch (err: any) {
+          console.error("Error sending audio:", err);
+          toast.error("Erro ao enviar áudio");
+        } finally {
+          setIsUploadingMedia(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Microphone error:", err);
+      toast.error("Não foi possível acessar o microfone");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
+      setIsRecording(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  // ── Meta Templates ──
+  const loadTemplates = async () => {
+    setLoadingTemplates(true);
+    try {
+      const selectedNum = getSelectedNumber();
+      const { data, error } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
+        body: { whatsappNumberId: selectedNum?.id },
+      });
+      if (error) throw error;
+      const approved = (data?.templates || []).filter((t: MetaTemplate) => t.status === "APPROVED");
+      setTemplates(approved);
+    } catch (err) {
+      console.error("Error loading templates:", err);
+      toast.error("Erro ao carregar templates");
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const sendTemplate = async (template: MetaTemplate) => {
+    setSendingTemplate(template.name);
+    try {
+      const selectedNum = getSelectedNumber();
+      const { error } = await supabase.functions.invoke("meta-whatsapp-send-template", {
+        body: { phone: viewerPhone, templateName: template.name, language: template.language, whatsappNumberId: selectedNum?.id },
+      });
+      if (error) throw error;
+
+      await supabase.from("whatsapp_messages").insert({
+        phone: viewerPhone,
+        message: `📋 Template: ${template.name}`,
+        direction: "outgoing",
+        status: "sent",
+        whatsapp_number_id: selectedNum?.provider === "meta" ? selectedNum.id : null,
+      });
+      toast.success(`Template "${template.name}" enviado!`);
+      setShowTemplates(false);
+    } catch (err: any) {
+      console.error("Error sending template:", err);
+      toast.error("Erro ao enviar template");
+    } finally {
+      setSendingTemplate(null);
     }
   };
 
@@ -123,15 +337,30 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     } catch { return ""; }
   };
 
+  const formatRecordingTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md h-[600px] p-0 overflow-hidden gap-0 flex flex-col">
+      <DialogContent className="max-w-md h-[650px] p-0 overflow-hidden gap-0 flex flex-col">
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 bg-[#008069] text-white flex-shrink-0">
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm truncate">{viewerName}</p>
             <p className="text-xs text-white/70">{viewerPhone}</p>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-[10px] text-white/80 hover:text-white hover:bg-white/10 gap-1"
+            onClick={() => { setShowTemplates(!showTemplates); if (!showTemplates && templates.length === 0) loadTemplates(); }}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Templates
+          </Button>
           <Button variant="ghost" size="icon" className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10" onClick={() => onOpenChange(false)}>
             <X className="h-4 w-4" />
           </Button>
@@ -148,6 +377,41 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
         <div className="px-3 py-1.5 border-b flex-shrink-0">
           <WhatsAppNumberSelector className="h-8 text-xs" />
         </div>
+
+        {/* Templates panel */}
+        {showTemplates && (
+          <div className="px-3 py-2 border-b bg-muted/30 max-h-[200px] overflow-y-auto flex-shrink-0">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase mb-2">Templates Meta aprovados</p>
+            {loadingTemplates ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : templates.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-2">Nenhum template aprovado encontrado</p>
+            ) : (
+              <div className="space-y-1">
+                {templates.map(t => (
+                  <div key={t.name} className="flex items-center justify-between p-2 rounded-lg bg-background border text-xs">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{t.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{t.category} • {t.language}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[10px] gap-1 ml-2"
+                      disabled={sendingTemplate === t.name}
+                      onClick={() => sendTemplate(t)}
+                    >
+                      {sendingTemplate === t.name ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                      Enviar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-1.5 bg-[#efeae2] dark:bg-[#0b141a]" style={{ backgroundImage: "url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiB4PSIwIiB5PSIwIiB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHBhdHRlcm5Vbml0cz0idXNlclNwYWNlT25Vc2UiIGlkPSJwIj48Y2lyY2xlIGN4PSIyIiBjeT0iMiIgcj0iMC41IiBmaWxsPSJyZ2JhKDAsMCwwLDAuMDMpIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI3ApIi8+PC9zdmc+')" }}>
@@ -172,8 +436,16 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
                   {msg.media_url && msg.media_type === "image" && (
                     <img src={msg.media_url} className="max-w-full rounded mb-1" alt="" />
                   )}
+                  {msg.media_url && msg.media_type === "video" && (
+                    <video src={msg.media_url} controls className="max-w-full rounded mb-1" />
+                  )}
                   {msg.media_url && msg.media_type === "audio" && (
                     <audio src={msg.media_url} controls className="max-w-full mb-1" />
+                  )}
+                  {msg.media_url && msg.media_type === "document" && (
+                    <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary underline text-xs mb-1">
+                      <Paperclip className="h-3 w-3" /> Documento
+                    </a>
                   )}
                   <p className="whitespace-pre-wrap break-words text-[13px]">{msg.message}</p>
                   <p className={`text-[10px] mt-0.5 text-right ${msg.direction === "outgoing" ? "text-[#667781]" : "text-muted-foreground"}`}>
@@ -186,24 +458,80 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
           )}
         </div>
 
-        {/* Input */}
-        <div className="flex items-center gap-2 p-3 border-t bg-background flex-shrink-0">
-          <Input
-            value={newMessage}
-            onChange={e => setNewMessage(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder="Digite sua mensagem..."
-            className="flex-1 text-sm"
-            disabled={isSending}
-          />
-          <Button
-            size="icon"
-            onClick={handleSend}
-            disabled={isSending || !newMessage.trim()}
-            className="bg-[#00a884] hover:bg-[#008069] h-9 w-9"
-          >
-            {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
+        {/* Hidden file inputs */}
+        <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleMediaFile} />
+        <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleMediaFile} />
+        <input ref={documentInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleMediaFile} />
+
+        {/* Input area */}
+        <div className="border-t bg-background flex-shrink-0">
+          {/* Media buttons row */}
+          <div className="flex items-center gap-1 px-3 pt-2">
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => imageInputRef.current?.click()} disabled={isUploadingMedia || isRecording}>
+              <Image className="h-4 w-4 text-muted-foreground" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => videoInputRef.current?.click()} disabled={isUploadingMedia || isRecording}>
+              <Video className="h-4 w-4 text-muted-foreground" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => documentInputRef.current?.click()} disabled={isUploadingMedia || isRecording}>
+              <Paperclip className="h-4 w-4 text-muted-foreground" />
+            </Button>
+            {isUploadingMedia && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
+                <Loader2 className="h-3 w-3 animate-spin" /> Enviando...
+              </div>
+            )}
+          </div>
+
+          {/* Recording UI or text input */}
+          <div className="flex items-center gap-2 p-3 pt-1">
+            {isRecording ? (
+              <div className="flex-1 flex items-center gap-3">
+                <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive" onClick={cancelRecording}>
+                  <X className="h-4 w-4" />
+                </Button>
+                <div className="flex-1 flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-sm font-mono text-destructive">{formatRecordingTime(recordingDuration)}</span>
+                  <span className="text-xs text-muted-foreground">Gravando...</span>
+                </div>
+                <Button size="icon" onClick={stopRecording} className="bg-[#00a884] hover:bg-[#008069] h-9 w-9">
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Input
+                  value={newMessage}
+                  onChange={e => setNewMessage(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                  placeholder="Digite sua mensagem..."
+                  className="flex-1 text-sm"
+                  disabled={isSending || isUploadingMedia}
+                />
+                {newMessage.trim() ? (
+                  <Button
+                    size="icon"
+                    onClick={handleSend}
+                    disabled={isSending}
+                    className="bg-[#00a884] hover:bg-[#008069] h-9 w-9"
+                  >
+                    {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                ) : (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={startRecording}
+                    disabled={isUploadingMedia}
+                    className="h-9 w-9"
+                  >
+                    <Mic className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

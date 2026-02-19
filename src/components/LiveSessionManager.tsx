@@ -194,6 +194,14 @@ export function LiveSessionManager() {
   const filteredProducts = allProducts.filter(p => p.node.title.toLowerCase().includes(productSearch.toLowerCase()));
 
   // ---- REVENUE CALCULATIONS ----
+  // Consider a viewer "truly online" if last_seen_at is within 2 minutes
+  const isViewerOnlineNow = (v: LiveViewer) => {
+    if (v.is_banned) return false;
+    if (!v.last_seen_at) return false;
+    const diff = Date.now() - new Date(v.last_seen_at).getTime();
+    return diff < 2 * 60 * 1000; // 2 minutes
+  };
+
   const getRevenueStats = () => {
     const viewersWithCarts = viewers.filter(v => v.cart_items && (v.cart_items as any[]).length > 0);
     const totalCartValue = viewersWithCarts.reduce((sum, v) => {
@@ -206,12 +214,15 @@ export function LiveSessionManager() {
     const completedValue = completedOrders.reduce((sum, v) => {
       return sum + (v.cart_items as any[]).reduce((s: number, item: any) => s + (item.price || 0) * (item.quantity || 1), 0);
     }, 0);
+    const trueOnlineCount = viewers.filter(v => isViewerOnlineNow(v)).length;
+    const offlineWithCart = viewers.filter(v => !isViewerOnlineNow(v) && v.cart_items && (v.cart_items as any[]).length > 0 && !(v as any).checkout_completed);
     return {
       totalCartValue,
       totalItems,
       cartsCount: viewersWithCarts.length,
       leadsCount: viewers.length,
-      onlineCount: viewers.filter(v => v.is_online && !v.is_banned).length,
+      onlineCount: trueOnlineCount,
+      offlineWithCartCount: offlineWithCart.length,
       messagesCount: chatMessages.length,
       completedCount: completedOrders.length,
       completedValue,
@@ -456,6 +467,7 @@ export function LiveSessionManager() {
         customerPhone: viewer.phone,
         products,
         source: "live",
+        sessionId: adminSessionId,
       };
       const encoded = btoa(encodeURIComponent(JSON.stringify(cartData)));
       const checkoutUrl = `${window.location.origin}/checkout?live=${encoded}`;
@@ -593,7 +605,7 @@ export function LiveSessionManager() {
   }, [testInterval]);
 
   const adminSession = sessions.find(s => s.id === adminSessionId);
-  const onlineViewers = viewers.filter(v => v.is_online && !v.is_banned);
+  const onlineViewers = viewers.filter(v => isViewerOnlineNow(v));
   const stats = getRevenueStats();
 
   const addCartFilteredProducts = allProducts.filter(p => p.node.title.toLowerCase().includes(addCartSearch.toLowerCase()));
@@ -627,7 +639,7 @@ export function LiveSessionManager() {
         </div>
 
         {/* Revenue Stats Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-9 gap-2">
           <Card className="border-green-500/20 bg-green-500/5">
             <CardContent className="p-3 text-center">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Faturamento Carrinhos</p>
@@ -664,12 +676,22 @@ export function LiveSessionManager() {
               <p className="text-lg font-bold">{stats.leadsCount}</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="border-green-500/20 bg-green-500/5">
             <CardContent className="p-3 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Online Real</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Online Agora</p>
               <p className="text-lg font-bold text-green-500">{stats.onlineCount}</p>
+              <p className="text-[9px] text-muted-foreground">últimos 2 min</p>
             </CardContent>
           </Card>
+          {stats.offlineWithCartCount > 0 && (
+            <Card className="border-orange-500/20 bg-orange-500/5">
+              <CardContent className="p-3 text-center">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Offline c/ Carrinho</p>
+                <p className="text-lg font-bold text-orange-500">{stats.offlineWithCartCount}</p>
+                <p className="text-[9px] text-muted-foreground">cobrar via WhatsApp</p>
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardContent className="p-3 text-center">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Mensagens</p>
