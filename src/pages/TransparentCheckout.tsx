@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, Clock, Trophy } from "lucide-react";
@@ -621,6 +621,7 @@ function CreditCardSection({
 // ── Main Transparent Checkout ───────────────────────────────────
 export default function TransparentCheckout() {
   const { orderId } = useParams<{ orderId: string }>();
+  const [searchParams] = useSearchParams();
   const [orderData, setOrderData] = useState<OrderData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success">("pending");
@@ -632,7 +633,35 @@ export default function TransparentCheckout() {
   });
 
   useEffect(() => {
-    if (!orderId) return;
+    // Try live cart data from query params first
+    const liveParam = searchParams.get("live");
+    if (liveParam && !orderId) {
+      try {
+        const decoded = JSON.parse(decodeURIComponent(liveParam));
+        const products: OrderProduct[] = decoded.items || [];
+        const subtotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
+        const now = new Date().toISOString();
+        setOrderData({
+          id: `live-${Date.now()}`,
+          customerName: decoded.customer?.name || "Cliente Live",
+          products,
+          subtotal,
+          discountAmount: 0,
+          totalAmount: Math.round(subtotal * 100) / 100,
+          isPaid: false,
+          checkoutStartedAt: now,
+          freeShipping: false,
+          shippingCost: 0,
+        });
+        setIsLoading(false);
+        loadInstallmentConfig();
+      } catch (err) {
+        console.error("Error parsing live cart:", err);
+        setIsLoading(false);
+      }
+      return;
+    }
+    if (!orderId) { setIsLoading(false); return; }
     loadOrder();
     loadInstallmentConfig();
   }, [orderId]);

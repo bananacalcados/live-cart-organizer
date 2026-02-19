@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users, PictureInPicture2, ChevronUp } from "lucide-react";
+import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { supabase } from "@/integrations/supabase/client";
@@ -79,15 +79,30 @@ const LiveCommerce = () => {
   const [sendingChat, setSendingChat] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
-  const [pipActive, setPipActive] = useState(false);
+  
 
   // Pending action after gate
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
-  // Restore viewer from localStorage
+  // Restore viewer from localStorage (regenerate username if missing)
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) { try { setViewer(JSON.parse(stored)); } catch {} }
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        // Fix: old entries may lack username
+        if (!parsed.username && parsed.name && parsed.phone) {
+          parsed.username = generateUsername(parsed.name, parsed.phone);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        }
+        if (parsed.name && parsed.phone && parsed.username) {
+          setViewer(parsed);
+        } else {
+          // Corrupt data, clear it
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      } catch { localStorage.removeItem(STORAGE_KEY); }
+    }
   }, []);
 
   // Fetch active session
@@ -237,22 +252,7 @@ const LiveCommerce = () => {
   const videoId = extractVideoId(session?.youtube_video_id || "");
   const whatsappLink = session?.whatsapp_link || "";
 
-  // PiP
-  const activatePiPForCheckout = useCallback(async () => {
-    if (!videoId) return;
-    try {
-      // Always use popup window approach for reliable video playback
-      const pipUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1`;
-      const left = Math.max(0, screen.width - 380);
-      const pipWin = window.open(pipUrl, "live_pip", `width=360,height=640,top=50,left=${left},toolbar=no,menubar=no,scrollbars=no,resizable=yes`);
-      if (pipWin) {
-        setPipActive(true);
-        const timer = setInterval(() => { if (pipWin.closed) { setPipActive(false); clearInterval(timer); } }, 1000);
-      }
-    } catch (err) {
-      console.error("PiP for checkout error:", err);
-    }
-  }, [videoId]);
+  // PiP is no longer used (popup blockers prevent it on mobile)
 
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
   const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
@@ -286,7 +286,6 @@ const LiveCommerce = () => {
     if (cart.length === 0) return;
     setCheckingOut(true);
     try {
-      // Always use internal transparent checkout
       const liveCartData = cart.map(item => ({
         title: item.productTitle,
         variant: item.variantTitle || "Único",
@@ -294,22 +293,19 @@ const LiveCommerce = () => {
         quantity: item.quantity,
         image: item.image || "",
       }));
-      const encoded = btoa(encodeURIComponent(JSON.stringify({
+      const payload = JSON.stringify({
         items: liveCartData,
         customer: viewer ? { name: viewer.name, phone: viewer.phone } : null,
         source: "live",
-      })));
-      const internalUrl = `${window.location.origin}/checkout?live=${encoded}`;
-
-      // Activate PiP before opening checkout
-      if (!pipActive) await activatePiPForCheckout();
-
-      window.open(internalUrl, "_blank");
-      toast.success("Checkout aberto!");
+        videoId: videoId || null,
+      });
+      // Use encodeURIComponent only (btoa can fail with unicode)
+      const encoded = encodeURIComponent(payload);
+      // Navigate in same tab to avoid popup blockers
+      window.location.href = `/checkout/live?live=${encoded}`;
     } catch (err) {
       console.error("[Live Checkout] Error:", err);
       toast.error("Erro ao processar checkout.");
-    } finally {
       setCheckingOut(false);
     }
   };
@@ -481,10 +477,6 @@ const LiveCommerce = () => {
                 <MessageCircle className="w-4 h-4" />
               </a>
             )}
-            <button onClick={activatePiPForCheckout}
-              className={`w-8 h-8 rounded-full flex items-center justify-center ${pipActive ? "bg-amber-500 text-black" : "bg-black/50 text-white"}`}>
-              <PictureInPicture2 className="w-4 h-4" />
-            </button>
           </div>
         </div>
 

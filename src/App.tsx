@@ -41,6 +41,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/checkout/:paypalOrderId" element={<Checkout />} />
             <Route path="/checkout/order/:orderId" element={<TransparentCheckout />} />
+            <Route path="/checkout/live" element={<TransparentCheckout />} />
             <Route path="/register/:orderId" element={<CustomerRegister />} />
             <Route path="/lp/:slug" element={<LandingPage />} />
             <Route path="/banana-verao" element={<BananaLanding />} />
