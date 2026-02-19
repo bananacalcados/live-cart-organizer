@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3, Link2, Lock, UserPlus, Pencil, ChevronRight, Megaphone, Timer, Tag, CheckCircle2, Phone, Loader2 } from "lucide-react";
+import { LiveWhatsAppChatDialog } from "./live/LiveWhatsAppChatDialog";
 import { Textarea } from "@/components/ui/textarea";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
@@ -121,12 +122,15 @@ export function LiveSessionManager() {
   const [paymentLinkViewer, setPaymentLinkViewer] = useState<LiveViewer | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
 
-  // WhatsApp send dialog
+  // WhatsApp send dialog (legacy one-shot)
   const [whatsappSendViewer, setWhatsappSendViewer] = useState<LiveViewer | null>(null);
   const [whatsappSendMessage, setWhatsappSendMessage] = useState("");
   const [whatsappSending, setWhatsappSending] = useState(false);
   const { sendMessage: zapiSendMessage } = useZapi();
   const { fetchNumbers: fetchWhatsAppNumbers, getSelectedNumber } = useWhatsAppNumberStore();
+
+  // In-app WhatsApp chat dialog
+  const [chatDialogViewer, setChatDialogViewer] = useState<{ name: string; phone: string; cartSummary?: string } | null>(null);
 
   // Chat auto-scroll refs
   const adminChatScrollRef = useRef<HTMLDivElement>(null);
@@ -233,7 +237,7 @@ export function LiveSessionManager() {
     setChatMessages((chatRes.data as any[]) || []);
   };
 
-  // ---- WHATSAPP SEND ----
+  // ---- WHATSAPP SEND (legacy one-shot for quick message) ----
   const openWhatsAppSend = (viewer: LiveViewer) => {
     fetchWhatsAppNumbers();
     const cartItems = Array.isArray(viewer.cart_items) ? viewer.cart_items : [];
@@ -244,6 +248,14 @@ export function LiveSessionManager() {
       : `Olá ${viewer.name}! 👋\n\nVi que você participou da nossa live. Posso te ajudar com algo? 😊`;
     setWhatsappSendMessage(defaultMsg);
     setWhatsappSendViewer(viewer);
+  };
+
+  // ---- OPEN IN-APP WHATSAPP CHAT ----
+  const openInAppChat = (viewer: LiveViewer) => {
+    const cartItems = Array.isArray(viewer.cart_items) ? viewer.cart_items : [];
+    const cartTotal = cartItems.reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0);
+    const cartSummary = cartItems.length > 0 ? `${cartItems.length} itens • R$ ${cartTotal.toFixed(2).replace(".", ",")}` : undefined;
+    setChatDialogViewer({ name: viewer.name, phone: viewer.phone, cartSummary });
   };
 
   const handleWhatsAppSend = async () => {
@@ -904,12 +916,9 @@ export function LiveSessionManager() {
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setAddCartViewer(v); setAddCartSearch(""); setAddCartSelectedProduct(null); }} title="Adicionar produto ao carrinho">
                           <Plus className="w-3.5 h-3.5 text-green-600" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openWhatsAppSend(v)} title="Enviar WhatsApp pelo app">
-                          <Send className="w-3.5 h-3.5 text-green-600" />
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openInAppChat(v)} title="Conversar pelo WhatsApp no app">
+                          <MessageCircle className="w-3.5 h-3.5 text-green-600" />
                         </Button>
-                        <a href={`https://wa.me/${v.phone}`} target="_blank" rel="noopener noreferrer">
-                          <Button size="icon" variant="ghost" className="h-7 w-7"><MessageCircle className="w-3.5 h-3.5 text-green-600" /></Button>
-                        </a>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => banViewer(v.id, !v.is_banned)}>
                           <Ban className={`w-3.5 h-3.5 ${v.is_banned ? "text-green-600" : "text-destructive"}`} />
                         </Button>
@@ -943,7 +952,7 @@ export function LiveSessionManager() {
                             <span className="text-sm font-medium">{generateUsername(v.name, v.phone)}</span>
                             <span className="text-[10px] text-muted-foreground ml-1.5">{v.name}</span>
                           </div>
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openWhatsAppSend(v)} title="Enviar WhatsApp">
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openInAppChat(v)} title="Conversar pelo WhatsApp">
                             <MessageCircle className="w-3.5 h-3.5 text-green-600" />
                           </Button>
                         </div>
@@ -993,7 +1002,7 @@ export function LiveSessionManager() {
                             <span className="text-sm font-medium">{generateUsername(v.name, v.phone)}</span>
                             <span className="text-[10px] text-muted-foreground ml-1.5">{v.name}</span>
                           </div>
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openWhatsAppSend(v)} title="Enviar WhatsApp">
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openInAppChat(v)} title="Conversar pelo WhatsApp">
                             <MessageCircle className="w-3.5 h-3.5 text-green-600" />
                           </Button>
                         </div>
@@ -1040,13 +1049,10 @@ export function LiveSessionManager() {
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
                           const v = viewers.find(vw => vw.phone === msg.viewer_phone);
-                          if (v) openWhatsAppSend(v);
-                        }} title="Enviar WhatsApp pelo app">
-                          <Send className="w-3.5 h-3.5 text-green-600" />
+                          if (v) openInAppChat(v);
+                        }} title="Conversar pelo WhatsApp no app">
+                          <MessageCircle className="w-3.5 h-3.5 text-green-600" />
                         </Button>
-                        <a href={`https://wa.me/${msg.viewer_phone}`} target="_blank" rel="noopener noreferrer">
-                          <Button size="icon" variant="ghost" className="h-7 w-7"><MessageCircle className="w-3.5 h-3.5 text-green-600" /></Button>
-                        </a>
                       </div>
                     </div>
                   ))}
@@ -1154,7 +1160,7 @@ export function LiveSessionManager() {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>{privateChatViewer?.phone}</span>
-                <a href={`https://wa.me/${privateChatViewer?.phone}`} target="_blank" rel="noopener noreferrer" className="text-green-600 underline">Abrir WhatsApp</a>
+                <button onClick={() => { if (privateChatViewer) { setChatDialogViewer({ name: privateChatViewer.name, phone: privateChatViewer.phone }); } }} className="text-green-600 underline">Conversar pelo WhatsApp</button>
               </div>
               <div ref={privateChatScrollRef} className="h-[250px] overflow-y-auto border rounded-lg p-3 space-y-2 bg-muted/30">
                 {privateChatMessages.length === 0 ? (
@@ -1349,40 +1355,14 @@ export function LiveSessionManager() {
           </DialogContent>
         </Dialog>
 
-        {/* WhatsApp Send Dialog */}
-        <Dialog open={!!whatsappSendViewer} onOpenChange={o => { if (!o) setWhatsappSendViewer(null); }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-sm flex items-center gap-2"><MessageCircle className="w-4 h-4 text-green-600" /> Enviar WhatsApp</DialogTitle>
-            </DialogHeader>
-            {whatsappSendViewer && (
-              <div className="space-y-4">
-                <div className="text-xs text-muted-foreground space-y-0.5">
-                  <p><strong>Para:</strong> {generateUsername(whatsappSendViewer.name, whatsappSendViewer.phone)} ({whatsappSendViewer.name})</p>
-                  <p><strong>Telefone:</strong> {whatsappSendViewer.phone}</p>
-                  {Array.isArray(whatsappSendViewer.cart_items) && whatsappSendViewer.cart_items.length > 0 && (
-                    <p><strong>Carrinho:</strong> {whatsappSendViewer.cart_items.length} itens • R$ {(whatsappSendViewer.cart_items as any[]).reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0).toFixed(2).replace(".", ",")}</p>
-                  )}
-                </div>
-
-                <WhatsAppNumberSelector className="h-9 text-xs" />
-
-                <div className="space-y-2">
-                  <Label className="text-sm">Mensagem</Label>
-                  <Textarea value={whatsappSendMessage} onChange={e => setWhatsappSendMessage(e.target.value)} rows={6} placeholder="Digite sua mensagem..." className="text-sm" />
-                </div>
-
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => setWhatsappSendViewer(null)}>Cancelar</Button>
-                  <Button className="flex-1 gap-2 bg-green-600 hover:bg-green-700" onClick={handleWhatsAppSend} disabled={whatsappSending || !whatsappSendMessage.trim()}>
-                    {whatsappSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    {whatsappSending ? "Enviando..." : "Enviar"}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {/* In-App WhatsApp Chat Dialog */}
+        <LiveWhatsAppChatDialog
+          open={!!chatDialogViewer}
+          onOpenChange={o => { if (!o) setChatDialogViewer(null); }}
+          viewerName={chatDialogViewer?.name || ""}
+          viewerPhone={chatDialogViewer?.phone || ""}
+          cartSummary={chatDialogViewer?.cartSummary}
+        />
       </div>
     );
   }
