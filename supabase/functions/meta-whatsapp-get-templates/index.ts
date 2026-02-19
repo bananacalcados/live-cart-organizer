@@ -17,7 +17,15 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const url = new URL(req.url);
-    const whatsappNumberId = url.searchParams.get('whatsappNumberId');
+    let whatsappNumberId = url.searchParams.get('whatsappNumberId');
+
+    // Also check request body for whatsappNumberId (used by supabase.functions.invoke)
+    if (!whatsappNumberId && req.method === 'POST') {
+      try {
+        const body = await req.json();
+        whatsappNumberId = body.whatsappNumberId || null;
+      } catch { /* no body */ }
+    }
 
     // Get credentials
     let accessToken = '';
