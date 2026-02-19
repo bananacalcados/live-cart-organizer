@@ -156,7 +156,7 @@ function CountdownTimer({ checkoutStartedAt }: { checkoutStartedAt: string | nul
 }
 
 // ── PIX Section ─────────────────────────────────────────────────
-function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: string; amount: number; onPaymentConfirmed: () => void }) {
+function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: string; amount: number; onPaymentConfirmed: (info?: { platform: string; method: string }) => void }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -184,7 +184,7 @@ function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: s
         if (data?.status === "approved") {
           setPixPaid(true);
           if (pollingRef.current) clearInterval(pollingRef.current);
-          onPaymentConfirmed();
+          onPaymentConfirmed({ platform: "mercadopago", method: "pix" });
         }
       } catch {}
     };
@@ -375,7 +375,7 @@ function CreditCardSection({
   amount: number;
   products: OrderProduct[];
   installmentConfig: InstallmentConfig;
-  onPaymentConfirmed: () => void;
+  onPaymentConfirmed: (info?: { platform: string; method: string }) => void;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -493,7 +493,7 @@ function CreditCardSection({
 
       if (data?.success) {
         toast.success(`Pagamento aprovado via ${data.gateway === 'pagarme' ? 'Pagar.me' : 'APPMAX'}!`);
-        onPaymentConfirmed();
+        onPaymentConfirmed({ platform: data.gateway || "pagarme", method: "credit_card" });
       } else {
         throw new Error(data?.error || "Pagamento recusado. Verifique os dados do cartão.");
       }
@@ -702,17 +702,30 @@ export default function TransparentCheckout() {
         const now = new Date().toISOString();
         // Store raw live cart data for Shopify order creation after payment
         setLiveCartRaw({ items: decoded.items || [], customer: decoded.customer || null });
+        
+        // Calculate shipping from freight config
+        let shippingCost = 0;
+        let freeShipping = false;
+        const fc = decoded.freightConfig;
+        if (fc && fc.enabled) {
+          if (fc.free_above && subtotal >= fc.free_above) {
+            freeShipping = true;
+          } else if (fc.flat_rate) {
+            shippingCost = fc.flat_rate;
+          }
+        }
+        
         setOrderData({
           id: `live-${Date.now()}`,
           customerName: decoded.customer?.name || "Cliente Live",
           products,
           subtotal,
           discountAmount: 0,
-          totalAmount: Math.round(subtotal * 100) / 100,
+          totalAmount: Math.round((subtotal + shippingCost) * 100) / 100,
           isPaid: false,
           checkoutStartedAt: now,
-          freeShipping: false,
-          shippingCost: 0,
+          freeShipping,
+          shippingCost,
         });
         setIsLoading(false);
         loadInstallmentConfig();
@@ -792,7 +805,7 @@ export default function TransparentCheckout() {
     } catch {}
   };
 
-  const handlePaymentConfirmed = useCallback(async () => {
+  const handlePaymentConfirmed = useCallback(async (paymentInfo?: { platform: string; method: string }) => {
     setPaymentStatus("success");
     if (orderData?.checkoutStartedAt) {
       const elapsed = (Date.now() - new Date(orderData.checkoutStartedAt).getTime()) / 1000;
@@ -803,6 +816,26 @@ export default function TransparentCheckout() {
         }
       }
     }
+    
+    // Mark checkout_completed in live_viewers and save payment info
+    const liveParam = searchParams.get("live");
+    if (liveParam) {
+      try {
+        const decoded = JSON.parse(decodeURIComponent(liveParam));
+        const customer = decoded.customer;
+        const sessionId = decoded.sessionId;
+        if (customer?.phone && sessionId) {
+          const phone = customer.phone;
+          await supabase.from("live_viewers").update({
+            checkout_completed: true,
+            checkout_completed_at: new Date().toISOString(),
+            payment_platform: paymentInfo?.platform || null,
+            payment_method: paymentInfo?.method || null,
+          }).eq("session_id", sessionId).eq("phone", phone);
+        }
+      } catch {}
+    }
+    
     // Create Shopify order for live commerce checkouts
     if (liveCartRaw && liveCartRaw.items.length > 0) {
       try {
@@ -826,7 +859,7 @@ export default function TransparentCheckout() {
         console.error("Error calling shopify-create-live-order:", err);
       }
     }
-  }, [orderData?.checkoutStartedAt, orderId, liveCartRaw]);
+  }, [orderData?.checkoutStartedAt, orderId, liveCartRaw, searchParams]);
 
   if (isLoading) {
     return (
@@ -928,6 +961,18 @@ export default function TransparentCheckout() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Desconto</span>
                 <span className="text-primary font-medium">-R$ {orderData.discountAmount.toFixed(2)}</span>
+              </div>
+            )}
+            {orderData.shippingCost > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Frete</span>
+                <span className="font-medium">R$ {orderData.shippingCost.toFixed(2)}</span>
+              </div>
+            )}
+            {orderData.freeShipping && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Frete</span>
+                <span className="text-green-600 font-medium">GRÁTIS 🎉</span>
               </div>
             )}
             <div className="flex items-center justify-between">
