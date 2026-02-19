@@ -741,6 +741,15 @@ export function LiveSessionManager() {
                     {p.node.images.edges[0]?.node.url && <img src={p.node.images.edges[0].node.url} className="w-full aspect-square rounded object-cover mb-1.5" />}
                     <p className="text-xs font-medium line-clamp-2">{p.node.title}</p>
                     <p className="text-xs text-muted-foreground">R$ {parseFloat(p.node.priceRange.minVariantPrice.amount).toFixed(2).replace(".", ",")}</p>
+                    {p.node.variants.edges.length > 1 && (
+                      <div className="mt-1.5 flex flex-wrap gap-0.5">
+                        {p.node.variants.edges.map(v => (
+                          <span key={v.node.id} className={`text-[10px] px-1 py-0.5 rounded ${v.node.availableForSale ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground line-through"}`}>
+                            {v.node.title === "Default Title" ? "Único" : v.node.title}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {isSpotlight(p.node.handle) && <Star className="absolute top-1.5 right-1.5 w-4 h-4 text-amber-500 fill-amber-500" />}
                   </button>
                 ))}
