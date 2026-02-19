@@ -137,7 +137,7 @@ export function LiveChatOverlay({ sessionId, viewerName, viewerPhone, viewerCoun
             onKeyDown={handleKeyDown}
             placeholder="Comente aqui..."
             maxLength={200}
-            className="flex-1 bg-zinc-800 rounded-full px-4 py-2 text-xs text-white placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-amber-500/50"
+            className="flex-1 bg-zinc-800 rounded-full px-4 py-2 text-[16px] sm:text-xs text-white placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-amber-500/50"
           />
           <button
             onClick={sendMessage}
