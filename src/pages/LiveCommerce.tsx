@@ -289,8 +289,9 @@ const LiveCommerce = () => {
 
     if (viewer && session?.id) {
       setTimeout(async () => {
-        const currentCart = [...cart, { variantId: variant.id, productTitle, price: variant.price, quantity: 1, image }];
-        const cartItems = currentCart.map(i => ({ handle: i.variantId, productTitle: i.productTitle, price: i.price, quantity: i.quantity, image: i.image }));
+        const variantTitle = variant.title === "Default Title" ? "" : variant.title;
+        const currentCart = [...cart, { variantId: variant.id, productTitle, variantTitle, price: variant.price, quantity: 1, image }];
+        const cartItems = currentCart.map(i => ({ handle: i.variantId, variantId: i.variantId, productTitle: i.productTitle, variantTitle: i.variantTitle || "", price: i.price, quantity: i.quantity, image: i.image }));
         await supabase.from("live_viewers").update({ cart_items: cartItems as any }).eq("session_id", session.id).eq("phone", viewer.phone);
       }, 100);
     }
