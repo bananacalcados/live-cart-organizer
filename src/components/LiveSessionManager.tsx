@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3, Link2, Lock, UserPlus, Pencil, ChevronRight, Megaphone, Timer, Tag, CheckCircle2, Phone, Loader2 } from "lucide-react";
+import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3, Link2, Lock, UserPlus, Pencil, ChevronRight, Megaphone, Timer, Tag, CheckCircle2, Phone, Loader2, Store, CreditCard } from "lucide-react";
 import { LiveWhatsAppChatDialog } from "./live/LiveWhatsAppChatDialog";
 import { Textarea } from "@/components/ui/textarea";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
@@ -964,6 +964,13 @@ export function LiveSessionManager() {
                           <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => { setAddCartViewer(v); setAddCartSearch(""); setAddCartSelectedProduct(null); }}>
                             <Plus className="w-3 h-3" /> Produto
                           </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={async () => {
+                            await supabase.from("live_viewers").update({ cart_items: [] as any }).eq("id", v.id);
+                            toast.success("Carrinho excluído");
+                            loadAdminData(adminSessionId!);
+                          }} title="Excluir carrinho">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
                       </div>
                       {(v.cart_items as any[]).map((item: any, idx: number) => (
@@ -993,6 +1000,8 @@ export function LiveSessionManager() {
                   <p className="text-muted-foreground text-xs text-center py-4">Nenhum pedido finalizado ainda</p>
                 ) : viewers.filter(v => (v as any).checkout_completed).map(v => {
                   const cartVal = (v.cart_items as any[]).reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0);
+                  const paymentPlatform = (v as any).payment_platform;
+                  const paymentMethod = (v as any).payment_method;
                   return (
                     <div key={v.id} className="border rounded-lg p-3 mb-2">
                       <div className="flex items-center justify-between mb-2">
@@ -1007,11 +1016,50 @@ export function LiveSessionManager() {
                           </Button>
                         </div>
                         <div className="flex items-center gap-2">
+                          {paymentPlatform && (
+                            <Badge variant="secondary" className="text-[10px] gap-1">
+                              <Store className="w-3 h-3" />
+                              {paymentPlatform === "pagarme" ? "Pagar.me" : paymentPlatform === "appmax" ? "APPMAX" : paymentPlatform === "mercadopago" ? "Mercado Pago" : paymentPlatform}
+                            </Badge>
+                          )}
+                          {paymentMethod && (
+                            <Badge variant="secondary" className="text-[10px] gap-1">
+                              <CreditCard className="w-3 h-3" />
+                              {paymentMethod === "credit_card" ? "Cartão" : paymentMethod === "pix" ? "PIX" : paymentMethod}
+                            </Badge>
+                          )}
                           <Badge variant="outline" className="text-xs text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</Badge>
                           <span className="text-[10px] text-muted-foreground">
                             {(v as any).checkout_completed_at ? new Date((v as any).checkout_completed_at).toLocaleString("pt-BR") : ""}
                           </span>
                         </div>
+                      </div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={async () => {
+                          const cartItems = Array.isArray(v.cart_items) ? v.cart_items : [];
+                          if (cartItems.length === 0) { toast.error("Carrinho vazio"); return; }
+                          try {
+                            toast.loading("Criando pedido na Shopify...", { id: "force-shopify" });
+                            const { data, error } = await supabase.functions.invoke("shopify-create-live-order", {
+                              body: {
+                                items: cartItems.map((item: any) => ({
+                                  variantId: item.variantId,
+                                  title: item.productTitle,
+                                  price: item.price,
+                                  quantity: item.quantity || 1,
+                                })),
+                                customer: { name: v.name, phone: v.phone },
+                              },
+                            });
+                            if (error) throw error;
+                            toast.success(`Pedido Shopify criado: ${data?.shopifyOrderName || "OK"}`, { id: "force-shopify" });
+                          } catch (err: any) {
+                            console.error(err);
+                            toast.error("Erro ao criar pedido Shopify", { id: "force-shopify" });
+                          }
+                        }} title="Criar pedido forçado na Shopify">
+                          <Store className="w-3 h-3" /> Criar na Shopify
+                        </Button>
                       </div>
                       {(v.cart_items as any[]).map((item: any, idx: number) => (
                         <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">

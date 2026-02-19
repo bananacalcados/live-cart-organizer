@@ -2293,6 +2293,8 @@ export type Database = {
           last_seen_at: string
           messages_count: number | null
           name: string
+          payment_method: string | null
+          payment_platform: string | null
           phone: string
           session_id: string
         }
@@ -2310,6 +2312,8 @@ export type Database = {
           last_seen_at?: string
           messages_count?: number | null
           name: string
+          payment_method?: string | null
+          payment_platform?: string | null
           phone: string
           session_id: string
         }
@@ -2327,6 +2331,8 @@ export type Database = {
           last_seen_at?: string
           messages_count?: number | null
           name?: string
+          payment_method?: string | null
+          payment_platform?: string | null
           phone?: string
           session_id?: string
         }

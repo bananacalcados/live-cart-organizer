@@ -334,16 +334,21 @@ const LiveCommerce = () => {
       // Save cart to localStorage for persistence when returning from checkout
       localStorage.setItem("live_cart", JSON.stringify(cart));
 
-      // Save cart to DB for admin visibility / cart recovery
+      // Save cart to DB for admin visibility / cart recovery (NOT checkout_completed yet - that happens after payment)
       if (viewer && session?.id) {
         const cartValue = cart.reduce((s, i) => s + i.price * i.quantity, 0);
         await supabase.from("live_viewers").update({
           cart_items: cart as any,
           cart_value: cartValue,
           last_seen_at: new Date().toISOString(),
-          checkout_completed: true,
-          checkout_completed_at: new Date().toISOString(),
         }).eq("session_id", session.id).eq("phone", viewer.phone);
+      }
+
+      // Fetch freight config from the active session for checkout
+      let freightConfig: any = null;
+      if (session?.id) {
+        const { data: sessionData } = await supabase.from("live_sessions").select("freight_config").eq("id", session.id).maybeSingle();
+        freightConfig = sessionData?.freight_config || null;
       }
 
       const liveCartData = cart.map(item => ({
@@ -352,12 +357,15 @@ const LiveCommerce = () => {
         price: item.price,
         quantity: item.quantity,
         image: item.image || "",
+        variantId: item.variantId,
       }));
       const payload = JSON.stringify({
         items: liveCartData,
         customer: viewer ? { name: viewer.name, phone: viewer.phone } : null,
         source: "live",
         videoId: videoId || null,
+        sessionId: session?.id || null,
+        freightConfig,
       });
       // Use encodeURIComponent only (btoa can fail with unicode)
       const encoded = encodeURIComponent(payload);
