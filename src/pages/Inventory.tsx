@@ -159,6 +159,8 @@ export default function Inventory() {
   const [showNewCountDialog, setShowNewCountDialog] = useState(false);
   const [newCountScope, setNewCountScope] = useState<'total' | 'partial'>('total');
   const [showFinishDialog, setShowFinishDialog] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyProgress, setVerifyProgress] = useState({ current: 0, total: 0 });
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
@@ -602,9 +604,12 @@ export default function Inventory() {
   const handleFinishCounting = async () => {
     if (!activeCount) return;
     setShowFinishDialog(false);
-    toast.info('Consultando saldos no Tiny... Isso pode levar alguns minutos.');
-
-    for (const item of countItems) {
+    setIsVerifying(true);
+    setVerifyProgress({ current: 0, total: countItems.length });
+    toast.info('Consultando saldos no Tiny...');
+    for (let idx = 0; idx < countItems.length; idx++) {
+      const item = countItems[idx];
+      setVerifyProgress({ current: idx + 1, total: countItems.length });
       try {
         const { data } = await supabase.functions.invoke('inventory-get-stock', {
           body: { store_id: selectedStoreId, product_id: item.product_id }
@@ -622,6 +627,8 @@ export default function Inventory() {
         console.error('Error getting stock:', e);
       }
     }
+
+    setIsVerifying(false);
 
     if (activeCount.scope === 'total') {
       const { data: allProducts } = await supabase
@@ -1552,6 +1559,37 @@ export default function Inventory() {
               }}
               onClose={() => setShowCameraScanner(false)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Verification Progress Overlay */}
+      {isVerifying && (
+        <div className="fixed inset-0 z-50 bg-background/95 flex flex-col items-center justify-center p-6">
+          <div className="w-full max-w-md space-y-6 text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+            <div>
+              <h3 className="text-xl font-bold text-foreground">Verificando saldos no Tiny</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Consultando estoque de cada produto. Por favor, aguarde...
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} className="h-4" />
+              <p className="text-sm font-medium text-foreground">
+                {verifyProgress.current} de {verifyProgress.total} produtos verificados
+                {verifyProgress.total > 0 && (
+                  <span className="text-muted-foreground ml-2">
+                    ({Math.round((verifyProgress.current / verifyProgress.total) * 100)}%)
+                  </span>
+                )}
+              </p>
+              {verifyProgress.total > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Tempo estimado restante: ~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 2.5) / 60)} min
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
