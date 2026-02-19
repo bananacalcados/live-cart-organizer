@@ -478,7 +478,7 @@ const LiveCommerce = () => {
             <iframe
               ref={iframeRef}
               className="absolute inset-0 w-full h-full object-cover"
-              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1&controls=0&enablejsapi=1`}
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1&controls=0&enablejsapi=1&live=1`}
               title="Live"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
