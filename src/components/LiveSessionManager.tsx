@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3, Link2, Lock, UserPlus, Pencil, ChevronRight, Megaphone, Timer, Tag, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3, Link2, Lock, UserPlus, Pencil, ChevronRight, Megaphone, Timer, Tag, CheckCircle2, Phone, Loader2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { useZapi } from "@/hooks/useZapi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,6 +64,13 @@ const FAKE_MESSAGES = ["Amei! 😍", "Quanto custa?", "Tem na cor preta?", "Quer
 function randomItem<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 function randomPhone() { return `5511${Math.floor(900000000 + Math.random() * 99999999)}`; }
 
+/** Generate a username from name + phone suffix (same logic as LiveCommerce) */
+function generateUsername(name: string, phone: string): string {
+  const firstName = name.trim().split(/\s+/)[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const suffix = phone.slice(-4);
+  return `@${firstName}${suffix}`;
+}
+
 export function LiveSessionManager() {
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,6 +120,13 @@ export function LiveSessionManager() {
   // Payment link dialog
   const [paymentLinkViewer, setPaymentLinkViewer] = useState<LiveViewer | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
+
+  // WhatsApp send dialog
+  const [whatsappSendViewer, setWhatsappSendViewer] = useState<LiveViewer | null>(null);
+  const [whatsappSendMessage, setWhatsappSendMessage] = useState("");
+  const [whatsappSending, setWhatsappSending] = useState(false);
+  const { sendMessage: zapiSendMessage } = useZapi();
+  const { fetchNumbers: fetchWhatsAppNumbers, getSelectedNumber } = useWhatsAppNumberStore();
 
   // Chat auto-scroll refs
   const adminChatScrollRef = useRef<HTMLDivElement>(null);
@@ -208,11 +226,64 @@ export function LiveSessionManager() {
 
   const loadAdminData = async (sessionId: string) => {
     const [viewersRes, chatRes] = await Promise.all([
-      supabase.from("live_viewers").select("*").eq("session_id", sessionId).order("joined_at", { ascending: false }),
+      supabase.from("live_viewers").select("*").eq("session_id", sessionId).order("joined_at", { ascending: false }).limit(5000),
       supabase.from("live_chat_messages").select("*").eq("session_id", sessionId).order("created_at", { ascending: true }).limit(500),
     ]);
     setViewers((viewersRes.data as any[]) || []);
     setChatMessages((chatRes.data as any[]) || []);
+  };
+
+  // ---- WHATSAPP SEND ----
+  const openWhatsAppSend = (viewer: LiveViewer) => {
+    fetchWhatsAppNumbers();
+    const cartItems = Array.isArray(viewer.cart_items) ? viewer.cart_items : [];
+    const cartTotal = cartItems.reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0);
+    const username = generateUsername(viewer.name, viewer.phone);
+    const defaultMsg = cartItems.length > 0
+      ? `Olá ${viewer.name}! 👋\n\nVi que você montou um carrinho na nossa live:\n\n${cartItems.map((i: any) => `• ${i.quantity || 1}x ${i.productTitle} ${i.variantTitle ? `(${i.variantTitle})` : ""} - R$ ${((i.price || 0) * (i.quantity || 1)).toFixed(2)}`).join("\n")}\n\n💰 Total: R$ ${cartTotal.toFixed(2)}\n\nPosso te ajudar a finalizar? 😊`
+      : `Olá ${viewer.name}! 👋\n\nVi que você participou da nossa live. Posso te ajudar com algo? 😊`;
+    setWhatsappSendMessage(defaultMsg);
+    setWhatsappSendViewer(viewer);
+  };
+
+  const handleWhatsAppSend = async () => {
+    if (!whatsappSendViewer || !whatsappSendMessage.trim()) return;
+    setWhatsappSending(true);
+    try {
+      const selectedNum = getSelectedNumber();
+      if (selectedNum?.provider === "meta") {
+        // Send via Meta API
+        const { error } = await supabase.functions.invoke("meta-whatsapp-send", {
+          body: { phone: whatsappSendViewer.phone, message: whatsappSendMessage.trim(), whatsappNumberId: selectedNum.id },
+        });
+        if (error) throw error;
+        toast.success("Mensagem enviada via Meta!");
+      } else {
+        // Send via Z-API
+        const result = await zapiSendMessage(whatsappSendViewer.phone, whatsappSendMessage.trim());
+        if (!result.success) throw new Error(result.error);
+      }
+      setWhatsappSendViewer(null);
+    } catch (err: any) {
+      console.error("Error sending WhatsApp:", err);
+      toast.error("Erro ao enviar mensagem");
+    } finally {
+      setWhatsappSending(false);
+    }
+  };
+
+  const handleWhatsAppTemplateSend = async (viewer: LiveViewer, templateName: string, language: string = "pt_BR") => {
+    try {
+      const selectedNum = getSelectedNumber();
+      const { error } = await supabase.functions.invoke("meta-whatsapp-send-template", {
+        body: { phone: viewer.phone, templateName, language, whatsappNumberId: selectedNum?.id },
+      });
+      if (error) throw error;
+      toast.success(`Template "${templateName}" enviado para ${viewer.name}!`);
+    } catch (err: any) {
+      console.error("Error sending template:", err);
+      toast.error("Erro ao enviar template");
+    }
   };
 
   // Realtime subscriptions for admin
@@ -631,8 +702,8 @@ export function LiveSessionManager() {
                           <div className="flex items-center gap-2">
                             <div className={`w-2 h-2 rounded-full ${v.is_online ? "bg-green-500" : "bg-zinc-400"}`} />
                             <div>
-                              <p className="text-sm font-medium">{v.name}</p>
-                              <p className="text-[10px] text-muted-foreground">{itemCount} itens</p>
+                              <p className="text-sm font-medium">{generateUsername(v.name, v.phone)}</p>
+                              <p className="text-[10px] text-muted-foreground">{v.name} • {itemCount} itens</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -833,6 +904,9 @@ export function LiveSessionManager() {
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setAddCartViewer(v); setAddCartSearch(""); setAddCartSelectedProduct(null); }} title="Adicionar produto ao carrinho">
                           <Plus className="w-3.5 h-3.5 text-green-600" />
                         </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openWhatsAppSend(v)} title="Enviar WhatsApp pelo app">
+                          <Send className="w-3.5 h-3.5 text-green-600" />
+                        </Button>
                         <a href={`https://wa.me/${v.phone}`} target="_blank" rel="noopener noreferrer">
                           <Button size="icon" variant="ghost" className="h-7 w-7"><MessageCircle className="w-3.5 h-3.5 text-green-600" /></Button>
                         </a>
@@ -865,10 +939,13 @@ export function LiveSessionManager() {
                     <div key={v.id} className="border rounded-lg p-3 mb-2">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{v.name}</span>
-                          <a href={`https://wa.me/${v.phone}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-500">
-                            <MessageCircle className="w-3.5 h-3.5" />
-                          </a>
+                          <div>
+                            <span className="text-sm font-medium">{generateUsername(v.name, v.phone)}</span>
+                            <span className="text-[10px] text-muted-foreground ml-1.5">{v.name}</span>
+                          </div>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openWhatsAppSend(v)} title="Enviar WhatsApp">
+                            <MessageCircle className="w-3.5 h-3.5 text-green-600" />
+                          </Button>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="text-xs text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</Badge>
@@ -912,10 +989,13 @@ export function LiveSessionManager() {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <CheckCircle2 className="w-4 h-4 text-green-500" />
-                          <span className="text-sm font-medium">{v.name}</span>
-                          <a href={`https://wa.me/${v.phone}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-500">
-                            <MessageCircle className="w-3.5 h-3.5" />
-                          </a>
+                          <div>
+                            <span className="text-sm font-medium">{generateUsername(v.name, v.phone)}</span>
+                            <span className="text-[10px] text-muted-foreground ml-1.5">{v.name}</span>
+                          </div>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openWhatsAppSend(v)} title="Enviar WhatsApp">
+                            <MessageCircle className="w-3.5 h-3.5 text-green-600" />
+                          </Button>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="text-xs text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</Badge>
@@ -958,6 +1038,12 @@ export function LiveSessionManager() {
                         <p className="text-[10px] text-muted-foreground/60">{new Date(msg.created_at).toLocaleString("pt-BR")}</p>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
+                          const v = viewers.find(vw => vw.phone === msg.viewer_phone);
+                          if (v) openWhatsAppSend(v);
+                        }} title="Enviar WhatsApp pelo app">
+                          <Send className="w-3.5 h-3.5 text-green-600" />
+                        </Button>
                         <a href={`https://wa.me/${msg.viewer_phone}`} target="_blank" rel="noopener noreferrer">
                           <Button size="icon" variant="ghost" className="h-7 w-7"><MessageCircle className="w-3.5 h-3.5 text-green-600" /></Button>
                         </a>
@@ -1260,6 +1346,41 @@ export function LiveSessionManager() {
                 Salvar Nome
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* WhatsApp Send Dialog */}
+        <Dialog open={!!whatsappSendViewer} onOpenChange={o => { if (!o) setWhatsappSendViewer(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-sm flex items-center gap-2"><MessageCircle className="w-4 h-4 text-green-600" /> Enviar WhatsApp</DialogTitle>
+            </DialogHeader>
+            {whatsappSendViewer && (
+              <div className="space-y-4">
+                <div className="text-xs text-muted-foreground space-y-0.5">
+                  <p><strong>Para:</strong> {generateUsername(whatsappSendViewer.name, whatsappSendViewer.phone)} ({whatsappSendViewer.name})</p>
+                  <p><strong>Telefone:</strong> {whatsappSendViewer.phone}</p>
+                  {Array.isArray(whatsappSendViewer.cart_items) && whatsappSendViewer.cart_items.length > 0 && (
+                    <p><strong>Carrinho:</strong> {whatsappSendViewer.cart_items.length} itens • R$ {(whatsappSendViewer.cart_items as any[]).reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0).toFixed(2).replace(".", ",")}</p>
+                  )}
+                </div>
+
+                <WhatsAppNumberSelector className="h-9 text-xs" />
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Mensagem</Label>
+                  <Textarea value={whatsappSendMessage} onChange={e => setWhatsappSendMessage(e.target.value)} rows={6} placeholder="Digite sua mensagem..." className="text-sm" />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setWhatsappSendViewer(null)}>Cancelar</Button>
+                  <Button className="flex-1 gap-2 bg-green-600 hover:bg-green-700" onClick={handleWhatsAppSend} disabled={whatsappSending || !whatsappSendMessage.trim()}>
+                    {whatsappSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {whatsappSending ? "Enviando..." : "Enviar"}
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
