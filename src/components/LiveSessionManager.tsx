@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3, Link2, Lock, UserPlus } from "lucide-react";
+import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3, Link2, Lock, UserPlus, Pencil, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,6 +100,10 @@ export function LiveSessionManager() {
   const [addCartViewer, setAddCartViewer] = useState<LiveViewer | null>(null);
   const [addCartSearch, setAddCartSearch] = useState("");
   const [addCartSelectedProduct, setAddCartSelectedProduct] = useState<ShopifyProduct | null>(null);
+
+  // Edit viewer name
+  const [editNameViewer, setEditNameViewer] = useState<LiveViewer | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
 
   // Payment link dialog
   const [paymentLinkViewer, setPaymentLinkViewer] = useState<LiveViewer | null>(null);
@@ -297,6 +301,15 @@ export function LiveSessionManager() {
       );
       setPrivateChatMessages(msgs);
     }, 500);
+  };
+
+  // ---- EDIT VIEWER NAME ----
+  const saveViewerName = async () => {
+    if (!editNameViewer || !editNameValue.trim() || !adminSessionId) return;
+    await supabase.from("live_viewers").update({ name: editNameValue.trim() }).eq("id", editNameViewer.id);
+    toast.success(`Nome alterado para "${editNameValue.trim()}"`);
+    setEditNameViewer(null);
+    loadAdminData(adminSessionId);
   };
 
   // ---- ADD PRODUCT TO VIEWER CART (with variant selection) ----
@@ -684,12 +697,26 @@ export function LiveSessionManager() {
                         </div>
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           {msg.viewer_phone !== "admin" && (
-                            <button onClick={() => {
-                              const v = viewers.find(vw => vw.phone === msg.viewer_phone);
-                              if (v) openPrivateChat(v);
-                            }} className="text-muted-foreground hover:text-primary" title="Chat privado">
-                              <Lock className="w-3 h-3" />
-                            </button>
+                            <>
+                              <button onClick={() => {
+                                const v = viewers.find(vw => vw.phone === msg.viewer_phone);
+                                if (v) { setAddCartViewer(v); setAddCartSearch(""); setAddCartSelectedProduct(null); }
+                              }} className="text-muted-foreground hover:text-green-600" title="Adicionar produto ao carrinho">
+                                <ShoppingCart className="w-3 h-3" />
+                              </button>
+                              <button onClick={() => {
+                                const v = viewers.find(vw => vw.phone === msg.viewer_phone);
+                                if (v) { setEditNameViewer(v); setEditNameValue(v.name); }
+                              }} className="text-muted-foreground hover:text-primary" title="Editar nome">
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button onClick={() => {
+                                const v = viewers.find(vw => vw.phone === msg.viewer_phone);
+                                if (v) openPrivateChat(v);
+                              }} className="text-muted-foreground hover:text-primary" title="Chat privado">
+                                <Lock className="w-3 h-3" />
+                              </button>
+                            </>
                           )}
                           <button onClick={() => deleteMessage(msg.id)} className="text-destructive">
                             <Trash2 className="w-3 h-3" />
@@ -771,6 +798,9 @@ export function LiveSessionManager() {
                         <p className="text-xs text-muted-foreground">{v.phone} • {v.messages_count || 0} msgs</p>
                       </div>
                       <div className="flex items-center gap-1">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditNameViewer(v); setEditNameValue(v.name); }} title="Editar nome">
+                          <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                        </Button>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openPrivateChat(v)} title="Chat privado">
                           <Lock className="w-3.5 h-3.5 text-primary" />
                         </Button>
@@ -1098,6 +1128,26 @@ export function LiveSessionManager() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Edit Viewer Name Dialog */}
+        <Dialog open={!!editNameViewer} onOpenChange={o => { if (!o) setEditNameViewer(null); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-sm flex items-center gap-2"><Pencil className="w-4 h-4" /> Editar Nome</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground">
+                <p><strong>Telefone:</strong> {editNameViewer?.phone}</p>
+                <p><strong>Nome atual:</strong> {editNameViewer?.name}</p>
+              </div>
+              <Input value={editNameValue} onChange={e => setEditNameValue(e.target.value)} placeholder="Novo nome..." className="text-sm"
+                onKeyDown={e => { if (e.key === "Enter") saveViewerName(); }} autoFocus />
+              <Button className="w-full" onClick={saveViewerName} disabled={!editNameValue.trim() || editNameValue.trim() === editNameViewer?.name}>
+                Salvar Nome
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -1198,11 +1248,3 @@ export function LiveSessionManager() {
   );
 }
 
-// Missing icon used in the component
-function ChevronRight(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="m9 18 6-6-6-6" />
-    </svg>
-  );
-}
