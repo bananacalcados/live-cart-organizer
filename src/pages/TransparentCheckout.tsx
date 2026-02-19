@@ -684,6 +684,7 @@ export default function TransparentCheckout() {
   const [isLoading, setIsLoading] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success">("pending");
   const [isEligibleForPrize, setIsEligibleForPrize] = useState(false);
+  const [liveCartRaw, setLiveCartRaw] = useState<{ items: any[]; customer: any } | null>(null);
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
     max_installments: 12,
     interest_free_installments: 6,
@@ -699,6 +700,8 @@ export default function TransparentCheckout() {
         const products: OrderProduct[] = decoded.items || [];
         const subtotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
         const now = new Date().toISOString();
+        // Store raw live cart data for Shopify order creation after payment
+        setLiveCartRaw({ items: decoded.items || [], customer: decoded.customer || null });
         setOrderData({
           id: `live-${Date.now()}`,
           customerName: decoded.customer?.name || "Cliente Live",
@@ -789,7 +792,7 @@ export default function TransparentCheckout() {
     } catch {}
   };
 
-  const handlePaymentConfirmed = useCallback(() => {
+  const handlePaymentConfirmed = useCallback(async () => {
     setPaymentStatus("success");
     if (orderData?.checkoutStartedAt) {
       const elapsed = (Date.now() - new Date(orderData.checkoutStartedAt).getTime()) / 1000;
@@ -800,7 +803,30 @@ export default function TransparentCheckout() {
         }
       }
     }
-  }, [orderData?.checkoutStartedAt, orderId]);
+    // Create Shopify order for live commerce checkouts
+    if (liveCartRaw && liveCartRaw.items.length > 0) {
+      try {
+        const { data, error } = await supabase.functions.invoke("shopify-create-live-order", {
+          body: {
+            items: liveCartRaw.items.map((item: any) => ({
+              variantId: item.variantId,
+              title: item.title || item.productTitle,
+              price: item.price,
+              quantity: item.quantity || 1,
+            })),
+            customer: liveCartRaw.customer,
+          },
+        });
+        if (error) {
+          console.error("Error creating Shopify live order:", error);
+        } else {
+          console.log("Shopify live order created:", data?.shopifyOrderName);
+        }
+      } catch (err) {
+        console.error("Error calling shopify-create-live-order:", err);
+      }
+    }
+  }, [orderData?.checkoutStartedAt, orderId, liveCartRaw]);
 
   if (isLoading) {
     return (
