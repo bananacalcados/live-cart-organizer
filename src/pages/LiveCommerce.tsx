@@ -59,7 +59,17 @@ const LiveCommerce = () => {
   const [session, setSession] = useState<LiveSessionData | null>(null);
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
   const [drawerView, setDrawerView] = useState<"closed" | "cart">("closed");
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    // Restore cart from localStorage if returning from checkout
+    try {
+      const saved = localStorage.getItem("live_cart");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   const [checkingOut, setCheckingOut] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShopifyProduct | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +90,15 @@ const LiveCommerce = () => {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   
+
+  // Sync cart to localStorage whenever it changes
+  useEffect(() => {
+    if (cart.length > 0) {
+      localStorage.setItem("live_cart", JSON.stringify(cart));
+    } else {
+      localStorage.removeItem("live_cart");
+    }
+  }, [cart]);
 
   // Pending action after gate
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -286,6 +305,19 @@ const LiveCommerce = () => {
     if (cart.length === 0) return;
     setCheckingOut(true);
     try {
+      // Save cart to localStorage for persistence when returning from checkout
+      localStorage.setItem("live_cart", JSON.stringify(cart));
+
+      // Save cart to DB for admin visibility / cart recovery
+      if (viewer && session?.id) {
+        const cartValue = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+        await supabase.from("live_viewers").update({
+          cart_items: cart as any,
+          cart_value: cartValue,
+          last_seen_at: new Date().toISOString(),
+        }).eq("session_id", session.id).eq("phone", viewer.phone);
+      }
+
       const liveCartData = cart.map(item => ({
         title: item.productTitle,
         variant: item.variantTitle || "Único",
