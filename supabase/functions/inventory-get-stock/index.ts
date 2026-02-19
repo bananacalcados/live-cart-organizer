@@ -28,6 +28,8 @@ serve(async (req) => {
 
     if (!store?.tiny_token) throw new Error('Store not found or token missing');
 
+    console.log(`[inventory-get-stock] store_id=${store_id}, product_id=${product_id}, token_prefix=${store.tiny_token.substring(0,8)}`);
+
     const resp = await fetch('https://api.tiny.com.br/api2/produto.obter.estoque.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -35,7 +37,8 @@ serve(async (req) => {
     });
 
     const data = await resp.json();
-    console.log('Tiny stock response:', JSON.stringify(data.retorno?.status));
+    // Log FULL response to diagnose multi-deposit issue
+    console.log(`[inventory-get-stock] FULL response for product ${product_id}:`, JSON.stringify(data.retorno));
 
     if (data.retorno?.status === 'Erro') {
       const err = data.retorno?.erros?.[0]?.erro || 'Error getting stock';
@@ -45,10 +48,26 @@ serve(async (req) => {
     }
 
     const produto = data.retorno?.produto;
+
+    // Check if there are multiple deposits — use deposit-specific stock if available
+    const depositos = produto?.depositos || [];
+    let stock = parseFloat(produto?.saldo || '0');
+
+    if (depositos.length > 0) {
+      console.log(`[inventory-get-stock] Found ${depositos.length} deposits:`, JSON.stringify(depositos));
+      // If there's only 1 deposit or we can't distinguish, use the first one
+      // The saldo field is the SUM of all deposits, which is wrong for multi-store
+      if (depositos.length === 1) {
+        stock = parseFloat(depositos[0]?.deposito?.saldo || depositos[0]?.saldo || produto?.saldo || '0');
+      }
+      // For now log everything so we can see the structure
+    }
+
     return new Response(JSON.stringify({
       success: true,
-      stock: parseFloat(produto?.saldo || '0'),
+      stock,
       reserved: parseFloat(produto?.saldoReservado || '0'),
+      deposits: depositos,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
