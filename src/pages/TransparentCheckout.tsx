@@ -619,9 +619,48 @@ function CreditCardSection({
 }
 
 // ── Main Transparent Checkout ───────────────────────────────────
+// ── Floating Live Mini Player ────────────────────────────────────
+function LiveMiniPlayer({ videoId }: { videoId: string }) {
+  const [dismissed, setDismissed] = useState(false);
+  const [muted, setMuted] = useState(true);
+
+  if (dismissed || !videoId) return null;
+
+  return (
+    <div className="fixed top-3 right-3 z-50 w-[140px] rounded-xl overflow-hidden shadow-2xl border-2 border-primary/40 bg-black">
+      <div className="relative aspect-[9/16]">
+        <iframe
+          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${muted ? 1 : 0}&rel=0&modestbranding=1&playsinline=1&controls=0`}
+          className="absolute inset-0 w-full h-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          title="Live"
+        />
+        <div className="absolute top-1 left-1 flex gap-1">
+          <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded">AO VIVO</span>
+        </div>
+        <div className="absolute bottom-1 right-1 flex gap-1">
+          <button
+            onClick={() => setMuted(!muted)}
+            className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]"
+          >
+            {muted ? "🔇" : "🔊"}
+          </button>
+          <button
+            onClick={() => setDismissed(true)}
+            className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TransparentCheckout() {
   const { orderId } = useParams<{ orderId: string }>();
   const [searchParams] = useSearchParams();
+  const liveVideoId = searchParams.get("videoId") || "";
   const [orderData, setOrderData] = useState<OrderData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success">("pending");
@@ -770,8 +809,9 @@ export default function TransparentCheckout() {
   }
 
   if (paymentStatus === "success") {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      {liveVideoId && <LiveMiniPlayer videoId={liveVideoId} />}
         <Card className="w-full max-w-md mx-4">
           <CardContent className="pt-8 pb-8 text-center space-y-6">
             <div className="relative">
