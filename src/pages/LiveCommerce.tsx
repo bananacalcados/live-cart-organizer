@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users, ChevronUp } from "lucide-react";
+import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users, ChevronUp, Tag, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +29,7 @@ interface LiveSessionData {
   selected_products: ProductRef[];
   spotlight_products: ProductRef[];
   title: string;
+  overlay_config: any;
 }
 
 const STORAGE_KEY = "live_viewer";
@@ -139,6 +140,7 @@ const LiveCommerce = () => {
           selected_products: s.selected_products || [],
           spotlight_products: s.spotlight_products || [],
           title: s.title,
+          overlay_config: s.overlay_config || {},
         });
         const spotlightHandles = (s.spotlight_products || []).map((p: ProductRef) => p.handle);
         if (spotlightHandles.length > 0) {
@@ -174,7 +176,7 @@ const LiveCommerce = () => {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "live_sessions", filter: `id=eq.${session.id}` }, async (payload) => {
         const s = payload.new as any;
         const newSpotlight: ProductRef[] = s.spotlight_products || [];
-        setSession(prev => prev ? { ...prev, spotlight_products: newSpotlight, selected_products: s.selected_products || prev.selected_products } : prev);
+        setSession(prev => prev ? { ...prev, spotlight_products: newSpotlight, selected_products: s.selected_products || prev.selected_products, overlay_config: s.overlay_config || prev.overlay_config } : prev);
         const handles = newSpotlight.map(p => p.handle);
         if (handles.length > 0) {
           const allProds = await fetchProducts(250);
@@ -278,6 +280,28 @@ const LiveCommerce = () => {
   const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
   const publicViewerCount = Math.max(viewerCount, MIN_PUBLIC_VIEWERS) + Math.floor(Math.random() * 15);
 
+  // Overlay config
+  const overlay = session?.overlay_config || {};
+
+  // Countdown timer
+  const [countdownText, setCountdownText] = useState("");
+  useEffect(() => {
+    if (!overlay.show_countdown || !overlay.countdown_end) { setCountdownText(""); return; }
+    const update = () => {
+      const end = new Date(overlay.countdown_end).getTime();
+      const now = Date.now();
+      const diff = end - now;
+      if (diff <= 0) { setCountdownText("⏰ ENCERRADO!"); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setCountdownText(`${h > 0 ? h + "h " : ""}${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`);
+    };
+    update();
+    const iv = setInterval(update, 1000);
+    return () => clearInterval(iv);
+  }, [overlay.show_countdown, overlay.countdown_end]);
+
   const addToCart = useCallback((variant: { id: string; title: string; price: number }, productTitle: string, image?: string) => {
     setCart(prev => {
       const existing = prev.find(i => i.variantId === variant.id);
@@ -317,6 +341,8 @@ const LiveCommerce = () => {
           cart_items: cart as any,
           cart_value: cartValue,
           last_seen_at: new Date().toISOString(),
+          checkout_completed: true,
+          checkout_completed_at: new Date().toISOString(),
         }).eq("session_id", session.id).eq("phone", viewer.phone);
       }
 
@@ -544,7 +570,29 @@ const LiveCommerce = () => {
           </div>
         </div>
 
-        {/* Chat overlay (inline on video, bottom-left) — raised when cart has items to avoid overlap with checkout button */}
+        {/* ===== LIVE OVERLAYS (banner, coupon, countdown, promo) ===== */}
+        <div className="absolute top-14 left-0 right-0 z-10 px-3 space-y-1.5 pointer-events-none">
+          {overlay.show_banner && overlay.banner_text && (
+            <div className="bg-amber-500/90 backdrop-blur-sm text-black text-[11px] font-bold text-center py-1.5 px-3 rounded-lg animate-fade-in">
+              📢 {overlay.banner_text}
+            </div>
+          )}
+          {overlay.show_coupon && overlay.coupon_code && (
+            <div className="bg-green-600/90 backdrop-blur-sm text-white text-[11px] font-bold text-center py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 animate-fade-in">
+              <Tag className="w-3.5 h-3.5" /> USE O CUPOM: <span className="bg-white/20 px-2 py-0.5 rounded text-[12px] tracking-wider">{overlay.coupon_code}</span>
+            </div>
+          )}
+          {overlay.show_countdown && countdownText && (
+            <div className="bg-red-600/90 backdrop-blur-sm text-white text-[11px] font-bold text-center py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 animate-pulse">
+              <Timer className="w-3.5 h-3.5" /> {countdownText}
+            </div>
+          )}
+          {overlay.show_promo && overlay.promo_text && (
+            <div className="bg-purple-600/90 backdrop-blur-sm text-white text-[11px] font-bold text-center py-1.5 px-3 rounded-lg animate-fade-in">
+              🔥 {overlay.promo_text}
+            </div>
+          )}
+        </div>
         <div className={`absolute left-0 right-16 z-10 max-h-[35vh] flex flex-col pointer-events-none ${cartCount > 0 ? 'bottom-36' : 'bottom-20'}`}>
           <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-3 space-y-1 scrollbar-hide pointer-events-auto">
             {chatMessages.slice(-30).map((msg: any) => (

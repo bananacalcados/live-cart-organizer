@@ -2242,6 +2242,7 @@ export type Database = {
           freight_config: Json | null
           id: string
           is_active: boolean
+          overlay_config: Json | null
           selected_products: Json
           spotlight_products: Json | null
           title: string
@@ -2254,6 +2255,7 @@ export type Database = {
           freight_config?: Json | null
           id?: string
           is_active?: boolean
+          overlay_config?: Json | null
           selected_products?: Json
           spotlight_products?: Json | null
           title: string
@@ -2266,6 +2268,7 @@ export type Database = {
           freight_config?: Json | null
           id?: string
           is_active?: boolean
+          overlay_config?: Json | null
           selected_products?: Json
           spotlight_products?: Json | null
           title?: string
@@ -2280,6 +2283,9 @@ export type Database = {
           ban_reason: string | null
           cart_items: Json | null
           cart_value: number | null
+          checkout_completed: boolean | null
+          checkout_completed_at: string | null
+          checkout_url: string | null
           id: string
           is_banned: boolean
           is_online: boolean
@@ -2294,6 +2300,9 @@ export type Database = {
           ban_reason?: string | null
           cart_items?: Json | null
           cart_value?: number | null
+          checkout_completed?: boolean | null
+          checkout_completed_at?: string | null
+          checkout_url?: string | null
           id?: string
           is_banned?: boolean
           is_online?: boolean
@@ -2308,6 +2317,9 @@ export type Database = {
           ban_reason?: string | null
           cart_items?: Json | null
           cart_value?: number | null
+          checkout_completed?: boolean | null
+          checkout_completed_at?: string | null
+          checkout_url?: string | null
           id?: string
           is_banned?: boolean
           is_online?: boolean
