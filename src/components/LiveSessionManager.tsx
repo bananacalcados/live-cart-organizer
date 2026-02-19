@@ -451,7 +451,7 @@ export function LiveSessionManager() {
 
     setGeneratingLink(true);
     try {
-      const products = cartItems.map((item: any) => ({
+      const items = cartItems.map((item: any) => ({
         title: item.productTitle,
         variant: item.variantTitle || "Default",
         price: item.price,
@@ -463,9 +463,8 @@ export function LiveSessionManager() {
 
       // Encode cart data in base64 for the checkout URL
       const cartData = {
-        customerName: viewer.name,
-        customerPhone: viewer.phone,
-        products,
+        customer: { name: viewer.name, phone: viewer.phone },
+        items,
         source: "live",
         sessionId: adminSessionId,
       };
@@ -1410,25 +1409,60 @@ export function LiveSessionManager() {
                       setGeneratingLink(true);
                       try {
                         const products = cartItems.map((item: any) => ({
+                          id: item.variantId || `live-${Date.now()}`,
                           title: item.productTitle,
+                          variant: item.variantTitle || "Default",
                           price: item.price,
                           quantity: item.quantity || 1,
-                          variantId: item.variantId,
+                          image: item.image,
+                          shopifyId: item.variantId || "",
+                          sku: item.sku || null,
                         }));
-                        const cartData = {
-                          customerName: paymentLinkViewer.name,
-                          customerPhone: paymentLinkViewer.phone,
-                          products,
-                          source: "live",
-                          paymentMethod: "paypal",
-                        };
-                        const encoded = btoa(encodeURIComponent(JSON.stringify(cartData)));
-                        const checkoutUrl = `${window.location.origin}/checkout?live=${encoded}&method=paypal`;
-                        navigator.clipboard.writeText(checkoutUrl);
+                        
+                        // Upsert customer
+                        const { data: customer } = await supabase
+                          .from("customers")
+                          .upsert(
+                            { instagram_handle: paymentLinkViewer.name || "live_viewer", whatsapp: paymentLinkViewer.phone },
+                            { onConflict: "instagram_handle" }
+                          )
+                          .select("id")
+                          .single();
+                        if (!customer) throw new Error("Erro ao criar cliente");
+                        
+                        // Get active event
+                        const { data: activeEvent } = await supabase
+                          .from("events")
+                          .select("id")
+                          .eq("is_active", true)
+                          .limit(1)
+                          .maybeSingle();
+                        if (!activeEvent) throw new Error("Nenhum evento ativo. Crie um evento primeiro.");
+                        
+                        // Create order
+                        const { data: order, error: orderErr } = await supabase
+                          .from("orders")
+                          .insert({
+                            customer_id: customer.id,
+                            event_id: activeEvent.id,
+                            products: products as any,
+                            stage: "new",
+                          })
+                          .select("id")
+                          .single();
+                        if (orderErr || !order) throw new Error("Erro ao criar pedido: " + (orderErr?.message || ""));
+                        
+                        // Create PayPal order
+                        const { data: paypalData, error: paypalErr } = await supabase.functions.invoke("paypal-create-order", {
+                          body: { orderId: order.id },
+                        });
+                        if (paypalErr || !paypalData?.approvalUrl) throw new Error(paypalData?.error || "Erro ao criar pedido PayPal");
+                        
+                        navigator.clipboard.writeText(paypalData.approvalUrl);
                         toast.success("Link PayPal copiado!");
                       } catch (err: any) {
                         console.error(err);
-                        toast.error("Erro ao gerar link PayPal");
+                        toast.error(err.message || "Erro ao gerar link PayPal");
                       } finally {
                         setGeneratingLink(false);
                         setPaymentLinkViewer(null);
