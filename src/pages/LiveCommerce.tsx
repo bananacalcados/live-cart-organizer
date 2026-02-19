@@ -213,7 +213,22 @@ const LiveCommerce = () => {
   };
 
   const isLive = !!session?.youtube_video_id;
-  const videoId = session?.youtube_video_id || "";
+  const rawVideoId = session?.youtube_video_id || "";
+  // Extract YouTube video ID from full URL or plain ID
+  const videoId = (() => {
+    const raw = rawVideoId.trim();
+    // Already a plain ID (no slashes or dots)
+    if (raw && !raw.includes('/') && !raw.includes('.')) return raw;
+    try {
+      const url = new URL(raw);
+      // youtube.com/watch?v=ID
+      if (url.searchParams.has('v')) return url.searchParams.get('v') || '';
+      // youtu.be/ID or youtube.com/embed/ID or youtube.com/live/ID
+      const pathParts = url.pathname.split('/').filter(Boolean);
+      if (pathParts.length > 0) return pathParts[pathParts.length - 1];
+    } catch {}
+    return raw;
+  })();
   const whatsappLink = session?.whatsapp_link || "";
 
   // Picture-in-Picture toggle
