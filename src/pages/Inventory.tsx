@@ -6,6 +6,7 @@ import {
   ClipboardList, Trash2, Search, ChevronDown, HelpCircle,
   Camera, Tag, Printer, Download, FileText, Link2
 } from "lucide-react";
+import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -182,6 +183,7 @@ export default function Inventory() {
   // Label printing
   const [showLabelDialog, setShowLabelDialog] = useState(false);
   const [labelItems, setLabelItems] = useState<Array<{ barcode: string; productName: string; sku: string; qty: number }>>([]);
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
 
   // Standalone label generator
   const [labelSearchQuery, setLabelSearchQuery] = useState("");
@@ -285,10 +287,10 @@ export default function Inventory() {
     setTimeout(() => barcodeInputRef.current?.focus(), 300);
   };
 
-  const handleBarcodeScan = async () => {
-    if (!barcodeInput.trim() || !activeCount) return;
-    const barcode = barcodeInput.trim();
-    const qty = parseInt(quantityInput) || 1;
+  const handleBarcodeScan = async (overrideBarcode?: string, overrideQty?: number) => {
+    const barcode = (overrideBarcode || barcodeInput).trim();
+    if (!barcode || !activeCount) return;
+    const qty = overrideQty ?? (parseInt(quantityInput) || 1);
     setBarcodeInput("");
     setQuantityInput("1");
 
@@ -1017,8 +1019,15 @@ export default function Inventory() {
                           onChange={(e) => setQuantityInput(e.target.value)}
                           className="w-20 h-12 text-center text-lg"
                         />
-                        <Button onClick={handleBarcodeScan} className="h-12 px-6">
+                        <Button onClick={() => handleBarcodeScan()} className="h-12 px-4">
                           <ScanBarcode className="h-5 w-5" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowCameraScanner(true)}
+                          className="h-12 px-4"
+                        >
+                          <Camera className="h-5 w-5" />
                         </Button>
                       </div>
                       {lastBipedProduct && (
@@ -1526,6 +1535,26 @@ export default function Inventory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Camera Barcode Scanner Overlay */}
+      {showCameraScanner && (
+        <div className="fixed inset-0 z-50 bg-background/95 flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-md">
+            <div className="mb-4 text-center">
+              <h3 className="text-lg font-bold text-foreground">📷 Scanner de Câmera</h3>
+              <p className="text-sm text-muted-foreground">Aponte para o código de barras do produto</p>
+            </div>
+            <POSBarcodeScanner
+              onScan={(code) => {
+                setShowCameraScanner(false);
+                const qty = parseInt(quantityInput) || 1;
+                handleBarcodeScan(code, qty);
+              }}
+              onClose={() => setShowCameraScanner(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
