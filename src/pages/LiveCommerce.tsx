@@ -488,14 +488,27 @@ const LiveCommerce = () => {
             {iframeMuted && (
               <button
                 onClick={() => {
-                  if (iframeRef.current) {
-                    iframeRef.current.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&rel=0&modestbranding=1&playsinline=1&controls=0&enablejsapi=1`;
+                  if (iframeRef.current?.contentWindow) {
+                    // Use YouTube IFrame API postMessage to unmute without reloading
+                    iframeRef.current.contentWindow.postMessage(
+                      JSON.stringify({ event: "command", func: "unMute", args: [] }),
+                      "*"
+                    );
+                    iframeRef.current.contentWindow.postMessage(
+                      JSON.stringify({ event: "command", func: "setVolume", args: [100] }),
+                      "*"
+                    );
+                    iframeRef.current.contentWindow.postMessage(
+                      JSON.stringify({ event: "command", func: "playVideo", args: [] }),
+                      "*"
+                    );
                   }
                   setIframeMuted(false);
                 }}
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-black/60 backdrop-blur-sm rounded-full p-4 flex items-center gap-2 text-white text-sm font-bold animate-pulse"
+                className="absolute bottom-32 left-1/2 -translate-x-1/2 z-20 bg-black/90 backdrop-blur-md rounded-xl px-6 py-4 flex items-center gap-3 text-white font-bold shadow-2xl border border-white/20 animate-pulse"
               >
-                🔊 Tocar com áudio
+                <span className="text-2xl">🔊</span>
+                <span className="text-sm leading-tight">CLIQUE PRA<br/>ESCUTAR A LIVE</span>
               </button>
             )}
           </>
