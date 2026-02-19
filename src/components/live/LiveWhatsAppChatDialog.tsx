@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, X, Loader2, MessageCircle, Phone, Image, Video, Mic, MicOff, Paperclip, FileText } from "lucide-react";
+import { Send, X, Loader2, MessageCircle, Phone, Image, Video, Mic, MicOff, Paperclip, FileText, Check, CheckCheck, AlertCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -67,6 +67,8 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
   const [templates, setTemplates] = useState<MetaTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [sendingTemplate, setSendingTemplate] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<MetaTemplate | null>(null);
+  const [templateVars, setTemplateVars] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
@@ -75,7 +77,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     }
   }, [open, viewerPhone]);
 
-  // Realtime subscription
+  // Realtime subscription (INSERT + UPDATE for status changes)
   useEffect(() => {
     if (!open || !viewerPhone) return;
     const channel = supabase
@@ -87,6 +89,15 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
         filter: `phone=eq.${viewerPhone}`,
       }, (payload) => {
         setMessages(prev => [...prev, payload.new as WaMessage]);
+      })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "whatsapp_messages",
+        filter: `phone=eq.${viewerPhone}`,
+      }, (payload) => {
+        const updated = payload.new as WaMessage;
+        setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -305,30 +316,116 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     }
   };
 
+  // Extract variable placeholders from template components
+  const getTemplateVariables = (template: MetaTemplate): { key: string; label: string }[] => {
+    const vars: { key: string; label: string }[] = [];
+    for (const comp of template.components || []) {
+      if (comp.type === "BODY" && comp.text) {
+        const matches = comp.text.match(/\{\{(\d+)\}\}/g) || [];
+        matches.forEach((m: string) => {
+          const num = m.replace(/[{}]/g, "");
+          if (!vars.find(v => v.key === num)) {
+            vars.push({ key: num, label: `Variável {{${num}}}` });
+          }
+        });
+      }
+      if (comp.type === "HEADER" && comp.text) {
+        const matches = comp.text.match(/\{\{(\d+)\}\}/g) || [];
+        matches.forEach((m: string) => {
+          const num = m.replace(/[{}]/g, "");
+          const headerKey = `header_${num}`;
+          if (!vars.find(v => v.key === headerKey)) {
+            vars.push({ key: headerKey, label: `Header {{${num}}}` });
+          }
+        });
+      }
+    }
+    return vars;
+  };
+
+  const selectTemplate = (template: MetaTemplate) => {
+    setSelectedTemplate(template);
+    setTemplateVars({});
+  };
+
+  const getRenderedPreview = (template: MetaTemplate, vars: Record<string, string>): string => {
+    let text = "";
+    for (const comp of template.components || []) {
+      if (comp.type === "BODY" && comp.text) {
+        text = comp.text;
+        Object.entries(vars).forEach(([key, val]) => {
+          if (!key.startsWith("header_")) {
+            text = text.replace(`{{${key}}}`, val || `{{${key}}}`);
+          }
+        });
+      }
+    }
+    return text;
+  };
+
   const sendTemplate = async (template: MetaTemplate) => {
     setSendingTemplate(template.name);
     try {
       const selectedNum = getSelectedNumber();
+      // Build components array with filled variables
+      const components: any[] = [];
+      const bodyVars = Object.entries(templateVars).filter(([k]) => !k.startsWith("header_"));
+      const headerVars = Object.entries(templateVars).filter(([k]) => k.startsWith("header_"));
+      
+      if (bodyVars.length > 0) {
+        components.push({
+          type: "body",
+          parameters: bodyVars
+            .sort(([a], [b]) => parseInt(a) - parseInt(b))
+            .map(([, val]) => ({ type: "text", text: val || "" })),
+        });
+      }
+      if (headerVars.length > 0) {
+        const headerComp = template.components?.find((c: any) => c.type === "HEADER");
+        if (headerComp?.format === "TEXT") {
+          components.push({
+            type: "header",
+            parameters: headerVars
+              .sort(([a], [b]) => parseInt(a.replace("header_", "")) - parseInt(b.replace("header_", "")))
+              .map(([, val]) => ({ type: "text", text: val || "" })),
+          });
+        }
+      }
+
+      const renderedMessage = getRenderedPreview(template, templateVars);
+
       const { error } = await supabase.functions.invoke("meta-whatsapp-send-template", {
-        body: { phone: viewerPhone, templateName: template.name, language: template.language, whatsappNumberId: selectedNum?.id },
+        body: {
+          phone: viewerPhone,
+          templateName: template.name,
+          language: template.language,
+          whatsappNumberId: selectedNum?.id,
+          components: components.length > 0 ? components : undefined,
+          renderedMessage,
+        },
       });
       if (error) throw error;
 
-      await supabase.from("whatsapp_messages").insert({
-        phone: viewerPhone,
-        message: `📋 Template: ${template.name}`,
-        direction: "outgoing",
-        status: "sent",
-        whatsapp_number_id: selectedNum?.provider === "meta" ? selectedNum.id : null,
-      });
       toast.success(`Template "${template.name}" enviado!`);
       setShowTemplates(false);
+      setSelectedTemplate(null);
+      setTemplateVars({});
     } catch (err: any) {
       console.error("Error sending template:", err);
       toast.error("Erro ao enviar template");
     } finally {
       setSendingTemplate(null);
     }
+  };
+
+  const renderMessageStatus = (msg: WaMessage) => {
+    if (msg.direction !== "outgoing") return null;
+    const s = msg.status;
+    if (s === "read") return <CheckCheck className="h-3 w-3 inline-block ml-1 text-blue-500" />;
+    if (s === "delivered") return <CheckCheck className="h-3 w-3 inline-block ml-1 text-[#667781]" />;
+    if (s === "sent") return <Check className="h-3 w-3 inline-block ml-1 text-[#667781]" />;
+    if (s === "failed") return <AlertCircle className="h-3 w-3 inline-block ml-1 text-destructive" />;
+    return <Clock className="h-3 w-3 inline-block ml-1 text-[#667781]" />;
   };
 
   const formatTime = (dateStr: string) => {
@@ -380,34 +477,78 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
 
         {/* Templates panel */}
         {showTemplates && (
-          <div className="px-3 py-2 border-b bg-muted/30 max-h-[200px] overflow-y-auto flex-shrink-0">
+          <div className="px-3 py-2 border-b bg-muted/30 max-h-[250px] overflow-y-auto flex-shrink-0">
             <p className="text-[10px] font-medium text-muted-foreground uppercase mb-2">Templates Meta aprovados</p>
             {loadingTemplates ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
+            ) : selectedTemplate ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium text-xs">{selectedTemplate.name}</p>
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { setSelectedTemplate(null); setTemplateVars({}); }}>
+                    ← Voltar
+                  </Button>
+                </div>
+                {/* Preview */}
+                <div className="bg-[#d9fdd3] dark:bg-[#005c4b] rounded-lg p-2 text-[11px] whitespace-pre-wrap">
+                  {getRenderedPreview(selectedTemplate, templateVars) || "(Sem corpo de texto)"}
+                </div>
+                {/* Variable inputs */}
+                {getTemplateVariables(selectedTemplate).length > 0 && (
+                  <div className="space-y-1.5">
+                    {getTemplateVariables(selectedTemplate).map(v => (
+                      <div key={v.key} className="flex items-center gap-2">
+                        <label className="text-[10px] text-muted-foreground w-20 shrink-0">{v.label}</label>
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder={`Valor para ${v.label}`}
+                          value={templateVars[v.key] || ""}
+                          onChange={e => setTemplateVars(prev => ({ ...prev, [v.key]: e.target.value }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  className="w-full h-7 text-xs gap-1"
+                  disabled={sendingTemplate === selectedTemplate.name}
+                  onClick={() => sendTemplate(selectedTemplate)}
+                >
+                  {sendingTemplate === selectedTemplate.name ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                  Enviar Template
+                </Button>
+              </div>
             ) : templates.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-2">Nenhum template aprovado encontrado</p>
             ) : (
               <div className="space-y-1">
-                {templates.map(t => (
-                  <div key={t.name} className="flex items-center justify-between p-2 rounded-lg bg-background border text-xs">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{t.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{t.category} • {t.language}</p>
+                {templates.map(t => {
+                  const vars = getTemplateVariables(t);
+                  return (
+                    <div key={t.name} className="flex items-center justify-between p-2 rounded-lg bg-background border text-xs">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{t.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {t.category} • {t.language}
+                          {vars.length > 0 && ` • ${vars.length} var`}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[10px] gap-1 ml-2"
+                        onClick={() => vars.length > 0 ? selectTemplate(t) : sendTemplate(t)}
+                        disabled={sendingTemplate === t.name}
+                      >
+                        {sendingTemplate === t.name ? <Loader2 className="h-3 w-3 animate-spin" /> : vars.length > 0 ? <FileText className="h-3 w-3" /> : <Send className="h-3 w-3" />}
+                        {vars.length > 0 ? "Configurar" : "Enviar"}
+                      </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-6 text-[10px] gap-1 ml-2"
-                      disabled={sendingTemplate === t.name}
-                      onClick={() => sendTemplate(t)}
-                    >
-                      {sendingTemplate === t.name ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                      Enviar
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -448,9 +589,9 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
                     </a>
                   )}
                   <p className="whitespace-pre-wrap break-words text-[13px]">{msg.message}</p>
-                  <p className={`text-[10px] mt-0.5 text-right ${msg.direction === "outgoing" ? "text-[#667781]" : "text-muted-foreground"}`}>
+                  <p className={`text-[10px] mt-0.5 text-right flex items-center justify-end ${msg.direction === "outgoing" ? "text-[#667781]" : "text-muted-foreground"}`}>
                     {formatTime(msg.created_at)}
-                    {msg.direction === "outgoing" && msg.status === "read" && " ✓✓"}
+                    {renderMessageStatus(msg)}
                   </p>
                 </div>
               </div>
