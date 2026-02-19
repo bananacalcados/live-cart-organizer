@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users, PictureInPicture2, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
-import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -242,28 +241,13 @@ const LiveCommerce = () => {
   const activatePiPForCheckout = useCallback(async () => {
     if (!videoId) return;
     try {
-      if ("documentPictureInPicture" in window) {
-        const pipWindow = await (window as any).documentPictureInPicture.requestWindow({ width: 360, height: 640 });
-        const pipDoc = pipWindow.document;
-        pipDoc.body.style.margin = "0";
-        pipDoc.body.style.overflow = "hidden";
-        pipDoc.body.style.background = "#000";
-        const pipIframe = pipDoc.createElement("iframe");
-        pipIframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
-        pipIframe.style.width = "100%";
-        pipIframe.style.height = "100%";
-        pipIframe.style.border = "none";
-        pipIframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
-        pipDoc.body.appendChild(pipIframe);
+      // Always use popup window approach for reliable video playback
+      const pipUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1`;
+      const left = Math.max(0, screen.width - 380);
+      const pipWin = window.open(pipUrl, "live_pip", `width=360,height=640,top=50,left=${left},toolbar=no,menubar=no,scrollbars=no,resizable=yes`);
+      if (pipWin) {
         setPipActive(true);
-        pipWindow.addEventListener("pagehide", () => setPipActive(false));
-      } else {
-        const pipUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
-        const pipWin = window.open(pipUrl, "live_pip", "width=360,height=640,top=50,left=" + (screen.width - 380));
-        if (pipWin) {
-          setPipActive(true);
-          const timer = setInterval(() => { if (pipWin.closed) { setPipActive(false); clearInterval(timer); } }, 1000);
-        }
+        const timer = setInterval(() => { if (pipWin.closed) { setPipActive(false); clearInterval(timer); } }, 1000);
       }
     } catch (err) {
       console.error("PiP for checkout error:", err);
@@ -302,43 +286,26 @@ const LiveCommerce = () => {
     if (cart.length === 0) return;
     setCheckingOut(true);
     try {
-      const orderProducts = cart.map(item => ({
-        id: item.variantId,
+      // Always use internal transparent checkout
+      const liveCartData = cart.map(item => ({
         title: item.productTitle,
-        variant: item.variantTitle || "Default",
+        variant: item.variantTitle || "Único",
         price: item.price,
         quantity: item.quantity,
-        shopifyId: item.variantId,
-        image: item.image,
+        image: item.image || "",
       }));
+      const encoded = btoa(encodeURIComponent(JSON.stringify({
+        items: liveCartData,
+        customer: viewer ? { name: viewer.name, phone: viewer.phone } : null,
+        source: "live",
+      })));
+      const internalUrl = `${window.location.origin}/checkout?live=${encoded}`;
 
-      console.log("[Live Checkout] Creating cart with", orderProducts.length, "products");
-      const checkoutUrl = await createShopifyCartFromOrder(orderProducts);
-      console.log("[Live Checkout] Result:", checkoutUrl);
+      // Activate PiP before opening checkout
+      if (!pipActive) await activatePiPForCheckout();
 
-      if (checkoutUrl) {
-        if (!pipActive) await activatePiPForCheckout();
-        window.open(checkoutUrl, "_blank");
-        toast.success("Checkout aberto em nova aba!");
-      } else {
-        // Fallback: use internal checkout
-        const liveCartData = cart.map(item => ({
-          title: item.productTitle,
-          variant: item.variantTitle || "Único",
-          price: item.price,
-          quantity: item.quantity,
-          image: item.image || "",
-        }));
-        const encoded = btoa(encodeURIComponent(JSON.stringify({
-          items: liveCartData,
-          customer: viewer ? { name: viewer.name, phone: viewer.phone } : null,
-          source: "live",
-        })));
-        const internalUrl = `/checkout?live=${encoded}`;
-        console.log("[Live Checkout] Falling back to internal checkout:", internalUrl);
-        window.open(internalUrl, "_blank");
-        toast.success("Checkout aberto!");
-      }
+      window.open(internalUrl, "_blank");
+      toast.success("Checkout aberto!");
     } catch (err) {
       console.error("[Live Checkout] Error:", err);
       toast.error("Erro ao processar checkout.");
@@ -608,9 +575,7 @@ const LiveCommerce = () => {
               <button
                 className="bg-black/70 backdrop-blur-md rounded-xl w-[72px] py-2 text-center border border-white/10"
                 onClick={() => {
-                  // Show all products in a bottom sheet style
                   setSelectedProduct(null);
-                  // We'll toggle an expanded products view
                   setShowProducts(false);
                   setTimeout(() => setShowProducts(true), 10);
                 }}
@@ -619,6 +584,20 @@ const LiveCommerce = () => {
                 <ChevronUp className="w-3 h-3 mx-auto text-zinc-400" />
               </button>
             )}
+          </div>
+        )}
+
+        {/* ===== FLOATING CHECKOUT BUTTON (visible when cart has items) ===== */}
+        {cartCount > 0 && (
+          <div className="absolute bottom-20 left-3 right-20 z-10">
+            <button
+              onClick={() => requireViewer("cart", handleCheckout)}
+              disabled={checkingOut}
+              className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/40 transition-all active:scale-95"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              {checkingOut ? "Abrindo checkout..." : `FINALIZAR COMPRA • R$ ${cartTotal.toFixed(2).replace(".", ",")}`}
+            </button>
           </div>
         )}
       </div>
