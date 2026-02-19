@@ -622,48 +622,56 @@ function CreditCardSection({
 // ── Floating Live Mini Player ────────────────────────────────────
 function LiveMiniPlayer({ videoId }: { videoId: string }) {
   const [dismissed, setDismissed] = useState(false);
-  const [muted, setMuted] = useState(true);
+  const [muted, setMuted] = useState(false);
 
   if (dismissed || !videoId) return null;
 
   const handleGoBackToLive = () => {
-    // Navigate back to live page — cart is preserved in localStorage
     window.location.href = "/live";
   };
 
   return (
-    <div className="fixed top-3 right-3 z-50 w-[140px] rounded-xl overflow-hidden shadow-2xl border-2 border-primary/40 bg-black">
-      <div className="relative aspect-[9/16]">
-        {/* Clickable overlay to go back to live — prevents YouTube redirect */}
-        <div
-          className="absolute inset-0 z-10 cursor-pointer"
-          onClick={handleGoBackToLive}
-          title="Voltar para a Live"
-        />
-        <iframe
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${muted ? 1 : 0}&rel=0&modestbranding=1&playsinline=1&controls=0`}
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          title="Live"
-        />
-        <div className="absolute top-1 left-1 flex gap-1 z-20">
-          <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded">AO VIVO</span>
-        </div>
-        <div className="absolute bottom-1 right-1 flex gap-1 z-20">
-          <button
-            onClick={(e) => { e.stopPropagation(); setMuted(!muted); }}
-            className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]"
-          >
-            {muted ? "🔇" : "🔊"}
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); setDismissed(true); }}
-            className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]"
-          >
-            ✕
-          </button>
+    <div className="fixed top-3 right-3 z-50 flex flex-col items-center gap-2">
+      <div className="w-[140px] rounded-xl overflow-hidden shadow-2xl border-2 border-primary/40 bg-black">
+        <div className="relative aspect-[9/16]">
+          {/* Clickable overlay to go back to live */}
+          <div
+            className="absolute inset-0 z-10 cursor-pointer"
+            onClick={handleGoBackToLive}
+            title="Voltar para a Live"
+          />
+          <iframe
+            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${muted ? 1 : 0}&rel=0&modestbranding=1&playsinline=1&controls=0`}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            title="Live"
+          />
+          <div className="absolute top-1 left-1 flex gap-1 z-20">
+            <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded">AO VIVO</span>
+          </div>
+          <div className="absolute bottom-1 right-1 flex gap-1 z-20">
+            <button
+              onClick={(e) => { e.stopPropagation(); setMuted(!muted); }}
+              className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]"
+            >
+              {muted ? "🔇" : "🔊"}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setDismissed(true); }}
+              className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       </div>
+      {/* Explicit back-to-live button */}
+      <button
+        onClick={handleGoBackToLive}
+        className="w-[140px] bg-primary text-primary-foreground text-xs font-bold py-2 rounded-lg shadow-lg hover:opacity-90 transition-opacity"
+      >
+        ↩ VOLTAR À LIVE
+      </button>
     </div>
   );
 }
