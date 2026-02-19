@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users, PictureInPicture2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users, PictureInPicture2, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { createShopifyCartFromOrder } from "@/lib/shopifyCart";
@@ -35,17 +35,39 @@ interface LiveSessionData {
 const STORAGE_KEY = "live_viewer";
 const MIN_PUBLIC_VIEWERS = 200;
 
+/** Generate a unique username from the display name + phone suffix */
+function generateUsername(name: string, phone: string): string {
+  const firstName = name.trim().split(/\s+/)[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const suffix = phone.slice(-4);
+  return `${firstName}${suffix}`;
+}
+
+/** Extract YouTube video ID from URL or plain ID */
+function extractVideoId(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  if (!trimmed.includes("/") && !trimmed.includes(".")) return trimmed;
+  try {
+    const url = new URL(trimmed);
+    if (url.searchParams.has("v")) return url.searchParams.get("v") || "";
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
+  } catch {}
+  return trimmed;
+}
+
 const LiveCommerce = () => {
   const [session, setSession] = useState<LiveSessionData | null>(null);
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
-  const [drawerView, setDrawerView] = useState<"closed" | "products" | "cart" | "chat">("closed");
+  const [drawerView, setDrawerView] = useState<"closed" | "cart">("closed");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [checkingOut, setCheckingOut] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShopifyProduct | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showProducts, setShowProducts] = useState(true);
 
   // Viewer / lead gate state
-  const [viewer, setViewer] = useState<{ name: string; phone: string } | null>(null);
+  const [viewer, setViewer] = useState<{ name: string; phone: string; username: string } | null>(null);
   const [showGate, setShowGate] = useState(false);
   const [gatePurpose, setGatePurpose] = useState<"chat" | "cart">("chat");
   const [gateName, setGateName] = useState("");
@@ -63,7 +85,7 @@ const LiveCommerce = () => {
   // Pending action after gate
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
-  // Restore viewer from localStorage (persisted across lives)
+  // Restore viewer from localStorage
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) { try { setViewer(JSON.parse(stored)); } catch {} }
@@ -94,7 +116,6 @@ const LiveCommerce = () => {
           .eq("session_id", s.id).eq("is_online", true);
         setViewerCount(count || 0);
 
-        // Auto-register viewer if already known
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
           try {
@@ -168,7 +189,7 @@ const LiveCommerce = () => {
     return () => { supabase.removeChannel(channel); };
   }, [session?.id]);
 
-  // Auto-scroll chat to bottom
+  // Auto-scroll chat
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
@@ -194,7 +215,8 @@ const LiveCommerce = () => {
     const rawPhone = gatePhone.replace(/\D/g, "");
     if (gateName.trim().length < 2 || rawPhone.length < 10) return;
     const phone = `55${rawPhone}`;
-    const viewerData = { name: gateName.trim(), phone };
+    const username = generateUsername(gateName, phone);
+    const viewerData = { name: gateName.trim(), phone, username };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(viewerData));
     setViewer(viewerData);
     setShowGate(false);
@@ -205,7 +227,7 @@ const LiveCommerce = () => {
         { onConflict: "session_id,phone" }
       );
       await supabase.from("live_chat_messages").insert({
-        session_id: session.id, viewer_name: viewerData.name, viewer_phone: phone,
+        session_id: session.id, viewer_name: `@${username}`, viewer_phone: phone,
         message: `${viewerData.name} entrou na live! 🎉`, message_type: "system",
       });
     }
@@ -213,112 +235,15 @@ const LiveCommerce = () => {
   };
 
   const isLive = !!session?.youtube_video_id;
-  const rawVideoId = session?.youtube_video_id || "";
-  // Extract YouTube video ID from full URL or plain ID
-  const videoId = (() => {
-    const raw = rawVideoId.trim();
-    // Already a plain ID (no slashes or dots)
-    if (raw && !raw.includes('/') && !raw.includes('.')) return raw;
-    try {
-      const url = new URL(raw);
-      // youtube.com/watch?v=ID
-      if (url.searchParams.has('v')) return url.searchParams.get('v') || '';
-      // youtu.be/ID or youtube.com/embed/ID or youtube.com/live/ID
-      const pathParts = url.pathname.split('/').filter(Boolean);
-      if (pathParts.length > 0) return pathParts[pathParts.length - 1];
-    } catch {}
-    return raw;
-  })();
+  const videoId = extractVideoId(session?.youtube_video_id || "");
   const whatsappLink = session?.whatsapp_link || "";
 
-  // Picture-in-Picture toggle
-  const togglePiP = useCallback(async () => {
-    try {
-      // Check if there's already a PiP window
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-        setPipActive(false);
-        return;
-      }
-
-      // For YouTube iframes, we need to use the experimental documentPictureInPicture API
-      // or fallback to creating a video element from the iframe
-      const iframe = videoContainerRef.current?.querySelector("iframe");
-      if (!iframe) return;
-
-      // Try Document PiP API (Chrome 116+)
-      if ("documentPictureInPicture" in window) {
-        const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
-          width: 400,
-          height: 225,
-        });
-        const pipDoc = pipWindow.document;
-        pipDoc.body.style.margin = "0";
-        pipDoc.body.style.overflow = "hidden";
-        pipDoc.body.style.background = "#000";
-        const pipIframe = pipDoc.createElement("iframe");
-        pipIframe.src = iframe.src;
-        pipIframe.style.width = "100%";
-        pipIframe.style.height = "100%";
-        pipIframe.style.border = "none";
-        pipIframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
-        pipDoc.body.appendChild(pipIframe);
-        setPipActive(true);
-        pipWindow.addEventListener("pagehide", () => setPipActive(false));
-        return;
-      }
-
-      // Fallback: open in small floating window
-      const pipUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
-      const pipWin = window.open(pipUrl, "live_pip", "width=400,height=225,top=50,left=" + (screen.width - 420));
-      if (pipWin) {
-        setPipActive(true);
-        const timer = setInterval(() => { if (pipWin.closed) { setPipActive(false); clearInterval(timer); } }, 1000);
-      }
-    } catch (err) {
-      console.error("PiP error:", err);
-      // Ultimate fallback: small window
-      const pipUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
-      window.open(pipUrl, "live_pip", "width=400,height=225,top=50,left=" + (screen.width - 420));
-    }
-  }, [videoId]);
-  const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
-  const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
-
-  // Public viewer count: always show at least MIN_PUBLIC_VIEWERS
-  const publicViewerCount = Math.max(viewerCount, MIN_PUBLIC_VIEWERS) + Math.floor(Math.random() * 15);
-
-  const addToCart = useCallback((variant: { id: string; title: string; price: number }, productTitle: string, image?: string) => {
-    setCart(prev => {
-      const existing = prev.find(i => i.variantId === variant.id);
-      if (existing) return prev.map(i => i.variantId === variant.id ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { variantId: variant.id, productTitle, variantTitle: variant.title === "Default Title" ? "" : variant.title, price: variant.price, quantity: 1, image }];
-    });
-    toast.success("Adicionado ao carrinho!");
-    setSelectedProduct(null);
-
-    // Sync cart to viewer record for admin visibility
-    if (viewer && session?.id) {
-      setTimeout(async () => {
-        // Re-read cart after state update
-        const currentCart = [...cart, { variantId: variant.id, productTitle, price: variant.price, quantity: 1, image }];
-        const cartItems = currentCart.map(i => ({ handle: i.variantId, productTitle: i.productTitle, price: i.price, quantity: i.quantity, image: i.image }));
-        await supabase.from("live_viewers").update({ cart_items: cartItems as any }).eq("session_id", session.id).eq("phone", viewer.phone);
-      }, 100);
-    }
-  }, [cart, viewer, session?.id]);
-
-  const updateQty = (variantId: string, delta: number) => {
-    setCart(prev => prev.map(i => { if (i.variantId !== variantId) return i; const q = i.quantity + delta; return q <= 0 ? null! : { ...i, quantity: q }; }).filter(Boolean));
-  };
-
-  const removeItem = (variantId: string) => setCart(prev => prev.filter(i => i.variantId !== variantId));
-
+  // PiP
   const activatePiPForCheckout = useCallback(async () => {
     if (!videoId) return;
     try {
       if ("documentPictureInPicture" in window) {
-        const pipWindow = await (window as any).documentPictureInPicture.requestWindow({ width: 400, height: 225 });
+        const pipWindow = await (window as any).documentPictureInPicture.requestWindow({ width: 360, height: 640 });
         const pipDoc = pipWindow.document;
         pipDoc.body.style.margin = "0";
         pipDoc.body.style.overflow = "hidden";
@@ -334,7 +259,7 @@ const LiveCommerce = () => {
         pipWindow.addEventListener("pagehide", () => setPipActive(false));
       } else {
         const pipUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
-        const pipWin = window.open(pipUrl, "live_pip", "width=400,height=225,top=50,left=" + (screen.width - 420));
+        const pipWin = window.open(pipUrl, "live_pip", "width=360,height=640,top=50,left=" + (screen.width - 380));
         if (pipWin) {
           setPipActive(true);
           const timer = setInterval(() => { if (pipWin.closed) { setPipActive(false); clearInterval(timer); } }, 1000);
@@ -345,19 +270,81 @@ const LiveCommerce = () => {
     }
   }, [videoId]);
 
+  const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
+  const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const publicViewerCount = Math.max(viewerCount, MIN_PUBLIC_VIEWERS) + Math.floor(Math.random() * 15);
+
+  const addToCart = useCallback((variant: { id: string; title: string; price: number }, productTitle: string, image?: string) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.variantId === variant.id);
+      if (existing) return prev.map(i => i.variantId === variant.id ? { ...i, quantity: i.quantity + 1 } : i);
+      return [...prev, { variantId: variant.id, productTitle, variantTitle: variant.title === "Default Title" ? "" : variant.title, price: variant.price, quantity: 1, image }];
+    });
+    toast.success("Adicionado ao carrinho! 🛒");
+    setSelectedProduct(null);
+
+    if (viewer && session?.id) {
+      setTimeout(async () => {
+        const currentCart = [...cart, { variantId: variant.id, productTitle, price: variant.price, quantity: 1, image }];
+        const cartItems = currentCart.map(i => ({ handle: i.variantId, productTitle: i.productTitle, price: i.price, quantity: i.quantity, image: i.image }));
+        await supabase.from("live_viewers").update({ cart_items: cartItems as any }).eq("session_id", session.id).eq("phone", viewer.phone);
+      }, 100);
+    }
+  }, [cart, viewer, session?.id]);
+
+  const updateQty = (variantId: string, delta: number) => {
+    setCart(prev => prev.map(i => { if (i.variantId !== variantId) return i; const q = i.quantity + delta; return q <= 0 ? null! : { ...i, quantity: q }; }).filter(Boolean));
+  };
+
+  const removeItem = (variantId: string) => setCart(prev => prev.filter(i => i.variantId !== variantId));
+
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     setCheckingOut(true);
     try {
-      const orderProducts = cart.map(item => ({ id: item.variantId, title: item.productTitle, variant: item.variantTitle || "Default", price: item.price, quantity: item.quantity, shopifyId: item.variantId, image: item.image }));
+      const orderProducts = cart.map(item => ({
+        id: item.variantId,
+        title: item.productTitle,
+        variant: item.variantTitle || "Default",
+        price: item.price,
+        quantity: item.quantity,
+        shopifyId: item.variantId,
+        image: item.image,
+      }));
+
+      console.log("[Live Checkout] Creating cart with", orderProducts.length, "products");
       const checkoutUrl = await createShopifyCartFromOrder(orderProducts);
+      console.log("[Live Checkout] Result:", checkoutUrl);
+
       if (checkoutUrl) {
-        // Activate PiP so viewer keeps watching while checking out
         if (!pipActive) await activatePiPForCheckout();
-        // Open checkout in new tab (especially when embedded via Shopify widget)
         window.open(checkoutUrl, "_blank");
-      } else { toast.error("Erro ao criar carrinho."); }
-    } catch { toast.error("Erro ao processar."); } finally { setCheckingOut(false); }
+        toast.success("Checkout aberto em nova aba!");
+      } else {
+        // Fallback: use internal checkout
+        const liveCartData = cart.map(item => ({
+          title: item.productTitle,
+          variant: item.variantTitle || "Único",
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image || "",
+        }));
+        const encoded = btoa(encodeURIComponent(JSON.stringify({
+          items: liveCartData,
+          customer: viewer ? { name: viewer.name, phone: viewer.phone } : null,
+          source: "live",
+        })));
+        const internalUrl = `/checkout?live=${encoded}`;
+        console.log("[Live Checkout] Falling back to internal checkout:", internalUrl);
+        window.open(internalUrl, "_blank");
+        toast.success("Checkout aberto!");
+      }
+    } catch (err) {
+      console.error("[Live Checkout] Error:", err);
+      toast.error("Erro ao processar checkout.");
+    } finally {
+      setCheckingOut(false);
+    }
   };
 
   const sendChatMessage = async () => {
@@ -365,29 +352,36 @@ const LiveCommerce = () => {
     setSendingChat(true);
     const text = chatInput.trim();
     setChatInput("");
-    await supabase.from("live_chat_messages").insert({ session_id: session.id, viewer_name: viewer.name, viewer_phone: viewer.phone, message: text, message_type: "text" });
+    await supabase.from("live_chat_messages").insert({
+      session_id: session.id,
+      viewer_name: `@${viewer.username}`,
+      viewer_phone: viewer.phone,
+      message: text,
+      message_type: "text",
+    });
     setSendingChat(false);
   };
 
   const getNameColor = (name: string) => {
-    const colors = ["text-amber-400", "text-pink-400", "text-cyan-400", "text-green-400", "text-purple-400", "text-orange-400"];
-    let hash = 0; for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    const colors = ["text-amber-400", "text-pink-400", "text-cyan-400", "text-green-400", "text-purple-400", "text-orange-400", "text-blue-400", "text-rose-400"];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
     return colors[Math.abs(hash) % colors.length];
   };
 
-  if (loading) return <div className="min-h-screen bg-black text-white flex items-center justify-center"><p className="text-zinc-400">Carregando...</p></div>;
+  if (loading) return <div className="h-[100dvh] bg-black text-white flex items-center justify-center"><p className="text-zinc-400">Carregando...</p></div>;
 
   if (!session) return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-3">
+    <div className="h-[100dvh] bg-black text-white flex flex-col items-center justify-center gap-3">
       <ShoppingBag className="w-16 h-16 text-zinc-600" /><p className="text-zinc-400 text-lg font-medium">Nenhuma live no momento</p><p className="text-zinc-500 text-sm">Volte em breve! 🎉</p>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
+    <div className="h-[100dvh] bg-black text-white flex flex-col overflow-hidden relative">
       {/* Lead Gate Modal */}
       {showGate && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center px-4" onClick={() => setShowGate(false)}>
+        <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center px-4" onClick={() => setShowGate(false)}>
           <div className="bg-zinc-900 rounded-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="text-center space-y-2">
               <img src="/images/banana-logo.png" alt="" className="w-12 h-12 rounded-full mx-auto object-cover" />
@@ -410,74 +404,10 @@ const LiveCommerce = () => {
         </div>
       )}
 
-      {/* Video */}
-      <div ref={videoContainerRef} className="relative w-full" style={{ paddingTop: "56.25%" }}>
-        {isLive ? (
-          <>
-            <iframe className="absolute inset-0 w-full h-full"
-              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`}
-              title="Live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen loading="lazy" />
-            {/* PiP Button */}
-            <button
-              onClick={togglePiP}
-              className={`absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                pipActive ? "bg-amber-500 text-black" : "bg-black/60 text-white hover:bg-black/80"
-              }`}
-              title={pipActive ? "Fechar Picture-in-Picture" : "Assistir em miniatura"}
-            >
-              <PictureInPicture2 className="w-4 h-4" />
-            </button>
-          </>
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 gap-3">
-            <ShoppingBag className="w-8 h-8 text-zinc-500" /><p className="text-zinc-400">Aguardando transmissão...</p>
-          </div>
-        )}
-      </div>
-
-      {/* Info Bar */}
-      <div className="bg-zinc-900 border-t border-zinc-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src="/images/banana-logo.png" alt="Banana Calçados" className="w-8 h-8 rounded-full object-cover" loading="lazy" />
-          <div>
-            <h1 className="text-sm font-bold leading-tight">{session.title}</h1>
-            <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
-              {isLive && <><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> AO VIVO • </>}
-              <Users className="w-3 h-3" /> {publicViewerCount}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {whatsappLink && (
-            <a href={whatsappLink} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center bg-green-600 hover:bg-green-700 text-white text-[10px] font-semibold px-2 py-1.5 rounded-lg">
-              <MessageCircle className="w-3.5 h-3.5" />
-            </a>
-          )}
-          <Button size="sm" variant="outline"
-            className={`border-zinc-700 text-white hover:bg-zinc-800 h-8 px-2 text-xs ${drawerView === "chat" ? "bg-zinc-700" : ""}`}
-            onClick={() => requireViewer("chat", () => setDrawerView(v => v === "chat" ? "closed" : "chat"))}>
-            💬
-          </Button>
-          {products.length > 0 && (
-            <Button size="sm" variant="outline"
-              className={`border-zinc-700 text-white hover:bg-zinc-800 gap-1 h-8 px-2 text-xs ${drawerView === "products" ? "bg-zinc-700" : ""}`}
-              onClick={() => setDrawerView(v => v === "products" ? "closed" : "products")}>
-              <ShoppingBag className="w-3.5 h-3.5" /> {products.length}
-            </Button>
-          )}
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-bold h-8 px-2 relative"
-            onClick={() => setDrawerView(v => v === "cart" ? "closed" : "cart")}>
-            <ShoppingCart className="w-3.5 h-3.5" />
-            {cartCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{cartCount}</span>}
-          </Button>
-        </div>
-      </div>
-
       {/* Variant Selector Modal */}
       {selectedProduct && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center" onClick={() => setSelectedProduct(null)}>
-          <div className="bg-zinc-900 rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end justify-center" onClick={() => setSelectedProduct(null)}>
+          <div className="bg-zinc-900 rounded-t-2xl w-full max-w-md max-h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
               <h3 className="font-bold text-sm">Escolha o tamanho/cor</h3>
               <button onClick={() => setSelectedProduct(null)} className="text-zinc-400 hover:text-white"><X className="w-4 h-4" /></button>
@@ -498,118 +428,200 @@ const LiveCommerce = () => {
         </div>
       )}
 
-      {/* Chat Drawer - with fixed auto-scroll */}
-      {drawerView === "chat" && viewer && (
-        <div className="bg-zinc-900 border-t border-zinc-800 h-[40vh] flex flex-col">
-          <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 min-h-0">
-            {chatMessages.map((msg: any) => (
-              <div key={msg.id} className="animate-fade-in">
-                {msg.message_type === "system" ? (
-                  <p className="text-[11px] text-zinc-500 text-center italic">{msg.message}</p>
-                ) : (
-                  <p className="text-[12px] leading-tight">
-                    <span className={`font-bold ${getNameColor(msg.viewer_name)}`}>{msg.viewer_name}</span>
-                    <span className="text-zinc-300 ml-1.5">{msg.message}</span>
-                  </p>
-                )}
-              </div>
-            ))}
-            {chatMessages.length === 0 && <p className="text-zinc-600 text-xs text-center py-4">Seja o primeiro a comentar! 💬</p>}
-          </div>
-          <div className="px-3 py-2 border-t border-zinc-800">
-            <div className="flex items-center gap-2">
-              <input value={chatInput} onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") sendChatMessage(); }}
-                placeholder="Comente aqui..." maxLength={200}
-                className="flex-1 bg-zinc-800 rounded-full px-4 py-2 text-xs text-white placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-amber-500/50" />
-              <button onClick={sendChatMessage} disabled={!chatInput.trim() || sendingChat}
-                className="w-8 h-8 rounded-full bg-amber-500 hover:bg-amber-600 disabled:opacity-40 flex items-center justify-center">
-                <Send className="w-3.5 h-3.5 text-black" />
-              </button>
+      {/* Cart Drawer - full overlay */}
+      {drawerView === "cart" && (
+        <div className="fixed inset-0 z-[55] bg-black/80 flex items-end justify-center" onClick={() => setDrawerView("closed")}>
+          <div className="bg-zinc-900 rounded-t-2xl w-full max-w-md max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-800">
+              <h2 className="text-sm font-bold">Meu Carrinho ({cartCount})</h2>
+              <button onClick={() => setDrawerView("closed")} className="text-zinc-400 hover:text-white"><X className="w-4 h-4" /></button>
             </div>
+            {cart.length === 0 ? (
+              <div className="text-center py-8">
+                <ShoppingCart className="w-10 h-10 text-zinc-600 mx-auto mb-2" />
+                <p className="text-zinc-500 text-sm">Seu carrinho está vazio</p>
+              </div>
+            ) : (
+              <div className="p-4 space-y-3">
+                {cart.map(item => (
+                  <div key={item.variantId} className="flex items-center gap-3 bg-zinc-800 rounded-lg p-3">
+                    {item.image && <img src={item.image} alt="" className="w-12 h-12 rounded object-cover flex-shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{item.productTitle}</p>
+                      {item.variantTitle && <p className="text-[10px] text-zinc-400">{item.variantTitle}</p>}
+                      <p className="text-sm font-bold text-green-400">R$ {(item.price * item.quantity).toFixed(2).replace(".", ",")}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => updateQty(item.variantId, -1)} className="w-7 h-7 rounded bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center"><Minus className="w-3 h-3" /></button>
+                      <span className="text-xs w-6 text-center font-bold">{item.quantity}</span>
+                      <button onClick={() => updateQty(item.variantId, 1)} className="w-7 h-7 rounded bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center"><Plus className="w-3 h-3" /></button>
+                      <button onClick={() => removeItem(item.variantId)} className="w-7 h-7 rounded bg-red-900/50 hover:bg-red-800/50 flex items-center justify-center ml-1"><Trash2 className="w-3 h-3 text-red-400" /></button>
+                    </div>
+                  </div>
+                ))}
+                <div className="border-t border-zinc-700 pt-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-zinc-400">Total</span>
+                    <span className="text-lg font-bold text-green-400">R$ {cartTotal.toFixed(2).replace(".", ",")}</span>
+                  </div>
+                  <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold text-sm py-5" onClick={handleCheckout} disabled={checkingOut}>
+                    {checkingOut ? "Gerando checkout..." : "Finalizar Compra 🛒"}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Products Drawer */}
-      {drawerView === "products" && (
-        <div className="bg-zinc-900 border-t border-zinc-800 max-h-[50vh] overflow-y-auto">
-          <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-800">
-            <h2 className="text-sm font-bold">Produtos em Destaque 🔥</h2>
-            <button onClick={() => setDrawerView("closed")} className="text-zinc-400 hover:text-white"><X className="w-4 h-4" /></button>
+      {/* ===== VERTICAL FULLSCREEN VIDEO ===== */}
+      <div ref={videoContainerRef} className="flex-1 relative overflow-hidden bg-black">
+        {isLive ? (
+          <iframe
+            className="absolute inset-0 w-full h-full object-cover"
+            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&controls=0`}
+            title="Live"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            loading="lazy"
+            style={{ pointerEvents: "auto" }}
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900 gap-3">
+            <ShoppingBag className="w-8 h-8 text-zinc-500" />
+            <p className="text-zinc-400">Aguardando transmissão...</p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4">
-            {products.map(p => {
+        )}
+
+        {/* ===== OVERLAYS ON TOP OF VIDEO ===== */}
+
+        {/* Top bar: title + viewers + PiP */}
+        <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 pt-3 pb-6 bg-gradient-to-b from-black/70 to-transparent">
+          <div className="flex items-center gap-2">
+            <img src="/images/banana-logo.png" alt="" className="w-8 h-8 rounded-full object-cover border-2 border-amber-500" />
+            <div>
+              <p className="text-xs font-bold leading-tight">{session.title}</p>
+              <div className="flex items-center gap-1.5 text-[10px] text-zinc-300">
+                {isLive && <span className="bg-red-600 text-white px-1.5 py-0.5 rounded text-[9px] font-bold">AO VIVO</span>}
+                <span className="flex items-center gap-0.5"><Users className="w-3 h-3" />{publicViewerCount}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {whatsappLink && (
+              <a href={whatsappLink} target="_blank" rel="noopener noreferrer"
+                className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center">
+                <MessageCircle className="w-4 h-4" />
+              </a>
+            )}
+            <button onClick={activatePiPForCheckout}
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${pipActive ? "bg-amber-500 text-black" : "bg-black/50 text-white"}`}>
+              <PictureInPicture2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Chat overlay (inline on video, bottom-left) */}
+        <div className="absolute bottom-20 left-0 right-16 z-10 max-h-[35vh] flex flex-col pointer-events-none">
+          <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-3 space-y-1 scrollbar-hide pointer-events-auto">
+            {chatMessages.slice(-30).map((msg: any) => (
+              <div key={msg.id} className="animate-fade-in">
+                {msg.message_type === "system" ? (
+                  <p className="text-[10px] text-zinc-400 italic">{msg.message}</p>
+                ) : (
+                  <p className="text-[12px] leading-tight drop-shadow-lg">
+                    <span className={`font-bold ${getNameColor(msg.viewer_name)}`}>{msg.viewer_name}</span>
+                    <span className="text-white ml-1.5">{msg.message}</span>
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Chat input (bottom, full width) */}
+        <div className="absolute bottom-0 left-0 right-0 z-10 px-3 py-2 bg-gradient-to-t from-black/80 to-transparent">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => requireViewer("chat", () => {})}
+              className="flex-1"
+            >
+              <input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); requireViewer("chat", sendChatMessage); } }}
+                onFocus={() => { if (!viewer) { requireViewer("chat", () => {}); } }}
+                placeholder={viewer ? "Comente aqui..." : "Cadastre-se para comentar..."}
+                readOnly={!viewer}
+                maxLength={200}
+                className="w-full bg-zinc-800/80 backdrop-blur-sm rounded-full px-4 py-2.5 text-xs text-white placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-amber-500/50"
+              />
+            </button>
+            {viewer && chatInput.trim() && (
+              <button onClick={sendChatMessage} disabled={sendingChat}
+                className="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-600 disabled:opacity-40 flex items-center justify-center flex-shrink-0">
+                <Send className="w-4 h-4 text-black" />
+              </button>
+            )}
+            {/* Cart button */}
+            <button onClick={() => setDrawerView(v => v === "cart" ? "closed" : "cart")}
+              className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0 relative">
+              <ShoppingCart className="w-4 h-4 text-black" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{cartCount}</span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ===== PRODUCT CARDS (TikTok-style, bottom-right) ===== */}
+        {products.length > 0 && showProducts && (
+          <div className="absolute bottom-20 right-2 z-10 flex flex-col gap-2 items-end max-h-[50vh] overflow-y-auto scrollbar-hide">
+            {products.slice(0, 3).map(p => {
               const product = p.node;
               const image = product.images.edges[0]?.node.url;
               const price = parseFloat(product.priceRange.minVariantPrice.amount);
               const hasVariants = product.variants.edges.length > 1;
               return (
-                <button key={product.id} className="bg-zinc-800 rounded-lg overflow-hidden hover:ring-1 hover:ring-amber-500/50 transition-all group text-left"
+                <button
+                  key={product.id}
+                  className="bg-black/70 backdrop-blur-md rounded-xl overflow-hidden w-[72px] flex flex-col items-center transition-all hover:scale-105 active:scale-95 border border-white/10"
                   onClick={() => {
                     if (hasVariants) { requireViewer("cart", () => setSelectedProduct(p)); }
                     else {
                       const v = product.variants.edges[0]?.node;
                       if (v?.availableForSale) requireViewer("cart", () => addToCart({ id: v.id, title: v.title, price: parseFloat(v.price.amount) }, product.title, image));
-                      else toast.error("Produto esgotado");
+                      else toast.error("Esgotado");
                     }
-                  }}>
-                  {image && <div className="aspect-square overflow-hidden"><img src={image} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" /></div>}
-                  <div className="p-2">
-                    <p className="text-xs font-medium line-clamp-2 leading-tight">{product.title}</p>
-                    <p className="text-sm font-bold text-green-400 mt-1">R$ {price.toFixed(2).replace(".", ",")}</p>
-                    <span className="text-[10px] text-amber-400 flex items-center gap-1 mt-1"><Plus className="w-3 h-3" /> {hasVariants ? "Escolher tamanho" : "Adicionar"}</span>
+                  }}
+                >
+                  {image && <img src={image} alt="" className="w-full aspect-square object-cover" loading="lazy" />}
+                  <div className="px-1.5 py-1.5 text-center w-full">
+                    <p className="text-[9px] font-medium line-clamp-1 leading-tight">{product.title}</p>
+                    <p className="text-[11px] font-bold text-green-400 mt-0.5">R${price.toFixed(0)}</p>
+                    <span className="text-[8px] text-amber-400 font-semibold">COMPRAR</span>
                   </div>
                 </button>
               );
             })}
+            {products.length > 3 && (
+              <button
+                className="bg-black/70 backdrop-blur-md rounded-xl w-[72px] py-2 text-center border border-white/10"
+                onClick={() => {
+                  // Show all products in a bottom sheet style
+                  setSelectedProduct(null);
+                  // We'll toggle an expanded products view
+                  setShowProducts(false);
+                  setTimeout(() => setShowProducts(true), 10);
+                }}
+              >
+                <p className="text-[10px] font-bold text-amber-400">+{products.length - 3}</p>
+                <ChevronUp className="w-3 h-3 mx-auto text-zinc-400" />
+              </button>
+            )}
           </div>
-        </div>
-      )}
-
-      {/* Cart Drawer */}
-      {drawerView === "cart" && (
-        <div className="bg-zinc-900 border-t border-zinc-800 max-h-[50vh] overflow-y-auto">
-          <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-800">
-            <h2 className="text-sm font-bold">Meu Carrinho ({cartCount})</h2>
-            <button onClick={() => setDrawerView("closed")} className="text-zinc-400 hover:text-white"><X className="w-4 h-4" /></button>
-          </div>
-          {cart.length === 0 ? (
-            <div className="text-center py-8">
-              <ShoppingCart className="w-10 h-10 text-zinc-600 mx-auto mb-2" /><p className="text-zinc-500 text-sm">Seu carrinho está vazio</p>
-              <button className="text-amber-400 text-xs mt-2 underline" onClick={() => setDrawerView("products")}>Ver produtos</button>
-            </div>
-          ) : (
-            <div className="p-4 space-y-3">
-              {cart.map(item => (
-                <div key={item.variantId} className="flex items-center gap-3 bg-zinc-800 rounded-lg p-3">
-                  {item.image && <img src={item.image} alt="" className="w-12 h-12 rounded object-cover flex-shrink-0" />}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{item.productTitle}</p>
-                    {item.variantTitle && <p className="text-[10px] text-zinc-400">{item.variantTitle}</p>}
-                    <p className="text-sm font-bold text-green-400">R$ {(item.price * item.quantity).toFixed(2).replace(".", ",")}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => updateQty(item.variantId, -1)} className="w-7 h-7 rounded bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center"><Minus className="w-3 h-3" /></button>
-                    <span className="text-xs w-6 text-center font-bold">{item.quantity}</span>
-                    <button onClick={() => updateQty(item.variantId, 1)} className="w-7 h-7 rounded bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center"><Plus className="w-3 h-3" /></button>
-                    <button onClick={() => removeItem(item.variantId)} className="w-7 h-7 rounded bg-red-900/50 hover:bg-red-800/50 flex items-center justify-center ml-1"><Trash2 className="w-3 h-3 text-red-400" /></button>
-                  </div>
-                </div>
-              ))}
-              <div className="border-t border-zinc-700 pt-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-zinc-400">Total</span>
-                  <span className="text-lg font-bold text-green-400">R$ {cartTotal.toFixed(2).replace(".", ",")}</span>
-                </div>
-                <Button className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold text-sm py-5" onClick={handleCheckout} disabled={checkingOut}>
-                  {checkingOut ? "Gerando checkout..." : "Finalizar Compra"}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
