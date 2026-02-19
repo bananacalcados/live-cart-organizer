@@ -834,7 +834,22 @@ export default function Inventory() {
                             {c.total_products} produtos • {c.divergent_products} divergências • {c.corrected_products} corrigidos
                           </p>
                         </div>
-                        <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-5 w-5 text-green-500" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm('Tem certeza que deseja excluir este balanço?')) {
+                                handleDeleteCount(c.id);
+                                setPastCounts(prev => prev.filter(p => p.id !== c.id));
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -940,6 +955,28 @@ export default function Inventory() {
         ) : (
           /* Active count */
           <div className="space-y-4">
+            {/* Active count header with delete button */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{activeCount.scope === 'total' ? 'Balanço Total' : 'Balanço Parcial'}</Badge>
+                <span className="text-xs text-muted-foreground">
+                  Iniciado em {new Date(activeCount.started_at).toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="gap-1"
+                onClick={() => {
+                  if (confirm('Tem certeza que deseja excluir este balanço e todos os itens? Esta ação não pode ser desfeita.')) {
+                    handleDeleteCount(activeCount.id);
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Apagar Balanço
+              </Button>
+            </div>
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
               <Card>

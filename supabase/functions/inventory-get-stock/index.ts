@@ -22,13 +22,14 @@ serve(async (req) => {
 
     const { data: store } = await supabase
       .from('pos_stores')
-      .select('tiny_token')
+      .select('tiny_token, tiny_deposit_name')
       .eq('id', store_id)
       .single();
 
     if (!store?.tiny_token) throw new Error('Store not found or token missing');
 
-    console.log(`[inventory-get-stock] store_id=${store_id}, product_id=${product_id}, token_prefix=${store.tiny_token.substring(0,8)}`);
+    const depositName = store.tiny_deposit_name || null;
+    console.log(`[inventory-get-stock] store_id=${store_id}, product_id=${product_id}, deposit=${depositName}`);
 
     const resp = await fetch('https://api.tiny.com.br/api2/produto.obter.estoque.php', {
       method: 'POST',
@@ -37,8 +38,6 @@ serve(async (req) => {
     });
 
     const data = await resp.json();
-    // Log FULL response to diagnose multi-deposit issue
-    console.log(`[inventory-get-stock] FULL response for product ${product_id}:`, JSON.stringify(data.retorno));
 
     if (data.retorno?.status === 'Erro') {
       const err = data.retorno?.erros?.[0]?.erro || 'Error getting stock';
@@ -48,19 +47,28 @@ serve(async (req) => {
     }
 
     const produto = data.retorno?.produto;
-
-    // Check if there are multiple deposits — use deposit-specific stock if available
     const depositos = produto?.depositos || [];
     let stock = parseFloat(produto?.saldo || '0');
 
-    if (depositos.length > 0) {
-      console.log(`[inventory-get-stock] Found ${depositos.length} deposits:`, JSON.stringify(depositos));
-      // If there's only 1 deposit or we can't distinguish, use the first one
-      // The saldo field is the SUM of all deposits, which is wrong for multi-store
-      if (depositos.length === 1) {
-        stock = parseFloat(depositos[0]?.deposito?.saldo || depositos[0]?.saldo || produto?.saldo || '0');
+    // Filter by specific deposit name if configured
+    if (depositName && depositos.length > 0) {
+      const matched = depositos.find((d: any) => {
+        const dep = d?.deposito || d;
+        const name = dep?.nome || dep?.descricao || '';
+        return name.toLowerCase() === depositName.toLowerCase();
+      });
+
+      if (matched) {
+        const dep = matched?.deposito || matched;
+        stock = parseFloat(dep?.saldo || '0');
+        console.log(`[inventory-get-stock] Matched deposit '${depositName}' → stock=${stock}`);
+      } else {
+        console.warn(`[inventory-get-stock] Deposit '${depositName}' NOT found in ${depositos.length} deposits. Using total saldo=${stock}`);
+        console.log(`[inventory-get-stock] Available deposits:`, JSON.stringify(depositos));
       }
-      // For now log everything so we can see the structure
+    } else if (depositos.length === 1) {
+      const dep = depositos[0]?.deposito || depositos[0];
+      stock = parseFloat(dep?.saldo || produto?.saldo || '0');
     }
 
     return new Response(JSON.stringify({
