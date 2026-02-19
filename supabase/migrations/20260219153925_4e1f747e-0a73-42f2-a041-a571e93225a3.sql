@@ -1,0 +1,1 @@
+ALTER TABLE public.pos_stores ADD COLUMN tiny_deposit_name TEXT;
