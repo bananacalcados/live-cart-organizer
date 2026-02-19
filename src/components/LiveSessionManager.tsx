@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3, Link2, Lock, UserPlus, Pencil, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Video, Radio, Search, Check, X, Copy, ExternalLink, Users, MessageCircle, ShoppingCart, Ban, Send, Eye, Truck, Settings, Star, StarOff, DollarSign, TestTube2, BarChart3, Link2, Lock, UserPlus, Pencil, ChevronRight, Megaphone, Timer, Tag, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,6 +86,7 @@ export function LiveSessionManager() {
   const [adminTab, setAdminTab] = useState("dashboard");
   const [spotlightProducts, setSpotlightProducts] = useState<ProductRef[]>([]);
   const [freightConfig, setFreightConfig] = useState<any>({ free_above: null, flat_rate: null, enabled: false });
+  const [overlayConfig, setOverlayConfig] = useState<any>({ banner_text: "", coupon_code: "", countdown_end: "", promo_text: "", show_banner: false, show_coupon: false, show_countdown: false, show_promo: false });
 
   // Test mode
   const [testRunning, setTestRunning] = useState(false);
@@ -179,6 +180,10 @@ export function LiveSessionManager() {
     const totalItems = viewersWithCarts.reduce((sum, v) => {
       return sum + (v.cart_items as any[]).reduce((s: number, item: any) => s + (item.quantity || 1), 0);
     }, 0);
+    const completedOrders = viewers.filter(v => (v as any).checkout_completed);
+    const completedValue = completedOrders.reduce((sum, v) => {
+      return sum + (v.cart_items as any[]).reduce((s: number, item: any) => s + (item.price || 0) * (item.quantity || 1), 0);
+    }, 0);
     return {
       totalCartValue,
       totalItems,
@@ -186,6 +191,8 @@ export function LiveSessionManager() {
       leadsCount: viewers.length,
       onlineCount: viewers.filter(v => v.is_online && !v.is_banned).length,
       messagesCount: chatMessages.length,
+      completedCount: completedOrders.length,
+      completedValue,
     };
   };
 
@@ -194,6 +201,7 @@ export function LiveSessionManager() {
     setAdminSessionId(s.id);
     setSpotlightProducts(s.spotlight_products || []);
     setFreightConfig(s.freight_config || { free_above: null, flat_rate: null, enabled: false });
+    setOverlayConfig((s as any).overlay_config || { banner_text: "", coupon_code: "", countdown_end: "", promo_text: "", show_banner: false, show_coupon: false, show_countdown: false, show_promo: false });
     loadProducts();
     loadAdminData(s.id);
   };
@@ -273,6 +281,11 @@ export function LiveSessionManager() {
   const saveFreightConfig = async () => {
     await supabase.from("live_sessions").update({ freight_config: freightConfig as any }).eq("id", adminSessionId!);
     toast.success("Frete atualizado!");
+  };
+
+  const saveOverlayConfig = async () => {
+    await supabase.from("live_sessions").update({ overlay_config: overlayConfig as any }).eq("id", adminSessionId!);
+    toast.success("Overlays atualizados! As mudanças aparecem em tempo real para os viewers.");
   };
 
   // ---- PRIVATE CHAT ----
@@ -531,11 +544,23 @@ export function LiveSessionManager() {
         </div>
 
         {/* Revenue Stats Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2">
           <Card className="border-green-500/20 bg-green-500/5">
             <CardContent className="p-3 text-center">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Faturamento Carrinhos</p>
               <p className="text-lg font-bold text-green-500">R$ {stats.totalCartValue.toFixed(2).replace(".", ",")}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-amber-500/20 bg-amber-500/5">
+            <CardContent className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pedidos Finalizados</p>
+              <p className="text-lg font-bold text-amber-500">{stats.completedCount}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-emerald-500/20 bg-emerald-500/5">
+            <CardContent className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Valor Finalizado</p>
+              <p className="text-lg font-bold text-emerald-500">R$ {stats.completedValue.toFixed(2).replace(".", ",")}</p>
             </CardContent>
           </Card>
           <Card>
@@ -571,12 +596,13 @@ export function LiveSessionManager() {
         </div>
 
         <Tabs value={adminTab} onValueChange={setAdminTab}>
-          <TabsList className="w-full grid grid-cols-7">
+          <TabsList className="w-full grid grid-cols-8">
             <TabsTrigger value="dashboard" className="gap-1 text-xs"><BarChart3 className="w-3 h-3" /> Dashboard</TabsTrigger>
             <TabsTrigger value="chat" className="gap-1 text-xs"><MessageCircle className="w-3 h-3" /> Chat</TabsTrigger>
             <TabsTrigger value="products" className="gap-1 text-xs"><Star className="w-3 h-3" /> Produtos</TabsTrigger>
             <TabsTrigger value="viewers" className="gap-1 text-xs"><Users className="w-3 h-3" /> Viewers</TabsTrigger>
             <TabsTrigger value="carts" className="gap-1 text-xs"><ShoppingCart className="w-3 h-3" /> Carrinhos</TabsTrigger>
+            <TabsTrigger value="orders" className="gap-1 text-xs"><CheckCircle2 className="w-3 h-3" /> Pedidos</TabsTrigger>
             <TabsTrigger value="messages" className="gap-1 text-xs"><Send className="w-3 h-3" /> Mensagens</TabsTrigger>
             <TabsTrigger value="config" className="gap-1 text-xs"><Settings className="w-3 h-3" /> Config</TabsTrigger>
           </TabsList>
@@ -869,7 +895,50 @@ export function LiveSessionManager() {
             </Card>
           </TabsContent>
 
-          {/* MESSAGES TAB */}
+          {/* ORDERS TAB (finalized checkouts) */}
+          <TabsContent value="orders" className="mt-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-green-500" /> Pedidos Finalizados ({stats.completedCount})</CardTitle>
+                <p className="text-xs text-muted-foreground">Viewers que foram ao checkout durante a live.</p>
+              </CardHeader>
+              <CardContent>
+                {viewers.filter(v => (v as any).checkout_completed).length === 0 ? (
+                  <p className="text-muted-foreground text-xs text-center py-4">Nenhum pedido finalizado ainda</p>
+                ) : viewers.filter(v => (v as any).checkout_completed).map(v => {
+                  const cartVal = (v.cart_items as any[]).reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0);
+                  return (
+                    <div key={v.id} className="border rounded-lg p-3 mb-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          <span className="text-sm font-medium">{v.name}</span>
+                          <a href={`https://wa.me/${v.phone}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-500">
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs text-green-500">R$ {cartVal.toFixed(2).replace(".", ",")}</Badge>
+                          <span className="text-[10px] text-muted-foreground">
+                            {(v as any).checkout_completed_at ? new Date((v as any).checkout_completed_at).toLocaleString("pt-BR") : ""}
+                          </span>
+                        </div>
+                      </div>
+                      {(v.cart_items as any[]).map((item: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          {item.image && <img src={item.image} className="w-6 h-6 rounded object-cover" />}
+                          <span className="flex-1">{item.productTitle} {item.variantTitle && <span className="text-[10px]">({item.variantTitle})</span>}</span>
+                          <span>x{item.quantity || 1}</span>
+                          <span className="font-medium text-foreground">R$ {((item.price || 0) * (item.quantity || 1)).toFixed(2).replace(".", ",")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="messages" className="mt-3">
             <Card>
               <CardHeader className="pb-2">
@@ -925,6 +994,51 @@ export function LiveSessionManager() {
                     onChange={e => setFreightConfig({ ...freightConfig, free_above: e.target.value ? parseFloat(e.target.value) : null })} />
                 </div>
                 <Button onClick={saveFreightConfig} className="w-full">Salvar Configuração de Frete</Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2"><Megaphone className="w-4 h-4" /> Overlays na Tela do Cliente</CardTitle>
+                <p className="text-xs text-muted-foreground">Configure banners, cupons, contagem regressiva e promoções que aparecem em tempo real na tela dos viewers.</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Banner */}
+                <div className="space-y-2 p-3 border rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium flex items-center gap-1.5"><Megaphone className="w-3.5 h-3.5" /> Banner de Texto</Label>
+                    <Switch checked={overlayConfig.show_banner} onCheckedChange={v => setOverlayConfig({ ...overlayConfig, show_banner: v })} />
+                  </div>
+                  <Input placeholder="Ex: FRETE GRÁTIS ACIMA DE R$200! 🚀" value={overlayConfig.banner_text}
+                    onChange={e => setOverlayConfig({ ...overlayConfig, banner_text: e.target.value })} className="text-sm" />
+                </div>
+                {/* Cupom */}
+                <div className="space-y-2 p-3 border rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> Cupom de Desconto</Label>
+                    <Switch checked={overlayConfig.show_coupon} onCheckedChange={v => setOverlayConfig({ ...overlayConfig, show_coupon: v })} />
+                  </div>
+                  <Input placeholder="Ex: LIVE10" value={overlayConfig.coupon_code}
+                    onChange={e => setOverlayConfig({ ...overlayConfig, coupon_code: e.target.value })} className="text-sm" />
+                </div>
+                {/* Countdown */}
+                <div className="space-y-2 p-3 border rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" /> Contagem Regressiva</Label>
+                    <Switch checked={overlayConfig.show_countdown} onCheckedChange={v => setOverlayConfig({ ...overlayConfig, show_countdown: v })} />
+                  </div>
+                  <Input type="datetime-local" value={overlayConfig.countdown_end}
+                    onChange={e => setOverlayConfig({ ...overlayConfig, countdown_end: e.target.value })} className="text-sm" />
+                </div>
+                {/* Promo */}
+                <div className="space-y-2 p-3 border rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Promoção do Momento</Label>
+                    <Switch checked={overlayConfig.show_promo} onCheckedChange={v => setOverlayConfig({ ...overlayConfig, show_promo: v })} />
+                  </div>
+                  <Input placeholder="Ex: BOTA ARANNI por apenas R$199,99! 🔥" value={overlayConfig.promo_text}
+                    onChange={e => setOverlayConfig({ ...overlayConfig, promo_text: e.target.value })} className="text-sm" />
+                </div>
+                <Button onClick={saveOverlayConfig} className="w-full">Salvar Overlays</Button>
               </CardContent>
             </Card>
             <Card>
