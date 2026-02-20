@@ -25,6 +25,7 @@ import BananaLanding from "./pages/BananaLanding";
 import BananaLandingGV from "./pages/BananaLandingGV";
 import Login from "./pages/Login";
 import LiveCommerce from "./pages/LiveCommerce";
+import DoseTriplaCatalog from "./pages/DoseTriplaCatalog";
 import { TeamChat } from "./components/TeamChat";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/banana-verao" element={<BananaLanding />} />
             <Route path="/banana-verao-gv" element={<BananaLandingGV />} />
             <Route path="/live" element={<LiveCommerce />} />
+            <Route path="/dose-tripla" element={<DoseTriplaCatalog />} />
 
             {/* Protected routes */}
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
