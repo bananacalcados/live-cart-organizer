@@ -191,3 +191,9 @@ verify_jwt = false
 
 [functions.live-send-verification]
 verify_jwt = false
+
+[functions.ai-marketing-master]
+verify_jwt = false
+
+[functions.ai-channel-specialist]
+verify_jwt = false
