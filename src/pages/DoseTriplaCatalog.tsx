@@ -1,11 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { createYampiPaymentLinkFromOrder } from "@/lib/yampi";
+import type { DbOrderProduct } from "@/types/database";
+import { toast } from "sonner";
 
-type Step = "welcome" | "category" | "products";
+type Step = "welcome" | "category" | "products" | "cart";
 
-// ─── Default config (used for /dose-tripla hardcoded route) ───
+// ─── Default config ───
 
 const DEFAULT_CATEGORIES: Array<{ key: string; label: string; emoji: string }> = [
   { key: "todos", label: "Todos", emoji: "👟" },
@@ -63,6 +66,8 @@ interface FilteredProduct {
   price: string;
   compareAtPrice: string | null;
   variantId: string;
+  variantGid: string;
+  sku: string | null;
   color: string;
   category: CategoryKey;
 }
@@ -94,16 +99,12 @@ function extractColor(product: ShopifyProduct): string {
   return colorOption?.value || "";
 }
 
-function filterProducts(
-  products: ShopifyProduct[],
-  config: PageConfig
-): FilteredProduct[] {
+function filterProducts(products: ShopifyProduct[], config: PageConfig): FilteredProduct[] {
   const result: FilteredProduct[] = [];
   const selectedIds = new Set(config.selected_product_ids || []);
   const hasManualSelection = selectedIds.size > 0;
 
   for (const product of products) {
-    // If manual selection, only include selected products
     if (hasManualSelection && !selectedIds.has(product.node.id)) continue;
 
     let targetVariant = product.node.variants.edges[0];
@@ -119,7 +120,6 @@ function filterProducts(
       if (sizeVariant) {
         targetVariant = sizeVariant;
       } else if (!hasManualSelection) {
-        // Skip if filtering by size and variant not found (unless manually selected)
         continue;
       }
     }
@@ -139,12 +139,39 @@ function filterProducts(
       price: targetVariant.node.price.amount,
       compareAtPrice: targetVariant.node.compareAtPrice?.amount || null,
       variantId: numericId,
+      variantGid: gid,
+      sku: targetVariant.node.sku || null,
       color,
       category: categorizeProduct(product.node.title),
     });
   }
-
   return result;
+}
+
+function parseComboPrice(priceStr: string): number {
+  const match = priceStr.replace(/[^\d,\.]/g, "").replace(",", ".");
+  return parseFloat(match) || 0;
+}
+
+function getComboTotal(cart: FilteredProduct[], tiers: Array<{ qty: string; price: string }>): { label: string; total: number } {
+  const qty = cart.length;
+  if (tiers.length === 0 || qty === 0) {
+    const total = cart.reduce((s, p) => s + Number(p.price), 0);
+    return { label: `${qty} item(s)`, total };
+  }
+  // Find the tier that best matches qty (highest tier where qty >= tier qty number)
+  const parsedTiers = tiers.map(t => {
+    const n = parseInt(t.qty.replace(/\D/g, "")) || 1;
+    return { n, price: parseComboPrice(t.price), label: t.qty + " por " + t.price };
+  }).sort((a, b) => b.n - a.n);
+
+  const match = parsedTiers.find(t => qty >= t.n);
+  if (match) {
+    return { label: match.label, total: match.price };
+  }
+  // Fallback: sum individual prices
+  const total = cart.reduce((s, p) => s + Number(p.price), 0);
+  return { label: `${qty} item(s)`, total };
 }
 
 // ─── Component ───
@@ -158,13 +185,20 @@ export default function DoseTriplaCatalog() {
   const [visible, setVisible] = useState(false);
   const [configLoading, setConfigLoading] = useState(!!slug);
 
+  // Cart state
+  const [cart, setCart] = useState<FilteredProduct[]>([]);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [cartBounce, setCartBounce] = useState(false);
+
   const [config, setConfig] = useState<PageConfig>({
     welcome_title: "Calçados em\nDose Tripla! 🔥",
     welcome_subtitle: "Os melhores calçados no **tamanho 34** com preços imperdíveis",
     cta_text: "Ver Calçados no 34 👀",
     payment_info: "Até **6x sem juros** no cartão ou **15% cashback** no Pix 💚",
     combo_tiers: DEFAULT_COMBOS,
-    categories: [...DEFAULT_CATEGORIES] as Array<{ key: string; label: string; emoji: string }>,
+    categories: [...DEFAULT_CATEGORIES],
     whatsapp_numbers: DEFAULT_WHATSAPP_STORES,
     selected_product_ids: [],
     product_filter: { sizeFilter: "34", filterBySize: true },
@@ -172,7 +206,7 @@ export default function DoseTriplaCatalog() {
     theme: { ...DEFAULT_THEME },
   });
 
-  // Load config from DB if slug is provided
+  // Load config from DB if slug
   useEffect(() => {
     if (!slug) return;
     (async () => {
@@ -185,16 +219,12 @@ export default function DoseTriplaCatalog() {
           .eq("is_active", true)
           .maybeSingle();
         if (error) throw error;
-        if (!data) {
-          setConfigLoading(false);
-          return;
-        }
+        if (!data) { setConfigLoading(false); return; }
         const theme = (data.theme_config as any) || DEFAULT_THEME;
         const cats = (data.categories as any[]) || DEFAULT_CATEGORIES;
         const combos = (data.combo_tiers as any[]) || DEFAULT_COMBOS;
         const waNums = (data.whatsapp_numbers as any[]) || DEFAULT_WHATSAPP_STORES;
         const filter = (data.product_filter as any) || { sizeFilter: "34", filterBySize: true };
-
         setConfig({
           welcome_title: data.welcome_title || "Confira nossos produtos!",
           welcome_subtitle: data.welcome_subtitle,
@@ -208,8 +238,6 @@ export default function DoseTriplaCatalog() {
           store_base_url: data.store_base_url || "https://bananacalcados.com.br",
           theme,
         });
-
-        // Increment views
         supabase.from("catalog_landing_pages").update({ views: (data.views || 0) + 1 }).eq("id", data.id).then();
       } catch (e) {
         console.error("Failed to load catalog config:", e);
@@ -249,21 +277,116 @@ export default function DoseTriplaCatalog() {
       ? allProducts
       : allProducts.filter((p) => p.category === selectedCategory);
 
-  const buildWhatsAppLink = (product: FilteredProduct, type: "whatsapp" | "loja") => {
+  // Cart helpers
+  const isInCart = (productId: string) => cart.some((p) => p.id === productId);
+
+  const addToCart = (product: FilteredProduct) => {
+    if (isInCart(product.id)) return;
+    setCart((prev) => [...prev, product]);
+    setCartBounce(true);
+    setTimeout(() => setCartBounce(false), 600);
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart((prev) => prev.filter((p) => p.id !== productId));
+  };
+
+  const comboInfo = getComboTotal(cart, config.combo_tiers);
+
+  // Register lead
+  const registerLead = async (channel: string) => {
+    try {
+      await supabase.from("lp_leads" as any).insert({
+        name: customerName,
+        phone: customerPhone.replace(/\D/g, ""),
+        campaign_tag: `catalogo-${slug || "dose-tripla"}`,
+        metadata: {
+          cart: cart.map((p) => ({ title: p.title, color: p.color, variantId: p.variantId })),
+          channel,
+          total: comboInfo.total,
+        },
+      } as any);
+      // Increment clicks
+      if (slug) {
+        const { data } = await supabase.from("catalog_landing_pages").select("id, clicks").eq("slug", slug).maybeSingle();
+        if (data) {
+          await supabase.from("catalog_landing_pages").update({ clicks: (data.clicks || 0) + 1 }).eq("id", data.id);
+        }
+      }
+    } catch (e) {
+      console.error("Lead registration failed:", e);
+    }
+  };
+
+  // Checkout via Yampi
+  const handleYampiCheckout = async () => {
+    if (!customerName.trim() || customerPhone.replace(/\D/g, "").length < 10) {
+      toast.error("Preencha seu nome e WhatsApp corretamente");
+      return;
+    }
+    setCheckoutLoading(true);
+    try {
+      const products: DbOrderProduct[] = cart.map((p) => ({
+        id: `catalog-${p.variantId}`,
+        shopifyId: p.variantGid,
+        sku: p.sku || undefined,
+        title: p.title,
+        variant: p.color || "Padrão",
+        price: Number(p.price),
+        quantity: 1,
+        image: p.imageUrl,
+      }));
+      const link = await createYampiPaymentLinkFromOrder(products, {
+        customerName,
+        customerPhone: customerPhone.replace(/\D/g, ""),
+      });
+      if (link) {
+        await registerLead("yampi");
+        window.open(link, "_blank");
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Erro ao gerar link de pagamento");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  // WhatsApp checkout
+  const handleWhatsAppCheckout = async (type: "whatsapp" | "loja") => {
+    if (!customerName.trim() || customerPhone.replace(/\D/g, "").length < 10) {
+      toast.error("Preencha seu nome e WhatsApp corretamente");
+      return;
+    }
     const stores = config.whatsapp_numbers;
     const storeIdx = getNextStoreIndex(`catalog_store_turn_${slug || "dose-tripla"}`, stores.length);
     const store = stores[storeIdx];
-    const colorText = product.color ? ` na cor *${product.color}*` : "";
     const sizeText = config.product_filter.filterBySize ? ` no tamanho ${config.product_filter.sizeFilter}` : "";
-    const message =
-      type === "whatsapp"
-        ? `Oi! Vi o produto *${product.title}*${colorText}${sizeText} e quero comprar! 🛒`
-        : `Oi! Vi o produto *${product.title}*${colorText}${sizeText} e quero *retirar na loja física*! 🏬`;
-    return `https://wa.me/${store.number}?text=${encodeURIComponent(message)}`;
+
+    const itemsList = cart
+      .map((p, i) => {
+        const colorText = p.color ? ` - Cor: ${p.color}` : "";
+        return `${i + 1}. *${p.title}*${colorText}${sizeText}`;
+      })
+      .join("\n");
+
+    const intro = type === "whatsapp"
+      ? `Oi! Sou *${customerName}*, vim do catálogo e quero comprar:`
+      : `Oi! Sou *${customerName}*, vim do catálogo e quero *retirar na loja física*:`;
+
+    const message = `${intro}\n\n${itemsList}\n\nTotal: R$ ${comboInfo.total.toFixed(0)} (${comboInfo.label})\n\nMeu WhatsApp: ${customerPhone}`;
+
+    await registerLead(type);
+    window.open(`https://wa.me/${store.number}?text=${encodeURIComponent(message)}`, "_blank");
   };
 
-  const buildSiteLink = (product: FilteredProduct) =>
-    `${config.store_base_url}/products/${product.handle}?variant=${product.variantId}`;
+  // Phone mask
+  const formatPhone = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
 
   const fadeCls = `transition-all duration-500 ease-out ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`;
   const theme = config.theme;
@@ -294,6 +417,20 @@ export default function DoseTriplaCatalog() {
         <p className="text-xs font-bold text-white/80 tracking-[0.3em] -mt-1">CALÇADOS</p>
       </div>
 
+      {/* Floating cart button */}
+      {step !== "welcome" && step !== "cart" && cart.length > 0 && (
+        <button
+          onClick={() => setStep("cart")}
+          className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white text-xl active:scale-90 transition-transform ${cartBounce ? "animate-bounce" : ""}`}
+          style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.secondaryColor})` }}
+        >
+          🛒
+          <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+            {cart.length}
+          </span>
+        </button>
+      )}
+
       {/* Main content */}
       <div className={`relative z-10 w-full max-w-md ${fadeCls}`}>
         {/* =================== WELCOME =================== */}
@@ -309,9 +446,7 @@ export default function DoseTriplaCatalog() {
                           {i > 0 && <br />}
                           {line.includes("Dose Tripla") ? (
                             <span className="text-emerald-600">{line}</span>
-                          ) : (
-                            line
-                          )}
+                          ) : line}
                         </span>
                       ))
                     : config.welcome_title}
@@ -319,20 +454,16 @@ export default function DoseTriplaCatalog() {
                 {config.welcome_subtitle && (
                   <p className="text-sm text-gray-500 mt-2"
                     dangerouslySetInnerHTML={{
-                      __html: config.welcome_subtitle
-                        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>"),
+                      __html: config.welcome_subtitle.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>"),
                     }}
                   />
                 )}
               </div>
 
-              {/* Pricing */}
               {config.combo_tiers.length > 0 && (
                 <div className="w-full bg-emerald-50 rounded-2xl p-4 space-y-2">
-                  <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
-                    Combo Especial
-                  </p>
-                  <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(config.combo_tiers.length, 3)}, 1fr)` }}>
+                  <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Combo Especial</p>
+                  <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(config.combo_tiers.length, 3)}, 1fr)` }}>
                     {config.combo_tiers.map((item) => (
                       <div key={item.qty} className="bg-white rounded-xl p-3 shadow-sm text-center">
                         <p className="text-xs text-gray-500">{item.qty}</p>
@@ -402,6 +533,14 @@ export default function DoseTriplaCatalog() {
               <span className="text-xs text-gray-400">{filteredProducts.length} itens</span>
             </div>
 
+            {/* Stock reservation warning */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex gap-2 items-start">
+              <span className="text-lg">⚠️</span>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                <strong>Atenção:</strong> Só adicione ao carrinho se tiver real intenção de compra. Os produtos adicionados serão separados no estoque.
+              </p>
+            </div>
+
             {loading ? (
               <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 text-center">
                 <div className="animate-spin w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full mx-auto" />
@@ -421,58 +560,162 @@ export default function DoseTriplaCatalog() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                {filteredProducts.map((product) => (
-                  <div
-                    key={product.id + product.variantId}
-                    className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden flex flex-col"
-                  >
-                    {product.imageUrl && (
-                      <div className="aspect-square overflow-hidden">
-                        <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" loading="lazy" />
-                      </div>
-                    )}
-                    <div className="p-3 flex flex-col gap-2 flex-1">
-                      <h3 className="text-xs font-bold text-gray-800 leading-tight line-clamp-2">{product.title}</h3>
-                      {product.color && <p className="text-[10px] text-gray-400">Cor: {product.color}</p>}
-                      <div className="flex items-baseline gap-1">
-                        {product.compareAtPrice && (
-                          <span className="text-[10px] text-gray-400 line-through">R$ {Number(product.compareAtPrice).toFixed(0)}</span>
-                        )}
-                        <span className="text-sm font-bold text-emerald-600">R$ {Number(product.price).toFixed(0)}</span>
-                      </div>
-                      <div className="flex flex-col gap-1.5 mt-auto">
-                        <a
-                          href={buildSiteLink(product)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full py-2 rounded-lg text-[11px] font-bold text-white text-center active:scale-95 transition-transform"
-                          style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.secondaryColor})` }}
-                        >
-                          🛒 Comprar no Site
-                        </a>
-                        <a
-                          href={buildWhatsAppLink(product, "whatsapp")}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full py-2 rounded-lg text-[11px] font-bold text-white text-center active:scale-95 transition-transform"
-                          style={{ background: theme.buttonWhatsappColor }}
-                        >
-                          💬 Comprar no WhatsApp
-                        </a>
-                        <a
-                          href={buildWhatsAppLink(product, "loja")}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full py-2 rounded-lg text-[11px] font-bold text-white text-center active:scale-95 transition-transform"
-                          style={{ background: `linear-gradient(135deg, ${theme.buttonStoreColor}, ${theme.buttonStoreColor}dd)` }}
-                        >
-                          🏬 Comprar na Loja
-                        </a>
+                {filteredProducts.map((product) => {
+                  const inCart = isInCart(product.id);
+                  return (
+                    <div
+                      key={product.id + product.variantId}
+                      className={`bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden flex flex-col ${inCart ? "ring-2 ring-emerald-400" : ""}`}
+                    >
+                      {product.imageUrl && (
+                        <div className="aspect-square overflow-hidden">
+                          <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" loading="lazy" />
+                        </div>
+                      )}
+                      <div className="p-3 flex flex-col gap-2 flex-1">
+                        <h3 className="text-xs font-bold text-gray-800 leading-tight line-clamp-2">{product.title}</h3>
+                        {product.color && <p className="text-[10px] text-gray-400">Cor: {product.color}</p>}
+                        <div className="flex items-baseline gap-1">
+                          {product.compareAtPrice && (
+                            <span className="text-[10px] text-gray-400 line-through">R$ {Number(product.compareAtPrice).toFixed(0)}</span>
+                          )}
+                          <span className="text-sm font-bold text-emerald-600">R$ {Number(product.price).toFixed(0)}</span>
+                        </div>
+                        <div className="mt-auto">
+                          {inCart ? (
+                            <button
+                              onClick={() => removeFromCart(product.id)}
+                              className="w-full py-2 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-100 text-center active:scale-95 transition-transform"
+                            >
+                              ✅ Adicionado · Remover
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => addToCart(product)}
+                              className="w-full py-2 rounded-lg text-[11px] font-bold text-white text-center active:scale-95 transition-transform"
+                              style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.secondaryColor})` }}
+                            >
+                              🛒 Adicionar ao Carrinho
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* =================== CART =================== */}
+        {step === "cart" && (
+          <div className="flex flex-col gap-4">
+            <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl px-6 py-4 flex items-center justify-between">
+              <button onClick={() => setStep("products")} className="text-sm text-gray-500 hover:text-gray-700 font-semibold">
+                ← Continuar Comprando
+              </button>
+              <span className="text-sm font-bold text-emerald-600">🛒 Meu Carrinho ({cart.length})</span>
+            </div>
+
+            {cart.length === 0 ? (
+              <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 text-center">
+                <p className="text-3xl mb-2">🛒</p>
+                <p className="text-sm text-gray-500">Seu carrinho está vazio</p>
+                <button
+                  onClick={() => setStep("products")}
+                  className="mt-4 px-6 py-2 rounded-xl text-sm font-semibold text-white active:scale-95 transition-transform"
+                  style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.secondaryColor})` }}
+                >
+                  Ver Produtos
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Cart items */}
+                <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl overflow-hidden">
+                  <div className="p-4 space-y-3">
+                    {cart.map((product) => (
+                      <div key={product.id} className="flex gap-3 items-center">
+                        {product.imageUrl && (
+                          <img src={product.imageUrl} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-gray-800 line-clamp-1">{product.title}</p>
+                          {product.color && <p className="text-[10px] text-gray-400">Cor: {product.color}</p>}
+                          <p className="text-xs font-bold text-emerald-600">R$ {Number(product.price).toFixed(0)}</p>
+                        </div>
+                        <button
+                          onClick={() => removeFromCart(product.id)}
+                          className="text-red-400 hover:text-red-600 text-lg shrink-0"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Total */}
+                  <div className="bg-emerald-50 px-4 py-3 flex items-center justify-between">
+                    <span className="text-xs text-gray-600">{comboInfo.label}</span>
+                    <span className="text-lg font-black text-emerald-600">R$ {comboInfo.total.toFixed(0)}</span>
+                  </div>
+                </div>
+
+                {/* Customer form */}
+                <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-5 space-y-3">
+                  <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">Seus dados para contato</p>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Seu nome"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white"
+                    />
+                    <input
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(formatPhone(e.target.value))}
+                      placeholder="(00) 00000-0000"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Warning */}
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex gap-2 items-start">
+                  <span className="text-lg">⚠️</span>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    <strong>NÃO FINALIZE SE NÃO TIVER A INTENÇÃO DE COMPRAR</strong> — Todos os produtos do seu carrinho serão separados automaticamente no estoque.
+                  </p>
+                </div>
+
+                {/* Checkout buttons */}
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={handleYampiCheckout}
+                    disabled={checkoutLoading}
+                    className="w-full py-3 rounded-xl font-bold text-white text-sm shadow-lg active:scale-95 transition-transform disabled:opacity-50"
+                    style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.secondaryColor})` }}
+                  >
+                    {checkoutLoading ? "Gerando link..." : "🛒 Finalizar no Site"}
+                  </button>
+                  <button
+                    onClick={() => handleWhatsAppCheckout("whatsapp")}
+                    className="w-full py-3 rounded-xl font-bold text-white text-sm shadow-lg active:scale-95 transition-transform"
+                    style={{ background: theme.buttonWhatsappColor }}
+                  >
+                    💬 Finalizar no WhatsApp
+                  </button>
+                  <button
+                    onClick={() => handleWhatsAppCheckout("loja")}
+                    className="w-full py-3 rounded-xl font-bold text-white text-sm shadow-lg active:scale-95 transition-transform"
+                    style={{ background: `linear-gradient(135deg, ${theme.buttonStoreColor}, ${theme.buttonStoreColor}dd)` }}
+                  >
+                    🏬 Retirar na Loja Física
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )}
