@@ -58,6 +58,16 @@ interface PageConfig {
 
 type CategoryKey = string;
 
+interface ColorVariant {
+  color: string;
+  imageUrl: string;
+  variantId: string;
+  variantGid: string;
+  sku: string | null;
+  price: string;
+  compareAtPrice: string | null;
+}
+
 interface FilteredProduct {
   id: string;
   title: string;
@@ -70,6 +80,7 @@ interface FilteredProduct {
   sku: string | null;
   color: string;
   category: CategoryKey;
+  colorVariants: ColorVariant[];
 }
 
 // ─── Helpers ───
@@ -92,13 +103,6 @@ function categorizeProduct(title: string): CategoryKey {
   return "todos";
 }
 
-function extractColor(product: ShopifyProduct): string {
-  const colorOption = product.node.variants.edges
-    .flatMap((v) => v.node.selectedOptions)
-    .find((opt) => opt.name.toLowerCase() === "cor" || opt.name.toLowerCase() === "color");
-  return colorOption?.value || "";
-}
-
 function filterProducts(products: ShopifyProduct[], config: PageConfig): FilteredProduct[] {
   const result: FilteredProduct[] = [];
   const selectedIds = new Set(config.selected_product_ids || []);
@@ -107,42 +111,70 @@ function filterProducts(products: ShopifyProduct[], config: PageConfig): Filtere
   for (const product of products) {
     if (hasManualSelection && !selectedIds.has(product.node.id)) continue;
 
-    let targetVariant = product.node.variants.edges[0];
+    const allVariants = product.node.variants.edges;
 
+    // Find variants matching size filter
+    let matchingVariants = allVariants;
     if (config.product_filter.filterBySize && config.product_filter.sizeFilter) {
-      const sizeVariant = product.node.variants.edges.find((v) =>
+      matchingVariants = allVariants.filter((v) =>
         v.node.selectedOptions.some(
           (opt) =>
             (opt.name.toLowerCase() === "tamanho" || opt.name.toLowerCase() === "size") &&
             opt.value === config.product_filter.sizeFilter
         )
       );
-      if (sizeVariant) {
-        targetVariant = sizeVariant;
-      } else if (!hasManualSelection) {
-        continue;
+      // If manually selected but no size match, skip
+      if (matchingVariants.length === 0) continue;
+    }
+
+    // Filter only available variants
+    const availableVariants = matchingVariants.filter(v => v.node.availableForSale);
+    if (availableVariants.length === 0) continue;
+
+    // Build color variants from available matching variants
+    const colorVariantsMap = new Map<string, ColorVariant>();
+    for (const v of availableVariants) {
+      const colorOpt = v.node.selectedOptions.find(
+        (opt) => opt.name.toLowerCase() === "cor" || opt.name.toLowerCase() === "color"
+      );
+      const color = colorOpt?.value || "Padrão";
+      if (!colorVariantsMap.has(color)) {
+        // Find image for this color variant - check if product has variant-specific images
+        // Use the variant index to try to get the matching image
+        const variantIndex = allVariants.indexOf(v);
+        const imageEdges = product.node.images.edges;
+        const imageUrl = imageEdges[Math.min(variantIndex, imageEdges.length - 1)]?.node.url || imageEdges[0]?.node.url || "";
+        
+        const gid = v.node.id;
+        const numericId = gid.split("/").pop() || gid;
+        colorVariantsMap.set(color, {
+          color,
+          imageUrl,
+          variantId: numericId,
+          variantGid: gid,
+          sku: v.node.sku || null,
+          price: v.node.price.amount,
+          compareAtPrice: v.node.compareAtPrice?.amount || null,
+        });
       }
     }
 
-    if (!targetVariant || !targetVariant.node.availableForSale) continue;
-
-    const imageUrl = product.node.images.edges[0]?.node.url || "";
-    const color = extractColor(product);
-    const gid = targetVariant.node.id;
-    const numericId = gid.split("/").pop() || gid;
+    const colorVariants = Array.from(colorVariantsMap.values());
+    const defaultVariant = colorVariants[0];
 
     result.push({
       id: product.node.id,
       title: product.node.title,
       handle: product.node.handle,
-      imageUrl,
-      price: targetVariant.node.price.amount,
-      compareAtPrice: targetVariant.node.compareAtPrice?.amount || null,
-      variantId: numericId,
-      variantGid: gid,
-      sku: targetVariant.node.sku || null,
-      color,
+      imageUrl: defaultVariant.imageUrl,
+      price: defaultVariant.price,
+      compareAtPrice: defaultVariant.compareAtPrice,
+      variantId: defaultVariant.variantId,
+      variantGid: defaultVariant.variantGid,
+      sku: defaultVariant.sku,
+      color: defaultVariant.color,
       category: categorizeProduct(product.node.title),
+      colorVariants,
     });
   }
   return result;
@@ -159,7 +191,6 @@ function getComboTotal(cart: FilteredProduct[], tiers: Array<{ qty: string; pric
     const total = cart.reduce((s, p) => s + Number(p.price), 0);
     return { label: `${qty} item(s)`, total };
   }
-  // Find the tier that best matches qty (highest tier where qty >= tier qty number)
   const parsedTiers = tiers.map(t => {
     const n = parseInt(t.qty.replace(/\D/g, "")) || 1;
     return { n, price: parseComboPrice(t.price), label: t.qty + " por " + t.price };
@@ -169,7 +200,6 @@ function getComboTotal(cart: FilteredProduct[], tiers: Array<{ qty: string; pric
   if (match) {
     return { label: match.label, total: match.price };
   }
-  // Fallback: sum individual prices
   const total = cart.reduce((s, p) => s + Number(p.price), 0);
   return { label: `${qty} item(s)`, total };
 }
@@ -191,6 +221,9 @@ export default function DoseTriplaCatalog() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [cartBounce, setCartBounce] = useState(false);
+
+  // Color selection per product
+  const [selectedColors, setSelectedColors] = useState<Record<string, string>>({});
 
   const [config, setConfig] = useState<PageConfig>({
     welcome_title: "Calçados em\nDose Tripla! 🔥",
@@ -277,12 +310,31 @@ export default function DoseTriplaCatalog() {
       ? allProducts
       : allProducts.filter((p) => p.category === selectedCategory);
 
+  // Get product with selected color applied
+  const getProductWithColor = (product: FilteredProduct): FilteredProduct => {
+    const selectedColor = selectedColors[product.id];
+    if (!selectedColor || selectedColor === product.color) return product;
+    const variant = product.colorVariants.find(v => v.color === selectedColor);
+    if (!variant) return product;
+    return {
+      ...product,
+      imageUrl: variant.imageUrl,
+      price: variant.price,
+      compareAtPrice: variant.compareAtPrice,
+      variantId: variant.variantId,
+      variantGid: variant.variantGid,
+      sku: variant.sku,
+      color: variant.color,
+    };
+  };
+
   // Cart helpers
   const isInCart = (productId: string) => cart.some((p) => p.id === productId);
 
   const addToCart = (product: FilteredProduct) => {
     if (isInCart(product.id)) return;
-    setCart((prev) => [...prev, product]);
+    const withColor = getProductWithColor(product);
+    setCart((prev) => [...prev, withColor]);
     setCartBounce(true);
     setTimeout(() => setCartBounce(false), 600);
   };
@@ -306,7 +358,6 @@ export default function DoseTriplaCatalog() {
           total: comboInfo.total,
         },
       } as any);
-      // Increment clicks
       if (slug) {
         const { data } = await supabase.from("catalog_landing_pages").select("id, clicks").eq("slug", slug).maybeSingle();
         if (data) {
@@ -380,6 +431,16 @@ export default function DoseTriplaCatalog() {
     window.open(`https://wa.me/${store.number}?text=${encodeURIComponent(message)}`, "_blank");
   };
 
+  // WhatsApp help - round-robin
+  const handleWhatsAppHelp = () => {
+    const stores = config.whatsapp_numbers;
+    if (stores.length === 0) return;
+    const storeIdx = getNextStoreIndex(`catalog_help_turn_${slug || "dose-tripla"}`, stores.length);
+    const store = stores[storeIdx];
+    const message = `Oi! Estou no catálogo e tenho uma dúvida. Pode me ajudar?`;
+    window.open(`https://wa.me/${store.number}?text=${encodeURIComponent(message)}`, "_blank");
+  };
+
   // Phone mask
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -421,13 +482,25 @@ export default function DoseTriplaCatalog() {
       {step !== "welcome" && step !== "cart" && cart.length > 0 && (
         <button
           onClick={() => setStep("cart")}
-          className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white text-xl active:scale-90 transition-transform ${cartBounce ? "animate-bounce" : ""}`}
+          className={`fixed bottom-20 right-6 z-50 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white text-xl active:scale-90 transition-transform ${cartBounce ? "animate-bounce" : ""}`}
           style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.secondaryColor})` }}
         >
           🛒
           <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
             {cart.length}
           </span>
+        </button>
+      )}
+
+      {/* Floating WhatsApp help button */}
+      {step !== "welcome" && (
+        <button
+          onClick={handleWhatsAppHelp}
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white text-2xl active:scale-90 transition-transform"
+          style={{ background: "#25D366" }}
+          title="Tirar dúvidas no WhatsApp"
+        >
+          💬
         </button>
       )}
 
@@ -561,25 +634,51 @@ export default function DoseTriplaCatalog() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {filteredProducts.map((product) => {
+                  const displayProduct = getProductWithColor(product);
                   const inCart = isInCart(product.id);
+                  const hasMultipleColors = product.colorVariants.length > 1;
+                  const activeColor = selectedColors[product.id] || product.color;
+
                   return (
                     <div
-                      key={product.id + product.variantId}
+                      key={product.id}
                       className={`bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden flex flex-col ${inCart ? "ring-2 ring-emerald-400" : ""}`}
                     >
-                      {product.imageUrl && (
+                      {displayProduct.imageUrl && (
                         <div className="aspect-square overflow-hidden">
-                          <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" loading="lazy" />
+                          <img src={displayProduct.imageUrl} alt={displayProduct.title} className="w-full h-full object-cover" loading="lazy" />
                         </div>
                       )}
                       <div className="p-3 flex flex-col gap-2 flex-1">
-                        <h3 className="text-xs font-bold text-gray-800 leading-tight line-clamp-2">{product.title}</h3>
-                        {product.color && <p className="text-[10px] text-gray-400">Cor: {product.color}</p>}
+                        <h3 className="text-xs font-bold text-gray-800 leading-tight line-clamp-2">{displayProduct.title}</h3>
+                        
+                        {/* Color selector */}
+                        {hasMultipleColors ? (
+                          <div className="flex flex-wrap gap-1 items-center">
+                            <span className="text-[10px] text-gray-400">Cor:</span>
+                            {product.colorVariants.map((cv) => (
+                              <button
+                                key={cv.color}
+                                onClick={() => setSelectedColors(prev => ({ ...prev, [product.id]: cv.color }))}
+                                className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-all ${
+                                  activeColor === cv.color
+                                    ? "border-emerald-500 bg-emerald-50 text-emerald-700 font-semibold"
+                                    : "border-gray-200 text-gray-500 hover:border-gray-300"
+                                }`}
+                              >
+                                {cv.color}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          displayProduct.color && <p className="text-[10px] text-gray-400">Cor: {displayProduct.color}</p>
+                        )}
+
                         <div className="flex items-baseline gap-1">
-                          {product.compareAtPrice && (
-                            <span className="text-[10px] text-gray-400 line-through">R$ {Number(product.compareAtPrice).toFixed(0)}</span>
+                          {displayProduct.compareAtPrice && (
+                            <span className="text-[10px] text-gray-400 line-through">R$ {Number(displayProduct.compareAtPrice).toFixed(0)}</span>
                           )}
-                          <span className="text-sm font-bold text-emerald-600">R$ {Number(product.price).toFixed(0)}</span>
+                          <span className="text-sm font-bold text-emerald-600">R$ {Number(displayProduct.price).toFixed(0)}</span>
                         </div>
                         <div className="mt-auto">
                           {inCart ? (
