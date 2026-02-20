@@ -146,8 +146,8 @@ export function CatalogLandingPageCreator() {
 
   useEffect(() => { fetchPages(); }, [fetchPages]);
 
-  const loadShopifyProducts = async () => {
-    if (shopifyProducts.length > 0) return;
+  const loadShopifyProducts = async (forceReload = false) => {
+    if (shopifyProducts.length > 0 && !forceReload) return;
     setProductsLoading(true);
     try {
       const raw = await fetchProducts(250);
@@ -341,14 +341,16 @@ export function CatalogLandingPageCreator() {
 
       {/* ── Editor Dialog ── */}
       <Dialog open={editorOpen} onOpenChange={(open) => { if (!open) { setEditorOpen(false); setEditingPage(null); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>{editingPage?.id ? "Editar" : "Criar"} Catálogo Interativo</DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 pr-4">
+          <div className="flex-1 overflow-y-auto pr-2">
             {editingPage && (
-              <div className="space-y-6 pb-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
+                {/* Left column: Config */}
+                <div className="space-y-6">
                 {/* Basic Info */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Informações Básicas</h4>
@@ -578,65 +580,65 @@ export function CatalogLandingPageCreator() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* Product Selection */}
-                  <AccordionItem value="products">
-                    <AccordionTrigger className="text-xs font-bold uppercase tracking-wider">
-                      Seleção de Produtos ({(editingPage.selected_product_ids || []).length} selecionados)
-                    </AccordionTrigger>
-                    <AccordionContent className="space-y-3 pt-2">
-                      <p className="text-xs text-muted-foreground">
-                        Selecione os produtos que aparecerão neste catálogo. Se nenhum for selecionado, todos os produtos com o filtro de tamanho serão exibidos.
-                      </p>
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          value={productSearch}
-                          onChange={(e) => setProductSearch(e.target.value)}
-                          placeholder="Buscar produto..."
-                          className="pl-9"
-                        />
-                      </div>
-                      {productsLoading ? (
-                        <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
-                      ) : (
-                        <ScrollArea className="h-[300px]">
-                          <div className="grid grid-cols-2 gap-2">
-                            {filteredShopifyProducts.map((product) => {
-                              const isSelected = (editingPage.selected_product_ids || []).includes(product.id);
-                              return (
-                                <button
-                                  key={product.id}
-                                  onClick={() => toggleProduct(product.id)}
-                                  className={`relative flex gap-2 p-2 rounded-lg border text-left transition-all ${
-                                    isSelected
-                                      ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                                      : "border-border hover:border-muted-foreground/30"
-                                  }`}
-                                >
-                                  {isSelected && (
-                                    <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                                      <Check className="h-3 w-3 text-primary-foreground" />
-                                    </div>
-                                  )}
-                                  {product.imageUrl && (
-                                    <img src={product.imageUrl} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-xs font-medium line-clamp-2">{product.title}</p>
-                                    <p className="text-[10px] text-muted-foreground">R$ {Number(product.price).toFixed(0)}</p>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </ScrollArea>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
                 </Accordion>
+                </div>
+
+              {/* Right column: Product Selection */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase text-muted-foreground tracking-wider">
+                  Seleção de Produtos ({(editingPage.selected_product_ids || []).length} selecionados)
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Selecione os produtos que aparecerão neste catálogo. Se nenhum for selecionado, todos com o filtro serão exibidos.
+                </p>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    placeholder="Buscar produto..."
+                    className="pl-9"
+                  />
+                </div>
+                {productsLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                ) : (
+                  <div className="overflow-y-auto max-h-[55vh] border rounded-lg p-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      {filteredShopifyProducts.map((product) => {
+                        const isSelected = (editingPage.selected_product_ids || []).includes(product.id);
+                        return (
+                          <button
+                            key={product.id}
+                            onClick={() => toggleProduct(product.id)}
+                            className={`relative flex gap-2 p-2 rounded-lg border text-left transition-all ${
+                              isSelected
+                                ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                                : "border-border hover:border-muted-foreground/30"
+                            }`}
+                          >
+                            {isSelected && (
+                              <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                <Check className="h-3 w-3 text-primary-foreground" />
+                              </div>
+                            )}
+                            {product.imageUrl && (
+                              <img src={product.imageUrl} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium line-clamp-2">{product.title}</p>
+                              <p className="text-[10px] text-muted-foreground">R$ {Number(product.price).toFixed(0)}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
+            </div>
             )}
-          </ScrollArea>
+          </div>
 
           <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => { setEditorOpen(false); setEditingPage(null); }}>Cancelar</Button>
