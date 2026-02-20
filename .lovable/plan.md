@@ -1,117 +1,98 @@
 
 
-# Sistema de Campanhas com IAs Especializadas por Canal
+# Landing Page Catalogo Interativo — Calcados em Dose Tripla (Tamanho 34)
 
 ## Visao Geral
 
-Transformar o sistema atual de campanha 360 (que gera tudo de uma vez com um prompt livre) em uma arquitetura de **IA Matriz + IAs Especialistas por canal**, onde:
-
-1. A **IA Matriz** cria a diretriz geral da campanha (conceito, tom, mensagem-chave)
-2. **IAs Especialistas** por canal recebem essa diretriz + parametros estruturados (selecionados via caixas/formularios) e geram planos detalhados e acionaveis para cada canal
-3. O usuario pode criar campanhas **multi-canal** (todos) ou **canal unico**
-
-## Canais Especialistas
-
-| Canal | Parametros configuráveis (caixas de selecao) |
-|-------|----------------------------------------------|
-| **Grupo VIP** | Data execucao, Qtd etapas, Explicacao etapas, Qtd mensagens/etapa, Data de cada etapa, Tipo de conteudo (texto/imagem/enquete) |
-| **WhatsApp Marketing** | Publico-alvo (segmentos RFM), Qtd mensagens, Qtd etapas, Template Meta a usar, Delay entre etapas, Horario de envio |
-| **Instagram** | Tipos de conteudo (Reels/Feed/Stories), Qtd posts por tipo, Frequencia semanal, Usar influenciador?, Investir em Ads? |
-| **Loja Fisica** | Publico, Canal divulgacao (carro de som/panfleto/vitrine), Qtd mensagens, Organizacao da loja, Metas vendedoras, Gamificacao |
-| **Email Marketing** | Qtd emails, Frequencia, Segmentacao de lista, Automacoes (welcome/abandoned), Layout |
-| **Site** | Banners, Pop-ups, Landing page, Cupom exclusivo |
+Criar uma landing page interativa estilo "typebot" que puxa produtos do tamanho 34 diretamente da Shopify, categoriza-os (Tenis, Salto, Papete, Rasteira, etc.) e oferece 3 botoes de compra por produto: Site, WhatsApp (com round-robin entre 2 lojas) e Loja Fisica. O design seguira o padrao visual ja existente nas landing pages da Banana Calcados (`BananaLanding.tsx`).
 
 ## Fluxo do Usuario
 
 ```text
-+------------------+     +-------------------+     +---------------------+
-| 1. Escolher modo |---->| 2. IA Matriz gera |---->| 3. Configurar cada  |
-| (360 ou canal    |     |    diretriz geral  |     |    canal com caixas |
-|  unico)          |     |    (conceito, tom) |     |    de parametros    |
-+------------------+     +-------------------+     +---------------------+
-                                                            |
-                                                            v
-                                                    +---------------------+
-                                                    | 4. IA Especialista  |
-                                                    |    gera plano       |
-                                                    |    detalhado +      |
-                                                    |    acoes prontas    |
-                                                    +---------------------+
-                                                            |
-                                                            v
-                                                    +---------------------+
-                                                    | 5. Revisar, editar  |
-                                                    |    e salvar campanha|
-                                                    +---------------------+
++------------------+     +------------------+     +------------------+
+| 1. Tela de boas- |---->| 2. Escolher      |---->| 3. Grid de        |
+|    vindas com    |     |    categoria:    |     |    produtos do    |
+|    info do combo |     |    Tenis, Salto, |     |    tamanho 34     |
+|    e precos      |     |    Papete, etc.  |     |    com foto e 3   |
++------------------+     +------------------+     |    botoes de      |
+                                                  |    compra         |
+                                                  +------------------+
 ```
+
+**Combo Dose Tripla:**
+- 1 par: R$ 150
+- 2 pares: R$ 240
+- 3 pares: R$ 300
+- Ate 6x sem juros no cartao ou 15% cashback no Pix
 
 ## Detalhes Tecnicos
 
-### 1. Nova pagina `/marketing/new` (refatorar a existente)
+### 1. Nova pagina: `src/pages/DoseTriplaCatalog.tsx`
 
-**Etapa 1 - Modo de criacao:**
-- Botao "Campanha 360 (todos os canais)" ou selecionar canais especificos
-- Campo de objetivo geral (obrigatorio)
-- Botao "Gerar Diretriz" chama a IA Matriz
+**Step "welcome":**
+- Banner visual da campanha com os precos do combo
+- Botao "Ver Calcados no 34"
 
-**Etapa 2 - Diretriz Matriz (resultado da IA geral):**
-- Exibe: nome da campanha, conceito central, tom de voz, mensagem-chave, publico
-- Editavel pelo usuario antes de prosseguir
+**Step "category":**
+- Botoes de categoria em grid: Tenis, Salto, Papete, Rasteira, Sandalia, Todos
+- Animacao de transicao suave (mesmo padrao do BananaLanding)
 
-**Etapa 3 - Configuracao por canal (formularios estruturados):**
-- Para cada canal selecionado, exibe um card/tab com caixas de selecao e inputs especificos
-- Nenhum prompt livre: tudo via selecao de opcoes
-- Botao "Gerar Plano" por canal (chama IA especialista)
+**Step "products":**
+- Carrega produtos da Shopify via `fetchProducts()` filtrando variantes que tenham `selectedOptions` com valor "34"
+- Filtra por categoria baseado no titulo/tipo do produto (mapeamento simples por palavras-chave)
+- Grid de cards de produto com:
+  - Foto (da Shopify)
+  - Nome do produto + cor
+  - Preco
+  - 3 botoes:
+    - **Comprar no Site**: link para a pagina do produto na Shopify (`https://bananacalcados.com.br/products/{handle}?variant={variantId}`)
+    - **Comprar no WhatsApp**: abre link `wa.me/{numero}?text=...` com round-robin entre as 2 lojas e mensagem pre-preenchida com nome + cor do produto
+    - **Comprar na Loja Fisica**: abre link `wa.me/{numero}?text=...` com mensagem dizendo que quer retirar na loja + nome/cor do produto
 
-**Etapa 4 - Revisao e salvamento:**
-- Visualiza todos os planos gerados por canal
-- Edita mensagens/copies individuais
-- Salva como campanha
+**Botao de voltar** em cada step para navegar entre categorias
 
-### 2. Edge Functions (backend)
+### 2. Round-Robin WhatsApp entre 2 Lojas
 
-**`ai-marketing-master`** (nova) - IA Matriz:
-- Recebe: objetivo, publico, instrucoes gerais
-- Retorna: conceito central, tom de voz, mensagens-chave, metas gerais
-- Prompt mais enxuto focado em diretriz estrategica
+- Usa os numeros ja cadastrados: Banana Calcados (`+55 33 93618 0084`) e Zoppy (`+55 33 93505-0288`)
+  - Ou, se preferir usar numeros especificos das lojas fisicas, basta definir no codigo
+- Logica simples: alterna entre loja 1 e loja 2 a cada clique, usando `localStorage` para manter o contador
+- Mensagem pre-preenchida: "Oi! Vi o produto *{NOME DO PRODUTO}* na cor *{COR}* no tamanho 34 e quero comprar! Campanha Dose Tripla"
 
-**`ai-channel-specialist`** (nova) - IA Especialista:
-- Recebe: diretriz da matriz + parametros estruturados do canal
-- Parametro `channel_type` determina o prompt especializado
-- Cada canal tem seu prompt otimizado com regras especificas
-- Retorna: plano detalhado com copies prontas, cronograma, acoes
+### 3. Rota e Registro
 
-### 3. Banco de dados
+- Rota publica: `/dose-tripla` em `App.tsx`
+- Nao exige cadastro previo para navegar (e um catalogo aberto)
+- Opcionalmente: ao clicar em "Comprar no WhatsApp", registrar o interesse na tabela `lp_leads` com `campaign_tag: "dose-tripla-34"` e metadados do produto escolhido (para analytics)
 
-Nenhuma mudanca de schema necessaria. As tabelas `marketing_campaigns`, `campaign_channels` e `campaign_tasks` ja suportam o modelo. Os parametros estruturados serao salvos no campo `content_plan` (jsonb) de `campaign_channels`.
+### 4. Filtragem de Produtos
 
-### 4. Componentes React
+A Shopify Storefront API ja retorna todas as variantes com `selectedOptions`. A filtragem sera feita no frontend:
 
-- **`ChannelConfigurator.tsx`** (novo): componente com formularios dinamicos por canal (caixas de selecao, inputs numericos, datas)
-- **`MasterDirectiveCard.tsx`** (novo): exibe/edita a diretriz da IA Matriz
-- **`ChannelPlanResult.tsx`** (novo): exibe o plano gerado pela IA especialista com copies editaveis
-- Refatorar `NewCampaign.tsx` para orquestrar o novo fluxo de 4 etapas
+1. Buscar todos os produtos via `fetchProducts(250)`
+2. Filtrar apenas produtos que tenham pelo menos 1 variante com `selectedOptions` contendo `{ name: "Tamanho", value: "34" }` (ou "Size" dependendo da config da loja)
+3. Categorizar por palavras-chave no titulo: "tenis" -> Tenis, "salto" -> Salto, "papete" -> Papete, etc.
 
-### 5. Exemplo de parametros estruturados (Grupo VIP)
+### 5. Arquivos a criar/editar
 
-O usuario nao digita prompt. Ele seleciona:
+| Arquivo | Acao |
+|---------|------|
+| `src/pages/DoseTriplaCatalog.tsx` | Criar - pagina principal do catalogo interativo |
+| `src/App.tsx` | Editar - adicionar rota `/dose-tripla` |
 
-- Data de execucao: [date picker]
-- Quantidade de etapas: [select: 1, 2, 3, 4, 5]
-- Para cada etapa:
-  - Nome da etapa: [input]
-  - Data: [date picker]
-  - Qtd mensagens: [select: 1-10]
-  - Tipo conteudo: [multi-select: texto, imagem, video, enquete]
-  - Descricao: [textarea curta]
+### 6. Design Visual
 
-Esses parametros sao enviados junto com a diretriz matriz para a IA especialista, que gera as mensagens prontas.
+- Mesmo estilo das landing pages existentes: gradiente verde Banana, cards brancos com bordas arredondadas, transicoes suaves
+- Mobile-first (max-w-md centralizado)
+- Grid de produtos: 2 colunas em mobile
+- Botoes de compra com cores distintas:
+  - Site: verde (primario)
+  - WhatsApp: verde WhatsApp (#25D366)
+  - Loja Fisica: azul/roxo
 
-## Ordem de Implementacao
+### 7. Dados da campanha embutidos
 
-1. Criar edge function `ai-marketing-master` (IA Matriz)
-2. Criar edge function `ai-channel-specialist` (IA Especialista com prompts por canal)
-3. Criar componentes `ChannelConfigurator`, `MasterDirectiveCard`, `ChannelPlanResult`
-4. Refatorar `NewCampaign.tsx` com o novo fluxo de 4 etapas
-5. Manter compatibilidade com campanhas existentes (a edge function antiga continua funcionando)
+- Nao precisa de banco de dados novo
+- Precos do combo hardcoded na tela de boas-vindas
+- Numeros de WhatsApp das lojas hardcoded (podem ser facilmente alterados)
+- Categorias de produto definidas como constantes no componente
 
