@@ -49,6 +49,7 @@ const App = () => (
             <Route path="/banana-verao-gv" element={<BananaLandingGV />} />
             <Route path="/live" element={<LiveCommerce />} />
             <Route path="/dose-tripla" element={<DoseTriplaCatalog />} />
+            <Route path="/catalogo/:slug" element={<DoseTriplaCatalog />} />
 
             {/* Protected routes */}
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />

@@ -662,6 +662,75 @@ export type Database = {
           },
         ]
       }
+      catalog_landing_pages: {
+        Row: {
+          categories: Json
+          clicks: number
+          combo_tiers: Json | null
+          created_at: string
+          cta_text: string
+          id: string
+          is_active: boolean
+          payment_info: string | null
+          product_filter: Json | null
+          selected_product_ids: string[] | null
+          slug: string
+          store_base_url: string
+          subtitle: string | null
+          theme_config: Json
+          title: string
+          updated_at: string
+          views: number
+          welcome_subtitle: string | null
+          welcome_title: string
+          whatsapp_numbers: Json
+        }
+        Insert: {
+          categories?: Json
+          clicks?: number
+          combo_tiers?: Json | null
+          created_at?: string
+          cta_text?: string
+          id?: string
+          is_active?: boolean
+          payment_info?: string | null
+          product_filter?: Json | null
+          selected_product_ids?: string[] | null
+          slug: string
+          store_base_url?: string
+          subtitle?: string | null
+          theme_config?: Json
+          title: string
+          updated_at?: string
+          views?: number
+          welcome_subtitle?: string | null
+          welcome_title?: string
+          whatsapp_numbers?: Json
+        }
+        Update: {
+          categories?: Json
+          clicks?: number
+          combo_tiers?: Json | null
+          created_at?: string
+          cta_text?: string
+          id?: string
+          is_active?: boolean
+          payment_info?: string | null
+          product_filter?: Json | null
+          selected_product_ids?: string[] | null
+          slug?: string
+          store_base_url?: string
+          subtitle?: string | null
+          theme_config?: Json
+          title?: string
+          updated_at?: string
+          views?: number
+          welcome_subtitle?: string | null
+          welcome_title?: string
+          whatsapp_numbers?: Json
+        }
+        Relationships: []
+      }
       chat_assignments: {
         Row: {
           ai_classification: string | null
