@@ -4,7 +4,7 @@ import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { toast } from "sonner";
 import {
   Plus, Save, Trash2, Loader2, Search, Check, X, ExternalLink,
-  Copy, Palette, MessageSquare, Store, Eye, EyeOff, ChevronDown, ChevronUp,
+  Copy, Palette, MessageSquare, Store, Eye, EyeOff, ChevronDown, ChevronUp, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -54,26 +53,10 @@ interface ThemeConfig {
   backgroundGradient: string;
 }
 
-interface ComboTier {
-  qty: string;
-  price: string;
-}
-
-interface Category {
-  key: string;
-  label: string;
-  emoji: string;
-}
-
-interface WhatsAppNumber {
-  name: string;
-  number: string;
-}
-
-interface ProductFilter {
-  sizeFilter: string;
-  filterBySize: boolean;
-}
+interface ComboTier { qty: string; price: string; }
+interface Category { key: string; label: string; emoji: string; }
+interface WhatsAppNumber { name: string; number: string; }
+interface ProductFilter { sizeFilter: string; filterBySize: boolean; }
 
 interface ShopifyProductSimple {
   id: string;
@@ -83,14 +66,67 @@ interface ShopifyProductSimple {
   price: string;
 }
 
-const DEFAULT_THEME: ThemeConfig = {
-  primaryColor: "#00BFA6",
-  secondaryColor: "#00897B",
-  accentColor: "#004D40",
-  buttonWhatsappColor: "#25D366",
-  buttonStoreColor: "#7C3AED",
-  backgroundGradient: "linear-gradient(160deg, #00BFA6 0%, #00897B 50%, #004D40 100%)",
-};
+// ─── Theme Presets ───────────────────────────────────────
+
+const THEME_PRESETS: Array<{ name: string; theme: ThemeConfig }> = [
+  {
+    name: "Esmeralda (Padrão)",
+    theme: {
+      primaryColor: "#00BFA6",
+      secondaryColor: "#00897B",
+      accentColor: "#004D40",
+      buttonWhatsappColor: "#25D366",
+      buttonStoreColor: "#7C3AED",
+      backgroundGradient: "linear-gradient(160deg, #00BFA6 0%, #00897B 50%, #004D40 100%)",
+    },
+  },
+  {
+    name: "Rosa Quente",
+    theme: {
+      primaryColor: "#E91E63",
+      secondaryColor: "#C2185B",
+      accentColor: "#880E4F",
+      buttonWhatsappColor: "#25D366",
+      buttonStoreColor: "#7C3AED",
+      backgroundGradient: "linear-gradient(160deg, #E91E63 0%, #C2185B 50%, #880E4F 100%)",
+    },
+  },
+  {
+    name: "Azul Royal",
+    theme: {
+      primaryColor: "#1565C0",
+      secondaryColor: "#0D47A1",
+      accentColor: "#0A1929",
+      buttonWhatsappColor: "#25D366",
+      buttonStoreColor: "#7C3AED",
+      backgroundGradient: "linear-gradient(160deg, #1976D2 0%, #1565C0 50%, #0D47A1 100%)",
+    },
+  },
+  {
+    name: "Dourado Premium",
+    theme: {
+      primaryColor: "#D4A017",
+      secondaryColor: "#B8860B",
+      accentColor: "#5C4300",
+      buttonWhatsappColor: "#25D366",
+      buttonStoreColor: "#7C3AED",
+      backgroundGradient: "linear-gradient(160deg, #D4A017 0%, #B8860B 50%, #5C4300 100%)",
+    },
+  },
+  {
+    name: "Coral Sunset",
+    theme: {
+      primaryColor: "#FF6B6B",
+      secondaryColor: "#EE5A24",
+      accentColor: "#6D214F",
+      buttonWhatsappColor: "#25D366",
+      buttonStoreColor: "#7C3AED",
+      backgroundGradient: "linear-gradient(160deg, #FF6B6B 0%, #EE5A24 50%, #6D214F 100%)",
+    },
+  },
+];
+
+const DEFAULT_THEME = THEME_PRESETS[0].theme;
 
 const DEFAULT_CATEGORIES: Category[] = [
   { key: "todos", label: "Todos", emoji: "👟" },
@@ -113,6 +149,38 @@ const DEFAULT_WHATSAPP: WhatsAppNumber[] = [
   { name: "Zoppy", number: "5533935050288" },
 ];
 
+// ─── Color Palette ───────────────────────────────────────
+
+const COLOR_PALETTE = [
+  "#E91E63", "#F44336", "#FF5722", "#FF9800", "#FFC107",
+  "#CDDC39", "#8BC34A", "#4CAF50", "#009688", "#00BCD4",
+  "#03A9F4", "#2196F3", "#3F51B5", "#673AB7", "#9C27B0",
+  "#795548", "#607D8B", "#D4A017", "#B8860B", "#000000",
+];
+
+function ColorPickerField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {COLOR_PALETTE.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onChange(c)}
+            className={`w-6 h-6 rounded-full border-2 transition-all ${value === c ? "border-foreground scale-110 ring-2 ring-primary/30" : "border-transparent hover:scale-110"}`}
+            style={{ background: c }}
+          />
+        ))}
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        <div className="w-6 h-6 rounded border" style={{ background: value }} />
+        <span className="text-[10px] text-muted-foreground font-mono">{value}</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ───────────────────────────────────────
 
 export function CatalogLandingPageCreator() {
@@ -122,7 +190,6 @@ export function CatalogLandingPageCreator() {
   const [saving, setSaving] = useState(false);
   const [editingPage, setEditingPage] = useState<Partial<CatalogLP> | null>(null);
 
-  // Shopify products for selection
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProductSimple[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productSearch, setProductSearch] = useState("");
@@ -275,10 +342,20 @@ export function CatalogLandingPageCreator() {
 
   const updateTheme = (key: keyof ThemeConfig, value: string) => {
     if (!editingPage?.theme_config) return;
-    setEditingPage({
-      ...editingPage,
-      theme_config: { ...editingPage.theme_config, [key]: value },
-    });
+    const newTheme = { ...editingPage.theme_config, [key]: value };
+    // Auto-update gradient when primary/secondary/accent change
+    if (key === "primaryColor" || key === "secondaryColor" || key === "accentColor") {
+      const p = key === "primaryColor" ? value : newTheme.primaryColor;
+      const s = key === "secondaryColor" ? value : newTheme.secondaryColor;
+      const a = key === "accentColor" ? value : newTheme.accentColor;
+      newTheme.backgroundGradient = `linear-gradient(160deg, ${p} 0%, ${s} 50%, ${a} 100%)`;
+    }
+    setEditingPage({ ...editingPage, theme_config: newTheme });
+  };
+
+  const applyPreset = (preset: ThemeConfig) => {
+    if (!editingPage) return;
+    setEditingPage({ ...editingPage, theme_config: { ...preset } });
   };
 
   // ─── Render ───────────────────────────────────────
@@ -435,43 +512,46 @@ export function CatalogLandingPageCreator() {
                     <AccordionTrigger className="text-xs font-bold uppercase tracking-wider">
                       <span className="flex items-center gap-1"><Palette className="h-3.5 w-3.5" /> Cores e Tema</span>
                     </AccordionTrigger>
-                    <AccordionContent className="space-y-3 pt-2">
-                      {editingPage.theme_config && (
-                        <div className="grid grid-cols-2 gap-3">
-                          {[
-                            { key: "primaryColor" as const, label: "Cor Primária" },
-                            { key: "secondaryColor" as const, label: "Cor Secundária" },
-                            { key: "accentColor" as const, label: "Cor de Fundo" },
-                            { key: "buttonWhatsappColor" as const, label: "Botão WhatsApp" },
-                            { key: "buttonStoreColor" as const, label: "Botão Loja" },
-                          ].map(({ key, label }) => (
-                            <div key={key} className="space-y-1">
-                              <Label className="text-xs">{label}</Label>
-                              <div className="flex gap-2 items-center">
-                                <input
-                                  type="color"
-                                  value={editingPage.theme_config![key]}
-                                  onChange={(e) => updateTheme(key, e.target.value)}
-                                  className="w-8 h-8 rounded border cursor-pointer"
-                                />
-                                <Input
-                                  value={editingPage.theme_config![key]}
-                                  onChange={(e) => updateTheme(key, e.target.value)}
-                                  className="flex-1 font-mono text-xs"
-                                />
+                    <AccordionContent className="space-y-4 pt-2">
+                      {/* Presets */}
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold">Temas Prontos</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {THEME_PRESETS.map((preset) => (
+                            <button
+                              key={preset.name}
+                              type="button"
+                              onClick={() => applyPreset(preset.theme)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium hover:ring-2 ring-primary/30 transition-all"
+                            >
+                              <div className="flex -space-x-1">
+                                <div className="w-4 h-4 rounded-full border border-white" style={{ background: preset.theme.primaryColor }} />
+                                <div className="w-4 h-4 rounded-full border border-white" style={{ background: preset.theme.secondaryColor }} />
+                                <div className="w-4 h-4 rounded-full border border-white" style={{ background: preset.theme.accentColor }} />
                               </div>
-                            </div>
+                              <span>{preset.name}</span>
+                            </button>
                           ))}
-                          <div className="col-span-2 space-y-1">
-                            <Label className="text-xs">Background Gradient (CSS)</Label>
-                            <Input
-                              value={editingPage.theme_config!.backgroundGradient}
-                              onChange={(e) => updateTheme("backgroundGradient", e.target.value)}
-                              className="font-mono text-xs"
-                            />
-                            <div className="h-8 rounded-lg mt-1" style={{ background: editingPage.theme_config!.backgroundGradient }} />
-                          </div>
                         </div>
+                      </div>
+
+                      {/* Preview */}
+                      {editingPage.theme_config && (
+                        <>
+                          <div className="h-10 rounded-lg" style={{ background: editingPage.theme_config.backgroundGradient }} />
+                          
+                          <div className="space-y-4">
+                            <ColorPickerField label="Cor Primária" value={editingPage.theme_config.primaryColor} onChange={(v) => updateTheme("primaryColor", v)} />
+                            <ColorPickerField label="Cor Secundária" value={editingPage.theme_config.secondaryColor} onChange={(v) => updateTheme("secondaryColor", v)} />
+                            <ColorPickerField label="Cor de Fundo" value={editingPage.theme_config.accentColor} onChange={(v) => updateTheme("accentColor", v)} />
+                            <ColorPickerField label="Botão WhatsApp" value={editingPage.theme_config.buttonWhatsappColor} onChange={(v) => updateTheme("buttonWhatsappColor", v)} />
+                            <ColorPickerField label="Botão Loja" value={editingPage.theme_config.buttonStoreColor} onChange={(v) => updateTheme("buttonStoreColor", v)} />
+                          </div>
+
+                          <Button variant="outline" size="sm" className="gap-1" onClick={() => applyPreset(THEME_PRESETS[0].theme)}>
+                            <RotateCcw className="h-3.5 w-3.5" /> Voltar às cores padrão
+                          </Button>
+                        </>
                       )}
                     </AccordionContent>
                   </AccordionItem>
