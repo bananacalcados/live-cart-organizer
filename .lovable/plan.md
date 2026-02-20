@@ -1,98 +1,141 @@
 
 
-# Landing Page Catalogo Interativo — Calcados em Dose Tripla (Tamanho 34)
+# Catalogo Interativo v2 — Carrinho Interno + Checkout Yampi
 
-## Visao Geral
+## Problemas Atuais (Bugs)
 
-Criar uma landing page interativa estilo "typebot" que puxa produtos do tamanho 34 diretamente da Shopify, categoriza-os (Tenis, Salto, Papete, Rasteira, etc.) e oferece 3 botoes de compra por produto: Site, WhatsApp (com round-robin entre 2 lojas) e Loja Fisica. O design seguira o padrao visual ja existente nas landing pages da Banana Calcados (`BananaLanding.tsx`).
+### 1. Produtos nao aparecem na busca do criador
+O componente `CatalogLandingPageCreator` carrega produtos da Shopify corretamente, mas o grid de selecao de produtos esta dentro de um `ScrollArea` com altura fixa de 300px dentro de um `AccordionItem` que ja esta dentro de outro `ScrollArea` do dialog. O aninhamento de ScrollAreas causa problemas de renderizacao. Alem disso, a busca funciona apenas por titulo no frontend — se a Shopify retornar paginado ou com delay, pode parecer vazio.
 
-## Fluxo do Usuario
+### 2. Layout apertado no editor
+O dialog usa `max-w-2xl` que e pequeno para a quantidade de campos. Precisa ser expandido para `max-w-4xl` ou ate tela cheia, e a area de produtos precisa de mais espaco visual.
+
+## Nova Feature: Carrinho Interno na Landing Page
+
+### Fluxo do Usuario
 
 ```text
 +------------------+     +------------------+     +------------------+
-| 1. Tela de boas- |---->| 2. Escolher      |---->| 3. Grid de        |
-|    vindas com    |     |    categoria:    |     |    produtos do    |
-|    info do combo |     |    Tenis, Salto, |     |    tamanho 34     |
-|    e precos      |     |    Papete, etc.  |     |    com foto e 3   |
-+------------------+     +------------------+     |    botoes de      |
-                                                  |    compra         |
-                                                  +------------------+
+| 1. Boas-vindas   |---->| 2. Categoria     |---->| 3. Grid produtos |
+|                  |     |                  |     |   + Botao "Add"  |
++------------------+     +------------------+     +------------------+
+                                                         |
+                                                         v
+                                              +---------------------+
+                                              | 4. Carrinho flutuante|
+                                              |    com contador     |
+                                              +---------------------+
+                                                         |
+                                                         v
+                                              +---------------------+
+                                              | 5. Tela do carrinho |
+                                              |  - Lista de itens   |
+                                              |  - Nome + WhatsApp  |
+                                              |  - Aviso de reserva |
+                                              +---------------------+
+                                                    |       |       |
+                                                    v       v       v
+                                              +-------+ +------+ +------+
+                                              | Yampi | | WhApp| | Loja |
+                                              +-------+ +------+ +------+
 ```
 
-**Combo Dose Tripla:**
-- 1 par: R$ 150
-- 2 pares: R$ 240
-- 3 pares: R$ 300
-- Ate 6x sem juros no cartao ou 15% cashback no Pix
+### Detalhes Tecnicos
 
-## Detalhes Tecnicos
+#### 1. Correcoes de Bug no `CatalogLandingPageCreator.tsx`
 
-### 1. Nova pagina: `src/pages/DoseTriplaCatalog.tsx`
+- Expandir dialog de `max-w-2xl` para `max-w-5xl` com layout em 2 colunas (config a esquerda, preview de produtos a direita)
+- Remover ScrollArea aninhada na secao de produtos — usar grid com scroll nativo
+- Garantir que `loadShopifyProducts()` carrega mesmo quando ja tem cache (forcando reload se necessario)
+- Aumentar a area de visualizacao dos produtos para pelo menos 400px de altura
 
-**Step "welcome":**
-- Banner visual da campanha com os precos do combo
-- Botao "Ver Calcados no 34"
+#### 2. Estado do Carrinho na Landing Page (`DoseTriplaCatalog.tsx`)
 
-**Step "category":**
-- Botoes de categoria em grid: Tenis, Salto, Papete, Rasteira, Sandalia, Todos
-- Animacao de transicao suave (mesmo padrao do BananaLanding)
+Novo estado local no componente:
 
-**Step "products":**
-- Carrega produtos da Shopify via `fetchProducts()` filtrando variantes que tenham `selectedOptions` com valor "34"
-- Filtra por categoria baseado no titulo/tipo do produto (mapeamento simples por palavras-chave)
-- Grid de cards de produto com:
-  - Foto (da Shopify)
-  - Nome do produto + cor
-  - Preco
-  - 3 botoes:
-    - **Comprar no Site**: link para a pagina do produto na Shopify (`https://bananacalcados.com.br/products/{handle}?variant={variantId}`)
-    - **Comprar no WhatsApp**: abre link `wa.me/{numero}?text=...` com round-robin entre as 2 lojas e mensagem pre-preenchida com nome + cor do produto
-    - **Comprar na Loja Fisica**: abre link `wa.me/{numero}?text=...` com mensagem dizendo que quer retirar na loja + nome/cor do produto
+- `cart: FilteredProduct[]` — lista de produtos adicionados
+- `cartStep: boolean` — se esta mostrando a tela do carrinho
+- `customerName: string` — nome do cliente
+- `customerPhone: string` — WhatsApp do cliente
+- `checkoutLoading: boolean` — estado de loading durante criacao do link
 
-**Botao de voltar** em cada step para navegar entre categorias
+#### 3. Botao Flutuante do Carrinho
 
-### 2. Round-Robin WhatsApp entre 2 Lojas
+- Icone de carrinho fixo no canto inferior direito
+- Badge com contagem de itens
+- Animacao de "bounce" ao adicionar item
+- Ao clicar, abre a tela do carrinho
 
-- Usa os numeros ja cadastrados: Banana Calcados (`+55 33 93618 0084`) e Zoppy (`+55 33 93505-0288`)
-  - Ou, se preferir usar numeros especificos das lojas fisicas, basta definir no codigo
-- Logica simples: alterna entre loja 1 e loja 2 a cada clique, usando `localStorage` para manter o contador
-- Mensagem pre-preenchida: "Oi! Vi o produto *{NOME DO PRODUTO}* na cor *{COR}* no tamanho 34 e quero comprar! Campanha Dose Tripla"
+#### 4. Cards de Produto Atualizados
 
-### 3. Rota e Registro
+Substituir os 3 botoes atuais (Site, WhatsApp, Loja) por:
 
-- Rota publica: `/dose-tripla` em `App.tsx`
-- Nao exige cadastro previo para navegar (e um catalogo aberto)
-- Opcionalmente: ao clicar em "Comprar no WhatsApp", registrar o interesse na tabela `lp_leads` com `campaign_tag: "dose-tripla-34"` e metadados do produto escolhido (para analytics)
+- **Botao unico "Adicionar ao Carrinho"** — adiciona o produto ao estado local
+- Se o produto ja esta no carrinho, mostrar botao "Adicionado" (desabilitado ou com opcao de remover)
+- Aviso visual: "Todos os produtos adicionados serao separados no estoque. So adicione se tiver real intencao de compra."
 
-### 4. Filtragem de Produtos
+#### 5. Tela do Carrinho (novo step "cart")
 
-A Shopify Storefront API ja retorna todas as variantes com `selectedOptions`. A filtragem sera feita no frontend:
+Layout:
+- Lista dos produtos adicionados com foto, nome, cor, preco
+- Botao de remover por item
+- Resumo: total baseado nos combo tiers (ex: 3 itens = R$ 300)
+- Calculo automatico do preco pelo combo tier mais proximo
 
-1. Buscar todos os produtos via `fetchProducts(250)`
-2. Filtrar apenas produtos que tenham pelo menos 1 variante com `selectedOptions` contendo `{ name: "Tamanho", value: "34" }` (ou "Size" dependendo da config da loja)
-3. Categorizar por palavras-chave no titulo: "tenis" -> Tenis, "salto" -> Salto, "papete" -> Papete, etc.
+Formulario obrigatorio:
+- Campo "Seu nome"
+- Campo "Seu WhatsApp" (com mascara)
+- Aviso: "NAO ADICIONE AO CARRINHO SE NAO TIVER A INTENCAO DE FINALIZAR A COMPRA — Todos os produtos que voce adicionar serao separados automaticamente no estoque."
 
-### 5. Arquivos a criar/editar
+3 botoes de finalizacao:
+- **Finalizar no Site (Yampi)**: chama `createYampiPaymentLinkFromOrder()` com os produtos do carrinho e redireciona
+- **Finalizar no WhatsApp**: abre wa.me com round-robin e mensagem listando todos os produtos do carrinho
+- **Retirar na Loja**: abre wa.me com mensagem de retirada listando todos os produtos
+
+#### 6. Integracao com Yampi
+
+A funcao `createYampiPaymentLinkFromOrder` ja existe em `src/lib/yampi.ts` e aceita `DbOrderProduct[]`. Sera necessario:
+
+- Mapear os `FilteredProduct` do carrinho para o formato `DbOrderProduct` que a Yampi espera (com `shopifyId`, `sku`, `price`, `quantity`)
+- Passar `customerName` e `customerPhone` nas opcoes
+- Incluir parametros UTM da campanha (slug da landing page)
+
+#### 7. Registro de Lead (Banco de Dados)
+
+Ao clicar em qualquer botao de finalizacao:
+- Salvar lead na tabela `lp_leads` com:
+  - `name`, `phone`, `campaign_tag: "catalogo-{slug}"`
+  - Metadados: lista de produtos, canal escolhido (yampi/whatsapp/loja)
+- Incrementar `clicks` na tabela `catalog_landing_pages`
+
+#### 8. Mensagem WhatsApp com Carrinho Completo
+
+Formato da mensagem pre-preenchida:
+
+```
+Oi! Sou {NOME}, vim do catalogo Dose Tripla e quero comprar:
+
+1. *Tenis XYZ* - Cor: Branco - Tam 34
+2. *Sandalia ABC* - Cor: Preto - Tam 34
+3. *Papete DEF* - Cor: Rosa - Tam 34
+
+Total: R$ 300 (combo 3 pares)
+
+Meu WhatsApp: {TELEFONE}
+```
+
+### Arquivos a Criar/Editar
 
 | Arquivo | Acao |
 |---------|------|
-| `src/pages/DoseTriplaCatalog.tsx` | Criar - pagina principal do catalogo interativo |
-| `src/App.tsx` | Editar - adicionar rota `/dose-tripla` |
+| `src/pages/DoseTriplaCatalog.tsx` | Editar — adicionar estado de carrinho, step "cart", integracao Yampi, formulario de cliente |
+| `src/components/marketing/CatalogLandingPageCreator.tsx` | Editar — corrigir layout do dialog (expandir), corrigir grid de produtos, melhorar UX |
 
-### 6. Design Visual
+### Design Visual do Carrinho
 
-- Mesmo estilo das landing pages existentes: gradiente verde Banana, cards brancos com bordas arredondadas, transicoes suaves
-- Mobile-first (max-w-md centralizado)
-- Grid de produtos: 2 colunas em mobile
-- Botoes de compra com cores distintas:
-  - Site: verde (primario)
-  - WhatsApp: verde WhatsApp (#25D366)
-  - Loja Fisica: azul/roxo
-
-### 7. Dados da campanha embutidos
-
-- Nao precisa de banco de dados novo
-- Precos do combo hardcoded na tela de boas-vindas
-- Numeros de WhatsApp das lojas hardcoded (podem ser facilmente alterados)
-- Categorias de produto definidas como constantes no componente
+- Botao flutuante: circulo com icone de sacola + badge numerico, cor primaria do tema
+- Tela do carrinho: mesmo estilo dos cards atuais (branco arredondado com blur)
+- Botoes de finalizacao: mesmas cores dos botoes atuais (verde site, verde whatsapp, roxo loja)
+- Campo de nome e WhatsApp: inputs estilizados dentro do card branco
+- Aviso de estoque: caixa amarela/amber com icone de alerta
 
