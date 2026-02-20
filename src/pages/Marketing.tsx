@@ -37,6 +37,7 @@ import { GroupsVipManager } from "@/components/marketing/GroupsVipManager";
 import { LiveSessionManager } from "@/components/LiveSessionManager";
 import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispatcher";
 import { PrizeManager } from "@/components/marketing/PrizeManager";
+import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLandingPageCreator";
 
 // ─── Types ──────────────────────────────────────
 
@@ -843,6 +844,9 @@ export default function Marketing() {
                 })}
               </CardContent>
             </Card>
+
+            {/* Catalog Landing Pages */}
+            <CatalogLandingPageCreator />
 
             <Card>
               <CardHeader className="pb-2">
