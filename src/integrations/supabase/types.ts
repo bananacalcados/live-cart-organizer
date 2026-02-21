@@ -4414,6 +4414,94 @@ export type Database = {
           },
         ]
       }
+      product_capture_items: {
+        Row: {
+          barcode: string
+          color: string | null
+          created_at: string
+          id: string
+          parent_code: string
+          price: number
+          product_name: string
+          quantity: number
+          reference_code: string | null
+          session_id: string
+          size: string | null
+          tiny_product_id: number | null
+        }
+        Insert: {
+          barcode: string
+          color?: string | null
+          created_at?: string
+          id?: string
+          parent_code: string
+          price?: number
+          product_name: string
+          quantity?: number
+          reference_code?: string | null
+          session_id: string
+          size?: string | null
+          tiny_product_id?: number | null
+        }
+        Update: {
+          barcode?: string
+          color?: string | null
+          created_at?: string
+          id?: string
+          parent_code?: string
+          price?: number
+          product_name?: string
+          quantity?: number
+          reference_code?: string | null
+          session_id?: string
+          size?: string | null
+          tiny_product_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_capture_items_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "product_capture_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_capture_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          status: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_capture_sessions_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
