@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy } from "lucide-react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES } from "@/types/order";
 import { Button } from "@/components/ui/button";
@@ -157,6 +157,23 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             <Phone className="h-3 w-3" />
             {order.customer.whatsapp}
           </a>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-stage-paid hover:text-stage-paid/80 hover:bg-stage-paid/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              const phone = order.customer?.whatsapp?.replace(/\D/g, "") || "";
+              const totalVal = order.products.reduce((s, p) => s + p.price * p.quantity, 0);
+              const text = order.products.length > 0
+                ? `Olá! 👋\n\nSeu pedido na Live Cart:\n\n${order.products.map(p => `• ${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`).join("\n")}\n\n💰 Total: R$ ${totalVal.toFixed(2)}`
+                : `Olá! 👋 Como posso ajudar?`;
+              window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+            }}
+            title="Abrir no WhatsApp Web"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
