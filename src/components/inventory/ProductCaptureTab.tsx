@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/accordion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
+import { CapturePhotoScanner } from "@/components/inventory/CapturePhotoScanner";
 
 interface CaptureSession {
   id: string;
@@ -401,7 +401,7 @@ export function ProductCaptureTab({ storeId, storeName }: Props) {
       {showCamera && (
         <div className="fixed inset-0 z-50 bg-background/95 flex items-center justify-center p-4">
           <div className="w-full max-w-md">
-            <POSBarcodeScanner
+            <CapturePhotoScanner
               onScan={(code) => {
                 setShowCamera(false);
                 handleBarcodeScan(code);
