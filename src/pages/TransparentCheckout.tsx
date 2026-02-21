@@ -879,6 +879,22 @@ export default function TransparentCheckout() {
         console.error("Error calling shopify-create-live-order:", err);
       }
     }
+
+    // Create Shopify order for CRM orders (non-live)
+    if (orderId && !liveCartRaw) {
+      try {
+        const { data, error } = await supabase.functions.invoke("shopify-create-order", {
+          body: { orderId },
+        });
+        if (error) {
+          console.error("Error creating Shopify order:", error);
+        } else {
+          console.log("Shopify order created:", data?.shopifyOrderName);
+        }
+      } catch (err) {
+        console.error("Error calling shopify-create-order:", err);
+      }
+    }
   }, [orderData?.checkoutStartedAt, orderId, liveCartRaw, searchParams]);
 
   if (isLoading) {
