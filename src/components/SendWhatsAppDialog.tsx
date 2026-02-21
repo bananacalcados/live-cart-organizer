@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MessageCircle, Send, Loader2 } from "lucide-react";
+import { MessageCircle, Send, Loader2, ExternalLink } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -82,22 +82,36 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button 
-            onClick={handleSend} 
-            disabled={isLoading || !message.trim()}
-            className="bg-stage-paid hover:bg-stage-paid/90"
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              const phone = order.whatsapp?.replace(/\D/g, "") || "";
+              window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+            }}
+            disabled={!order.whatsapp || !message.trim()}
+            className="gap-2"
           >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <Send className="h-4 w-4 mr-2" />
-            )}
-            Enviar
+            <ExternalLink className="h-4 w-4" />
+            WhatsApp Web
           </Button>
+          <div className="flex gap-2 ml-auto">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSend} 
+              disabled={isLoading || !message.trim()}
+              className="bg-stage-paid hover:bg-stage-paid/90"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Send className="h-4 w-4 mr-2" />
+              )}
+              Enviar via Z-API
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
