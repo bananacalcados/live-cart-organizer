@@ -23,7 +23,7 @@ import { POSTeamChat } from "@/components/pos/POSTeamChat";
 import { supabase } from "@/integrations/supabase/client";
 
 type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches";
-type WhatsAppFilter = "unanswered" | undefined;
+type WhatsAppFilter = "unanswered" | "new" | undefined;
 
 const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badge?: boolean; priority?: boolean }[] = [
   { id: "sales", label: "Venda", icon: ShoppingCart, priority: true },
@@ -183,7 +183,7 @@ export default function POS() {
         {section === "config" && <POSConfig storeId={selectedStore} />}
         {section === "returns" && <POSExchanges storeId={selectedStore} />}
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
-        {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter} />}
+        {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
         {section === "searches" && <POSProductSearchLog storeId={selectedStore} />}
         {section === "chat" && <POSTeamChat storeId={selectedStore} />}

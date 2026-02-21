@@ -56,7 +56,7 @@ interface Props {
   sellerId?: string;
   preloadedSellers?: Seller[];
   sellersPreloaded?: boolean;
-  onNavigateToWhatsApp?: (filter?: "unanswered") => void;
+  onNavigateToWhatsApp?: (filter?: "unanswered" | "new") => void;
 }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -112,6 +112,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
   // Notification counters
   const [unreadWhatsApp, setUnreadWhatsApp] = useState(0);
+  const [newWhatsApp, setNewWhatsApp] = useState(0);
   const [unreadTeamChat, setUnreadTeamChat] = useState(0);
   const [pendingReturns, setPendingReturns] = useState(0);
 
@@ -148,28 +149,88 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
-  // Load notification counts
+  // Load notification counts with Realtime
   useEffect(() => {
     if (!hasOpenRegister) return;
     loadNotifications();
-    const interval = setInterval(loadNotifications, 30000); // refresh every 30s
-    return () => clearInterval(interval);
+
+    // Subscribe to whatsapp_messages changes for real-time updates
+    const channel = supabase
+      .channel("pos-dashboard-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_messages" }, () => {
+        loadNotifications();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_finished_conversations" }, () => {
+        loadNotifications();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [hasOpenRegister]);
 
   const loadNotifications = async () => {
     try {
-      // Unread WhatsApp messages (conversations with unanswered messages)
-      const { count: whatsAppCount } = await supabase
-        .from('orders')
-        .select('id', { count: 'exact', head: true })
-        .eq('has_unread_messages', true);
-      setUnreadWhatsApp(whatsAppCount || 0);
+      // Get all messages grouped by phone to determine conversation status
+      const { data: allMessages } = await supabase
+        .from('whatsapp_messages')
+        .select('phone, direction, created_at')
+        .order('created_at', { ascending: false });
+
+      // Get finished conversations to exclude them
+      const { data: finishedConvs } = await supabase
+        .from('chat_finished_conversations')
+        .select('phone, finished_at')
+        .order('finished_at', { ascending: false });
+
+      const finishedPhones = new Set<string>();
+      if (finishedConvs) {
+        // Group by phone, get latest finished_at
+        const finishedMap = new Map<string, string>();
+        for (const f of finishedConvs) {
+          if (!finishedMap.has(f.phone)) finishedMap.set(f.phone, f.finished_at);
+        }
+        // A phone is "finished" if last finished_at > last message time
+        if (allMessages) {
+          const lastMsgTime = new Map<string, string>();
+          for (const m of allMessages) {
+            if (!lastMsgTime.has(m.phone)) lastMsgTime.set(m.phone, m.created_at);
+          }
+          finishedMap.forEach((finishedAt, phone) => {
+            const lastMsg = lastMsgTime.get(phone);
+            if (lastMsg && new Date(finishedAt) >= new Date(lastMsg)) {
+              finishedPhones.add(phone);
+            }
+          });
+        }
+      }
+
+      if (allMessages) {
+        const phoneMap = new Map<string, { lastDirection: string; hasOutgoing: boolean }>();
+        for (const msg of allMessages) {
+          if (finishedPhones.has(msg.phone)) continue;
+          if (!phoneMap.has(msg.phone)) {
+            phoneMap.set(msg.phone, { lastDirection: msg.direction, hasOutgoing: false });
+          }
+          const entry = phoneMap.get(msg.phone)!;
+          if (msg.direction === 'outgoing') entry.hasOutgoing = true;
+        }
+
+        let awaiting = 0;
+        let newConvs = 0;
+        phoneMap.forEach(({ lastDirection, hasOutgoing }) => {
+          if (lastDirection === 'incoming') {
+            if (hasOutgoing) awaiting++;
+            else newConvs++;
+          }
+        });
+        setUnreadWhatsApp(awaiting);
+        setNewWhatsApp(newConvs);
+      }
 
       // Team chat unread count from localStorage
       const storedUnread = parseInt(localStorage.getItem('team_chat_unread') || '0', 10);
       setUnreadTeamChat(storedUnread);
     } catch (e) {
-      // silently fail for non-critical notifications
       console.error('Notification load error:', e);
     }
   };
@@ -811,17 +872,18 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     );
   }
 
-  const totalNotifications = unreadWhatsApp + unreadTeamChat + pendingReturns;
+  const totalNotifications = unreadWhatsApp + newWhatsApp + unreadTeamChat + pendingReturns;
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       {/* Notification Dashboard */}
       {step === "scan" && (
         <div className="flex items-stretch gap-2 md:gap-3 px-3 md:px-4 pt-2 md:pt-3 pb-1 overflow-x-auto scrollbar-hide">
+          {/* Aguardando resposta */}
           <button
             onClick={() => onNavigateToWhatsApp?.("unanswered")}
             className={cn(
-            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[120px] text-left",
+            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[110px] text-left",
             unreadWhatsApp > 0
               ? "bg-green-500/10 border-green-500/30 cursor-pointer hover:bg-green-500/20"
               : "bg-gray-100 border-gray-200 cursor-pointer hover:bg-gray-200"
@@ -830,7 +892,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               <Phone className={cn("h-4 w-4 md:h-5 md:w-5", unreadWhatsApp > 0 ? "text-green-600" : "text-gray-400")} />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">WhatsApp</p>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Aguardando</p>
               <p className={cn("text-base md:text-lg font-bold leading-tight", unreadWhatsApp > 0 ? "text-green-600" : "text-gray-400")}>
                 {unreadWhatsApp}
               </p>
@@ -838,8 +900,29 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             </div>
           </button>
 
+          {/* Novas conversas */}
+          <button
+            onClick={() => onNavigateToWhatsApp?.("new")}
+            className={cn(
+            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[110px] text-left",
+            newWhatsApp > 0
+              ? "bg-blue-500/10 border-blue-500/30 cursor-pointer hover:bg-blue-500/20"
+              : "bg-gray-100 border-gray-200 cursor-pointer hover:bg-gray-200"
+          )}>
+            <div className={cn("p-1.5 md:p-2 rounded-lg", newWhatsApp > 0 ? "bg-blue-500/20" : "bg-gray-200")}>
+              <Bell className={cn("h-4 w-4 md:h-5 md:w-5", newWhatsApp > 0 ? "text-blue-600" : "text-gray-400")} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Novas</p>
+              <p className={cn("text-base md:text-lg font-bold leading-tight", newWhatsApp > 0 ? "text-blue-600" : "text-gray-400")}>
+                {newWhatsApp}
+              </p>
+              <p className="text-[10px] text-gray-400 hidden sm:block">mensagens</p>
+            </div>
+          </button>
+
           <div className={cn(
-            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[120px]",
+            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[110px]",
             pendingReturns > 0
               ? "bg-orange-50 border-orange-300"
               : "bg-gray-100 border-gray-200"
@@ -857,7 +940,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           </div>
 
           <div className={cn(
-            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[120px]",
+            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[110px]",
             unreadTeamChat > 0
               ? "bg-yellow-50 border-yellow-400"
               : "bg-gray-100 border-gray-200"
