@@ -1,141 +1,114 @@
 
+# Sistema de Captacao de Produtos por Codigo de Barras (Pai/Filho)
 
-# Catalogo Interativo v2 — Carrinho Interno + Checkout Yampi
+## Objetivo
+Criar um modulo dentro da area de Estoque que permite fotografar/bipar etiquetas de produtos em uma loja parceira, identificar automaticamente a hierarquia Pai (modelo) e Filhos (variacoes por tamanho/cor), montar um catalogo temporario e, ao final, criar os produtos no Tiny ERP com estrutura de variacoes.
 
-## Problemas Atuais (Bugs)
+## Analise das Etiquetas
+Com base nos prints enviados:
+- **Codigo do modelo (PAI)**: `UC0602005` - identifica o produto independente de tamanho/cor
+- **Nome**: `TENIS CADARCO OURO LIGHT`
+- **GTIN (codigo de barras)**: unico por variacao (ex: `7890924449152` = tam 40, `7890924449145` = tam 39)
+- **Tamanho**: `40`, `39` (campo BRA)
+- **Referencia**: `6003702928` (igual para todas as variacoes)
 
-### 1. Produtos nao aparecem na busca do criador
-O componente `CatalogLandingPageCreator` carrega produtos da Shopify corretamente, mas o grid de selecao de produtos esta dentro de um `ScrollArea` com altura fixa de 300px dentro de um `AccordionItem` que ja esta dentro de outro `ScrollArea` do dialog. O aninhamento de ScrollAreas causa problemas de renderizacao. Alem disso, a busca funciona apenas por titulo no frontend — se a Shopify retornar paginado ou com delay, pode parecer vazio.
-
-### 2. Layout apertado no editor
-O dialog usa `max-w-2xl` que e pequeno para a quantidade de campos. Precisa ser expandido para `max-w-4xl` ou ate tela cheia, e a area de produtos precisa de mais espaco visual.
-
-## Nova Feature: Carrinho Interno na Landing Page
-
-### Fluxo do Usuario
+## Fluxo do Usuario
 
 ```text
-+------------------+     +------------------+     +------------------+
-| 1. Boas-vindas   |---->| 2. Categoria     |---->| 3. Grid produtos |
-|                  |     |                  |     |   + Botao "Add"  |
-+------------------+     +------------------+     +------------------+
-                                                         |
-                                                         v
-                                              +---------------------+
-                                              | 4. Carrinho flutuante|
-                                              |    com contador     |
-                                              +---------------------+
-                                                         |
-                                                         v
-                                              +---------------------+
-                                              | 5. Tela do carrinho |
-                                              |  - Lista de itens   |
-                                              |  - Nome + WhatsApp  |
-                                              |  - Aviso de reserva |
-                                              +---------------------+
-                                                    |       |       |
-                                                    v       v       v
-                                              +-------+ +------+ +------+
-                                              | Yampi | | WhApp| | Loja |
-                                              +-------+ +------+ +------+
+1. Abrir aba "Captacao" no modulo de Estoque
+2. Selecionar a loja destino (onde os produtos serao cadastrados)
+3. Bipar o codigo de barras da caixa (camera ou leitor fisico)
+4. Sistema registra: GTIN, nome do produto, codigo pai, tamanho
+5. Se o codigo pai ja existe na sessao, agrupa como filho
+6. Se e um novo codigo pai, cria um novo grupo
+7. Permite edicao manual (nome, cor, preco, etc.)
+8. Ao finalizar, botao "Criar no Tiny" envia tudo via API
 ```
 
-### Detalhes Tecnicos
+## Mudancas Necessarias
 
-#### 1. Correcoes de Bug no `CatalogLandingPageCreator.tsx`
+### 1. Nova Tabela: `product_capture_sessions`
+Sessao de captacao (uma por ida a loja do amigo):
+- `id`, `store_id`, `status` (capturing, completed), `notes`, `created_at`
 
-- Expandir dialog de `max-w-2xl` para `max-w-5xl` com layout em 2 colunas (config a esquerda, preview de produtos a direita)
-- Remover ScrollArea aninhada na secao de produtos — usar grid com scroll nativo
-- Garantir que `loadShopifyProducts()` carrega mesmo quando ja tem cache (forcando reload se necessario)
-- Aumentar a area de visualizacao dos produtos para pelo menos 400px de altura
+### 2. Nova Tabela: `product_capture_items`
+Cada item bipado:
+- `id`, `session_id`, `parent_code` (ex: UC0602005), `product_name`, `barcode` (GTIN), `size`, `color`, `price`, `reference_code`, `quantity`, `tiny_product_id` (preenchido apos criar no Tiny), `created_at`
 
-#### 2. Estado do Carrinho na Landing Page (`DoseTriplaCatalog.tsx`)
+### 3. Nova Aba "Captacao" no Inventory.tsx
+Adicionar uma nova aba no modulo de estoque com:
+- Botao para iniciar sessao de captacao
+- Campo de bipagem (input + camera) que captura o GTIN
+- Lista agrupada por `parent_code` mostrando hierarquia Pai > Filhos
+- Campos editaveis para nome, cor, preco de cada item
+- Contadores: total de modelos (pais), total de variacoes (filhos), total de unidades
 
-Novo estado local no componente:
+### 4. Logica de Agrupamento Automatico
+Ao bipar um codigo de barras:
+- Buscar na tabela `product_capture_items` da sessao atual por codigos com o mesmo `parent_code`
+- Se encontrar, o item e automaticamente agrupado como "filho" do mesmo pai
+- O `parent_code` sera extraido da etiqueta (campo tipo UC0602005)
+- Como o GTIN nao contem o parent_code diretamente, o usuario informara o parent_code na primeira bipagem de um modelo novo, e para os subsequentes com mesmo parent_code o sistema agrupara automaticamente
 
-- `cart: FilteredProduct[]` — lista de produtos adicionados
-- `cartStep: boolean` — se esta mostrando a tela do carrinho
-- `customerName: string` — nome do cliente
-- `customerPhone: string` — WhatsApp do cliente
-- `checkoutLoading: boolean` — estado de loading durante criacao do link
+**Fluxo inteligente**: Na primeira bipagem de um modelo, o sistema pede o codigo pai (UC0602005) e o nome. Nas proximas bipagens, se o usuario informar o mesmo codigo pai, agrupa automaticamente.
 
-#### 3. Botao Flutuante do Carrinho
+### 5. Nova Edge Function: `tiny-create-product-with-variations`
+Recebe os dados agrupados e cria o produto no Tiny ERP usando `produto.incluir.php`:
+- `classe_produto: "V"` (com variacoes)
+- `codigo`: codigo pai (ex: UC0602005)
+- `nome`: nome do produto
+- `variacoes[]`: array com cada filho contendo:
+  - `codigo`: GTIN ou SKU do filho
+  - `grade`: `{ "Tamanho": "40", "Cor": "Ouro Light" }`
+  - `estoque_atual`: quantidade contada
 
-- Icone de carrinho fixo no canto inferior direito
-- Badge com contagem de itens
-- Animacao de "bounce" ao adicionar item
-- Ao clicar, abre a tela do carrinho
+### 6. Interface de Revisao Pre-Envio
+Antes de criar no Tiny, mostrar:
+- Arvore visual: Produto Pai > Filhos (tamanho/cor)
+- Campos editaveis para ajustes de ultimo momento
+- Botao "Criar no Tiny" com confirmacao
+- Feedback de sucesso/erro por produto
 
-#### 4. Cards de Produto Atualizados
+## Detalhes Tecnicos
 
-Substituir os 3 botoes atuais (Site, WhatsApp, Loja) por:
+### Tabelas (SQL Migration)
+```text
+product_capture_sessions:
+  - id (uuid PK)
+  - store_id (uuid FK pos_stores)
+  - status (text default 'capturing')
+  - notes (text nullable)
+  - created_at (timestamptz)
 
-- **Botao unico "Adicionar ao Carrinho"** — adiciona o produto ao estado local
-- Se o produto ja esta no carrinho, mostrar botao "Adicionado" (desabilitado ou com opcao de remover)
-- Aviso visual: "Todos os produtos adicionados serao separados no estoque. So adicione se tiver real intencao de compra."
-
-#### 5. Tela do Carrinho (novo step "cart")
-
-Layout:
-- Lista dos produtos adicionados com foto, nome, cor, preco
-- Botao de remover por item
-- Resumo: total baseado nos combo tiers (ex: 3 itens = R$ 300)
-- Calculo automatico do preco pelo combo tier mais proximo
-
-Formulario obrigatorio:
-- Campo "Seu nome"
-- Campo "Seu WhatsApp" (com mascara)
-- Aviso: "NAO ADICIONE AO CARRINHO SE NAO TIVER A INTENCAO DE FINALIZAR A COMPRA — Todos os produtos que voce adicionar serao separados automaticamente no estoque."
-
-3 botoes de finalizacao:
-- **Finalizar no Site (Yampi)**: chama `createYampiPaymentLinkFromOrder()` com os produtos do carrinho e redireciona
-- **Finalizar no WhatsApp**: abre wa.me com round-robin e mensagem listando todos os produtos do carrinho
-- **Retirar na Loja**: abre wa.me com mensagem de retirada listando todos os produtos
-
-#### 6. Integracao com Yampi
-
-A funcao `createYampiPaymentLinkFromOrder` ja existe em `src/lib/yampi.ts` e aceita `DbOrderProduct[]`. Sera necessario:
-
-- Mapear os `FilteredProduct` do carrinho para o formato `DbOrderProduct` que a Yampi espera (com `shopifyId`, `sku`, `price`, `quantity`)
-- Passar `customerName` e `customerPhone` nas opcoes
-- Incluir parametros UTM da campanha (slug da landing page)
-
-#### 7. Registro de Lead (Banco de Dados)
-
-Ao clicar em qualquer botao de finalizacao:
-- Salvar lead na tabela `lp_leads` com:
-  - `name`, `phone`, `campaign_tag: "catalogo-{slug}"`
-  - Metadados: lista de produtos, canal escolhido (yampi/whatsapp/loja)
-- Incrementar `clicks` na tabela `catalog_landing_pages`
-
-#### 8. Mensagem WhatsApp com Carrinho Completo
-
-Formato da mensagem pre-preenchida:
-
-```
-Oi! Sou {NOME}, vim do catalogo Dose Tripla e quero comprar:
-
-1. *Tenis XYZ* - Cor: Branco - Tam 34
-2. *Sandalia ABC* - Cor: Preto - Tam 34
-3. *Papete DEF* - Cor: Rosa - Tam 34
-
-Total: R$ 300 (combo 3 pares)
-
-Meu WhatsApp: {TELEFONE}
+product_capture_items:
+  - id (uuid PK)
+  - session_id (uuid FK product_capture_sessions)
+  - parent_code (text) -- ex: UC0602005
+  - product_name (text)
+  - barcode (text) -- GTIN
+  - size (text nullable)
+  - color (text nullable)
+  - price (numeric default 0)
+  - reference_code (text nullable) -- ex: 6003702928
+  - quantity (integer default 1)
+  - tiny_product_id (bigint nullable)
+  - created_at (timestamptz)
 ```
 
-### Arquivos a Criar/Editar
+### Edge Function: `tiny-create-product-with-variations`
+- Recebe: `{ store_id, parent_code, product_name, items: [{ barcode, size, color, price, quantity }] }`
+- Busca o `tiny_token` da loja
+- Monta o payload JSON conforme a API do Tiny
+- Envia via POST para `produto.incluir.php`
+- Salva o `tiny_product_id` retornado nos items
+- Responde com sucesso/erro
 
-| Arquivo | Acao |
-|---------|------|
-| `src/pages/DoseTriplaCatalog.tsx` | Editar — adicionar estado de carrinho, step "cart", integracao Yampi, formulario de cliente |
-| `src/components/marketing/CatalogLandingPageCreator.tsx` | Editar — corrigir layout do dialog (expandir), corrigir grid de produtos, melhorar UX |
+### UI na Aba Captacao
+- Reutilizar o componente `POSBarcodeScanner` existente para camera
+- Input de bipagem com suporte a leitor fisico (mesmo padrao do modulo de estoque)
+- Cards agrupados por produto pai, expandiveis para ver filhos
+- Badge com contagem de variacoes por modelo
+- Botao global "Criar Todos no Tiny" + botao individual por produto
 
-### Design Visual do Carrinho
-
-- Botao flutuante: circulo com icone de sacola + badge numerico, cor primaria do tema
-- Tela do carrinho: mesmo estilo dos cards atuais (branco arredondado com blur)
-- Botoes de finalizacao: mesmas cores dos botoes atuais (verde site, verde whatsapp, roxo loja)
-- Campo de nome e WhatsApp: inputs estilizados dentro do card branco
-- Aviso de estoque: caixa amarela/amber com icone de alerta
-
+### RLS
+- As tabelas terao RLS habilitado com politicas permissivas para usuarios autenticados (mesmo padrao das demais tabelas do modulo de estoque)
