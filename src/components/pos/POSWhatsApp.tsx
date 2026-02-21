@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,6 +15,7 @@ import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { POSProductCatalogSender } from "./POSProductCatalogSender";
 import { NewConversationDialog } from "./NewConversationDialog";
+import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -63,6 +64,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
 
+  // CRM phone lookup for conversation names
+  const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
+  const { crmMap, deleteWhatsApp } = useCrmPhoneLookup(conversationPhones);
+
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
   // Load chat contacts + photos
@@ -110,28 +115,62 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
     const loadCrmData = async () => {
       const cleanPhone = selectedPhone.replace(/\D/g, '');
+      const suffix = cleanPhone.slice(-8);
       
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("id, instagram_handle, tags, whatsapp")
-        .or(`whatsapp.ilike.%${cleanPhone.slice(-8)}%`)
-        .limit(1)
-        .maybeSingle();
+      // Search customers, pos_customers, zoppy_customers, and campaign_leads
+      const [customerRes, expRes, posRes, zoppyRes, leadRes] = await Promise.all([
+        supabase
+          .from("customers")
+          .select("id, instagram_handle, tags, whatsapp")
+          .or(`whatsapp.ilike.%${suffix}%`)
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("expedition_orders")
+          .select("id, shopify_order_name, expedition_status, freight_tracking_code, total_price, shopify_created_at")
+          .or(`customer_phone.ilike.%${suffix}%`)
+          .order("shopify_created_at", { ascending: false })
+          .limit(5),
+        supabase
+          .from("pos_customers")
+          .select("id, name, whatsapp, email")
+          .or(`whatsapp.ilike.%${suffix}%`)
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("zoppy_customers")
+          .select("id, first_name, last_name, phone, email")
+          .or(`phone.ilike.%${suffix}%`)
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("campaign_leads")
+          .select("id, name, phone, email, campaign_id")
+          .or(`phone.ilike.%${suffix}%`)
+          .limit(1)
+          .maybeSingle(),
+      ]);
 
-      const { data: expOrders } = await supabase
-        .from("expedition_orders")
-        .select("id, shopify_order_name, expedition_status, freight_tracking_code, total_price, shopify_created_at")
-        .or(`customer_phone.ilike.%${cleanPhone.slice(-8)}%`)
-        .order("shopify_created_at", { ascending: false })
-        .limit(5);
+      const customer = customerRes.data;
+      const expOrders = expRes.data;
+      const posCustomer = posRes.data as any;
+      const zoppyCustomer = zoppyRes.data as any;
+      const lead = leadRes.data;
 
-      if (!customer && (!expOrders || expOrders.length === 0)) {
+      if (!customer && (!expOrders || expOrders.length === 0) && !posCustomer && !zoppyCustomer && !lead) {
         setCrmData(null);
         return;
       }
 
+      // Determine best name with priority
+      const resolvedName = chatContacts[selectedPhone]
+        || posCustomer?.name
+        || (zoppyCustomer ? `${zoppyCustomer.first_name || ''} ${zoppyCustomer.last_name || ''}`.trim() : null)
+        || lead?.name
+        || customer?.instagram_handle;
+
       setCrmData({
-        name: chatContacts[selectedPhone],
+        name: resolvedName || undefined,
         instagram: customer?.instagram_handle,
         tags: customer?.tags || [],
         profilePicUrl: contactPhotos[selectedPhone],
@@ -182,7 +221,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           lastMessage: lastMsg.message,
           lastMessageAt: new Date(lastMsg.created_at),
           unreadCount: value.unread,
-          customerName: chatContacts[phone],
+          customerName: chatContacts[phone] || crmMap.get(phone)?.name,
           isGroup: value.isGroup || phone.includes("@g.us"),
           hasUnansweredMessage: lastMsg.direction === "incoming",
           whatsapp_number_id: msgWithNumberId?.whatsapp_number_id || null,
@@ -206,7 +245,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [selectedPhone, chatContacts]);
+  }, [selectedPhone, chatContacts, crmMap]);
 
   const loadMessages = async (phone: string) => {
     const { data } = await supabase
@@ -349,19 +388,47 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
   };
 
+  const crmEntry = selectedPhone ? crmMap.get(selectedPhone) : null;
+  const crmSourceLabel = crmEntry?.source === 'pos_customer' ? 'PDV' 
+    : crmEntry?.source === 'zoppy_customer' ? 'Zoppy'
+    : crmEntry?.source === 'campaign_lead' ? 'Lead'
+    : crmEntry?.source === 'customer' ? 'CRM' : null;
+
   const customerInfoPanel = crmData && showCrmPanel ? (
     <div className="border-b border-[#00a884]/20 bg-[#f0f2f5] dark:bg-[#111b21] px-3 py-2 flex-shrink-0">
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <User className="h-4 w-4 text-[#00a884]" />
-          <span className="text-xs font-bold text-foreground">Dados do Cliente</span>
+          <span className="text-xs font-bold text-foreground">
+            {crmData.name || 'Cliente'}
+          </span>
+          {crmSourceLabel && (
+            <Badge variant="outline" className="text-[8px] px-1 py-0 h-4 border-[#00a884]/30 text-[#00a884]">
+              {crmSourceLabel}
+            </Badge>
+          )}
           {crmData.instagram && (
             <span className="text-[10px] text-muted-foreground">@{crmData.instagram}</span>
           )}
         </div>
-        <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground" onClick={() => setShowCrmPanel(false)}>
-          <X className="h-3 w-3" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 text-destructive/60 hover:text-destructive"
+            title="Excluir WhatsApp do CRM"
+            onClick={async () => {
+              if (!selectedPhone) return;
+              if (!confirm('Excluir este WhatsApp de todas as bases de clientes?')) return;
+              await deleteWhatsApp(selectedPhone);
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground" onClick={() => setShowCrmPanel(false)}>
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
       {crmData.tags && crmData.tags.length > 0 && (
         <div className="flex gap-1 flex-wrap mb-1">
