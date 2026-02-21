@@ -505,36 +505,40 @@ export function MassTemplateDispatcher() {
 
     try {
       if (hasDynamicVars) {
-        // Per-recipient send: each person gets personalized variables
+        // Per-recipient send with concurrency pool
         let sent = 0, failed = 0;
         const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
+        const CONCURRENCY = 50;
 
-        for (const phone of phones) {
-          const recipient = recipientMap.get(phone);
-          const components = buildComponentsForRecipient(recipient);
-          const rendered = recipient ? buildRenderedForRecipient(recipient) : renderedMessage;
+        for (let i = 0; i < phones.length; i += CONCURRENCY) {
+          const batch = phones.slice(i, i + CONCURRENCY);
+          const promises = batch.map(async (phone) => {
+            const recipient = recipientMap.get(phone);
+            const components = buildComponentsForRecipient(recipient);
+            const rendered = recipient ? buildRenderedForRecipient(recipient) : renderedMessage;
+            try {
+              const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
+                method: 'POST',
+                headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  phone,
+                  templateName: selectedTemplate!.name,
+                  language: selectedTemplate!.language,
+                  whatsappNumberId: selectedNumber,
+                  components: components.length > 0 ? components : undefined,
+                  renderedMessage: rendered,
+                }),
+              });
+              const data = await res.json();
+              return data.success;
+            } catch { return false; }
+          });
 
-          try {
-            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
-              method: 'POST',
-              headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                phone,
-                templateName: selectedTemplate.name,
-                language: selectedTemplate.language,
-                whatsappNumberId: selectedNumber,
-                components: components.length > 0 ? components : undefined,
-                renderedMessage: rendered,
-              }),
-            });
-            const data = await res.json();
-            if (data.success) sent++;
-            else failed++;
-          } catch { failed++; }
-
+          const results = await Promise.all(promises);
+          for (const ok of results) {
+            if (ok) sent++; else failed++;
+          }
           setSendProgress({ sent, total: phones.length, failed });
-          // Small delay to avoid rate limiting
-          if (sent + failed < phones.length) await new Promise(r => setTimeout(r, 200));
         }
       } else {
         // Static vars: use bulk queue
