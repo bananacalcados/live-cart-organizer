@@ -23,6 +23,7 @@ import { POSTeamChat } from "@/components/pos/POSTeamChat";
 import { supabase } from "@/integrations/supabase/client";
 
 type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches";
+type WhatsAppFilter = "unanswered" | undefined;
 
 const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badge?: boolean; priority?: boolean }[] = [
   { id: "sales", label: "Venda", icon: ShoppingCart, priority: true },
@@ -42,6 +43,7 @@ export default function POS() {
   const isMobile = useIsMobile();
   const [selectedStore, setSelectedStore] = useState<string>("");
   const [section, setSection] = useState<POSSection>("sales");
+  const [whatsappFilter, setWhatsappFilter] = useState<WhatsAppFilter>(undefined);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
@@ -165,13 +167,23 @@ export default function POS() {
 
       {/* Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {section === "sales" && <POSSalesView storeId={selectedStore} preloadedSellers={sellers} sellersPreloaded={sellersLoaded} />}
+        {section === "sales" && (
+          <POSSalesView
+            storeId={selectedStore}
+            preloadedSellers={sellers}
+            sellersPreloaded={sellersLoaded}
+            onNavigateToWhatsApp={(filter) => {
+              setSection("whatsapp");
+              setWhatsappFilter(filter);
+            }}
+          />
+        )}
         {section === "cash" && <POSCashRegister storeId={selectedStore} />}
         {section === "gamification" && <POSGamificationMini storeId={selectedStore} />}
         {section === "config" && <POSConfig storeId={selectedStore} />}
         {section === "returns" && <POSExchanges storeId={selectedStore} />}
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
-        {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} />}
+        {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
         {section === "searches" && <POSProductSearchLog storeId={selectedStore} />}
         {section === "chat" && <POSTeamChat storeId={selectedStore} />}

@@ -6,13 +6,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface InteractiveButton {
+  id: string;
+  title: string;
+}
+
+interface InteractiveData {
+  header?: { type: string; imageUrl?: string };
+  body: string;
+  buttons: InteractiveButton[];
+}
+
 interface SendMessageRequest {
   phone: string;
   message: string;
-  type?: 'text' | 'image' | 'video' | 'audio' | 'document';
+  type?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'interactive';
   mediaUrl?: string;
   caption?: string;
   whatsappNumberId?: string;
+  interactiveData?: InteractiveData;
 }
 
 async function getCredentials(supabase: ReturnType<typeof createClient>, whatsappNumberId?: string) {
@@ -50,7 +62,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { phone, message, type = 'text', mediaUrl, caption, whatsappNumberId }: SendMessageRequest = await req.json();
+    const { phone, message, type = 'text', mediaUrl, caption, whatsappNumberId, interactiveData }: SendMessageRequest = await req.json();
 
     if (!phone) {
       return new Response(
@@ -117,6 +129,30 @@ serve(async (req) => {
         to: formattedPhone,
         type: 'document',
         document: { link: mediaUrl, caption: caption || message || '' },
+      };
+    } else if (type === 'interactive' && interactiveData) {
+      // Interactive message with reply buttons (session message, no template needed)
+      const interactive: Record<string, unknown> = {
+        type: 'button',
+        body: { text: interactiveData.body },
+        action: {
+          buttons: interactiveData.buttons.slice(0, 3).map(btn => ({
+            type: 'reply',
+            reply: { id: btn.id, title: btn.title.slice(0, 20) },
+          })),
+        },
+      };
+
+      // Add image header if provided
+      if (interactiveData.header?.type === 'image' && interactiveData.header.imageUrl) {
+        interactive.header = { type: 'image', image: { link: interactiveData.header.imageUrl } };
+      }
+
+      body = {
+        messaging_product: 'whatsapp',
+        to: formattedPhone,
+        type: 'interactive',
+        interactive,
       };
     } else {
       return new Response(

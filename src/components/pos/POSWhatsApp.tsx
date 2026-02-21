@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,12 +13,14 @@ import { ChatView } from "@/components/chat/ChatView";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
+import { POSProductCatalogSender } from "./POSProductCatalogSender";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface Props {
   storeId: string;
+  initialFilter?: "unanswered";
 }
 
 interface CrmCustomerData {
@@ -36,7 +38,7 @@ interface CrmCustomerData {
   }[];
 }
 
-export function POSWhatsApp({ storeId }: Props) {
+export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -46,7 +48,7 @@ export function POSWhatsApp({ storeId }: Props) {
   const [chatFilter, setChatFilter] = useState<ChatFilter>("all");
   const [stageFilter, setStageFilter] = useState<StageFilter>("all");
   const [instanceFilter, setInstanceFilter] = useState<InstanceFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>(initialFilter === "unanswered" ? "awaiting_reply" : "all");
   const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [contactPhotos, setContactPhotos] = useState<Record<string, string>>({});
@@ -54,6 +56,7 @@ export function POSWhatsApp({ storeId }: Props) {
   const [editNameValue, setEditNameValue] = useState("");
   const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
   const [showCrmPanel, setShowCrmPanel] = useState(false);
+  const [showCatalog, setShowCatalog] = useState(false);
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
@@ -442,20 +445,31 @@ export function POSWhatsApp({ storeId }: Props) {
           )}
         </div>
         {selectedPhone && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
-            onClick={async () => {
-              if (selectedPhone) await finishConversation(selectedPhone);
-              setSelectedPhone(null);
-              setMessages([]);
-              toast.success("Conversa finalizada");
-            }}
-          >
-            <PhoneOff className="h-4 w-4" />
-            Finalizar
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+              onClick={() => setShowCatalog(true)}
+            >
+              <ShoppingBag className="h-4 w-4" />
+              <span className="hidden sm:inline">Catálogo</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+              onClick={async () => {
+                if (selectedPhone) await finishConversation(selectedPhone);
+                setSelectedPhone(null);
+                setMessages([]);
+                toast.success("Conversa finalizada");
+              }}
+            >
+              <PhoneOff className="h-4 w-4" />
+              Finalizar
+            </Button>
+          </div>
         )}
       </div>
 
@@ -504,6 +518,18 @@ export function POSWhatsApp({ storeId }: Props) {
           />
         )}
       </div>
+
+      {/* Product Catalog Sender */}
+      {selectedPhone && (
+        <POSProductCatalogSender
+          storeId={storeId}
+          phone={selectedPhone}
+          sendVia={sendVia}
+          selectedNumberId={selectedNumberId}
+          open={showCatalog}
+          onOpenChange={setShowCatalog}
+        />
+      )}
     </div>
   );
 }

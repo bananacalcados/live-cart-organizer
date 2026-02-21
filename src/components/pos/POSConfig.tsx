@@ -77,6 +77,13 @@ export function POSConfig({ storeId }: Props) {
   const [showAddTier, setShowAddTier] = useState(false);
   const [newTier, setNewTier] = useState({ name: "", min_points: "50", prize_type: "discount_percent", prize_value: "10", prize_label: "", color: "#FFD700" });
 
+  // WhatsApp Pricing Rules
+  const [pickupDiscount, setPickupDiscount] = useState("10");
+  const [deliveryFee, setDeliveryFee] = useState("0");
+  const [storeMarkup, setStoreMarkup] = useState("0");
+  const [pricingActive, setPricingActive] = useState(true);
+  const [savingPricing, setSavingPricing] = useState(false);
+
   const SEGMENT_COLORS = ["#FF6B00", "#E91E63", "#9C27B0", "#3F51B5", "#00BCD4", "#4CAF50", "#FFEB3B", "#FF5722", "#795548", "#607D8B"];
 
   useEffect(() => {
@@ -89,8 +96,40 @@ export function POSConfig({ storeId }: Props) {
     loadWheelSegments();
     loadLoyaltyConfig();
     loadLoyaltyTiers();
+    loadPricingRules();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [storeId]);
+
+  const loadPricingRules = async () => {
+    const { data } = await supabase
+      .from("pos_product_pricing_rules" as any)
+      .select("*")
+      .eq("store_id", storeId)
+      .maybeSingle();
+    if (data) {
+      const d = data as any;
+      setPickupDiscount(String(d.pickup_discount_percent || 10));
+      setDeliveryFee(String(d.delivery_fee || 0));
+      setStoreMarkup(String(d.physical_store_markup_percent || 0));
+      setPricingActive(d.is_active !== false);
+    }
+  };
+
+  const savePricingRules = async () => {
+    setSavingPricing(true);
+    try {
+      const payload = {
+        store_id: storeId,
+        pickup_discount_percent: parseFloat(pickupDiscount) || 0,
+        delivery_fee: parseFloat(deliveryFee) || 0,
+        physical_store_markup_percent: parseFloat(storeMarkup) || 0,
+        is_active: pricingActive,
+      };
+      await supabase.from("pos_product_pricing_rules" as any).upsert(payload, { onConflict: "store_id" });
+      toast.success("Precificação salva!");
+    } catch { toast.error("Erro ao salvar"); }
+    finally { setSavingPricing(false); }
+  };
 
   const loadLoyaltyConfig = async () => {
     const { data } = await supabase.from('loyalty_config').select('*').eq('store_id', storeId).maybeSingle() as any;
@@ -1221,6 +1260,45 @@ export function POSConfig({ storeId }: Props) {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* WhatsApp Pricing Rules */}
+      <Card className="bg-pos-white/5 border-pos-orange/20">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold text-pos-orange flex items-center gap-2">
+            <Phone className="h-4 w-4" />
+            Precificação WhatsApp
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-pos-white/60">Configure os preços diferenciados nos botões ao enviar produtos pelo WhatsApp.</p>
+          <div className="flex items-center justify-between">
+            <Label className="text-pos-white/80 text-xs">Ativo</Label>
+            <Switch checked={pricingActive} onCheckedChange={setPricingActive} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-pos-white/70 text-xs">Desconto Retirada (%)</Label>
+              <Input type="number" value={pickupDiscount} onChange={e => setPickupDiscount(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="10" />
+              <p className="text-[10px] text-pos-white/40 mt-1">Ex: 10 = 10% off retirada</p>
+            </div>
+            <div>
+              <Label className="text-pos-white/70 text-xs">Taxa Entrega (R$)</Label>
+              <Input type="number" value={deliveryFee} onChange={e => setDeliveryFee(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="0" />
+              <p className="text-[10px] text-pos-white/40 mt-1">Soma ao preço c/ entrega</p>
+            </div>
+            <div>
+              <Label className="text-pos-white/70 text-xs">Markup Loja Física (%)</Label>
+              <Input type="number" value={storeMarkup} onChange={e => setStoreMarkup(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="0" />
+              <p className="text-[10px] text-pos-white/40 mt-1">Ex: 5 = 5% acima do site</p>
+            </div>
+          </div>
+          <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={savePricingRules} disabled={savingPricing}>
+            {savingPricing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Salvar Precificação
+          </Button>
+        </CardContent>
+      </Card>
+
     </ScrollArea>
   );
 }

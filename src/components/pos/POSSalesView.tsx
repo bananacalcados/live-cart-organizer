@@ -56,12 +56,13 @@ interface Props {
   sellerId?: string;
   preloadedSellers?: Seller[];
   sellersPreloaded?: boolean;
+  onNavigateToWhatsApp?: (filter?: "unanswered") => void;
 }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPreloaded }: Props) {
+export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPreloaded, onNavigateToWhatsApp }: Props) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [step, setStep] = useState<SaleStep>("scan");
@@ -817,11 +818,13 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       {/* Notification Dashboard */}
       {step === "scan" && (
         <div className="flex items-stretch gap-2 md:gap-3 px-3 md:px-4 pt-2 md:pt-3 pb-1 overflow-x-auto scrollbar-hide">
-          <div className={cn(
-            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[120px]",
+          <button
+            onClick={() => onNavigateToWhatsApp?.("unanswered")}
+            className={cn(
+            "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[120px] text-left",
             unreadWhatsApp > 0
-              ? "bg-green-500/10 border-green-500/30"
-              : "bg-gray-100 border-gray-200"
+              ? "bg-green-500/10 border-green-500/30 cursor-pointer hover:bg-green-500/20"
+              : "bg-gray-100 border-gray-200 cursor-pointer hover:bg-gray-200"
           )}>
             <div className={cn("p-1.5 md:p-2 rounded-lg", unreadWhatsApp > 0 ? "bg-green-500/20" : "bg-gray-200")}>
               <Phone className={cn("h-4 w-4 md:h-5 md:w-5", unreadWhatsApp > 0 ? "text-green-600" : "text-gray-400")} />
@@ -833,7 +836,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               </p>
               <p className="text-[10px] text-gray-400 hidden sm:block">sem resposta</p>
             </div>
-          </div>
+          </button>
 
           <div className={cn(
             "flex-shrink-0 md:flex-shrink md:flex-1 flex items-center gap-2 md:gap-3 rounded-xl p-2 md:p-3 border transition-all min-w-[120px]",

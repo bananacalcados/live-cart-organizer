@@ -3663,6 +3663,50 @@ export type Database = {
           },
         ]
       }
+      pos_product_pricing_rules: {
+        Row: {
+          created_at: string
+          delivery_fee: number
+          id: string
+          is_active: boolean
+          physical_store_markup_percent: number
+          physical_store_price_source: string
+          pickup_discount_percent: number
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_fee?: number
+          id?: string
+          is_active?: boolean
+          physical_store_markup_percent?: number
+          physical_store_price_source?: string
+          pickup_discount_percent?: number
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_fee?: number
+          id?: string
+          is_active?: boolean
+          physical_store_markup_percent?: number
+          physical_store_price_source?: string
+          pickup_discount_percent?: number
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_product_pricing_rules_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_product_requests: {
         Row: {
           answered_at: string | null
