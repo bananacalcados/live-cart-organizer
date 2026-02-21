@@ -5523,6 +5523,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_conversation_counts: {
+        Args: never
+        Returns: {
+          awaiting_count: number
+          new_count: number
+        }[]
+      }
       get_inventory_summary: {
         Args: never
         Returns: {
