@@ -309,10 +309,17 @@ serve(async (req) => {
 
     // If Pagar.me fails, try APPMAX
     if (!result.success) {
-      console.log(`Pagar.me failed: ${result.error}. Trying APPMAX fallback...`);
+      const pagarmeError = result.error;
+      console.log(`Pagar.me failed: ${pagarmeError}. Trying APPMAX fallback...`);
       const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
       if (appmaxToken) {
-        result = await chargeAppmax(chargeParams, products, appmaxToken);
+        const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken);
+        if (appmaxResult.success) {
+          result = appmaxResult;
+        } else {
+          // Both failed — show the more descriptive Pagar.me error
+          result.error = pagarmeError || appmaxResult.error || "Pagamento recusado";
+        }
       }
     }
 
