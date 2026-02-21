@@ -616,7 +616,7 @@ export function MassTemplateDispatcher() {
             <SelectValue placeholder="Selecionar número de WhatsApp" />
           </SelectTrigger>
           <SelectContent>
-            {numbers.map(num => (
+            {numbers.filter(num => !!num.phone_number_id).map(num => (
               <SelectItem key={num.id} value={num.id}>{num.label} - {num.phone_display}</SelectItem>
             ))}
           </SelectContent>
