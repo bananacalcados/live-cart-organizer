@@ -62,11 +62,13 @@ Deno.serve(async (req) => {
       produtos: [
         {
           produto: {
+            sequencia: 1,
             codigo: parent_code,
             nome: product_name,
             situacao: "A", // Active
             tipo: "P", // Produto
             classe_produto: "V", // Com variações
+            origem: "0", // Nacional
             unidade: "UN",
             preco: items[0]?.price || 0,
             variacoes,
