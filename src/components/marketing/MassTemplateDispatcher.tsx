@@ -115,6 +115,7 @@ export function MassTemplateDispatcher() {
   // Sending
   const [isSending, setIsSending] = useState(false);
   const [sendProgress, setSendProgress] = useState({ sent: 0, total: 0, failed: 0 });
+  const cancelSendRef = useRef(false);
   const [testPhone, setTestPhone] = useState("");
   const [isTesting, setIsTesting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -501,6 +502,7 @@ export function MassTemplateDispatcher() {
     }
 
     setIsSending(true);
+    cancelSendRef.current = false;
     setSendProgress({ sent: 0, total: phones.length, failed: 0 });
 
     try {
@@ -511,8 +513,10 @@ export function MassTemplateDispatcher() {
         const CONCURRENCY = 50;
 
         for (let i = 0; i < phones.length; i += CONCURRENCY) {
+          if (cancelSendRef.current) break;
           const batch = phones.slice(i, i + CONCURRENCY);
           const promises = batch.map(async (phone) => {
+            if (cancelSendRef.current) return false;
             const recipient = recipientMap.get(phone);
             const components = buildComponentsForRecipient(recipient);
             const rendered = recipient ? buildRenderedForRecipient(recipient) : renderedMessage;
@@ -565,6 +569,7 @@ export function MassTemplateDispatcher() {
 
         let sent = 0, failed = 0;
         for (let i = 0; i < allIds.length; i += 50) {
+          if (cancelSendRef.current) break;
           const batchIds = allIds.slice(i, i + 50);
           const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
             method: 'POST',
@@ -600,12 +605,17 @@ export function MassTemplateDispatcher() {
           .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());
       }
 
-      toast.success("Disparo concluído!");
+      if (cancelSendRef.current) {
+        toast.info("Disparo cancelado pelo usuário");
+      } else {
+        toast.success("Disparo concluído!");
+      }
     } catch (err) {
       console.error(err);
       toast.error("Erro durante o disparo em massa");
     } finally {
       setIsSending(false);
+      cancelSendRef.current = false;
     }
   };
 
@@ -1038,6 +1048,14 @@ export function MassTemplateDispatcher() {
                 <p className="text-[10px] text-muted-foreground text-center">
                   ✅ {sendProgress.sent} enviados · ❌ {sendProgress.failed} falharam · 📊 {sendProgress.total} total
                 </p>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full mt-1"
+                  onClick={() => { cancelSendRef.current = true; }}
+                >
+                  ✋ Cancelar Disparo
+                </Button>
               </div>
             )}
           </CardContent>
