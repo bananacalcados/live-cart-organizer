@@ -214,13 +214,22 @@ export default function Marketing() {
   const fetchLeads = useCallback(async () => {
     setLeadsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('lp_leads')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5000);
-      if (error) throw error;
-      setLeads(data || []);
+      const allLeads: any[] = [];
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('lp_leads')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allLeads.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      setLeads(allLeads);
     } catch (err) { console.error(err); }
     finally { setLeadsLoading(false); }
   }, []);
