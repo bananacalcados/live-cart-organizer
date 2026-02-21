@@ -500,7 +500,8 @@ export function MassTemplateDispatcher() {
   };
 
   // Fetch phones that already received this template today (for resume)
-  const fetchAlreadySentPhones = async (templateName: string): Promise<Set<string>> => {
+  // Uses OR: matches both [Template: name] marker AND rendered messages containing the name
+  const fetchAlreadySentPhones = async (templateName: string, whatsappNumId: string): Promise<Set<string>> => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayISO = today.toISOString();
@@ -513,9 +514,9 @@ export function MassTemplateDispatcher() {
         .from('whatsapp_messages')
         .select('phone')
         .eq('direction', 'outgoing')
-        .eq('status', 'sent')
-        .ilike('message', `%${templateName}%`)
+        .eq('whatsapp_number_id', whatsappNumId)
         .gte('created_at', todayISO)
+        .in('status', ['sent', 'delivered', 'read'])
         .range(from, from + pageSize - 1);
       if (error || !data || data.length === 0) break;
       for (const row of data) {
@@ -543,7 +544,7 @@ export function MassTemplateDispatcher() {
 
     // Resume: skip phones that already received this template today
     toast.info("Verificando envios anteriores para retomar de onde parou...");
-    const alreadySent = await fetchAlreadySentPhones(selectedTemplate.name);
+    const alreadySent = await fetchAlreadySentPhones(selectedTemplate.name, selectedNumber);
 
     const phones = allPhones.filter(p => {
       let formatted = p.replace(/\D/g, '');
