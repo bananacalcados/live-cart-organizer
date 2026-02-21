@@ -63,14 +63,32 @@ serve(async (req) => {
     if (customer?.email) shopifyCustomer.email = customer.email;
     if (phone) shopifyCustomer.phone = phone;
 
+    // Build shipping/billing address if available from checkout form
+    let shippingAddress: Record<string, unknown> | null = null;
+    const addr = customer?.address;
+    if (addr && (addr.street || addr.city)) {
+      shippingAddress = {
+        first_name: firstName,
+        last_name: lastName,
+        address1: addr.street ? `${addr.street}, ${addr.number || ""}`.trim() : undefined,
+        city: addr.city || undefined,
+        province: addr.state || undefined,
+        zip: addr.cep || undefined,
+        country: "BR",
+        phone: phone || undefined,
+      };
+    }
+
     const shopifyOrder = {
       order: {
         line_items: lineItems,
         financial_status: "paid",
-        note: `Pedido via Live Commerce | Cliente: ${fullName} | Tel: ${customer?.phone || "N/A"}`,
+        note: `Pedido via Live Commerce${customer?.cpf ? ` | CPF: ${customer.cpf}` : ""} | Cliente: ${fullName} | Tel: ${customer?.phone || "N/A"}`,
         tags: "live-commerce,auto-sync",
         customer: shopifyCustomer,
+        ...(customer?.email ? { email: customer.email } : {}),
         ...(phone ? { phone } : {}),
+        ...(shippingAddress ? { shipping_address: shippingAddress, billing_address: shippingAddress } : {}),
       },
     };
 

@@ -157,7 +157,7 @@ function CountdownTimer({ checkoutStartedAt }: { checkoutStartedAt: string | nul
 }
 
 // ── PIX Section ─────────────────────────────────────────────────
-function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: string; amount: number; onPaymentConfirmed: (info?: { platform: string; method: string }) => void }) {
+function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: string; amount: number; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -185,7 +185,13 @@ function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: s
         if (data?.status === "approved") {
           setPixPaid(true);
           if (pollingRef.current) clearInterval(pollingRef.current);
-          onPaymentConfirmed({ platform: "mercadopago", method: "pix" });
+          onPaymentConfirmed({ platform: "mercadopago", method: "pix", customerData: {
+            name: `${firstName} ${lastName}`.trim(),
+            email,
+            cpf: cpf.replace(/\D/g, ""),
+            phone: "",
+            address: { street, number, neighborhood, city, state, cep: cep.replace(/\D/g, "") },
+          }});
         }
       } catch {}
     };
@@ -220,6 +226,28 @@ function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: s
     }
     setIsGenerating(true);
     trackPixelEvent("AddPaymentInfo", { content_category: "pix" });
+
+    // Save customer registration early so mercadopago-check-payment can use it for Shopify order
+    if (orderId && !orderId.startsWith("live-")) {
+      try {
+        await supabase.from("customer_registrations").insert({
+          order_id: orderId,
+          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+          email: email.trim(),
+          cpf: cpf.replace(/\D/g, ""),
+          whatsapp: "",
+          cep: cep.replace(/\D/g, ""),
+          address: street.trim(),
+          address_number: number.trim(),
+          complement: "",
+          neighborhood: neighborhood.trim(),
+          city: city.trim(),
+          state: state.trim(),
+        });
+      } catch (err) {
+        console.error("Error saving customer registration for PIX:", err);
+      }
+    }
     try {
       const response = await supabase.functions.invoke("mercadopago-create-pix", {
         body: {
@@ -377,7 +405,7 @@ function CreditCardSection({
   amount: number;
   products: OrderProduct[];
   installmentConfig: InstallmentConfig;
-  onPaymentConfirmed: (info?: { platform: string; method: string }) => void;
+  onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -496,7 +524,13 @@ function CreditCardSection({
 
       if (data?.success) {
         toast.success(`Pagamento aprovado via ${data.gateway === 'pagarme' ? 'Pagar.me' : 'APPMAX'}!`);
-        onPaymentConfirmed({ platform: data.gateway || "pagarme", method: "credit_card" });
+        onPaymentConfirmed({ platform: data.gateway || "pagarme", method: "credit_card", customerData: {
+          name: name.trim(),
+          email: email.trim(),
+          cpf: cpf.replace(/\D/g, ""),
+          phone: phone.replace(/\D/g, ""),
+          address: { street: street.trim(), number: number.trim(), neighborhood: neighborhood.trim(), city: city.trim(), state: state.trim(), cep: cep.replace(/\D/g, "") },
+        }});
       } else {
         throw new Error(data?.error || "Pagamento recusado. Verifique os dados do cartão.");
       }
@@ -814,8 +848,10 @@ export default function TransparentCheckout() {
     } catch {}
   };
 
-  const handlePaymentConfirmed = useCallback(async (paymentInfo?: { platform: string; method: string }) => {
+  const handlePaymentConfirmed = useCallback(async (paymentInfo?: { platform: string; method: string; customerData?: any }) => {
     setPaymentStatus("success");
+
+    const cd = paymentInfo?.customerData;
 
     // Pixel: Purchase event
     if (orderData) {
@@ -859,6 +895,17 @@ export default function TransparentCheckout() {
     // Create Shopify order for live commerce checkouts
     if (liveCartRaw && liveCartRaw.items.length > 0) {
       try {
+        // Merge checkout form data with live customer data
+        const enrichedCustomer = {
+          ...liveCartRaw.customer,
+          ...(cd ? {
+            name: cd.name || liveCartRaw.customer?.name,
+            email: cd.email || liveCartRaw.customer?.email,
+            phone: cd.phone || liveCartRaw.customer?.phone,
+            cpf: cd.cpf,
+            address: cd.address,
+          } : {}),
+        };
         const { data, error } = await supabase.functions.invoke("shopify-create-live-order", {
           body: {
             items: liveCartRaw.items.map((item: any) => ({
@@ -867,7 +914,7 @@ export default function TransparentCheckout() {
               price: item.price,
               quantity: item.quantity || 1,
             })),
-            customer: liveCartRaw.customer,
+            customer: enrichedCustomer,
           },
         });
         if (error) {
@@ -877,6 +924,30 @@ export default function TransparentCheckout() {
         }
       } catch (err) {
         console.error("Error calling shopify-create-live-order:", err);
+      }
+    }
+
+    // Save customer data to customer_registrations for CRM orders, so shopify-create-order picks it up
+    if (orderId && !liveCartRaw && cd) {
+      try {
+        const nameParts = (cd.name || "").split(" ");
+        const addr = cd.address || {};
+        await supabase.from("customer_registrations").insert({
+          order_id: orderId,
+          full_name: cd.name || "Cliente",
+          email: cd.email || "",
+          cpf: cd.cpf || "",
+          whatsapp: cd.phone || "",
+          cep: addr.cep || "",
+          address: addr.street || "",
+          address_number: addr.number || "",
+          complement: "",
+          neighborhood: addr.neighborhood || "",
+          city: addr.city || "",
+          state: addr.state || "",
+        });
+      } catch (err) {
+        console.error("Error saving customer registration:", err);
       }
     }
 
