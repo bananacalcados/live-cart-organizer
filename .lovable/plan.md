@@ -1,180 +1,133 @@
 
 
-## Plano: Dashboard em Tempo Real + Catalogo Melhorado + Nova Conversa
+## Plano de Correcao: 3 Problemas Criticos
+
+Identifiquei as causas raiz de cada problema apos analise detalhada dos logs, banco de dados e codigo.
 
 ---
 
-### Parte 1: Dashboard em Tempo Real com Novas Mensagens
+### Problema 1: Catalogo nao envia produtos (erro no Z-API)
 
-**Problemas atuais:**
-- O contador de "sem resposta" usa a tabela `orders` (`has_unread_messages`), que nao reflete o estado real das conversas no WhatsApp
-- Nao atualiza em tempo real (usa polling de 30s com `setInterval`)
-- Nao mostra contagem de "Novas" conversas (mensagens nao iniciadas)
+**Causa raiz:** O payload enviado para a Z-API esta no formato errado. O endpoint correto para enviar botoes COM imagem e `send-button-list-image` (nao `send-button-list`). Alem disso, a estrutura do JSON esta incorreta - o sistema envia `buttonList` como array simples, mas a Z-API espera o formato `buttonList: { image: "url", buttons: [...] }`.
 
-**Solucao:**
+**Evidencia nos logs:**
+```text
+Error sending Z-API button list: SyntaxError: Unexpected end of JSON input
+```
+A Z-API retorna resposta vazia (nao JSON) porque rejeita o payload malformado.
 
-1. **Trocar a fonte de dados** do contador para consultar `whatsapp_messages` diretamente, usando a mesma logica do `ConversationList`:
-   - "Sem resposta" (Aguardando): conversas onde a ultima mensagem e `direction = 'incoming'` e ja houve resposta anterior
-   - "Novas": conversas onde TODAS as mensagens sao `direction = 'incoming'` (nunca respondemos)
-
-2. **Adicionar card "Novas"** ao dashboard, ao lado do card WhatsApp existente, mostrando quantas conversas novas existem
-
-3. **Adicionar Supabase Realtime** para atualizar os contadores instantaneamente quando novas mensagens chegam ou sao enviadas, em vez de depender do polling de 30s
-
-**Alteracoes em `POSSalesView.tsx`:**
-- Substituir a query `orders.has_unread_messages` por query em `whatsapp_messages`
-- Adicionar state `newConversations` para contagem de novas
-- Adicionar canal Realtime em `whatsapp_messages` para refresh automatico
-- Adicionar segundo card no dashboard para "Novas" com navegacao para aba WhatsApp com filtro `not_started`
-
-**Alteracao no `POSWhatsApp.tsx`:**
-- Aceitar `initialFilter` com valores `"unanswered"` OU `"new"` para aplicar o filtro correto
-
----
-
-### Parte 2: Catalogo Melhorado com Filtros e Fotos por Variante
-
-**Problemas atuais:**
-- O nome do produto esta muito longo e esconde a variacao (cor/tamanho)
-- Todas as variantes mostram a mesma foto (primeira imagem do produto)
-- Nao tem filtro por colecao nem tamanho
-- Shopify Storefront API retorna imagens por variante atraves do campo `image` na variant, mas o query atual nao busca esse campo
-
-**Solucao:**
-
-1. **Atualizar a query GraphQL em `shopify.ts`** para:
-   - Buscar `image { url }` dentro de cada variante (foto especifica da cor/variacao)
-   - Buscar `collections(first: 20) { edges { node { title handle } } }` para ter as colecoes
-   - Buscar `productType` para categorias
-
-2. **Melhorar a exibicao do produto no catalogo:**
-   - Separar o nome do produto do nome da variante
-   - Mostrar o nome do produto em uma linha (truncado) e a variacao (cor + tamanho) em outra linha com destaque
-   - Usar a imagem especifica da variante em vez da imagem geral do produto
-
-3. **Adicionar filtros no catalogo:**
-   - **Filtro por Colecao** (dropdown com colecoes disponiveiscarregadas da Shopify)
-   - **Filtro por Tamanho** (dropdown com tamanhos extraidos de `selectedOptions` onde `name = "Tamanho"` ou `"Size"`)
-   - Os filtros sao combinaveis: Colecao + Tamanho, ou apenas um, ou busca livre + filtros
-
-**Alteracoes em `shopify.ts`:**
-- Adicionar `image { url }` no fragment de variantes da query GraphQL
-- Adicionar `collections(first: 20) { edges { node { title handle } } }` no fragment de produtos
-- Atualizar o tipo `ShopifyProduct` para incluir os novos campos
-
-**Alteracoes em `POSProductCatalogSender.tsx`:**
-- Extrair colecoes e tamanhos unicos dos produtos carregados
-- Adicionar dropdowns de filtro por colecao e tamanho
-- Usar `variant.image.url` quando disponivel, senao fallback para primeira imagem do produto
-- Refatorar a exibicao: nome do produto curto + variacao (cor/tamanho) em destaque abaixo
+**Correcao no `supabase/functions/zapi-send-button-list/index.ts`:**
+- Trocar endpoint de `send-button-list` para `send-button-list-image`
+- Reestruturar payload para o formato correto da Z-API:
+```text
+{
+  "phone": "5533991955003",
+  "message": "Escolha como quer comprar:\nTamanco Modare - 34/Oliva",
+  "buttonList": {
+    "image": "https://cdn.shopify.com/...",
+    "buttons": [
+      { "id": "delivery_SKU", "label": "R$120 Entrega" },
+      { "id": "pickup_SKU", "label": "R$108 Retira Loja" },
+      { "id": "store_SKU", "label": "R$132 Loja Fisica" }
+    ]
+  }
+}
+```
+- Adicionar tratamento seguro para resposta nao-JSON da Z-API (usar `response.text()` e tentar parse, em vez de chamar `.json()` diretamente)
 
 ---
 
-### Parte 3: Botao "Nova Conversa" no WhatsApp
+### Problema 2: Vendas do PDV nao estao sendo registradas
 
-**Problema:** Nao existe forma de iniciar uma conversa com um contato que nao esta no historico do chat.
+**Causa raiz:** A funcao `loadNotifications` no dashboard do POS busca TODAS as 72.412 mensagens do WhatsApp sem limite. Como o Supabase tem um limite padrao de 1.000 linhas por query, os dados retornados estao incompletos, resultando em contagens erradas. Alem disso, o Supabase Realtime dispara essa query pesada a CADA nova mensagem recebida, causando sobrecarga que pode travar a aplicacao e impedir que vendas sejam finalizadas.
 
-**Solucao:**
+O erro "The app encountered an error" (visivel no screenshot) provavelmente e causado por essa sobrecarga - a aplicacao trava durante o processo de venda porque o Realtime continua disparando queries massivas em background.
 
-1. **Adicionar botao "+ Nova Conversa"** no header do WhatsApp (quando nao tem conversa selecionada)
+**Evidencia:** 
+- 72.412 mensagens no banco, query sem `.limit()` retorna no maximo 1.000
+- Nenhuma chamada para `pos-tiny-create-sale` aparece nos logs de hoje (21/02), mas existem 11 vendas registradas ate 20/02
+- O Realtime dispara `loadNotifications()` a cada mensagem nova, e com o volume de mensagens da live (dezenas por minuto), isso cria uma tempestade de queries
 
-2. **Dialog "Nova Conversa"** com os campos:
-   - Nome do contato (opcional, sera salvo em `chat_contacts`)
-   - Telefone (obrigatorio, com mascara brasileira)
-   - Selecao de instancia: Z-API ou Meta API (com seletor de numero Meta)
-   - Se Meta API selecionada: opcao de enviar via **template** ou **mensagem normal**
+**Correcao no `src/components/pos/POSSalesView.tsx`:**
+- Substituir a query que busca todas as mensagens por uma abordagem eficiente usando RPC ou query otimizada:
+  - Usar uma query SQL que agrupa diretamente no banco (via RPC) em vez de processar 72k+ registros no frontend
+  - Alternativa: usar `DISTINCT ON (phone)` para pegar apenas a ultima mensagem por telefone
+- Adicionar debounce no handler do Realtime (minimo 5 segundos entre recargas) para evitar tempestade de queries durante lives
+- Garantir que o Realtime NAO bloqueia o fluxo de vendas
 
-3. **Se escolher template:**
-   - Listar templates aprovados da Meta (reutilizando o endpoint `meta-whatsapp-get-templates`)
-   - Ao selecionar template, mostrar preview com variaveis
-   - Permitir preencher variaveis manualmente OU puxar dados do lead/cliente:
-     - Buscar na tabela `customers` e `pos_customers` pelo telefone digitado
-     - Se encontrado, disponibilizar variaveis como: `{{nome}}`, `{{email}}`, `{{cidade}}`, `{{estado}}`
-   - Enviar via `meta-whatsapp-send-template`
-
-4. **Se escolher mensagem normal** (ou Z-API):
-   - Campo de texto livre para digitar a primeira mensagem
-   - Enviar via `zapi-send-message` ou `meta-whatsapp-send`
-
-5. **Apos envio:**
-   - Salvar mensagem em `whatsapp_messages`
-   - Salvar contato em `chat_contacts` com o nome digitado
-   - Abrir automaticamente a conversa recem-criada
-
-**Alteracoes em `POSWhatsApp.tsx`:**
-- Adicionar botao "+ Nova Conversa" no header
-- Criar state e Dialog para nova conversa
-- Integrar com `meta-whatsapp-get-templates` para listagem de templates
-- Integrar com busca de dados do lead para preenchimento automatico de variaveis
+**Criar RPC `get_conversation_counts`:**
+Uma funcao SQL que calcula os contadores diretamente no banco, retornando apenas dois numeros (awaiting e new) em vez de transferir milhares de linhas para o frontend.
 
 ---
 
-### Resumo dos Arquivos
+### Problema 3: Bugs recorrentes ao mexer em uma parte do sistema
+
+**Explicacao tecnica:** O problema nao e do GitHub - o Git controla versoes de codigo, mas nao impede que mudancas em um componente afetem outros que compartilham o mesmo estado ou dados. No caso especifico:
+
+- A adicao do Realtime no dashboard criou uma dependencia pesada que afeta todo o POS
+- Queries sem limite em tabelas grandes sao uma bomba-relogio que explode quando o volume de dados cresce
+- O componente `POSSalesView` acumula muitas responsabilidades (vendas + dashboard + notificacoes), o que aumenta o risco de efeitos colaterais
+
+A correcao dos problemas 1 e 2 acima resolve os bugs atuais. Para prevenir futuros problemas, a query otimizada via RPC e o debounce no Realtime sao fundamentais.
+
+---
+
+### Resumo das Alteracoes
 
 | Arquivo | Acao | Detalhes |
 |---------|------|----------|
-| `src/components/pos/POSSalesView.tsx` | MODIFICAR | Dashboard real-time com Supabase Realtime, card de "Novas", query em whatsapp_messages |
-| `src/components/pos/POSWhatsApp.tsx` | MODIFICAR | Botao "+ Nova Conversa", dialog com templates, aceitar filtro "new" |
-| `src/components/pos/POSProductCatalogSender.tsx` | MODIFICAR | Filtros colecao/tamanho, foto por variante, exibicao melhorada |
-| `src/lib/shopify.ts` | MODIFICAR | Query GraphQL com image por variante e collections |
+| `supabase/functions/zapi-send-button-list/index.ts` | CORRIGIR | Endpoint correto + payload Z-API formatado + parse seguro de resposta |
+| `src/components/pos/POSSalesView.tsx` | CORRIGIR | Substituir query de 72k+ msgs por RPC otimizada + debounce no Realtime |
+| Migracao SQL | CRIAR | Funcao RPC `get_conversation_counts` para calcular contadores no banco |
 
 ### Detalhes Tecnicos
 
-**Query GraphQL atualizada (shopify.ts):**
-
+**RPC `get_conversation_counts`:**
 ```text
-variants(first: 100) {
-  edges {
-    node {
-      id
-      title
-      sku
-      price { amount }
-      compareAtPrice { amount }
-      availableForSale
-      selectedOptions { name value }
-      image { url }          // NOVO: foto especifica da variante
-    }
-  }
-}
-collections(first: 20) {     // NOVO: colecoes do produto
-  edges {
-    node { title handle }
-  }
-}
+CREATE OR REPLACE FUNCTION get_conversation_counts()
+RETURNS TABLE(awaiting_count bigint, new_count bigint) AS $$
+  WITH last_msgs AS (
+    SELECT DISTINCT ON (phone)
+      phone, direction, created_at
+    FROM whatsapp_messages
+    ORDER BY phone, created_at DESC
+  ),
+  has_outgoing AS (
+    SELECT DISTINCT phone
+    FROM whatsapp_messages
+    WHERE direction = 'outgoing'
+  ),
+  finished AS (
+    SELECT DISTINCT ON (phone) phone, finished_at
+    FROM chat_finished_conversations
+    ORDER BY phone, finished_at DESC
+  ),
+  active AS (
+    SELECT lm.phone, lm.direction,
+      CASE WHEN ho.phone IS NOT NULL THEN true ELSE false END as has_reply
+    FROM last_msgs lm
+    LEFT JOIN has_outgoing ho ON ho.phone = lm.phone
+    LEFT JOIN finished f ON f.phone = lm.phone
+    WHERE lm.direction = 'incoming'
+      AND (f.finished_at IS NULL OR f.finished_at < lm.created_at)
+  )
+  SELECT
+    COUNT(*) FILTER (WHERE has_reply) as awaiting_count,
+    COUNT(*) FILTER (WHERE NOT has_reply) as new_count
+  FROM active;
+$$ LANGUAGE sql SECURITY DEFINER;
 ```
 
-**Logica do dashboard (POSSalesView.tsx):**
-
+**Debounce no Realtime:**
 ```text
-// Query para contar conversas sem resposta
-1. Buscar ultimas mensagens por telefone de whatsapp_messages
-2. Agrupar por phone
-3. Contar onde ultima msg e direction='incoming' E existe msg outgoing anterior -> "Aguardando"
-4. Contar onde TODAS msgs sao direction='incoming' -> "Novas"
-5. Assinar canal Realtime em whatsapp_messages para refresh automatico
-```
+// Em vez de chamar loadNotifications() diretamente:
+const debounceTimer = useRef<NodeJS.Timeout>();
+const debouncedLoad = () => {
+  if (debounceTimer.current) clearTimeout(debounceTimer.current);
+  debounceTimer.current = setTimeout(loadNotifications, 5000);
+};
 
-**Fluxo "Nova Conversa":**
-
-```text
-Vendedor clica "+ Nova Conversa"
-  -> Digita nome e telefone
-  -> Escolhe instancia (Z-API ou Meta)
-  -> Se Meta:
-       -> Escolhe: "Template" ou "Mensagem normal"
-       -> Se Template:
-            -> Lista templates aprovados
-            -> Seleciona template
-            -> Preenche variaveis (manual ou auto do lead)
-            -> Envia via meta-whatsapp-send-template
-       -> Se Mensagem normal:
-            -> Digita texto
-            -> Envia via meta-whatsapp-send
-  -> Se Z-API:
-       -> Digita texto
-       -> Envia via zapi-send-message
-  -> Salva em whatsapp_messages + chat_contacts
-  -> Abre conversa automaticamente
+// No canal Realtime:
+.on("postgres_changes", ..., () => debouncedLoad())
 ```
 
