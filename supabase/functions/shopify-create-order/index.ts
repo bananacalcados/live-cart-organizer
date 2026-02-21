@@ -71,12 +71,15 @@ serve(async (req) => {
         : order.discount_value;
     }
 
-    // Format phone to +55...
+    // Format phone to +55... (must be 11 digits local for Shopify to accept)
     function formatPhone(raw: string | null | undefined): string | null {
       if (!raw) return null;
       const digits = raw.replace(/\D/g, "");
       if (digits.length < 10) return null;
-      return digits.startsWith("55") ? `+${digits}` : `+55${digits}`;
+      const full = digits.startsWith("55") ? digits : `55${digits}`;
+      // Shopify requires valid E.164 - Brazilian mobile must be 13 digits total (+55 + 2-digit DDD + 9-digit number)
+      if (full.length < 12 || full.length > 13) return null;
+      return `+${full}`;
     }
 
     // Build customer & address from registration or CRM customer
@@ -84,10 +87,10 @@ serve(async (req) => {
     const phone = formatPhone(registration?.whatsapp || customer?.whatsapp);
 
     // Determine name
-    const fullName = registration?.full_name || customer?.instagram_handle || "Cliente";
+    const fullName = (registration?.full_name || customer?.instagram_handle || "Cliente").trim();
     const nameParts = fullName.split(" ");
     const firstName = nameParts[0];
-    const lastName = nameParts.slice(1).join(" ") || "-";
+    const lastName = nameParts.slice(1).join(" ").trim() || "-";
 
     // Build Shopify customer object
     const shopifyCustomer: Record<string, unknown> = {
