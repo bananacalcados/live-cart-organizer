@@ -1,114 +1,114 @@
 
-# Sistema de Captacao de Produtos por Codigo de Barras (Pai/Filho)
 
-## Objetivo
-Criar um modulo dentro da area de Estoque que permite fotografar/bipar etiquetas de produtos em uma loja parceira, identificar automaticamente a hierarquia Pai (modelo) e Filhos (variacoes por tamanho/cor), montar um catalogo temporario e, ao final, criar os produtos no Tiny ERP com estrutura de variacoes.
+## Plano Atualizado: Botoes Interativos em AMBOS os canais (Z-API + Meta Cloud API)
 
-## Analise das Etiquetas
-Com base nos prints enviados:
-- **Codigo do modelo (PAI)**: `UC0602005` - identifica o produto independente de tamanho/cor
-- **Nome**: `TENIS CADARCO OURO LIGHT`
-- **GTIN (codigo de barras)**: unico por variacao (ex: `7890924449152` = tam 40, `7890924449145` = tam 39)
-- **Tamanho**: `40`, `39` (campo BRA)
-- **Referencia**: `6003702928` (igual para todas as variacoes)
+O plano anterior ja previa suporte a ambos, mas vou detalhar exatamente como funcionara em cada canal.
 
-## Fluxo do Usuario
+---
+
+### Como funciona em cada canal
+
+**Z-API:** Endpoint `send-button-list` para enviar mensagens com botoes clicaveis.
+
+**Meta Cloud API:** Dentro da janela de 24h, a API permite enviar mensagens do tipo `interactive` com ate 3 reply buttons SEM precisar de template aprovado. O payload e assim:
 
 ```text
-1. Abrir aba "Captacao" no modulo de Estoque
-2. Selecionar a loja destino (onde os produtos serao cadastrados)
-3. Bipar o codigo de barras da caixa (camera ou leitor fisico)
-4. Sistema registra: GTIN, nome do produto, codigo pai, tamanho
-5. Se o codigo pai ja existe na sessao, agrupa como filho
-6. Se e um novo codigo pai, cria um novo grupo
-7. Permite edicao manual (nome, cor, preco, etc.)
-8. Ao finalizar, botao "Criar no Tiny" envia tudo via API
+{
+  "messaging_product": "whatsapp",
+  "to": "5533999998803",
+  "type": "interactive",
+  "interactive": {
+    "type": "button",
+    "header": { "type": "image", "image": { "link": "URL_DA_FOTO" } },
+    "body": { "text": "Tenis Nice\nDe R$ 319,99 por R$ 299,99" },
+    "action": {
+      "buttons": [
+        { "type": "reply", "reply": { "id": "btn_delivery", "title": "R$ 299 c/ Entrega" } },
+        { "type": "reply", "reply": { "id": "btn_pickup", "title": "R$ 269 Retira Loja" } },
+        { "type": "reply", "reply": { "id": "btn_store", "title": "R$ 319 Loja Fisica" } }
+      ]
+    }
+  }
+}
 ```
 
-## Mudancas Necessarias
+Isso e uma mensagem de sessao normal (nao template), entao funciona perfeitamente dentro das 24h.
 
-### 1. Nova Tabela: `product_capture_sessions`
-Sessao de captacao (uma por ida a loja do amigo):
-- `id`, `store_id`, `status` (capturing, completed), `notes`, `created_at`
+---
 
-### 2. Nova Tabela: `product_capture_items`
-Cada item bipado:
-- `id`, `session_id`, `parent_code` (ex: UC0602005), `product_name`, `barcode` (GTIN), `size`, `color`, `price`, `reference_code`, `quantity`, `tiny_product_id` (preenchido apos criar no Tiny), `created_at`
+### Alteracoes Tecnicas
 
-### 3. Nova Aba "Captacao" no Inventory.tsx
-Adicionar uma nova aba no modulo de estoque com:
-- Botao para iniciar sessao de captacao
-- Campo de bipagem (input + camera) que captura o GTIN
-- Lista agrupada por `parent_code` mostrando hierarquia Pai > Filhos
-- Campos editaveis para nome, cor, preco de cada item
-- Contadores: total de modelos (pais), total de variacoes (filhos), total de unidades
+**1. Edge Function `meta-whatsapp-send` (MODIFICAR)**
 
-### 4. Logica de Agrupamento Automatico
-Ao bipar um codigo de barras:
-- Buscar na tabela `product_capture_items` da sessao atual por codigos com o mesmo `parent_code`
-- Se encontrar, o item e automaticamente agrupado como "filho" do mesmo pai
-- O `parent_code` sera extraido da etiqueta (campo tipo UC0602005)
-- Como o GTIN nao contem o parent_code diretamente, o usuario informara o parent_code na primeira bipagem de um modelo novo, e para os subsequentes com mesmo parent_code o sistema agrupara automaticamente
+Adicionar suporte ao tipo `interactive` no switch de tipos de mensagem. O componente do frontend enviara:
 
-**Fluxo inteligente**: Na primeira bipagem de um modelo, o sistema pede o codigo pai (UC0602005) e o nome. Nas proximas bipagens, se o usuario informar o mesmo codigo pai, agrupa automaticamente.
-
-### 5. Nova Edge Function: `tiny-create-product-with-variations`
-Recebe os dados agrupados e cria o produto no Tiny ERP usando `produto.incluir.php`:
-- `classe_produto: "V"` (com variacoes)
-- `codigo`: codigo pai (ex: UC0602005)
-- `nome`: nome do produto
-- `variacoes[]`: array com cada filho contendo:
-  - `codigo`: GTIN ou SKU do filho
-  - `grade`: `{ "Tamanho": "40", "Cor": "Ouro Light" }`
-  - `estoque_atual`: quantidade contada
-
-### 6. Interface de Revisao Pre-Envio
-Antes de criar no Tiny, mostrar:
-- Arvore visual: Produto Pai > Filhos (tamanho/cor)
-- Campos editaveis para ajustes de ultimo momento
-- Botao "Criar no Tiny" com confirmacao
-- Feedback de sucesso/erro por produto
-
-## Detalhes Tecnicos
-
-### Tabelas (SQL Migration)
 ```text
-product_capture_sessions:
-  - id (uuid PK)
-  - store_id (uuid FK pos_stores)
-  - status (text default 'capturing')
-  - notes (text nullable)
-  - created_at (timestamptz)
-
-product_capture_items:
-  - id (uuid PK)
-  - session_id (uuid FK product_capture_sessions)
-  - parent_code (text) -- ex: UC0602005
-  - product_name (text)
-  - barcode (text) -- GTIN
-  - size (text nullable)
-  - color (text nullable)
-  - price (numeric default 0)
-  - reference_code (text nullable) -- ex: 6003702928
-  - quantity (integer default 1)
-  - tiny_product_id (bigint nullable)
-  - created_at (timestamptz)
+{
+  phone: "33999998803",
+  type: "interactive",
+  interactiveData: {
+    header: { type: "image", imageUrl: "https://..." },
+    body: "Tenis Nice\nDe R$ 319,99 por R$ 299,99",
+    buttons: [
+      { id: "btn_delivery", title: "R$ 299 c/ Entrega" },
+      { id: "btn_pickup", title: "R$ 269 Retira Loja" },
+      { id: "btn_store", title: "R$ 319 Loja Fisica" }
+    ]
+  },
+  whatsappNumberId: "uuid-do-numero"
+}
 ```
 
-### Edge Function: `tiny-create-product-with-variations`
-- Recebe: `{ store_id, parent_code, product_name, items: [{ barcode, size, color, price, quantity }] }`
-- Busca o `tiny_token` da loja
-- Monta o payload JSON conforme a API do Tiny
-- Envia via POST para `produto.incluir.php`
-- Salva o `tiny_product_id` retornado nos items
-- Responde com sucesso/erro
+A function montara o payload `interactive` com header de imagem + body de texto + ate 3 reply buttons.
 
-### UI na Aba Captacao
-- Reutilizar o componente `POSBarcodeScanner` existente para camera
-- Input de bipagem com suporte a leitor fisico (mesmo padrao do modulo de estoque)
-- Cards agrupados por produto pai, expandiveis para ver filhos
-- Badge com contagem de variacoes por modelo
-- Botao global "Criar Todos no Tiny" + botao individual por produto
+**2. Edge Function `zapi-send-button-list` (CRIAR)**
 
-### RLS
-- As tabelas terao RLS habilitado com politicas permissivas para usuarios autenticados (mesmo padrao das demais tabelas do modulo de estoque)
+Nova function para Z-API usando o endpoint `send-button-list` com estrutura equivalente: imagem + texto + botoes clicaveis.
+
+**3. Componente `POSProductCatalogSender` (CRIAR)**
+
+O componente detectara automaticamente qual canal esta ativo na conversa (Z-API ou Meta) e chamara a function correta:
+- Se `whatsapp_number_id` presente -> Meta Cloud API (`meta-whatsapp-send` com type `interactive`)
+- Se Z-API -> `zapi-send-button-list`
+
+**4. Limite de 3 botoes da Meta**
+
+A Meta permite no maximo 3 reply buttons por mensagem. Como temos exatamente 3 opcoes de preco (Entrega, Retirada, Loja Fisica), encaixa perfeitamente. O titulo de cada botao tem limite de 20 caracteres, entao os textos serao abreviados (ex: "R$ 269 Retira Loja").
+
+---
+
+### Resumo dos arquivos
+
+| Arquivo | Acao |
+|---------|------|
+| `supabase/functions/meta-whatsapp-send/index.ts` | MODIFICAR - Adicionar tipo `interactive` com reply buttons |
+| `supabase/functions/zapi-send-button-list/index.ts` | CRIAR - Envio de botoes via Z-API |
+| `src/components/pos/POSProductCatalogSender.tsx` | CRIAR - Seletor de produtos com envio dual-channel |
+| `src/components/pos/POSWhatsApp.tsx` | MODIFICAR - Integrar botao de catalogo |
+| `src/components/pos/POSSalesView.tsx` | MODIFICAR - Dashboard clicavel |
+| `src/components/pos/POSConfig.tsx` | MODIFICAR - Precificacao por modalidade |
+| `src/pages/POS.tsx` | MODIFICAR - Navegacao com filtro |
+| Migracao SQL | CRIAR - Tabela `pos_product_pricing_rules` |
+
+### Fluxo unificado
+
+```text
+Vendedor abre conversa -> Clica "Catalogo" -> Seleciona produtos -> Clica "Enviar"
+                                                                         |
+                                              +---------------------------+---------------------------+
+                                              |                                                       |
+                                     Conversa Meta API                                       Conversa Z-API
+                                              |                                                       |
+                                   meta-whatsapp-send                                    zapi-send-button-list
+                                   type: "interactive"                                   endpoint: send-button-list
+                                   header: image                                         image + buttons
+                                   body: nome + preco                                    texto + preco
+                                   buttons: 3 reply                                      buttons: 3 opcoes
+                                              |                                                       |
+                                              +---------------------------+---------------------------+
+                                                                          |
+                                                              Cliente recebe foto
+                                                           com 3 botoes de preco
+                                                          e clica na opcao desejada
+```
+
