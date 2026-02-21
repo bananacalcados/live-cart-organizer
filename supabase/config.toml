@@ -197,3 +197,6 @@ verify_jwt = false
 
 [functions.ai-channel-specialist]
 verify_jwt = false
+
+[functions.zapi-send-button-list]
+verify_jwt = false
