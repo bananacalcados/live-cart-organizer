@@ -186,17 +186,26 @@ export function MassTemplateDispatcher() {
       }
       setCrmCustomers(allCustomers);
 
-      // Fetch leads
-      const { data: leadsData } = await supabase
-        .from('lp_leads')
-        .select('id, name, phone, campaign_tag, source, created_at')
-        .not('phone', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(5000);
-      setLeads(leadsData || []);
+      // Fetch leads (paginated to get ALL)
+      const allLeads: any[] = [];
+      let leadsFrom = 0;
+      const leadsPageSize = 1000;
+      while (true) {
+        const { data: leadsPage, error: leadsErr } = await supabase
+          .from('lp_leads')
+          .select('id, name, phone, campaign_tag, source, created_at')
+          .not('phone', 'is', null)
+          .order('created_at', { ascending: false })
+          .range(leadsFrom, leadsFrom + leadsPageSize - 1);
+        if (leadsErr || !leadsPage || leadsPage.length === 0) break;
+        allLeads.push(...leadsPage);
+        if (leadsPage.length < leadsPageSize) break;
+        leadsFrom += leadsPageSize;
+      }
+      setLeads(allLeads);
 
       // Get unique campaign tags
-      const tags = [...new Set((leadsData || []).map((l: any) => l.campaign_tag).filter(Boolean))];
+      const tags: string[] = [...new Set(allLeads.map((l: any) => l.campaign_tag).filter(Boolean))];
       setLeadCampaignTags(tags);
     } catch (err) { console.error(err); toast.error("Erro ao carregar audiência"); }
     finally { setIsLoadingAudience(false); }
