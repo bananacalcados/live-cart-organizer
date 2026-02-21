@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,13 +14,14 @@ import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, Convers
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { POSProductCatalogSender } from "./POSProductCatalogSender";
+import { NewConversationDialog } from "./NewConversationDialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface Props {
   storeId: string;
-  initialFilter?: "unanswered";
+  initialFilter?: "unanswered" | "new";
 }
 
 interface CrmCustomerData {
@@ -48,7 +49,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [chatFilter, setChatFilter] = useState<ChatFilter>("all");
   const [stageFilter, setStageFilter] = useState<StageFilter>("all");
   const [instanceFilter, setInstanceFilter] = useState<InstanceFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>(initialFilter === "unanswered" ? "awaiting_reply" : "all");
+  const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>(initialFilter === "unanswered" ? "awaiting_reply" : initialFilter === "new" ? "not_started" : "all");
   const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [contactPhotos, setContactPhotos] = useState<Record<string, string>>({});
@@ -57,6 +58,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
   const [showCrmPanel, setShowCrmPanel] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
+  const [showNewConversation, setShowNewConversation] = useState(false);
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
@@ -441,6 +443,15 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               <MessageCircle className="h-5 w-5 text-white" />
               <span className="font-bold text-white">WhatsApp</span>
               {totalUnread > 0 && <Badge className="bg-white text-[#008069] border-0 text-xs font-bold">{totalUnread}</Badge>}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+                onClick={() => setShowNewConversation(true)}
+              >
+                <UserPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">Nova Conversa</span>
+              </Button>
             </>
           )}
         </div>
@@ -530,6 +541,15 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           onOpenChange={setShowCatalog}
         />
       )}
+
+      {/* New Conversation Dialog */}
+      <NewConversationDialog
+        open={showNewConversation}
+        onOpenChange={setShowNewConversation}
+        onConversationCreated={(phone) => {
+          handleSelectConversation(phone);
+        }}
+      />
     </div>
   );
 }
