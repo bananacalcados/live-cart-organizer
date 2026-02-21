@@ -67,12 +67,12 @@ function resolveVariableForRecipient(varConfig: { mode: string; staticValue: str
   switch (varConfig.mode) {
     case '__first_name__': return recipient.firstName || recipient.name.split(' ')[0] || 'Cliente';
     case '__full_name__': return recipient.name || 'Cliente';
-    case '__phone__': return recipient.phone;
-    case '__city__': return recipient.city || '';
-    case '__state__': return recipient.state || '';
-    case '__segment__': return recipient.segment || '';
-    case '__email__': return recipient.email || '';
-    default: return varConfig.staticValue;
+    case '__phone__': return recipient.phone || '';
+    case '__city__': return recipient.city || 'N/A';
+    case '__state__': return recipient.state || 'N/A';
+    case '__segment__': return recipient.segment || 'N/A';
+    case '__email__': return recipient.email || 'N/A';
+    default: return varConfig.staticValue || 'Cliente';
   }
 }
 
@@ -368,8 +368,13 @@ export function MassTemplateDispatcher() {
     const resolve = (key: string) => {
       const vc = variables[key];
       if (!vc) return '';
-      if (vc.mode === '__static__' || !recipient) return vc.staticValue;
-      return resolveVariableForRecipient(vc, recipient);
+      if (vc.mode === '__static__') return vc.staticValue || 'Cliente';
+      if (!recipient) {
+        // Test send without recipient: use placeholder so Meta doesn't get empty text
+        const opt = DYNAMIC_VARIABLE_OPTIONS.find(o => o.value === vc.mode);
+        return opt ? opt.label.replace(/^.+\s/, '') : 'Cliente';
+      }
+      return resolveVariableForRecipient(vc, recipient) || 'Cliente';
     };
 
     // Header: media (IMAGE/VIDEO/DOCUMENT) or text variables
