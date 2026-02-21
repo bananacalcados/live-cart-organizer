@@ -5552,6 +5552,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      lookup_crm_by_phones: {
+        Args: { p_phones: string[] }
+        Returns: {
+          crm_name: string
+          crm_source: string
+          crm_source_id: string
+          phone: string
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }

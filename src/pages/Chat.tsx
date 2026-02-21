@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search, Phone, Users, MessageCircle, Filter, ArrowLeft,
@@ -22,6 +22,7 @@ import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import { toast } from "sonner";
 import { Message, Conversation, ChatFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
+import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { STAGES } from "@/types/order";
 import {
   Select,
@@ -151,6 +152,10 @@ export default function ChatPage() {
   const { sendMessage: zapiSend, sendMedia: zapiSendMedia } = useZapi();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
 
+  // CRM phone lookup for conversation names
+  const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
+  const { crmMap, deleteWhatsApp } = useCrmPhoneLookup(conversationPhones);
+
   // ── Fetch numbers and contacts on mount ──
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
   
@@ -224,7 +229,7 @@ export default function ChatPage() {
         lastMessage: lastMsg.message,
         lastMessageAt: new Date(lastMsg.created_at),
         unreadCount: value.unread,
-        customerName: getContactName(phone) || order?.customer?.instagram_handle || customer?.instagram_handle,
+        customerName: getContactName(phone) || crmMap.get(phone)?.name || order?.customer?.instagram_handle || customer?.instagram_handle,
         isGroup,
         hasUnansweredMessage: lastMsg.direction === 'incoming',
         stage: order?.stage,
