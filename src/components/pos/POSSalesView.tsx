@@ -149,82 +149,49 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
-  // Load notification counts with Realtime
+  // Debounce timer for Realtime notifications
+  const notifDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load notification counts with Realtime + debounce
   useEffect(() => {
     if (!hasOpenRegister) return;
     loadNotifications();
 
-    // Subscribe to whatsapp_messages changes for real-time updates
+    // Subscribe to whatsapp_messages changes with debounce to prevent query storms
+    const debouncedLoad = () => {
+      if (notifDebounceRef.current) clearTimeout(notifDebounceRef.current);
+      notifDebounceRef.current = setTimeout(loadNotifications, 5000);
+    };
+
     const channel = supabase
       .channel("pos-dashboard-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_messages" }, () => {
-        loadNotifications();
+        debouncedLoad();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_finished_conversations" }, () => {
-        loadNotifications();
+        debouncedLoad();
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (notifDebounceRef.current) clearTimeout(notifDebounceRef.current);
+      supabase.removeChannel(channel);
+    };
   }, [hasOpenRegister]);
 
   const loadNotifications = async () => {
     try {
-      // Get all messages grouped by phone to determine conversation status
-      const { data: allMessages } = await supabase
-        .from('whatsapp_messages')
-        .select('phone, direction, created_at')
-        .order('created_at', { ascending: false });
+      // Use RPC to calculate counts directly in the database (instead of fetching 72k+ rows)
+      const { data, error } = await supabase.rpc('get_conversation_counts');
 
-      // Get finished conversations to exclude them
-      const { data: finishedConvs } = await supabase
-        .from('chat_finished_conversations')
-        .select('phone, finished_at')
-        .order('finished_at', { ascending: false });
-
-      const finishedPhones = new Set<string>();
-      if (finishedConvs) {
-        // Group by phone, get latest finished_at
-        const finishedMap = new Map<string, string>();
-        for (const f of finishedConvs) {
-          if (!finishedMap.has(f.phone)) finishedMap.set(f.phone, f.finished_at);
-        }
-        // A phone is "finished" if last finished_at > last message time
-        if (allMessages) {
-          const lastMsgTime = new Map<string, string>();
-          for (const m of allMessages) {
-            if (!lastMsgTime.has(m.phone)) lastMsgTime.set(m.phone, m.created_at);
-          }
-          finishedMap.forEach((finishedAt, phone) => {
-            const lastMsg = lastMsgTime.get(phone);
-            if (lastMsg && new Date(finishedAt) >= new Date(lastMsg)) {
-              finishedPhones.add(phone);
-            }
-          });
-        }
+      if (error) {
+        console.error('RPC get_conversation_counts error:', error);
+        return;
       }
 
-      if (allMessages) {
-        const phoneMap = new Map<string, { lastDirection: string; hasOutgoing: boolean }>();
-        for (const msg of allMessages) {
-          if (finishedPhones.has(msg.phone)) continue;
-          if (!phoneMap.has(msg.phone)) {
-            phoneMap.set(msg.phone, { lastDirection: msg.direction, hasOutgoing: false });
-          }
-          const entry = phoneMap.get(msg.phone)!;
-          if (msg.direction === 'outgoing') entry.hasOutgoing = true;
-        }
-
-        let awaiting = 0;
-        let newConvs = 0;
-        phoneMap.forEach(({ lastDirection, hasOutgoing }) => {
-          if (lastDirection === 'incoming') {
-            if (hasOutgoing) awaiting++;
-            else newConvs++;
-          }
-        });
-        setUnreadWhatsApp(awaiting);
-        setNewWhatsApp(newConvs);
+      if (data && data.length > 0) {
+        setUnreadWhatsApp(Number(data[0].awaiting_count) || 0);
+        setNewWhatsApp(Number(data[0].new_count) || 0);
       }
 
       // Team chat unread count from localStorage

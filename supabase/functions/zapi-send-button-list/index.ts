@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,23 +32,31 @@ serve(async (req) => {
     let formattedPhone = phone.replace(/\D/g, '');
     if (!formattedPhone.startsWith('55')) formattedPhone = '55' + formattedPhone;
 
-    const url = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-button-list`;
+    // Use send-button-list-image when image is provided, otherwise send-button-list
+    const endpoint = imageUrl ? 'send-button-list-image' : 'send-button-list';
+    const url = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/${endpoint}`;
 
-    // Build Z-API button list payload
-    const buttonList = (buttons || []).map((btn: { id: string; title: string }, i: number) => ({
+    // Build buttons array
+    const buttonArray = (buttons || []).map((btn: { id: string; title: string }, i: number) => ({
       id: btn.id || `btn_${i}`,
       label: btn.title || `Opção ${i + 1}`,
     }));
 
+    // Build payload in the correct Z-API format
     const body: Record<string, unknown> = {
       phone: formattedPhone,
       message: message || '',
-      buttonList,
     };
 
-    // Add image if provided
     if (imageUrl) {
-      body.image = imageUrl;
+      // For send-button-list-image: buttonList is an object with image + buttons
+      body.buttonList = {
+        image: imageUrl,
+        buttons: buttonArray,
+      };
+    } else {
+      // For send-button-list without image: buttonList is just the array
+      body.buttonList = buttonArray;
     }
 
     const headers: Record<string, string> = {
@@ -59,16 +66,25 @@ serve(async (req) => {
       headers['Client-Token'] = zapiClientToken;
     }
 
+    console.log('Z-API button list request:', JSON.stringify({ url: endpoint, body }));
+
     const response = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
+    // Safe response parsing - Z-API may return empty or non-JSON responses
+    const responseText = await response.text();
+    let data: any;
+    try {
+      data = responseText ? JSON.parse(responseText) : { raw: responseText };
+    } catch {
+      data = { raw: responseText };
+    }
 
     if (!response.ok) {
-      console.error('Z-API button list error:', data);
+      console.error('Z-API button list error:', response.status, data);
       return new Response(JSON.stringify({ error: 'Failed to send button list', details: data }), {
         status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
