@@ -499,20 +499,70 @@ export function MassTemplateDispatcher() {
     finally { setIsTesting(false); }
   };
 
+  // Fetch phones that already received this template today (for resume)
+  const fetchAlreadySentPhones = async (templateName: string): Promise<Set<string>> => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayISO = today.toISOString();
+
+    const alreadySent = new Set<string>();
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from('whatsapp_messages')
+        .select('phone')
+        .eq('direction', 'outgoing')
+        .eq('status', 'sent')
+        .ilike('message', `%${templateName}%`)
+        .gte('created_at', todayISO)
+        .range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      for (const row of data) {
+        if (row.phone) alreadySent.add(row.phone.replace(/\D/g, ''));
+      }
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+    return alreadySent;
+  };
+
   // Mass send
   const handleMassSend = async () => {
     setConfirmOpen(false);
     if (!selectedTemplate || !selectedNumber) return;
 
-    const phones = [...selectedPhones];
-    if (phones.length === 0) {
+    const allPhones = [...selectedPhones];
+    if (allPhones.length === 0) {
       toast.error("Selecione pelo menos um destinatário");
       return;
     }
 
     setIsSending(true);
     cancelSendRef.current = false;
-    setSendProgress({ sent: 0, total: phones.length, failed: 0 });
+
+    // Resume: skip phones that already received this template today
+    toast.info("Verificando envios anteriores para retomar de onde parou...");
+    const alreadySent = await fetchAlreadySentPhones(selectedTemplate.name);
+
+    const phones = allPhones.filter(p => {
+      let formatted = p.replace(/\D/g, '');
+      if (!formatted.startsWith('55')) formatted = '55' + formatted;
+      return !alreadySent.has(formatted) && !alreadySent.has(p.replace(/\D/g, ''));
+    });
+
+    const skipped = allPhones.length - phones.length;
+    if (skipped > 0) {
+      toast.success(`⏩ ${skipped} destinatários já receberam hoje — retomando dos restantes.`);
+    }
+
+    if (phones.length === 0) {
+      toast.success("✅ Todos os destinatários selecionados já receberam este template hoje!");
+      setIsSending(false);
+      return;
+    }
+
+    setSendProgress({ sent: skipped, total: allPhones.length, failed: 0 });
 
     try {
       if (hasDynamicVars) {
@@ -555,7 +605,7 @@ export function MassTemplateDispatcher() {
           for (const ok of results) {
             if (ok) sent++; else failed++;
           }
-          setSendProgress({ sent, total: phones.length, failed });
+          setSendProgress({ sent: sent + skipped, total: allPhones.length, failed });
         }
       } else {
         // Static vars: use bulk queue
@@ -603,7 +653,7 @@ export function MassTemplateDispatcher() {
               else failed++;
             }
           }
-          setSendProgress({ sent, total: phones.length, failed });
+          setSendProgress({ sent: sent + skipped, total: allPhones.length, failed });
         }
       }
 
