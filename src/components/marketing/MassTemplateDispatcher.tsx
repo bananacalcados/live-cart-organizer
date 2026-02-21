@@ -530,9 +530,12 @@ export function MassTemplateDispatcher() {
             const components = buildComponentsForRecipient(recipient);
             const rendered = recipient ? buildRenderedForRecipient(recipient) : renderedMessage;
             try {
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 30000);
               const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
                 method: 'POST',
                 headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+                signal: controller.signal,
                 body: JSON.stringify({
                   phone,
                   templateName: selectedTemplate!.name,
@@ -542,6 +545,7 @@ export function MassTemplateDispatcher() {
                   renderedMessage: rendered,
                 }),
               });
+              clearTimeout(timeout);
               const data = await res.json();
               return data.success;
             } catch { return false; }
@@ -580,14 +584,18 @@ export function MassTemplateDispatcher() {
         for (let i = 0; i < allIds.length; i += 50) {
           if (cancelSendRef.current) break;
           const batchIds = allIds.slice(i, i + 50);
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 30000);
           const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
             method: 'POST',
             headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+            signal: controller.signal,
             body: JSON.stringify({
               queueIds: batchIds,
               whatsappNumberId: selectedNumber,
             }),
           });
+          clearTimeout(timeout);
           const data = await res.json();
           if (data.results) {
             for (const r of data.results) {
