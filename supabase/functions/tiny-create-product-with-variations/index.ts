@@ -40,22 +40,34 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Build variations array
-    const variacoes = items.map((item: any) => {
-      const grade: Record<string, string> = {};
-      if (item.size) grade["Tamanho"] = item.size;
-      if (item.color) grade["Cor"] = item.color;
+    // Deduplicate items by size+color, summing quantities
+    const mergedMap = new Map<string, any>();
+    for (const item of items) {
+      const size = item.size || "Único";
+      const color = item.color || "Única";
+      const key = `${size}|${color}`;
+      if (mergedMap.has(key)) {
+        const existing = mergedMap.get(key);
+        existing.quantity = (existing.quantity || 1) + (item.quantity || 1);
+        // Keep the first barcode as primary
+        if (!existing.ids) existing.ids = [existing.id];
+        if (item.id) existing.ids.push(item.id);
+      } else {
+        mergedMap.set(key, { ...item, size, color, ids: item.id ? [item.id] : [] });
+      }
+    }
+    const mergedItems = [...mergedMap.values()];
 
-      return {
-        variacao: {
-          codigo: item.barcode,
-          gtin: item.barcode,
-          preco: item.price || 0,
-          estoque_atual: item.quantity || 0,
-          grade: Object.keys(grade).length > 0 ? grade : { Tamanho: "Único" },
-        },
-      };
-    });
+    // Build variations array
+    const variacoes = mergedItems.map((item: any) => ({
+      variacao: {
+        codigo: item.barcode,
+        gtin: item.barcode,
+        preco: item.price || 0,
+        estoque_atual: item.quantity || 0,
+        grade: { Tamanho: item.size, Cor: item.color },
+      },
+    }));
 
     // Build Tiny product payload
     const produto = {
@@ -110,12 +122,13 @@ Deno.serve(async (req) => {
 
     // Update capture items with the Tiny product ID
     if (tinyProductId) {
-      for (const item of items) {
-        if (item.id) {
+      for (const item of mergedItems) {
+        const allIds = item.ids || (item.id ? [item.id] : []);
+        for (const id of allIds) {
           await supabase
             .from("product_capture_items")
             .update({ tiny_product_id: tinyProductId })
-            .eq("id", item.id);
+            .eq("id", id);
         }
       }
     }
