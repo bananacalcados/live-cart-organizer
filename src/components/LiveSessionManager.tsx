@@ -733,7 +733,7 @@ export function LiveSessionManager() {
                       return (
                         <div key={v.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
                           <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${v.is_online ? "bg-green-500" : "bg-zinc-400"}`} />
+                            <div className={`w-2 h-2 rounded-full ${isViewerOnlineNow(v) ? "bg-green-500" : "bg-zinc-400"}`} />
                             <div>
                               <p className="text-sm font-medium">{generateUsername(v.name, v.phone)}</p>
                               <p className="text-[10px] text-muted-foreground">{v.name} • {itemCount} itens</p>
@@ -774,6 +774,48 @@ export function LiveSessionManager() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Online Viewers List */}
+            <Card className="border-green-500/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Users className="w-4 h-4 text-green-500" />
+                  Online Agora ({onlineViewers.length})
+                  <span className="text-[10px] text-muted-foreground font-normal ml-1">atualiza em tempo real</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {onlineViewers.length === 0 ? (
+                  <p className="text-muted-foreground text-sm text-center py-4">Nenhum viewer online no momento</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto">
+                    {onlineViewers.map(v => {
+                      const cartItems = Array.isArray(v.cart_items) ? v.cart_items : [];
+                      const cartVal = cartItems.reduce((s: number, i: any) => s + (i.price || 0) * (i.quantity || 1), 0);
+                      const seenAgo = Math.round((Date.now() - new Date(v.last_seen_at).getTime()) / 1000);
+                      return (
+                        <div key={v.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-500/5 border border-green-500/10">
+                          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium truncate">{v.name}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {generateUsername(v.name, v.phone)}
+                              {cartItems.length > 0 && <> • 🛒 R$ {cartVal.toFixed(2).replace(".", ",")}</>}
+                            </p>
+                            <p className="text-[9px] text-muted-foreground">visto há {seenAgo < 60 ? `${seenAgo}s` : `${Math.round(seenAgo / 60)}min`}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openInAppChat(v)} title="Chat WhatsApp">
+                              <Phone className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Test Mode Controls */}
             <Card className="border-dashed border-amber-500/30">
@@ -922,7 +964,7 @@ export function LiveSessionManager() {
                     <p className="text-muted-foreground text-sm text-center py-8">Nenhum viewer cadastrado</p>
                   ) : viewers.map(v => (
                     <div key={v.id} className={`flex items-center gap-3 p-3 ${v.is_banned ? "opacity-50 bg-destructive/5" : ""}`}>
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${v.is_online ? "bg-green-500" : "bg-zinc-400"}`} />
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isViewerOnlineNow(v) ? "bg-green-500" : "bg-zinc-400"}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">{v.name} {v.is_banned && <Badge variant="destructive" className="text-[10px] ml-1">Banido</Badge>}</p>
                         <p className="text-xs text-muted-foreground">{v.phone} • {v.messages_count || 0} msgs</p>
