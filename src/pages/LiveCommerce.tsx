@@ -175,6 +175,22 @@ const LiveCommerce = () => {
     load();
   }, []);
 
+  // Heartbeat: update last_seen_at every 30s so dashboard knows viewer is online
+  useEffect(() => {
+    if (!session?.id) return;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return;
+    let v: { name: string; phone: string };
+    try { v = JSON.parse(stored); } catch { return; }
+    const interval = setInterval(async () => {
+      await supabase.from("live_viewers").upsert(
+        { session_id: session.id, name: v.name, phone: v.phone, is_online: true, last_seen_at: new Date().toISOString() },
+        { onConflict: "session_id,phone" }
+      );
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [session?.id]);
+
   // Realtime: spotlight products + session changes
   useEffect(() => {
     if (!session?.id) return;
