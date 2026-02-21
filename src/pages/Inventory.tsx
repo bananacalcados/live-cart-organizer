@@ -4,8 +4,9 @@ import {
   ArrowLeft, Package, BarChart3, ScanBarcode, CheckCircle2,
   AlertTriangle, Loader2, Play, Pause, RotateCcw, Store,
   ClipboardList, Trash2, Search, ChevronDown, HelpCircle,
-  Camera, Tag, Printer, Download, FileText, Link2
+  Camera, Tag, Printer, Download, FileText, Link2, ShoppingBag
 } from "lucide-react";
+import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -164,6 +165,7 @@ export default function Inventory() {
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
+  const [inventoryMode, setInventoryMode] = useState<"stock" | "capture">("stock");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
@@ -767,6 +769,26 @@ export default function Inventory() {
           <Package className="h-5 w-5 text-primary" />
           <h1 className="text-lg font-bold">Controle de Estoque</h1>
           <div className="flex-1" />
+          {stores.length > 0 && selectedStoreId && (
+            <div className="flex gap-1 bg-muted rounded-lg p-0.5">
+              <Button
+                variant={inventoryMode === "stock" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("stock")}
+                className="text-xs h-7 gap-1"
+              >
+                <ClipboardList className="h-3 w-3" /> Balanço
+              </Button>
+              <Button
+                variant={inventoryMode === "capture" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("capture")}
+                className="text-xs h-7 gap-1"
+              >
+                <ShoppingBag className="h-3 w-3" /> Captação
+              </Button>
+            </div>
+          )}
           {stores.length > 0 && (
             <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
               <SelectTrigger className="w-48">
@@ -794,6 +816,8 @@ export default function Inventory() {
             <h2 className="text-xl font-semibold text-muted-foreground">Selecione uma loja</h2>
             <p className="text-sm text-muted-foreground mt-1">Escolha a loja para iniciar o controle de estoque</p>
           </div>
+        ) : inventoryMode === "capture" ? (
+          <ProductCaptureTab storeId={selectedStoreId} storeName={selectedStore?.name || ""} />
         ) : !activeCount ? (
           <div className="max-w-lg mx-auto space-y-6">
             <Card>
