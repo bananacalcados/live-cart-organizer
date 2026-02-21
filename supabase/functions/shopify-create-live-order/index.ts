@@ -47,14 +47,16 @@ serve(async (req) => {
       if (!raw) return null;
       const digits = raw.replace(/\D/g, "");
       if (digits.length < 10) return null;
-      return digits.startsWith("55") ? `+${digits}` : `+55${digits}`;
+      const full = digits.startsWith("55") ? digits : `55${digits}`;
+      if (full.length < 12 || full.length > 13) return null;
+      return `+${full}`;
     }
 
     const phone = formatPhone(customer?.phone);
-    const fullName = customer?.name || "Cliente Live";
+    const fullName = (customer?.name || "Cliente Live").trim();
     const nameParts = fullName.split(" ");
     const firstName = nameParts[0];
-    const lastName = nameParts.slice(1).join(" ") || "-";
+    const lastName = nameParts.slice(1).join(" ").trim() || "-";
 
     const shopifyCustomer: Record<string, unknown> = {
       first_name: firstName,

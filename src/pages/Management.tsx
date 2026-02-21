@@ -24,6 +24,7 @@ import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, startO
 import { toast } from "sonner";
 import { TeamProfilesManager } from "@/components/TeamProfilesManager";
 import { BankReconciliation } from "@/components/management/BankReconciliation";
+import { StrategyManager } from "@/components/management/StrategyManager";
 
 interface TinySyncedOrder {
   id: string;
@@ -1056,6 +1057,10 @@ export default function Management() {
                   <Users className="h-3.5 w-3.5" />
                   Equipe
                 </TabsTrigger>
+                <TabsTrigger value="strategy" className="gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Estratégia
+                </TabsTrigger>
               </TabsList>
 
               {/* Overview */}
@@ -1246,6 +1251,11 @@ export default function Management() {
               {/* Equipe / Perfis */}
               <TabsContent value="team" className="space-y-4">
                 <TeamProfilesManager stores={stores} />
+              </TabsContent>
+
+              {/* Estratégia */}
+              <TabsContent value="strategy" className="space-y-4">
+                <StrategyManager stores={stores} />
               </TabsContent>
             </Tabs>
           </>
