@@ -1,12 +1,17 @@
 import { useState, useEffect } from "react";
 import {
   DollarSign, ShoppingCart, Tag, Users, TrendingUp,
-  Package, Loader2, RefreshCw, BarChart3, Send, RotateCcw
+  Package, Loader2, RefreshCw, BarChart3, Send, RotateCcw,
+  CalendarIcon, ChevronLeft, ChevronRight
 } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -43,19 +48,25 @@ export function POSDailySales({ storeId }: Props) {
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [resending, setResending] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  const isToday = selectedDate.toDateString() === new Date().toDateString();
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
+      const dayStart = new Date(selectedDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(selectedDate);
+      dayEnd.setHours(23, 59, 59, 999);
 
       const [salesRes, itemsRes, sellersRes] = await Promise.all([
         supabase
           .from("pos_sales")
           .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id")
           .eq("store_id", storeId)
-          .gte("created_at", todayStart.toISOString())
+          .gte("created_at", dayStart.toISOString())
+          .lte("created_at", dayEnd.toISOString())
           .order("created_at", { ascending: false }),
         supabase
           .from("pos_sale_items")
@@ -194,7 +205,19 @@ export function POSDailySales({ storeId }: Props) {
 
   useEffect(() => {
     loadData();
-  }, [storeId]);
+  }, [storeId, selectedDate]);
+
+  const goToPrevDay = () => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() - 1);
+    setSelectedDate(d);
+  };
+  const goToNextDay = () => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + 1);
+    if (d <= new Date()) setSelectedDate(d);
+  };
+  const goToToday = () => setSelectedDate(new Date());
 
   // Calculations
   const completedSales = sales.filter((s) => s.status === "completed");
@@ -253,19 +276,46 @@ export function POSDailySales({ storeId }: Props) {
       <div className="flex items-center justify-between p-4 border-b border-pos-orange/20">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-pos-orange" />
-          <h2 className="text-lg font-bold text-pos-white">Vendas do Dia</h2>
+          <h2 className="text-lg font-bold text-pos-white">Vendas</h2>
           <Badge className="bg-pos-orange/20 text-pos-orange border-pos-orange/30">
             {completedSales.length} vendas
           </Badge>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10"
-          onClick={loadData}
-        >
-          <RefreshCw className="h-3.5 w-3.5" /> Atualizar
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-pos-white/60 hover:text-pos-white" onClick={goToPrevDay}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs min-w-[120px]">
+                <CalendarIcon className="h-3.5 w-3.5" />
+                {isToday ? "Hoje" : format(selectedDate, "dd/MM/yyyy")}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(d) => d && setSelectedDate(d)}
+                disabled={(date) => date > new Date()}
+                locale={ptBR}
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-pos-white/60 hover:text-pos-white" onClick={goToNextDay} disabled={isToday}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          {!isToday && (
+            <Button variant="outline" size="sm" className="text-xs border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 ml-1" onClick={goToToday}>
+              Hoje
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 ml-1" onClick={loadData}>
+            <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
