@@ -125,8 +125,18 @@ export function MassTemplateDispatcher() {
   }, [numbers.length, fetchNumbers]);
 
   useEffect(() => {
-    if (selectedNumberId && !selectedNumber) setSelectedNumber(selectedNumberId);
-  }, [selectedNumberId, selectedNumber]);
+    // Only auto-select if it's a Meta number (has phone_number_id)
+    if (selectedNumberId && !selectedNumber) {
+      const num = numbers.find(n => n.id === selectedNumberId);
+      if (num && num.phone_number_id) {
+        setSelectedNumber(selectedNumberId);
+      } else {
+        // Fallback to first Meta number
+        const metaNum = numbers.find(n => !!n.phone_number_id);
+        if (metaNum) setSelectedNumber(metaNum.id);
+      }
+    }
+  }, [selectedNumberId, selectedNumber, numbers]);
 
   useEffect(() => {
     if (selectedNumber) fetchTemplates();

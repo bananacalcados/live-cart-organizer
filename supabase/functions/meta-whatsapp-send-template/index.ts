@@ -80,6 +80,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body = await req.json();
+    console.log('Request body keys:', Object.keys(body), 'whatsappNumberId:', body.whatsappNumberId || body.whatsappNumberId || 'none');
 
     // === Bulk send from queue ===
     if (body.queueIds) {
