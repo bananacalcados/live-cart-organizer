@@ -149,7 +149,8 @@ async function chargePagarme(
   });
 
   const chargeData = await chargeRes.json();
-  console.log("Pagar.me charge response status:", chargeData.status);
+  console.log("Pagar.me charge response HTTP status:", chargeRes.status);
+  console.log("Pagar.me charge full response:", JSON.stringify(chargeData).substring(0, 2000));
 
   if (chargeData.status === "paid" || chargeData.status === "pending") {
     return {
@@ -159,9 +160,13 @@ async function chargePagarme(
     };
   }
 
-  const errorMsg = chargeData.charges?.[0]?.last_transaction?.gateway_response?.errors?.[0]?.message
+  const gatewayErrors = chargeData.charges?.[0]?.last_transaction?.gateway_response?.errors;
+  const acquirerMsg = chargeData.charges?.[0]?.last_transaction?.acquirer_message;
+  const errorMsg = gatewayErrors?.[0]?.message
+    || acquirerMsg
     || chargeData.message
     || "Charge failed";
+  console.error("Pagar.me detailed error:", { errorMsg, gatewayErrors, acquirerMsg, status: chargeData.status });
   return { success: false, gateway: "pagarme", error: errorMsg };
 }
 
