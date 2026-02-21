@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { ShoppingBag, MessageCircle, X, Plus, Minus, ShoppingCart, Trash2, Send, Users, ChevronUp, Tag, Timer } from "lucide-react";
+import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
 import { Button } from "@/components/ui/button";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { supabase } from "@/integrations/supabase/client";
@@ -124,6 +125,12 @@ const LiveCommerce = () => {
         }
       } catch { localStorage.removeItem(STORAGE_KEY); }
     }
+  }, []);
+
+  // Init Meta Pixel + PageView
+  useEffect(() => {
+    initMetaPixel();
+    trackPageView();
   }, []);
 
   // Fetch active session
@@ -267,6 +274,9 @@ const LiveCommerce = () => {
         message: `${viewerData.name} entrou na live! 🎉`, message_type: "system",
       });
     }
+    // Pixel: Lead event
+    trackPixelEvent("Lead", { content_name: "live_gate", content_category: gatePurpose });
+
     if (pendingAction) { pendingAction(); setPendingAction(null); }
   };
 
@@ -311,6 +321,14 @@ const LiveCommerce = () => {
     toast.success("Adicionado ao carrinho! 🛒");
     setSelectedProduct(null);
 
+    // Pixel: AddToCart
+    trackPixelEvent("AddToCart", {
+      content_name: productTitle,
+      content_type: "product",
+      value: variant.price,
+      currency: "BRL",
+    });
+
     if (viewer && session?.id) {
       setTimeout(async () => {
         const variantTitle = variant.title === "Default Title" ? "" : variant.title;
@@ -330,6 +348,12 @@ const LiveCommerce = () => {
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     setCheckingOut(true);
+    // Pixel: InitiateCheckout
+    trackPixelEvent("InitiateCheckout", {
+      value: cartTotal,
+      currency: "BRL",
+      num_items: cartCount,
+    });
     try {
       // Save cart to localStorage for persistence when returning from checkout
       localStorage.setItem("live_cart", JSON.stringify(cart));
