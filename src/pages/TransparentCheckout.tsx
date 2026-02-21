@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, Clock, Trophy } from "lucide-react";
 import { toast } from "sonner";
@@ -218,6 +219,7 @@ function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: s
       return;
     }
     setIsGenerating(true);
+    trackPixelEvent("AddPaymentInfo", { content_category: "pix" });
     try {
       const response = await supabase.functions.invoke("mercadopago-create-pix", {
         body: {
@@ -456,6 +458,7 @@ function CreditCardSection({
     }
 
     setIsProcessing(true);
+    trackPixelEvent("AddPaymentInfo", { content_category: "credit_card" });
     try {
       const totalCents = Math.round(totalWithInterest * 100);
 
@@ -691,6 +694,12 @@ export default function TransparentCheckout() {
     monthly_interest_rate: 2.49,
   });
 
+  // Init Meta Pixel + InitiateCheckout
+  useEffect(() => {
+    initMetaPixel();
+    trackPixelEvent("InitiateCheckout");
+  }, []);
+
   useEffect(() => {
     // Try live cart data from query params first
     const liveParam = searchParams.get("live");
@@ -807,6 +816,17 @@ export default function TransparentCheckout() {
 
   const handlePaymentConfirmed = useCallback(async (paymentInfo?: { platform: string; method: string }) => {
     setPaymentStatus("success");
+
+    // Pixel: Purchase event
+    if (orderData) {
+      trackPixelEvent("Purchase", {
+        value: orderData.totalAmount,
+        currency: "BRL",
+        content_type: "product",
+        num_items: orderData.products.reduce((s, p) => s + p.quantity, 0),
+      });
+    }
+
     if (orderData?.checkoutStartedAt) {
       const elapsed = (Date.now() - new Date(orderData.checkoutStartedAt).getTime()) / 1000;
       if (elapsed <= 600) {
