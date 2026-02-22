@@ -1,79 +1,52 @@
 
 
-# Redesign do WhatsApp no POS - Layout Split-View (Estilo WhatsApp Desktop) + Transferencia de Estoque no Tiny
+# Correcoes no WhatsApp POS - Fotos, Busca e Numero Visivel
 
-## Visao Geral
+## 3 Problemas Identificados
 
-Duas entregas neste plano:
+### 1. Fotos de Perfil Nao Aparecem
 
-### 1. Layout Split-View do Chat
+**Causa raiz:** O sistema so busca fotos de perfil para telefones que ja existem na tabela `chat_contacts` mas nao tem foto. Telefones que aparecem nas conversas mas nunca foram salvos na tabela `chat_contacts` sao completamente ignorados.
 
-Transformar o chat do POS de um layout "tela unica" (lista OU chat) para um layout side-by-side igual ao WhatsApp Desktop:
-- **Painel esquerdo**: Lista de conversas sempre visivel (com busca, filtros, abas de status)
-- **Painel direito**: Area de chat da conversa selecionada
-- A conversa selecionada fica destacada na lista
-- Mensagens novas em outras conversas continuam aparecendo na lista em tempo real
-- Nomes de grupos mantidos normalmente
-- Todas as funcionalidades existentes preservadas (catalogo Shopify, audios, fotos, suporte, trocas, etc.)
-- Em mobile, manter o comportamento atual (tela unica) por falta de espaco
+**Solucao:** Apos carregar os contatos do banco, comparar com a lista de telefones das conversas. Para os telefones que nao estao em `chat_contacts` (e portanto nao tem foto), incluir tambem no lote de busca via `zapi-profile-picture`. Como as conversas carregam depois dos contatos, adicionar um segundo `useEffect` que monitora as conversas e busca fotos dos telefones faltantes.
 
-### 2. Transferencia Automatica de Estoque no Tiny ERP
+**Arquivo:** `src/components/pos/POSWhatsApp.tsx`
 
-Quando uma transferencia entre lojas for confirmada como "Entregue", o sistema deve automaticamente:
-- **Decrementar** o estoque na loja de origem (que enviou o produto)
-- **Incrementar** o estoque na loja de destino (que recebeu o produto)
+---
 
-Isso sera feito via a API do Tiny ERP (estoque.atualizar.php), usando os tokens individuais de cada loja.
+### 2. Busca por Numero Nao Funciona
+
+**Causa raiz:** O filtro de busca (linha 99-101 do `ConversationList.tsx`) faz `c.phone.includes(searchQuery)`, que funciona para digitos exatos. Porem, o usuario pode digitar parcialmente (ex: "9815") e esperar encontrar. O problema real e que o codigo ja deveria funcionar com substring -- mas precisa tambem limpar caracteres nao-numericos do termo de busca para cobrir casos onde o usuario digita com formatacao.
+
+**Solucao:** Antes de comparar, remover todos os caracteres nao-numericos do `searchQuery`. Assim "27 998" vira "27998" e encontra dentro de "5527998151234". A busca parcial por ultimos 4 digitos ja funcionara naturalmente com `includes()`.
+
+**Arquivo:** `src/components/chat/ConversationList.tsx`
+
+---
+
+### 3. Numero de WhatsApp Invisivel Quando Tem Nome
+
+**Causa raiz:** Na lista de conversas, so exibe `customerName || phone`. Quando tem nome, o phone desaparece. No header do chat (barra verde), mesmo comportamento: so mostra nome ou phone, nunca ambos.
+
+**Solucao:**
+- Na lista de conversas: exibir o numero do telefone formatado abaixo do nome, em fonte menor e cor mais clara
+- No header verde do chat: exibir o numero abaixo do nome do contato
+- No painel CRM: adicionar o numero de WhatsApp visivel
+
+**Arquivos:** `src/components/chat/ConversationList.tsx` e `src/components/pos/POSWhatsApp.tsx`
 
 ---
 
 ## Detalhes Tecnicos
 
-### Parte 1 - Layout Split-View
+### Alteracoes em `src/components/pos/POSWhatsApp.tsx`
 
-**Arquivo: `src/components/pos/POSWhatsApp.tsx`**
+1. Adicionar um `useEffect` que roda quando `conversations` mudam, verificando quais telefones da lista de conversas nao tem foto em `contactPhotos`, e buscando em lote via `zapi-profile-picture`
+2. No header verde (linha 508-513), abaixo do nome do contato, exibir o telefone em texto branco/translucido menor
+3. No painel CRM (linha 406-467), adicionar o numero de telefone visivel
 
-Reestruturar o JSX principal:
+### Alteracoes em `src/components/chat/ConversationList.tsx`
 
-```text
-+--------------------------------------------------+
-|  Header verde (WhatsApp)                         |
-+------------------+-------------------------------+
-|  ConversationList|  ChatView                     |
-|  (sempre visivel)|  (conversa selecionada)       |
-|                  |                               |
-|  [busca]         |  [header do contato]          |
-|  [filtros/abas]  |  [API selector]               |
-|  [lista convs]   |  [mensagens]                  |
-|                  |  [input]                       |
-+------------------+-------------------------------+
-```
-
-- Usar `flex` com larguras fixas: lista ~35% e chat ~65%
-- Passar `selectedPhone` para `ConversationList` para destacar a conversa ativa
-- Em telas < 768px (mobile), manter o comportamento atual de tela unica
-- O header verde sera unificado no topo, mostrando info do contato quando selecionado
-
-**Arquivo: `src/components/chat/ConversationList.tsx`**
-
-- Adicionar prop opcional `selectedPhone` para highlight visual da conversa ativa
-- Aplicar estilo de destaque (background) na conversa selecionada
-
-### Parte 2 - Transferencia de Estoque no Tiny
-
-**Novo arquivo: `supabase/functions/pos-inter-store-stock-transfer/index.ts`**
-
-Edge function que:
-1. Recebe `request_id` da transferencia
-2. Busca os dados da solicitacao (itens, loja origem, loja destino)
-3. Busca os tokens Tiny de ambas as lojas via `pos_stores.tiny_token`
-4. Para cada item:
-   - Chama `estoque.atualizar.php` na loja de origem decrementando a quantidade
-   - Chama `estoque.atualizar.php` na loja de destino incrementando a quantidade
-5. Retorna o resultado
-
-**Arquivo: `src/components/pos/POSInterStoreRequests.tsx`**
-
-- No `handleRespond`, quando o status for `"delivered"`, apos atualizar o banco, chamar a nova edge function para ajustar o estoque no Tiny automaticamente
-- Exibir feedback de sucesso/erro ao usuario
+1. No filtro de busca (linhas 99-101): limpar `searchQuery` removendo `\D` antes de comparar com `c.phone`, mantendo tambem a busca por nome como esta
+2. Na renderizacao de cada conversa: quando `customerName` existe, exibir o telefone formatado em uma linha menor abaixo do nome
 
