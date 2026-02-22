@@ -1,82 +1,79 @@
 
 
-# Plano de Otimizacao de Performance
+# Redesign do WhatsApp no POS - Layout Split-View (Estilo WhatsApp Desktop) + Transferencia de Estoque no Tiny
 
-## Problema identificado
+## Visao Geral
 
-O sistema esta lento porque algumas telas carregam volumes enormes de dados de uma so vez:
+Duas entregas neste plano:
 
-- **Chat**: Carrega TODAS as 76.000+ mensagens do WhatsApp para montar a lista de conversas. Isso e feito a cada INSERT via Realtime, ou seja, cada nova mensagem recarrega 76k registros.
-- **Home**: Faz uma chamada RPC por modulo (ate 9 chamadas) para verificar permissoes.
-- **ProtectedRoute**: Faz outra chamada RPC a cada navegacao.
-- **TeamChat**: Roda em TODAS as paginas, fazendo queries adicionais em cada tela.
+### 1. Layout Split-View do Chat
 
-## Sobre separar modulos em projetos
+Transformar o chat do POS de um layout "tela unica" (lista OU chat) para um layout side-by-side igual ao WhatsApp Desktop:
+- **Painel esquerdo**: Lista de conversas sempre visivel (com busca, filtros, abas de status)
+- **Painel direito**: Area de chat da conversa selecionada
+- A conversa selecionada fica destacada na lista
+- Mensagens novas em outras conversas continuam aparecendo na lista em tempo real
+- Nomes de grupos mantidos normalmente
+- Todas as funcionalidades existentes preservadas (catalogo Shopify, audios, fotos, suporte, trocas, etc.)
+- Em mobile, manter o comportamento atual (tela unica) por falta de espaco
 
-**Nao recomendo.** Os motivos:
+### 2. Transferencia Automatica de Estoque no Tiny ERP
 
-- A lentidao nao e causada pelo tamanho do codigo, mas sim por queries ineficientes no banco de dados
-- Separar em projetos criaria complexidade enorme: autenticacao compartilhada, comunicacao entre APIs, duplicacao de configuracoes
-- O banco de dados continuaria o mesmo, entao os mesmos problemas de performance persistiriam
-- A solucao correta e otimizar as queries, nao dividir o sistema
+Quando uma transferencia entre lojas for confirmada como "Entregue", o sistema deve automaticamente:
+- **Decrementar** o estoque na loja de origem (que enviou o produto)
+- **Incrementar** o estoque na loja de destino (que recebeu o produto)
 
-## Solucao proposta
-
-### 1. Criar RPC para lista de conversas (maior impacto)
-
-Em vez de carregar 76k mensagens no frontend, criar uma funcao no banco que retorna apenas a ultima mensagem de cada telefone, com contagem de nao-lidas. Isso reduz de 76k registros para ~3.600 registros (um por conversa).
-
-```sql
-CREATE FUNCTION get_conversations(p_number_id UUID DEFAULT NULL)
-RETURNS TABLE (
-  phone TEXT,
-  last_message TEXT,
-  last_message_at TIMESTAMPTZ,
-  unread_count BIGINT,
-  direction TEXT,
-  is_group BOOLEAN
-)
-```
-
-### 2. Unificar verificacao de permissoes em uma unica RPC
-
-Em vez de 9 chamadas separadas na Home, criar uma funcao que retorna todos os modulos permitidos de uma vez:
-
-```sql
-CREATE FUNCTION get_user_allowed_modules(p_user_id UUID)
-RETURNS TEXT[]
-```
-
-### 3. Implementar lazy loading no App.tsx
-
-Usar `React.lazy()` para que cada modulo so carregue seu JavaScript quando o usuario navegar ate ele. Hoje todos os 15+ modulos sao importados no carregamento inicial.
-
-### 4. Paginar mensagens do chat
-
-Ao abrir uma conversa, carregar apenas as ultimas 50 mensagens e implementar "carregar mais" ao rolar para cima.
-
-### 5. Otimizar TeamChat
-
-Adicionar um debounce e evitar recarregar mensagens a cada mudanca de rota.
+Isso sera feito via a API do Tiny ERP (estoque.atualizar.php), usando os tokens individuais de cada loja.
 
 ---
 
-## Detalhes tecnicos
+## Detalhes Tecnicos
 
-### Arquivos que serao modificados:
+### Parte 1 - Layout Split-View
 
-| Arquivo | Mudanca |
-|---|---|
-| **Nova migration SQL** | Criar RPCs `get_conversations` e `get_user_allowed_modules` |
-| **src/pages/Chat.tsx** | Usar a nova RPC em vez de carregar todas as mensagens; paginar mensagens individuais |
-| **src/pages/Home.tsx** | Usar `get_user_allowed_modules` em uma unica chamada |
-| **src/components/ProtectedRoute.tsx** | Cachear resultado de permissoes para evitar re-chamadas |
-| **src/App.tsx** | Adicionar `React.lazy()` nos imports dos modulos |
+**Arquivo: `src/components/pos/POSWhatsApp.tsx`**
 
-### Resultado esperado:
+Reestruturar o JSX principal:
 
-- Chat: de ~76k registros para ~3.6k (reducao de 95%)
-- Home: de 9 chamadas RPC para 1
-- Carregamento inicial: apenas o codigo do modulo atual e baixado
-- Nenhuma configuracao existente sera perdida
+```text
++--------------------------------------------------+
+|  Header verde (WhatsApp)                         |
++------------------+-------------------------------+
+|  ConversationList|  ChatView                     |
+|  (sempre visivel)|  (conversa selecionada)       |
+|                  |                               |
+|  [busca]         |  [header do contato]          |
+|  [filtros/abas]  |  [API selector]               |
+|  [lista convs]   |  [mensagens]                  |
+|                  |  [input]                       |
++------------------+-------------------------------+
+```
+
+- Usar `flex` com larguras fixas: lista ~35% e chat ~65%
+- Passar `selectedPhone` para `ConversationList` para destacar a conversa ativa
+- Em telas < 768px (mobile), manter o comportamento atual de tela unica
+- O header verde sera unificado no topo, mostrando info do contato quando selecionado
+
+**Arquivo: `src/components/chat/ConversationList.tsx`**
+
+- Adicionar prop opcional `selectedPhone` para highlight visual da conversa ativa
+- Aplicar estilo de destaque (background) na conversa selecionada
+
+### Parte 2 - Transferencia de Estoque no Tiny
+
+**Novo arquivo: `supabase/functions/pos-inter-store-stock-transfer/index.ts`**
+
+Edge function que:
+1. Recebe `request_id` da transferencia
+2. Busca os dados da solicitacao (itens, loja origem, loja destino)
+3. Busca os tokens Tiny de ambas as lojas via `pos_stores.tiny_token`
+4. Para cada item:
+   - Chama `estoque.atualizar.php` na loja de origem decrementando a quantidade
+   - Chama `estoque.atualizar.php` na loja de destino incrementando a quantidade
+5. Retorna o resultado
+
+**Arquivo: `src/components/pos/POSInterStoreRequests.tsx`**
+
+- No `handleRespond`, quando o status for `"delivered"`, apos atualizar o banco, chamar a nova edge function para ajustar o estoque no Tiny automaticamente
+- Exibir feedback de sucesso/erro ao usuario
 
