@@ -33,6 +33,7 @@ interface ConversationListProps {
   metaNumbers: WhatsAppNumber[];
   contactPhotos?: Record<string, string>;
   contactNames?: Record<string, string>;
+  selectedPhone?: string | null;
 }
 
 const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel: string }[] = [
@@ -59,6 +60,7 @@ export function ConversationList({
   metaNumbers,
   contactPhotos = {},
   contactNames = {},
+  selectedPhone,
 }: ConversationListProps) {
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) return format(date, 'HH:mm', { locale: ptBR });
@@ -221,7 +223,8 @@ export function ConversationList({
                 onClick={() => onSelectConversation(conv.phone)}
                 className={cn(
                   "w-full px-3 py-3 flex items-center gap-3 hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors text-left border-b border-[#e9edef] dark:border-[#313d45]",
-                  conv.hasUnansweredMessage && "bg-[#d9fdd3]/30 dark:bg-[#005c4b]/20"
+                  conv.hasUnansweredMessage && "bg-[#d9fdd3]/30 dark:bg-[#005c4b]/20",
+                  selectedPhone === conv.phone && "bg-[#f0f2f5] dark:bg-[#2a3942]"
                 )}
               >
                 {/* Avatar with photo */}

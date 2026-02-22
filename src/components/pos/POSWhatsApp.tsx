@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -568,9 +569,13 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         </div>
       )}
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {!selectedPhone ? (
+      {/* Content - Split view on desktop, single view on mobile */}
+      <div className="flex-1 flex overflow-hidden min-w-0">
+        {/* Conversation List - always visible on desktop, hidden when chat open on mobile */}
+        <div className={cn(
+          "flex flex-col min-h-0 overflow-hidden border-r border-[#e9edef] dark:border-[#313d45]",
+          selectedPhone ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
+        )}>
           <ConversationList
             conversations={conversations}
             searchQuery={searchQuery}
@@ -587,20 +592,34 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             metaNumbers={metaNumbers}
             contactPhotos={contactPhotos}
             contactNames={chatContacts}
+            selectedPhone={selectedPhone}
           />
+        </div>
+
+        {/* Chat View - takes remaining space on desktop */}
+        {selectedPhone ? (
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+            <ChatView
+              messages={messages}
+              conversation={selectedConversation}
+              newMessage={newMessage}
+              onNewMessageChange={setNewMessage}
+              onSendMessage={handleSendMessage}
+              onSendAudio={handleSendAudio}
+              onSendMedia={handleSendMedia}
+              onBack={() => setSelectedPhone(null)}
+              isSending={isSending}
+              customerInfoPanel={customerInfoPanel}
+            />
+          </div>
         ) : (
-          <ChatView
-            messages={messages}
-            conversation={selectedConversation}
-            newMessage={newMessage}
-            onNewMessageChange={setNewMessage}
-            onSendMessage={handleSendMessage}
-            onSendAudio={handleSendAudio}
-            onSendMedia={handleSendMedia}
-            onBack={() => setSelectedPhone(null)}
-            isSending={isSending}
-            customerInfoPanel={customerInfoPanel}
-          />
+          <div className="hidden md:flex flex-1 items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35]">
+            <div className="text-center text-[#667781]">
+              <MessageCircle className="h-16 w-16 mx-auto mb-4 opacity-30" />
+              <p className="text-lg font-light">Selecione uma conversa</p>
+              <p className="text-sm mt-1">para começar a atender</p>
+            </div>
+          </div>
         )}
       </div>
 
