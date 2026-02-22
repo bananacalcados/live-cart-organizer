@@ -121,6 +121,20 @@ export default function CustomerRegister() {
 
     setSubmitting(true);
     try {
+      // Check if already registered (prevent duplicate submissions)
+      const { data: existingReg } = await supabase
+        .from("customer_registrations")
+        .select("id, status, shopify_draft_order_name")
+        .eq("order_id", orderId!)
+        .maybeSingle();
+
+      if (existingReg) {
+        setDraftOrderName(existingReg.shopify_draft_order_name || "");
+        setSubmitted(true);
+        toast.success("Cadastro já realizado anteriormente!");
+        return;
+      }
+
       // Save registration
       const { data: reg, error: regError } = await supabase
         .from("customer_registrations")
