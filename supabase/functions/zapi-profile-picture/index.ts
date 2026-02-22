@@ -42,7 +42,7 @@ serve(async (req) => {
     for (const phone of batch) {
       try {
         const cleanPhone = phone.replace(/\D/g, '');
-        const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/profile-picture/${cleanPhone}`;
+        const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/profile-picture?phone=${cleanPhone}`;
         
         const headers: Record<string, string> = {};
         if (clientToken) headers['Client-Token'] = clientToken;
@@ -51,7 +51,8 @@ serve(async (req) => {
         
         if (resp.ok) {
           const data = await resp.json();
-          const picUrl = data?.link || data?.profilePictureUrl || data?.url || null;
+          console.log(`Profile pic response for ${phone}:`, JSON.stringify(data));
+          const picUrl = Array.isArray(data) ? data[0]?.link : (data?.link || data?.profilePictureUrl || data?.url || null);
           
           if (picUrl) {
             results[phone] = picUrl;
