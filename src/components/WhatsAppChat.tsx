@@ -413,6 +413,12 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         message_id: result.messageId || null,
         whatsapp_number_id: selectedNumberId || null,
       });
+      // Deactivate any active AI session so AI doesn't respond while operator is chatting
+      await supabase
+        .from('automation_ai_sessions')
+        .update({ is_active: false })
+        .eq('phone', normalizedPhone)
+        .eq('is_active', true);
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       // Track that we sent a message for no-response timer
       updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });

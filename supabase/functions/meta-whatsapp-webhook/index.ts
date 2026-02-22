@@ -308,7 +308,7 @@ serve(async (req) => {
                 body: JSON.stringify({ phone, messageText, instance: whatsappNumberDbId || 'meta' }),
               }).catch(err => console.error('automation-trigger-incoming error:', err));
 
-              // Check for active AI session and auto-respond
+               // Check for active AI session and auto-respond
               try {
                 const { data: aiSession } = await supabase
                   .from('automation_ai_sessions')
@@ -319,6 +319,22 @@ serve(async (req) => {
                   .maybeSingle();
 
                 if (aiSession && messageText && msg.type === 'text') {
+                  // Check if an operator sent a manual message in the last 10 minutes — if so, skip AI
+                  const cooldownMinutes = 10;
+                  const cooldownCutoff = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
+                  const { data: recentManual } = await supabase
+                    .from('whatsapp_messages')
+                    .select('id')
+                    .eq('phone', phone)
+                    .eq('direction', 'outgoing')
+                    .gt('created_at', cooldownCutoff)
+                    .not('message', 'ilike', '%[IA]%')
+                    .limit(1);
+
+                  // If there's a recent manual outgoing message, skip AI auto-respond
+                  if (recentManual && recentManual.length > 0) {
+                    console.log(`Operator cooldown active for ${phone}, skipping AI auto-respond`);
+                  } else {
                   console.log(`Active AI session found for ${phone}, auto-responding...`);
 
                   // Call AI to generate response
@@ -364,6 +380,7 @@ serve(async (req) => {
                     
                     console.log(`AI auto-reply sent to ${phone}: ${aiData.reply.slice(0, 50)}...`);
                   }
+                  } // end of cooldown else
                 }
               } catch (aiErr) {
                 console.error('AI auto-respond error:', aiErr);
