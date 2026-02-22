@@ -13,15 +13,34 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
   const [hasAccess, setHasAccess] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        setSession(null);
+      }
+    }, 10000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+      if (!settled || session) {
+        settled = true;
+        clearTimeout(timeout);
+        setSession(session);
+      }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+      if (!settled || session) {
+        settled = true;
+        clearTimeout(timeout);
+        setSession(session);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -31,11 +50,20 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
     }
 
     const checkAccess = async () => {
-      const { data, error } = await supabase.rpc("has_module_access", {
-        _user_id: session.user.id,
-        _module: requiredModule,
-      });
-      setHasAccess(error ? false : !!data);
+      try {
+        const result = await Promise.race([
+          supabase.rpc("has_module_access", {
+            _user_id: session.user.id,
+            _module: requiredModule,
+          }).then(r => r),
+          new Promise<{ data: boolean; error: any }>((resolve) =>
+            setTimeout(() => resolve({ data: false, error: new Error('timeout') }), 8000)
+          ),
+        ]);
+        setHasAccess(result.error ? false : !!result.data);
+      } catch {
+        setHasAccess(false);
+      }
     };
 
     checkAccess();
