@@ -1,52 +1,42 @@
 
 
-# Correcoes no WhatsApp POS - Fotos, Busca e Numero Visivel
+# Correcao das Fotos de Perfil no WhatsApp POS
 
-## 3 Problemas Identificados
+## Problema Encontrado
 
-### 1. Fotos de Perfil Nao Aparecem
+As fotos nao aparecem porque a Edge Function `zapi-profile-picture` esta chamando a API do Z-API com o formato de URL **errado**.
 
-**Causa raiz:** O sistema so busca fotos de perfil para telefones que ja existem na tabela `chat_contacts` mas nao tem foto. Telefones que aparecem nas conversas mas nunca foram salvos na tabela `chat_contacts` sao completamente ignorados.
+**URL atual (incorreta):**
+```
+GET /profile-picture/5533987267222
+```
 
-**Solucao:** Apos carregar os contatos do banco, comparar com a lista de telefones das conversas. Para os telefones que nao estao em `chat_contacts` (e portanto nao tem foto), incluir tambem no lote de busca via `zapi-profile-picture`. Como as conversas carregam depois dos contatos, adicionar um segundo `useEffect` que monitora as conversas e busca fotos dos telefones faltantes.
+**URL correta (conforme documentacao Z-API):**
+```
+GET /profile-picture?phone=5533987267222
+```
 
-**Arquivo:** `src/components/pos/POSWhatsApp.tsx`
+Alem disso, a resposta da API e um **array** `[{"link": "url"}]`, mas o codigo trata como objeto simples. Como a URL esta errada, a API retorna 200 mas sem dados, resultando em `photos: {}` em todas as chamadas.
 
----
+## Solucao
 
-### 2. Busca por Numero Nao Funciona
+Alterar **apenas** a Edge Function `supabase/functions/zapi-profile-picture/index.ts`:
 
-**Causa raiz:** O filtro de busca (linha 99-101 do `ConversationList.tsx`) faz `c.phone.includes(searchQuery)`, que funciona para digitos exatos. Porem, o usuario pode digitar parcialmente (ex: "9815") e esperar encontrar. O problema real e que o codigo ja deveria funcionar com substring -- mas precisa tambem limpar caracteres nao-numericos do termo de busca para cobrir casos onde o usuario digita com formatacao.
+1. Mudar a URL de `profile-picture/${cleanPhone}` para `profile-picture?phone=${cleanPhone}`
+2. Tratar a resposta como array: pegar `data[0]?.link` em vez de `data?.link`
+3. Adicionar log para debug caso a resposta nao tenha link
 
-**Solucao:** Antes de comparar, remover todos os caracteres nao-numericos do `searchQuery`. Assim "27 998" vira "27998" e encontra dentro de "5527998151234". A busca parcial por ultimos 4 digitos ja funcionara naturalmente com `includes()`.
-
-**Arquivo:** `src/components/chat/ConversationList.tsx`
-
----
-
-### 3. Numero de WhatsApp Invisivel Quando Tem Nome
-
-**Causa raiz:** Na lista de conversas, so exibe `customerName || phone`. Quando tem nome, o phone desaparece. No header do chat (barra verde), mesmo comportamento: so mostra nome ou phone, nunca ambos.
-
-**Solucao:**
-- Na lista de conversas: exibir o numero do telefone formatado abaixo do nome, em fonte menor e cor mais clara
-- No header verde do chat: exibir o numero abaixo do nome do contato
-- No painel CRM: adicionar o numero de WhatsApp visivel
-
-**Arquivos:** `src/components/chat/ConversationList.tsx` e `src/components/pos/POSWhatsApp.tsx`
-
----
+O restante do sistema ja esta preparado: o componente `POSWhatsApp.tsx` ja busca fotos para phones sem foto, e o `ConversationList.tsx` ja renderiza o `AvatarImage` quando `contactPhotos[phone]` existe. O problema e exclusivamente na chamada da API.
 
 ## Detalhes Tecnicos
 
-### Alteracoes em `src/components/pos/POSWhatsApp.tsx`
+**Arquivo:** `supabase/functions/zapi-profile-picture/index.ts`
 
-1. Adicionar um `useEffect` que roda quando `conversations` mudam, verificando quais telefones da lista de conversas nao tem foto em `contactPhotos`, e buscando em lote via `zapi-profile-picture`
-2. No header verde (linha 508-513), abaixo do nome do contato, exibir o telefone em texto branco/translucido menor
-3. No painel CRM (linha 406-467), adicionar o numero de telefone visivel
+Alteracoes na linha 45:
+- De: ``const url = `...profile-picture/${cleanPhone}`;``
+- Para: ``const url = `...profile-picture?phone=${cleanPhone}`;``
 
-### Alteracoes em `src/components/chat/ConversationList.tsx`
-
-1. No filtro de busca (linhas 99-101): limpar `searchQuery` removendo `\D` antes de comparar com `c.phone`, mantendo tambem a busca por nome como esta
-2. Na renderizacao de cada conversa: quando `customerName` existe, exibir o telefone formatado em uma linha menor abaixo do nome
+Alteracoes na linha 53-54:
+- Tratar resposta como array
+- `const picUrl = Array.isArray(data) ? data[0]?.link : (data?.link || data?.profilePictureUrl || data?.url || null);`
 
