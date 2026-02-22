@@ -113,6 +113,8 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [numberFilter, setNumberFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>('all');
   const [chatContacts, setChatContacts] = useState<ChatContact[]>([]);
@@ -189,57 +191,49 @@ export default function ChatPage() {
     setEditingName(false);
   };
 
-  // ── Load conversations ──
+  // ── Load conversations via RPC ──
   const loadConversations = useCallback(async () => {
-    let query = supabase
-      .from('whatsapp_messages')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const numberId = numberFilter !== 'all' ? numberFilter : undefined;
 
-    // Filter by whatsapp number if selected
-    if (numberFilter !== 'all') {
-      query = query.eq('whatsapp_number_id', numberFilter);
-    }
+    const { data, error } = await supabase.rpc('get_conversations', {
+      p_number_id: numberId || null,
+    });
 
-    const { data, error } = await query;
-
-    if (error) { console.error('Error loading messages:', error); return; }
-
-    const phoneMap = new Map<string, { messages: Message[]; unread: number; isGroup: boolean }>();
-    for (const msg of data || []) {
-      if (!phoneMap.has(msg.phone)) phoneMap.set(msg.phone, { messages: [], unread: 0, isGroup: msg.is_group || false });
-      const entry = phoneMap.get(msg.phone)!;
-      entry.messages.push(msg as Message);
-      if (msg.direction === 'incoming' && msg.status !== 'read') entry.unread++;
-      if (msg.is_group) entry.isGroup = true;
-    }
+    if (error) { console.error('Error loading conversations:', error); return; }
 
     const convs: Conversation[] = [];
     const phoneMessages = new Map<string, { direction: string }[]>();
-    phoneMap.forEach((value, phone) => {
-      const lastMsg = value.messages[0];
+
+    for (const row of data || []) {
+      const phone = row.phone;
       const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
       const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
-      const isGroup = value.isGroup || phone.includes('@g.us') || phone.includes('-');
-      
-      phoneMessages.set(phone, value.messages.map(m => ({ direction: m.direction })));
-      
+      const isGroup = row.is_group || phone.includes('@g.us') || phone.includes('-');
+
+      // Build minimal message list for status computation
+      const msgs: { direction: string }[] = [{ direction: row.direction }];
+      if (row.has_outgoing && row.direction === 'incoming') {
+        msgs.push({ direction: 'outgoing' }); // indicate we have outgoing messages
+      }
+      phoneMessages.set(phone, msgs);
+
       convs.push({
         phone,
-        lastMessage: lastMsg.message,
-        lastMessageAt: new Date(lastMsg.created_at),
-        unreadCount: value.unread,
+        lastMessage: row.last_message,
+        lastMessageAt: new Date(row.last_message_at),
+        unreadCount: Number(row.unread_count),
         customerName: getContactName(phone) || crmMap.get(phone)?.name || order?.customer?.instagram_handle || customer?.instagram_handle,
         isGroup,
-        hasUnansweredMessage: lastMsg.direction === 'incoming',
+        hasUnansweredMessage: row.direction === 'incoming',
         stage: order?.stage,
         customerId: order?.customer_id || customer?.id,
         customerTags: customer?.tags,
+        whatsapp_number_id: row.whatsapp_number_id,
       });
-    });
-    convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
+    }
+
     setConversations(enrichConversations(convs, phoneMessages));
-  }, [orders, customers, numberFilter, getContactName]);
+  }, [orders, customers, numberFilter, getContactName, crmMap, enrichConversations]);
 
   useEffect(() => {
     loadConversations();
@@ -256,16 +250,33 @@ export default function ChatPage() {
     return () => { supabase.removeChannel(channel); };
   }, [loadConversations, selectedPhone]);
 
-  // ── Load messages for a phone ──
-  const loadMessages = async (phone: string) => {
-    setIsLoadingMessages(true);
+  // ── Load messages for a phone (paginated) ──
+  const PAGE_SIZE = 50;
+
+  const loadMessages = async (phone: string, loadMore = false) => {
+    if (loadMore) setIsLoadingMore(true);
+    else setIsLoadingMessages(true);
+
+    const offset = loadMore ? messages.length : 0;
     const { data, error } = await supabase
       .from('whatsapp_messages')
       .select('*')
       .eq('phone', phone)
-      .order('created_at', { ascending: true });
-    if (!error) setMessages((data || []) as Message[]);
-    setIsLoadingMessages(false);
+      .order('created_at', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
+
+    if (!error && data) {
+      const sorted = [...data].reverse() as Message[];
+      if (loadMore) {
+        setMessages(prev => [...sorted, ...prev]);
+      } else {
+        setMessages(sorted);
+      }
+      setHasMoreMessages(data.length === PAGE_SIZE);
+    }
+
+    if (loadMore) setIsLoadingMore(false);
+    else setIsLoadingMessages(false);
   };
 
   // ── Select conversation ──

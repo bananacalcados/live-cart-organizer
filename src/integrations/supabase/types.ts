@@ -5530,6 +5530,21 @@ export type Database = {
           new_count: number
         }[]
       }
+      get_conversations: {
+        Args: { p_number_id?: string }
+        Returns: {
+          direction: string
+          has_outgoing: boolean
+          is_group: boolean
+          last_message: string
+          last_message_at: string
+          phone: string
+          sender_name: string
+          status: string
+          unread_count: number
+          whatsapp_number_id: string
+        }[]
+      }
       get_inventory_summary: {
         Args: never
         Returns: {
@@ -5540,6 +5555,10 @@ export type Database = {
           total_value: number
           zero_stock: number
         }[]
+      }
+      get_user_allowed_modules: {
+        Args: { p_user_id: string }
+        Returns: string[]
       }
       has_module_access: {
         Args: { _module: string; _user_id: string }

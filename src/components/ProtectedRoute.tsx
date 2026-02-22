@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
+
+// Simple in-memory cache for module permissions per user
+const permissionCache = new Map<string, { modules: string[]; ts: number }>();
+const CACHE_TTL = 60_000; // 1 minute
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -11,14 +15,12 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [hasAccess, setHasAccess] = useState<boolean | undefined>(undefined);
+  const checkedRef = useRef(false);
 
   useEffect(() => {
     let settled = false;
     const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        setSession(null);
-      }
+      if (!settled) { settled = true; setSession(null); }
     }, 10000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -37,10 +39,7 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
       }
     });
 
-    return () => {
-      clearTimeout(timeout);
-      subscription.unsubscribe();
-    };
+    return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
@@ -49,18 +48,35 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
       return;
     }
 
+    const userId = session.user.id;
+
+    // Check cache first
+    const cached = permissionCache.get(userId);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      setHasAccess(cached.modules.includes(requiredModule));
+      return;
+    }
+
+    if (checkedRef.current) return;
+    checkedRef.current = true;
+
     const checkAccess = async () => {
       try {
         const result = await Promise.race([
-          supabase.rpc("has_module_access", {
-            _user_id: session.user.id,
-            _module: requiredModule,
-          }).then(r => r),
-          new Promise<{ data: boolean; error: any }>((resolve) =>
-            setTimeout(() => resolve({ data: false, error: new Error('timeout') }), 8000)
+          supabase.rpc("get_user_allowed_modules", { p_user_id: userId }),
+          new Promise<{ data: null; error: Error }>((resolve) =>
+            setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 8000)
           ),
         ]);
-        setHasAccess(result.error ? false : !!result.data);
+
+        if (result.error || !result.data) {
+          setHasAccess(false);
+          return;
+        }
+
+        const modules = result.data as string[];
+        permissionCache.set(userId, { modules, ts: Date.now() });
+        setHasAccess(modules.includes(requiredModule));
       } catch {
         setHasAccess(false);
       }
@@ -77,9 +93,7 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
     );
   }
 
-  if (!session) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!session) return <Navigate to="/login" replace />;
 
   if (requiredModule && hasAccess === undefined) {
     return (
