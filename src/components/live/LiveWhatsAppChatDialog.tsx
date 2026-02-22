@@ -12,6 +12,7 @@ import { useZapi } from "@/hooks/useZapi";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
+import { MessageStatusIcon } from "@/components/chat/MessageStatusIcon";
 
 interface LiveWhatsAppChatDialogProps {
   open: boolean;
@@ -420,12 +421,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
 
   const renderMessageStatus = (msg: WaMessage) => {
     if (msg.direction !== "outgoing") return null;
-    const s = msg.status;
-    if (s === "read") return <CheckCheck className="h-3 w-3 inline-block ml-1 text-blue-500" />;
-    if (s === "delivered") return <CheckCheck className="h-3 w-3 inline-block ml-1 text-[#667781]" />;
-    if (s === "sent") return <Check className="h-3 w-3 inline-block ml-1 text-[#667781]" />;
-    if (s === "failed") return <AlertCircle className="h-3 w-3 inline-block ml-1 text-destructive" />;
-    return <Clock className="h-3 w-3 inline-block ml-1 text-[#667781]" />;
+    return <MessageStatusIcon status={msg.status} className="h-3 w-3 inline-block ml-1" />;
   };
 
   const formatTime = (dateStr: string) => {

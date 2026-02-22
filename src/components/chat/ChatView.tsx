@@ -18,6 +18,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { CreateSupportTicketDialog } from "../CreateSupportTicketDialog";
+import { MessageStatusIcon } from "./MessageStatusIcon";
 
 interface ChatViewProps {
   messages: Message[];
@@ -337,12 +338,9 @@ export function ChatView({
                     ⚠️ Mensagem não entregue
                   </div>
                 )}
-                <p className="text-[10px] text-muted-foreground text-right mt-1">
+                <p className="text-[10px] text-muted-foreground text-right mt-1 flex items-center justify-end gap-0.5">
                   {formatMessageTime(new Date(msg.created_at))}
-                  {msg.direction === 'outgoing' && msg.status === 'failed' && ' ❌'}
-                  {msg.direction === 'outgoing' && msg.status === 'delivered' && ' ✓✓'}
-                  {msg.direction === 'outgoing' && msg.status === 'read' && ' ✓✓'}
-                  {msg.direction === 'outgoing' && msg.status === 'sent' && ' ✓'}
+                  {msg.direction === 'outgoing' && <MessageStatusIcon status={msg.status} />}
                 </p>
               </div>
             </div>
