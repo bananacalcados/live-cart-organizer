@@ -106,6 +106,25 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     load();
   }, []);
 
+  // Fetch profile pics for conversation phones not yet in chat_contacts
+  const fetchedPhonesRef = useMemo(() => new Set<string>(), []);
+  useEffect(() => {
+    if (conversations.length === 0) return;
+    const missingPhones = conversations
+      .filter(c => !c.isGroup && !contactPhotos[c.phone] && !fetchedPhonesRef.has(c.phone))
+      .map(c => c.phone)
+      .slice(0, 20);
+    if (missingPhones.length === 0) return;
+    missingPhones.forEach(p => fetchedPhonesRef.add(p));
+    supabase.functions.invoke("zapi-profile-picture", {
+      body: { phones: missingPhones },
+    }).then(resp => {
+      if (resp.data?.photos && Object.keys(resp.data.photos).length > 0) {
+        setContactPhotos(prev => ({ ...prev, ...resp.data.photos }));
+      }
+    }).catch(e => console.error("Error fetching conversation pics:", e));
+  }, [conversations, contactPhotos]);
+
   // Load CRM data when phone is selected
   useEffect(() => {
     if (!selectedPhone) {
@@ -407,9 +426,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <User className="h-4 w-4 text-[#00a884]" />
-          <span className="text-xs font-bold text-foreground">
-            {crmData.name || 'Cliente'}
-          </span>
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-foreground">
+              {crmData.name || 'Cliente'}
+            </span>
+            {selectedPhone && (
+              <span className="text-[10px] text-muted-foreground">{selectedPhone}</span>
+            )}
+          </div>
           {crmSourceLabel && (
             <Badge variant="outline" className="text-[8px] px-1 py-0 h-4 border-[#00a884]/30 text-[#00a884]">
               {crmSourceLabel}
@@ -505,11 +529,16 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-1 min-w-0">
-                  <span className="font-semibold text-white truncate">{selectedConversation?.customerName || selectedPhone}</span>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-white/60 hover:text-white hover:bg-white/10" onClick={() => { setEditNameValue(selectedConversation?.customerName || ""); setIsEditingName(true); }}>
-                    <Pencil className="h-3 w-3" />
-                  </Button>
+              <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="font-semibold text-white truncate">{selectedConversation?.customerName || selectedPhone}</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-white/60 hover:text-white hover:bg-white/10" onClick={() => { setEditNameValue(selectedConversation?.customerName || ""); setIsEditingName(true); }}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  {selectedConversation?.customerName && (
+                    <span className="text-[11px] text-white/60 truncate">{selectedPhone}</span>
+                  )}
                 </div>
               )}
             </>
