@@ -96,10 +96,12 @@ export function ConversationList({
       if (c.isFinished) return false; // finished conversations only show in finished tab
       return c.conversationStatus === statusFilter;
     })
-    .filter(c =>
-      c.phone.includes(searchQuery) ||
-      c.customerName?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    .filter(c => {
+      const cleanedQuery = searchQuery.replace(/\D/g, '');
+      const nameMatch = c.customerName?.toLowerCase().includes(searchQuery.toLowerCase());
+      const phoneMatch = cleanedQuery.length > 0 ? c.phone.includes(cleanedQuery) : false;
+      return nameMatch || phoneMatch || (searchQuery === '');
+    });
 
   const contactsCount = conversations.filter(c => !c.isGroup).length;
   const groupsCount = conversations.filter(c => c.isGroup).length;
@@ -246,12 +248,17 @@ export function ConversationList({
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 min-w-0 flex-1">
-                      <span className="font-medium text-[15px] text-[#111b21] dark:text-[#e9edef] truncate">
-                        {conv.customerName || contactNames[conv.phone] || conv.phone}
-                      </span>
-                      {conv.hasOtherInstances && (
-                        <Link2 className="h-3 w-3 text-orange-400 flex-shrink-0" />
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="font-medium text-[15px] text-[#111b21] dark:text-[#e9edef] truncate">
+                          {conv.customerName || contactNames[conv.phone] || conv.phone}
+                        </span>
+                        {conv.hasOtherInstances && (
+                          <Link2 className="h-3 w-3 text-orange-400 flex-shrink-0" />
+                        )}
+                      </div>
+                      {(conv.customerName || contactNames[conv.phone]) && (
+                        <span className="text-[11px] text-[#667781] truncate">{conv.phone}</span>
                       )}
                     </div>
                     <span className={cn(
