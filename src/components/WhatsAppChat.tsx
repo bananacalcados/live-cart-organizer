@@ -26,6 +26,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
+import { MessageStatusIcon } from "./chat/MessageStatusIcon";
 
 interface Message {
   id: string;
@@ -52,22 +53,7 @@ interface WhatsAppChatProps {
   onBack?: () => void;
 }
 
-function getStatusIcon(status: string | null) {
-  switch (status) {
-    case 'sending':
-      return <Clock className="h-3 w-3" />;
-    case 'sent':
-      return <Check className="h-3 w-3" />;
-    case 'delivered':
-      return <CheckCheck className="h-3 w-3" />;
-    case 'read':
-      return <CheckCheck className="h-3 w-3 text-blue-400" />;
-    case 'failed':
-      return <X className="h-3 w-3 text-red-400" />;
-    default:
-      return <Check className="h-3 w-3" />;
-  }
-}
+// Status icon now uses shared component
 
 function getMediaType(file: File): 'image' | 'audio' | 'video' | 'document' {
   if (file.type.startsWith('image/')) return 'image';
@@ -763,7 +749,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                         msg.direction === 'outgoing' ? 'text-gray-500' : 'text-gray-400'
                       )}>
                         <span>{format(new Date(msg.created_at), "HH:mm")}</span>
-                        {msg.direction === 'outgoing' && getStatusIcon(msg.status)}
+                        {msg.direction === 'outgoing' && <MessageStatusIcon status={msg.status} />}
                       </div>
                     </div>
                   </div>

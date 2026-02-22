@@ -14,6 +14,7 @@ import { uploadMediaToStorage } from '../MediaAttachmentPicker';
 import { WhatsAppNumberSelector } from '../WhatsAppNumberSelector';
 import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { MessageStatusIcon } from '../chat/MessageStatusIcon';
 
 interface Message {
   id: string;
@@ -187,7 +188,10 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
                 {msg.media_url && msg.media_type === 'audio' && <audio src={msg.media_url} controls className="w-full mb-1" />}
                 {msg.media_url && msg.media_type === 'video' && <video src={msg.media_url} controls className="max-w-full rounded mb-1" style={{ maxHeight: 200 }} />}
                 {msg.message && <p className="whitespace-pre-wrap break-words">{msg.message}</p>}
-                <p className="text-[10px] text-muted-foreground text-right mt-1">{format(new Date(msg.created_at), 'HH:mm', { locale: ptBR })}</p>
+                <p className="text-[10px] text-muted-foreground text-right mt-1 flex items-center justify-end gap-0.5">
+                  {format(new Date(msg.created_at), 'HH:mm', { locale: ptBR })}
+                  {msg.direction === 'outgoing' && <MessageStatusIcon status={msg.status} />}
+                </p>
               </div>
             </div>
           ))}
