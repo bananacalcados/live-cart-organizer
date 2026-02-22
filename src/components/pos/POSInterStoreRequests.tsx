@@ -178,6 +178,31 @@ export function POSInterStoreRequests({ storeId }: Props) {
 
       const { error } = await supabase.from("pos_inter_store_requests").update(update).eq("id", id);
       if (error) throw error;
+
+      // When delivered, trigger automatic stock transfer in Tiny ERP
+      if (responseStatus === "delivered") {
+        toast.info("Ajustando estoque no Tiny...");
+        try {
+          const { data: transferResult, error: transferError } = await supabase.functions.invoke("pos-inter-store-stock-transfer", {
+            body: { request_id: id },
+          });
+          if (transferError) throw transferError;
+          if (transferResult?.success) {
+            toast.success("Estoque transferido automaticamente no Tiny!");
+          } else {
+            const failedItems = transferResult?.results?.filter((r: any) => !r.success) || [];
+            if (failedItems.length > 0) {
+              toast.error(`Erro no estoque: ${failedItems.map((f: any) => `${f.product_name}: ${f.error}`).join(', ')}`);
+            } else {
+              toast.error("Erro ao transferir estoque: " + (transferResult?.error || "Erro desconhecido"));
+            }
+          }
+        } catch (stockErr: any) {
+          console.error("Stock transfer error:", stockErr);
+          toast.error("Erro ao transferir estoque no Tiny: " + stockErr.message);
+        }
+      }
+
       toast.success("Status atualizado!");
       setRespondingId(null);
       resetResponseForm();
@@ -426,6 +451,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
                 <SelectContent>
                   <SelectItem value="confirmed">✅ Confirmado - Temos o produto</SelectItem>
                   <SelectItem value="in_transit">🏍️ A caminho - Enviando com motoboy</SelectItem>
+                  <SelectItem value="delivered">📦 Entregue - Produto recebido</SelectItem>
                   <SelectItem value="unavailable">❌ Indisponível</SelectItem>
                   <SelectItem value="cancelled">🚫 Cancelar</SelectItem>
                 </SelectContent>
