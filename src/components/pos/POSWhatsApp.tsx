@@ -294,6 +294,13 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         whatsapp_number_id: sendVia === "meta" ? selectedNumberId : null,
       });
 
+      // Deactivate any active AI session for this phone so AI doesn't respond while operator is chatting
+      await supabase
+        .from("automation_ai_sessions")
+        .update({ is_active: false })
+        .eq("phone", selectedPhone)
+        .eq("is_active", true);
+
       loadMessages(selectedPhone);
     } catch (error) {
       console.error("Error sending:", error);
