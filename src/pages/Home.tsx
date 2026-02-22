@@ -91,32 +91,60 @@ export default function Home() {
   const [allowedModules, setAllowedModules] = useState<string[] | null>(null);
 
   useEffect(() => {
+    const timeoutMs = 8000;
+
+    const withTimeout = <T,>(promise: Promise<T> | PromiseLike<T>, fallback: T): Promise<T> =>
+      Promise.race([
+        Promise.resolve(promise),
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), timeoutMs)),
+      ]);
+
     const checkPermissions = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      try {
+        const { data: { session } } = await withTimeout(
+          supabase.auth.getSession(),
+          { data: { session: null } } as any
+        );
+        if (!session) return;
 
-      // Check if user is admin (has access to everything)
-      const { data: isAdmin } = await supabase.rpc("has_role", {
-        _user_id: session.user.id,
-        _role: "admin" as any,
-      });
-
-      if (isAdmin) {
-        setAllowedModules(modules.map(m => m.module));
-        return;
-      }
-
-      // Check each module
-      const checks = await Promise.all(
-        modules.map(async (mod) => {
-          const { data } = await supabase.rpc("has_module_access", {
+        // Check if user is admin (has access to everything)
+        const { data: isAdmin } = await withTimeout(
+          supabase.rpc("has_role", {
             _user_id: session.user.id,
-            _module: mod.module,
-          });
-          return data ? mod.module : null;
-        })
-      );
-      setAllowedModules(checks.filter(Boolean) as string[]);
+            _role: "admin" as any,
+          }).then(r => r),
+          { data: false, error: null, count: null, status: 200, statusText: 'OK' } as any
+        );
+
+        if (isAdmin) {
+          setAllowedModules(modules.map(m => m.module));
+          return;
+        }
+
+        // Check each module
+        const checks = await Promise.all(
+          modules.map(async (mod) => {
+            const { data } = await withTimeout(
+              supabase.rpc("has_module_access", {
+                _user_id: session.user.id,
+                _module: mod.module,
+              }).then(r => r),
+              { data: false, error: null, count: null, status: 200, statusText: 'OK' } as any
+            );
+            return data ? mod.module : null;
+          })
+        );
+        setAllowedModules(checks.filter(Boolean) as string[]);
+      } catch (err) {
+        console.error("Error checking permissions:", err);
+        // Show empty modules rather than infinite spinner
+        setAllowedModules([]);
+        toast({
+          title: "Erro ao verificar permissões",
+          description: "Não foi possível conectar ao servidor. Tente recarregar a página.",
+          variant: "destructive",
+        });
+      }
     };
 
     checkPermissions();
