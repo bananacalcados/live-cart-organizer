@@ -48,38 +48,11 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-
-    const isCustomDomain =
-      !window.location.hostname.includes("lovable.app") &&
-      !window.location.hostname.includes("lovableproject.com") &&
-      !window.location.hostname.includes("localhost");
-
     try {
-      if (isCustomDomain) {
-        // Custom domains: bypass auth-bridge, redirect directly
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: window.location.origin,
-            skipBrowserRedirect: true,
-          },
-        });
-        if (error) throw error;
-        if (data?.url) {
-          const oauthUrl = new URL(data.url);
-          const allowedHosts = ["accounts.google.com", "tqxhcyuxgqbzqwoidpie.supabase.co"];
-          if (!allowedHosts.some((h) => oauthUrl.hostname.includes(h))) {
-            throw new Error("URL de redirecionamento inválida");
-          }
-          window.location.href = data.url;
-          return;
-        }
-      } else {
-        const { error } = await lovable.auth.signInWithOAuth("google", {
-          redirect_uri: window.location.origin,
-        });
-        if (error) throw error;
-      }
+      const { error } = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (error) throw error;
     } catch (err: any) {
       toast({
         title: "Erro ao entrar com Google",
