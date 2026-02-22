@@ -1,43 +1,82 @@
-# Indicadores de Status de Mensagem WhatsApp
 
-## Problema
 
-As mensagens enviadas no WhatsApp do app mostram indicadores de status inconsistentes ou ausentes dependendo do modulo:
+# Plano de Otimizacao de Performance
 
-- **ChatView** (usado no POS, Chat global, pagina Chat): mostra apenas texto simples (✓, ✓✓, ❌) sem diferenciacao visual entre "entregue" e "lido"
-- **SupportWhatsAppChat** (Expedicao): nao mostra nenhum status nas mensagens enviadas
-- **WhatsAppChat** (Pedidos) e **LiveWhatsAppChatDialog**: ja possuem icones corretos com Lucide icons
+## Problema identificado
 
-## Solucao
+O sistema esta lento porque algumas telas carregam volumes enormes de dados de uma so vez:
 
-Criar um componente compartilhado `MessageStatusIcon` e aplicar em todos os modulos com WhatsApp.
+- **Chat**: Carrega TODAS as 76.000+ mensagens do WhatsApp para montar a lista de conversas. Isso e feito a cada INSERT via Realtime, ou seja, cada nova mensagem recarrega 76k registros.
+- **Home**: Faz uma chamada RPC por modulo (ate 9 chamadas) para verificar permissoes.
+- **ProtectedRoute**: Faz outra chamada RPC a cada navegacao.
+- **TeamChat**: Roda em TODAS as paginas, fazendo queries adicionais em cada tela.
 
-### Icones (como no WhatsApp real)
+## Sobre separar modulos em projetos
 
-- **Enviando** (sending/pending): relogio cinza
-- **Enviado** (sent): 1 check cinza - mensagem saiu do servidor, destinatario pode estar sem sinal
-- **Entregue** (delivered): 2 checks cinza - destinatario foi notificado
-- **Lido** (read): 2 checks azul - destinatario visualizou
-- **Falha** (failed): X vermelho
+**Nao recomendo.** Os motivos:
 
-### Componentes a alterar
+- A lentidao nao e causada pelo tamanho do codigo, mas sim por queries ineficientes no banco de dados
+- Separar em projetos criaria complexidade enorme: autenticacao compartilhada, comunicacao entre APIs, duplicacao de configuracoes
+- O banco de dados continuaria o mesmo, entao os mesmos problemas de performance persistiriam
+- A solucao correta e otimizar as queries, nao dividir o sistema
 
-1. **Novo: `src/components/chat/MessageStatusIcon.tsx**`
-  - Componente reutilizavel com a funcao `getStatusIcon(status)`
-  - Usa Lucide: `Clock`, `Check`, `CheckCheck`, `X`
-  - "read" renderiza CheckCheck com cor azul (#53bdeb)
-2. `**src/components/chat/ChatView.tsx**`
-  - Substituir os emojis de texto (✓, ✓✓, ❌) pelo componente `MessageStatusIcon`
-  - Renderizar icone inline ao lado do horario para mensagens outgoing
-3. `**src/components/expedition/SupportWhatsAppChat.tsx**`
-  - Adicionar `MessageStatusIcon` ao lado do horario nas mensagens outgoing
-4. `**src/components/WhatsAppChat.tsx**`
-  - Refatorar para usar o componente compartilhado (remover funcao local `getStatusIcon`)
-5. `**src/components/live/LiveWhatsAppChatDialog.tsx**`
-  - Refatorar para usar o componente compartilhado (remover funcao local `renderMessageStatus`)
+## Solucao proposta
 
-### Detalhes tecnicos
+### 1. Criar RPC para lista de conversas (maior impacto)
 
-- O campo `status` na tabela `whatsapp_messages` ja armazena os valores corretos: `sending`, `sent`, `delivered`, `read`, `failed`
-- O webhook da Meta (`meta-whatsapp-webhook`) ja atualiza o status corretamente quando recebe callbacks de `sent`, `delivered`, `read`, `failed`
-- O Supabase Realtime ja esta habilitado na tabela `whatsapp_messages`, entao os status atualizam em tempo real na tela
+Em vez de carregar 76k mensagens no frontend, criar uma funcao no banco que retorna apenas a ultima mensagem de cada telefone, com contagem de nao-lidas. Isso reduz de 76k registros para ~3.600 registros (um por conversa).
+
+```sql
+CREATE FUNCTION get_conversations(p_number_id UUID DEFAULT NULL)
+RETURNS TABLE (
+  phone TEXT,
+  last_message TEXT,
+  last_message_at TIMESTAMPTZ,
+  unread_count BIGINT,
+  direction TEXT,
+  is_group BOOLEAN
+)
+```
+
+### 2. Unificar verificacao de permissoes em uma unica RPC
+
+Em vez de 9 chamadas separadas na Home, criar uma funcao que retorna todos os modulos permitidos de uma vez:
+
+```sql
+CREATE FUNCTION get_user_allowed_modules(p_user_id UUID)
+RETURNS TEXT[]
+```
+
+### 3. Implementar lazy loading no App.tsx
+
+Usar `React.lazy()` para que cada modulo so carregue seu JavaScript quando o usuario navegar ate ele. Hoje todos os 15+ modulos sao importados no carregamento inicial.
+
+### 4. Paginar mensagens do chat
+
+Ao abrir uma conversa, carregar apenas as ultimas 50 mensagens e implementar "carregar mais" ao rolar para cima.
+
+### 5. Otimizar TeamChat
+
+Adicionar um debounce e evitar recarregar mensagens a cada mudanca de rota.
+
+---
+
+## Detalhes tecnicos
+
+### Arquivos que serao modificados:
+
+| Arquivo | Mudanca |
+|---|---|
+| **Nova migration SQL** | Criar RPCs `get_conversations` e `get_user_allowed_modules` |
+| **src/pages/Chat.tsx** | Usar a nova RPC em vez de carregar todas as mensagens; paginar mensagens individuais |
+| **src/pages/Home.tsx** | Usar `get_user_allowed_modules` em uma unica chamada |
+| **src/components/ProtectedRoute.tsx** | Cachear resultado de permissoes para evitar re-chamadas |
+| **src/App.tsx** | Adicionar `React.lazy()` nos imports dos modulos |
+
+### Resultado esperado:
+
+- Chat: de ~76k registros para ~3.6k (reducao de 95%)
+- Home: de 9 chamadas RPC para 1
+- Carregamento inicial: apenas o codigo do modulo atual e baixado
+- Nenhuma configuracao existente sera perdida
+
