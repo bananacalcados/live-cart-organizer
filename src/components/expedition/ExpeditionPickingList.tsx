@@ -536,6 +536,72 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     }
   };
 
+  const handlePrintPending = () => {
+    const pendingItems = sortedItems.filter(([, item]) => item.pickedQty < item.totalQty);
+    if (pendingItems.length === 0) {
+      toast.info('Todos os produtos já foram conferidos!');
+      return;
+    }
+    const totalPendingUnits = pendingItems.reduce((sum, [, item]) => sum + (item.totalQty - item.pickedQty), 0);
+    const rows = pendingItems.map(([key, item], i) => {
+      const displaySku = getDisplaySku(key, item.sku);
+      const locs = stockLocations[item.sku];
+      const locText = locs?.map(l => `${l.depositName}(${l.stock})`).join(', ') || '—';
+      const remaining = item.totalQty - item.pickedQty;
+      const ordersList = item.lineItems
+        .filter(li => li.pickedQty < li.quantity)
+        .map(li => {
+          const parts = [li.orderName];
+          if (li.tinyOrderId) parts.push(`Tiny:${li.tinyOrderId}`);
+          return `${parts.join('/')} (${li.quantity - li.pickedQty})`;
+        }).join(', ');
+      return `<tr>
+        <td style="text-align:center;font-weight:bold;color:#333;">${i + 1}</td>
+        <td style="font-weight:600;">${item.name}${item.variant ? ` <span style="color:#e67e22;font-weight:500;">(${item.variant})</span>` : ''}</td>
+        <td style="font-family:monospace;color:#666;font-size:12px;">${displaySku}</td>
+        <td style="font-size:11px;color:#555;">${locText}</td>
+        <td style="font-size:11px;color:#555;">${ordersList}</td>
+        <td style="text-align:center;font-size:18px;font-weight:bold;color:#c0392b;background:#ffeaea;border-radius:4px;">${remaining}</td>
+        <td style="text-align:center;width:60px;">☐</td>
+      </tr>`;
+    }).join('');
+
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.write(`<html><head><title>Produtos Pendentes de Conferência</title>
+<style>
+  @page { margin: 15mm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 20px; }
+  .header { background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%); color: #fff; padding: 20px 24px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { margin: 0; font-size: 22px; letter-spacing: 1px; }
+  .header .meta { text-align: right; color: #fdd; font-size: 13px; }
+  .header .meta strong { color: #fff; font-size: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #c0392b; color: #fff; padding: 10px 12px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  .footer { margin-top: 20px; padding: 12px 0; border-top: 2px solid #c0392b; display: flex; justify-content: space-between; font-size: 13px; color: #666; }
+  .footer .total { font-size: 16px; font-weight: bold; color: #c0392b; }
+  @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<div class="header">
+  <div><h1>⚠️ PENDENTES DE CONFERÊNCIA</h1></div>
+  <div class="meta">Data: ${new Date().toLocaleDateString('pt-BR')}<br><strong>${pendingItems.length} produtos • ${totalPendingUnits} unidades restantes</strong><br>Conferidos: ${totalChecked}/${totalProducts}</div>
+</div>
+<table>
+  <thead><tr><th style="width:40px;text-align:center">#</th><th>Produto</th><th style="width:100px">SKU</th><th style="width:120px">Estoque</th><th>Pedidos</th><th style="width:50px;text-align:center">Falta</th><th style="width:50px;text-align:center">✓</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="footer">
+  <span>Impresso em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+  <span class="total">Faltam: ${totalPendingUnits} itens</span>
+</div>
+</body></html>`);
+      w.document.close();
+      w.print();
+    }
+  };
+
   return (
     <div className="space-y-3 md:space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -561,6 +627,11 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
           <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1 md:gap-2 text-xs md:text-sm">
             <Printer className="h-3 w-3 md:h-4 md:w-4" /> <span className="hidden sm:inline">Imprimir</span>
           </Button>
+          {showChecking && (
+            <Button variant="outline" size="sm" onClick={handlePrintPending} className="gap-1 md:gap-2 text-xs md:text-sm border-destructive/50 text-destructive hover:bg-destructive/10">
+              <Printer className="h-3 w-3 md:h-4 md:w-4" /> <span className="hidden sm:inline">Pendentes</span>
+            </Button>
+          )}
           {showChecking && totalChecked === totalProducts && totalProducts > 0 && (
             <Button size="sm" onClick={handleMarkPickingComplete} className="gap-1 md:gap-2 text-xs md:text-sm">
               <CheckCircle2 className="h-3 w-3 md:h-4 md:w-4" /> Confirmar
