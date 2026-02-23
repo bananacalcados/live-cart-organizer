@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -73,6 +73,19 @@ export function ExpeditionOrdersList({ orders, searchTerm, showGrouping, onRefre
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(approved.map(o => o.id)));
+    }
+  };
+
+  const handleUngroup = async (orderId: string, orderName: string) => {
+    try {
+      await supabase
+        .from('expedition_orders')
+        .update({ group_id: null, expedition_status: 'approved' })
+        .eq('id', orderId);
+      toast.success(`Pedido ${orderName} removido do grupo!`);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro ao desagrupar: ${error.message}`);
     }
   };
 
@@ -276,9 +289,22 @@ export function ExpeditionOrdersList({ orders, searchTerm, showGrouping, onRefre
                           </span>
                         )}
                       </div>
-                      <span className="text-sm font-medium">
-                        R$ {Number(o.total_price || 0).toFixed(2)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">
+                          R$ {Number(o.total_price || 0).toFixed(2)}
+                        </span>
+                        {o.group_id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+                            title="Remover do grupo"
+                            onClick={() => handleUngroup(o.id, o.shopify_order_name)}
+                          >
+                            <Unlink className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
