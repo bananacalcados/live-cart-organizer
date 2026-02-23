@@ -40,13 +40,13 @@ serve(async (req) => {
     const items = order.expedition_order_items || [];
     const totalQty = items.reduce((sum: number, i: any) => sum + i.quantity, 0);
 
-    // Quote via Frenet
+    // Quote via Frenet (real API only)
     const frenetBody = {
-      SellerCEP: "01001000", // Origin ZIP - should be configurable
+      SellerCEP: "01001000",
       RecipientCEP: shippingAddress.zip.replace(/\D/g, ''),
       ShipmentInvoiceValue: order.total_price || 0,
       ShippingItemArray: [{
-        Height: Math.max(4, Math.ceil(totalQty * 5)), // Estimate
+        Height: Math.max(4, Math.ceil(totalQty * 5)),
         Length: 30,
         Width: 25,
         Weight: Math.max(0.3, totalWeight),
@@ -56,49 +56,43 @@ serve(async (req) => {
       RecipientCountry: 'BR',
     };
 
-    const frenetResponse = await fetch('https://private-anon-9c5ec15f26-fraboratory.apiary-mock.com/shipping/quote', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'token': FRENET_TOKEN,
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(frenetBody),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
 
-    // Also try the real Frenet API
-    const frenetRealResponse = await fetch('https://api.frenet.com.br/shipping/quote', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'token': FRENET_TOKEN,
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(frenetBody),
-    });
+    try {
+      const frenetRealResponse = await fetch('https://api.frenet.com.br/shipping/quote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'token': FRENET_TOKEN,
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(frenetBody),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
 
-    let quotes: any[] = [];
-
-    if (frenetRealResponse.ok) {
-      const frenetData = await frenetRealResponse.json();
-      const shippingServices = frenetData.ShippingSevicesArray || frenetData.ShippingServices || [];
-      
-      for (const svc of shippingServices) {
-        if (svc.Error || svc.ShippingPrice <= 0) continue;
-        quotes.push({
-          expedition_order_id: order_id,
-          carrier: svc.Carrier || 'Unknown',
-          service: svc.ServiceDescription || svc.ServiceCode || 'Standard',
-          price: parseFloat(svc.ShippingPrice || svc.OriginalShippingPrice || '0'),
-          delivery_days: parseInt(svc.DeliveryTime || '0'),
-        });
+      if (frenetRealResponse.ok) {
+        const frenetData = await frenetRealResponse.json();
+        const shippingServices = frenetData.ShippingSevicesArray || frenetData.ShippingServices || [];
+        
+        for (const svc of shippingServices) {
+          if (svc.Error || svc.ShippingPrice <= 0) continue;
+          quotes.push({
+            expedition_order_id: order_id,
+            carrier: svc.Carrier || 'Unknown',
+            service: svc.ServiceDescription || svc.ServiceCode || 'Standard',
+            price: parseFloat(svc.ShippingPrice || svc.OriginalShippingPrice || '0'),
+            delivery_days: parseInt(svc.DeliveryTime || '0'),
+          });
+        }
+      } else {
+        await frenetRealResponse.text();
       }
-    } else {
-      await frenetRealResponse.text(); // consume body
+    } catch (e) {
+      clearTimeout(timeout);
+      console.warn('Frenet request failed/timed out:', e.message);
     }
-
-    // Consume mock response body
-    await frenetResponse.text();
 
     // If no Frenet quotes, add a fallback with Correios pricing estimate
     if (quotes.length === 0) {
@@ -115,18 +109,18 @@ serve(async (req) => {
           { code: '03298', name: 'PAC' },
         ];
 
-        for (const svc of services) {
+        // Fetch SEDEX and PAC in parallel with timeout
+        const correiosPromises = services.map(async (svc) => {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 6000);
           try {
             const correiosUrl = `http://ws.correios.com.br/calculador/CalcPrecoPrazo.aspx?nCdEmpresa=${CORREIOS_CODIGO || ''}&sDsSenha=${CORREIOS_SENHA}&nCdServico=${svc.code}&sCepOrigem=01001000&sCepDestino=${shippingAddress.zip.replace(/\D/g, '')}&nVlPeso=${Math.max(0.3, totalWeight)}&nCdFormato=1&nVlComprimento=30&nVlAltura=${Math.max(4, Math.ceil(totalQty * 5))}&nVlLargura=25&nVlDiametro=0&sCdMaoPropria=N&nVlValorDeclarado=${order.total_price || 0}&sCdAvisoRecebimento=N&StrRetorno=xml&nIndicaCalculo=3`;
-
-            const correiosResponse = await fetch(correiosUrl);
+            const correiosResponse = await fetch(correiosUrl, { signal: ctrl.signal });
+            clearTimeout(t);
             const correiosText = await correiosResponse.text();
-
-            // Parse basic XML response
             const priceMatch = correiosText.match(/<Valor>([\d,.]+)<\/Valor>/);
             const daysMatch = correiosText.match(/<PrazoEntrega>(\d+)<\/PrazoEntrega>/);
             const errorMatch = correiosText.match(/<Erro>(\d+)<\/Erro>/);
-
             if (priceMatch && (!errorMatch || errorMatch[1] === '0')) {
               quotes.push({
                 expedition_order_id: order_id,
@@ -137,9 +131,11 @@ serve(async (req) => {
               });
             }
           } catch (e) {
+            clearTimeout(t);
             console.error(`Error quoting Correios ${svc.name}:`, e);
           }
-        }
+        });
+        await Promise.all(correiosPromises);
       }
     }
 
