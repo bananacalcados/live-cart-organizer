@@ -60,9 +60,9 @@ serve(async (req) => {
     const objectId = order.tiny_invoice_id;
     const objectType = 'notafiscal';
 
-    // Step 1: Send NF-e to expedition
+    // Step 1: Send NF-e to expedition (correct endpoint: expedicao.liberar.objetos.php)
     console.log(`Step 1: Sending ${objectType} ${objectId} to expedition...`);
-    const sendResponse = await fetch('https://api.tiny.com.br/api2/enviar.objetos.para.expedicao.php', {
+    const sendResponse = await fetch('https://api.tiny.com.br/api2/expedicao.liberar.objetos.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `token=${TINY_ERP_TOKEN}&formato=json&tipoObjetos=${objectType}&idObjetos=${objectId}`,
@@ -70,9 +70,17 @@ serve(async (req) => {
     const sendData = await safeJson(sendResponse, 'Envio para expedição');
     console.log('Send to expedition response:', JSON.stringify(sendData));
 
+    // Extract idExpedicao from send response if available
+    let idExpedicaoFromSend: string | null = null;
     if (sendData.retorno?.status === 'Erro') {
       const errMsg = sendData.retorno?.erros?.[0]?.erro || JSON.stringify(sendData.retorno);
       console.log('Send to expedition error (may be already sent):', errMsg);
+    } else {
+      const objetos = sendData.retorno?.objetos || [];
+      if (objetos.length > 0) {
+        idExpedicaoFromSend = objetos[0]?.objeto?.idExpedicao || null;
+        console.log('Expedition ID from send:', idExpedicaoFromSend);
+      }
     }
 
     // Step 2: Get expedition info
