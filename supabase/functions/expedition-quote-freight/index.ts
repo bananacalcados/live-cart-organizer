@@ -56,6 +56,7 @@ serve(async (req) => {
       RecipientCountry: 'BR',
     };
 
+    const quotes: any[] = [];
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
