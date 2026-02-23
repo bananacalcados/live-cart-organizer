@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw, ScanBarcode, Clock, ShieldCheck } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -21,13 +22,24 @@ interface StockLocation {
   stock: number;
 }
 
+interface PendingConfirm {
+  key: string;
+  name: string;
+  variant: string;
+  sku: string;
+}
+
 export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefresh }: Props) {
   const [checkedItems, setCheckedItems] = useState<Record<string, number>>({});
   const [stockLocations, setStockLocations] = useState<Record<string, StockLocation[]>>({});
   const [loadingStock, setLoadingStock] = useState(false);
   const [refreshingStock, setRefreshingStock] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  const [qualityChecks, setQualityChecks] = useState({ feet_correct: false, no_defects: false });
+  const barcodeRef = useRef<HTMLInputElement>(null);
 
-  const allItems = new Map<string, { name: string; variant: string; sku: string; totalQty: number; orders: string[] }>();
+  const allItems = new Map<string, { name: string; variant: string; sku: string; totalQty: number; orders: string[]; barcodes: string[] }>();
 
   const relevantOrders = orders.filter(o => {
     const term = searchTerm.toLowerCase();
@@ -39,15 +51,27 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     (order.expedition_order_items || []).forEach((item: any) => {
       const key = item.sku || `${item.product_name}-${item.variant_name || ''}`;
       if (!allItems.has(key)) {
-        allItems.set(key, { name: item.product_name, variant: item.variant_name || '', sku: item.sku || '', totalQty: 0, orders: [] });
+        allItems.set(key, { name: item.product_name, variant: item.variant_name || '', sku: item.sku || '', totalQty: 0, orders: [], barcodes: [] });
       }
       const entry = allItems.get(key)!;
       entry.totalQty += item.quantity;
       entry.orders.push(order.shopify_order_name);
+      if (item.barcode && !entry.barcodes.includes(item.barcode)) entry.barcodes.push(item.barcode);
     });
   });
 
   const sortedItems = Array.from(allItems.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
+
+  // In checking mode, sort: unchecked first, then checked
+  const displayItems = showChecking
+    ? [...sortedItems].sort((a, b) => {
+        const aChecked = (checkedItems[a[0]] || 0) >= a[1].totalQty;
+        const bChecked = (checkedItems[b[0]] || 0) >= b[1].totalQty;
+        if (aChecked && !bChecked) return 1;
+        if (!aChecked && bChecked) return -1;
+        return 0;
+      })
+    : sortedItems;
 
   // Load stock locations for all SKUs
   useEffect(() => {
@@ -57,7 +81,6 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     const fetchStockLocations = async () => {
       setLoadingStock(true);
       try {
-        // Query by both sku AND barcode since Shopify SKU may be stored as barcode in pos_products
         const [{ data: bySku }, { data: byBarcode }] = await Promise.all([
           supabase
             .from('pos_products')
@@ -74,7 +97,6 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
           const storeName = p.pos_stores?.name || 'Desconhecida';
           const depositName = p.pos_stores?.tiny_deposit_name || '';
           if (!locations[matchedKey]) locations[matchedKey] = [];
-          // Avoid duplicates (same store)
           if (!locations[matchedKey].some(l => l.storeId === p.store_id)) {
             locations[matchedKey].push({ storeName, depositName, storeId: p.store_id, stock: p.stock });
           }
@@ -102,7 +124,6 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     toast.info('Buscando estoque em tempo real do Tiny ERP...');
     
     try {
-      // Process in batches of 10
       const allResults: Record<string, StockLocation[]> = { ...stockLocations };
       
       for (let i = 0; i < skus.length; i += 10) {
@@ -134,8 +155,55 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     }
   };
 
-  const handleCheck = (key: string, qty: number) => {
-    setCheckedItems(prev => ({ ...prev, [key]: qty }));
+  // Barcode scan handler for checking mode
+  const handleBarcodeScan = useCallback((code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+
+    // Find item by SKU or barcode
+    const matched = sortedItems.find(([, item]) =>
+      item.sku === trimmed || item.barcodes.includes(trimmed)
+    );
+
+    if (!matched) {
+      toast.error(`Produto não encontrado: ${trimmed}`);
+      setBarcodeInput('');
+      barcodeRef.current?.focus();
+      return;
+    }
+
+    const [key, item] = matched;
+    const current = checkedItems[key] || 0;
+
+    if (current >= item.totalQty) {
+      toast.warning(`${item.name} já foi totalmente conferido!`);
+      setBarcodeInput('');
+      barcodeRef.current?.focus();
+      return;
+    }
+
+    // Show quality confirmation
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku });
+    setQualityChecks({ feet_correct: false, no_defects: false });
+    setBarcodeInput('');
+  }, [sortedItems, checkedItems]);
+
+  const handleConfirmQuality = () => {
+    if (!pendingConfirm) return;
+    const { key } = pendingConfirm;
+    const item = allItems.get(key);
+    if (!item) return;
+
+    const current = checkedItems[key] || 0;
+    setCheckedItems(prev => ({ ...prev, [key]: Math.min(current + 1, item.totalQty) }));
+    toast.success(`✓ ${item.name} conferido (${current + 1}/${item.totalQty})`);
+    setPendingConfirm(null);
+    setTimeout(() => barcodeRef.current?.focus(), 100);
+  };
+
+  const handleCancelConfirm = () => {
+    setPendingConfirm(null);
+    setTimeout(() => barcodeRef.current?.focus(), 100);
   };
 
   const totalProducts = sortedItems.reduce((sum, [, item]) => sum + item.totalQty, 0);
@@ -162,7 +230,6 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       return <Badge variant="destructive" className="text-[10px] gap-1"><MapPin className="h-3 w-3" />Sem cadastro</Badge>;
     }
 
-    // Show ALL stores with their stock levels
     const siteLoc = locs.find(l => l.depositName === 'Site');
     const otherLocs = locs.filter(l => l.depositName !== 'Site');
 
@@ -180,6 +247,12 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
         ))}
       </div>
     );
+  };
+
+  const getItemStatus = (key: string, totalQty: number) => {
+    const checked = checkedItems[key] || 0;
+    if (checked >= totalQty) return 'confirmed';
+    return 'waiting'; // not yet scanned = waiting for stock
   };
 
   const handlePrint = () => {
@@ -237,7 +310,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-foreground">
-            {showChecking ? 'Conferência de Separação' : 'Lista de Separação (Picking)'}
+            {showChecking ? 'Conferência por Bipagem' : 'Lista de Separação (Picking)'}
           </h2>
           <p className="text-sm text-muted-foreground">
             {sortedItems.length} produtos únicos • {totalProducts} unidades totais
@@ -252,7 +325,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
           <Button variant="outline" onClick={handlePrint} className="gap-2">
             <Printer className="h-4 w-4" /> Imprimir
           </Button>
-          {showChecking && totalChecked === totalProducts && (
+          {showChecking && totalChecked === totalProducts && totalProducts > 0 && (
             <Button onClick={handleMarkPickingComplete} className="gap-2">
               <CheckCircle2 className="h-4 w-4" /> Confirmar Separação
             </Button>
@@ -260,52 +333,123 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
         </div>
       </div>
 
+      {/* Barcode scanner for checking mode */}
       {showChecking && (
-        <div className="w-full bg-secondary rounded-full h-3">
-          <div
-            className="bg-primary h-3 rounded-full transition-all"
-            style={{ width: `${totalProducts > 0 ? (totalChecked / totalProducts) * 100 : 0}%` }}
-          />
-        </div>
+        <>
+          <div className="w-full bg-secondary rounded-full h-3">
+            <div
+              className="bg-primary h-3 rounded-full transition-all"
+              style={{ width: `${totalProducts > 0 ? (totalChecked / totalProducts) * 100 : 0}%` }}
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Input
+              ref={barcodeRef}
+              placeholder="Bipe o código de barras ou SKU do produto..."
+              value={barcodeInput}
+              onChange={(e) => setBarcodeInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleBarcodeScan(barcodeInput); }}
+              className="text-lg font-mono"
+              autoFocus
+              disabled={!!pendingConfirm}
+            />
+            <Button onClick={() => handleBarcodeScan(barcodeInput)} disabled={!!pendingConfirm}>
+              <ScanBarcode className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* Quality confirmation dialog */}
+          {pendingConfirm && (
+            <Card className="border-2 border-amber-500 bg-amber-50 dark:bg-amber-900/10 animate-in fade-in slide-in-from-top-2">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-amber-600" />
+                  <h3 className="font-bold text-foreground">Verificação de Qualidade</h3>
+                </div>
+                <div className="p-3 rounded-lg bg-background border">
+                  <p className="font-medium text-foreground">{pendingConfirm.name}</p>
+                  {pendingConfirm.variant && <p className="text-sm text-muted-foreground">{pendingConfirm.variant}</p>}
+                  <p className="text-xs text-muted-foreground font-mono">SKU: {pendingConfirm.sku}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-secondary/50 transition-colors">
+                    <Checkbox checked={qualityChecks.feet_correct} onCheckedChange={(v) => setQualityChecks(prev => ({ ...prev, feet_correct: !!v }))} />
+                    <div>
+                      <span className="text-sm font-medium text-foreground">Pés corretos</span>
+                      <p className="text-xs text-muted-foreground">Esquerdo e direito conferidos</p>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-secondary/50 transition-colors">
+                    <Checkbox checked={qualityChecks.no_defects} onCheckedChange={(v) => setQualityChecks(prev => ({ ...prev, no_defects: !!v }))} />
+                    <div>
+                      <span className="text-sm font-medium text-foreground">Sem defeitos</span>
+                      <p className="text-xs text-muted-foreground">Sem defeitos visíveis (costuras, colagem, acabamento)</p>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleConfirmQuality}
+                    disabled={!qualityChecks.feet_correct || !qualityChecks.no_defects}
+                    className="flex-1 gap-2"
+                  >
+                    <CheckCircle2 className="h-4 w-4" /> Confirmar Produto
+                  </Button>
+                  <Button variant="outline" onClick={handleCancelConfirm}>
+                    Cancelar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       <div className="space-y-2">
-        {sortedItems.map(([key, item]) => (
-          <Card key={key}>
-            <CardContent className="p-3 flex items-center justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-foreground">{item.name}</span>
-                  {item.variant && <Badge variant="outline" className="text-xs">{item.variant}</Badge>}
-                  {getStockBadge(item.sku)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  SKU: {item.sku || 'N/A'} • Pedidos: {item.orders.join(', ')}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Badge className="text-base px-3 py-1">x{item.totalQty}</Badge>
-                {showChecking && (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={item.totalQty}
-                      value={checkedItems[key] || 0}
-                      onChange={(e) => handleCheck(key, Math.min(item.totalQty, parseInt(e.target.value) || 0))}
-                      className="w-20 text-center"
-                    />
-                    {(checkedItems[key] || 0) === item.totalQty ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    ) : (checkedItems[key] || 0) > 0 ? (
-                      <XCircle className="h-5 w-5 text-yellow-500" />
-                    ) : null}
+        {displayItems.map(([key, item]) => {
+          const status = showChecking ? getItemStatus(key, item.totalQty) : null;
+          const checked = checkedItems[key] || 0;
+          const isFullyChecked = checked >= item.totalQty;
+
+          return (
+            <Card key={key} className={isFullyChecked && showChecking ? 'border-green-500 bg-green-50 dark:bg-green-900/10' : ''}>
+              <CardContent className="p-3 flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {showChecking && (
+                      isFullyChecked
+                        ? <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+                        : <Clock className="h-5 w-5 text-amber-500 shrink-0" />
+                    )}
+                    <span className="font-medium text-foreground">{item.name}</span>
+                    {item.variant && <Badge variant="outline" className="text-xs">{item.variant}</Badge>}
+                    {showChecking && !isFullyChecked && (
+                      <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
+                        Aguardando
+                      </Badge>
+                    )}
+                    {getStockBadge(item.sku)}
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                  <p className="text-xs text-muted-foreground">
+                    SKU: {item.sku || 'N/A'} • Pedidos: {item.orders.join(', ')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {showChecking ? (
+                    <span className={`text-lg font-bold ${isFullyChecked ? 'text-green-500' : 'text-foreground'}`}>
+                      {checked}/{item.totalQty}
+                    </span>
+                  ) : (
+                    <Badge className="text-base px-3 py-1">x{item.totalQty}</Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
