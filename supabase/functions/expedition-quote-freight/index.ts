@@ -44,7 +44,7 @@ async function fetchTinyShippingMethods(token: string) {
       return methods;
     }
 
-    const formasEnvio = searchData.retorno?.formas_envio || searchData.retorno?.formasEnvio || [];
+    const formasEnvio = searchData.retorno?.formas_envio || searchData.retorno?.formasEnvio || searchData.retorno?.registros || [];
     console.log(`Found ${formasEnvio.length} shipping methods in Tiny`);
 
     // For each forma de envio, get the details (formas de frete)
@@ -52,42 +52,20 @@ async function fetchTinyShippingMethods(token: string) {
       const fe = entry?.forma_envio || entry?.formaEnvio || entry;
       const feId = String(fe.id || '');
       const feDescricao = fe.descricao || fe.nome || '';
-      const feCodigo = fe.codigo || fe.tipo || '';
+      const feCodigo = fe.codigo || fe.tipo || fe.tipo_logistica || '';
 
       if (!feId) continue;
 
-      try {
-        const detailResp = await fetch('https://api.tiny.com.br/api2/formas.envio.obter.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${token}&formato=json&id=${feId}`,
-        });
-        const detailData = await safeJson(detailResp, `Obter forma envio ${feId}`);
-        
-        const formaEnvioDetail = detailData.retorno?.forma_envio || detailData.retorno?.formaEnvio || {};
-        const formasFrete = formaEnvioDetail.formas_frete || formaEnvioDetail.formasFrete || [];
+      // Skip individual detail calls - they consume rate limits and return no frete data
+      // Just use the top-level forma de envio info for matching
+      methods.push({
+        formaEnvioId: feId,
+        formaEnvioDescricao: feDescricao,
+        formaEnvioCodigo: feCodigo,
+        fretes: [],
+      });
 
-        const fretes: Array<{ formaFreteId: string; formaFreteDescricao: string; serviceCode: string }> = [];
-        for (const ffEntry of formasFrete) {
-          const ff = ffEntry?.forma_frete || ffEntry?.formaFrete || ffEntry;
-          fretes.push({
-            formaFreteId: String(ff.id || ''),
-            formaFreteDescricao: ff.descricao || ff.nome || '',
-            serviceCode: ff.codigo_servico || ff.codigoServico || '',
-          });
-        }
-
-        methods.push({
-          formaEnvioId: feId,
-          formaEnvioDescricao: feDescricao,
-          formaEnvioCodigo: feCodigo,
-          fretes,
-        });
-
-        console.log(`Forma envio "${feDescricao}" (${feId}): ${fretes.length} formas de frete`);
-      } catch (e) {
-        console.warn(`Error getting details for forma envio ${feId}:`, e);
-      }
+      console.log(`Forma envio "${feDescricao}" (${feId}), tipo: ${feCodigo}`);
     }
   } catch (e) {
     console.error('Error fetching Tiny shipping methods:', e);
@@ -107,48 +85,47 @@ function matchFrenetToTiny(
   const service = (frenetService || '').toLowerCase();
   const code = frenetServiceCode || '';
 
-  for (const method of tinyMethods) {
-    const desc = method.formaEnvioDescricao.toLowerCase();
-    
-    // Match carrier name
-    const carrierMatch =
-      (carrier.includes('correio') && (desc.includes('correio') || method.formaEnvioCodigo === 'C')) ||
-      (carrier.includes('j&t') && (desc.includes('j&t') || desc.includes('jt'))) ||
-      (carrier.includes('jadlog') && desc.includes('jadlog')) ||
-      (carrier.includes('loggi') && desc.includes('loggi')) ||
-      (carrier.includes('total') && desc.includes('total')) ||
-      desc.includes(carrier.split(' ')[0]); // Partial name match
+  // Priority 1: Try to match "via Frenet" methods first (most specific)
+  const frenetMethods = tinyMethods.filter(m => m.formaEnvioDescricao.toLowerCase().includes('frenet'));
+  // Priority 2: Then try "via Melhor Envio" methods
+  const melhorEnvioMethods = tinyMethods.filter(m => m.formaEnvioDescricao.toLowerCase().includes('melhor envio'));
+  // Priority 3: Then try generic methods
+  const genericMethods = tinyMethods.filter(m => !m.formaEnvioDescricao.toLowerCase().includes('frenet') && !m.formaEnvioDescricao.toLowerCase().includes('melhor envio'));
 
-    if (!carrierMatch) continue;
+  for (const methodGroup of [frenetMethods, melhorEnvioMethods, genericMethods]) {
+    for (const method of methodGroup) {
+      const desc = method.formaEnvioDescricao.toLowerCase();
+      
+      // Match carrier name in the forma de envio description
+      const carrierMatch =
+        (carrier.includes('correio') && desc.includes('correio')) ||
+        (carrier.includes('j&t') && (desc.includes('j&t') || desc.includes('jet') || desc.includes('j e t'))) ||
+        (carrier.includes('jadlog') && desc.includes('jadlog')) ||
+        (carrier.includes('loggi') && desc.includes('loggi')) ||
+        (carrier.includes('total') && desc.includes('total')) ||
+        (carrier.includes('azul') && desc.includes('azul')) ||
+        (carrier.includes('buslog') && desc.includes('buslog')) ||
+        (carrier.includes('latam') && desc.includes('latam'));
 
-    // Try to match the specific service (PAC, SEDEX, etc.)
-    for (const frete of method.fretes) {
-      const freteDesc = frete.formaFreteDescricao.toLowerCase();
-      const freteCode = frete.serviceCode;
+      if (!carrierMatch) continue;
 
-      // Match by service code first (most precise)
-      if (code && freteCode && code === freteCode) {
-        return { formaEnvioId: method.formaEnvioId, formaFreteId: frete.formaFreteId, serviceCode: freteCode };
+      // If there are fretes, try to match specific service
+      for (const frete of method.fretes) {
+        const freteDesc = frete.formaFreteDescricao.toLowerCase();
+        const freteCode = frete.serviceCode;
+        if (code && freteCode && code === freteCode) {
+          return { formaEnvioId: method.formaEnvioId, formaFreteId: frete.formaFreteId, serviceCode: freteCode };
+        }
+        if (
+          (service.includes('pac') && freteDesc.includes('pac')) ||
+          (service.includes('sedex') && freteDesc.includes('sedex'))
+        ) {
+          return { formaEnvioId: method.formaEnvioId, formaFreteId: frete.formaFreteId, serviceCode: freteCode || code };
+        }
       }
 
-      // Match by service description
-      if (
-        (service.includes('pac') && freteDesc.includes('pac')) ||
-        (service.includes('sedex') && !service.includes('10') && !service.includes('12') && freteDesc.includes('sedex') && !freteDesc.includes('10') && !freteDesc.includes('12')) ||
-        (service.includes('sedex 10') && freteDesc.includes('sedex 10')) ||
-        (service.includes('sedex 12') && freteDesc.includes('sedex 12')) ||
-        (service.includes('standard') && freteDesc.includes('standard')) ||
-        (service.includes('express') && freteDesc.includes('express')) ||
-        freteDesc.includes(service.split(' ')[0])
-      ) {
-        return { formaEnvioId: method.formaEnvioId, formaFreteId: frete.formaFreteId, serviceCode: freteCode || code };
-      }
-    }
-
-    // If carrier matched but no specific frete, use first available
-    if (method.fretes.length > 0) {
-      const first = method.fretes[0];
-      return { formaEnvioId: method.formaEnvioId, formaFreteId: first.formaFreteId, serviceCode: first.serviceCode || code };
+      // No fretes available - just return the forma de envio ID (this is common)
+      return { formaEnvioId: method.formaEnvioId, formaFreteId: '', serviceCode: code };
     }
   }
 
