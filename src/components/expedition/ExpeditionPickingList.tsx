@@ -514,6 +514,41 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
               </CardContent>
             </Card>
           )}
+
+          {/* Verified items list */}
+          {totalChecked > 0 && (
+            <Card className="border-green-500/30 bg-green-50/50 dark:bg-green-900/5">
+              <CardContent className="p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <h3 className="text-sm font-bold text-foreground">Itens Conferidos ({totalChecked}/{totalProducts})</h3>
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {sortedItems
+                    .filter(([, item]) => item.pickedQty > 0)
+                    .map(([key, item]) => {
+                      const isFullyChecked = item.pickedQty >= item.totalQty;
+                      return (
+                        <div key={key} className={`flex items-center justify-between px-2 py-1.5 rounded text-sm ${isFullyChecked ? 'bg-green-100 dark:bg-green-900/20' : 'bg-amber-50 dark:bg-amber-900/10'}`}>
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            {isFullyChecked
+                              ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                              : <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                            }
+                            <span className="truncate text-foreground">{item.name}</span>
+                            {item.variant && <span className="text-xs text-muted-foreground shrink-0">({item.variant})</span>}
+                          </div>
+                          <span className={`font-mono font-bold text-xs shrink-0 ml-2 ${isFullyChecked ? 'text-green-600' : 'text-amber-600'}`}>
+                            {item.pickedQty}/{item.totalQty}
+                          </span>
+                        </div>
+                      );
+                    })
+                  }
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 
