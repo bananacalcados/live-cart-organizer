@@ -56,18 +56,32 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     const fetchStockLocations = async () => {
       setLoadingStock(true);
       try {
-        const { data: products } = await supabase
-          .from('pos_products')
-          .select('sku, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
-          .in('sku', skus);
+        // Query by both sku AND barcode since Shopify SKU may be stored as barcode in pos_products
+        const [{ data: bySku }, { data: byBarcode }] = await Promise.all([
+          supabase
+            .from('pos_products')
+            .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
+            .in('sku', skus),
+          supabase
+            .from('pos_products')
+            .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
+            .in('barcode', skus),
+        ]);
 
         const locations: Record<string, StockLocation[]> = {};
-        (products || []).forEach((p: any) => {
+        const addProduct = (p: any, matchedKey: string) => {
           const storeName = p.pos_stores?.name || 'Desconhecida';
           const depositName = p.pos_stores?.tiny_deposit_name || '';
-          if (!locations[p.sku]) locations[p.sku] = [];
-          locations[p.sku].push({ storeName, depositName, storeId: p.store_id, stock: p.stock });
-        });
+          if (!locations[matchedKey]) locations[matchedKey] = [];
+          // Avoid duplicates (same store)
+          if (!locations[matchedKey].some(l => l.storeId === p.store_id)) {
+            locations[matchedKey].push({ storeName, depositName, storeId: p.store_id, stock: p.stock });
+          }
+        };
+
+        (bySku || []).forEach((p: any) => addProduct(p, p.sku));
+        (byBarcode || []).forEach((p: any) => addProduct(p, p.barcode));
+
         setStockLocations(locations);
       } catch (e) {
         console.error('Error fetching stock locations:', e);
