@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle } from "lucide-react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES } from "@/types/order";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
 import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
+import { SendToPOSDialog } from "./SendToPOSDialog";
 import { Order } from "@/types/order";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +39,7 @@ const dbOrderToOrder = (dbOrder: DbOrder): Order => ({
 export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDbProps) {
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [showChatDialog, setShowChatDialog] = useState(false);
+  const [showPOSDialog, setShowPOSDialog] = useState(false);
   const [hasRegistration, setHasRegistration] = useState(false);
   const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
   const [shopifyOrderName, setShopifyOrderName] = useState<string | null>(null);
@@ -413,7 +415,19 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               <ClipboardCopy className="h-3 w-3" />
               Copiar Link de Cadastro
             </Button>
-          )}
+           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs gap-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowPOSDialog(true);
+            }}
+          >
+            <Store className="h-3 w-3" />
+            Enviar ao PDV (Retirada)
+          </Button>
         </div>
       )}
 
@@ -436,6 +450,12 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           order={orderForDialog}
         />
       )}
+
+      <SendToPOSDialog
+        open={showPOSDialog}
+        onOpenChange={setShowPOSDialog}
+        order={order}
+      />
     </div>
   );
 }
