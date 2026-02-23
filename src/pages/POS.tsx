@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
   ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3, SearchX,
-  Menu, X
+  Menu, X, Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,17 +19,19 @@ import { POSInterStoreRequests } from "@/components/pos/POSInterStoreRequests";
 import { POSWhatsApp } from "@/components/pos/POSWhatsApp";
 import { POSProductSearchLog } from "@/components/pos/POSProductSearchLog";
 import { POSDailySales } from "@/components/pos/POSDailySales";
+import { POSPickupOrders } from "@/components/pos/POSPickupOrders";
 import { POSTeamChat } from "@/components/pos/POSTeamChat";
 import { supabase } from "@/integrations/supabase/client";
 
-type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches";
+type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches" | "pickups";
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
 const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badge?: boolean; priority?: boolean }[] = [
   { id: "sales", label: "Venda", icon: ShoppingCart, priority: true },
   { id: "daily", label: "Vendas Dia", icon: BarChart3, priority: true },
+  { id: "pickups", label: "Retiradas", icon: Package, priority: true, badge: true },
   { id: "cash", label: "Caixa", icon: DollarSign, priority: true },
-  { id: "returns", label: "Trocas", icon: RotateCcw, priority: true },
+  { id: "returns", label: "Trocas", icon: RotateCcw },
   { id: "requests", label: "Solicitações", icon: ArrowRightLeft, badge: true },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "whatsapp", label: "WhatsApp", icon: Phone },
@@ -185,6 +187,7 @@ export default function POS() {
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
         {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
+        {section === "pickups" && <POSPickupOrders storeId={selectedStore} />}
         {section === "searches" && <POSProductSearchLog storeId={selectedStore} />}
         {section === "chat" && <POSTeamChat storeId={selectedStore} />}
       </div>
