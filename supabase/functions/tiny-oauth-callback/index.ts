@@ -18,9 +18,9 @@ serve(async (req) => {
   const clientSecret = Deno.env.get("TINY_APP_CLIENT_SECRET")!;
   const redirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/tiny-oauth-callback`;
 
-  // Step 0: If called with ?start=true, redirect to Olist auth
+  // Step 0: If called with ?start=true, redirect to Tiny auth
   if (params.get("start") === "true") {
-    const authUrl = `https://id.olist.com/openid/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&state=tiny_app_auth`;
+    const authUrl = `https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?client_id=${encodeURIComponent(clientId)}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid&state=tiny_app_auth`;
     console.log("Redirecting to auth URL:", authUrl);
     return new Response(null, {
       status: 302,
@@ -47,7 +47,7 @@ serve(async (req) => {
 
     try {
       // Exchange code for access token
-      const tokenRes = await fetch("https://id.olist.com/openid/token", {
+      const tokenRes = await fetch("https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
