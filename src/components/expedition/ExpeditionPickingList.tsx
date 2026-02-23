@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CheckCircle2, XCircle, Printer, MapPin, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -25,6 +25,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   const [checkedItems, setCheckedItems] = useState<Record<string, number>>({});
   const [stockLocations, setStockLocations] = useState<Record<string, StockLocation[]>>({});
   const [loadingStock, setLoadingStock] = useState(false);
+  const [refreshingStock, setRefreshingStock] = useState(false);
 
   const allItems = new Map<string, { name: string; variant: string; sku: string; totalQty: number; orders: string[] }>();
 
@@ -92,6 +93,46 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
 
     fetchStockLocations();
   }, [orders, searchTerm]);
+
+  const handleRefreshStock = async () => {
+    const skus = sortedItems.map(([, item]) => item.sku).filter(Boolean);
+    if (skus.length === 0) return;
+    
+    setRefreshingStock(true);
+    toast.info('Buscando estoque em tempo real do Tiny ERP...');
+    
+    try {
+      // Process in batches of 10
+      const allResults: Record<string, StockLocation[]> = { ...stockLocations };
+      
+      for (let i = 0; i < skus.length; i += 10) {
+        const batch = skus.slice(i, i + 10);
+        const { data, error } = await supabase.functions.invoke('expedition-check-stock', {
+          body: { skus: batch },
+        });
+        
+        if (error) throw error;
+        if (data?.stock) {
+          Object.entries(data.stock).forEach(([sku, locs]: [string, any]) => {
+            allResults[sku] = locs.map((l: any) => ({
+              storeName: l.storeName,
+              depositName: l.depositName,
+              storeId: l.storeId,
+              stock: l.stock,
+            }));
+          });
+        }
+      }
+      
+      setStockLocations(allResults);
+      toast.success('Estoque atualizado em tempo real!');
+    } catch (e: any) {
+      console.error('Error refreshing stock:', e);
+      toast.error(`Erro ao atualizar: ${e.message}`);
+    } finally {
+      setRefreshingStock(false);
+    }
+  };
 
   const handleCheck = (key: string, qty: number) => {
     setCheckedItems(prev => ({ ...prev, [key]: qty }));
@@ -205,6 +246,9 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleRefreshStock} disabled={refreshingStock} className="gap-2">
+            <RefreshCw className={`h-4 w-4 ${refreshingStock ? 'animate-spin' : ''}`} /> {refreshingStock ? 'Atualizando...' : 'Atualizar Estoque'}
+          </Button>
           <Button variant="outline" onClick={handlePrint} className="gap-2">
             <Printer className="h-4 w-4" /> Imprimir
           </Button>
