@@ -97,6 +97,9 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       })
     : sortedItems;
 
+  // Track item IDs that THIS device just updated to skip redundant refreshes
+  const localUpdatedIdsRef = useRef<Set<string>>(new Set());
+
   // Subscribe to realtime changes on expedition_order_items
   useEffect(() => {
     const channel = supabase
@@ -105,8 +108,14 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
         event: 'UPDATE',
         schema: 'public',
         table: 'expedition_order_items',
-      }, () => {
-        // Refetch orders when any item is updated (by another user)
+      }, (payload: any) => {
+        const updatedId = payload.new?.id;
+        // If this device just updated this item, skip the refresh
+        if (updatedId && localUpdatedIdsRef.current.has(updatedId)) {
+          localUpdatedIdsRef.current.delete(updatedId);
+          return;
+        }
+        // Another user updated an item — refresh to get their changes
         onRefresh();
       })
       .subscribe();
@@ -252,6 +261,9 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       const newPickedQty = Math.min(lineItem.pickedQty + 1, lineItem.quantity);
       const isFullyPicked = newPickedQty >= lineItem.quantity;
 
+      // Mark this item as locally updated so realtime handler skips it
+      localUpdatedIdsRef.current.add(pendingConfirm.itemId);
+
       // Save to DB immediately
       const { error } = await supabase
         .from('expedition_order_items')
@@ -261,12 +273,15 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
         })
         .eq('id', pendingConfirm.itemId);
 
-      if (error) throw error;
+      if (error) {
+        localUpdatedIdsRef.current.delete(pendingConfirm.itemId);
+        throw error;
+      }
 
       toast.success(`✓ ${item.name} conferido (${item.pickedQty + 1}/${item.totalQty})`);
       setPendingConfirm(null);
 
-      // Refetch to get updated data
+      // Refetch only THIS device's data (local confirmation)
       onRefresh();
 
       setTimeout(() => barcodeRef.current?.focus(), 100);
