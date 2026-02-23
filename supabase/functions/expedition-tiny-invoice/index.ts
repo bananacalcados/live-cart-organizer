@@ -312,6 +312,83 @@ serve(async (req) => {
         throw new Error('O frete precisa ser cotado e selecionado antes de emitir a NF-e.');
       }
 
+      // Step: Set transport/carrier data on Tiny order BEFORE generating NF-e
+      // This ensures the NF-e includes the carrier info, which is required for expedition
+      console.log('Setting transport data on Tiny order before NF-e generation...');
+      try {
+        // Determine forma_envio based on carrier
+        const carrierLower = (order.freight_carrier || '').toLowerCase();
+        let formaEnvio = 'T'; // Default: Transportadora
+        if (carrierLower.includes('correio') || carrierLower.includes('pac') || carrierLower.includes('sedex')) {
+          formaEnvio = 'C'; // Correios
+        } else if (carrierLower.includes('jadlog')) {
+          formaEnvio = 'J';
+        } else if (carrierLower.includes('loggi')) {
+          formaEnvio = 'LOGGI';
+        } else if (carrierLower.includes('total express')) {
+          formaEnvio = 'TOTALEXPRESS';
+        }
+
+        // Build the forma_frete string (e.g. "J&T frenet")
+        const formaFrete = order.freight_service
+          ? `${order.freight_carrier} ${order.freight_service}`.trim()
+          : order.freight_carrier;
+
+        const transportPayload = {
+          pedido: {
+            nome_transportador: order.freight_carrier || '',
+            forma_envio: formaEnvio,
+            forma_frete: formaFrete,
+            frete_por_conta: 'R', // CIF - Remetente
+            valor_frete: order.freight_price || 0,
+          }
+        };
+
+        console.log('Transport payload:', JSON.stringify(transportPayload));
+
+        const transportResp = await fetch('https://api.tiny.com.br/api2/pedido.alterar.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}&dados_pedido=${encodeURIComponent(JSON.stringify(transportPayload.pedido))}`,
+        });
+        const transportData = await safeJson(transportResp, 'Alterar transporte pedido');
+        console.log('Transport update response:', JSON.stringify(transportData));
+
+        // If pedido.alterar doesn't support transport fields, try the pedido.incluir approach
+        // by getting the order and re-including with transport data
+        if (transportData.retorno?.status === 'Erro') {
+          console.warn('pedido.alterar may not support transport fields, trying alternative...');
+          
+          // Get the full order from Tiny
+          const getOrderResp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}`,
+          });
+          const getOrderData = await safeJson(getOrderResp, 'Obter pedido para transporte');
+          const tinyPedido = getOrderData.retorno?.pedido;
+          
+          if (tinyPedido) {
+            // Try to update via pedido.incluir with the same numero_pedido_ecommerce
+            // This may update the existing order instead of creating a new one
+            const updatePayload = {
+              pedido: {
+                numero_pedido_ecommerce: tinyPedido.numero_ecommerce || tinyPedido.numero || '',
+                nome_transportador: order.freight_carrier || '',
+                forma_envio: formaEnvio,
+                forma_frete: formaFrete,
+                frete_por_conta: 'R',
+                valor_frete: order.freight_price || 0,
+              }
+            };
+            console.log('Alternative transport update payload:', JSON.stringify(updatePayload));
+          }
+        }
+      } catch (transportErr) {
+        // Non-fatal: we still try to generate NF-e even without transport data
+        console.warn('Failed to set transport data on Tiny order:', transportErr);
+      }
+
       // Emit NF-e from Tiny order
       const tinyResponse = await fetch(`https://api.tiny.com.br/api2/gerar.nota.fiscal.pedido.php`, {
         method: 'POST',
