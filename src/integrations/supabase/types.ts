@@ -3000,6 +3000,7 @@ export type Database = {
           notes: string | null
           paid_at: string | null
           paid_externally: boolean | null
+          pos_sale_id: string | null
           products: Json
           stage: string
           updated_at: string
@@ -3025,6 +3026,7 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
+          pos_sale_id?: string | null
           products?: Json
           stage?: string
           updated_at?: string
@@ -3050,6 +3052,7 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
+          pos_sale_id?: string | null
           products?: Json
           stage?: string
           updated_at?: string
@@ -4152,6 +4155,7 @@ export type Database = {
           payment_details: Json | null
           payment_method: string | null
           seller_id: string | null
+          source_order_id: string | null
           status: string
           store_id: string
           subtotal: number
@@ -4176,6 +4180,7 @@ export type Database = {
           payment_details?: Json | null
           payment_method?: string | null
           seller_id?: string | null
+          source_order_id?: string | null
           status?: string
           store_id: string
           subtotal?: number
@@ -4200,6 +4205,7 @@ export type Database = {
           payment_details?: Json | null
           payment_method?: string | null
           seller_id?: string | null
+          source_order_id?: string | null
           status?: string
           store_id?: string
           subtotal?: number
@@ -4229,6 +4235,13 @@ export type Database = {
             columns: ["seller_id"]
             isOneToOne: false
             referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sales_source_order_id_fkey"
+            columns: ["source_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
           {
