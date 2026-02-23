@@ -128,11 +128,6 @@ export default function Expedition() {
   useEffect(() => {
     fetchOrders();
     fetchSupportCount();
-    // Auto-verify on first load
-    if (!verifyRan) {
-      setVerifyRan(true);
-      verifyShippedOrders();
-    }
     const channel = supabase
       .channel('expedition-orders')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'expedition_orders' }, () => fetchOrders())
