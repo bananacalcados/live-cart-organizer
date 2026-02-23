@@ -327,7 +327,29 @@ serve(async (req) => {
         const invoiceId = nfData?.idNotaFiscal || nfData?.[0]?.idNotaFiscal || null;
 
         if (invoiceId) {
-          // Get invoice details
+          // Step 2: Authorize (emit) the NF-e at SEFAZ
+          console.log(`Step 2: Authorizing NF-e ${invoiceId} at SEFAZ...`);
+          const emitResponse = await fetch('https://api.tiny.com.br/api2/nota.fiscal.emitir.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `token=${TINY_ERP_TOKEN}&formato=json&id=${invoiceId}&enviarEmail=S`,
+          });
+          const emitData = await safeJson(emitResponse, 'Emitir/Autorizar NF-e');
+          console.log('NF-e authorization response:', JSON.stringify(emitData));
+          
+          const emitOk = emitData.retorno?.status === 'OK' || emitData.retorno?.status === 'Processado';
+          if (!emitOk) {
+            const emitErr = emitData.retorno?.erros?.[0]?.erro || '';
+            // If already authorized, that's fine
+            if (!emitErr.includes('já autorizada') && !emitErr.includes('já foi autorizada') && !emitErr.includes('Autorizada')) {
+              console.warn('NF-e authorization warning:', emitErr);
+            }
+          }
+
+          // Wait a moment for Tiny to process authorization
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // Step 3: Get invoice details (now with chave_acesso and DANFE link)
           const detailResponse = await fetch(`https://api.tiny.com.br/api2/nota.fiscal.obter.php`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -350,7 +372,15 @@ serve(async (req) => {
             })
             .eq('id', order_id);
 
-          return new Response(JSON.stringify({ success: true, invoice: nf, tiny_invoice_id: invoiceId }), {
+          return new Response(JSON.stringify({ 
+            success: true, 
+            invoice: nf, 
+            tiny_invoice_id: invoiceId,
+            authorized: emitOk,
+            message: emitOk 
+              ? 'NF-e gerada e autorizada na SEFAZ com sucesso!' 
+              : 'NF-e gerada. Autorização pode levar alguns instantes.',
+          }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
