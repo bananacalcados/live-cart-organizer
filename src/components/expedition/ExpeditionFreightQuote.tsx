@@ -493,15 +493,46 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
                         ⚠️ Cote e selecione o frete primeiro (aba Cotação de Frete) antes de emitir a NF-e.
                       </div>
                     ) : (
-                      <Button
-                        onClick={() => handleEmitInvoice(order.id)}
-                        disabled={loadingId === order.id}
-                        variant="outline"
-                        className="gap-2"
-                      >
-                        {loadingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
-                        Emitir NF-e
-                      </Button>
+                      <div className="flex flex-col gap-2">
+                        {!order.tiny_order_id && (
+                          <Button
+                            onClick={async () => {
+                              setLoadingId(order.id);
+                              try {
+                                const { data, error } = await supabase.functions.invoke('expedition-tiny-invoice', {
+                                  body: { order_id: order.id, action: 'sync_order' },
+                                });
+                                if (error) throw error;
+                                if (data?.success) {
+                                  toast.success(data.message || 'Pedido sincronizado com Tiny!');
+                                  onRefresh();
+                                } else {
+                                  throw new Error(data?.error || 'Erro ao sincronizar');
+                                }
+                              } catch (e: any) {
+                                toast.error(`Erro: ${e.message}`);
+                              } finally {
+                                setLoadingId(null);
+                              }
+                            }}
+                            disabled={loadingId === order.id}
+                            variant="outline"
+                            className="gap-2 border-blue-500/50 text-blue-700 dark:text-blue-400"
+                          >
+                            {loadingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                            Sincronizar com Tiny
+                          </Button>
+                        )}
+                        <Button
+                          onClick={() => handleEmitInvoice(order.id)}
+                          disabled={loadingId === order.id}
+                          variant="outline"
+                          className="gap-2"
+                        >
+                          {loadingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
+                          Emitir NF-e
+                        </Button>
+                      </div>
                     )}
                   </div>
                 )}
