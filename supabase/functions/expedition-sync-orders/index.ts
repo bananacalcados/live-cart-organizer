@@ -46,7 +46,7 @@ serve(async (req) => {
         const params = new URLSearchParams({
           status: 'any',
           limit: '50',
-          fields: 'id,name,order_number,email,phone,financial_status,fulfillment_status,total_price,subtotal_price,total_shipping_price_set,total_discounts,created_at,line_items,shipping_address,note,note_attributes,customer,total_weight,token,checkout_token',
+          fields: 'id,name,order_number,email,phone,financial_status,fulfillment_status,cancelled_at,total_price,subtotal_price,total_shipping_price_set,total_discounts,created_at,line_items,shipping_address,note,note_attributes,customer,total_weight,token,checkout_token',
         });
         if (created_at_min) params.set('created_at_min', created_at_min);
         if (created_at_max) params.set('created_at_max', created_at_max);
@@ -69,6 +69,39 @@ serve(async (req) => {
       const orders = data.orders || [];
 
       for (const order of orders) {
+        // Skip cancelled orders entirely
+        if (order.financial_status === 'voided' || order.financial_status === 'refunded') {
+          // If it was already synced, remove it from expedition
+          const shopifyOrderId = String(order.id);
+          const { data: existing } = await supabase
+            .from('expedition_orders')
+            .select('id')
+            .eq('shopify_order_id', shopifyOrderId)
+            .maybeSingle();
+          if (existing) {
+            await supabase.from('expedition_order_items').delete().eq('expedition_order_id', existing.id);
+            await supabase.from('expedition_freight_quotes').delete().eq('expedition_order_id', existing.id);
+            await supabase.from('expedition_orders').delete().eq('id', existing.id);
+          }
+          continue;
+        }
+
+        // Also skip if cancelled_at is set (Shopify marks cancellations this way)
+        if (order.cancelled_at) {
+          const shopifyOrderId = String(order.id);
+          const { data: existing } = await supabase
+            .from('expedition_orders')
+            .select('id')
+            .eq('shopify_order_id', shopifyOrderId)
+            .maybeSingle();
+          if (existing) {
+            await supabase.from('expedition_order_items').delete().eq('expedition_order_id', existing.id);
+            await supabase.from('expedition_freight_quotes').delete().eq('expedition_order_id', existing.id);
+            await supabase.from('expedition_orders').delete().eq('id', existing.id);
+          }
+          continue;
+        }
+
         const shopifyOrderId = String(order.id);
         
         // Check if already synced
