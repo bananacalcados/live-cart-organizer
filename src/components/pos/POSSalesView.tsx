@@ -245,11 +245,34 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         body: JSON.stringify({ store_id: storeId }),
       });
       const data = await resp.json();
-      if (data.success) {
-        setPaymentMethods(data.methods || []);
+      if (data.success && data.methods?.length > 0) {
+        setPaymentMethods(data.methods);
+      } else {
+        // Fallback: load directly from DB cache
+        const { data: cached } = await supabase
+          .from('pos_payment_methods')
+          .select('id, name')
+          .eq('store_id', storeId)
+          .eq('is_active', true)
+          .order('sort_order');
+        if (cached && cached.length > 0) {
+          setPaymentMethods(cached);
+        }
       }
     } catch (e) {
       console.error('Error loading payment methods:', e);
+      // Fallback on network error too
+      try {
+        const { data: cached } = await supabase
+          .from('pos_payment_methods')
+          .select('id, name')
+          .eq('store_id', storeId)
+          .eq('is_active', true)
+          .order('sort_order');
+        if (cached && cached.length > 0) {
+          setPaymentMethods(cached);
+        }
+      } catch {}
     } finally {
       setLoadingPayments(false);
     }
