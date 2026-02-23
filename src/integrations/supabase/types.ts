@@ -1770,6 +1770,72 @@ export type Database = {
         }
         Relationships: []
       }
+      expedition_unscannable_items: {
+        Row: {
+          barcode: string | null
+          created_at: string
+          created_by: string | null
+          expedition_order_id: string
+          expedition_order_item_id: string
+          id: string
+          product_name: string
+          reason: string | null
+          resolved: boolean | null
+          resolved_at: string | null
+          resolved_notes: string | null
+          scanned_value: string | null
+          sku: string | null
+          variant_name: string | null
+        }
+        Insert: {
+          barcode?: string | null
+          created_at?: string
+          created_by?: string | null
+          expedition_order_id: string
+          expedition_order_item_id: string
+          id?: string
+          product_name: string
+          reason?: string | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_notes?: string | null
+          scanned_value?: string | null
+          sku?: string | null
+          variant_name?: string | null
+        }
+        Update: {
+          barcode?: string | null
+          created_at?: string
+          created_by?: string | null
+          expedition_order_id?: string
+          expedition_order_item_id?: string
+          id?: string
+          product_name?: string
+          reason?: string | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_notes?: string | null
+          scanned_value?: string | null
+          sku?: string | null
+          variant_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expedition_unscannable_items_expedition_order_id_fkey"
+            columns: ["expedition_order_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expedition_unscannable_items_expedition_order_item_id_fkey"
+            columns: ["expedition_order_item_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_categories: {
         Row: {
           created_at: string

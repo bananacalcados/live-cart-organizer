@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw, ScanBarcode, Clock, ShieldCheck, Camera, X, Users } from 'lucide-react';
+import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw, ScanBarcode, Clock, ShieldCheck, Camera, X, Users, Search, AlertTriangle, Hand } from 'lucide-react';
 import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarcodeScanner';
 
 interface Props {
@@ -30,6 +30,7 @@ interface PendingConfirm {
   sku: string;
   itemId: string;
   isRecheck: boolean;
+  isManualOverride: boolean;
 }
 
 export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefresh }: Props) {
@@ -46,6 +47,9 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   const [enrichedBarcodes, setEnrichedBarcodes] = useState<Record<string, string[]>>({});
   // Reverse map: scanned GTIN -> item key (for products whose Shopify SKU doesn't match Tiny SKU)
   const [gtinToKeyMap, setGtinToKeyMap] = useState<Record<string, string>>({});
+  // Product search state for manual confirmation
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [showProductSearch, setShowProductSearch] = useState(false);
 
   // Build items from orders — now tracking individual line items with their DB state
   interface ItemEntry {
@@ -307,7 +311,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       const lastCheckedLine = item.lineItems.find(li => li.pickedQty > 0);
       if (lastCheckedLine) {
         toast.info(`${item.name} já conferido (${item.pickedQty}/${item.totalQty}). Re-verificando...`);
-        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, isRecheck: true });
+        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, isRecheck: true, isManualOverride: false });
         setQualityChecks({ feet_correct: false, no_defects: false });
         setBarcodeInput('');
         return;
@@ -319,7 +323,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     }
 
     // Show quality confirmation
-    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, isRecheck: false });
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, isRecheck: false, isManualOverride: false });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setBarcodeInput('');
   }, [sortedItems, enrichedBarcodes, gtinToKeyMap]);
@@ -356,7 +360,22 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
         throw error;
       }
 
-      toast.success(`✓ ${item.name} conferido (${item.pickedQty + 1}/${item.totalQty})`);
+      // If manual override, log to unscannable items table
+      if (pendingConfirm.isManualOverride) {
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase.from('expedition_unscannable_items').insert({
+          expedition_order_id: lineItem.orderId,
+          expedition_order_item_id: pendingConfirm.itemId,
+          product_name: pendingConfirm.name,
+          variant_name: pendingConfirm.variant || null,
+          sku: pendingConfirm.sku || null,
+          barcode: item.barcodes?.[0] || null,
+          reason: 'manual_override',
+          created_by: user?.id || null,
+        });
+      }
+
+      toast.success(`✓ ${item.name} conferido${pendingConfirm.isManualOverride ? ' (manual)' : ''} (${item.pickedQty + 1}/${item.totalQty})`);
       setPendingConfirm(null);
 
       // Refetch only THIS device's data (local confirmation)
@@ -370,6 +389,29 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       setSavingConfirm(false);
     }
   };
+
+  // Manual confirmation handler — select product from list without scanning
+  const handleManualConfirm = useCallback((key: string) => {
+    const item = allItems.get(key);
+    if (!item) return;
+
+    const pendingLine = item.lineItems.find(li => li.pickedQty < li.quantity);
+    if (!pendingLine) {
+      const lastCheckedLine = item.lineItems.find(li => li.pickedQty > 0);
+      if (lastCheckedLine) {
+        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, isRecheck: true, isManualOverride: true });
+        setQualityChecks({ feet_correct: false, no_defects: false });
+        return;
+      }
+      toast.warning(`${item.name} já foi totalmente conferido!`);
+      return;
+    }
+
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, isRecheck: false, isManualOverride: true });
+    setQualityChecks({ feet_correct: false, no_defects: false });
+    setShowProductSearch(false);
+    setProductSearchQuery('');
+  }, [allItems]);
 
   const handleCancelConfirm = () => {
     setPendingConfirm(null);
@@ -419,14 +461,27 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     );
   };
 
+  // Helper: get display SKU — if SKU looks like a random Shopify code, show enriched GTIN instead
+  const getDisplaySku = (key: string, sku: string) => {
+    if (!sku) return 'N/A';
+    // Random Shopify SKUs are usually short alphanumeric (not all digits)
+    const isRandomSku = sku.length <= 12 && /[A-Z]/.test(sku) && /\d/.test(sku);
+    if (isRandomSku) {
+      const gtins = enrichedBarcodes[key] || enrichedBarcodes[sku];
+      if (gtins && gtins.length > 0) return gtins[0];
+    }
+    return sku;
+  };
+
   const handlePrint = () => {
-    const rows = sortedItems.map(([, item], i) => {
+    const rows = sortedItems.map(([key, item], i) => {
+      const displaySku = getDisplaySku(key, item.sku);
       const locs = stockLocations[item.sku];
       const locText = locs?.map(l => `${l.depositName}(${l.stock})`).join(', ') || '—';
       return `<tr>
         <td style="text-align:center;font-weight:bold;color:#333;">${i + 1}</td>
         <td style="font-weight:600;">${item.name}${item.variant ? ` <span style="color:#e67e22;font-weight:500;">(${item.variant})</span>` : ''}</td>
-        <td style="font-family:monospace;color:#666;font-size:12px;">${item.sku || '—'}</td>
+        <td style="font-family:monospace;color:#666;font-size:12px;">${displaySku}</td>
         <td style="font-size:11px;color:#555;">${locText}</td>
         <td style="text-align:center;font-size:18px;font-weight:bold;color:#1a1a1a;background:#fff8e1;border-radius:4px;">${item.totalQty}</td>
         <td style="text-align:center;width:60px;">☐</td>
@@ -535,7 +590,73 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
               <Camera className="h-5 w-5" />
               <span className="hidden sm:inline">Câmera</span>
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowProductSearch(!showProductSearch)}
+              disabled={!!pendingConfirm}
+              className="gap-2"
+            >
+              <Search className="h-5 w-5" />
+              <span className="hidden sm:inline">Buscar</span>
+            </Button>
           </div>
+
+          {/* Product search panel for manual confirmation */}
+          {showProductSearch && !pendingConfirm && (
+            <Card className="border-2 border-blue-400 dark:border-blue-600">
+              <CardContent className="p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Search className="h-4 w-4 text-blue-500" />
+                  <h3 className="text-sm font-bold text-foreground">Buscar produto para conferência manual</h3>
+                  <Button variant="ghost" size="icon" className="ml-auto h-6 w-6" onClick={() => { setShowProductSearch(false); setProductSearchQuery(''); }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  Itens conferidos manualmente serão registrados para auditoria posterior.
+                </div>
+                <Input
+                  placeholder="Digite o nome do produto..."
+                  value={productSearchQuery}
+                  onChange={(e) => setProductSearchQuery(e.target.value)}
+                  className="text-sm"
+                  autoFocus
+                />
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {sortedItems
+                    .filter(([, item]) => {
+                      if (!productSearchQuery.trim()) return false;
+                      const q = productSearchQuery.toLowerCase();
+                      return item.name.toLowerCase().includes(q) || item.variant?.toLowerCase().includes(q) || item.sku?.toLowerCase().includes(q);
+                    })
+                    .map(([key, item]) => {
+                      const isFullyChecked = item.pickedQty >= item.totalQty;
+                      return (
+                        <button
+                          key={key}
+                          className="w-full text-left px-3 py-2 rounded-lg hover:bg-secondary/70 transition-colors border border-border/50 flex items-center justify-between gap-2"
+                          onClick={() => handleManualConfirm(key)}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {item.variant && `${item.variant} • `}SKU: {getDisplaySku(key, item.sku)} • {item.pickedQty}/{item.totalQty}
+                            </p>
+                          </div>
+                          {isFullyChecked ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                          ) : (
+                            <Hand className="h-4 w-4 text-blue-500 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })
+                  }
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Camera scanner overlay */}
           {showCameraScanner && (
@@ -567,10 +688,16 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-amber-600" />
                   <h3 className="font-bold text-foreground">
-                    {pendingConfirm.isRecheck ? 'Re-verificação de Qualidade' : 'Verificação de Qualidade'}
+                    {pendingConfirm.isManualOverride ? 'Conferência Manual' : pendingConfirm.isRecheck ? 'Re-verificação de Qualidade' : 'Verificação de Qualidade'}
                   </h3>
                 </div>
-                {pendingConfirm.isRecheck && (
+                {pendingConfirm.isManualOverride && (
+                  <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-300 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    Conferência manual — este item será registrado para auditoria.
+                  </div>
+                )}
+                {pendingConfirm.isRecheck && !pendingConfirm.isManualOverride && (
                   <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-400">
                     ⚠️ Este produto já foi conferido anteriormente. Confirme novamente se necessário.
                   </div>
@@ -678,10 +805,23 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
                     {getStockBadge(item.sku)}
                   </div>
                   <p className="text-[10px] md:text-xs text-muted-foreground truncate">
-                    SKU: {item.sku || 'N/A'} • {item.orders.join(', ')}
+                    SKU: {getDisplaySku(key, item.sku)} • {item.orders.join(', ')}
                   </p>
                 </div>
-                <div className="flex items-center gap-3 self-end sm:self-auto">
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  {showChecking && !isFullyChecked && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleManualConfirm(key)}
+                      disabled={!!pendingConfirm}
+                      className="gap-1 text-[10px] h-7 px-2"
+                      title="Conferir manualmente (sem bipar)"
+                    >
+                      <Hand className="h-3 w-3" />
+                      <span className="hidden sm:inline">Manual</span>
+                    </Button>
+                  )}
                   {showChecking ? (
                     <span className={`text-base md:text-lg font-bold ${isFullyChecked ? 'text-green-500' : 'text-foreground'}`}>
                       {item.pickedQty}/{item.totalQty}
