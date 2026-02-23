@@ -143,9 +143,33 @@ serve(async (req) => {
         }
       }
 
-      // 3b: Conclude the grouping (this auto-purchases freight/label)
+      // 3b: Update expedition with packaging data (required to conclude)
+      console.log('Step 3b: Updating expedition packaging data...');
+      const weightKg = order.total_weight_grams ? (order.total_weight_grams / 1000).toFixed(3) : '0.500';
+      const expeditionUpdatePayload = JSON.stringify({
+        expedicao: {
+          id: idExpedicao,
+          pesoBruto: weightKg,
+          qtdVolumes: 1,
+          embalagem: {
+            tipo: 2, // pacote/caixa
+            altura: 10,
+            largura: 20,
+            comprimento: 30,
+          },
+        },
+      });
+      const updateExpResp = await fetch('https://api.tiny.com.br/api2/expedicao.alterar.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `token=${TINY_ERP_TOKEN}&formato=json&expedicao=${encodeURIComponent(expeditionUpdatePayload)}`,
+      });
+      const updateExpData = await safeJson(updateExpResp, 'Alterar expedição');
+      console.log('Update expedition response:', JSON.stringify(updateExpData));
+
+      // 3c: Conclude the grouping (this auto-purchases freight/label)
       if (idAgrupamento) {
-        console.log('Step 3b: Concluding expedition grouping (auto-purchases freight)...');
+        console.log('Step 3c: Concluding expedition grouping (auto-purchases freight)...');
         const concludeResponse = await fetch('https://api.tiny.com.br/api2/expedicao.concluir.agrupamento.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
