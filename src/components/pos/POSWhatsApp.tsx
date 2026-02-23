@@ -638,6 +638,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             contactPhotos={contactPhotos}
             contactNames={chatContacts}
             selectedPhone={selectedPhone}
+            onBulkFinish={async (phones) => {
+              for (const phone of phones) {
+                await finishConversation(phone);
+              }
+              toast.success(`${phones.length} conversa${phones.length !== 1 ? 's' : ''} finalizada${phones.length !== 1 ? 's' : ''}`);
+            }}
           />
         </div>
 
