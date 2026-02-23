@@ -1740,6 +1740,86 @@ export type Database = {
           },
         ]
       }
+      expedition_stock_requests: {
+        Row: {
+          courier_name: string | null
+          courier_phone: string | null
+          courier_requested: boolean | null
+          created_at: string
+          expedition_order_ids: string[] | null
+          has_stock: boolean | null
+          id: string
+          notes: string | null
+          order_names: string[] | null
+          product_name: string
+          quantity_needed: number
+          requested_by: string | null
+          responded_at: string | null
+          responded_by: string | null
+          response_notes: string | null
+          sku: string
+          status: string
+          to_store_id: string
+          to_store_name: string | null
+          updated_at: string
+          variant_name: string | null
+        }
+        Insert: {
+          courier_name?: string | null
+          courier_phone?: string | null
+          courier_requested?: boolean | null
+          created_at?: string
+          expedition_order_ids?: string[] | null
+          has_stock?: boolean | null
+          id?: string
+          notes?: string | null
+          order_names?: string[] | null
+          product_name: string
+          quantity_needed?: number
+          requested_by?: string | null
+          responded_at?: string | null
+          responded_by?: string | null
+          response_notes?: string | null
+          sku: string
+          status?: string
+          to_store_id: string
+          to_store_name?: string | null
+          updated_at?: string
+          variant_name?: string | null
+        }
+        Update: {
+          courier_name?: string | null
+          courier_phone?: string | null
+          courier_requested?: boolean | null
+          created_at?: string
+          expedition_order_ids?: string[] | null
+          has_stock?: boolean | null
+          id?: string
+          notes?: string | null
+          order_names?: string[] | null
+          product_name?: string
+          quantity_needed?: number
+          requested_by?: string | null
+          responded_at?: string | null
+          responded_by?: string | null
+          response_notes?: string | null
+          sku?: string
+          status?: string
+          to_store_id?: string
+          to_store_name?: string | null
+          updated_at?: string
+          variant_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expedition_stock_requests_to_store_id_fkey"
+            columns: ["to_store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expedition_sync_log: {
         Row: {
           completed_at: string | null
