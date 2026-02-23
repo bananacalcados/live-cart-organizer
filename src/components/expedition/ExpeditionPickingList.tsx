@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw, ScanBarcode, Clock, ShieldCheck, Camera, X } from 'lucide-react';
+import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw, ScanBarcode, Clock, ShieldCheck, Camera, X, Users } from 'lucide-react';
 import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarcodeScanner';
 
 interface Props {
@@ -28,10 +28,10 @@ interface PendingConfirm {
   name: string;
   variant: string;
   sku: string;
+  itemId: string; // expedition_order_items id for DB update
 }
 
 export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefresh }: Props) {
-  const [checkedItems, setCheckedItems] = useState<Record<string, number>>({});
   const [stockLocations, setStockLocations] = useState<Record<string, StockLocation[]>>({});
   const [loadingStock, setLoadingStock] = useState(false);
   const [refreshingStock, setRefreshingStock] = useState(false);
@@ -39,9 +39,22 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
   const [qualityChecks, setQualityChecks] = useState({ feet_correct: false, no_defects: false });
   const [showCameraScanner, setShowCameraScanner] = useState(false);
+  const [savingConfirm, setSavingConfirm] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
 
-  const allItems = new Map<string, { name: string; variant: string; sku: string; totalQty: number; orders: string[]; barcodes: string[] }>();
+  // Build items from orders — now tracking individual line items with their DB state
+  interface ItemEntry {
+    name: string;
+    variant: string;
+    sku: string;
+    totalQty: number;
+    pickedQty: number; // from DB pick_verified items
+    orders: string[];
+    barcodes: string[];
+    lineItems: Array<{ id: string; orderId: string; orderName: string; quantity: number; pickedQty: number; pickVerified: boolean }>;
+  }
+
+  const allItems = new Map<string, ItemEntry>();
 
   const relevantOrders = orders.filter(o => {
     const term = searchTerm.toLowerCase();
@@ -53,12 +66,21 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     (order.expedition_order_items || []).forEach((item: any) => {
       const key = item.sku || `${item.product_name}-${item.variant_name || ''}`;
       if (!allItems.has(key)) {
-        allItems.set(key, { name: item.product_name, variant: item.variant_name || '', sku: item.sku || '', totalQty: 0, orders: [], barcodes: [] });
+        allItems.set(key, { name: item.product_name, variant: item.variant_name || '', sku: item.sku || '', totalQty: 0, pickedQty: 0, orders: [], barcodes: [], lineItems: [] });
       }
       const entry = allItems.get(key)!;
       entry.totalQty += item.quantity;
+      entry.pickedQty += (item.picked_quantity || 0);
       entry.orders.push(order.shopify_order_name);
       if (item.barcode && !entry.barcodes.includes(item.barcode)) entry.barcodes.push(item.barcode);
+      entry.lineItems.push({
+        id: item.id,
+        orderId: order.id,
+        orderName: order.shopify_order_name,
+        quantity: item.quantity,
+        pickedQty: item.picked_quantity || 0,
+        pickVerified: !!item.pick_verified,
+      });
     });
   });
 
@@ -67,13 +89,30 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   // In checking mode, sort: unchecked first, then checked
   const displayItems = showChecking
     ? [...sortedItems].sort((a, b) => {
-        const aChecked = (checkedItems[a[0]] || 0) >= a[1].totalQty;
-        const bChecked = (checkedItems[b[0]] || 0) >= b[1].totalQty;
+        const aChecked = a[1].pickedQty >= a[1].totalQty;
+        const bChecked = b[1].pickedQty >= b[1].totalQty;
         if (aChecked && !bChecked) return 1;
         if (!aChecked && bChecked) return -1;
         return 0;
       })
     : sortedItems;
+
+  // Subscribe to realtime changes on expedition_order_items
+  useEffect(() => {
+    const channel = supabase
+      .channel('expedition-items-realtime')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'expedition_order_items',
+      }, () => {
+        // Refetch orders when any item is updated (by another user)
+        onRefresh();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [onRefresh]);
 
   // Load stock locations for all SKUs
   useEffect(() => {
@@ -175,9 +214,17 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     }
 
     const [key, item] = matched;
-    const current = checkedItems[key] || 0;
 
-    if (current >= item.totalQty) {
+    if (item.pickedQty >= item.totalQty) {
+      toast.warning(`${item.name} já foi totalmente conferido!`);
+      setBarcodeInput('');
+      barcodeRef.current?.focus();
+      return;
+    }
+
+    // Find the first line item that still needs picking
+    const pendingLine = item.lineItems.find(li => li.pickedQty < li.quantity);
+    if (!pendingLine) {
       toast.warning(`${item.name} já foi totalmente conferido!`);
       setBarcodeInput('');
       barcodeRef.current?.focus();
@@ -185,22 +232,50 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     }
 
     // Show quality confirmation
-    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku });
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setBarcodeInput('');
-  }, [sortedItems, checkedItems]);
+  }, [sortedItems]);
 
-  const handleConfirmQuality = () => {
+  const handleConfirmQuality = async () => {
     if (!pendingConfirm) return;
-    const { key } = pendingConfirm;
-    const item = allItems.get(key);
-    if (!item) return;
+    setSavingConfirm(true);
 
-    const current = checkedItems[key] || 0;
-    setCheckedItems(prev => ({ ...prev, [key]: Math.min(current + 1, item.totalQty) }));
-    toast.success(`✓ ${item.name} conferido (${current + 1}/${item.totalQty})`);
-    setPendingConfirm(null);
-    setTimeout(() => barcodeRef.current?.focus(), 100);
+    try {
+      // Find the line item to update
+      const item = allItems.get(pendingConfirm.key);
+      if (!item) throw new Error('Item not found');
+
+      const lineItem = item.lineItems.find(li => li.id === pendingConfirm.itemId);
+      if (!lineItem) throw new Error('Line item not found');
+
+      const newPickedQty = Math.min(lineItem.pickedQty + 1, lineItem.quantity);
+      const isFullyPicked = newPickedQty >= lineItem.quantity;
+
+      // Save to DB immediately
+      const { error } = await supabase
+        .from('expedition_order_items')
+        .update({
+          picked_quantity: newPickedQty,
+          pick_verified: isFullyPicked,
+        })
+        .eq('id', pendingConfirm.itemId);
+
+      if (error) throw error;
+
+      toast.success(`✓ ${item.name} conferido (${item.pickedQty + 1}/${item.totalQty})`);
+      setPendingConfirm(null);
+
+      // Refetch to get updated data
+      onRefresh();
+
+      setTimeout(() => barcodeRef.current?.focus(), 100);
+    } catch (err: any) {
+      console.error('Error saving pick verification:', err);
+      toast.error(`Erro ao salvar: ${err.message}`);
+    } finally {
+      setSavingConfirm(false);
+    }
   };
 
   const handleCancelConfirm = () => {
@@ -209,7 +284,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   };
 
   const totalProducts = sortedItems.reduce((sum, [, item]) => sum + item.totalQty, 0);
-  const totalChecked = Object.values(checkedItems).reduce((sum, qty) => sum + qty, 0);
+  const totalChecked = sortedItems.reduce((sum, [, item]) => sum + item.pickedQty, 0);
 
   const handleMarkPickingComplete = async () => {
     try {
@@ -249,12 +324,6 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
         ))}
       </div>
     );
-  };
-
-  const getItemStatus = (key: string, totalQty: number) => {
-    const checked = checkedItems[key] || 0;
-    if (checked >= totalQty) return 'confirmed';
-    return 'waiting'; // not yet scanned = waiting for stock
   };
 
   const handlePrint = () => {
@@ -319,6 +388,11 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
             {showChecking && ` • ${totalChecked}/${totalProducts} conferidos`}
             {loadingStock && ' • Carregando estoques...'}
           </p>
+          {showChecking && (
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+              <Users className="h-3 w-3" /> Colaborativo — bipagens salvas em tempo real
+            </p>
+          )}
         </div>
         <div className="flex gap-1.5 md:gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={handleRefreshStock} disabled={refreshingStock} className="gap-1 md:gap-2 text-xs md:text-sm">
@@ -427,12 +501,13 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
                 <div className="flex gap-2">
                   <Button
                     onClick={handleConfirmQuality}
-                    disabled={!qualityChecks.feet_correct || !qualityChecks.no_defects}
+                    disabled={!qualityChecks.feet_correct || !qualityChecks.no_defects || savingConfirm}
                     className="flex-1 gap-2"
                   >
-                    <CheckCircle2 className="h-4 w-4" /> Confirmar Produto
+                    {savingConfirm ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    {savingConfirm ? 'Salvando...' : 'Confirmar Produto'}
                   </Button>
-                  <Button variant="outline" onClick={handleCancelConfirm}>
+                  <Button variant="outline" onClick={handleCancelConfirm} disabled={savingConfirm}>
                     Cancelar
                   </Button>
                 </div>
@@ -444,9 +519,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
 
       <div className="space-y-2">
         {displayItems.map(([key, item]) => {
-          const status = showChecking ? getItemStatus(key, item.totalQty) : null;
-          const checked = checkedItems[key] || 0;
-          const isFullyChecked = checked >= item.totalQty;
+          const isFullyChecked = item.pickedQty >= item.totalQty;
 
           return (
             <Card key={key} className={isFullyChecked && showChecking ? 'border-green-500 bg-green-50 dark:bg-green-900/10' : ''}>
@@ -476,7 +549,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
                 <div className="flex items-center gap-3 self-end sm:self-auto">
                   {showChecking ? (
                     <span className={`text-base md:text-lg font-bold ${isFullyChecked ? 'text-green-500' : 'text-foreground'}`}>
-                      {checked}/{item.totalQty}
+                      {item.pickedQty}/{item.totalQty}
                     </span>
                   ) : (
                     <Badge className="text-sm md:text-base px-2.5 md:px-3 py-0.5 md:py-1">x{item.totalQty}</Badge>
