@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
@@ -15,7 +15,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [hasAccess, setHasAccess] = useState<boolean | undefined>(undefined);
-  const checkedRef = useRef(false);
+  
 
   useEffect(() => {
     let settled = false;
@@ -57,10 +57,9 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
       return;
     }
 
-    if (checkedRef.current) return;
-    checkedRef.current = true;
+    let cancelled = false;
 
-    const checkAccess = async () => {
+    const checkAccess = async (attempt = 1) => {
       try {
         const result = await Promise.race([
           supabase.rpc("get_user_allowed_modules", { p_user_id: userId }),
@@ -69,7 +68,14 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
           ),
         ]);
 
+        if (cancelled) return;
+
         if (result.error || !result.data) {
+          // Retry up to 2 times on failure
+          if (attempt < 3) {
+            setTimeout(() => { if (!cancelled) checkAccess(attempt + 1); }, 1500 * attempt);
+            return;
+          }
           setHasAccess(false);
           return;
         }
@@ -78,11 +84,18 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
         permissionCache.set(userId, { modules, ts: Date.now() });
         setHasAccess(modules.includes(requiredModule));
       } catch {
+        if (cancelled) return;
+        if (attempt < 3) {
+          setTimeout(() => { if (!cancelled) checkAccess(attempt + 1); }, 1500 * attempt);
+          return;
+        }
         setHasAccess(false);
       }
     };
 
     checkAccess();
+
+    return () => { cancelled = true; };
   }, [session, requiredModule]);
 
   if (session === undefined) {
