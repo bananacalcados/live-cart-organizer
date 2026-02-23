@@ -488,10 +488,11 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
         {items.map((item: any) => {
           const scanned = scannedItems[item.id] || 0;
           const isComplete = scanned === item.quantity;
+          const hasNoBarcode = !item.barcode && !item.sku;
           return (
             <Card key={item.id} className={isComplete ? 'border-green-500 bg-green-50 dark:bg-green-900/10' : ''}>
               <CardContent className="p-3 flex items-center justify-between">
-                <div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     {isComplete ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <ScanBarcode className="h-5 w-5 text-muted-foreground" />}
                     <span className="font-medium text-foreground">{item.product_name}</span>
@@ -502,9 +503,38 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
                     SKU: {item.sku || 'N/A'} • Barcode: {item.barcode || 'N/A'}
                   </p>
                 </div>
-                <span className={`text-lg font-bold ${isComplete ? 'text-green-500' : 'text-foreground'}`}>
-                  {scanned}/{item.quantity}
-                </span>
+                <div className="flex items-center gap-2">
+                  {!isComplete && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={`gap-1 text-xs ${hasNoBarcode ? 'border-amber-500 text-amber-700 dark:text-amber-400 animate-pulse' : 'border-muted'}`}
+                      onClick={async () => {
+                        const current = scannedItems[item.id] || 0;
+                        if (current < item.quantity) {
+                          setScannedItems(prev => ({ ...prev, [item.id]: current + 1 }));
+                          toast.success(`✓ ${item.product_name} confirmado manualmente (${current + 1}/${item.quantity})`);
+                          // Log manual confirmation for audit
+                          supabase.from('expedition_unscannable_items').insert({
+                            expedition_order_id: selectedOrderId!,
+                            expedition_order_item_id: item.id,
+                            product_name: item.product_name,
+                            sku: item.sku || null,
+                            reason: 'manual_confirm',
+                            confirmed_by: 'operator',
+                          }).then(() => {});
+                          await transferStockIfNeeded(item);
+                        }
+                      }}
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      Confirmar
+                    </Button>
+                  )}
+                  <span className={`text-lg font-bold ${isComplete ? 'text-green-500' : 'text-foreground'}`}>
+                    {scanned}/{item.quantity}
+                  </span>
+                </div>
               </CardContent>
             </Card>
           );
