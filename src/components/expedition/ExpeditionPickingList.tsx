@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw, ScanBarcode, Clock, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw, ScanBarcode, Clock, ShieldCheck, Camera, X } from 'lucide-react';
+import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarcodeScanner';
 
 interface Props {
   orders: any[];
@@ -37,6 +38,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   const [barcodeInput, setBarcodeInput] = useState('');
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
   const [qualityChecks, setQualityChecks] = useState({ feet_correct: false, no_defects: false });
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
 
   const allItems = new Map<string, { name: string; variant: string; sku: string; totalQty: number; orders: string[]; barcodes: string[] }>();
@@ -306,28 +308,28 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-3 md:space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-bold text-foreground">
+          <h2 className="text-base md:text-lg font-bold text-foreground">
             {showChecking ? 'Conferência por Bipagem' : 'Lista de Separação (Picking)'}
           </h2>
-          <p className="text-sm text-muted-foreground">
-            {sortedItems.length} produtos únicos • {totalProducts} unidades totais
+          <p className="text-xs md:text-sm text-muted-foreground">
+            {sortedItems.length} produtos • {totalProducts} unidades
             {showChecking && ` • ${totalChecked}/${totalProducts} conferidos`}
             {loadingStock && ' • Carregando estoques...'}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleRefreshStock} disabled={refreshingStock} className="gap-2">
-            <RefreshCw className={`h-4 w-4 ${refreshingStock ? 'animate-spin' : ''}`} /> {refreshingStock ? 'Atualizando...' : 'Atualizar Estoque'}
+        <div className="flex gap-1.5 md:gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={handleRefreshStock} disabled={refreshingStock} className="gap-1 md:gap-2 text-xs md:text-sm">
+            <RefreshCw className={`h-3 w-3 md:h-4 md:w-4 ${refreshingStock ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">{refreshingStock ? 'Atualizando...' : 'Atualizar Estoque'}</span>
           </Button>
-          <Button variant="outline" onClick={handlePrint} className="gap-2">
-            <Printer className="h-4 w-4" /> Imprimir
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1 md:gap-2 text-xs md:text-sm">
+            <Printer className="h-3 w-3 md:h-4 md:w-4" /> <span className="hidden sm:inline">Imprimir</span>
           </Button>
           {showChecking && totalChecked === totalProducts && totalProducts > 0 && (
-            <Button onClick={handleMarkPickingComplete} className="gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Confirmar Separação
+            <Button size="sm" onClick={handleMarkPickingComplete} className="gap-1 md:gap-2 text-xs md:text-sm">
+              <CheckCircle2 className="h-3 w-3 md:h-4 md:w-4" /> Confirmar
             </Button>
           )}
         </div>
@@ -346,18 +348,50 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
           <div className="flex gap-2">
             <Input
               ref={barcodeRef}
-              placeholder="Bipe o código de barras ou SKU do produto..."
+              placeholder="Bipe o código de barras ou SKU..."
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleBarcodeScan(barcodeInput); }}
-              className="text-lg font-mono"
+              className="text-lg font-mono flex-1"
               autoFocus
-              disabled={!!pendingConfirm}
+              disabled={!!pendingConfirm || showCameraScanner}
             />
-            <Button onClick={() => handleBarcodeScan(barcodeInput)} disabled={!!pendingConfirm}>
+            <Button onClick={() => handleBarcodeScan(barcodeInput)} disabled={!!pendingConfirm || showCameraScanner}>
               <ScanBarcode className="h-5 w-5" />
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowCameraScanner(true)}
+              disabled={!!pendingConfirm || showCameraScanner}
+              className="gap-2"
+            >
+              <Camera className="h-5 w-5" />
+              <span className="hidden sm:inline">Câmera</span>
+            </Button>
           </div>
+
+          {/* Camera scanner overlay */}
+          {showCameraScanner && (
+            <div className="fixed inset-0 z-[9999] bg-background/95 flex flex-col items-center justify-center p-4">
+              <div className="w-full max-w-md space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <Camera className="h-5 w-5" /> Scanner de Código de Barras
+                  </h3>
+                  <Button variant="ghost" size="icon" onClick={() => setShowCameraScanner(false)}>
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+                <ExpeditionBarcodeScanner
+                  onScan={(code) => {
+                    setShowCameraScanner(false);
+                    handleBarcodeScan(code);
+                  }}
+                  onClose={() => setShowCameraScanner(false)}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Quality confirmation dialog */}
           {pendingConfirm && (
@@ -416,34 +450,36 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
 
           return (
             <Card key={key} className={isFullyChecked && showChecking ? 'border-green-500 bg-green-50 dark:bg-green-900/10' : ''}>
-              <CardContent className="p-3 flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
+              <CardContent className="p-2.5 md:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
                     {showChecking && (
                       isFullyChecked
-                        ? <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
-                        : <Clock className="h-5 w-5 text-amber-500 shrink-0" />
+                        ? <CheckCircle2 className="h-4 w-4 md:h-5 md:w-5 text-green-500 shrink-0" />
+                        : <Clock className="h-4 w-4 md:h-5 md:w-5 text-amber-500 shrink-0" />
                     )}
-                    <span className="font-medium text-foreground">{item.name}</span>
-                    {item.variant && <Badge variant="outline" className="text-xs">{item.variant}</Badge>}
+                    <span className="font-medium text-foreground text-sm md:text-base truncate">{item.name}</span>
+                    {item.variant && <Badge variant="outline" className="text-[10px] md:text-xs">{item.variant}</Badge>}
                     {showChecking && !isFullyChecked && (
                       <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
                         Aguardando
                       </Badge>
                     )}
+                  </div>
+                  <div className="flex items-center gap-1 flex-wrap mt-0.5">
                     {getStockBadge(item.sku)}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    SKU: {item.sku || 'N/A'} • Pedidos: {item.orders.join(', ')}
+                  <p className="text-[10px] md:text-xs text-muted-foreground truncate">
+                    SKU: {item.sku || 'N/A'} • {item.orders.join(', ')}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 self-end sm:self-auto">
                   {showChecking ? (
-                    <span className={`text-lg font-bold ${isFullyChecked ? 'text-green-500' : 'text-foreground'}`}>
+                    <span className={`text-base md:text-lg font-bold ${isFullyChecked ? 'text-green-500' : 'text-foreground'}`}>
                       {checked}/{item.totalQty}
                     </span>
                   ) : (
-                    <Badge className="text-base px-3 py-1">x{item.totalQty}</Badge>
+                    <Badge className="text-sm md:text-base px-2.5 md:px-3 py-0.5 md:py-1">x{item.totalQty}</Badge>
                   )}
                 </div>
               </CardContent>
