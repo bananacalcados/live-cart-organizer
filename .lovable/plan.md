@@ -1,104 +1,96 @@
 
-# Checkout em 3 Etapas + Dados Persistentes por Cliente
+# Plano: Integrar Cotacao de Frete via Tiny ERP
 
 ## Problema Atual
-Atualmente, os dados de cadastro (nome, CPF, email, endereco) estao vinculados apenas ao `order_id` na tabela `customer_registrations`. Quando um cliente compra novamente, precisa preencher tudo de novo. Alem disso, o checkout e uma pagina unica com todos os campos misturados.
 
-## Visao Geral da Solucao
+O sistema cota frete diretamente pela Frenet, mas o Tiny ERP tambem esta conectado a Frenet internamente. Isso causa:
 
-### 1. Banco de Dados: Vincular dados ao Instagram (customer_id)
-- Adicionar coluna `customer_id` na tabela `customer_registrations` (referenciando `customers.id`)
-- Criar uma funcao RPC `get_customer_registration_by_instagram` que busca o cadastro mais recente pelo `instagram_handle`
-- Isso permite recuperar dados de qualquer cliente que ja comprou, independente do pedido
+1. Os codigos de servico do Tiny nao batem com os da Frenet direta -- erro "forma de frete vazio"
+2. O contrato empresarial dos Correios configurado no Tiny nao e utilizado (precos piores)
+3. Peso sendo interpretado incorretamente (700g virando 700kg)
+4. Mapeamento manual de carrier para codigos Tiny e fragil e propenso a erros
 
-### 2. Indicador Visual no Card do Pedido (OrderCardDb)
-- Ao carregar os pedidos, verificar se o `customer_id` possui registro em `customer_registrations`
-- Se sim, exibir um badge verde: "DADOS CADASTRADOS" no card
-- Trocar o botao "Copiar Link de Cadastro" por "Criar Pedido Shopify" quando os dados ja existirem
-- Manter a opcao de enviar link de confirmacao (com dados pre-preenchidos) para o cliente validar o endereco
+## Solucao Proposta
 
-### 3. Checkout Transparente em 3 Etapas (estilo Yampi)
-Redesign completo da pagina `/checkout/order/:orderId` com layout inspirado no print da Yampi:
+Usar a API do Tiny para buscar as **formas de envio** e **formas de frete** reais cadastradas na conta, e armazenar os IDs do Tiny junto com cada cotacao. Assim, na hora de gerar etiqueta, usamos os IDs exatos que o Tiny reconhece.
 
-**Layout Desktop**: 3 colunas (Etapa atual | Proximas etapas | Resumo da compra)
-**Layout Mobile**: Empilhado com resumo colapsavel
-
-**Etapa 1 - Identificacao (1 de 3)**
-- Nome completo, E-mail, CPF, WhatsApp
-- Botao "IR PARA ENTREGA"
-- Ao avancar: salva dados em `customer_registrations` vinculando ao `customer_id`
-- Dados ja ficam persistidos mesmo que nao finalize a compra
-
-**Etapa 2 - Entrega (2 de 3)**
-- CEP (com auto-preenchimento via ViaCEP), Endereco, Numero, Complemento, Bairro, Cidade, UF
-- Botao "IR PARA PAGAMENTO"
-- Ao avancar: atualiza o registro com dados de endereco
-
-**Etapa 3 - Pagamento (3 de 3)**
-- Abas: PIX | Cartao de Credito (mantendo logica atual do Mercado Pago e Pagar.me)
-- Apenas dados de pagamento (cartao ou gerar PIX)
-- Finalizacao do pagamento
-
-**Pre-preenchimento automatico**: Se o cliente (pelo `instagram_handle` do pedido) ja tiver dados cadastrados, as etapas 1 e 2 vem preenchidas automaticamente, permitindo correcao se necessario.
-
-### 4. Fluxo de Dados
+### Fluxo Novo (Hibrido)
 
 ```text
-Cliente abre checkout
-       |
-       v
-Busca customer_registrations pelo customer_id do pedido
-       |
-   [Encontrou?]
-   /         \
- Sim          Nao
-  |            |
-Pre-preenche  Campos vazios
-campos         |
-  |            |
-  v            v
-Etapa 1: Identificacao --> Salva/Atualiza registro
-       |
-       v
-Etapa 2: Endereco --> Atualiza registro
-       |
-       v
-Etapa 3: Pagamento --> Processa e cria pedido Shopify
+1. Cotar Frete (botao)
+   |
+   v
+2. Edge Function busca formas de envio do Tiny
+   (formas.envio.pesquisa.php + formas.envio.obter.php)
+   |
+   v
+3. Tambem cota via Frenet (precos em tempo real)
+   |
+   v
+4. Cruza: para cada cotacao Frenet, encontra o ID
+   da forma de frete correspondente no Tiny
+   |
+   v
+5. Salva cotacoes com tiny_forma_envio_id + tiny_forma_frete_id
+   |
+   v
+6. Usuario seleciona -> salva IDs no pedido
+   |
+   v
+7. Na emissao de NF-e e geracao de etiqueta,
+   usa os IDs do Tiny diretamente (sem mapeamento manual)
 ```
 
-## Detalhes Tecnicos
+## Etapas de Implementacao
 
-### Migracao SQL
-```sql
--- Adicionar customer_id na tabela customer_registrations
-ALTER TABLE customer_registrations ADD COLUMN customer_id uuid REFERENCES customers(id);
+### Etapa 1: Adicionar colunas para IDs do Tiny
 
--- Criar indice para busca rapida por customer
-CREATE INDEX idx_customer_registrations_customer_id ON customer_registrations(customer_id);
+Adicionar colunas na tabela `expedition_freight_quotes` e `expedition_orders` para armazenar os IDs reais do Tiny:
 
--- Funcao para buscar ultimo cadastro por customer_id
-CREATE OR REPLACE FUNCTION get_latest_registration_by_customer(p_customer_id uuid)
-RETURNS customer_registrations
-LANGUAGE sql STABLE SECURITY DEFINER AS $$
-  SELECT * FROM customer_registrations
-  WHERE customer_id = p_customer_id
-  ORDER BY updated_at DESC
-  LIMIT 1;
-$$;
-```
+- `expedition_freight_quotes`: `tiny_forma_envio_id`, `tiny_forma_frete_id`, `tiny_service_code`
+- `expedition_orders`: `tiny_forma_envio_id`, `tiny_forma_frete_id`, `tiny_service_code`
 
-### Arquivos a Modificar
-1. **`src/pages/TransparentCheckout.tsx`** - Redesign completo em 3 etapas com stepper visual, pre-preenchimento de dados e salvamento progressivo
-2. **`src/components/OrderCardDb.tsx`** - Adicionar badge "DADOS CADASTRADOS" e botao para criar pedido Shopify direto quando dados existem
-3. **`src/components/OrderDialogDb.tsx`** - Mostrar indicador de dados cadastrados no dialogo de edicao
-4. **`src/pages/CustomerRegister.tsx`** - Atualizar para tambem vincular `customer_id` ao salvar
+### Etapa 2: Reescrever `expedition-quote-freight`
 
-### Arquivos Novos
-- Nenhum arquivo novo necessario; toda logica fica nos arquivos existentes
+A Edge Function passara a:
 
-### Resumo do Impacto
-- Clientes nunca mais precisam preencher dados 2x
-- Operadores veem imediatamente quais clientes ja tem cadastro
-- Checkout mais limpo e moderno (estilo Yampi em 3 passos)
-- Dados salvos progressivamente (etapa por etapa)
-- Pre-preenchimento automatico para clientes recorrentes
+1. Chamar `formas.envio.pesquisa.php` do Tiny para listar todas as formas de envio cadastradas (Correios, J&T, etc.)
+2. Para cada forma de envio, chamar `formas.envio.obter.php` para obter as formas de frete (PAC, SEDEX, etc.) com seus IDs
+3. Continuar cotando via Frenet para obter precos e prazos em tempo real
+4. Cruzar os resultados: associar cada cotacao Frenet com o ID correto da forma de frete no Tiny
+5. Salvar as cotacoes com `tiny_forma_envio_id` e `tiny_forma_frete_id`
+6. Manter a opcao "Mototaxista" como fallback manual
+
+### Etapa 3: Atualizar selecao de frete no frontend
+
+Quando o usuario selecionar um frete em `ExpeditionFreightQuote.tsx`, salvar tambem os IDs do Tiny no `expedition_orders`.
+
+### Etapa 4: Simplificar `expedition-tiny-invoice` e `expedition-fetch-label`
+
+Remover todo o mapeamento manual de carrier (as funcoes `mapCarrierToFormaEnvio` e `mapToServiceCode`). Em vez disso, usar diretamente os IDs armazenados:
+
+- Na NF-e: usar `tiny_forma_envio_id` e `tiny_forma_frete_id` no payload
+- Na etiqueta: usar os mesmos IDs ao atualizar o pedido de venda e a expedicao
+
+Isso elimina o problema de "forma de frete vazio" e garante que o Tiny reconheca o servico selecionado.
+
+### Etapa 5: Correcao de peso
+
+Garantir que TODOS os pontos que enviam peso ao Tiny facam a conversao `total_weight_grams / 1000` com minimo de 0.3 kg. Revisar `expedition-tiny-invoice` e `expedition-fetch-label`.
+
+## Arquivos Modificados
+
+| Arquivo | Alteracao |
+|---|---|
+| Migracao SQL (nova) | Adicionar colunas `tiny_forma_envio_id`, `tiny_forma_frete_id`, `tiny_service_code` nas tabelas |
+| `supabase/functions/expedition-quote-freight/index.ts` | Reescrever para buscar formas de envio do Tiny + cruzar com Frenet |
+| `src/components/expedition/ExpeditionFreightQuote.tsx` | Salvar IDs do Tiny ao selecionar frete |
+| `supabase/functions/expedition-tiny-invoice/index.ts` | Usar IDs do Tiny em vez de mapeamento manual |
+| `supabase/functions/expedition-fetch-label/index.ts` | Usar IDs do Tiny em vez de mapeamento manual; remover `mapCarrierToFormaEnvio` e `mapToServiceCode` |
+
+## Resultado Esperado
+
+- Cotacoes com precos do contrato empresarial dos Correios (via Frenet configurada no Tiny)
+- IDs exatos do Tiny em cada etapa -- sem mapeamento manual
+- Eliminacao do erro "forma de frete vazio" na geracao de etiquetas
+- Peso sempre em kg correto (nunca mais 700kg)
