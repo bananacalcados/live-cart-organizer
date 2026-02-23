@@ -52,7 +52,8 @@ serve(async (req) => {
         if (resp.ok) {
           const data = await resp.json();
           console.log(`Profile pic response for ${phone}:`, JSON.stringify(data));
-          const picUrl = Array.isArray(data) ? data[0]?.link : (data?.link || data?.profilePictureUrl || data?.url || null);
+          const rawLink = Array.isArray(data) ? data[0]?.link : (data?.link || data?.profilePictureUrl || data?.url || null);
+          const picUrl = (rawLink && rawLink !== 'null' && rawLink !== null) ? rawLink : null;
           
           if (picUrl) {
             results[phone] = picUrl;
