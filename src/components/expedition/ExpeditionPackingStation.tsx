@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, ScanBarcode, Camera, Keyboard, Package, ShieldCheck, AlertTriangle, Gift, ArrowRightLeft, Loader2, MapPin, Clock, Play } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { CheckCircle2, ScanBarcode, Camera, Keyboard, Package, ShieldCheck, AlertTriangle, Gift, ArrowRightLeft, Loader2, MapPin, Clock, Play, PackageCheck, PackageX, PackageMinus, Search, Filter } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -29,6 +30,8 @@ interface TransferLog {
   message?: string;
 }
 
+type PackingCategory = 'all' | 'complete' | 'incomplete' | 'missing';
+
 const SITE_STORE_ID = '2bd2c08d-321c-47ee-98a9-e27e936818ab';
 
 export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Props) {
@@ -40,21 +43,61 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
   const [transferLogs, setTransferLogs] = useState<TransferLog[]>([]);
   const [stockMap, setStockMap] = useState<Record<string, { storeId: string; storeName: string; depositName: string; stock: number }[]>>({});
   const [transferring, setTransferring] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<PackingCategory>('all');
+  const [productScanInput, setProductScanInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const productScanRef = useRef<HTMLInputElement>(null);
 
+  // Filter orders eligible for packing
   const filtered = orders.filter(o => {
     const term = searchTerm.toLowerCase();
     if (term && !(o.shopify_order_name?.toLowerCase().includes(term) || o.customer_name?.toLowerCase().includes(term))) return false;
     return ['approved', 'grouped', 'picked', 'awaiting_stock'].includes(o.expedition_status);
   });
 
-  // Sort: ready orders first, awaiting_stock at the bottom
-  const sortedFiltered = [...filtered].sort((a, b) => {
-    if (a.expedition_status === 'awaiting_stock' && b.expedition_status !== 'awaiting_stock') return 1;
-    if (a.expedition_status !== 'awaiting_stock' && b.expedition_status === 'awaiting_stock') return -1;
-    return 0;
-  });
+  // Categorize orders by pick verification completeness
+  const categorizeOrder = (order: any): 'complete' | 'incomplete' | 'missing' => {
+    const items = order.expedition_order_items || [];
+    if (items.length === 0) return 'missing';
 
+    let totalVerified = 0;
+    let totalItems = 0;
+
+    for (const item of items) {
+      totalItems += item.quantity;
+      const picked = item.picked_quantity || 0;
+      totalVerified += Math.min(picked, item.quantity);
+    }
+
+    if (totalItems === 0) return 'missing';
+    if (totalVerified >= totalItems) return 'complete';
+    if (totalVerified > 0) return 'incomplete';
+    return 'missing';
+  };
+
+  const categorizedOrders = filtered.reduce((acc, order) => {
+    const cat = categorizeOrder(order);
+    acc[cat].push(order);
+    return acc;
+  }, { complete: [] as any[], incomplete: [] as any[], missing: [] as any[] });
+
+  const getFilteredOrders = () => {
+    const isAwaiting = (o: any) => o.expedition_status === 'awaiting_stock';
+    let list: any[];
+    switch (activeCategory) {
+      case 'complete': list = categorizedOrders.complete; break;
+      case 'incomplete': list = categorizedOrders.incomplete; break;
+      case 'missing': list = categorizedOrders.missing; break;
+      default: list = filtered;
+    }
+    return [...list].sort((a, b) => {
+      if (isAwaiting(a) && !isAwaiting(b)) return 1;
+      if (!isAwaiting(a) && isAwaiting(b)) return -1;
+      return 0;
+    });
+  };
+
+  const sortedFiltered = getFilteredOrders();
   const selectedOrder = filtered.find(o => o.id === selectedOrderId);
   const items = selectedOrder?.expedition_order_items || [];
   const hasGift = selectedOrder?.has_gift || false;
@@ -74,34 +117,20 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     if (skus.length === 0) return;
 
     const fetchStock = async () => {
-      // Query by both sku AND barcode since Shopify SKU may be stored as barcode in pos_products
       const [{ data: bySku }, { data: byBarcode }] = await Promise.all([
-        supabase
-          .from('pos_products')
-          .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
-          .in('sku', skus),
-        supabase
-          .from('pos_products')
-          .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
-          .in('barcode', skus),
+        supabase.from('pos_products').select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)').in('sku', skus),
+        supabase.from('pos_products').select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)').in('barcode', skus),
       ]);
 
       const map: typeof stockMap = {};
       const addProduct = (p: any, matchedKey: string) => {
         if (!map[matchedKey]) map[matchedKey] = [];
         if (!map[matchedKey].some(l => l.storeId === p.store_id)) {
-          map[matchedKey].push({
-            storeId: p.store_id,
-            storeName: p.pos_stores?.name || '',
-            depositName: p.pos_stores?.tiny_deposit_name || '',
-            stock: p.stock,
-          });
+          map[matchedKey].push({ storeId: p.store_id, storeName: p.pos_stores?.name || '', depositName: p.pos_stores?.tiny_deposit_name || '', stock: p.stock });
         }
       };
-
       (bySku || []).forEach((p: any) => addProduct(p, p.sku));
       (byBarcode || []).forEach((p: any) => addProduct(p, p.barcode));
-
       setStockMap(map);
     };
     fetchStock();
@@ -110,28 +139,14 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
   const transferStockIfNeeded = useCallback(async (item: any) => {
     const sku = item.sku;
     if (!sku) return;
-
     const locations = stockMap[sku];
     if (!locations) return;
-
     const siteLoc = locations.find(l => l.depositName === 'Site');
-    const siteStock = siteLoc?.stock || 0;
-
-    // If site has stock, no transfer needed
-    if (siteStock > 0) return;
-
-    // Find a source store with stock
+    if ((siteLoc?.stock || 0) > 0) return;
     const source = locations.find(l => l.depositName !== 'Site' && l.stock > 0);
     if (!source) return;
 
-    const logEntry: TransferLog = {
-      itemId: item.id,
-      sku,
-      from: source.depositName,
-      to: 'Site',
-      status: 'pending',
-    };
-
+    const logEntry: TransferLog = { itemId: item.id, sku, from: source.depositName, to: 'Site', status: 'pending' };
     setTransferLogs(prev => [...prev, logEntry]);
     setTransferring(true);
 
@@ -139,7 +154,6 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
       const { data, error } = await supabase.functions.invoke('expedition-transfer-stock', {
         body: { sku, source_store_id: source.storeId, quantity: 1 },
       });
-
       if (error || !data?.success) {
         const errMsg = data?.error || error?.message || 'Erro desconhecido';
         setTransferLogs(prev => prev.map(l => l.itemId === item.id ? { ...l, status: 'error', message: errMsg } : l));
@@ -147,8 +161,6 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
       } else {
         setTransferLogs(prev => prev.map(l => l.itemId === item.id ? { ...l, status: 'success', message: `${source.depositName} → Site ✓` } : l));
         toast.success(`Estoque transferido: ${source.depositName} → Site (${item.product_name})`);
-
-        // Update local stock map
         setStockMap(prev => {
           const updated = { ...prev };
           if (updated[sku]) {
@@ -171,17 +183,13 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
 
   const handleBarcodeScan = useCallback(async (barcode: string) => {
     if (!selectedOrder || !barcode.trim()) return;
-    const matchedItem = items.find((item: any) =>
-      item.barcode === barcode.trim() || item.sku === barcode.trim()
-    );
+    const matchedItem = items.find((item: any) => item.barcode === barcode.trim() || item.sku === barcode.trim());
     if (matchedItem) {
       const key = matchedItem.id;
       const current = scannedItems[key] || 0;
       if (current < matchedItem.quantity) {
         setScannedItems(prev => ({ ...prev, [key]: current + 1 }));
         toast.success(`✓ ${matchedItem.product_name} (${current + 1}/${matchedItem.quantity})`);
-
-        // Auto-transfer stock if needed
         await transferStockIfNeeded(matchedItem);
       } else {
         toast.warning(`${matchedItem.product_name} já foi totalmente bipado!`);
@@ -192,8 +200,37 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     setBarcodeInput('');
   }, [selectedOrder, items, scannedItems, transferStockIfNeeded]);
 
+  // Product-first scan: find order by scanned barcode/sku
+  const handleProductScan = useCallback((barcode: string) => {
+    if (!barcode.trim()) return;
+    const trimmed = barcode.trim();
+
+    // Search across all filtered orders for a matching item
+    const matchingOrders = filtered.filter(order => {
+      const orderItems = order.expedition_order_items || [];
+      return orderItems.some((item: any) => item.barcode === trimmed || item.sku === trimmed);
+    });
+
+    if (matchingOrders.length === 0) {
+      toast.error(`Nenhum pedido encontrado com o código: ${trimmed}`);
+    } else if (matchingOrders.length === 1) {
+      setSelectedOrderId(matchingOrders[0].id);
+      toast.success(`Pedido ${matchingOrders[0].shopify_order_name} localizado!`);
+    } else {
+      // Multiple orders, show them filtered
+      toast.info(`${matchingOrders.length} pedidos encontrados com esse produto. Selecione um.`);
+      // We'll highlight these by temporarily filtering
+      setActiveCategory('all');
+    }
+    setProductScanInput('');
+  }, [filtered]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleBarcodeScan(barcodeInput);
+  };
+
+  const handleProductScanKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleProductScan(productScanInput);
   };
 
   const totalItems = items.reduce((sum: number, i: any) => sum + i.quantity, 0);
@@ -207,16 +244,9 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     try {
       for (const item of items) {
         const scanned = scannedItems[item.id] || 0;
-        await supabase
-          .from('expedition_order_items')
-          .update({ packed_quantity: scanned, pack_verified: scanned === item.quantity })
-          .eq('id', item.id);
+        await supabase.from('expedition_order_items').update({ packed_quantity: scanned, pack_verified: scanned === item.quantity }).eq('id', item.id);
       }
-      await supabase
-        .from('expedition_orders')
-        .update({ expedition_status: 'packed' })
-        .eq('id', selectedOrderId);
-
+      await supabase.from('expedition_orders').update({ expedition_status: 'packed' }).eq('id', selectedOrderId);
       toast.success('Conferência e verificação concluídas!');
       setSelectedOrderId(null);
       setScannedItems({});
@@ -234,7 +264,6 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     if (!locations) return null;
     const siteLoc = locations.find(l => l.depositName === 'Site');
     const others = locations.filter(l => l.depositName !== 'Site' && l.stock > 0);
-
     if (siteLoc && siteLoc.stock > 0) {
       return <Badge variant="outline" className="text-[10px] gap-1 border-green-500 text-green-600"><MapPin className="h-3 w-3" />Site ({siteLoc.stock})</Badge>;
     }
@@ -252,29 +281,85 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     return <Badge variant="destructive" className="text-[10px]">Sem estoque</Badge>;
   };
 
+  // ── ORDER LIST VIEW ──
   if (!selectedOrderId) {
     return (
       <div className="space-y-4">
-        <h2 className="text-lg font-bold text-foreground">Conferência & Verificação (Packing)</h2>
-        <p className="text-sm text-muted-foreground">Selecione um pedido para bipar produtos e verificar qualidade.</p>
+        <h2 className="text-lg font-bold text-foreground">Bipagem & Conferência (Packing)</h2>
+
+        {/* Product-first scan input */}
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-3 md:p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <ScanBarcode className="h-4 w-4 text-primary" />
+              <span className="text-sm font-bold text-foreground">Bipar produto para localizar pedido</span>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                ref={productScanRef}
+                placeholder="Bipe ou digite o código de barras do produto..."
+                value={productScanInput}
+                onChange={(e) => setProductScanInput(e.target.value)}
+                onKeyDown={handleProductScanKeyDown}
+                className="text-lg font-mono"
+                autoFocus
+              />
+              <Button onClick={() => handleProductScan(productScanInput)}>
+                <Search className="h-5 w-5" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Category tabs */}
+        <Tabs value={activeCategory} onValueChange={(v) => setActiveCategory(v as PackingCategory)}>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="all" className="gap-1 text-xs md:text-sm">
+              <Package className="h-3 w-3 md:h-4 md:w-4" />
+              Todos ({filtered.length})
+            </TabsTrigger>
+            <TabsTrigger value="complete" className="gap-1 text-xs md:text-sm text-green-600 data-[state=active]:text-green-700">
+              <PackageCheck className="h-3 w-3 md:h-4 md:w-4" />
+              Completos ({categorizedOrders.complete.length})
+            </TabsTrigger>
+            <TabsTrigger value="incomplete" className="gap-1 text-xs md:text-sm text-amber-600 data-[state=active]:text-amber-700">
+              <PackageMinus className="h-3 w-3 md:h-4 md:w-4" />
+              Incompletos ({categorizedOrders.incomplete.length})
+            </TabsTrigger>
+            <TabsTrigger value="missing" className="gap-1 text-xs md:text-sm text-red-600 data-[state=active]:text-red-700">
+              <PackageX className="h-3 w-3 md:h-4 md:w-4" />
+              Em Falta ({categorizedOrders.missing.length})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {sortedFiltered.length === 0 ? (
-          <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido pronto para conferência.</CardContent></Card>
+          <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido nesta categoria.</CardContent></Card>
         ) : (
           <div className="grid gap-2">
             {sortedFiltered.map(order => {
               const isAwaiting = order.expedition_status === 'awaiting_stock';
+              const cat = categorizeOrder(order);
+              const catColors = {
+                complete: 'border-l-4 border-l-green-500',
+                incomplete: 'border-l-4 border-l-amber-500',
+                missing: 'border-l-4 border-l-red-500',
+              };
+              const orderItems = order.expedition_order_items || [];
+              const totalQty = orderItems.reduce((s: number, i: any) => s + i.quantity, 0);
+              const pickedQty = orderItems.reduce((s: number, i: any) => s + (i.picked_quantity || 0), 0);
+
               return (
                 <Card
                   key={order.id}
-                  className={`cursor-pointer transition-shadow ${isAwaiting ? 'opacity-60 border-amber-400/50' : 'hover:shadow-md hover:border-primary'}`}
+                  className={`cursor-pointer transition-shadow ${catColors[cat]} ${isAwaiting ? 'opacity-60 border-amber-400/50' : 'hover:shadow-md hover:border-primary'}`}
                   onClick={() => !isAwaiting && setSelectedOrderId(order.id)}
                 >
-                  <CardContent className="p-4 flex items-center justify-between">
+                  <CardContent className="p-3 md:p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      {isAwaiting ? <Clock className="h-5 w-5 text-amber-500" /> : <Package className="h-5 w-5 text-muted-foreground" />}
+                      {isAwaiting ? <Clock className="h-5 w-5 text-amber-500" /> : cat === 'complete' ? <PackageCheck className="h-5 w-5 text-green-500" /> : cat === 'incomplete' ? <PackageMinus className="h-5 w-5 text-amber-500" /> : <PackageX className="h-5 w-5 text-red-500" />}
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-foreground">{order.shopify_order_name}</span>
                           {isAwaiting && (
                             <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 gap-1">
@@ -282,12 +367,15 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
                             </Badge>
                           )}
                           {order.has_gift && <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600"><Gift className="h-3 w-3 mr-0.5" />Brinde</Badge>}
+                          <Badge variant="outline" className={`text-[10px] ${cat === 'complete' ? 'border-green-500 text-green-600' : cat === 'incomplete' ? 'border-amber-500 text-amber-600' : 'border-red-500 text-red-600'}`}>
+                            {pickedQty}/{totalQty} conferidos
+                          </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">{order.customer_name}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge>{order.expedition_order_items?.length || 0} itens</Badge>
+                      <Badge>{orderItems.length} itens</Badge>
                       {isAwaiting && (
                         <Button
                           size="sm"
@@ -295,10 +383,7 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
                           className="gap-1 border-green-500/50 text-green-700 dark:text-green-400"
                           onClick={(e) => {
                             e.stopPropagation();
-                            supabase
-                              .from('expedition_orders')
-                              .update({ expedition_status: 'approved' })
-                              .eq('id', order.id)
+                            supabase.from('expedition_orders').update({ expedition_status: 'approved' }).eq('id', order.id)
                               .then(() => { toast.success('Pedido retomado!'); onRefresh(); });
                           }}
                         >
@@ -316,6 +401,7 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     );
   }
 
+  // ── ORDER DETAIL / SCANNING VIEW ──
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
