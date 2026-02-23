@@ -67,21 +67,34 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     if (skus.length === 0) return;
 
     const fetchStock = async () => {
-      const { data } = await supabase
-        .from('pos_products')
-        .select('sku, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
-        .in('sku', skus);
+      // Query by both sku AND barcode since Shopify SKU may be stored as barcode in pos_products
+      const [{ data: bySku }, { data: byBarcode }] = await Promise.all([
+        supabase
+          .from('pos_products')
+          .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
+          .in('sku', skus),
+        supabase
+          .from('pos_products')
+          .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
+          .in('barcode', skus),
+      ]);
 
       const map: typeof stockMap = {};
-      (data || []).forEach((p: any) => {
-        if (!map[p.sku]) map[p.sku] = [];
-        map[p.sku].push({
-          storeId: p.store_id,
-          storeName: p.pos_stores?.name || '',
-          depositName: p.pos_stores?.tiny_deposit_name || '',
-          stock: p.stock,
-        });
-      });
+      const addProduct = (p: any, matchedKey: string) => {
+        if (!map[matchedKey]) map[matchedKey] = [];
+        if (!map[matchedKey].some(l => l.storeId === p.store_id)) {
+          map[matchedKey].push({
+            storeId: p.store_id,
+            storeName: p.pos_stores?.name || '',
+            depositName: p.pos_stores?.tiny_deposit_name || '',
+            stock: p.stock,
+          });
+        }
+      };
+
+      (bySku || []).forEach((p: any) => addProduct(p, p.sku));
+      (byBarcode || []).forEach((p: any) => addProduct(p, p.barcode));
+
       setStockMap(map);
     };
     fetchStock();
