@@ -312,27 +312,29 @@ serve(async (req) => {
         throw new Error('O frete precisa ser cotado e selecionado antes de emitir a NF-e.');
       }
 
-      // Determine forma_envio code based on carrier name
-      const carrierLower = (order.freight_carrier || '').toLowerCase();
-      let formaEnvio = 'T'; // Default: Transportadora
-      if (carrierLower.includes('correio') || carrierLower.includes('pac') || carrierLower.includes('sedex')) {
-        formaEnvio = 'C'; // Correios
-      } else if (carrierLower.includes('jadlog')) {
-        formaEnvio = 'J';
-      } else if (carrierLower.includes('loggi')) {
-        formaEnvio = 'LOGGI';
-      } else if (carrierLower.includes('total express')) {
-        formaEnvio = 'TOTALEXPRESS';
+      // Use stored Tiny IDs if available, otherwise fallback to manual mapping
+      let formaEnvio = order.tiny_forma_envio_id || '';
+      let formaFrete = order.tiny_forma_frete_id || '';
+      
+      if (!formaEnvio) {
+        // Fallback: manual mapping
+        const carrierLower = (order.freight_carrier || '').toLowerCase();
+        if (carrierLower.includes('correio') || carrierLower.includes('pac') || carrierLower.includes('sedex')) {
+          formaEnvio = 'C';
+        } else if (carrierLower.includes('jadlog') || carrierLower.includes('j&t')) {
+          formaEnvio = 'J';
+        } else {
+          formaEnvio = 'T';
+        }
+      }
+      
+      if (!formaFrete) {
+        formaFrete = order.freight_service
+          ? `${order.freight_carrier} ${order.freight_service}`.trim()
+          : order.freight_carrier || '';
       }
 
-      // Build forma_frete string matching Tiny's configured shipping methods
-      // The freight_service from Frenet contains the service name (e.g. "Standard", "Express")
-      // Combined with carrier gives something like "J&T Express Standard"
-      const formaFrete = order.freight_service
-        ? `${order.freight_carrier} ${order.freight_service}`.trim()
-        : order.freight_carrier;
-
-      console.log(`Carrier mapping: "${order.freight_carrier}" + "${order.freight_service}" → formaEnvio="${formaEnvio}", formaFrete="${formaFrete}"`);
+      console.log(`Carrier mapping: tiny_forma_envio_id="${order.tiny_forma_envio_id}", tiny_forma_frete_id="${order.tiny_forma_frete_id}" → formaEnvio="${formaEnvio}", formaFrete="${formaFrete}"`);
 
       // STRATEGY: First try gerar.nota.fiscal.pedido.php (auto-taxes).
       // Then check if transport data is missing. If so, create NF-e manually with nota.fiscal.incluir.php.
@@ -380,8 +382,8 @@ serve(async (req) => {
         throw new Error('Pedido no Tiny não possui itens. Verifique o pedido.');
       }
 
-      // Calculate total weight in kg
-      const totalWeightKg = (order.total_weight_grams || 0) / 1000;
+      // Calculate total weight in kg (min 0.3)
+      const totalWeightKg = Math.max(0.3, (order.total_weight_grams || 300) / 1000);
 
       const nfPayload = {
         nota_fiscal: {

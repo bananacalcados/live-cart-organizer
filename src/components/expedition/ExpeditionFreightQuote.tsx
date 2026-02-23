@@ -88,6 +88,9 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
           freight_service: quote.service,
           freight_price: quote.price,
           freight_delivery_days: quote.delivery_days,
+          tiny_forma_envio_id: quote.tiny_forma_envio_id || null,
+          tiny_forma_frete_id: quote.tiny_forma_frete_id || null,
+          tiny_service_code: quote.tiny_service_code || null,
           expedition_status: 'freight_quoted',
         })
         .eq('id', orderId);
