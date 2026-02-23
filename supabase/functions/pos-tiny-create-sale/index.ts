@@ -30,162 +30,172 @@ serve(async (req) => {
     if (!store?.tiny_token) throw new Error('Store token not configured');
 
     const token = store.tiny_token;
-
-    // Build Tiny order
     const subtotal = items.reduce((s: number, i: any) => s + (i.price * i.quantity), 0);
     const total = subtotal - (discount || 0);
 
-    const tinyOrder = {
-      pedido: {
-        situacao: 'aprovado',
-        data_pedido: new Date().toLocaleDateString('pt-BR'),
-        ...(customer?.name && {
-          cliente: {
-            nome: customer.name,
-            cpf_cnpj: customer.cpf || '',
-            email: customer.email || '',
-            fone: customer.whatsapp || '',
-            ...(customer.address && { endereco: customer.address }),
-            ...(customer.cep && { cep: customer.cep.replace(/\D/g, '') }),
-            ...(customer.city && { cidade: customer.city }),
-            ...(customer.state && { uf: customer.state }),
-          },
-        }),
-        itens: items.map((item: any) => ({
-          item: {
-            codigo: item.sku || '',
-            descricao: `${item.name}${item.variant ? ` - ${item.variant}` : ''}`,
-            unidade: 'UN',
-            quantidade: item.quantity,
-            valor_unitario: item.price,
-          },
-        })),
-        ...(discount && discount > 0 && { valor_desconto: discount }),
-        ...(payment_method_name && {
-          forma_pagamento: payment_method_name,
-        }),
-        ...(tiny_seller_id && {
-          id_vendedor: tiny_seller_id,
-        }),
-        ...(notes && { obs: notes }),
-      },
-    };
+    let tinyOrderId: string | null = null;
+    let tinyOrderNumber: string | null = null;
+    let tinyFailed = false;
 
-    console.log('Creating Tiny order:', JSON.stringify(tinyOrder));
+    // Try to create order in Tiny ERP
+    try {
+      const tinyOrder = {
+        pedido: {
+          situacao: 'aprovado',
+          data_pedido: new Date().toLocaleDateString('pt-BR'),
+          ...(customer?.name && {
+            cliente: {
+              nome: customer.name,
+              cpf_cnpj: customer.cpf || '',
+              email: customer.email || '',
+              fone: customer.whatsapp || '',
+              ...(customer.address && { endereco: customer.address }),
+              ...(customer.cep && { cep: customer.cep.replace(/\D/g, '') }),
+              ...(customer.city && { cidade: customer.city }),
+              ...(customer.state && { uf: customer.state }),
+            },
+          }),
+          itens: items.map((item: any) => ({
+            item: {
+              codigo: item.sku || '',
+              descricao: `${item.name}${item.variant ? ` - ${item.variant}` : ''}`,
+              unidade: 'UN',
+              quantidade: item.quantity,
+              valor_unitario: item.price,
+            },
+          })),
+          ...(discount && discount > 0 && { valor_desconto: discount }),
+          ...(payment_method_name && {
+            forma_pagamento: payment_method_name,
+          }),
+          ...(tiny_seller_id && {
+            id_vendedor: tiny_seller_id,
+          }),
+          ...(notes && { obs: notes }),
+        },
+      };
 
-    const tinyResp = await fetch('https://api.tiny.com.br/api2/pedido.incluir.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${token}&formato=json&pedido=${encodeURIComponent(JSON.stringify(tinyOrder))}`,
-    });
+      console.log('Creating Tiny order:', JSON.stringify(tinyOrder));
 
-    const tinyData = await tinyResp.json();
-    console.log('Tiny create order response:', JSON.stringify(tinyData));
+      const tinyResp = await fetch('https://api.tiny.com.br/api2/pedido.incluir.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `token=${token}&formato=json&pedido=${encodeURIComponent(JSON.stringify(tinyOrder))}`,
+      });
 
-    if (tinyData.retorno?.status === 'OK' || tinyData.retorno?.status === 'Processado') {
-      const records = tinyData.retorno?.registros?.registro || tinyData.retorno?.registros;
-      const tinyOrderId = records?.id || records?.[0]?.id || null;
-      const tinyOrderNumber = records?.numero || records?.[0]?.numero || null;
+      const tinyData = await tinyResp.json();
+      console.log('Tiny create order response:', JSON.stringify(tinyData));
 
-      // Save sale to pos_sales
-      const { data: sale, error: saleError } = await supabase
-        .from('pos_sales')
-        .insert({
-          store_id,
-          seller_id: seller_id || null,
-          customer_id: customer?.id || null,
-          payment_method: payment_method_name || null,
-          subtotal,
-          discount: discount || 0,
-          total,
-          tiny_order_id: String(tinyOrderId),
-          tiny_order_number: tinyOrderNumber ? String(tinyOrderNumber) : null,
-          status: 'completed',
-        })
-        .select('id')
-        .single();
+      if (tinyData.retorno?.status === 'OK' || tinyData.retorno?.status === 'Processado') {
+        const records = tinyData.retorno?.registros?.registro || tinyData.retorno?.registros;
+        tinyOrderId = records?.id || records?.[0]?.id || null;
+        tinyOrderNumber = records?.numero || records?.[0]?.numero || null;
+      } else {
+        const errorMsg = tinyData.retorno?.erros?.[0]?.erro || JSON.stringify(tinyData.retorno);
+        console.error('Tiny API failed, saving sale locally:', errorMsg);
+        tinyFailed = true;
+      }
+    } catch (tinyError) {
+      console.error('Tiny API unreachable, saving sale locally:', tinyError);
+      tinyFailed = true;
+    }
 
-      if (sale) {
-        // Save sale items
-        const saleItems = items.map((item: any) => ({
-          sale_id: sale.id,
-          sku: item.sku || '',
-          product_name: item.name,
-          variant_name: item.variant || null,
-          size: item.size || null,
-          category: item.category || null,
-          quantity: item.quantity,
-          unit_price: item.price,
-          barcode: item.barcode || null,
-          tiny_product_id: item.tiny_id ? String(item.tiny_id) : null,
-        }));
+    // Always save sale to pos_sales (even if Tiny failed)
+    const { data: sale, error: saleError } = await supabase
+      .from('pos_sales')
+      .insert({
+        store_id,
+        seller_id: seller_id || null,
+        customer_id: customer?.id || null,
+        payment_method: payment_method_name || null,
+        subtotal,
+        discount: discount || 0,
+        total,
+        tiny_order_id: tinyOrderId ? String(tinyOrderId) : null,
+        tiny_order_number: tinyOrderNumber ? String(tinyOrderNumber) : null,
+        status: tinyFailed ? 'pending_sync' : 'completed',
+      })
+      .select('id')
+      .single();
 
-        await supabase.from('pos_sale_items').insert(saleItems);
+    if (sale) {
+      // Save sale items
+      const saleItems = items.map((item: any) => ({
+        sale_id: sale.id,
+        sku: item.sku || '',
+        product_name: item.name,
+        variant_name: item.variant || null,
+        size: item.size || null,
+        category: item.category || null,
+        quantity: item.quantity,
+        unit_price: item.price,
+        barcode: item.barcode || null,
+        tiny_product_id: item.tiny_id ? String(item.tiny_id) : null,
+      }));
 
-        // Update local stock cache (pos_products)
-        for (const item of items) {
-          if (item.sku) {
-            const { data: product } = await supabase
-              .from('pos_products')
-              .select('id, stock')
-              .eq('store_id', store_id)
-              .eq('sku', item.sku)
-              .maybeSingle();
+      await supabase.from('pos_sale_items').insert(saleItems);
 
-            if (product) {
-              const newStock = Math.max(0, (product.stock || 0) - item.quantity);
-              await supabase
-                .from('pos_products')
-                .update({ stock: newStock, synced_at: new Date().toISOString() })
-                .eq('id', product.id);
-            }
-          }
-        }
-
-        // Award gamification points to seller
-        if (seller_id) {
-          const { data: existingGamification } = await supabase
-            .from('pos_gamification')
-            .select('id, total_points, sales_count, registrations_count')
-            .eq('seller_id', seller_id)
+      // Update local stock cache (pos_products)
+      for (const item of items) {
+        if (item.sku) {
+          const { data: product } = await supabase
+            .from('pos_products')
+            .select('id, stock')
             .eq('store_id', store_id)
+            .eq('sku', item.sku)
             .maybeSingle();
 
-          const salePoints = 10;
-          const registrationPoints = customer?.id ? 15 : 0;
-          const completenessPoints = customer?.id ? calculateCompletenessPoints(customer) : 0;
-          const totalNew = salePoints + registrationPoints + completenessPoints;
-
-          if (existingGamification) {
-            await supabase.from('pos_gamification').update({
-              total_points: existingGamification.total_points + totalNew,
-              sales_count: existingGamification.sales_count + 1,
-              registrations_count: existingGamification.registrations_count + (customer?.id ? 1 : 0),
-            }).eq('id', existingGamification.id);
-          } else {
-            await supabase.from('pos_gamification').insert({
-              seller_id,
-              store_id,
-              total_points: totalNew,
-              sales_count: 1,
-              registrations_count: customer?.id ? 1 : 0,
-            });
+          if (product) {
+            const newStock = Math.max(0, (product.stock || 0) - item.quantity);
+            await supabase
+              .from('pos_products')
+              .update({ stock: newStock, synced_at: new Date().toISOString() })
+              .eq('id', product.id);
           }
         }
       }
 
-      return new Response(JSON.stringify({
-        success: true,
-        tiny_order_id: tinyOrderId,
-        tiny_order_number: tinyOrderNumber,
-        sale_id: sale?.id,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      // Award gamification points to seller
+      if (seller_id) {
+        const { data: existingGamification } = await supabase
+          .from('pos_gamification')
+          .select('id, total_points, sales_count, registrations_count')
+          .eq('seller_id', seller_id)
+          .eq('store_id', store_id)
+          .maybeSingle();
+
+        const salePoints = 10;
+        const registrationPoints = customer?.id ? 15 : 0;
+        const completenessPoints = customer?.id ? calculateCompletenessPoints(customer) : 0;
+        const totalNew = salePoints + registrationPoints + completenessPoints;
+
+        if (existingGamification) {
+          await supabase.from('pos_gamification').update({
+            total_points: existingGamification.total_points + totalNew,
+            sales_count: existingGamification.sales_count + 1,
+            registrations_count: existingGamification.registrations_count + (customer?.id ? 1 : 0),
+          }).eq('id', existingGamification.id);
+        } else {
+          await supabase.from('pos_gamification').insert({
+            seller_id,
+            store_id,
+            total_points: totalNew,
+            sales_count: 1,
+            registrations_count: customer?.id ? 1 : 0,
+          });
+        }
+      }
     }
 
-    const errorMsg = tinyData.retorno?.erros?.[0]?.erro || JSON.stringify(tinyData.retorno);
-    throw new Error(`Tiny ERP error: ${errorMsg}`);
+    return new Response(JSON.stringify({
+      success: true,
+      tiny_order_id: tinyOrderId,
+      tiny_order_number: tinyOrderNumber,
+      sale_id: sale?.id,
+      tiny_failed: tinyFailed,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   } catch (error) {
     console.error('Error:', error);
     return new Response(JSON.stringify({ success: false, error: error.message }), {

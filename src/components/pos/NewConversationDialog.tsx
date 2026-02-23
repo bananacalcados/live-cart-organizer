@@ -272,7 +272,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0">
+      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-4 pt-4 pb-2">
           <DialogTitle className="flex items-center gap-2 text-base">
             <UserPlus className="h-5 w-5 text-[#00a884]" />

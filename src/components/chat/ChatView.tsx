@@ -345,7 +345,7 @@ export function ChatView({
                 )}
               >
                 {msg.media_url && msg.media_type?.includes('image') && (
-                  <img src={msg.media_url} alt="" className="max-w-full rounded mb-1" />
+                  <img src={msg.media_url} alt="" className="max-w-[200px] max-h-[200px] rounded mb-1 object-cover cursor-pointer" onClick={() => window.open(msg.media_url!, '_blank')} />
                 )}
                 {msg.media_url && msg.media_type === 'audio' && (
                   <audio src={msg.media_url} controls className="w-full mb-1" />

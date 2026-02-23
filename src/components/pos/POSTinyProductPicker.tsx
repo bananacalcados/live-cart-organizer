@@ -47,8 +47,41 @@ export function POSTinyProductPicker({ storeId, label = "Produto", value, onSele
     if (term.length < 2) { setResults([]); return; }
     setSearching(true);
     try {
+      const isBarcode = /^\d{8,14}$/.test(term);
+
+      // First try local DB (fast, works offline)
+      const { data: localData } = await supabase
+        .from('pos_products')
+        .select('*')
+        .eq('store_id', storeId)
+        .eq('is_active', true)
+        .or(isBarcode
+          ? `barcode.eq.${term},sku.eq.${term}`
+          : `name.ilike.%${term}%,sku.ilike.%${term}%,barcode.ilike.%${term}%`)
+        .order('name')
+        .limit(20);
+
+      if (localData && localData.length > 0) {
+        const mapped: TinyProduct[] = localData.map((row: any) => ({
+          tiny_id: row.tiny_id,
+          sku: row.sku || '',
+          name: row.name,
+          variant: row.variant || '',
+          size: row.size || null,
+          category: row.category || null,
+          price: parseFloat(row.price || '0'),
+          barcode: row.barcode || '',
+          stock: parseFloat(row.stock || '0'),
+        }));
+        setResults(mapped);
+        setShowDropdown(true);
+        setSearching(false);
+        return;
+      }
+
+      // Fallback: try Tiny API
       const { data, error } = await supabase.functions.invoke("pos-tiny-search-product", {
-        body: { store_id: storeId, query: term },
+        body: { store_id: storeId, query: isBarcode ? undefined : term, gtin: isBarcode ? term : undefined },
       });
       if (!error && data?.products) {
         setResults(data.products);
