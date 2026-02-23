@@ -258,7 +258,14 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     }
   };
 
-  const getItemStockInfo = (sku: string) => {
+  const getItemStockInfo = (sku: string, item?: any) => {
+    // If item was already pick-verified in conferência, show verified badge instead of stock
+    if (item?.pick_verified) {
+      return <Badge variant="outline" className="text-[10px] gap-1 border-green-500 text-green-600"><CheckCircle2 className="h-3 w-3" />Conferido ✓</Badge>;
+    }
+    if (item && (item.picked_quantity || 0) > 0) {
+      return <Badge variant="outline" className="text-[10px] gap-1 border-amber-500 text-amber-600"><CheckCircle2 className="h-3 w-3" />Parcial ({item.picked_quantity}/{item.quantity})</Badge>;
+    }
     if (!sku) return null;
     const locations = stockMap[sku];
     if (!locations) return null;
@@ -489,7 +496,7 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
                     {isComplete ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <ScanBarcode className="h-5 w-5 text-muted-foreground" />}
                     <span className="font-medium text-foreground">{item.product_name}</span>
                     {item.variant_name && <Badge variant="outline" className="text-xs">{item.variant_name}</Badge>}
-                    {getItemStockInfo(item.sku)}
+                    {getItemStockInfo(item.sku, item)}
                   </div>
                   <p className="text-xs text-muted-foreground ml-7">
                     SKU: {item.sku || 'N/A'} • Barcode: {item.barcode || 'N/A'}
