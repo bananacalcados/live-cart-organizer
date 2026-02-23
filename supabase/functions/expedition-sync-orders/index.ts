@@ -98,12 +98,15 @@ serve(async (req) => {
         // Extract CPF from note_attributes (sent by our system) or from note text
         let customerCpf: string | null = null;
         if (order.note_attributes && Array.isArray(order.note_attributes)) {
-          const cpfAttr = order.note_attributes.find((a: any) => a.name?.toLowerCase() === 'cpf');
-          if (cpfAttr?.value) customerCpf = cpfAttr.value;
+          const cpfAttr = order.note_attributes.find((a: any) => {
+            const name = a.name?.toLowerCase() || '';
+            return name === 'cpf' || name.includes('cpf_cnpj') || name.includes('cpf');
+          });
+          if (cpfAttr?.value) customerCpf = cpfAttr.value.replace(/\D/g, '');
         }
         if (!customerCpf && order.note) {
-          const cpfMatch = order.note.match(/CPF:\s*([\d.\-\/]+)/);
-          if (cpfMatch) customerCpf = cpfMatch[1];
+          const cpfMatch = order.note.match(/(?:CPF|cpf_cnpj)[:\s]*([\d.\-\/]+)/i);
+          if (cpfMatch) customerCpf = cpfMatch[1].replace(/\D/g, '');
         }
 
         const orderData = {
