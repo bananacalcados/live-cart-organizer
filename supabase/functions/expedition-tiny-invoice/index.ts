@@ -328,6 +328,72 @@ serve(async (req) => {
       }
 
       const errorMsg = tinyData.retorno?.erros?.[0]?.erro || JSON.stringify(tinyData.retorno);
+      
+      // If NF-e already exists for this Tiny order, try to fetch it
+      if (errorMsg.includes('Já foi gerada nota fiscal') || errorMsg.includes('já foi gerada')) {
+        console.log('NF-e already exists, trying to fetch existing invoice...');
+        // Search for existing NF-e linked to this Tiny order
+        const nfSearchResp = await fetch('https://api.tiny.com.br/api2/notas.fiscais.pesquisa.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${TINY_ERP_TOKEN}&formato=json&idPedidoEcommerce=${order.tiny_order_id}`,
+        });
+        const nfSearchData = await safeJson(nfSearchResp, 'Pesquisa NF-e existente');
+        console.log('Existing NF-e search result:', JSON.stringify(nfSearchData));
+        
+        const existingNf = nfSearchData.retorno?.notas_fiscais?.[0]?.nota_fiscal;
+        if (existingNf?.id) {
+          // Get full details
+          const detailResponse = await fetch('https://api.tiny.com.br/api2/nota.fiscal.obter.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `token=${TINY_ERP_TOKEN}&formato=json&id=${existingNf.id}`,
+          });
+          const detailData = await safeJson(detailResponse, 'Obter NF-e existente');
+          const nf = detailData.retorno?.nota_fiscal || {};
+          
+          // Check if this NF-e belongs to the correct customer
+          const nfCliente = (nf.cliente?.nome || existingNf.nome_cliente || '').toLowerCase();
+          const orderCliente = (order.customer_name || '').toLowerCase().split(' ')[0];
+          
+          if (orderCliente && nfCliente && !nfCliente.includes(orderCliente)) {
+            // Wrong customer! The tiny_order_id is linked to wrong order
+            console.log(`NF-e customer "${nfCliente}" doesn't match order customer "${order.customer_name}". Clearing tiny_order_id.`);
+            await supabase
+              .from('expedition_orders')
+              .update({ tiny_order_id: null })
+              .eq('id', order_id);
+            throw new Error(
+              `O pedido no Tiny (ID: ${order.tiny_order_id}) pertence a "${nfCliente}", não a "${order.customer_name}". ` +
+              `O vínculo foi limpo. Clique em "Sincronizar com Tiny" novamente.`
+            );
+          }
+          
+          // Correct customer - save the existing NF-e data
+          await supabase
+            .from('expedition_orders')
+            .update({
+              tiny_invoice_id: String(existingNf.id),
+              invoice_number: nf.numero || existingNf.numero || null,
+              invoice_series: nf.serie || existingNf.serie || null,
+              invoice_key: nf.chave_acesso || null,
+              invoice_pdf_url: nf.link_danfe || null,
+              invoice_xml_url: nf.link_xml || null,
+              expedition_status: 'invoice_issued',
+            })
+            .eq('id', order_id);
+          
+          return new Response(JSON.stringify({
+            success: true,
+            invoice: nf,
+            tiny_invoice_id: existingNf.id,
+            message: 'NF-e já existente vinculada com sucesso.',
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+      
       throw new Error(`Tiny NF-e error: ${errorMsg}`);
     }
 

@@ -115,6 +115,25 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
     }
   };
 
+  const handleSelectManualFreight = async (orderId: string, carrier: string) => {
+    try {
+      await supabase
+        .from('expedition_orders')
+        .update({
+          freight_carrier: carrier,
+          freight_service: 'Entrega local',
+          freight_price: 0,
+          freight_delivery_days: 0,
+          expedition_status: 'freight_quoted',
+        })
+        .eq('id', orderId);
+      toast.success(`Frete definido como ${carrier}`);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    }
+  };
+
   const handleSaveCpf = async (orderId: string) => {
     const cleaned = cpfValue.replace(/\D/g, '');
     if (cleaned.length < 11) {
@@ -366,7 +385,7 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
                 {/* Freight section */}
                 {activeTab === 'freight' && (
                   <div className="space-y-2">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Button
                         onClick={() => handleQuoteFreight(order.id)}
                         disabled={loadingId === order.id}
@@ -377,6 +396,17 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
                         {loadingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                         {quotes.length > 0 ? 'Recotar' : 'Cotar Frete'}
                       </Button>
+                      {!order.freight_carrier && (
+                        <Button
+                          onClick={() => handleSelectManualFreight(order.id, 'Mototaxista')}
+                          disabled={loadingId === order.id}
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 border-orange-500/50 text-orange-700 dark:text-orange-400"
+                        >
+                          🏍️ Mototaxista
+                        </Button>
+                      )}
                     </div>
 
                     {/* Show freight options */}
