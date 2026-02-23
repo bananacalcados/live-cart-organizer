@@ -10,7 +10,7 @@ import { Loader2, CheckCircle2, Package, MapPin, User } from "lucide-react";
 interface OrderInfo {
   id: string;
   products: Array<{ title: string; variant: string; quantity: number; price: number; image?: string }>;
-  customer?: { instagram_handle: string };
+  customer?: { id: string; instagram_handle: string };
 }
 
 export default function CustomerRegister() {
@@ -43,7 +43,7 @@ export default function CustomerRegister() {
   const loadOrder = async () => {
     const { data, error } = await supabase
       .from("orders")
-      .select("id, products, customer:customers(instagram_handle)")
+      .select("id, products, customer_id, customer:customers(id, instagram_handle)")
       .eq("id", orderId)
       .single();
 
@@ -52,7 +52,7 @@ export default function CustomerRegister() {
       return;
     }
 
-    // Check if already registered
+    // Check if already registered for THIS order
     const { data: existing } = await supabase
       .from("customer_registrations")
       .select("id, status, shopify_draft_order_name")
@@ -62,6 +62,27 @@ export default function CustomerRegister() {
     if (existing?.status === "completed") {
       setDraftOrderName(existing.shopify_draft_order_name || "");
       setSubmitted(true);
+    }
+
+    // Pre-fill from previous registration if customer has one
+    const customerId = (data as any).customer_id;
+    if (customerId && !existing) {
+      const { data: prevReg } = await supabase
+        .rpc('get_latest_registration_by_customer', { p_customer_id: customerId })
+        .maybeSingle();
+      if (prevReg) {
+        setFullName(prevReg.full_name || "");
+        setCpf(formatCpf(prevReg.cpf || ""));
+        setEmail(prevReg.email || "");
+        setWhatsapp(formatPhone(prevReg.whatsapp || ""));
+        setCep(formatCep(prevReg.cep || ""));
+        setAddress(prevReg.address || "");
+        setAddressNumber(prevReg.address_number || "");
+        setComplement(prevReg.complement || "");
+        setNeighborhood(prevReg.neighborhood || "");
+        setCity(prevReg.city || "");
+        setState(prevReg.state || "");
+      }
     }
 
     setOrder({
@@ -135,7 +156,9 @@ export default function CustomerRegister() {
         return;
       }
 
-      // Save registration
+      // Save registration with customer_id linkage
+      const customerIdToLink = order.customer?.id || null;
+      
       const { data: reg, error: regError } = await supabase
         .from("customer_registrations")
         .insert({
@@ -151,6 +174,7 @@ export default function CustomerRegister() {
           neighborhood,
           city,
           state,
+          ...(customerIdToLink ? { customer_id: customerIdToLink } : {}),
         })
         .select()
         .single();

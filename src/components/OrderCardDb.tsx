@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2 } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES } from "@/types/order";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
 import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
 import { Order } from "@/types/order";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface OrderCardDbProps {
   order: DbOrder;
@@ -37,6 +38,38 @@ const dbOrderToOrder = (dbOrder: DbOrder): Order => ({
 export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDbProps) {
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [showChatDialog, setShowChatDialog] = useState(false);
+  const [hasRegistration, setHasRegistration] = useState(false);
+  const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
+
+  // Check if customer has existing registration data
+  useEffect(() => {
+    if (!order.customer_id) return;
+    const checkRegistration = async () => {
+      const { data } = await supabase
+        .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
+        .maybeSingle();
+      setHasRegistration(!!data);
+    };
+    checkRegistration();
+  }, [order.customer_id]);
+
+  const handleCreateShopifyOrder = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsCreatingShopifyOrder(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-create-order", {
+        body: { orderId: order.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Pedido criado na Shopify! ${data?.shopifyOrderName || ""}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Erro ao criar pedido";
+      toast.error(msg);
+    } finally {
+      setIsCreatingShopifyOrder(false);
+    }
+  };
   
   const stage = STAGES.find((s) => s.id === order.stage);
   const totalValue = order.products.reduce(
@@ -106,44 +139,48 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         </div>
       </div>
 
-      {/* Badges for Paid Externally, Gift, Free Shipping, Discount */}
-      {(order.paid_externally || order.has_gift || order.free_shipping || (order.discount_value && order.discount_value > 0)) && (
-        <div className="flex flex-wrap gap-1 mb-3">
-          {order.paid_externally && (
-            <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30">
-              <Wallet className="h-3 w-3 mr-1" />
-              Pago Externo
-            </Badge>
-          )}
-          {order.has_gift && (
-            <Badge variant="secondary" className="text-[10px] bg-accent/20 text-accent border-accent/30">
-              <Gift className="h-3 w-3 mr-1" />
-              Brinde
-            </Badge>
-          )}
-          {order.free_shipping && (
-            <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
-              <Truck className="h-3 w-3 mr-1" />
-              Frete Grátis
-            </Badge>
-          )}
-          {order.discount_value && order.discount_value > 0 && (
-            <Badge variant="secondary" className="text-[10px] bg-stage-contacted/20 text-stage-contacted border-stage-contacted/30">
-              {order.discount_type === 'percentage' ? (
-                <>
-                  <Percent className="h-3 w-3 mr-1" />
-                  {order.discount_value}% off
-                </>
-              ) : (
-                <>
-                  <DollarSign className="h-3 w-3 mr-1" />
-                  R${order.discount_value.toFixed(0)} off
-                </>
-              )}
-            </Badge>
-          )}
-        </div>
-      )}
+      {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
+      <div className="flex flex-wrap gap-1 mb-3">
+        {hasRegistration && (
+          <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
+            <UserCheck className="h-3 w-3 mr-1" />
+            Dados Cadastrados
+          </Badge>
+        )}
+        {order.paid_externally && (
+          <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30">
+            <Wallet className="h-3 w-3 mr-1" />
+            Pago Externo
+          </Badge>
+        )}
+        {order.has_gift && (
+          <Badge variant="secondary" className="text-[10px] bg-accent/20 text-accent border-accent/30">
+            <Gift className="h-3 w-3 mr-1" />
+            Brinde
+          </Badge>
+        )}
+        {order.free_shipping && (
+          <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
+            <Truck className="h-3 w-3 mr-1" />
+            Frete Grátis
+          </Badge>
+        )}
+        {order.discount_value && order.discount_value > 0 && (
+          <Badge variant="secondary" className="text-[10px] bg-stage-contacted/20 text-stage-contacted border-stage-contacted/30">
+            {order.discount_type === 'percentage' ? (
+              <>
+                <Percent className="h-3 w-3 mr-1" />
+                {order.discount_value}% off
+              </>
+            ) : (
+              <>
+                <DollarSign className="h-3 w-3 mr-1" />
+                R${order.discount_value.toFixed(0)} off
+              </>
+            )}
+          </Badge>
+        )}
+      </div>
 
       {order.customer?.whatsapp && (
         <div className="flex items-center gap-2 mb-3">
@@ -261,27 +298,43 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         </div>
       )}
 
-      {/* Registration link button */}
+      {/* Registration link / Shopify order button */}
       {order.products.length > 0 && (
-        <div className="mt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-xs gap-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              const url = `${window.location.origin}/register/${order.id}`;
-              navigator.clipboard.writeText(url).then(
-                () => toast.success("Link de cadastro copiado!"),
-                () => {
-                  window.prompt("Copie o link:", url);
-                }
-              );
-            }}
-          >
-            <ClipboardCopy className="h-3 w-3" />
-            Copiar Link de Cadastro
-          </Button>
+        <div className="mt-2 space-y-1.5">
+          {hasRegistration ? (
+            <Button
+              variant="default"
+              size="sm"
+              className="w-full text-xs gap-1"
+              onClick={handleCreateShopifyOrder}
+              disabled={isCreatingShopifyOrder}
+            >
+              {isCreatingShopifyOrder ? (
+                <><Loader2 className="h-3 w-3 animate-spin" /> Criando...</>
+              ) : (
+                <><ShoppingBag className="h-3 w-3" /> Criar Pedido Shopify</>
+              )}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                const url = `${window.location.origin}/register/${order.id}`;
+                navigator.clipboard.writeText(url).then(
+                  () => toast.success("Link de cadastro copiado!"),
+                  () => {
+                    window.prompt("Copie o link:", url);
+                  }
+                );
+              }}
+            >
+              <ClipboardCopy className="h-3 w-3" />
+              Copiar Link de Cadastro
+            </Button>
+          )}
         </div>
       )}
 
