@@ -45,10 +45,54 @@ serve(async (req) => {
       return { id, name };
     });
 
+    // If Tiny returned methods, cache them in DB
+    if (methods.length > 0) {
+      for (const m of methods) {
+        await supabase.from('pos_payment_methods').upsert(
+          { id: m.id, store_id, name: m.name, is_active: true },
+          { onConflict: 'store_id,id' }
+        );
+      }
+    }
+
+    // If Tiny API failed, load from DB cache
+    if (methods.length === 0) {
+      const { data: cached } = await supabase
+        .from('pos_payment_methods')
+        .select('id, name')
+        .eq('store_id', store_id)
+        .eq('is_active', true)
+        .order('sort_order');
+      if (cached && cached.length > 0) {
+        console.log(`Tiny API failed, using ${cached.length} cached payment methods`);
+        return new Response(JSON.stringify({ success: true, methods: cached, source: 'cache' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ success: true, methods }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
+    // On any error, try DB fallback
+    try {
+      const { store_id } = await req.clone().json().catch(() => ({ store_id: null }));
+      if (store_id) {
+        const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        const { data: cached } = await supabase
+          .from('pos_payment_methods')
+          .select('id, name')
+          .eq('store_id', store_id)
+          .eq('is_active', true)
+          .order('sort_order');
+        if (cached && cached.length > 0) {
+          return new Response(JSON.stringify({ success: true, methods: cached, source: 'cache' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+    } catch {}
     console.error('Error:', error);
     return new Response(JSON.stringify({ success: false, error: error.message, methods: [] }), {
       status: 200,
