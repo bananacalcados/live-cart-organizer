@@ -60,7 +60,7 @@ serve(async (req) => {
     const objectId = order.tiny_invoice_id;
     const objectType = 'notafiscal';
 
-    // Step 1: Send NF-e to expedition (correct endpoint: expedicao.liberar.objetos.php)
+    // Step 1: Send NF-e to expedition (expedicao.liberar.objetos.php)
     console.log(`Step 1: Sending ${objectType} ${objectId} to expedition...`);
     const sendResponse = await fetch('https://api.tiny.com.br/api2/expedicao.liberar.objetos.php', {
       method: 'POST',
@@ -110,33 +110,116 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const idExpedicao = expedition.id || expedition.idExpedicao;
-    const trackingCode = expedition.codigoRastreamento || expedition.codigo_rastreamento || null;
+    const idExpedicao = expedition.id || expedition.idExpedicao || idExpedicaoFromSend;
+    let trackingCode = expedition.codigoRastreamento || expedition.codigo_rastreamento || null;
     const carrier = expedition.formaEnvio || expedition.transportadora || null;
 
     console.log(`Expedition ID: ${idExpedicao}, Tracking: ${trackingCode}, Carrier: ${carrier}`);
 
-    // Step 3: Get label URLs
-    console.log('Step 3: Fetching labels...');
-    const labelResponse = await fetch('https://api.tiny.com.br/api2/expedicao.obter.etiquetas.impressao.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${TINY_ERP_TOKEN}&formato=json&idExpedicao=${idExpedicao}`,
-    });
-    const labelData = await safeJson(labelResponse, 'Obter etiquetas');
-    console.log('Label data:', JSON.stringify(labelData));
-
+    // Step 3: Create grouping (agrupamento) and conclude it to auto-purchase freight
+    let idAgrupamento: string | null = null;
     let labelUrl: string | null = null;
 
-    if (labelData.retorno?.status === 'OK' || labelData.retorno?.status === 'Processado') {
-      const links = labelData.retorno?.links || labelData.retorno?.etiquetas || [];
-      if (Array.isArray(links) && links.length > 0) {
-        labelUrl = links[0]?.link || links[0]?.url || links[0] || null;
-      } else if (typeof links === 'string') {
-        labelUrl = links;
+    if (idExpedicao) {
+      // 3a: Create grouping with this expedition
+      console.log('Step 3a: Creating expedition grouping...');
+      const groupResponse = await fetch('https://api.tiny.com.br/api2/expedicao.incluir.agrupamento.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `token=${TINY_ERP_TOKEN}&formato=json&idsExpedicao=${idExpedicao}`,
+      });
+      const groupData = await safeJson(groupResponse, 'Incluir agrupamento');
+      console.log('Grouping response:', JSON.stringify(groupData));
+
+      if (groupData.retorno?.status === 'OK' || groupData.retorno?.status === 'Processado') {
+        idAgrupamento = groupData.retorno?.idAgrupamento || null;
+        console.log('Grouping ID:', idAgrupamento);
+      } else {
+        const groupErr = groupData.retorno?.erros?.[0]?.erro || '';
+        console.warn('Grouping error (may already exist):', groupErr);
+        // Try to extract existing grouping ID if already grouped
+        if (groupErr.includes('já') || groupErr.includes('agrupamento')) {
+          idAgrupamento = groupData.retorno?.idAgrupamento || null;
+        }
       }
-    } else {
-      console.warn('Could not fetch labels:', JSON.stringify(labelData.retorno));
+
+      // 3b: Conclude the grouping (this auto-purchases freight/label)
+      if (idAgrupamento) {
+        console.log('Step 3b: Concluding expedition grouping (auto-purchases freight)...');
+        const concludeResponse = await fetch('https://api.tiny.com.br/api2/expedicao.concluir.agrupamento.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${TINY_ERP_TOKEN}&formato=json&idAgrupamento=${idAgrupamento}`,
+        });
+        const concludeData = await safeJson(concludeResponse, 'Concluir agrupamento');
+        console.log('Conclude response:', JSON.stringify(concludeData));
+
+        if (concludeData.retorno?.status === 'OK' || concludeData.retorno?.status === 'Processado') {
+          console.log('Expedition grouping concluded successfully - freight purchased automatically');
+        } else {
+          const concludeErr = concludeData.retorno?.erros?.[0]?.erro || '';
+          console.warn('Conclude error:', concludeErr);
+        }
+
+        // Wait a moment for Tiny to process the freight purchase
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+
+      // Step 4: Fetch labels (try by agrupamento first, then by expedition)
+      console.log('Step 4: Fetching labels...');
+      
+      if (idAgrupamento) {
+        const labelByGroupResp = await fetch('https://api.tiny.com.br/api2/expedicao.obter.etiquetas.impressao.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${TINY_ERP_TOKEN}&formato=json&idAgrupamento=${idAgrupamento}`,
+        });
+        const labelByGroupData = await safeJson(labelByGroupResp, 'Obter etiquetas (agrupamento)');
+        console.log('Label by group data:', JSON.stringify(labelByGroupData));
+
+        if (labelByGroupData.retorno?.status === 'OK' || labelByGroupData.retorno?.status === 'Processado') {
+          const links = labelByGroupData.retorno?.links || labelByGroupData.retorno?.etiquetas || [];
+          if (Array.isArray(links) && links.length > 0) {
+            labelUrl = links[0]?.link || links[0]?.url || links[0] || null;
+          } else if (typeof links === 'string') {
+            labelUrl = links;
+          }
+        }
+      }
+
+      // Fallback: try by expedition ID
+      if (!labelUrl) {
+        const labelResponse = await fetch('https://api.tiny.com.br/api2/expedicao.obter.etiquetas.impressao.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${TINY_ERP_TOKEN}&formato=json&idExpedicao=${idExpedicao}`,
+        });
+        const labelData = await safeJson(labelResponse, 'Obter etiquetas (expedição)');
+        console.log('Label by expedition data:', JSON.stringify(labelData));
+
+        if (labelData.retorno?.status === 'OK' || labelData.retorno?.status === 'Processado') {
+          const links = labelData.retorno?.links || labelData.retorno?.etiquetas || [];
+          if (Array.isArray(links) && links.length > 0) {
+            labelUrl = links[0]?.link || links[0]?.url || links[0] || null;
+          } else if (typeof links === 'string') {
+            labelUrl = links;
+          }
+        }
+      }
+
+      // Also re-fetch expedition to get tracking code if it was updated
+      if (!trackingCode) {
+        const recheck = await fetch('https://api.tiny.com.br/api2/expedicao.obter.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${TINY_ERP_TOKEN}&formato=json&tipoObjeto=${objectType}&idObjeto=${objectId}`,
+        });
+        const recheckData = await safeJson(recheck, 'Re-obter expedição');
+        const recheckExp = recheckData.retorno?.expedicao;
+        if (recheckExp) {
+          trackingCode = recheckExp.codigoRastreamento || recheckExp.codigo_rastreamento || trackingCode;
+        }
+      }
     }
 
     // Update order with label info
@@ -159,9 +242,12 @@ serve(async (req) => {
       label_url: labelUrl,
       tracking_code: trackingCode,
       expedition_id: idExpedicao,
+      grouping_id: idAgrupamento,
       message: hasLabel
         ? 'Etiqueta oficial obtida com sucesso!'
-        : 'Expedição criada no Tiny, mas a etiqueta ainda não foi gerada pela transportadora. Tente buscar novamente em alguns instantes.',
+        : trackingCode
+          ? 'Expedição concluída e frete comprado. A etiqueta pode levar alguns instantes para ficar disponível. Tente novamente em breve.'
+          : 'Expedição enviada ao Tiny, mas a etiqueta ainda não foi gerada. Verifique se a NF-e contém os dados da transportadora e tente novamente.',
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
