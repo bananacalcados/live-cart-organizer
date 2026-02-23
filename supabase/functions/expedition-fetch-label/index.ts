@@ -16,34 +16,14 @@ async function safeJson(response: Response, label: string) {
   }
 }
 
-// Map carrier name to Tiny's formaEnvio code
-function mapCarrierToFormaEnvio(carrier: string): string {
+// Fallback: Map carrier name to Tiny's formaEnvio code (only used when tiny_forma_envio_id is not stored)
+function mapCarrierToFormaEnvioFallback(carrier: string): string {
   const c = (carrier || '').toLowerCase();
   if (c.includes('correio') || c.includes('pac') || c.includes('sedex')) return 'C';
   if (c.includes('j&t') || c.includes('jt ') || c.includes('j&t')) return 'J';
   if (c.includes('jadlog')) return 'J';
-  if (c.includes('loggi')) return 'LOGGI';
-  if (c.includes('total express')) return 'TOTALEXPRESS';
-  if (c.includes('moto')) return 'X'; // Outros
-  return 'T'; // Transportadora genérica
-}
-
-// Map carrier+service to Frenet/Correios service code for Tiny
-function mapToServiceCode(carrier: string, service: string): string {
-  const c = (carrier || '').toLowerCase();
-  const s = (service || '').toLowerCase();
-  
-  // Correios service codes
-  if (c.includes('correio') || s.includes('pac') || s.includes('sedex')) {
-    if (s.includes('sedex') && s.includes('10')) return '03158';
-    if (s.includes('sedex') && s.includes('12')) return '03140';
-    if (s.includes('sedex')) return '03220';
-    if (s.includes('pac')) return '03298';
-    return '03298'; // Default PAC
-  }
-  
-  // For other carriers, return the carrier+service as description
-  return `${carrier} ${service}`.trim();
+  if (c.includes('moto')) return 'X';
+  return 'T';
 }
 
 serve(async (req) => {
@@ -87,17 +67,15 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Derive carrier codes
-    const formaEnvio = mapCarrierToFormaEnvio(order.freight_carrier);
-    const serviceCode = mapToServiceCode(order.freight_carrier, order.freight_service || '');
-    const formaFrete = order.freight_service
+    // Use stored Tiny IDs (preferred) or fallback to manual mapping
+    const formaEnvio = order.tiny_forma_envio_id || mapCarrierToFormaEnvioFallback(order.freight_carrier);
+    const formaFrete = order.tiny_forma_frete_id || (order.freight_service
       ? `${order.freight_carrier} ${order.freight_service}`.trim()
-      : order.freight_carrier;
-    const weightKg = order.total_weight_grams 
-      ? Math.max(0.3, order.total_weight_grams / 1000) 
-      : 0.5;
+      : order.freight_carrier);
+    const serviceCode = order.tiny_service_code || '';
+    const weightKg = Math.max(0.3, (order.total_weight_grams || 300) / 1000);
 
-    console.log(`Freight info: carrier="${order.freight_carrier}", service="${order.freight_service}", formaEnvio="${formaEnvio}", serviceCode="${serviceCode}", formaFrete="${formaFrete}", weightKg=${weightKg}`);
+    console.log(`Freight info: carrier="${order.freight_carrier}", formaEnvio="${formaEnvio}" (stored=${!!order.tiny_forma_envio_id}), formaFrete="${formaFrete}" (stored=${!!order.tiny_forma_frete_id}), serviceCode="${serviceCode}", weightKg=${weightKg}`);
 
     // Step 0: Update the Tiny SALES ORDER with freight data (pedido.alterar.php)
     // This ensures the order has the shipping method set before expedition

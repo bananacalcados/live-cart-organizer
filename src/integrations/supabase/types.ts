@@ -1358,6 +1358,9 @@ export type Database = {
           price: number
           quoted_at: string
           service: string
+          tiny_forma_envio_id: string | null
+          tiny_forma_frete_id: string | null
+          tiny_service_code: string | null
         }
         Insert: {
           carrier: string
@@ -1369,6 +1372,9 @@ export type Database = {
           price: number
           quoted_at?: string
           service: string
+          tiny_forma_envio_id?: string | null
+          tiny_forma_frete_id?: string | null
+          tiny_service_code?: string | null
         }
         Update: {
           carrier?: string
@@ -1380,6 +1386,9 @@ export type Database = {
           price?: number
           quoted_at?: string
           service?: string
+          tiny_forma_envio_id?: string | null
+          tiny_forma_frete_id?: string | null
+          tiny_service_code?: string | null
         }
         Relationships: [
           {
@@ -1524,8 +1533,11 @@ export type Database = {
           source_event_date: string | null
           source_event_name: string | null
           subtotal_price: number | null
+          tiny_forma_envio_id: string | null
+          tiny_forma_frete_id: string | null
           tiny_invoice_id: string | null
           tiny_order_id: string | null
+          tiny_service_code: string | null
           total_discount: number | null
           total_price: number | null
           total_shipping: number | null
@@ -1569,8 +1581,11 @@ export type Database = {
           source_event_date?: string | null
           source_event_name?: string | null
           subtotal_price?: number | null
+          tiny_forma_envio_id?: string | null
+          tiny_forma_frete_id?: string | null
           tiny_invoice_id?: string | null
           tiny_order_id?: string | null
+          tiny_service_code?: string | null
           total_discount?: number | null
           total_price?: number | null
           total_shipping?: number | null
@@ -1614,8 +1629,11 @@ export type Database = {
           source_event_date?: string | null
           source_event_name?: string | null
           subtotal_price?: number | null
+          tiny_forma_envio_id?: string | null
+          tiny_forma_frete_id?: string | null
           tiny_invoice_id?: string | null
           tiny_order_id?: string | null
+          tiny_service_code?: string | null
           total_discount?: number | null
           total_price?: number | null
           total_shipping?: number | null
