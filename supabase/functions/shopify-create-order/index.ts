@@ -116,6 +116,12 @@ serve(async (req) => {
       };
     }
 
+    // Build note_attributes with CPF so Tiny ERP can import it
+    const noteAttributes: Array<{ name: string; value: string }> = [];
+    if (registration?.cpf) {
+      noteAttributes.push({ name: "cpf", value: registration.cpf });
+    }
+
     const shopifyOrder: Record<string, unknown> = {
       order: {
         line_items: lineItems,
@@ -123,6 +129,7 @@ serve(async (req) => {
         note: `Pedido criado manualmente via CRM - Order #${orderId.substring(0, 8)}${registration?.cpf ? ` | CPF: ${registration.cpf}` : ""}`,
         tags: "crm,manual-sync",
         customer: shopifyCustomer,
+        ...(noteAttributes.length > 0 ? { note_attributes: noteAttributes } : {}),
         ...(registration?.email ? { email: registration.email } : {}),
         ...(phone ? { phone } : {}),
         ...(shippingAddress ? { shipping_address: shippingAddress, billing_address: shippingAddress } : {}),

@@ -81,6 +81,12 @@ serve(async (req) => {
       };
     }
 
+    // Build note_attributes with CPF so Tiny ERP can import it
+    const noteAttributes: Array<{ name: string; value: string }> = [];
+    if (customer?.cpf) {
+      noteAttributes.push({ name: "cpf", value: customer.cpf });
+    }
+
     const shopifyOrder = {
       order: {
         line_items: lineItems,
@@ -88,6 +94,7 @@ serve(async (req) => {
         note: `Pedido via Live Commerce${customer?.cpf ? ` | CPF: ${customer.cpf}` : ""} | Cliente: ${fullName} | Tel: ${customer?.phone || "N/A"}`,
         tags: "live-commerce,auto-sync",
         customer: shopifyCustomer,
+        ...(noteAttributes.length > 0 ? { note_attributes: noteAttributes } : {}),
         ...(customer?.email ? { email: customer.email } : {}),
         ...(phone ? { phone } : {}),
         ...(shippingAddress ? { shipping_address: shippingAddress, billing_address: shippingAddress } : {}),

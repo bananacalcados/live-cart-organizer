@@ -75,6 +75,12 @@ serve(async (req) => {
     };
 
     // Create draft order via Shopify Admin API
+    // Build note_attributes with CPF so Tiny ERP can import it
+    const noteAttributes: Array<{ name: string; value: string }> = [];
+    if (registration.cpf) {
+      noteAttributes.push({ name: "cpf", value: registration.cpf });
+    }
+
     const draftOrderPayload = {
       draft_order: {
         line_items: lineItems,
@@ -82,6 +88,7 @@ serve(async (req) => {
         billing_address: shippingAddress,
         email: registration.email,
         note: `CRM Order ID: ${order.id} | CPF: ${registration.cpf}`,
+        note_attributes: noteAttributes,
         tags: "live-crm",
         customer: {
           first_name: registration.full_name.split(" ")[0],
