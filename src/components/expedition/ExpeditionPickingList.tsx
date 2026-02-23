@@ -42,8 +42,10 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [savingConfirm, setSavingConfirm] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
-  // Map of SKU -> extra GTINs/barcodes from pos_products (enrichment)
+  // Map of item key -> extra GTINs/barcodes from pos_products (enrichment)
   const [enrichedBarcodes, setEnrichedBarcodes] = useState<Record<string, string[]>>({});
+  // Reverse map: scanned GTIN -> item key (for products whose Shopify SKU doesn't match Tiny SKU)
+  const [gtinToKeyMap, setGtinToKeyMap] = useState<Record<string, string>>({});
 
   // Build items from orders — now tracking individual line items with their DB state
   interface ItemEntry {
@@ -168,8 +170,57 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
             }
           }
         });
-        setEnrichedBarcodes(newEnriched);
 
+        // For items whose Shopify SKU doesn't match any pos_products SKU,
+        // search by product name to find the Tiny GTIN and build a reverse map
+        const unmatchedItems = sortedItems.filter(([, item]) => {
+          const sku = item.sku;
+          if (!sku) return true;
+          // Check if this SKU was found in pos_products
+          const foundInSku = (bySku || []).some((p: any) => p.sku === sku);
+          const foundInBarcode = (byBarcode || []).some((p: any) => p.barcode === sku);
+          return !foundInSku && !foundInBarcode;
+        });
+
+        const newGtinToKey: Record<string, string> = {};
+
+        if (unmatchedItems.length > 0) {
+          // Extract short product names for fuzzy search in pos_products
+          for (const [key, item] of unmatchedItems) {
+            // Try to find by variant (size) and partial name
+            const nameParts = item.name.split(/\s+/).slice(0, 3).join(' ');
+            const { data: nameMatches } = await supabase
+              .from('pos_products')
+              .select('sku, barcode, name, variant')
+              .ilike('name', `%${nameParts}%`)
+              .limit(20);
+
+            if (nameMatches && nameMatches.length > 0) {
+              // Filter by variant/size match
+              const sizeMatch = item.variant?.match(/\d+/)?.[0];
+              const matched = sizeMatch
+                ? nameMatches.filter((p: any) => p.variant === sizeMatch || p.name?.includes(sizeMatch))
+                : nameMatches;
+
+              const targets = matched.length > 0 ? matched : nameMatches;
+              for (const p of targets) {
+                if (p.barcode) {
+                  if (!newEnriched[key]) newEnriched[key] = [];
+                  if (!newEnriched[key].includes(p.barcode)) newEnriched[key].push(p.barcode);
+                  newGtinToKey[p.barcode] = key;
+                }
+                if (p.sku && p.sku !== key) {
+                  if (!newEnriched[key]) newEnriched[key] = [];
+                  if (!newEnriched[key].includes(p.sku)) newEnriched[key].push(p.sku);
+                  newGtinToKey[p.sku] = key;
+                }
+              }
+            }
+          }
+        }
+
+        setEnrichedBarcodes(newEnriched);
+        setGtinToKeyMap(prev => ({ ...prev, ...newGtinToKey }));
         setStockLocations(locations);
       } catch (e) {
         console.error('Error fetching stock locations:', e);
@@ -225,12 +276,19 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     const trimmed = code.trim();
     if (!trimmed) return;
 
-    // Find item by SKU, barcode from order, or GTIN from pos_products
-    const matched = sortedItems.find(([, item]) =>
+    // Find item by SKU, barcode from order, GTIN from pos_products, or reverse GTIN map
+    let matched = sortedItems.find(([key, item]) =>
       item.sku === trimmed ||
       item.barcodes.includes(trimmed) ||
-      (enrichedBarcodes[item.sku] && enrichedBarcodes[item.sku].includes(trimmed))
+      (enrichedBarcodes[item.sku] && enrichedBarcodes[item.sku].includes(trimmed)) ||
+      (enrichedBarcodes[key] && enrichedBarcodes[key].includes(trimmed))
     );
+
+    // Fallback: check gtinToKeyMap for products whose Shopify SKU != Tiny SKU
+    if (!matched && gtinToKeyMap[trimmed]) {
+      const mappedKey = gtinToKeyMap[trimmed];
+      matched = sortedItems.find(([key]) => key === mappedKey);
+    }
 
     if (!matched) {
       toast.error(`Produto não encontrado: ${trimmed}`);
@@ -264,7 +322,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, isRecheck: false });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setBarcodeInput('');
-  }, [sortedItems, enrichedBarcodes]);
+  }, [sortedItems, enrichedBarcodes, gtinToKeyMap]);
 
   const handleConfirmQuality = async () => {
     if (!pendingConfirm) return;
