@@ -16,41 +16,60 @@ async function safeJson(response: Response, label: string) {
   }
 }
 
-async function searchTinyOrderByNumber(token: string, orderNumber: string): Promise<string | null> {
-  // Search by numero_ecommerce or numero
-  for (const campo of [orderNumber]) {
-    const response = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${token}&formato=json&numero=${encodeURIComponent(campo)}`,
-    });
-    const data = await safeJson(response, 'Pesquisa pedido Tiny');
-    console.log(`Search Tiny for "${campo}":`, JSON.stringify(data));
-
-    if (data.retorno?.status === 'OK' || data.retorno?.status === 'Processado') {
-      const pedidos = data.retorno?.pedidos || [];
-      if (pedidos.length > 0) {
-        const pedido = pedidos[0]?.pedido || pedidos[0];
-        return String(pedido.id);
+async function searchTinyOrderByNumber(token: string, orderNumber: string, customerName?: string): Promise<string | null> {
+  // Helper to filter valid (non-canceled) orders and optionally match customer name
+  const findValidOrder = (pedidos: any[]): string | null => {
+    for (const entry of pedidos) {
+      const pedido = entry?.pedido || entry;
+      const situacao = (pedido.situacao || '').toLowerCase();
+      // Skip canceled orders
+      if (situacao === 'cancelado' || situacao === 'cancelada') {
+        console.log(`Skipping canceled Tiny order: id=${pedido.id}, numero=${pedido.numero}, situacao=${situacao}`);
+        continue;
       }
+      // If we have a customer name, try to match
+      if (customerName) {
+        const tinyCliente = (pedido.nome_cliente || pedido.cliente?.nome || '').toLowerCase();
+        const searchName = customerName.toLowerCase().split(' ')[0]; // first name match
+        if (tinyCliente && !tinyCliente.includes(searchName)) {
+          console.log(`Skipping Tiny order id=${pedido.id}: customer "${tinyCliente}" doesn't match "${customerName}"`);
+          continue;
+        }
+      }
+      console.log(`Found valid Tiny order: id=${pedido.id}, numero=${pedido.numero}, situacao=${situacao}`);
+      return String(pedido.id);
     }
-  }
+    return null;
+  };
 
-  // Also try searching by numero_ecommerce using pesquisa field
-  const response = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
+  // 1) Search by numero_ecommerce first (most reliable for Shopify orders)
+  const ecomResponse = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `token=${token}&formato=json&numeroEcommerce=${encodeURIComponent(orderNumber)}`,
   });
-  const data = await safeJson(response, 'Pesquisa pedido Tiny (ecommerce)');
-  console.log(`Search Tiny ecommerce "${orderNumber}":`, JSON.stringify(data));
+  const ecomData = await safeJson(ecomResponse, 'Pesquisa pedido Tiny (ecommerce)');
+  console.log(`Search Tiny ecommerce "${orderNumber}":`, JSON.stringify(ecomData));
+
+  if (ecomData.retorno?.status === 'OK' || ecomData.retorno?.status === 'Processado') {
+    const pedidos = ecomData.retorno?.pedidos || [];
+    const found = findValidOrder(pedidos);
+    if (found) return found;
+  }
+
+  // 2) Search by numero
+  const response = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `token=${token}&formato=json&numero=${encodeURIComponent(orderNumber)}`,
+  });
+  const data = await safeJson(response, 'Pesquisa pedido Tiny');
+  console.log(`Search Tiny for "${orderNumber}":`, JSON.stringify(data));
 
   if (data.retorno?.status === 'OK' || data.retorno?.status === 'Processado') {
     const pedidos = data.retorno?.pedidos || [];
-    if (pedidos.length > 0) {
-      const pedido = pedidos[0]?.pedido || pedidos[0];
-      return String(pedido.id);
-    }
+    const found = findValidOrder(pedidos);
+    if (found) return found;
   }
 
   return null;
@@ -196,16 +215,16 @@ serve(async (req) => {
       const searchNumber = order.shopify_order_name || order.shopify_order_number;
       if (!searchNumber) throw new Error('Pedido sem número Shopify para buscar no Tiny');
 
-      console.log(`Searching Tiny for order: ${searchNumber}`);
+      console.log(`Searching Tiny for order: ${searchNumber}, customer: ${order.customer_name}`);
       let tinyOrderId = order.tiny_order_id;
 
       if (!tinyOrderId) {
-        tinyOrderId = await searchTinyOrderByNumber(TINY_ERP_TOKEN, searchNumber);
+        tinyOrderId = await searchTinyOrderByNumber(TINY_ERP_TOKEN, searchNumber, order.customer_name);
       }
 
       if (!tinyOrderId) {
         throw new Error(
-          `Pedido "${searchNumber}" não encontrado no Tiny ERP. ` +
+          `Pedido "${searchNumber}" não encontrado no Tiny ERP (ou está cancelado). ` +
           `Verifique se o pedido já foi sincronizado da Shopify para o Tiny. ` +
           `Aguarde alguns minutos e tente novamente.`
         );
@@ -238,7 +257,7 @@ serve(async (req) => {
       if (!order.tiny_order_id) {
         const searchNumber = order.shopify_order_name || order.shopify_order_number;
         if (searchNumber) {
-          const foundId = await searchTinyOrderByNumber(TINY_ERP_TOKEN, searchNumber);
+          const foundId = await searchTinyOrderByNumber(TINY_ERP_TOKEN, searchNumber, order.customer_name);
           if (foundId) {
             await supabase
               .from('expedition_orders')
