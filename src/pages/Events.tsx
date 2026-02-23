@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle } from "lucide-react";
+import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ const Events = () => {
   const [description, setDescription] = useState("");
   const [shippingCost, setShippingCost] = useState("");
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
+  const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchEvents();
@@ -69,25 +71,12 @@ const Events = () => {
         const orders = data || [];
         const paidOrders = orders.filter((o) => o.is_paid || o.paid_externally);
         
-        // Check which paid orders have Shopify orders
-        let missingShopify = 0;
-        if (paidOrders.length > 0) {
-          const paidIds = paidOrders.map(o => o.id);
-          const { data: regs } = await supabase
-            .from('customer_registrations')
-            .select('order_id, shopify_draft_order_id')
-            .in('order_id', paidIds);
-          
-          const regMap = new Map((regs || []).map(r => [r.order_id, r.shopify_draft_order_id]));
-          missingShopify = paidOrders.filter(o => !regMap.get(o.id)).length;
-        }
-        
         stats.push({
           eventId: event.id,
           totalOrders: orders.length,
           unpaidOrders: orders.filter((o) => !o.is_paid && !o.paid_externally).length,
           paidOrders: paidOrders.length,
-          missingShopify,
+          missingShopify: -1, // -1 = not verified yet
         });
       }
       
@@ -96,6 +85,38 @@ const Events = () => {
     
     fetchStats();
   }, [events]);
+
+  const handleVerifyShopify = async (eventId: string) => {
+    setVerifyingEventId(eventId);
+    try {
+      const { data, error } = await supabase.functions.invoke('shopify-verify-event-orders', {
+        body: { eventId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const results = data.results as { orderId: string; hasShopify: boolean; shopifyOrderName?: string }[];
+      const missing = results.filter(r => !r.hasShopify).length;
+
+      // Update stats
+      setEventStats(prev => prev.map(s =>
+        s.eventId === eventId ? { ...s, missingShopify: missing } : s
+      ));
+
+      // Store results in sessionStorage so OrderCardDb can read them
+      sessionStorage.setItem(`shopify-verify-${eventId}`, JSON.stringify(results));
+
+      if (missing === 0) {
+        toast.success(`✅ Todos os ${results.length} pedidos pagos têm pedido na Shopify!`);
+      } else {
+        toast.warning(`⚠️ ${missing} de ${results.length} pedidos pagos NÃO foram encontrados na Shopify.`);
+      }
+    } catch (error: any) {
+      toast.error(`Erro ao verificar: ${error.message}`);
+    } finally {
+      setVerifyingEventId(null);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
@@ -349,11 +370,27 @@ const Events = () => {
                         <p className="text-lg font-bold text-stage-paid">{stats.paidOrders}</p>
                         <p className="text-xs text-muted-foreground">Pagos</p>
                       </div>
-                      <div className={`rounded-lg p-2 ${stats.missingShopify > 0 ? 'bg-destructive/10 animate-pulse' : 'bg-secondary/50'}`}>
-                        <AlertTriangle className={`h-4 w-4 mx-auto mb-1 ${stats.missingShopify > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
-                        <p className={`text-lg font-bold ${stats.missingShopify > 0 ? 'text-destructive' : 'text-foreground'}`}>{stats.missingShopify}</p>
-                        <p className="text-xs text-muted-foreground">Sem Shopify</p>
-                      </div>
+                      {stats.missingShopify >= 0 ? (
+                        <div className={`rounded-lg p-2 cursor-pointer ${stats.missingShopify > 0 ? 'bg-destructive/10 animate-pulse' : 'bg-stage-paid/10'}`} onClick={() => handleVerifyShopify(event.id)}>
+                          <AlertTriangle className={`h-4 w-4 mx-auto mb-1 ${stats.missingShopify > 0 ? 'text-destructive' : 'text-stage-paid'}`} />
+                          <p className={`text-lg font-bold ${stats.missingShopify > 0 ? 'text-destructive' : 'text-stage-paid'}`}>{stats.missingShopify}</p>
+                          <p className="text-xs text-muted-foreground">Sem Shopify</p>
+                        </div>
+                      ) : (
+                        <div
+                          className="rounded-lg p-2 bg-secondary/50 cursor-pointer hover:bg-secondary transition-colors"
+                          onClick={() => handleVerifyShopify(event.id)}
+                        >
+                          {verifyingEventId === event.id ? (
+                            <Loader2 className="h-4 w-4 mx-auto mb-1 text-muted-foreground animate-spin" />
+                          ) : (
+                            <Search className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+                          )}
+                          <p className="text-xs font-medium text-muted-foreground mt-1">
+                            {verifyingEventId === event.id ? 'Verificando...' : 'Verificar Shopify'}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <Button
