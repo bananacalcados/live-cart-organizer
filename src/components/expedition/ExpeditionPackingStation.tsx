@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, ScanBarcode, Camera, Keyboard, Package, ShieldCheck, AlertTriangle, Gift } from 'lucide-react';
+import { CheckCircle2, ScanBarcode, Camera, Keyboard, Package, ShieldCheck, AlertTriangle, Gift, ArrowRightLeft, Loader2, MapPin } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -20,12 +20,26 @@ interface QualityChecks {
   gift_verified: boolean;
 }
 
+interface TransferLog {
+  itemId: string;
+  sku: string;
+  from: string;
+  to: string;
+  status: 'pending' | 'success' | 'error';
+  message?: string;
+}
+
+const SITE_STORE_ID = '2bd2c08d-321c-47ee-98a9-e27e936818ab';
+
 export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Props) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [scanMode, setScanMode] = useState<'keyboard' | 'camera'>('keyboard');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [scannedItems, setScannedItems] = useState<Record<string, number>>({});
   const [qualityChecks, setQualityChecks] = useState<QualityChecks>({ feet_correct: false, no_defects: false, gift_verified: false });
+  const [transferLogs, setTransferLogs] = useState<TransferLog[]>([]);
+  const [stockMap, setStockMap] = useState<Record<string, { storeId: string; storeName: string; depositName: string; stock: number }[]>>({});
+  const [transferring, setTransferring] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = orders.filter(o => {
@@ -39,17 +53,103 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
   const hasGift = selectedOrder?.has_gift || false;
 
   useEffect(() => {
-    if (selectedOrderId && scanMode === 'keyboard') {
-      inputRef.current?.focus();
-    }
+    if (selectedOrderId && scanMode === 'keyboard') inputRef.current?.focus();
   }, [selectedOrderId, scanMode]);
 
-  // Reset quality checks when selecting a new order
   useEffect(() => {
     setQualityChecks({ feet_correct: false, no_defects: false, gift_verified: !hasGift });
   }, [selectedOrderId, hasGift]);
 
-  const handleBarcodeScan = useCallback((barcode: string) => {
+  // Load stock info for selected order items
+  useEffect(() => {
+    if (!selectedOrder) return;
+    const skus = items.map((i: any) => i.sku).filter(Boolean);
+    if (skus.length === 0) return;
+
+    const fetchStock = async () => {
+      const { data } = await supabase
+        .from('pos_products')
+        .select('sku, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
+        .in('sku', skus);
+
+      const map: typeof stockMap = {};
+      (data || []).forEach((p: any) => {
+        if (!map[p.sku]) map[p.sku] = [];
+        map[p.sku].push({
+          storeId: p.store_id,
+          storeName: p.pos_stores?.name || '',
+          depositName: p.pos_stores?.tiny_deposit_name || '',
+          stock: p.stock,
+        });
+      });
+      setStockMap(map);
+    };
+    fetchStock();
+  }, [selectedOrderId]);
+
+  const transferStockIfNeeded = useCallback(async (item: any) => {
+    const sku = item.sku;
+    if (!sku) return;
+
+    const locations = stockMap[sku];
+    if (!locations) return;
+
+    const siteLoc = locations.find(l => l.depositName === 'Site');
+    const siteStock = siteLoc?.stock || 0;
+
+    // If site has stock, no transfer needed
+    if (siteStock > 0) return;
+
+    // Find a source store with stock
+    const source = locations.find(l => l.depositName !== 'Site' && l.stock > 0);
+    if (!source) return;
+
+    const logEntry: TransferLog = {
+      itemId: item.id,
+      sku,
+      from: source.depositName,
+      to: 'Site',
+      status: 'pending',
+    };
+
+    setTransferLogs(prev => [...prev, logEntry]);
+    setTransferring(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('expedition-transfer-stock', {
+        body: { sku, source_store_id: source.storeId, quantity: 1 },
+      });
+
+      if (error || !data?.success) {
+        const errMsg = data?.error || error?.message || 'Erro desconhecido';
+        setTransferLogs(prev => prev.map(l => l.itemId === item.id ? { ...l, status: 'error', message: errMsg } : l));
+        toast.error(`Falha na transferência: ${errMsg}`);
+      } else {
+        setTransferLogs(prev => prev.map(l => l.itemId === item.id ? { ...l, status: 'success', message: `${source.depositName} → Site ✓` } : l));
+        toast.success(`Estoque transferido: ${source.depositName} → Site (${item.product_name})`);
+
+        // Update local stock map
+        setStockMap(prev => {
+          const updated = { ...prev };
+          if (updated[sku]) {
+            updated[sku] = updated[sku].map(l => {
+              if (l.storeId === source.storeId) return { ...l, stock: l.stock - 1 };
+              if (l.depositName === 'Site') return { ...l, stock: l.stock + 1 };
+              return l;
+            });
+          }
+          return updated;
+        });
+      }
+    } catch (e: any) {
+      setTransferLogs(prev => prev.map(l => l.itemId === item.id ? { ...l, status: 'error', message: e.message } : l));
+      toast.error(`Erro na transferência: ${e.message}`);
+    } finally {
+      setTransferring(false);
+    }
+  }, [stockMap]);
+
+  const handleBarcodeScan = useCallback(async (barcode: string) => {
     if (!selectedOrder || !barcode.trim()) return;
     const matchedItem = items.find((item: any) =>
       item.barcode === barcode.trim() || item.sku === barcode.trim()
@@ -60,6 +160,9 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
       if (current < matchedItem.quantity) {
         setScannedItems(prev => ({ ...prev, [key]: current + 1 }));
         toast.success(`✓ ${matchedItem.product_name} (${current + 1}/${matchedItem.quantity})`);
+
+        // Auto-transfer stock if needed
+        await transferStockIfNeeded(matchedItem);
       } else {
         toast.warning(`${matchedItem.product_name} já foi totalmente bipado!`);
       }
@@ -67,7 +170,7 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
       toast.error(`Código não encontrado neste pedido: ${barcode}`);
     }
     setBarcodeInput('');
-  }, [selectedOrder, items, scannedItems]);
+  }, [selectedOrder, items, scannedItems, transferStockIfNeeded]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleBarcodeScan(barcodeInput);
@@ -97,11 +200,36 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
       toast.success('Conferência e verificação concluídas!');
       setSelectedOrderId(null);
       setScannedItems({});
+      setTransferLogs([]);
       setQualityChecks({ feet_correct: false, no_defects: false, gift_verified: false });
       onRefresh();
     } catch (error: any) {
       toast.error(`Erro: ${error.message}`);
     }
+  };
+
+  const getItemStockInfo = (sku: string) => {
+    if (!sku) return null;
+    const locations = stockMap[sku];
+    if (!locations) return null;
+    const siteLoc = locations.find(l => l.depositName === 'Site');
+    const others = locations.filter(l => l.depositName !== 'Site' && l.stock > 0);
+
+    if (siteLoc && siteLoc.stock > 0) {
+      return <Badge variant="outline" className="text-[10px] gap-1 border-green-500 text-green-600"><MapPin className="h-3 w-3" />Site ({siteLoc.stock})</Badge>;
+    }
+    if (others.length > 0) {
+      return (
+        <div className="flex gap-1">
+          {others.map(o => (
+            <Badge key={o.storeId} variant="outline" className="text-[10px] gap-1 border-amber-500 text-amber-600">
+              <MapPin className="h-3 w-3" />{o.depositName} ({o.stock})
+            </Badge>
+          ))}
+        </div>
+      );
+    }
+    return <Badge variant="destructive" className="text-[10px]">Sem estoque</Badge>;
   };
 
   if (!selectedOrderId) {
@@ -115,11 +243,7 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
         ) : (
           <div className="grid gap-2">
             {filtered.map(order => (
-              <Card
-                key={order.id}
-                className="cursor-pointer hover:shadow-md transition-shadow hover:border-primary"
-                onClick={() => setSelectedOrderId(order.id)}
-              >
+              <Card key={order.id} className="cursor-pointer hover:shadow-md transition-shadow hover:border-primary" onClick={() => setSelectedOrderId(order.id)}>
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Package className="h-5 w-5 text-muted-foreground" />
@@ -145,17 +269,13 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-foreground">
-            Conferência: {selectedOrder?.shopify_order_name}
-          </h2>
+          <h2 className="text-lg font-bold text-foreground">Conferência: {selectedOrder?.shopify_order_name}</h2>
           <p className="text-sm text-muted-foreground">
             {selectedOrder?.customer_name} • {totalScanned}/{totalItems} itens bipados
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { setSelectedOrderId(null); setScannedItems({}); }}>
-            Voltar
-          </Button>
+          <Button variant="outline" onClick={() => { setSelectedOrderId(null); setScannedItems({}); setTransferLogs([]); }}>Voltar</Button>
           {allVerified && (
             <Button onClick={handleConfirmPacking} className="gap-2 bg-green-600 hover:bg-green-700">
               <CheckCircle2 className="h-4 w-4" /> Confirmar
@@ -166,10 +286,7 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
 
       {/* Progress */}
       <div className="w-full bg-secondary rounded-full h-4">
-        <div
-          className={`h-4 rounded-full transition-all ${allVerified ? 'bg-green-500' : 'bg-primary'}`}
-          style={{ width: `${totalItems > 0 ? (totalScanned / totalItems) * 100 : 0}%` }}
-        />
+        <div className={`h-4 rounded-full transition-all ${allVerified ? 'bg-green-500' : 'bg-primary'}`} style={{ width: `${totalItems > 0 ? (totalScanned / totalItems) * 100 : 0}%` }} />
       </div>
 
       {/* Scan Mode */}
@@ -193,10 +310,34 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
           className="text-lg font-mono"
           autoFocus
         />
-        <Button onClick={() => handleBarcodeScan(barcodeInput)}>
-          <ScanBarcode className="h-5 w-5" />
+        <Button onClick={() => handleBarcodeScan(barcodeInput)} disabled={transferring}>
+          {transferring ? <Loader2 className="h-5 w-5 animate-spin" /> : <ScanBarcode className="h-5 w-5" />}
         </Button>
       </div>
+
+      {/* Transfer Log */}
+      {transferLogs.length > 0 && (
+        <Card className="border-blue-500/50 bg-blue-50 dark:bg-blue-900/10">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <ArrowRightLeft className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-bold text-foreground">Transferências de Estoque</span>
+            </div>
+            <div className="space-y-1">
+              {transferLogs.map((log, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  {log.status === 'pending' && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
+                  {log.status === 'success' && <CheckCircle2 className="h-3 w-3 text-green-500" />}
+                  {log.status === 'error' && <AlertTriangle className="h-3 w-3 text-red-500" />}
+                  <span className="font-mono">{log.sku}</span>
+                  <span className="text-muted-foreground">{log.from} → {log.to}</span>
+                  {log.message && <span className={log.status === 'error' ? 'text-red-500' : 'text-green-600'}>{log.message}</span>}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Items */}
       <div className="space-y-2">
@@ -207,14 +348,11 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
             <Card key={item.id} className={isComplete ? 'border-green-500 bg-green-50 dark:bg-green-900/10' : ''}>
               <CardContent className="p-3 flex items-center justify-between">
                 <div>
-                  <div className="flex items-center gap-2">
-                    {isComplete ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <ScanBarcode className="h-5 w-5 text-muted-foreground" />
-                    )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {isComplete ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <ScanBarcode className="h-5 w-5 text-muted-foreground" />}
                     <span className="font-medium text-foreground">{item.product_name}</span>
                     {item.variant_name && <Badge variant="outline" className="text-xs">{item.variant_name}</Badge>}
+                    {getItemStockInfo(item.sku)}
                   </div>
                   <p className="text-xs text-muted-foreground ml-7">
                     SKU: {item.sku || 'N/A'} • Barcode: {item.barcode || 'N/A'}
@@ -241,10 +379,7 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
 
             <div className="space-y-3">
               <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-secondary/50 transition-colors">
-                <Checkbox
-                  checked={qualityChecks.feet_correct}
-                  onCheckedChange={(v) => setQualityChecks(prev => ({ ...prev, feet_correct: !!v }))}
-                />
+                <Checkbox checked={qualityChecks.feet_correct} onCheckedChange={(v) => setQualityChecks(prev => ({ ...prev, feet_correct: !!v }))} />
                 <div>
                   <span className="text-sm font-medium text-foreground">Pés corretos</span>
                   <p className="text-xs text-muted-foreground">Verificar se o calçado está com os pés esquerdo e direito corretos</p>
@@ -252,10 +387,7 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
               </label>
 
               <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-secondary/50 transition-colors">
-                <Checkbox
-                  checked={qualityChecks.no_defects}
-                  onCheckedChange={(v) => setQualityChecks(prev => ({ ...prev, no_defects: !!v }))}
-                />
+                <Checkbox checked={qualityChecks.no_defects} onCheckedChange={(v) => setQualityChecks(prev => ({ ...prev, no_defects: !!v }))} />
                 <div>
                   <span className="text-sm font-medium text-foreground">Sem defeitos de fabricação</span>
                   <p className="text-xs text-muted-foreground">Verificar se não há defeitos visíveis no produto (costuras, colagem, acabamento)</p>
@@ -263,18 +395,11 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
               </label>
 
               <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-secondary/50 transition-colors">
-                <Checkbox
-                  checked={qualityChecks.gift_verified}
-                  onCheckedChange={(v) => setQualityChecks(prev => ({ ...prev, gift_verified: !!v }))}
-                />
+                <Checkbox checked={qualityChecks.gift_verified} onCheckedChange={(v) => setQualityChecks(prev => ({ ...prev, gift_verified: !!v }))} />
                 <div className="flex items-center gap-2">
                   <div>
-                    <span className="text-sm font-medium text-foreground">
-                      {hasGift ? 'Brinde incluído no pedido' : 'Sem brinde neste pedido'}
-                    </span>
-                    <p className="text-xs text-muted-foreground">
-                      {hasGift ? 'Confirmar que o brinde foi adicionado à embalagem' : 'Confirmar que este pedido não possui brinde'}
-                    </p>
+                    <span className="text-sm font-medium text-foreground">{hasGift ? 'Brinde incluído no pedido' : 'Sem brinde neste pedido'}</span>
+                    <p className="text-xs text-muted-foreground">{hasGift ? 'Confirmar que o brinde foi adicionado à embalagem' : 'Confirmar que este pedido não possui brinde'}</p>
                   </div>
                   {hasGift && <Gift className="h-4 w-4 text-amber-600" />}
                 </div>
