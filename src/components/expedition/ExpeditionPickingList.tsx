@@ -28,7 +28,8 @@ interface PendingConfirm {
   name: string;
   variant: string;
   sku: string;
-  itemId: string; // expedition_order_items id for DB update
+  itemId: string;
+  isRecheck: boolean;
 }
 
 export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefresh }: Props) {
@@ -224,16 +225,19 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
 
     const [key, item] = matched;
 
-    if (item.pickedQty >= item.totalQty) {
-      toast.warning(`${item.name} já foi totalmente conferido!`);
-      setBarcodeInput('');
-      barcodeRef.current?.focus();
-      return;
-    }
-
     // Find the first line item that still needs picking
     const pendingLine = item.lineItems.find(li => li.pickedQty < li.quantity);
+
     if (!pendingLine) {
+      // All units already checked — allow RE-CHECK by resetting the last checked item
+      const lastCheckedLine = item.lineItems.find(li => li.pickedQty > 0);
+      if (lastCheckedLine) {
+        toast.info(`${item.name} já conferido (${item.pickedQty}/${item.totalQty}). Re-verificando...`);
+        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, isRecheck: true });
+        setQualityChecks({ feet_correct: false, no_defects: false });
+        setBarcodeInput('');
+        return;
+      }
       toast.warning(`${item.name} já foi totalmente conferido!`);
       setBarcodeInput('');
       barcodeRef.current?.focus();
@@ -241,7 +245,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     }
 
     // Show quality confirmation
-    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id });
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, isRecheck: false });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setBarcodeInput('');
   }, [sortedItems]);
@@ -488,8 +492,15 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-amber-600" />
-                  <h3 className="font-bold text-foreground">Verificação de Qualidade</h3>
+                  <h3 className="font-bold text-foreground">
+                    {pendingConfirm.isRecheck ? 'Re-verificação de Qualidade' : 'Verificação de Qualidade'}
+                  </h3>
                 </div>
+                {pendingConfirm.isRecheck && (
+                  <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-400">
+                    ⚠️ Este produto já foi conferido anteriormente. Confirme novamente se necessário.
+                  </div>
+                )}
                 <div className="p-3 rounded-lg bg-background border">
                   <p className="font-medium text-foreground">{pendingConfirm.name}</p>
                   {pendingConfirm.variant && <p className="text-sm text-muted-foreground">{pendingConfirm.variant}</p>}
