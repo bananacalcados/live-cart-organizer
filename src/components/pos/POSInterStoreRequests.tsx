@@ -370,17 +370,23 @@ export function POSInterStoreRequests({ storeId }: Props) {
                   <div key={idx} className="space-y-2 p-3 bg-pos-white/5 rounded-lg border border-pos-white/10">
                     <div className="flex items-start gap-2">
                       <div className="flex-1">
-                        <POSTinyProductPicker
+                         <POSTinyProductPicker
                           storeId={searchStoreId}
                           label="Produto"
                           value={item.product_name}
                           placeholder="Buscar produto no Tiny..."
                           onSelect={(p) => {
+                            // Extract size and color from variant string (e.g. "42" or "42 / Preto")
+                            const parts = (p.size || '').split('/').map(s => s.trim());
+                            const variantParts = p.product_name.split(' - ').slice(1);
+                            const sizeFromVariant = variantParts[0]?.trim() || parts[0] || '';
+                            const colorFromVariant = variantParts[1]?.trim() || parts[1] || '';
                             setItems(prev => prev.map((it, i) => i === idx ? {
                               ...it,
                               product_name: p.product_name,
                               sku: p.sku,
-                              size: p.size || it.size,
+                              size: sizeFromVariant || it.size,
+                              color: colorFromVariant || it.color,
                             } : it));
                           }}
                         />

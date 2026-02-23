@@ -652,7 +652,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       });
       const data = await resp.json();
       if (data.success) {
-        toast.success("Venda criada no Tiny ERP!");
+        if (data.tiny_failed) {
+          toast.warning("Venda salva localmente! Tiny ERP indisponível — sincronize depois manualmente.");
+        } else {
+          toast.success("Venda criada no Tiny ERP!");
+        }
         setSaleResult(data);
         setStep("invoice");
 
