@@ -340,8 +340,17 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       const lineItem = item.lineItems.find(li => li.id === pendingConfirm.itemId);
       if (!lineItem) throw new Error('Line item not found');
 
-      const newPickedQty = Math.min(lineItem.pickedQty + 1, lineItem.quantity);
-      const isFullyPicked = newPickedQty >= lineItem.quantity;
+      // Fetch current value from DB to avoid stale in-memory state
+      const { data: currentDbItem } = await supabase
+        .from('expedition_order_items')
+        .select('picked_quantity, quantity')
+        .eq('id', pendingConfirm.itemId)
+        .single();
+
+      const currentPicked = currentDbItem?.picked_quantity || 0;
+      const maxQty = currentDbItem?.quantity || lineItem.quantity;
+      const newPickedQty = Math.min(currentPicked + 1, maxQty);
+      const isFullyPicked = newPickedQty >= maxQty;
 
       // Mark this item as locally updated so realtime handler skips it
       localUpdatedIdsRef.current.add(pendingConfirm.itemId);
