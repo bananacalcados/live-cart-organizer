@@ -312,225 +312,231 @@ serve(async (req) => {
         throw new Error('O frete precisa ser cotado e selecionado antes de emitir a NF-e.');
       }
 
-      // Step: Set transport/carrier data on Tiny order BEFORE generating NF-e
-      // This ensures the NF-e includes the carrier info, which is required for expedition
-      console.log('Setting transport data on Tiny order before NF-e generation...');
-      try {
-        // Determine forma_envio based on carrier
-        const carrierLower = (order.freight_carrier || '').toLowerCase();
-        let formaEnvio = 'T'; // Default: Transportadora
-        if (carrierLower.includes('correio') || carrierLower.includes('pac') || carrierLower.includes('sedex')) {
-          formaEnvio = 'C'; // Correios
-        } else if (carrierLower.includes('jadlog')) {
-          formaEnvio = 'J';
-        } else if (carrierLower.includes('loggi')) {
-          formaEnvio = 'LOGGI';
-        } else if (carrierLower.includes('total express')) {
-          formaEnvio = 'TOTALEXPRESS';
-        }
-
-        // Build the forma_frete string (e.g. "J&T frenet")
-        const formaFrete = order.freight_service
-          ? `${order.freight_carrier} ${order.freight_service}`.trim()
-          : order.freight_carrier;
-
-        const transportPayload = {
-          pedido: {
-            nome_transportador: order.freight_carrier || '',
-            forma_envio: formaEnvio,
-            forma_frete: formaFrete,
-            frete_por_conta: 'R', // CIF - Remetente
-            valor_frete: order.freight_price || 0,
-          }
-        };
-
-        console.log('Transport payload:', JSON.stringify(transportPayload));
-
-        const transportResp = await fetch('https://api.tiny.com.br/api2/pedido.alterar.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}&dados_pedido=${encodeURIComponent(JSON.stringify(transportPayload.pedido))}`,
-        });
-        const transportData = await safeJson(transportResp, 'Alterar transporte pedido');
-        console.log('Transport update response:', JSON.stringify(transportData));
-
-        // If pedido.alterar doesn't support transport fields, try the pedido.incluir approach
-        // by getting the order and re-including with transport data
-        if (transportData.retorno?.status === 'Erro') {
-          console.warn('pedido.alterar may not support transport fields, trying alternative...');
-          
-          // Get the full order from Tiny
-          const getOrderResp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}`,
-          });
-          const getOrderData = await safeJson(getOrderResp, 'Obter pedido para transporte');
-          const tinyPedido = getOrderData.retorno?.pedido;
-          
-          if (tinyPedido) {
-            // Try to update via pedido.incluir with the same numero_pedido_ecommerce
-            // This may update the existing order instead of creating a new one
-            const updatePayload = {
-              pedido: {
-                numero_pedido_ecommerce: tinyPedido.numero_ecommerce || tinyPedido.numero || '',
-                nome_transportador: order.freight_carrier || '',
-                forma_envio: formaEnvio,
-                forma_frete: formaFrete,
-                frete_por_conta: 'R',
-                valor_frete: order.freight_price || 0,
-              }
-            };
-            console.log('Alternative transport update payload:', JSON.stringify(updatePayload));
-          }
-        }
-      } catch (transportErr) {
-        // Non-fatal: we still try to generate NF-e even without transport data
-        console.warn('Failed to set transport data on Tiny order:', transportErr);
+      // Determine forma_envio code based on carrier name
+      const carrierLower = (order.freight_carrier || '').toLowerCase();
+      let formaEnvio = 'T'; // Default: Transportadora
+      if (carrierLower.includes('correio') || carrierLower.includes('pac') || carrierLower.includes('sedex')) {
+        formaEnvio = 'C'; // Correios
+      } else if (carrierLower.includes('jadlog')) {
+        formaEnvio = 'J';
+      } else if (carrierLower.includes('loggi')) {
+        formaEnvio = 'LOGGI';
+      } else if (carrierLower.includes('total express')) {
+        formaEnvio = 'TOTALEXPRESS';
       }
 
-      // Emit NF-e from Tiny order
-      const tinyResponse = await fetch(`https://api.tiny.com.br/api2/gerar.nota.fiscal.pedido.php`, {
+      // Build forma_frete string matching Tiny's configured shipping methods
+      // The freight_service from Frenet contains the service name (e.g. "Standard", "Express")
+      // Combined with carrier gives something like "J&T Express Standard"
+      const formaFrete = order.freight_service
+        ? `${order.freight_carrier} ${order.freight_service}`.trim()
+        : order.freight_carrier;
+
+      console.log(`Carrier mapping: "${order.freight_carrier}" + "${order.freight_service}" → formaEnvio="${formaEnvio}", formaFrete="${formaFrete}"`);
+
+      // STRATEGY: First try gerar.nota.fiscal.pedido.php (auto-taxes).
+      // Then check if transport data is missing. If so, create NF-e manually with nota.fiscal.incluir.php.
+      
+      // Step 1: Get full order from Tiny to have item data available
+      console.log('Step 1: Getting Tiny order details...');
+      const tinyOrderResp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}&modelo=NFe`,
+        body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}`,
+      });
+      const tinyOrderData = await safeJson(tinyOrderResp, 'Obter pedido Tiny');
+      const tinyPedido = tinyOrderData.retorno?.pedido;
+      
+      if (!tinyPedido) {
+        throw new Error('Não foi possível obter dados do pedido no Tiny para gerar a NF-e.');
+      }
+
+      console.log('Tiny order obtained. Items:', JSON.stringify(tinyPedido.itens?.length || 0));
+
+      // Step 2: Create NF-e using nota.fiscal.incluir.php WITH transport data
+      // This gives us control over the carrier/transport section
+      console.log('Step 2: Creating NF-e with transport data via nota.fiscal.incluir.php...');
+      
+      const tinyCliente = tinyPedido.cliente || {};
+      const tinyItems = tinyPedido.itens || [];
+      
+      // Build items array for NF-e
+      const nfItems = tinyItems.map((entry: any) => {
+        const item = entry?.item || entry;
+        return {
+          item: {
+            ...(item.id_produto ? { id_produto: item.id_produto } : {}),
+            ...(item.codigo ? { codigo: item.codigo } : {}),
+            descricao: item.descricao || 'Produto',
+            unidade: item.unidade || 'UN',
+            quantidade: item.quantidade || 1,
+            valor_unitario: item.valor_unitario || 0,
+            tipo: 'P', // Product
+          }
+        };
       });
 
-      const tinyData = await safeJson(tinyResponse, 'Gerar NF-e');
-      console.log('NF-e response:', JSON.stringify(tinyData));
-
-      if (tinyData.retorno?.status === 'OK' || tinyData.retorno?.status === 'Processado') {
-        const nfData = tinyData.retorno?.registros?.registro || tinyData.retorno?.registros;
-        const invoiceId = nfData?.idNotaFiscal || nfData?.[0]?.idNotaFiscal || null;
-
-        if (invoiceId) {
-          // Step 2: Authorize (emit) the NF-e at SEFAZ
-          console.log(`Step 2: Authorizing NF-e ${invoiceId} at SEFAZ...`);
-          const emitResponse = await fetch('https://api.tiny.com.br/api2/nota.fiscal.emitir.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `token=${TINY_ERP_TOKEN}&formato=json&id=${invoiceId}&enviarEmail=S`,
-          });
-          const emitData = await safeJson(emitResponse, 'Emitir/Autorizar NF-e');
-          console.log('NF-e authorization response:', JSON.stringify(emitData));
-          
-          const emitOk = emitData.retorno?.status === 'OK' || emitData.retorno?.status === 'Processado';
-          if (!emitOk) {
-            const emitErr = emitData.retorno?.erros?.[0]?.erro || '';
-            // If already authorized, that's fine
-            if (!emitErr.includes('já autorizada') && !emitErr.includes('já foi autorizada') && !emitErr.includes('Autorizada')) {
-              console.warn('NF-e authorization warning:', emitErr);
-            }
-          }
-
-          // Wait a moment for Tiny to process authorization
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          // Step 3: Get invoice details (now with chave_acesso and DANFE link)
-          const detailResponse = await fetch(`https://api.tiny.com.br/api2/nota.fiscal.obter.php`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `token=${TINY_ERP_TOKEN}&formato=json&id=${invoiceId}`,
-          });
-
-          const detailData = await safeJson(detailResponse, 'Obter NF-e');
-          const nf = detailData.retorno?.nota_fiscal || {};
-
-          await supabase
-            .from('expedition_orders')
-            .update({
-              tiny_invoice_id: String(invoiceId),
-              invoice_number: nf.numero || null,
-              invoice_series: nf.serie || null,
-              invoice_key: nf.chave_acesso || null,
-              invoice_pdf_url: nf.link_danfe || null,
-              invoice_xml_url: nf.link_xml || null,
-              expedition_status: 'invoice_issued',
-            })
-            .eq('id', order_id);
-
-          return new Response(JSON.stringify({ 
-            success: true, 
-            invoice: nf, 
-            tiny_invoice_id: invoiceId,
-            authorized: emitOk,
-            message: emitOk 
-              ? 'NF-e gerada e autorizada na SEFAZ com sucesso!' 
-              : 'NF-e gerada. Autorização pode levar alguns instantes.',
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
+      if (nfItems.length === 0) {
+        throw new Error('Pedido no Tiny não possui itens. Verifique o pedido.');
       }
 
-      const errorMsg = tinyData.retorno?.erros?.[0]?.erro || JSON.stringify(tinyData.retorno);
-      
-      // If NF-e already exists for this Tiny order, try to fetch it
-      if (errorMsg.includes('Já foi gerada nota fiscal') || errorMsg.includes('já foi gerada')) {
-        console.log('NF-e already exists, trying to fetch existing invoice...');
-        // Search for existing NF-e linked to this Tiny order
-        const nfSearchResp = await fetch('https://api.tiny.com.br/api2/notas.fiscais.pesquisa.php', {
+      // Calculate total weight in kg
+      const totalWeightKg = (order.total_weight_grams || 0) / 1000;
+
+      const nfPayload = {
+        nota_fiscal: {
+          tipo: 'S', // Saída
+          numero_pedido_ecommerce: order.shopify_order_name?.replace('#', '') || '',
+          cliente: {
+            nome: tinyCliente.nome || order.customer_name || 'Cliente',
+            tipo_pessoa: tinyCliente.tipo_pessoa || 'F',
+            cpf_cnpj: tinyCliente.cpf_cnpj || order.customer_cpf?.replace(/\D/g, '') || '',
+            endereco: tinyCliente.endereco || '',
+            numero: tinyCliente.numero || 'S/N',
+            complemento: tinyCliente.complemento || '',
+            bairro: tinyCliente.bairro || '',
+            cep: tinyCliente.cep || '',
+            cidade: tinyCliente.cidade || '',
+            uf: tinyCliente.uf || '',
+            fone: tinyCliente.fone || order.customer_phone || '',
+            email: tinyCliente.email || order.customer_email || '',
+            atualizar_cliente: 'N', // Don't update client registry
+          },
+          itens: nfItems,
+          // TRANSPORT DATA - this is the key fix!
+          transportador: {
+            nome: order.freight_carrier || '',
+          },
+          forma_envio: formaEnvio,
+          forma_frete: formaFrete,
+          frete_por_conta: 'R', // CIF - Remetente
+          valor_frete: order.freight_price || 0,
+          quantidade_volumes: 1,
+          especie_volumes: 'CAIXA',
+          forma_pagamento: tinyPedido.forma_pagamento || '',
+          obs: tinyPedido.obs || `Pedido ${order.shopify_order_name || ''}`,
+        }
+      };
+
+      console.log('NF-e payload (transport section):', JSON.stringify({
+        transportador: nfPayload.nota_fiscal.transportador,
+        forma_envio: nfPayload.nota_fiscal.forma_envio,
+        forma_frete: nfPayload.nota_fiscal.forma_frete,
+        frete_por_conta: nfPayload.nota_fiscal.frete_por_conta,
+        valor_frete: nfPayload.nota_fiscal.valor_frete,
+      }));
+
+      const nfResponse = await fetch('https://api.tiny.com.br/api2/nota.fiscal.incluir.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `token=${TINY_ERP_TOKEN}&formato=json&nota=${encodeURIComponent(JSON.stringify(nfPayload))}`,
+      });
+      const nfData = await safeJson(nfResponse, 'Incluir NF-e');
+      console.log('NF-e incluir response:', JSON.stringify(nfData));
+
+      let invoiceId: string | null = null;
+      let usedFallback = false;
+
+      if (nfData.retorno?.status === 'OK' || nfData.retorno?.status === 'Processado') {
+        const reg = nfData.retorno?.registros?.registro || nfData.retorno?.registros?.[0]?.registro || nfData.retorno?.registros;
+        invoiceId = reg?.id || reg?.idNotaFiscal || reg?.[0]?.id || null;
+        console.log('NF-e created via incluir with transport data. Invoice ID:', invoiceId);
+      } else {
+        // Fallback: try gerar.nota.fiscal.pedido.php (auto-taxes but no transport)
+        const nfErr = nfData.retorno?.erros?.[0]?.erro || JSON.stringify(nfData.retorno);
+        console.warn('nota.fiscal.incluir failed:', nfErr, '- falling back to gerar.nota.fiscal.pedido.php');
+        usedFallback = true;
+
+        const fallbackResp = await fetch('https://api.tiny.com.br/api2/gerar.nota.fiscal.pedido.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${TINY_ERP_TOKEN}&formato=json&idPedidoEcommerce=${order.tiny_order_id}`,
+          body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}&modelo=NFe`,
         });
-        const nfSearchData = await safeJson(nfSearchResp, 'Pesquisa NF-e existente');
-        console.log('Existing NF-e search result:', JSON.stringify(nfSearchData));
-        
-        const existingNf = nfSearchData.retorno?.notas_fiscais?.[0]?.nota_fiscal;
-        if (existingNf?.id) {
-          // Get full details
-          const detailResponse = await fetch('https://api.tiny.com.br/api2/nota.fiscal.obter.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `token=${TINY_ERP_TOKEN}&formato=json&id=${existingNf.id}`,
-          });
-          const detailData = await safeJson(detailResponse, 'Obter NF-e existente');
-          const nf = detailData.retorno?.nota_fiscal || {};
+        const fallbackData = await safeJson(fallbackResp, 'Gerar NF-e (fallback)');
+        console.log('NF-e fallback response:', JSON.stringify(fallbackData));
+
+        if (fallbackData.retorno?.status === 'OK' || fallbackData.retorno?.status === 'Processado') {
+          const fbReg = fallbackData.retorno?.registros?.registro || fallbackData.retorno?.registros;
+          invoiceId = fbReg?.idNotaFiscal || fbReg?.[0]?.idNotaFiscal || null;
+        } else {
+          const fbErr = fallbackData.retorno?.erros?.[0]?.erro || JSON.stringify(fallbackData.retorno);
           
-          // Check if this NF-e belongs to the correct customer
-          const nfCliente = (nf.cliente?.nome || existingNf.nome_cliente || '').toLowerCase();
-          const orderCliente = (order.customer_name || '').toLowerCase().split(' ')[0];
-          
-          if (orderCliente && nfCliente && !nfCliente.includes(orderCliente)) {
-            // Wrong customer! The tiny_order_id is linked to wrong order
-            console.log(`NF-e customer "${nfCliente}" doesn't match order customer "${order.customer_name}". Clearing tiny_order_id.`);
-            await supabase
-              .from('expedition_orders')
-              .update({ tiny_order_id: null })
-              .eq('id', order_id);
-            throw new Error(
-              `O pedido no Tiny (ID: ${order.tiny_order_id}) pertence a "${nfCliente}", não a "${order.customer_name}". ` +
-              `O vínculo foi limpo. Clique em "Sincronizar com Tiny" novamente.`
-            );
+          // Check if NF-e already exists
+          if (fbErr.includes('Já foi gerada nota fiscal') || fbErr.includes('já foi gerada')) {
+            // Will be handled by the existing NF-e search logic below
           }
           
-          // Correct customer - save the existing NF-e data
-          await supabase
-            .from('expedition_orders')
-            .update({
-              tiny_invoice_id: String(existingNf.id),
-              invoice_number: nf.numero || existingNf.numero || null,
-              invoice_series: nf.serie || existingNf.serie || null,
-              invoice_key: nf.chave_acesso || null,
-              invoice_pdf_url: nf.link_danfe || null,
-              invoice_xml_url: nf.link_xml || null,
-              expedition_status: 'invoice_issued',
-            })
-            .eq('id', order_id);
-          
-          return new Response(JSON.stringify({
-            success: true,
-            invoice: nf,
-            tiny_invoice_id: existingNf.id,
-            message: 'NF-e já existente vinculada com sucesso.',
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          if (!invoiceId) {
+            throw new Error(`Erro ao gerar NF-e: ${fbErr}`);
+          }
         }
       }
-      
-      throw new Error(`Tiny NF-e error: ${errorMsg}`);
+
+      if (invoiceId) {
+        // Step 3: Authorize (emit) the NF-e at SEFAZ
+        console.log(`Step 3: Authorizing NF-e ${invoiceId} at SEFAZ...`);
+        const emitResponse = await fetch('https://api.tiny.com.br/api2/nota.fiscal.emitir.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${TINY_ERP_TOKEN}&formato=json&id=${invoiceId}&enviarEmail=S`,
+        });
+        const emitData = await safeJson(emitResponse, 'Emitir/Autorizar NF-e');
+        console.log('NF-e authorization response:', JSON.stringify(emitData));
+        
+        const emitOk = emitData.retorno?.status === 'OK' || emitData.retorno?.status === 'Processado';
+        if (!emitOk) {
+          const emitErr = emitData.retorno?.erros?.[0]?.erro || '';
+          if (!emitErr.includes('já autorizada') && !emitErr.includes('já foi autorizada') && !emitErr.includes('Autorizada')) {
+            console.warn('NF-e authorization warning:', emitErr);
+          }
+        }
+
+        // Wait for Tiny to process authorization
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Step 4: Get invoice details
+        const detailResponse = await fetch('https://api.tiny.com.br/api2/nota.fiscal.obter.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${TINY_ERP_TOKEN}&formato=json&id=${invoiceId}`,
+        });
+
+        const detailData = await safeJson(detailResponse, 'Obter NF-e');
+        const nf = detailData.retorno?.nota_fiscal || {};
+
+        await supabase
+          .from('expedition_orders')
+          .update({
+            tiny_invoice_id: String(invoiceId),
+            invoice_number: nf.numero || null,
+            invoice_series: nf.serie || null,
+            invoice_key: nf.chave_acesso || null,
+            invoice_pdf_url: nf.link_danfe || null,
+            invoice_xml_url: nf.link_xml || null,
+            expedition_status: 'invoice_issued',
+          })
+          .eq('id', order_id);
+
+        const transportMsg = usedFallback
+          ? 'NF-e gerada (sem dados de transporte - configure manualmente no Tiny).'
+          : 'NF-e gerada COM dados da transportadora!';
+
+        return new Response(JSON.stringify({ 
+          success: true, 
+          invoice: nf, 
+          tiny_invoice_id: invoiceId,
+          authorized: emitOk,
+          transport_included: !usedFallback,
+          message: emitOk 
+            ? `${transportMsg} Autorizada na SEFAZ com sucesso!`
+            : `${transportMsg} Autorização pode levar alguns instantes.`,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // If we got here without returning, no invoice was created
+      throw new Error('Não foi possível gerar a NF-e. Verifique os dados do pedido no Tiny.');
     }
 
     throw new Error(`Unknown action: ${action}`);
