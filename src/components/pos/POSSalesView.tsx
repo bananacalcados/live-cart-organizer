@@ -102,6 +102,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [rfmMatches, setRfmMatches] = useState<any[]>([]);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
   const [installments, setInstallments] = useState("1");
+  const [multiInstallments, setMultiInstallments] = useState("1");
   const [cashReceived, setCashReceived] = useState("");
   const [discount, setDiscount] = useState("");
   const [discountType, setDiscountType] = useState<"value" | "percent">("value");
@@ -804,6 +805,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setUseMultiPayment(false);
     setMultiPaymentMethodId("");
     setMultiPaymentAmount("");
+    setMultiInstallments("1");
     setDiscount("");
     setDiscountType("value");
     setShowWheel(false);
@@ -1315,13 +1317,13 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                       );
                     })}
                   </div>
-                  {selectedPaymentName.toLowerCase().includes('crédito') && (
+                  {(selectedPaymentName.toLowerCase().includes('crédito') || selectedPaymentName.toLowerCase().includes('credito') || selectedPaymentName.toLowerCase().includes('crediário') || selectedPaymentName.toLowerCase().includes('crediario')) && (
                     <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
                       <Label className="text-pos-white">Parcelas</Label>
                       <Select value={installments} onValueChange={setInstallments}>
                         <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {[1, 2, 3, 6, 10, 12].map(n => (
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
                             <SelectItem key={n} value={String(n)}>{n}x de R$ {(totalWithDiscount / n).toFixed(2)}{n === 1 ? ' (à vista)' : ''}</SelectItem>
                           ))}
                         </SelectContent>
@@ -1342,40 +1344,68 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               ) : (
                 <div className="space-y-4">
                   {/* Multi-payment: add payment methods with amounts */}
-                  <div className="flex gap-2">
-                    <Select value={multiPaymentMethodId} onValueChange={setMultiPaymentMethodId}>
-                      <SelectTrigger className="flex-1 bg-pos-white/5 border-pos-orange/30 text-pos-white">
-                        <SelectValue placeholder="Forma de pagamento" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {paymentMethods.map(m => (
-                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="number"
-                      value={multiPaymentAmount}
-                      onChange={e => setMultiPaymentAmount(e.target.value)}
-                      placeholder="Valor R$"
-                      className="w-32 bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30"
-                    />
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Select value={multiPaymentMethodId} onValueChange={setMultiPaymentMethodId}>
+                        <SelectTrigger className="flex-1 bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                          <SelectValue placeholder="Forma de pagamento" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {paymentMethods.map(m => (
+                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        value={multiPaymentAmount}
+                        onChange={e => setMultiPaymentAmount(e.target.value)}
+                        placeholder="Valor R$"
+                        className="w-32 bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30"
+                      />
+                    </div>
+                    {/* Installments for credit/crediário in multi-payment */}
+                    {(() => {
+                      const selectedMethodName = paymentMethods.find(m => m.id === multiPaymentMethodId)?.name?.toLowerCase() || '';
+                      if (selectedMethodName.includes('crédito') || selectedMethodName.includes('credito') || selectedMethodName.includes('crediário') || selectedMethodName.includes('crediario')) {
+                        return (
+                          <Select value={multiInstallments} onValueChange={setMultiInstallments}>
+                            <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                              <SelectValue placeholder="Parcelas" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => {
+                                const amt = parseFloat(multiPaymentAmount) || 0;
+                                return (
+                                  <SelectItem key={n} value={String(n)}>
+                                    {n}x {amt > 0 ? `de R$ ${(amt / n).toFixed(2)}` : ''}{n === 1 ? ' (à vista)' : ''}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        );
+                      }
+                      return null;
+                    })()}
                     <Button
-                      className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
+                      className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
                       onClick={() => {
                         if (!multiPaymentMethodId || !multiPaymentAmount) return;
                         const method = paymentMethods.find(m => m.id === multiPaymentMethodId);
                         if (!method) return;
+                        const inst = parseInt(multiInstallments) || 1;
                         setMultiPayments(prev => [...prev, {
                           method_id: multiPaymentMethodId,
-                          method_name: method.name,
+                          method_name: inst > 1 ? `${method.name} ${inst}x` : method.name,
                           amount: parseFloat(multiPaymentAmount) || 0,
                         }]);
                         setMultiPaymentMethodId("");
                         setMultiPaymentAmount("");
+                        setMultiInstallments("1");
                       }}
                     >
-                      <Plus className="h-4 w-4" />
+                      <Plus className="h-4 w-4 mr-1" /> Adicionar
                     </Button>
                   </div>
 

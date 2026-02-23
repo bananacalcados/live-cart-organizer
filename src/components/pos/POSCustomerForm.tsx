@@ -174,7 +174,10 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label className="text-pos-white/70 text-xs">CEP</Label>
-                  <Input value={form.cep} onChange={e => update('cep', e.target.value)} onBlur={handleCepLookup} placeholder="00000-000" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
+                  <div className="flex gap-1">
+                    <Input value={form.cep} onChange={e => update('cep', e.target.value)} onBlur={handleCepLookup} placeholder="00000-000" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
+                    <Button type="button" size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted text-xs px-2 h-9 shrink-0" onClick={handleCepLookup}>Buscar</Button>
+                  </div>
                 </div>
                 <div className="col-span-2">
                   <Label className="text-pos-white/70 text-xs">Rua</Label>
