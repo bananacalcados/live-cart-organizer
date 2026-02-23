@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { CheckCircle2, ScanBarcode, Camera, Keyboard, Package, ShieldCheck, AlertTriangle, Gift, ArrowRightLeft, Loader2, MapPin, Clock, Play, PackageCheck, PackageX, PackageMinus, Search, Filter } from 'lucide-react';
+import { CheckCircle2, ScanBarcode, Camera, Keyboard, Package, ShieldCheck, AlertTriangle, Gift, ArrowRightLeft, Loader2, MapPin, Clock, Play, PackageCheck, PackageX, PackageMinus, Search, Filter, Users } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -32,10 +32,50 @@ interface TransferLog {
 
 type PackingCategory = 'all' | 'complete' | 'incomplete' | 'missing';
 
+interface CustomerGroup {
+  key: string;
+  customerName: string;
+  customerEmail: string;
+  orders: any[];
+  allItems: any[];
+  hasGift: boolean;
+  orderNames: string[];
+}
+
 const SITE_STORE_ID = '2bd2c08d-321c-47ee-98a9-e27e936818ab';
 
+// Group orders by customer (email or name fallback)
+function groupOrdersByCustomer(orders: any[]): CustomerGroup[] {
+  const map = new Map<string, any[]>();
+
+  for (const order of orders) {
+    // Group key: prefer email, fallback to normalized name
+    const email = (order.customer_email || '').toLowerCase().trim();
+    const name = (order.customer_name || '').toLowerCase().trim();
+    const key = email || name || order.id; // fallback to order id if no identifiers
+    
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(order);
+  }
+
+  return Array.from(map.entries()).map(([key, groupOrders]) => {
+    const allItems = groupOrders.flatMap(o => o.expedition_order_items || []);
+    const hasGift = groupOrders.some(o => o.has_gift);
+    const orderNames = groupOrders.map(o => o.shopify_order_name).filter(Boolean);
+    return {
+      key,
+      customerName: groupOrders[0].customer_name || 'Sem nome',
+      customerEmail: groupOrders[0].customer_email || '',
+      orders: groupOrders,
+      allItems,
+      hasGift,
+      orderNames,
+    };
+  });
+}
+
 export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Props) {
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [scanMode, setScanMode] = useState<'keyboard' | 'camera'>('keyboard');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [scannedItems, setScannedItems] = useState<Record<string, number>>({});
@@ -55,9 +95,12 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     return ['approved', 'grouped', 'picked', 'awaiting_stock'].includes(o.expedition_status);
   });
 
-  // Categorize orders by pick verification completeness
-  const categorizeOrder = (order: any): 'complete' | 'incomplete' | 'missing' => {
-    const items = order.expedition_order_items || [];
+  // Group filtered orders by customer
+  const customerGroups = useMemo(() => groupOrdersByCustomer(filtered), [filtered]);
+
+  // Categorize a group by pick verification completeness
+  const categorizeGroup = (group: CustomerGroup): 'complete' | 'incomplete' | 'missing' => {
+    const items = group.allItems;
     if (items.length === 0) return 'missing';
 
     let totalVerified = 0;
@@ -75,44 +118,44 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     return 'missing';
   };
 
-  const categorizedOrders = filtered.reduce((acc, order) => {
-    const cat = categorizeOrder(order);
-    acc[cat].push(order);
+  const categorizedGroups = customerGroups.reduce((acc, group) => {
+    const cat = categorizeGroup(group);
+    acc[cat].push(group);
     return acc;
-  }, { complete: [] as any[], incomplete: [] as any[], missing: [] as any[] });
+  }, { complete: [] as CustomerGroup[], incomplete: [] as CustomerGroup[], missing: [] as CustomerGroup[] });
 
-  const getFilteredOrders = () => {
-    const isAwaiting = (o: any) => o.expedition_status === 'awaiting_stock';
-    let list: any[];
+  const getFilteredGroups = () => {
+    const isGroupAwaiting = (g: CustomerGroup) => g.orders.every(o => o.expedition_status === 'awaiting_stock');
+    let list: CustomerGroup[];
     switch (activeCategory) {
-      case 'complete': list = categorizedOrders.complete; break;
-      case 'incomplete': list = categorizedOrders.incomplete; break;
-      case 'missing': list = categorizedOrders.missing; break;
-      default: list = filtered;
+      case 'complete': list = categorizedGroups.complete; break;
+      case 'incomplete': list = categorizedGroups.incomplete; break;
+      case 'missing': list = categorizedGroups.missing; break;
+      default: list = customerGroups;
     }
     return [...list].sort((a, b) => {
-      if (isAwaiting(a) && !isAwaiting(b)) return 1;
-      if (!isAwaiting(a) && isAwaiting(b)) return -1;
+      if (isGroupAwaiting(a) && !isGroupAwaiting(b)) return 1;
+      if (!isGroupAwaiting(a) && isGroupAwaiting(b)) return -1;
       return 0;
     });
   };
 
-  const sortedFiltered = getFilteredOrders();
-  const selectedOrder = filtered.find(o => o.id === selectedOrderId);
-  const items = selectedOrder?.expedition_order_items || [];
-  const hasGift = selectedOrder?.has_gift || false;
+  const sortedGroups = getFilteredGroups();
+  const selectedGroup = selectedGroupKey ? customerGroups.find(g => g.key === selectedGroupKey) : null;
+  const items = selectedGroup?.allItems || [];
+  const hasGift = selectedGroup?.hasGift || false;
 
   useEffect(() => {
-    if (selectedOrderId && scanMode === 'keyboard') inputRef.current?.focus();
-  }, [selectedOrderId, scanMode]);
+    if (selectedGroupKey && scanMode === 'keyboard') inputRef.current?.focus();
+  }, [selectedGroupKey, scanMode]);
 
   useEffect(() => {
     setQualityChecks({ feet_correct: false, no_defects: false, gift_verified: !hasGift });
-  }, [selectedOrderId, hasGift]);
+  }, [selectedGroupKey, hasGift]);
 
-  // Load stock info for selected order items
+  // Load stock info for selected group items
   useEffect(() => {
-    if (!selectedOrder) return;
+    if (!selectedGroup) return;
     const skus = items.map((i: any) => i.sku).filter(Boolean);
     if (skus.length === 0) return;
 
@@ -134,7 +177,7 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
       setStockMap(map);
     };
     fetchStock();
-  }, [selectedOrderId]);
+  }, [selectedGroupKey]);
 
   const transferStockIfNeeded = useCallback(async (item: any) => {
     const sku = item.sku;
@@ -182,7 +225,7 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
   }, [stockMap]);
 
   const handleBarcodeScan = useCallback(async (barcode: string) => {
-    if (!selectedOrder || !barcode.trim()) return;
+    if (!selectedGroup || !barcode.trim()) return;
     const matchedItem = items.find((item: any) => item.barcode === barcode.trim() || item.sku === barcode.trim());
     if (matchedItem) {
       const key = matchedItem.id;
@@ -195,35 +238,32 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
         toast.warning(`${matchedItem.product_name} já foi totalmente bipado!`);
       }
     } else {
-      toast.error(`Código não encontrado neste pedido: ${barcode}`);
+      toast.error(`Código não encontrado nestes pedidos: ${barcode}`);
     }
     setBarcodeInput('');
-  }, [selectedOrder, items, scannedItems, transferStockIfNeeded]);
+  }, [selectedGroup, items, scannedItems, transferStockIfNeeded]);
 
-  // Product-first scan: find order by scanned barcode/sku
+  // Product-first scan: find group by scanned barcode/sku
   const handleProductScan = useCallback((barcode: string) => {
     if (!barcode.trim()) return;
     const trimmed = barcode.trim();
 
-    // Search across all filtered orders for a matching item
-    const matchingOrders = filtered.filter(order => {
-      const orderItems = order.expedition_order_items || [];
-      return orderItems.some((item: any) => item.barcode === trimmed || item.sku === trimmed);
-    });
+    const matchingGroups = customerGroups.filter(group =>
+      group.allItems.some((item: any) => item.barcode === trimmed || item.sku === trimmed)
+    );
 
-    if (matchingOrders.length === 0) {
+    if (matchingGroups.length === 0) {
       toast.error(`Nenhum pedido encontrado com o código: ${trimmed}`);
-    } else if (matchingOrders.length === 1) {
-      setSelectedOrderId(matchingOrders[0].id);
-      toast.success(`Pedido ${matchingOrders[0].shopify_order_name} localizado!`);
+    } else if (matchingGroups.length === 1) {
+      setSelectedGroupKey(matchingGroups[0].key);
+      const names = matchingGroups[0].orderNames.join(', ');
+      toast.success(`Pedido(s) ${names} localizado(s)!`);
     } else {
-      // Multiple orders, show them filtered
-      toast.info(`${matchingOrders.length} pedidos encontrados com esse produto. Selecione um.`);
-      // We'll highlight these by temporarily filtering
+      toast.info(`${matchingGroups.length} clientes encontrados com esse produto. Selecione um.`);
       setActiveCategory('all');
     }
     setProductScanInput('');
-  }, [filtered]);
+  }, [customerGroups]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleBarcodeScan(barcodeInput);
@@ -240,15 +280,18 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
   const allVerified = allScanned && allChecked;
 
   const handleConfirmPacking = async () => {
-    if (!selectedOrderId) return;
+    if (!selectedGroup) return;
     try {
+      // Update all items across all orders in the group
       for (const item of items) {
         const scanned = scannedItems[item.id] || 0;
         await supabase.from('expedition_order_items').update({ packed_quantity: scanned, pack_verified: scanned === item.quantity }).eq('id', item.id);
       }
-      await supabase.from('expedition_orders').update({ expedition_status: 'packed' }).eq('id', selectedOrderId);
-      toast.success('Conferência e verificação concluídas!');
-      setSelectedOrderId(null);
+      // Mark all orders in the group as packed
+      const orderIds = selectedGroup.orders.map(o => o.id);
+      await supabase.from('expedition_orders').update({ expedition_status: 'packed' }).in('id', orderIds);
+      toast.success(`Conferência concluída para ${selectedGroup.orderNames.length} pedido(s)!`);
+      setSelectedGroupKey(null);
       setScannedItems({});
       setTransferLogs([]);
       setQualityChecks({ feet_correct: false, no_defects: false, gift_verified: false });
@@ -259,7 +302,6 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
   };
 
   const getItemStockInfo = (sku: string, item?: any) => {
-    // If item was already pick-verified in conferência, show verified badge instead of stock
     if (item?.pick_verified) {
       return <Badge variant="outline" className="text-[10px] gap-1 border-green-500 text-green-600"><CheckCircle2 className="h-3 w-3" />Conferido ✓</Badge>;
     }
@@ -288,8 +330,16 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     return <Badge variant="destructive" className="text-[10px]">Sem estoque</Badge>;
   };
 
-  // ── ORDER LIST VIEW ──
-  if (!selectedOrderId) {
+  // Find which order an item belongs to (for display in detail view)
+  const getOrderForItem = (itemId: string) => {
+    if (!selectedGroup) return null;
+    return selectedGroup.orders.find(o =>
+      (o.expedition_order_items || []).some((i: any) => i.id === itemId)
+    );
+  };
+
+  // ── GROUP LIST VIEW ──
+  if (!selectedGroupKey) {
     return (
       <div className="space-y-4">
         <h2 className="text-lg font-bold text-foreground">Bipagem & Conferência (Packing)</h2>
@@ -323,66 +373,73 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="all" className="gap-1 text-xs md:text-sm">
               <Package className="h-3 w-3 md:h-4 md:w-4" />
-              Todos ({filtered.length})
+              Todos ({customerGroups.length})
             </TabsTrigger>
             <TabsTrigger value="complete" className="gap-1 text-xs md:text-sm text-green-600 data-[state=active]:text-green-700">
               <PackageCheck className="h-3 w-3 md:h-4 md:w-4" />
-              Completos ({categorizedOrders.complete.length})
+              Completos ({categorizedGroups.complete.length})
             </TabsTrigger>
             <TabsTrigger value="incomplete" className="gap-1 text-xs md:text-sm text-amber-600 data-[state=active]:text-amber-700">
               <PackageMinus className="h-3 w-3 md:h-4 md:w-4" />
-              Incompletos ({categorizedOrders.incomplete.length})
+              Incompletos ({categorizedGroups.incomplete.length})
             </TabsTrigger>
             <TabsTrigger value="missing" className="gap-1 text-xs md:text-sm text-red-600 data-[state=active]:text-red-700">
               <PackageX className="h-3 w-3 md:h-4 md:w-4" />
-              Em Falta ({categorizedOrders.missing.length})
+              Em Falta ({categorizedGroups.missing.length})
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {sortedFiltered.length === 0 ? (
+        {sortedGroups.length === 0 ? (
           <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido nesta categoria.</CardContent></Card>
         ) : (
           <div className="grid gap-2">
-            {sortedFiltered.map(order => {
-              const isAwaiting = order.expedition_status === 'awaiting_stock';
-              const cat = categorizeOrder(order);
+            {sortedGroups.map(group => {
+              const isAwaiting = group.orders.every(o => o.expedition_status === 'awaiting_stock');
+              const cat = categorizeGroup(group);
               const catColors = {
                 complete: 'border-l-4 border-l-green-500',
                 incomplete: 'border-l-4 border-l-amber-500',
                 missing: 'border-l-4 border-l-red-500',
               };
-              const orderItems = order.expedition_order_items || [];
-              const totalQty = orderItems.reduce((s: number, i: any) => s + i.quantity, 0);
-              const pickedQty = orderItems.reduce((s: number, i: any) => s + (i.picked_quantity || 0), 0);
+              const totalQty = group.allItems.reduce((s: number, i: any) => s + i.quantity, 0);
+              const pickedQty = group.allItems.reduce((s: number, i: any) => s + (i.picked_quantity || 0), 0);
+              const isMultiOrder = group.orders.length > 1;
 
               return (
                 <Card
-                  key={order.id}
-                  className={`cursor-pointer transition-shadow ${catColors[cat]} ${isAwaiting ? 'opacity-60 border-amber-400/50' : 'hover:shadow-md hover:border-primary'}`}
-                  onClick={() => !isAwaiting && setSelectedOrderId(order.id)}
+                  key={group.key}
+                  className={`cursor-pointer transition-shadow ${catColors[cat]} ${isAwaiting ? 'opacity-60 border-amber-400/50' : 'hover:shadow-md hover:border-primary'} ${isMultiOrder ? 'ring-2 ring-blue-400/40' : ''}`}
+                  onClick={() => !isAwaiting && setSelectedGroupKey(group.key)}
                 >
                   <CardContent className="p-3 md:p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {isAwaiting ? <Clock className="h-5 w-5 text-amber-500" /> : cat === 'complete' ? <PackageCheck className="h-5 w-5 text-green-500" /> : cat === 'incomplete' ? <PackageMinus className="h-5 w-5 text-amber-500" /> : <PackageX className="h-5 w-5 text-red-500" />}
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-foreground">{order.shopify_order_name}</span>
+                          {group.orderNames.map((name, i) => (
+                            <span key={i} className="font-bold text-foreground">{name}</span>
+                          ))}
+                          {isMultiOrder && (
+                            <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 gap-1">
+                              <Users className="h-3 w-3" /> {group.orders.length} pedidos
+                            </Badge>
+                          )}
                           {isAwaiting && (
                             <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 gap-1">
                               <Clock className="h-3 w-3" /> Aguardando
                             </Badge>
                           )}
-                          {order.has_gift && <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600"><Gift className="h-3 w-3 mr-0.5" />Brinde</Badge>}
+                          {group.hasGift && <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600"><Gift className="h-3 w-3 mr-0.5" />Brinde</Badge>}
                           <Badge variant="outline" className={`text-[10px] ${cat === 'complete' ? 'border-green-500 text-green-600' : cat === 'incomplete' ? 'border-amber-500 text-amber-600' : 'border-red-500 text-red-600'}`}>
                             {pickedQty}/{totalQty} conferidos
                           </Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground">{order.customer_name}</p>
+                        <p className="text-sm text-muted-foreground">{group.customerName}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge>{orderItems.length} itens</Badge>
+                      <Badge>{totalQty} itens</Badge>
                       {isAwaiting && (
                         <Button
                           size="sm"
@@ -390,8 +447,11 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
                           className="gap-1 border-green-500/50 text-green-700 dark:text-green-400"
                           onClick={(e) => {
                             e.stopPropagation();
-                            supabase.from('expedition_orders').update({ expedition_status: 'approved' }).eq('id', order.id)
-                              .then(() => { toast.success('Pedido retomado!'); onRefresh(); });
+                            Promise.all(
+                              group.orders.map(o =>
+                                supabase.from('expedition_orders').update({ expedition_status: 'approved' }).eq('id', o.id)
+                              )
+                            ).then(() => { toast.success('Pedidos retomados!'); onRefresh(); });
                           }}
                         >
                           <Play className="h-3 w-3" /> Retomar
@@ -408,18 +468,23 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     );
   }
 
-  // ── ORDER DETAIL / SCANNING VIEW ──
+  // ── GROUP DETAIL / SCANNING VIEW ──
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Conferência: {selectedOrder?.shopify_order_name}</h2>
+          <h2 className="text-lg font-bold text-foreground">
+            Conferência: {selectedGroup?.orderNames.join(' + ')}
+          </h2>
           <p className="text-sm text-muted-foreground">
-            {selectedOrder?.customer_name} • {totalScanned}/{totalItems} itens bipados
+            {selectedGroup?.customerName} • {totalScanned}/{totalItems} itens bipados
+            {(selectedGroup?.orders.length || 0) > 1 && (
+              <span className="ml-2 text-blue-600 font-medium">({selectedGroup?.orders.length} pedidos agrupados)</span>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { setSelectedOrderId(null); setScannedItems({}); setTransferLogs([]); }}>Voltar</Button>
+          <Button variant="outline" onClick={() => { setSelectedGroupKey(null); setScannedItems({}); setTransferLogs([]); }}>Voltar</Button>
           {allVerified && (
             <Button onClick={handleConfirmPacking} className="gap-2 bg-green-600 hover:bg-green-700">
               <CheckCircle2 className="h-4 w-4" /> Confirmar
@@ -483,60 +548,73 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
         </Card>
       )}
 
-      {/* Items */}
+      {/* Items grouped by order */}
       <div className="space-y-2">
-        {items.map((item: any) => {
-          const scanned = scannedItems[item.id] || 0;
-          const isComplete = scanned === item.quantity;
-          const hasNoBarcode = !item.barcode && !item.sku;
+        {selectedGroup && selectedGroup.orders.map(order => {
+          const orderItems = order.expedition_order_items || [];
+          if (orderItems.length === 0) return null;
           return (
-            <Card key={item.id} className={isComplete ? 'border-green-500 bg-green-50 dark:bg-green-900/10' : ''}>
-              <CardContent className="p-3 flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {isComplete ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <ScanBarcode className="h-5 w-5 text-muted-foreground" />}
-                    <span className="font-medium text-foreground">{item.product_name}</span>
-                    {item.variant_name && <Badge variant="outline" className="text-xs">{item.variant_name}</Badge>}
-                    {getItemStockInfo(item.sku, item)}
-                  </div>
-                  <p className="text-xs text-muted-foreground ml-7">
-                    SKU: {item.sku || 'N/A'} • Barcode: {item.barcode || 'N/A'}
-                  </p>
+            <div key={order.id} className="space-y-1">
+              {selectedGroup.orders.length > 1 && (
+                <div className="flex items-center gap-2 px-1 pt-2">
+                  <Badge variant="outline" className="text-xs font-mono">{order.shopify_order_name}</Badge>
+                  <span className="text-xs text-muted-foreground">{orderItems.length} itens</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  {!isComplete && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={`gap-1 text-xs ${hasNoBarcode ? 'border-amber-500 text-amber-700 dark:text-amber-400 animate-pulse' : 'border-muted'}`}
-                      onClick={async () => {
-                        const current = scannedItems[item.id] || 0;
-                        if (current < item.quantity) {
-                          setScannedItems(prev => ({ ...prev, [item.id]: current + 1 }));
-                          toast.success(`✓ ${item.product_name} confirmado manualmente (${current + 1}/${item.quantity})`);
-                          // Log manual confirmation for audit
-                          supabase.from('expedition_unscannable_items').insert({
-                            expedition_order_id: selectedOrderId!,
-                            expedition_order_item_id: item.id,
-                            product_name: item.product_name,
-                            sku: item.sku || null,
-                            reason: 'manual_confirm',
-                            confirmed_by: 'operator',
-                          }).then(() => {});
-                          await transferStockIfNeeded(item);
-                        }
-                      }}
-                    >
-                      <CheckCircle2 className="h-3 w-3" />
-                      Confirmar
-                    </Button>
-                  )}
-                  <span className={`text-lg font-bold ${isComplete ? 'text-green-500' : 'text-foreground'}`}>
-                    {scanned}/{item.quantity}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+              )}
+              {orderItems.map((item: any) => {
+                const scanned = scannedItems[item.id] || 0;
+                const isComplete = scanned === item.quantity;
+                const hasNoBarcode = !item.barcode && !item.sku;
+                return (
+                  <Card key={item.id} className={isComplete ? 'border-green-500 bg-green-50 dark:bg-green-900/10' : ''}>
+                    <CardContent className="p-3 flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {isComplete ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <ScanBarcode className="h-5 w-5 text-muted-foreground" />}
+                          <span className="font-medium text-foreground">{item.product_name}</span>
+                          {item.variant_name && <Badge variant="outline" className="text-xs">{item.variant_name}</Badge>}
+                          {getItemStockInfo(item.sku, item)}
+                        </div>
+                        <p className="text-xs text-muted-foreground ml-7">
+                          SKU: {item.sku || 'N/A'} • Barcode: {item.barcode || 'N/A'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {!isComplete && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className={`gap-1 text-xs ${hasNoBarcode ? 'border-amber-500 text-amber-700 dark:text-amber-400 animate-pulse' : 'border-muted'}`}
+                            onClick={async () => {
+                              const current = scannedItems[item.id] || 0;
+                              if (current < item.quantity) {
+                                setScannedItems(prev => ({ ...prev, [item.id]: current + 1 }));
+                                toast.success(`✓ ${item.product_name} confirmado manualmente (${current + 1}/${item.quantity})`);
+                                supabase.from('expedition_unscannable_items').insert({
+                                  expedition_order_id: order.id,
+                                  expedition_order_item_id: item.id,
+                                  product_name: item.product_name,
+                                  sku: item.sku || null,
+                                  reason: 'manual_confirm',
+                                  confirmed_by: 'operator',
+                                }).then(() => {});
+                                await transferStockIfNeeded(item);
+                              }
+                            }}
+                          >
+                            <CheckCircle2 className="h-3 w-3" />
+                            Confirmar
+                          </Button>
+                        )}
+                        <span className={`text-lg font-bold ${isComplete ? 'text-green-500' : 'text-foreground'}`}>
+                          {scanned}/{item.quantity}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           );
         })}
       </div>
