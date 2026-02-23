@@ -21,9 +21,10 @@ import { POSProductSearchLog } from "@/components/pos/POSProductSearchLog";
 import { POSDailySales } from "@/components/pos/POSDailySales";
 import { POSPickupOrders } from "@/components/pos/POSPickupOrders";
 import { POSTeamChat } from "@/components/pos/POSTeamChat";
+import { POSStockRequests } from "@/components/pos/POSStockRequests";
 import { supabase } from "@/integrations/supabase/client";
 
-type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches" | "pickups";
+type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches" | "pickups" | "stockcheck";
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
 const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badge?: boolean; priority?: boolean }[] = [
@@ -33,6 +34,7 @@ const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badg
   { id: "cash", label: "Caixa", icon: DollarSign, priority: true },
   { id: "returns", label: "Trocas", icon: RotateCcw },
   { id: "requests", label: "Solicitações", icon: ArrowRightLeft, badge: true },
+  { id: "stockcheck", label: "Estoque Exp.", icon: Package, badge: true },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "whatsapp", label: "WhatsApp", icon: Phone },
   { id: "searches", label: "Procurados", icon: SearchX },
@@ -47,6 +49,7 @@ export default function POS() {
   const [section, setSection] = useState<POSSection>("sales");
   const [whatsappFilter, setWhatsappFilter] = useState<WhatsAppFilter>(undefined);
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [pendingStockChecks, setPendingStockChecks] = useState(0);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   // Pre-load sellers as soon as store is selected (before POSSalesView mounts)
@@ -79,18 +82,27 @@ export default function POS() {
   useEffect(() => {
     if (!selectedStore) return;
     const loadPending = async () => {
-      const { count } = await supabase
-        .from("pos_inter_store_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("to_store_id", selectedStore)
-        .eq("status", "pending");
-      setPendingRequests(count || 0);
+      const [{ count: interStoreCount }, { count: stockCheckCount }] = await Promise.all([
+        supabase
+          .from("pos_inter_store_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("to_store_id", selectedStore)
+          .eq("status", "pending"),
+        supabase
+          .from("expedition_stock_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("to_store_id", selectedStore)
+          .eq("status", "pending"),
+      ]);
+      setPendingRequests((interStoreCount || 0) + (stockCheckCount || 0));
+      setPendingStockChecks(stockCheckCount || 0);
     };
     loadPending();
 
     const channel = supabase
       .channel("pos-requests-badge")
       .on("postgres_changes", { event: "*", schema: "public", table: "pos_inter_store_requests" }, () => loadPending())
+      .on("postgres_changes", { event: "*", schema: "public", table: "expedition_stock_requests" }, () => loadPending())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [selectedStore]);
@@ -185,6 +197,7 @@ export default function POS() {
         {section === "config" && <POSConfig storeId={selectedStore} />}
         {section === "returns" && <POSExchanges storeId={selectedStore} />}
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
+        {section === "stockcheck" && <POSStockRequests storeId={selectedStore} />}
         {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
         {section === "pickups" && <POSPickupOrders storeId={selectedStore} />}
