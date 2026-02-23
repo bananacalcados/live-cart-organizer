@@ -95,7 +95,15 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               body: { phones: phonesWithoutPhotos.slice(0, 20) },
             });
             if (resp.data?.photos) {
-              setContactPhotos(prev => ({ ...prev, ...resp.data.photos }));
+              const validPhotos: Record<string, string> = {};
+              for (const [phone, url] of Object.entries(resp.data.photos)) {
+                if (url && url !== 'null' && typeof url === 'string' && url.startsWith('http')) {
+                  validPhotos[phone] = url;
+                }
+              }
+              if (Object.keys(validPhotos).length > 0) {
+                setContactPhotos(prev => ({ ...prev, ...validPhotos }));
+              }
             }
           } catch (e) {
             console.error("Error fetching profile pics:", e);
@@ -119,8 +127,16 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     supabase.functions.invoke("zapi-profile-picture", {
       body: { phones: missingPhones },
     }).then(resp => {
-      if (resp.data?.photos && Object.keys(resp.data.photos).length > 0) {
-        setContactPhotos(prev => ({ ...prev, ...resp.data.photos }));
+      if (resp.data?.photos) {
+        const validPhotos: Record<string, string> = {};
+        for (const [phone, url] of Object.entries(resp.data.photos)) {
+          if (url && url !== 'null' && typeof url === 'string' && (url as string).startsWith('http')) {
+            validPhotos[phone] = url as string;
+          }
+        }
+        if (Object.keys(validPhotos).length > 0) {
+          setContactPhotos(prev => ({ ...prev, ...validPhotos }));
+        }
       }
     }).catch(e => console.error("Error fetching conversation pics:", e));
   }, [conversations, contactPhotos]);
