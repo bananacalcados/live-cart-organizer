@@ -146,24 +146,26 @@ export default function Expedition() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Truck className="h-5 w-5" />
+        <div className="container flex h-14 md:h-16 items-center justify-between px-3 md:px-6">
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="flex h-8 w-8 md:h-10 md:w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Truck className="h-4 w-4 md:h-5 md:w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground">Expedição</h1>
-              <p className="text-xs text-muted-foreground">Gestão de envios</p>
+              <h1 className="text-base md:text-lg font-bold text-foreground">Expedição</h1>
+              <p className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">Gestão de envios</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2">
             <ThemeToggle />
-            <NavLink to="/">Início</NavLink>
-            <NavLink to="/chat">Chat</NavLink>
-            <NavLink to="/marketing">Marketing</NavLink>
-            <Button onClick={syncOrders} disabled={isSyncing} variant="outline" className="gap-2">
-              {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Sincronizar Shopify
+            <div className="hidden md:flex items-center gap-2">
+              <NavLink to="/">Início</NavLink>
+              <NavLink to="/chat">Chat</NavLink>
+              <NavLink to="/marketing">Marketing</NavLink>
+            </div>
+            <Button onClick={syncOrders} disabled={isSyncing} variant="outline" size="sm" className="gap-1 md:gap-2 text-xs md:text-sm">
+              {isSyncing ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <RefreshCw className="h-3 w-3 md:h-4 md:w-4" />}
+              <span className="hidden sm:inline">Sincronizar</span>
             </Button>
           </div>
         </div>
@@ -171,24 +173,24 @@ export default function Expedition() {
 
       {/* Stats Bar */}
       <div className="border-b border-border/40 bg-card">
-        <div className="container py-3">
-          <div className="grid grid-cols-2 md:grid-cols-8 gap-3">
-            <StatCard label="Total" value={stats.total} icon={<Package className="h-4 w-4" />} />
-            <StatCard label="Aprovados" value={stats.approved} icon={<CheckCircle2 className="h-4 w-4 text-green-500" />} />
-            <StatCard label="Pendentes" value={stats.pending} icon={<AlertTriangle className="h-4 w-4 text-orange-500" />} />
-            <StatCard label="Aguardando" value={stats.awaiting} icon={<Clock className="h-4 w-4 text-amber-500" />} highlight={stats.awaiting > 0} />
-            <StatCard label="Separando" value={stats.picking} icon={<ClipboardList className="h-4 w-4 text-blue-500" />} />
-            <StatCard label="Embalados" value={stats.packed} icon={<PackageCheck className="h-4 w-4 text-purple-500" />} />
-            <StatCard label="Despachados" value={stats.dispatched} icon={<Truck className="h-4 w-4 text-primary" />} />
-            <StatCard label="Suportes Abertos" value={openSupportCount} icon={<HeadphonesIcon className="h-4 w-4 text-destructive" />} highlight={openSupportCount > 0} />
+        <div className="container py-2 md:py-3 px-3 md:px-6">
+          <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5 md:gap-3">
+            <StatCard label="Total" value={stats.total} icon={<Package className="h-3 w-3 md:h-4 md:w-4" />} />
+            <StatCard label="Aprovados" value={stats.approved} icon={<CheckCircle2 className="h-3 w-3 md:h-4 md:w-4 text-green-500" />} />
+            <StatCard label="Pendentes" value={stats.pending} icon={<AlertTriangle className="h-3 w-3 md:h-4 md:w-4 text-orange-500" />} />
+            <StatCard label="Aguardando" value={stats.awaiting} icon={<Clock className="h-3 w-3 md:h-4 md:w-4 text-amber-500" />} highlight={stats.awaiting > 0} />
+            <StatCard label="Separando" value={stats.picking} icon={<ClipboardList className="h-3 w-3 md:h-4 md:w-4 text-blue-500" />} />
+            <StatCard label="Embalados" value={stats.packed} icon={<PackageCheck className="h-3 w-3 md:h-4 md:w-4 text-purple-500" />} />
+            <StatCard label="Despachados" value={stats.dispatched} icon={<Truck className="h-3 w-3 md:h-4 md:w-4 text-primary" />} />
+            <StatCard label="Suportes" value={openSupportCount} icon={<HeadphonesIcon className="h-3 w-3 md:h-4 md:w-4 text-destructive" />} highlight={openSupportCount > 0} />
           </div>
         </div>
       </div>
 
       {/* Step Navigation */}
       <div className="border-b border-border/40 bg-card/50">
-        <div className="container py-2">
-          <div className="flex gap-1 overflow-x-auto pb-1">
+        <div className="container py-1.5 md:py-2 px-3 md:px-6">
+          <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
             {STEPS.map((step, i) => {
               const Icon = step.icon;
               const isActive = activeStep === step.id;
@@ -196,62 +198,58 @@ export default function Expedition() {
                 <button
                   key={step.id}
                   onClick={() => setActiveStep(step.id)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-all ${
+                  className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
                     isActive
                       ? 'bg-primary text-primary-foreground shadow-md'
                       : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                   }`}
                 >
-                  <span className="flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold bg-background/20">
+                  <span className="flex items-center justify-center w-4 h-4 md:w-5 md:h-5 rounded-full text-[10px] md:text-xs font-bold bg-background/20">
                     {i + 1}
                   </span>
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3 w-3 md:h-4 md:w-4" />
                   <span className="hidden md:inline font-medium">{step.label}</span>
                 </button>
               );
             })}
-            {/* WhatsApp tab */}
             <button
               onClick={() => setActiveStep('whatsapp')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-all ${
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
                 activeStep === 'whatsapp'
                   ? 'bg-[#008069] text-white shadow-md'
                   : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
               }`}
             >
-              <MessageCircle className="h-4 w-4" />
+              <MessageCircle className="h-3 w-3 md:h-4 md:w-4" />
               <span className="hidden md:inline font-medium">WhatsApp</span>
             </button>
-            {/* Support tab */}
             <button
               onClick={() => setActiveStep('support')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-all ${
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
                 activeStep === 'support'
                   ? 'bg-primary text-primary-foreground shadow-md'
                   : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
               }`}
             >
-              <HeadphonesIcon className="h-4 w-4" />
+              <HeadphonesIcon className="h-3 w-3 md:h-4 md:w-4" />
               <span className="hidden md:inline font-medium">Suporte</span>
             </button>
-            {/* Returns tab */}
             <button
               onClick={() => setActiveStep('returns')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-all ml-auto ${
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ml-auto ${
                 activeStep === 'returns'
                   ? 'bg-destructive text-destructive-foreground shadow-md'
                   : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
               }`}
             >
-              <RotateCcw className="h-4 w-4" />
+              <RotateCcw className="h-3 w-3 md:h-4 md:w-4" />
               <span className="hidden md:inline font-medium">Devoluções</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="container py-4">
+      <div className="container py-3 md:py-4 px-3 md:px-6">
         {/* Search + Date Filter */}
         <div className="mb-4 flex flex-col md:flex-row gap-2">
           <div className="relative flex-1">
@@ -374,11 +372,11 @@ export default function Expedition() {
 
 function StatCard({ label, value, icon, highlight }: { label: string; value: number; icon: React.ReactNode; highlight?: boolean }) {
   return (
-    <div className={`flex items-center gap-2 p-2 rounded-lg bg-background border ${highlight ? 'border-destructive/50 bg-destructive/5 animate-pulse' : 'border-border/50'}`}>
+    <div className={`flex items-center gap-1.5 md:gap-2 p-1.5 md:p-2 rounded-lg bg-background border ${highlight ? 'border-destructive/50 bg-destructive/5 animate-pulse' : 'border-border/50'}`}>
       {icon}
-      <div>
-        <p className={`text-lg font-bold ${highlight ? 'text-destructive' : 'text-foreground'}`}>{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="min-w-0">
+        <p className={`text-sm md:text-lg font-bold ${highlight ? 'text-destructive' : 'text-foreground'}`}>{value}</p>
+        <p className="text-[9px] md:text-xs text-muted-foreground truncate">{label}</p>
       </div>
     </div>
   );
