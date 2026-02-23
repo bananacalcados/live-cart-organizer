@@ -46,7 +46,7 @@ serve(async (req) => {
         const params = new URLSearchParams({
           status: 'any',
           limit: '50',
-          fields: 'id,name,order_number,email,phone,financial_status,fulfillment_status,total_price,subtotal_price,total_shipping_price_set,total_discounts,created_at,line_items,shipping_address,note,customer,total_weight,token,checkout_token',
+          fields: 'id,name,order_number,email,phone,financial_status,fulfillment_status,total_price,subtotal_price,total_shipping_price_set,total_discounts,created_at,line_items,shipping_address,note,note_attributes,customer,total_weight,token,checkout_token',
         });
         if (created_at_min) params.set('created_at_min', created_at_min);
         if (created_at_max) params.set('created_at_max', created_at_max);
@@ -95,6 +95,17 @@ serve(async (req) => {
 
         const totalWeight = order.line_items?.reduce((sum: number, item: any) => sum + (item.grams || 0) * item.quantity, 0) || order.total_weight || 0;
 
+        // Extract CPF from note_attributes (sent by our system) or from note text
+        let customerCpf: string | null = null;
+        if (order.note_attributes && Array.isArray(order.note_attributes)) {
+          const cpfAttr = order.note_attributes.find((a: any) => a.name?.toLowerCase() === 'cpf');
+          if (cpfAttr?.value) customerCpf = cpfAttr.value;
+        }
+        if (!customerCpf && order.note) {
+          const cpfMatch = order.note.match(/CPF:\s*([\d.\-\/]+)/);
+          if (cpfMatch) customerCpf = cpfMatch[1];
+        }
+
         const orderData = {
           shopify_order_id: shopifyOrderId,
           shopify_order_number: String(order.order_number || ''),
@@ -102,6 +113,7 @@ serve(async (req) => {
           customer_name: order.customer ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim() : (order.shipping_address?.name || ''),
           customer_email: order.email || '',
           customer_phone: order.phone || order.shipping_address?.phone || '',
+          customer_cpf: customerCpf,
           shipping_address: shippingAddress,
           financial_status: order.financial_status || 'pending',
           fulfillment_status: order.fulfillment_status || null,
