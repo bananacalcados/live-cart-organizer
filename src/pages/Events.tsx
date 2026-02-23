@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home } from "lucide-react";
+import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,7 @@ interface EventStats {
   totalOrders: number;
   unpaidOrders: number;
   paidOrders: number;
+  missingShopify: number;
 }
 
 const Events = () => {
@@ -62,15 +63,31 @@ const Events = () => {
       for (const event of events) {
         const { data } = await supabase
           .from('orders')
-          .select('is_paid')
+          .select('id, is_paid, paid_externally')
           .eq('event_id', event.id);
         
         const orders = data || [];
+        const paidOrders = orders.filter((o) => o.is_paid || o.paid_externally);
+        
+        // Check which paid orders have Shopify orders
+        let missingShopify = 0;
+        if (paidOrders.length > 0) {
+          const paidIds = paidOrders.map(o => o.id);
+          const { data: regs } = await supabase
+            .from('customer_registrations')
+            .select('order_id, shopify_draft_order_id')
+            .in('order_id', paidIds);
+          
+          const regMap = new Map((regs || []).map(r => [r.order_id, r.shopify_draft_order_id]));
+          missingShopify = paidOrders.filter(o => !regMap.get(o.id)).length;
+        }
+        
         stats.push({
           eventId: event.id,
           totalOrders: orders.length,
-          unpaidOrders: orders.filter((o) => !o.is_paid).length,
-          paidOrders: orders.filter((o) => o.is_paid).length,
+          unpaidOrders: orders.filter((o) => !o.is_paid && !o.paid_externally).length,
+          paidOrders: paidOrders.length,
+          missingShopify,
         });
       }
       
@@ -127,7 +144,8 @@ const Events = () => {
     return eventStats.find((s) => s.eventId === eventId) || {
       totalOrders: 0,
       unpaidOrders: 0,
-      paidOrders: 0
+      paidOrders: 0,
+      missingShopify: 0,
     };
   };
 
@@ -315,7 +333,7 @@ const Events = () => {
                       </div>
                     )}
                     
-                    <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="grid grid-cols-4 gap-2 text-center">
                       <div className="bg-secondary/50 rounded-lg p-2">
                         <ShoppingBag className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
                         <p className="text-lg font-bold">{stats.totalOrders}</p>
@@ -330,6 +348,11 @@ const Events = () => {
                         <Users className="h-4 w-4 mx-auto mb-1 text-stage-paid" />
                         <p className="text-lg font-bold text-stage-paid">{stats.paidOrders}</p>
                         <p className="text-xs text-muted-foreground">Pagos</p>
+                      </div>
+                      <div className={`rounded-lg p-2 ${stats.missingShopify > 0 ? 'bg-destructive/10 animate-pulse' : 'bg-secondary/50'}`}>
+                        <AlertTriangle className={`h-4 w-4 mx-auto mb-1 ${stats.missingShopify > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
+                        <p className={`text-lg font-bold ${stats.missingShopify > 0 ? 'text-destructive' : 'text-foreground'}`}>{stats.missingShopify}</p>
+                        <p className="text-xs text-muted-foreground">Sem Shopify</p>
                       </div>
                     </div>
 
