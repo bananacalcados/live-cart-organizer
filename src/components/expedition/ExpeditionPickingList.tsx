@@ -42,6 +42,8 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [savingConfirm, setSavingConfirm] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
+  // Map of SKU -> extra GTINs/barcodes from pos_products (enrichment)
+  const [enrichedBarcodes, setEnrichedBarcodes] = useState<Record<string, string[]>>({});
 
   // Build items from orders — now tracking individual line items with their DB state
   interface ItemEntry {
@@ -124,7 +126,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     return () => { supabase.removeChannel(channel); };
   }, [onRefresh]);
 
-  // Load stock locations for all SKUs
+  // Load stock locations and enrich barcodes from pos_products (GTIN)
   useEffect(() => {
     const skus = sortedItems.map(([, item]) => item.sku).filter(Boolean);
     if (skus.length === 0) return;
@@ -155,6 +157,18 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
 
         (bySku || []).forEach((p: any) => addProduct(p, p.sku));
         (byBarcode || []).forEach((p: any) => addProduct(p, p.barcode));
+
+        // Enrich barcodes map: SKU -> extra GTINs from pos_products so scanning by GTIN works
+        const newEnriched: Record<string, string[]> = {};
+        (bySku || []).forEach((p: any) => {
+          if (p.barcode && p.sku) {
+            if (!newEnriched[p.sku]) newEnriched[p.sku] = [];
+            if (!newEnriched[p.sku].includes(p.barcode)) {
+              newEnriched[p.sku].push(p.barcode);
+            }
+          }
+        });
+        setEnrichedBarcodes(newEnriched);
 
         setStockLocations(locations);
       } catch (e) {
@@ -211,9 +225,11 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     const trimmed = code.trim();
     if (!trimmed) return;
 
-    // Find item by SKU or barcode
+    // Find item by SKU, barcode from order, or GTIN from pos_products
     const matched = sortedItems.find(([, item]) =>
-      item.sku === trimmed || item.barcodes.includes(trimmed)
+      item.sku === trimmed ||
+      item.barcodes.includes(trimmed) ||
+      (enrichedBarcodes[item.sku] && enrichedBarcodes[item.sku].includes(trimmed))
     );
 
     if (!matched) {
@@ -248,7 +264,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, isRecheck: false });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setBarcodeInput('');
-  }, [sortedItems]);
+  }, [sortedItems, enrichedBarcodes]);
 
   const handleConfirmQuality = async () => {
     if (!pendingConfirm) return;
