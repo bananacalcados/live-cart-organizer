@@ -59,8 +59,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
         const { data: products } = await supabase
           .from('pos_products')
           .select('sku, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
-          .in('sku', skus)
-          .gt('stock', 0);
+          .in('sku', skus);
 
         const locations: Record<string, StockLocation[]> = {};
         (products || []).forEach((p: any) => {
@@ -105,26 +104,25 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     if (!sku || loadingStock) return null;
     const locs = stockLocations[sku];
     if (!locs || locs.length === 0) {
-      return <Badge variant="destructive" className="text-[10px] gap-1"><MapPin className="h-3 w-3" />Sem estoque</Badge>;
+      return <Badge variant="destructive" className="text-[10px] gap-1"><MapPin className="h-3 w-3" />Sem cadastro</Badge>;
     }
 
-    // Check if Site has stock
+    // Show ALL stores with their stock levels
     const siteLoc = locs.find(l => l.depositName === 'Site');
     const otherLocs = locs.filter(l => l.depositName !== 'Site');
 
-    if (siteLoc && siteLoc.stock > 0) {
-      return <Badge variant="outline" className="text-[10px] gap-1 border-green-500 text-green-600"><MapPin className="h-3 w-3" />Site ({siteLoc.stock})</Badge>;
-    }
-
-    // Show where the stock actually is
     return (
       <div className="flex gap-1 flex-wrap">
+        {siteLoc && (
+          <Badge variant="outline" className={`text-[10px] gap-1 ${siteLoc.stock > 0 ? 'border-green-500 text-green-600' : 'border-red-400 text-red-500'}`}>
+            <MapPin className="h-3 w-3" />Site ({siteLoc.stock})
+          </Badge>
+        )}
         {otherLocs.map(loc => (
-          <Badge key={loc.storeId} variant="outline" className="text-[10px] gap-1 border-amber-500 text-amber-600">
+          <Badge key={loc.storeId} variant="outline" className={`text-[10px] gap-1 ${loc.stock > 0 ? 'border-amber-500 text-amber-600' : 'border-muted text-muted-foreground'}`}>
             <MapPin className="h-3 w-3" />{loc.depositName} ({loc.stock})
           </Badge>
         ))}
-        {siteLoc && <Badge variant="outline" className="text-[10px] gap-1 border-red-400 text-red-500"><MapPin className="h-3 w-3" />Site (0)</Badge>}
       </div>
     );
   };
