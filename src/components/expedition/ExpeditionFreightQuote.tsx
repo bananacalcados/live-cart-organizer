@@ -123,12 +123,14 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
         return;
       }
 
+      // Sync: find existing Tiny order (auto-synced from Shopify) and update CPF/customer data
       if (!order?.tiny_order_id) {
-        const { data: createData, error: createError } = await supabase.functions.invoke('expedition-tiny-invoice', {
-          body: { order_id: orderId, action: 'create_order' },
+        const { data: syncData, error: syncError } = await supabase.functions.invoke('expedition-tiny-invoice', {
+          body: { order_id: orderId, action: 'sync_order' },
         });
-        if (createError) throw createError;
-        if (!createData?.success) throw new Error(createData?.error || 'Erro ao criar pedido no Tiny');
+        if (syncError) throw syncError;
+        if (!syncData?.success) throw new Error(syncData?.error || 'Erro ao localizar pedido no Tiny');
+        toast.info(syncData?.message || 'Pedido sincronizado com Tiny');
       }
 
       const { data, error } = await supabase.functions.invoke('expedition-tiny-invoice', {
