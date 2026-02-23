@@ -10,7 +10,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon, MessageCircle, Clock } from 'lucide-react';
+import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon, MessageCircle, Clock, SearchCheck } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ExpeditionOrdersList } from '@/components/expedition/ExpeditionOrdersList';
@@ -44,6 +44,8 @@ export default function Expedition() {
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [openSupportCount, setOpenSupportCount] = useState(0);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyRan, setVerifyRan] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
@@ -81,9 +83,36 @@ export default function Expedition() {
     setOpenSupportCount(count || 0);
   }, []);
 
+  // Auto-verify shipped orders on load
+  const verifyShippedOrders = useCallback(async () => {
+    setIsVerifying(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('expedition-verify-shipped');
+      if (error) throw error;
+      if (data?.updated > 0) {
+        toast.success(`${data.updated} pedido(s) marcado(s) como enviado(s)!`, {
+          description: data.results?.map((r: any) => `${r.order_name} (${r.source})`).join(', '),
+        });
+        fetchOrders();
+      } else if (data?.checked > 0) {
+        toast.info(`${data.checked} pedidos verificados, nenhum envio externo encontrado.`);
+      }
+    } catch (error: any) {
+      console.error('Verify shipped error:', error);
+      toast.error(`Erro na verificação: ${error.message}`);
+    } finally {
+      setIsVerifying(false);
+    }
+  }, [fetchOrders]);
+
   useEffect(() => {
     fetchOrders();
     fetchSupportCount();
+    // Auto-verify on first load
+    if (!verifyRan) {
+      setVerifyRan(true);
+      verifyShippedOrders();
+    }
     const channel = supabase
       .channel('expedition-orders')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'expedition_orders' }, () => fetchOrders())
@@ -93,7 +122,7 @@ export default function Expedition() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => fetchSupportCount())
       .subscribe();
     return () => { supabase.removeChannel(channel); supabase.removeChannel(supportChannel); };
-  }, [fetchOrders, fetchSupportCount]);
+  }, [fetchOrders, fetchSupportCount, verifyRan, verifyShippedOrders]);
 
   const syncOrders = async () => {
     setIsSyncing(true);
@@ -163,6 +192,10 @@ export default function Expedition() {
               <NavLink to="/chat">Chat</NavLink>
               <NavLink to="/marketing">Marketing</NavLink>
             </div>
+            <Button onClick={verifyShippedOrders} disabled={isVerifying} variant="outline" size="sm" className="gap-1 md:gap-2 text-xs md:text-sm">
+              {isVerifying ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <SearchCheck className="h-3 w-3 md:h-4 md:w-4" />}
+              <span className="hidden sm:inline">Verificar Envios</span>
+            </Button>
             <Button onClick={syncOrders} disabled={isSyncing} variant="outline" size="sm" className="gap-1 md:gap-2 text-xs md:text-sm">
               {isSyncing ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <RefreshCw className="h-3 w-3 md:h-4 md:w-4" />}
               <span className="hidden sm:inline">Sincronizar</span>
