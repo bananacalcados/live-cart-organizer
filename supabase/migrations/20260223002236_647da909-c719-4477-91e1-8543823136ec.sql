@@ -1,0 +1,1 @@
+ALTER TABLE public.chat_contacts ADD COLUMN tags text[] DEFAULT '{}';

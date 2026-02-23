@@ -9,7 +9,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { EmojiPickerButton } from "../EmojiPickerButton";
 import { Message, Conversation } from "./ChatTypes";
-import { useCustomerStore } from "@/stores/customerStore";
+import { supabase } from "@/integrations/supabase/client";
 import { uploadMediaToStorage } from "../MediaAttachmentPicker";
 import { toast } from "sonner";
 import {
@@ -61,11 +61,28 @@ export function ChatView({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
-  const { addTagToCustomer, removeTagFromCustomer, customers } = useCustomerStore();
+  const [contactTags, setContactTags] = useState<string[]>([]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Load tags from chat_contacts when conversation changes
+  useEffect(() => {
+    if (!conversation?.phone || conversation.isGroup) {
+      setContactTags([]);
+      return;
+    }
+    const loadTags = async () => {
+      const { data } = await supabase
+        .from('chat_contacts')
+        .select('tags')
+        .eq('phone', conversation.phone)
+        .maybeSingle();
+      setContactTags((data as any)?.tags || []);
+    };
+    loadTags();
+  }, [conversation?.phone]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -87,22 +104,31 @@ export function ChatView({
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  const customer = conversation?.customerId 
-    ? customers.find(c => c.id === conversation.customerId)
-    : null;
-  const customerTags = customer?.tags || [];
+  const customerTags = contactTags;
 
-  const handleAddTag = (tag: string) => {
-    if (conversation?.customerId && tag.trim()) {
-      addTagToCustomer(conversation.customerId, tag.trim());
-      setNewTag("");
-    }
+  const handleAddTag = async (tag: string) => {
+    if (!conversation?.phone || !tag.trim()) return;
+    const trimmed = tag.trim();
+    if (customerTags.includes(trimmed)) return;
+    const newTags = [...customerTags, trimmed];
+    setContactTags(newTags);
+    setNewTag("");
+    await supabase
+      .from('chat_contacts')
+      .upsert(
+        { phone: conversation.phone, tags: newTags },
+        { onConflict: 'phone', ignoreDuplicates: false }
+      );
   };
 
-  const handleRemoveTag = (tag: string) => {
-    if (conversation?.customerId) {
-      removeTagFromCustomer(conversation.customerId, tag);
-    }
+  const handleRemoveTag = async (tag: string) => {
+    if (!conversation?.phone) return;
+    const newTags = customerTags.filter(t => t !== tag);
+    setContactTags(newTags);
+    await supabase
+      .from('chat_contacts')
+      .update({ tags: newTags })
+      .eq('phone', conversation.phone);
   };
 
   const startRecording = useCallback(async () => {

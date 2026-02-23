@@ -789,6 +789,7 @@ export type Database = {
           id: string
           phone: string
           profile_pic_url: string | null
+          tags: string[] | null
           updated_at: string
         }
         Insert: {
@@ -798,6 +799,7 @@ export type Database = {
           id?: string
           phone: string
           profile_pic_url?: string | null
+          tags?: string[] | null
           updated_at?: string
         }
         Update: {
@@ -807,6 +809,7 @@ export type Database = {
           id?: string
           phone?: string
           profile_pic_url?: string | null
+          tags?: string[] | null
           updated_at?: string
         }
         Relationships: []
