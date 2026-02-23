@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Truck, Receipt, Tag, CheckCircle2, Download, RefreshCw, Printer } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, Truck, Receipt, Tag, CheckCircle2, Download, RefreshCw, Printer, Pencil, RotateCcw } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -16,6 +17,8 @@ interface Props {
 export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefresh }: Props) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [quotesMap, setQuotesMap] = useState<Record<string, any[]>>({});
+  const [editingCpf, setEditingCpf] = useState<string | null>(null);
+  const [cpfValue, setCpfValue] = useState('');
 
   const filtered = orders.filter(o => {
     const term = searchTerm.toLowerCase();
@@ -112,6 +115,25 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
     }
   };
 
+  const handleSaveCpf = async (orderId: string) => {
+    const cleaned = cpfValue.replace(/\D/g, '');
+    if (cleaned.length < 11) {
+      toast.error('CPF inválido. Deve ter pelo menos 11 dígitos.');
+      return;
+    }
+    try {
+      await supabase
+        .from('expedition_orders')
+        .update({ customer_cpf: cleaned })
+        .eq('id', orderId);
+      toast.success('CPF atualizado!');
+      setEditingCpf(null);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    }
+  };
+
   const handleEmitInvoice = async (orderId: string) => {
     setLoadingId(orderId);
     try {
@@ -142,6 +164,52 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
         onRefresh();
       } else {
         throw new Error(data?.error || 'Erro na emissão');
+      }
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  const handleReemitInvoice = async (orderId: string) => {
+    setLoadingId(orderId);
+    try {
+      // First sync customer data on Tiny
+      const { data: syncData, error: syncError } = await supabase.functions.invoke('expedition-tiny-invoice', {
+        body: { order_id: orderId, action: 'sync_order' },
+      });
+      if (syncError) throw syncError;
+      if (!syncData?.success) throw new Error(syncData?.error || 'Erro ao sincronizar com Tiny');
+      toast.info('Dados do cliente atualizados no Tiny');
+
+      // Reset invoice data in our DB
+      await supabase
+        .from('expedition_orders')
+        .update({
+          tiny_invoice_id: null,
+          invoice_number: null,
+          invoice_series: null,
+          invoice_key: null,
+          invoice_pdf_url: null,
+          invoice_xml_url: null,
+          internal_barcode: null,
+          freight_label_url: null,
+          freight_tracking_code: null,
+          expedition_status: 'freight_quoted',
+        })
+        .eq('id', orderId);
+
+      // Re-emit
+      const { data, error } = await supabase.functions.invoke('expedition-tiny-invoice', {
+        body: { order_id: orderId, action: 'emit_invoice' },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success('NF-e re-emitida com sucesso!');
+        onRefresh();
+      } else {
+        throw new Error(data?.error || 'Erro na re-emissão');
       }
     } catch (error: any) {
       toast.error(`Erro: ${error.message}`);
@@ -359,6 +427,37 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
                 {/* Invoice section */}
                 {activeTab === 'invoice' && (
                   <div className="space-y-2">
+                    {/* CPF display/edit */}
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">CPF:</span>
+                      {editingCpf === order.id ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={cpfValue}
+                            onChange={(e) => setCpfValue(e.target.value)}
+                            placeholder="000.000.000-00"
+                            className="h-7 w-40 text-sm"
+                          />
+                          <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => handleSaveCpf(order.id)}>Salvar</Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingCpf(null)}>Cancelar</Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className={order.customer_cpf ? 'font-mono text-foreground' : 'text-destructive font-medium'}>
+                            {order.customer_cpf || 'Não informado'}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => { setEditingCpf(order.id); setCpfValue(order.customer_cpf || ''); }}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
                     {order.invoice_number ? (
                       <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800">
                         <div className="flex items-center justify-between">
@@ -376,6 +475,16 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
                                 </a>
                               </Button>
                             )}
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="gap-1"
+                              onClick={() => handleReemitInvoice(order.id)}
+                              disabled={loadingId === order.id}
+                            >
+                              {loadingId === order.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                              Re-emitir NF-e
+                            </Button>
                           </div>
                         </div>
                       </div>
