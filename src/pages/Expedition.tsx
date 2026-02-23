@@ -46,6 +46,7 @@ export default function Expedition() {
   const [openSupportCount, setOpenSupportCount] = useState(0);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyRan, setVerifyRan] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
@@ -158,6 +159,31 @@ export default function Expedition() {
     }
   };
 
+  const refreshOrders = async () => {
+    setIsRefreshing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('expedition-refresh-orders');
+      if (error) throw error;
+      if (data?.success) {
+        if (data.removed > 0) {
+          toast.success(`${data.removed} pedido(s) cancelado(s) removido(s)!`, {
+            description: `${data.checked} pedidos verificados no total.`,
+          });
+        } else {
+          toast.info(`${data.checked} pedidos verificados, nenhum cancelado encontrado.`);
+        }
+        fetchOrders();
+      } else {
+        throw new Error(data?.error || 'Refresh failed');
+      }
+    } catch (error: any) {
+      console.error('Refresh error:', error);
+      toast.error(`Erro ao atualizar: ${error.message}`);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Auto-navigate to next step
   const goToNextStep = useCallback(() => {
     const currentIndex = STEPS.findIndex(s => s.id === activeStep);
@@ -207,6 +233,10 @@ export default function Expedition() {
               <NavLink to="/chat">Chat</NavLink>
               <NavLink to="/marketing">Marketing</NavLink>
             </div>
+            <Button onClick={refreshOrders} disabled={isRefreshing} variant="outline" size="sm" className="gap-1 md:gap-2 text-xs md:text-sm" title="Verificar e remover pedidos cancelados">
+              {isRefreshing ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <RotateCcw className="h-3 w-3 md:h-4 md:w-4" />}
+              <span className="hidden sm:inline">Atualizar</span>
+            </Button>
             <Button onClick={verifyShippedOrders} disabled={isVerifying} variant="outline" size="sm" className="gap-1 md:gap-2 text-xs md:text-sm">
               {isVerifying ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <SearchCheck className="h-3 w-3 md:h-4 md:w-4" />}
               <span className="hidden sm:inline">Verificar Envios</span>
