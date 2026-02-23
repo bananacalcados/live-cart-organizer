@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CheckCircle2, XCircle, ClipboardList, Printer } from 'lucide-react';
+import { CheckCircle2, XCircle, Printer, MapPin, Loader2 } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -14,8 +14,18 @@ interface Props {
   onRefresh: () => void;
 }
 
+interface StockLocation {
+  storeName: string;
+  depositName: string;
+  storeId: string;
+  stock: number;
+}
+
 export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefresh }: Props) {
-  // Aggregate all items across approved orders
+  const [checkedItems, setCheckedItems] = useState<Record<string, number>>({});
+  const [stockLocations, setStockLocations] = useState<Record<string, StockLocation[]>>({});
+  const [loadingStock, setLoadingStock] = useState(false);
+
   const allItems = new Map<string, { name: string; variant: string; sku: string; totalQty: number; orders: string[] }>();
 
   const relevantOrders = orders.filter(o => {
@@ -28,13 +38,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     (order.expedition_order_items || []).forEach((item: any) => {
       const key = item.sku || `${item.product_name}-${item.variant_name || ''}`;
       if (!allItems.has(key)) {
-        allItems.set(key, {
-          name: item.product_name,
-          variant: item.variant_name || '',
-          sku: item.sku || '',
-          totalQty: 0,
-          orders: [],
-        });
+        allItems.set(key, { name: item.product_name, variant: item.variant_name || '', sku: item.sku || '', totalQty: 0, orders: [] });
       }
       const entry = allItems.get(key)!;
       entry.totalQty += item.quantity;
@@ -44,7 +48,37 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
 
   const sortedItems = Array.from(allItems.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
 
-  const [checkedItems, setCheckedItems] = useState<Record<string, number>>({});
+  // Load stock locations for all SKUs
+  useEffect(() => {
+    const skus = sortedItems.map(([, item]) => item.sku).filter(Boolean);
+    if (skus.length === 0) return;
+
+    const fetchStockLocations = async () => {
+      setLoadingStock(true);
+      try {
+        const { data: products } = await supabase
+          .from('pos_products')
+          .select('sku, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
+          .in('sku', skus)
+          .gt('stock', 0);
+
+        const locations: Record<string, StockLocation[]> = {};
+        (products || []).forEach((p: any) => {
+          const storeName = p.pos_stores?.name || 'Desconhecida';
+          const depositName = p.pos_stores?.tiny_deposit_name || '';
+          if (!locations[p.sku]) locations[p.sku] = [];
+          locations[p.sku].push({ storeName, depositName, storeId: p.store_id, stock: p.stock });
+        });
+        setStockLocations(locations);
+      } catch (e) {
+        console.error('Error fetching stock locations:', e);
+      } finally {
+        setLoadingStock(false);
+      }
+    };
+
+    fetchStockLocations();
+  }, [orders, searchTerm]);
 
   const handleCheck = (key: string, qty: number) => {
     setCheckedItems(prev => ({ ...prev, [key]: qty }));
@@ -67,17 +101,48 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     }
   };
 
+  const getStockBadge = (sku: string) => {
+    if (!sku || loadingStock) return null;
+    const locs = stockLocations[sku];
+    if (!locs || locs.length === 0) {
+      return <Badge variant="destructive" className="text-[10px] gap-1"><MapPin className="h-3 w-3" />Sem estoque</Badge>;
+    }
+
+    // Check if Site has stock
+    const siteLoc = locs.find(l => l.depositName === 'Site');
+    const otherLocs = locs.filter(l => l.depositName !== 'Site');
+
+    if (siteLoc && siteLoc.stock > 0) {
+      return <Badge variant="outline" className="text-[10px] gap-1 border-green-500 text-green-600"><MapPin className="h-3 w-3" />Site ({siteLoc.stock})</Badge>;
+    }
+
+    // Show where the stock actually is
+    return (
+      <div className="flex gap-1 flex-wrap">
+        {otherLocs.map(loc => (
+          <Badge key={loc.storeId} variant="outline" className="text-[10px] gap-1 border-amber-500 text-amber-600">
+            <MapPin className="h-3 w-3" />{loc.depositName} ({loc.stock})
+          </Badge>
+        ))}
+        {siteLoc && <Badge variant="outline" className="text-[10px] gap-1 border-red-400 text-red-500"><MapPin className="h-3 w-3" />Site (0)</Badge>}
+      </div>
+    );
+  };
+
   const handlePrint = () => {
-    const rows = sortedItems.map(([, item], i) => 
-      `<tr>
+    const rows = sortedItems.map(([, item], i) => {
+      const locs = stockLocations[item.sku];
+      const locText = locs?.map(l => `${l.depositName}(${l.stock})`).join(', ') || '—';
+      return `<tr>
         <td style="text-align:center;font-weight:bold;color:#333;">${i + 1}</td>
         <td style="font-weight:600;">${item.name}${item.variant ? ` <span style="color:#e67e22;font-weight:500;">(${item.variant})</span>` : ''}</td>
         <td style="font-family:monospace;color:#666;font-size:12px;">${item.sku || '—'}</td>
+        <td style="font-size:11px;color:#555;">${locText}</td>
         <td style="text-align:center;font-size:18px;font-weight:bold;color:#1a1a1a;background:#fff8e1;border-radius:4px;">${item.totalQty}</td>
         <td style="text-align:center;width:60px;">☐</td>
-      </tr>`
-    ).join('');
-    
+      </tr>`;
+    }).join('');
+
     const w = window.open('', '_blank');
     if (w) {
       w.document.write(`<html><head><title>Lista de Separação</title>
@@ -92,17 +157,16 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   thead th { background: #1a1a1a; color: #f5c518; padding: 10px 12px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
   tbody td { padding: 10px 12px; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
   tbody tr:nth-child(even) { background: #fafafa; }
-  tbody tr:hover { background: #fff8e1; }
   .footer { margin-top: 20px; padding: 12px 0; border-top: 2px solid #1a1a1a; display: flex; justify-content: space-between; font-size: 13px; color: #666; }
   .footer .total { font-size: 16px; font-weight: bold; color: #1a1a1a; }
-  @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } tbody tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
 <div class="header">
   <div><h1>📦 LISTA DE SEPARAÇÃO</h1></div>
   <div class="meta">Data: ${new Date().toLocaleDateString('pt-BR')}<br><strong>${sortedItems.length} produtos • ${totalProducts} unidades</strong></div>
 </div>
 <table>
-  <thead><tr><th style="width:40px;text-align:center">#</th><th>Produto</th><th style="width:120px">SKU</th><th style="width:60px;text-align:center">Qtd</th><th style="width:60px;text-align:center">✓</th></tr></thead>
+  <thead><tr><th style="width:40px;text-align:center">#</th><th>Produto</th><th style="width:100px">SKU</th><th style="width:120px">Estoque</th><th style="width:50px;text-align:center">Qtd</th><th style="width:50px;text-align:center">✓</th></tr></thead>
   <tbody>${rows}</tbody>
 </table>
 <div class="footer">
@@ -125,6 +189,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
           <p className="text-sm text-muted-foreground">
             {sortedItems.length} produtos únicos • {totalProducts} unidades totais
             {showChecking && ` • ${totalChecked}/${totalProducts} conferidos`}
+            {loadingStock && ' • Carregando estoques...'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -153,9 +218,10 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
           <Card key={key}>
             <CardContent className="p-3 flex items-center justify-between">
               <div className="flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-foreground">{item.name}</span>
                   {item.variant && <Badge variant="outline" className="text-xs">{item.variant}</Badge>}
+                  {getStockBadge(item.sku)}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   SKU: {item.sku || 'N/A'} • Pedidos: {item.orders.join(', ')}
