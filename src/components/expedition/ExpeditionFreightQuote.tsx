@@ -298,6 +298,12 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
       }
       if (data?.success && data?.label_url) {
         toast.success(data?.message || 'Etiqueta oficial obtida com sucesso!');
+        window.open(data.label_url, '_blank');
+        onRefresh();
+      } else if (data?.label_url) {
+        // Label exists but success=false (e.g. tracking pending) — still open it
+        window.open(data.label_url, '_blank');
+        toast.info(data?.message || 'Etiqueta obtida, mas rastreio ainda pendente.');
         onRefresh();
       } else {
         toast.info(data?.message || data?.error || 'Etiqueta oficial ainda não disponível.');
@@ -592,24 +598,16 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
 
                         {/* Print buttons */}
                         <div className="flex flex-wrap gap-2">
-                          {order.freight_label_url ? (
-                            <Button size="sm" variant="outline" className="gap-2" asChild>
-                              <a href={order.freight_label_url} target="_blank" rel="noopener noreferrer">
-                                <Download className="h-4 w-4" /> Imprimir Etiqueta Oficial de Envio
-                              </a>
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={() => handleFetchOfficialLabel(order.id)}
-                              disabled={loadingId === order.id}
-                            >
-                              {loadingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-                              Buscar Etiqueta Oficial (Tiny/Frenet)
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => handleFetchOfficialLabel(order.id)}
+                            disabled={loadingId === order.id}
+                          >
+                            {loadingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                            Imprimir Etiqueta Oficial de Envio
+                          </Button>
                           <Button
                             size="sm"
                             variant="secondary"
