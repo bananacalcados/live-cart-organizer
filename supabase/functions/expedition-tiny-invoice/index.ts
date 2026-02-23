@@ -18,7 +18,7 @@ async function safeJson(response: Response, label: string) {
 
 async function searchTinyOrderByNumber(token: string, orderNumber: string, customerName?: string): Promise<string | null> {
   // Helper to filter valid (non-canceled) orders and optionally match customer name
-  const findValidOrder = (pedidos: any[]): string | null => {
+  const findValidOrder = (pedidos: any[], requireNameMatch = false): string | null => {
     for (const entry of pedidos) {
       const pedido = entry?.pedido || entry;
       const situacao = (pedido.situacao || '').toLowerCase();
@@ -28,48 +28,77 @@ async function searchTinyOrderByNumber(token: string, orderNumber: string, custo
         continue;
       }
       // If we have a customer name, try to match
-      if (customerName) {
-        const tinyCliente = (pedido.nome_cliente || pedido.cliente?.nome || '').toLowerCase();
+      if (customerName && requireNameMatch) {
+        const tinyCliente = (pedido.nome || pedido.nome_cliente || pedido.cliente?.nome || '').toLowerCase();
         const searchName = customerName.toLowerCase().split(' ')[0]; // first name match
         if (tinyCliente && !tinyCliente.includes(searchName)) {
           console.log(`Skipping Tiny order id=${pedido.id}: customer "${tinyCliente}" doesn't match "${customerName}"`);
           continue;
         }
       }
-      console.log(`Found valid Tiny order: id=${pedido.id}, numero=${pedido.numero}, situacao=${situacao}`);
+      console.log(`Found valid Tiny order: id=${pedido.id}, numero=${pedido.numero}, situacao=${situacao}, nome=${pedido.nome || pedido.nome_cliente || ''}`);
       return String(pedido.id);
     }
     return null;
   };
 
-  // 1) Search by numero_ecommerce first (most reliable for Shopify orders)
-  const ecomResponse = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `token=${token}&formato=json&numeroEcommerce=${encodeURIComponent(orderNumber)}`,
-  });
-  const ecomData = await safeJson(ecomResponse, 'Pesquisa pedido Tiny (ecommerce)');
-  console.log(`Search Tiny ecommerce "${orderNumber}":`, JSON.stringify(ecomData));
+  const cleanNumber = orderNumber.replace('#', '');
 
-  if (ecomData.retorno?.status === 'OK' || ecomData.retorno?.status === 'Processado') {
-    const pedidos = ecomData.retorno?.pedidos || [];
-    const found = findValidOrder(pedidos);
-    if (found) return found;
+  // 1) Search by numero_ecommerce first (most reliable for Shopify-synced orders)
+  try {
+    const ecomResponse = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `token=${token}&formato=json&numeroEcommerce=${encodeURIComponent(cleanNumber)}`,
+    });
+    const ecomData = await safeJson(ecomResponse, 'Pesquisa pedido Tiny (ecommerce)');
+    console.log(`Search Tiny ecommerce "${cleanNumber}":`, JSON.stringify(ecomData).substring(0, 500));
+
+    if (ecomData.retorno?.status === 'OK' || ecomData.retorno?.status === 'Processado') {
+      const pedidos = ecomData.retorno?.pedidos || [];
+      const found = findValidOrder(pedidos, true);
+      if (found) return found;
+    }
+  } catch (e) {
+    console.log('ecommerce search failed:', e);
   }
 
-  // 2) Search by numero
-  const response = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `token=${token}&formato=json&numero=${encodeURIComponent(orderNumber)}`,
-  });
-  const data = await safeJson(response, 'Pesquisa pedido Tiny');
-  console.log(`Search Tiny for "${orderNumber}":`, JSON.stringify(data));
+  // 2) Search by customer name (most reliable for manually-created orders / vendas)
+  if (customerName) {
+    try {
+      const nameSearch = customerName.split(' ')[0]; // first name
+      console.log(`Searching Tiny by customer name: "${nameSearch}"`);
+      const nameResponse = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `token=${token}&formato=json&pesquisa=${encodeURIComponent(nameSearch)}&situacao=aberto`,
+      });
+      const nameData = await safeJson(nameResponse, 'Pesquisa pedido Tiny (nome)');
+      console.log(`Search Tiny by name "${nameSearch}" (aberto):`, JSON.stringify(nameData).substring(0, 500));
 
-  if (data.retorno?.status === 'OK' || data.retorno?.status === 'Processado') {
-    const pedidos = data.retorno?.pedidos || [];
-    const found = findValidOrder(pedidos);
-    if (found) return found;
+      if (nameData.retorno?.status === 'OK' || nameData.retorno?.status === 'Processado') {
+        const pedidos = nameData.retorno?.pedidos || [];
+        const found = findValidOrder(pedidos, true);
+        if (found) return found;
+      }
+
+      // Also try without status filter
+      const nameResponse2 = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `token=${token}&formato=json&pesquisa=${encodeURIComponent(nameSearch)}`,
+      });
+      const nameData2 = await safeJson(nameResponse2, 'Pesquisa pedido Tiny (nome, todos)');
+      console.log(`Search Tiny by name "${nameSearch}" (todos):`, JSON.stringify(nameData2).substring(0, 500));
+
+      if (nameData2.retorno?.status === 'OK' || nameData2.retorno?.status === 'Processado') {
+        const pedidos = nameData2.retorno?.pedidos || [];
+        const found = findValidOrder(pedidos, true);
+        if (found) return found;
+      }
+    } catch (e) {
+      console.log('name search failed:', e);
+    }
   }
 
   return null;
