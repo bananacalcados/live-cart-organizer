@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -346,6 +347,42 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
   onAdvance: (id: string, status: string) => void;
   onRefresh: () => void;
 }) {
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isMarking, setIsMarking] = useState(false);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      // Delete items first, then the order
+      await supabase.from('expedition_order_items').delete().eq('expedition_order_id', order.id);
+      await supabase.from('expedition_freight_quotes').delete().eq('expedition_order_id', order.id);
+      const { error } = await supabase.from('expedition_orders').delete().eq('id', order.id);
+      if (error) throw error;
+      toast.success(`Pedido ${order.shopify_order_name} excluído!`);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro ao excluir: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleMarkDispatched = async () => {
+    setIsMarking(true);
+    try {
+      const { error } = await supabase
+        .from('expedition_orders')
+        .update({ expedition_status: 'dispatched', dispatch_verified: true, dispatch_verified_at: new Date().toISOString() })
+        .eq('id', order.id);
+      if (error) throw error;
+      toast.success(`Pedido ${order.shopify_order_name} marcado como despachado!`);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    } finally {
+      setIsMarking(false);
+    }
+  };
   const statusColors: Record<string, string> = {
     pending_sync: 'bg-muted text-muted-foreground',
     approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -474,16 +511,53 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
               </div>
             )}
 
-            {/* Action button */}
-            {nextStep && (
-              <Button
-                onClick={() => onAdvance(order.id, order.expedition_status)}
-                className="gap-2 w-full"
-              >
-                <ArrowRight className="h-4 w-4" />
-                Avançar para: {nextStep.label}
-              </Button>
-            )}
+            {/* Action buttons */}
+            <div className="flex flex-col gap-2">
+              {nextStep && (
+                <Button
+                  onClick={() => onAdvance(order.id, order.expedition_status)}
+                  className="gap-2 w-full"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  Avançar para: {nextStep.label}
+                </Button>
+              )}
+
+              {order.expedition_status !== 'dispatched' && (
+                <Button
+                  onClick={handleMarkDispatched}
+                  disabled={isMarking}
+                  variant="outline"
+                  className="gap-2 w-full border-green-500/50 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20"
+                >
+                  <CheckCheck className="h-4 w-4" />
+                  {isMarking ? 'Marcando...' : 'Marcar como Despachado'}
+                </Button>
+              )}
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="gap-2 w-full border-destructive/50 text-destructive hover:bg-destructive/10">
+                    <Trash2 className="h-4 w-4" />
+                    Excluir Pedido
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir pedido {order.shopify_order_name}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Essa ação é irreversível. O pedido e todos os seus itens serão removidos da expedição permanentemente.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      {isDeleting ? 'Excluindo...' : 'Excluir'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
 
             {order.expedition_status === 'dispatched' && (
               <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/10 text-center">
