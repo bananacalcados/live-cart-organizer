@@ -24,6 +24,25 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught:', error, errorInfo);
+
+    // Auto-reload on chunk/module import failures (stale cache after deploy)
+    const msg = error?.message || '';
+    if (
+      msg.includes('Importing a module script failed') ||
+      msg.includes('Failed to fetch dynamically imported module') ||
+      msg.includes('Loading chunk') ||
+      msg.includes('Loading CSS chunk')
+    ) {
+      const key = 'eb_auto_reload';
+      const last = sessionStorage.getItem(key);
+      const now = Date.now();
+      // Only auto-reload once per 30s to avoid infinite loops
+      if (!last || now - Number(last) > 30000) {
+        sessionStorage.setItem(key, String(now));
+        window.location.reload();
+        return;
+      }
+    }
   }
 
   render() {
