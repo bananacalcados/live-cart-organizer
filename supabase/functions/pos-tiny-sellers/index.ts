@@ -6,6 +6,86 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const TINY_V3_BASE = 'https://api.tiny.com.br/public-api/v3';
+
+async function getTinyV3Token(supabase: any): Promise<string | null> {
+  const { data } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', 'tiny_app_token')
+    .single();
+
+  if (!data?.value?.access_token) return null;
+
+  const tokenData = data.value as any;
+
+  // Check if token needs refresh (expires_in is typically 300s = 5min)
+  const connectedAt = new Date(tokenData.connected_at || tokenData.refreshed_at || 0).getTime();
+  const expiresIn = (tokenData.expires_in || 300) * 1000;
+  const now = Date.now();
+
+  if (now - connectedAt > expiresIn - 30000) {
+    // Token expired or about to expire, refresh it
+    console.log('Tiny v3 token expired, refreshing...');
+    try {
+      const refreshRes = await fetch('https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: tokenData.refresh_token,
+          client_id: Deno.env.get('TINY_APP_CLIENT_ID')!,
+          client_secret: Deno.env.get('TINY_APP_CLIENT_SECRET')!,
+        }).toString(),
+      });
+
+      if (!refreshRes.ok) {
+        console.error('Token refresh failed:', await refreshRes.text());
+        return null;
+      }
+
+      const newTokens = await refreshRes.json();
+      await supabase.from('app_settings').upsert({
+        key: 'tiny_app_token',
+        value: {
+          access_token: newTokens.access_token,
+          refresh_token: newTokens.refresh_token || tokenData.refresh_token,
+          id_token: newTokens.id_token,
+          expires_in: newTokens.expires_in,
+          token_type: newTokens.token_type,
+          refreshed_at: new Date().toISOString(),
+          connected_at: tokenData.connected_at,
+        },
+      }, { onConflict: 'key' });
+
+      console.log('Tiny v3 token refreshed successfully');
+      return newTokens.access_token;
+    } catch (e) {
+      console.error('Token refresh error:', e);
+      return null;
+    }
+  }
+
+  return tokenData.access_token;
+}
+
+async function tinyV3Get(token: string, path: string, params?: Record<string, string>): Promise<any> {
+  const url = new URL(`${TINY_V3_BASE}${path}`);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      url.searchParams.set(k, v);
+    }
+  }
+  const resp = await fetch(url.toString(), {
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+  });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Tiny v3 ${path} failed (${resp.status}): ${errText.substring(0, 300)}`);
+  }
+  return resp.json();
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -20,34 +100,54 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { data: store } = await supabase
-      .from('pos_stores')
-      .select('tiny_token')
-      .eq('id', store_id)
-      .single();
+    // Try API v3 first
+    const v3Token = await getTinyV3Token(supabase);
+    let sellers: Array<{ tiny_id: string; name: string }> = [];
 
-    if (!store?.tiny_token) throw new Error('Store token not configured');
+    if (v3Token) {
+      try {
+        console.log('Using Tiny API v3 for sellers...');
+        const data = await tinyV3Get(v3Token, '/vendedores');
+        const items = data.itens || data.items || data.vendedores || data || [];
+        
+        sellers = (Array.isArray(items) ? items : []).map((v: any) => ({
+          tiny_id: String(v.id || ''),
+          name: v.nome || v.name || 'Sem nome',
+        })).filter((s: any) => s.tiny_id);
+        
+        console.log(`[v3] Found ${sellers.length} sellers`);
+      } catch (e) {
+        console.warn('Tiny v3 sellers failed, falling back to v2:', e.message);
+      }
+    }
 
-    // Fetch sellers from Tiny
-    const resp = await fetch('https://api.tiny.com.br/api2/vendedores.pesquisa.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${store.tiny_token}&formato=json&pesquisa=`,
-    });
+    // Fallback to API v2 if v3 failed or unavailable
+    if (sellers.length === 0) {
+      const { data: store } = await supabase
+        .from('pos_stores')
+        .select('tiny_token')
+        .eq('id', store_id)
+        .single();
 
-    const data = await resp.json();
-    const rawSellers = data.retorno?.vendedores || [];
-
-    const sellers = rawSellers.map((item: any) => {
-      const v = item.vendedor || item;
-      return {
-        tiny_id: String(v.id || ''),
-        name: v.nome || 'Sem nome',
-        situacao: v.situacao || 'A',
-      };
-    }).filter((s: any) => s.situacao === 'A' || s.situacao === 'Ativo');
-
-    console.log(`Found ${sellers.length} active sellers from Tiny`);
+      if (store?.tiny_token) {
+        console.log('Using Tiny API v2 for sellers (fallback)...');
+        const resp = await fetch('https://api.tiny.com.br/api2/vendedores.pesquisa.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${store.tiny_token}&formato=json&pesquisa=`,
+        });
+        const data = await resp.json();
+        const rawSellers = data.retorno?.vendedores || [];
+        sellers = rawSellers.map((item: any) => {
+          const v = item.vendedor || item;
+          return { tiny_id: String(v.id || ''), name: v.nome || 'Sem nome' };
+        }).filter((s: any) => {
+          const situacao = (s as any).situacao || 'A';
+          return situacao === 'A' || situacao === 'Ativo';
+        });
+        console.log(`[v2] Found ${sellers.length} active sellers`);
+      }
+    }
 
     // Sync sellers to pos_sellers table
     for (const seller of sellers) {
