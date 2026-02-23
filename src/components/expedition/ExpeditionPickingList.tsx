@@ -29,6 +29,8 @@ interface PendingConfirm {
   variant: string;
   sku: string;
   itemId: string;
+  orderName: string;
+  tinyOrderId: string | null;
   isRecheck: boolean;
   isManualOverride: boolean;
 }
@@ -60,7 +62,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     pickedQty: number; // from DB pick_verified items
     orders: string[];
     barcodes: string[];
-    lineItems: Array<{ id: string; orderId: string; orderName: string; quantity: number; pickedQty: number; pickVerified: boolean }>;
+    lineItems: Array<{ id: string; orderId: string; orderName: string; tinyOrderId: string | null; quantity: number; pickedQty: number; pickVerified: boolean }>;
   }
 
   const allItems = new Map<string, ItemEntry>();
@@ -80,12 +82,13 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       const entry = allItems.get(key)!;
       entry.totalQty += item.quantity;
       entry.pickedQty += (item.picked_quantity || 0);
-      entry.orders.push(order.shopify_order_name);
+      entry.orders.push(order.shopify_order_name || order.tiny_order_id || '');
       if (item.barcode && !entry.barcodes.includes(item.barcode)) entry.barcodes.push(item.barcode);
       entry.lineItems.push({
         id: item.id,
         orderId: order.id,
         orderName: order.shopify_order_name,
+        tinyOrderId: order.tiny_order_id || null,
         quantity: item.quantity,
         pickedQty: item.picked_quantity || 0,
         pickVerified: !!item.pick_verified,
@@ -311,7 +314,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       const lastCheckedLine = item.lineItems.find(li => li.pickedQty > 0);
       if (lastCheckedLine) {
         toast.info(`${item.name} já conferido (${item.pickedQty}/${item.totalQty}). Re-verificando...`);
-        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, isRecheck: true, isManualOverride: false });
+        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, orderName: lastCheckedLine.orderName, tinyOrderId: lastCheckedLine.tinyOrderId, isRecheck: true, isManualOverride: false });
         setQualityChecks({ feet_correct: false, no_defects: false });
         setBarcodeInput('');
         return;
@@ -323,7 +326,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     }
 
     // Show quality confirmation
-    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, isRecheck: false, isManualOverride: false });
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, orderName: pendingLine.orderName, tinyOrderId: pendingLine.tinyOrderId, isRecheck: false, isManualOverride: false });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setBarcodeInput('');
   }, [sortedItems, enrichedBarcodes, gtinToKeyMap]);
@@ -408,7 +411,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     if (!pendingLine) {
       const lastCheckedLine = item.lineItems.find(li => li.pickedQty > 0);
       if (lastCheckedLine) {
-        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, isRecheck: true, isManualOverride: true });
+        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, orderName: lastCheckedLine.orderName, tinyOrderId: lastCheckedLine.tinyOrderId, isRecheck: true, isManualOverride: true });
         setQualityChecks({ feet_correct: false, no_defects: false });
         return;
       }
@@ -416,7 +419,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       return;
     }
 
-    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, isRecheck: false, isManualOverride: true });
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, orderName: pendingLine.orderName, tinyOrderId: pendingLine.tinyOrderId, isRecheck: false, isManualOverride: true });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setShowProductSearch(false);
     setProductSearchQuery('');
@@ -715,6 +718,9 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
                   <p className="font-medium text-foreground">{pendingConfirm.name}</p>
                   {pendingConfirm.variant && <p className="text-sm text-muted-foreground">{pendingConfirm.variant}</p>}
                   <p className="text-xs text-muted-foreground font-mono">SKU: {pendingConfirm.sku}</p>
+                  <p className="text-xs font-semibold text-primary mt-1">
+                    Pedido: {pendingConfirm.orderName}{pendingConfirm.tinyOrderId ? ` / Tiny: ${pendingConfirm.tinyOrderId}` : ''}
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -814,7 +820,11 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
                     {getStockBadge(item.sku)}
                   </div>
                   <p className="text-[10px] md:text-xs text-muted-foreground truncate">
-                    SKU: {getDisplaySku(key, item.sku)} • {item.orders.join(', ')}
+                    SKU: {getDisplaySku(key, item.sku)} • Pedidos: {item.lineItems.map(li => {
+                      const parts = [li.orderName];
+                      if (li.tinyOrderId) parts.push(`Tiny:${li.tinyOrderId}`);
+                      return parts.join('/');
+                    }).join(', ')}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 self-end sm:self-auto">
