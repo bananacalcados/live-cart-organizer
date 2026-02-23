@@ -97,16 +97,33 @@ serve(async (req) => {
 
         // Extract CPF from note_attributes (sent by our system) or from note text
         let customerCpf: string | null = null;
+        // 1) From note_attributes (structured)
         if (order.note_attributes && Array.isArray(order.note_attributes)) {
           const cpfAttr = order.note_attributes.find((a: any) => {
-            const name = a.name?.toLowerCase() || '';
+            const name = (a.name || '').toLowerCase();
             return name === 'cpf' || name.includes('cpf_cnpj') || name.includes('cpf');
           });
-          if (cpfAttr?.value) customerCpf = cpfAttr.value.replace(/\D/g, '');
+          if (cpfAttr?.value) {
+            const digits = cpfAttr.value.replace(/\D/g, '');
+            if (digits.length >= 11) customerCpf = digits;
+          }
         }
+        // 2) From note text (multiple patterns)
         if (!customerCpf && order.note) {
-          const cpfMatch = order.note.match(/(?:CPF|cpf_cnpj)[:\s]*([\d.\-\/]+)/i);
-          if (cpfMatch) customerCpf = cpfMatch[1].replace(/\D/g, '');
+          const patterns = [
+            /CPF[:\s]+([\d.\-\/]+)/i,
+            /cpf_cnpj[:\s]+([\d.\-\/]+)/i,
+            /\|\s*CPF[:\s]+([\d.\-\/]+)/i,
+            /\bCPF\b[^0-9]*([\d]{3}\.?[\d]{3}\.?[\d]{3}-?[\d]{2})/i,
+            /\bCPF\b[^0-9]*([\d]{11,14})/i,
+          ];
+          for (const pat of patterns) {
+            const m = order.note.match(pat);
+            if (m) {
+              const digits = m[1].replace(/\D/g, '');
+              if (digits.length >= 11) { customerCpf = digits; break; }
+            }
+          }
         }
 
         const orderData = {
