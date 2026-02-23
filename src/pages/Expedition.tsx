@@ -10,7 +10,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon } from 'lucide-react';
+import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon, MessageCircle } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ExpeditionOrdersList } from '@/components/expedition/ExpeditionOrdersList';
@@ -20,6 +20,7 @@ import { ExpeditionFreightQuote } from '@/components/expedition/ExpeditionFreigh
 import { ExpeditionDispatch } from '@/components/expedition/ExpeditionDispatch';
 import { ExpeditionReturns } from '@/components/expedition/ExpeditionReturns';
 import { SupportDashboard } from '@/components/expedition/SupportDashboard';
+import { ExpeditionWhatsApp } from '@/components/expedition/ExpeditionWhatsApp';
 
 const STEPS = [
   { id: 'orders', label: 'Pedidos', icon: Package, description: 'Sincronizar e visualizar' },
@@ -207,6 +208,18 @@ export default function Expedition() {
                 </button>
               );
             })}
+            {/* WhatsApp tab */}
+            <button
+              onClick={() => setActiveStep('whatsapp')}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-all ${
+                activeStep === 'whatsapp'
+                  ? 'bg-[#008069] text-white shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`}
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span className="hidden md:inline font-medium">WhatsApp</span>
+            </button>
             {/* Support tab */}
             <button
               onClick={() => setActiveStep('support')}
@@ -297,6 +310,7 @@ export default function Expedition() {
           </div>
         ) : (
           <>
+            {activeStep === 'whatsapp' && <ExpeditionWhatsApp />}
             {activeStep === 'support' && <SupportDashboard />}
             {(activeStep === 'orders' || activeStep === 'grouping') && (
               <ExpeditionOrdersList
