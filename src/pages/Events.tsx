@@ -56,7 +56,7 @@ const Events = () => {
   }, [fetchEvents]);
 
   useEffect(() => {
-    // Fetch stats for all events
+    // Fetch stats for all events and auto-verify Shopify
     const fetchStats = async () => {
       if (events.length === 0) return;
       
@@ -76,11 +76,34 @@ const Events = () => {
           totalOrders: orders.length,
           unpaidOrders: orders.filter((o) => !o.is_paid && !o.paid_externally).length,
           paidOrders: paidOrders.length,
-          missingShopify: -1, // -1 = not verified yet
+          missingShopify: -1, // -1 = loading
         });
       }
       
       setEventStats(stats);
+
+      // Auto-verify Shopify for events that have paid orders
+      for (const stat of stats) {
+        if (stat.paidOrders === 0) {
+          setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: 0 } : s));
+          continue;
+        }
+        try {
+          const { data, error } = await supabase.functions.invoke('shopify-verify-event-orders', {
+            body: { eventId: stat.eventId },
+          });
+          if (error || data?.error) {
+            setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: 0 } : s));
+            continue;
+          }
+          const results = data.results as { orderId: string; hasShopify: boolean; shopifyOrderName?: string }[];
+          const missing = results.filter(r => !r.hasShopify).length;
+          sessionStorage.setItem(`shopify-verify-${stat.eventId}`, JSON.stringify(results));
+          setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: missing } : s));
+        } catch {
+          setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: 0 } : s));
+        }
+      }
     };
     
     fetchStats();
@@ -377,18 +400,9 @@ const Events = () => {
                           <p className="text-xs text-muted-foreground">Sem Shopify</p>
                         </div>
                       ) : (
-                        <div
-                          className="rounded-lg p-2 bg-secondary/50 cursor-pointer hover:bg-secondary transition-colors"
-                          onClick={() => handleVerifyShopify(event.id)}
-                        >
-                          {verifyingEventId === event.id ? (
-                            <Loader2 className="h-4 w-4 mx-auto mb-1 text-muted-foreground animate-spin" />
-                          ) : (
-                            <Search className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                          )}
-                          <p className="text-xs font-medium text-muted-foreground mt-1">
-                            {verifyingEventId === event.id ? 'Verificando...' : 'Verificar Shopify'}
-                          </p>
+                        <div className="rounded-lg p-2 bg-secondary/50">
+                          <Loader2 className="h-4 w-4 mx-auto mb-1 text-muted-foreground animate-spin" />
+                          <p className="text-xs font-medium text-muted-foreground mt-1">Verificando...</p>
                         </div>
                       )}
                     </div>
