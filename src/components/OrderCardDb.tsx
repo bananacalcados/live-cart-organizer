@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2 } from "lucide-react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES } from "@/types/order";
 import { Button } from "@/components/ui/button";
@@ -39,9 +39,10 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [showChatDialog, setShowChatDialog] = useState(false);
   const [hasRegistration, setHasRegistration] = useState(false);
+  const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
   const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
 
-  // Check if customer has existing registration data
+  // Check if customer has existing registration data + Shopify order
   useEffect(() => {
     if (!order.customer_id) return;
     const checkRegistration = async () => {
@@ -49,9 +50,18 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
         .maybeSingle();
       setHasRegistration(!!data);
+      // Check if Shopify order was created for this order
+      if (order.is_paid || order.paid_externally) {
+        const { data: reg } = await supabase
+          .from('customer_registrations')
+          .select('shopify_draft_order_id')
+          .eq('order_id', order.id)
+          .maybeSingle();
+        setHasShopifyOrder(!!reg?.shopify_draft_order_id);
+      }
     };
     checkRegistration();
-  }, [order.customer_id]);
+  }, [order.customer_id, order.id, order.is_paid, order.paid_externally]);
 
   const handleCreateShopifyOrder = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -141,6 +151,12 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">
+        {(order.is_paid || order.paid_externally) && hasShopifyOrder === false && (
+          <Badge variant="secondary" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30 animate-pulse">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Sem Shopify
+          </Badge>
+        )}
         {hasRegistration && (
           <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
             <UserCheck className="h-3 w-3 mr-1" />
