@@ -1081,6 +1081,7 @@ export type Database = {
           complement: string | null
           cpf: string
           created_at: string
+          customer_id: string | null
           email: string
           full_name: string
           id: string
@@ -1101,6 +1102,7 @@ export type Database = {
           complement?: string | null
           cpf: string
           created_at?: string
+          customer_id?: string | null
           email: string
           full_name: string
           id?: string
@@ -1121,6 +1123,7 @@ export type Database = {
           complement?: string | null
           cpf?: string
           created_at?: string
+          customer_id?: string | null
           email?: string
           full_name?: string
           id?: string
@@ -1134,6 +1137,13 @@ export type Database = {
           whatsapp?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "customer_registrations_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "customer_registrations_order_id_fkey"
             columns: ["order_id"]
@@ -5558,6 +5568,36 @@ export type Database = {
           total_value: number
           zero_stock: number
         }[]
+      }
+      get_latest_registration_by_customer: {
+        Args: { p_customer_id: string }
+        Returns: {
+          address: string
+          address_number: string
+          cep: string
+          city: string
+          complement: string | null
+          cpf: string
+          created_at: string
+          customer_id: string | null
+          email: string
+          full_name: string
+          id: string
+          neighborhood: string
+          order_id: string
+          shopify_draft_order_id: string | null
+          shopify_draft_order_name: string | null
+          state: string
+          status: string
+          updated_at: string
+          whatsapp: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "customer_registrations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_user_allowed_modules: {
         Args: { p_user_id: string }

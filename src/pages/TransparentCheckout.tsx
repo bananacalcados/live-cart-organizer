@@ -2,14 +2,15 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, Clock, Trophy } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, Clock, Trophy, User, MapPin, Wallet, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 interface OrderProduct {
   title: string;
@@ -22,6 +23,7 @@ interface OrderProduct {
 interface OrderData {
   id: string;
   customerName: string;
+  customerId?: string;
   products: OrderProduct[];
   subtotal: number;
   discountAmount: number;
@@ -43,6 +45,20 @@ interface InstallmentConfig {
   max_installments: number;
   interest_free_installments: number;
   monthly_interest_rate: number;
+}
+
+interface CustomerFormData {
+  fullName: string;
+  email: string;
+  cpf: string;
+  whatsapp: string;
+  cep: string;
+  address: string;
+  addressNumber: string;
+  complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
 }
 
 // ── Formatters ──────────────────────────────────────────────────
@@ -91,24 +107,89 @@ function calculateInstallmentAmount(total: number, installments: number, config:
   };
 }
 
-// ── Product List ────────────────────────────────────────────────
-function ProductList({ products }: { products: OrderProduct[] }) {
+// ── Stepper ─────────────────────────────────────────────────────
+function StepIndicator({ currentStep }: { currentStep: number }) {
+  const steps = [
+    { num: 1, label: "Identificação", icon: User },
+    { num: 2, label: "Entrega", icon: MapPin },
+    { num: 3, label: "Pagamento", icon: Wallet },
+  ];
   return (
-    <div className="space-y-3">
-      <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Itens do Pedido</h3>
-      {products.map((product, index) => (
-        <div key={index} className="flex items-center gap-3 p-3 bg-secondary/30 rounded-lg">
-          {product.image && (
-            <img src={product.image} alt={product.title} className="w-14 h-14 rounded-md object-cover flex-shrink-0" />
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate">{product.title}</p>
-            {product.variant && <p className="text-xs text-muted-foreground">{product.variant}</p>}
-            <p className="text-xs text-muted-foreground">Qtd: {product.quantity}</p>
+    <div className="flex items-center justify-center gap-1 mb-6">
+      {steps.map((step, i) => {
+        const Icon = step.icon;
+        const isActive = currentStep === step.num;
+        const isDone = currentStep > step.num;
+        return (
+          <div key={step.num} className="flex items-center">
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+              isActive ? 'bg-primary text-primary-foreground' : isDone ? 'bg-stage-paid/20 text-stage-paid' : 'bg-secondary text-muted-foreground'
+            }`}>
+              {isDone ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">{step.label}</span>
+              <span className="sm:hidden">{step.num}</span>
+            </div>
+            {i < steps.length - 1 && <ChevronRight className="h-4 w-4 text-muted-foreground mx-1" />}
           </div>
-          <p className="font-semibold text-sm flex-shrink-0">R$ {(product.price * product.quantity).toFixed(2)}</p>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Order Summary Sidebar ───────────────────────────────────────
+function OrderSummary({ orderData, collapsed, onToggle }: { orderData: OrderData; collapsed?: boolean; onToggle?: () => void }) {
+  const totalItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
+  return (
+    <div className="bg-secondary/30 rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between cursor-pointer sm:cursor-default" onClick={onToggle}>
+        <div className="flex items-center gap-2 font-medium text-sm">
+          <ShoppingBag className="h-4 w-4" />
+          Resumo ({totalItems} {totalItems === 1 ? 'item' : 'itens'})
         </div>
-      ))}
+        <span className="font-bold text-primary">R$ {orderData.totalAmount.toFixed(2)}</span>
+      </div>
+      {!collapsed && (
+        <>
+          {orderData.products.map((product, index) => (
+            <div key={index} className="flex items-center gap-3 p-2 bg-background/50 rounded-lg">
+              {product.image && (
+                <img src={product.image} alt={product.title} className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-xs truncate">{product.title}</p>
+                {product.variant && <p className="text-[10px] text-muted-foreground">{product.variant}</p>}
+                <p className="text-[10px] text-muted-foreground">Qtd: {product.quantity}</p>
+              </div>
+              <p className="font-semibold text-xs flex-shrink-0">R$ {(product.price * product.quantity).toFixed(2)}</p>
+            </div>
+          ))}
+          <div className="border-t pt-2 space-y-1">
+            {orderData.discountAmount > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Desconto</span>
+                <span className="text-stage-paid font-medium">-R$ {orderData.discountAmount.toFixed(2)}</span>
+              </div>
+            )}
+            {orderData.shippingCost > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Frete</span>
+                <span className="font-medium">R$ {orderData.shippingCost.toFixed(2)}</span>
+              </div>
+            )}
+            {orderData.freeShipping && (
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Frete</span>
+                <span className="text-stage-paid font-medium">GRÁTIS 🎉</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold text-sm pt-1">
+              <span>Total</span>
+              <span className="text-primary">R$ {orderData.totalAmount.toFixed(2)}</span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -132,48 +213,245 @@ function CountdownTimer({ checkoutStartedAt }: { checkoutStartedAt: string | nul
 
   if (timeLeft <= 0) {
     return (
-      <div className="text-center p-3 bg-muted rounded-lg">
-        <p className="text-sm text-muted-foreground">⏰ Tempo para participar da roleta expirou</p>
-        <p className="text-xs text-muted-foreground mt-1">Você ainda pode pagar normalmente</p>
+      <div className="text-center p-2 bg-muted rounded-lg">
+        <p className="text-xs text-muted-foreground">⏰ Tempo para roleta expirou, mas você ainda pode pagar</p>
       </div>
     );
   }
 
   return (
-    <div className={`text-center p-4 rounded-lg border-2 ${isUrgent ? 'border-destructive bg-destructive/10 animate-pulse' : 'border-primary/30 bg-primary/5'}`}>
+    <div className={`text-center p-3 rounded-lg border ${isUrgent ? 'border-destructive bg-destructive/10 animate-pulse' : 'border-primary/30 bg-primary/5'}`}>
       <div className="flex items-center justify-center gap-2 mb-1">
-        <Trophy className="h-5 w-5 text-yellow-500" />
-        <span className="text-sm font-medium">Pague em até 10 min e concorra a prêmios!</span>
+        <Trophy className="h-4 w-4 text-primary" />
+        <span className="text-xs font-medium">Pague em até 10 min e concorra a prêmios!</span>
       </div>
-      <div className="flex items-center justify-center gap-2">
-        <Clock className={`h-5 w-5 ${isUrgent ? 'text-destructive' : 'text-primary'}`} />
-        <span className={`text-3xl font-bold font-mono ${isUrgent ? 'text-destructive' : 'text-primary'}`}>
+      <div className="flex items-center justify-center gap-1">
+        <Clock className={`h-4 w-4 ${isUrgent ? 'text-destructive' : 'text-primary'}`} />
+        <span className={`text-2xl font-bold font-mono ${isUrgent ? 'text-destructive' : 'text-primary'}`}>
           {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground mt-1">Prêmios de até R$ 200,00 na roleta da live! 🎰</p>
     </div>
   );
 }
 
-// ── PIX Section ─────────────────────────────────────────────────
-function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: string; amount: number; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void }) {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [cpf, setCpf] = useState("");
-  const [cep, setCep] = useState("");
-  const [street, setStreet] = useState("");
-  const [number, setNumber] = useState("");
-  const [neighborhood, setNeighborhood] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
+// ── Step 1: Identification ──────────────────────────────────────
+function StepIdentification({ form, setForm, onNext }: { form: CustomerFormData; setForm: (f: CustomerFormData) => void; onNext: () => void }) {
+  const handleNext = () => {
+    if (!form.fullName.trim() || !form.email.trim() || !form.cpf.trim() || !form.whatsapp.trim()) {
+      toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+    if (form.cpf.replace(/\D/g, "").length !== 11) {
+      toast.error("CPF inválido");
+      return;
+    }
+    onNext();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <User className="h-5 w-5 text-primary" />
+        <h2 className="font-semibold text-lg">Identificação</h2>
+        <Badge variant="secondary" className="text-[10px]">1 de 3</Badge>
+      </div>
+      <div className="space-y-3">
+        <div>
+          <Label className="text-sm">Nome completo *</Label>
+          <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="João da Silva" />
+        </div>
+        <div>
+          <Label className="text-sm">E-mail *</Label>
+          <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="seu@email.com" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-sm">CPF *</Label>
+            <Input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: formatCPF(e.target.value) })} placeholder="000.000.000-00" maxLength={14} />
+          </div>
+          <div>
+            <Label className="text-sm">WhatsApp *</Label>
+            <Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: formatPhone(e.target.value) })} placeholder="(11) 99999-9999" maxLength={15} />
+          </div>
+        </div>
+      </div>
+      <Button onClick={handleNext} className="w-full h-12 text-base font-semibold" size="lg">
+        Ir para Entrega <ChevronRight className="h-5 w-5 ml-1" />
+      </Button>
+    </div>
+  );
+}
+
+// ── Step 2: Delivery Address ────────────────────────────────────
+function StepDelivery({ form, setForm, onNext, onBack }: { form: CustomerFormData; setForm: (f: CustomerFormData) => void; onNext: () => void; onBack: () => void }) {
+  const [fetchingCep, setFetchingCep] = useState(false);
+
+  const lookupCep = async (cepValue: string) => {
+    const digits = cepValue.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setFetchingCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setForm({
+          ...form,
+          cep: cepValue,
+          address: data.logradouro || form.address,
+          neighborhood: data.bairro || form.neighborhood,
+          city: data.localidade || form.city,
+          state: data.uf || form.state,
+        });
+      }
+    } catch {}
+    setFetchingCep(false);
+  };
+
+  const handleNext = () => {
+    if (!form.cep.trim() || !form.address.trim() || !form.addressNumber.trim() || !form.neighborhood.trim() || !form.city.trim() || !form.state.trim()) {
+      toast.error("Preencha todos os campos obrigatórios do endereço");
+      return;
+    }
+    onNext();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <MapPin className="h-5 w-5 text-primary" />
+        <h2 className="font-semibold text-lg">Endereço de Entrega</h2>
+        <Badge variant="secondary" className="text-[10px]">2 de 3</Badge>
+      </div>
+      <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-1">
+            <Label className="text-sm">CEP *</Label>
+            <div className="relative">
+              <Input value={form.cep} onChange={(e) => { const v = formatCEP(e.target.value); setForm({ ...form, cep: v }); lookupCep(v); }} placeholder="00000-000" maxLength={9} />
+              {fetchingCep && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+          </div>
+          <div className="col-span-2">
+            <Label className="text-sm">Rua *</Label>
+            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <Label className="text-sm">Número *</Label>
+            <Input value={form.addressNumber} onChange={(e) => setForm({ ...form, addressNumber: e.target.value })} />
+          </div>
+          <div>
+            <Label className="text-sm">Complemento</Label>
+            <Input value={form.complement} onChange={(e) => setForm({ ...form, complement: e.target.value })} placeholder="Apto, Bloco" />
+          </div>
+          <div>
+            <Label className="text-sm">Bairro *</Label>
+            <Input value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-2">
+            <Label className="text-sm">Cidade *</Label>
+            <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+          </div>
+          <div>
+            <Label className="text-sm">UF *</Label>
+            <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })} maxLength={2} />
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-3">
+        <Button variant="outline" onClick={onBack} className="flex-1 h-12">Voltar</Button>
+        <Button onClick={handleNext} className="flex-[2] h-12 text-base font-semibold">
+          Ir para Pagamento <ChevronRight className="h-5 w-5 ml-1" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Step 3: Payment ─────────────────────────────────────────────
+function StepPayment({
+  orderId,
+  amount,
+  products,
+  form,
+  installmentConfig,
+  onPaymentConfirmed,
+  onBack,
+}: {
+  orderId: string;
+  amount: number;
+  products: OrderProduct[];
+  form: CustomerFormData;
+  installmentConfig: InstallmentConfig;
+  onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
+  onBack: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Wallet className="h-5 w-5 text-primary" />
+        <h2 className="font-semibold text-lg">Pagamento</h2>
+        <Badge variant="secondary" className="text-[10px]">3 de 3</Badge>
+      </div>
+
+      <Tabs defaultValue="card" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="card" className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" /> Cartão
+          </TabsTrigger>
+          <TabsTrigger value="pix" className="flex items-center gap-2">
+            <QrCode className="h-4 w-4" /> PIX
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="card" className="mt-4">
+          <CardPaymentForm
+            orderId={orderId}
+            amount={amount}
+            products={products}
+            form={form}
+            installmentConfig={installmentConfig}
+            onPaymentConfirmed={onPaymentConfirmed}
+          />
+        </TabsContent>
+
+        <TabsContent value="pix" className="mt-4">
+          <PixPaymentForm
+            orderId={orderId}
+            amount={amount}
+            form={form}
+            onPaymentConfirmed={onPaymentConfirmed}
+          />
+        </TabsContent>
+      </Tabs>
+
+      <Button variant="ghost" onClick={onBack} className="w-full text-sm text-muted-foreground">
+        ← Voltar para Entrega
+      </Button>
+    </div>
+  );
+}
+
+// ── PIX Payment Form (step 3) ───────────────────────────────────
+function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId: string; amount: number; form: CustomerFormData; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [pixPaid, setPixPaid] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const customerData = {
+    name: form.fullName,
+    email: form.email,
+    cpf: form.cpf.replace(/\D/g, ""),
+    phone: form.whatsapp.replace(/\D/g, ""),
+    address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
+  };
 
   useEffect(() => {
     if (!pixPaymentId || pixPaid) return;
@@ -185,79 +463,50 @@ function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: s
         if (data?.status === "approved") {
           setPixPaid(true);
           if (pollingRef.current) clearInterval(pollingRef.current);
-          onPaymentConfirmed({ platform: "mercadopago", method: "pix", customerData: {
-            name: `${firstName} ${lastName}`.trim(),
-            email,
-            cpf: cpf.replace(/\D/g, ""),
-            phone: "",
-            address: { street, number, neighborhood, city, state, cep: cep.replace(/\D/g, "") },
-          }});
+          onPaymentConfirmed({ platform: "mercadopago", method: "pix", customerData });
         }
       } catch {}
     };
     check();
     pollingRef.current = setInterval(check, 5000);
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [pixPaymentId, pixPaid, orderId, onPaymentConfirmed]);
-
-  const lookupCep = async (cepValue: string) => {
-    const digits = cepValue.replace(/\D/g, "");
-    if (digits.length !== 8) return;
-    try {
-      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
-      const data = await res.json();
-      if (!data.erro) {
-        setStreet(data.logradouro || "");
-        setNeighborhood(data.bairro || "");
-        setCity(data.localidade || "");
-        setState(data.uf || "");
-      }
-    } catch {}
-  };
+  }, [pixPaymentId, pixPaid, orderId]);
 
   const handleGeneratePix = async () => {
-    if (!firstName.trim() || !cpf.trim() || !email.trim()) {
-      toast.error("Preencha nome, CPF e e-mail para continuar");
-      return;
-    }
-    if (cpf.replace(/\D/g, "").length !== 11) {
-      toast.error("CPF inválido");
-      return;
-    }
     setIsGenerating(true);
     trackPixelEvent("AddPaymentInfo", { content_category: "pix" });
 
-    // Save customer registration early so mercadopago-check-payment can use it for Shopify order
+    // Save customer registration early
     if (orderId && !orderId.startsWith("live-")) {
       try {
         await supabase.from("customer_registrations").insert({
           order_id: orderId,
-          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
-          email: email.trim(),
-          cpf: cpf.replace(/\D/g, ""),
-          whatsapp: "",
-          cep: cep.replace(/\D/g, ""),
-          address: street.trim(),
-          address_number: number.trim(),
-          complement: "",
-          neighborhood: neighborhood.trim(),
-          city: city.trim(),
-          state: state.trim(),
+          full_name: form.fullName,
+          email: form.email,
+          cpf: form.cpf.replace(/\D/g, ""),
+          whatsapp: form.whatsapp.replace(/\D/g, ""),
+          cep: form.cep.replace(/\D/g, ""),
+          address: form.address,
+          address_number: form.addressNumber,
+          complement: form.complement,
+          neighborhood: form.neighborhood,
+          city: form.city,
+          state: form.state,
         });
-      } catch (err) {
-        console.error("Error saving customer registration for PIX:", err);
-      }
+      } catch {}
     }
+
     try {
+      const nameParts = form.fullName.split(" ");
       const response = await supabase.functions.invoke("mercadopago-create-pix", {
         body: {
           orderId,
           payer: {
-            firstName: firstName.trim(),
-            lastName: lastName.trim(),
-            email: email.trim(),
-            cpf: cpf.trim(),
-            address: cep ? { zipCode: cep.trim(), street: street.trim(), number: number.trim(), neighborhood: neighborhood.trim(), city: city.trim(), state: state.trim() } : undefined,
+            firstName: nameParts[0] || "",
+            lastName: nameParts.slice(1).join(" ") || "",
+            email: form.email,
+            cpf: form.cpf,
+            address: form.cep ? { zipCode: form.cep, street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state } : undefined,
           },
         },
       });
@@ -268,30 +517,17 @@ function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: s
       if (data.paymentId) setPixPaymentId(String(data.paymentId));
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Erro desconhecido";
-      toast.error(msg.includes("CPF") ? "CPF inválido. Verifique e tente novamente." : "Erro ao gerar PIX. Tente novamente.");
+      toast.error(msg.includes("CPF") ? "CPF inválido." : "Erro ao gerar PIX.");
     } finally {
       setIsGenerating(false);
-    }
-  };
-
-  const handleCopyPix = async () => {
-    if (!pixData?.qrCode) return;
-    try {
-      await navigator.clipboard.writeText(pixData.qrCode);
-      setCopied(true);
-      toast.success("Código PIX copiado!");
-      setTimeout(() => setCopied(false), 3000);
-    } catch {
-      window.prompt("Copie o código PIX:", pixData.qrCode);
     }
   };
 
   if (pixPaid) {
     return (
       <div className="text-center space-y-4 py-4">
-        <CheckCircle2 className="h-12 w-12 text-primary mx-auto" />
+        <CheckCircle2 className="h-12 w-12 text-stage-paid mx-auto" />
         <h3 className="text-lg font-bold">PIX Confirmado!</h3>
-        <p className="text-sm text-muted-foreground">Seu pagamento foi processado com sucesso.</p>
       </div>
     );
   }
@@ -299,93 +535,32 @@ function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: s
   if (pixData) {
     return (
       <div className="space-y-4">
-        <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-          <QrCode className="h-4 w-4" /> Pague com PIX
-        </h3>
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-2 p-3 bg-primary/10 rounded-lg">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <span className="text-sm font-medium text-primary">Aguardando pagamento...</span>
-          </div>
-          {pixData.qrCodeBase64 && (
-            <div className="flex justify-center">
-              <img src={`data:image/png;base64,${pixData.qrCodeBase64}`} alt="QR Code PIX" className="w-48 h-48 rounded-lg border" />
-            </div>
-          )}
-          <p className="text-sm text-muted-foreground">Escaneie o QR Code acima ou copie o código abaixo:</p>
-          <div className="relative">
-            <div className="p-3 bg-secondary/50 rounded-lg text-xs font-mono break-all max-h-20 overflow-y-auto">{pixData.qrCode}</div>
-            <Button size="sm" variant="outline" className="mt-2 w-full" onClick={handleCopyPix}>
-              {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-              {copied ? "Copiado!" : "Copiar código PIX"}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">Valor: <span className="font-bold text-foreground">R$ {pixData.amount}</span></p>
-          {pixData.expirationDate && <p className="text-xs text-muted-foreground">Válido até: {new Date(pixData.expirationDate).toLocaleString("pt-BR")}</p>}
+        <div className="flex items-center justify-center gap-2 p-3 bg-primary/10 rounded-lg">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-sm font-medium text-primary">Aguardando pagamento...</span>
         </div>
+        {pixData.qrCodeBase64 && (
+          <div className="flex justify-center">
+            <img src={`data:image/png;base64,${pixData.qrCodeBase64}`} alt="QR Code PIX" className="w-48 h-48 rounded-lg border" />
+          </div>
+        )}
+        <div className="relative">
+          <div className="p-3 bg-secondary/50 rounded-lg text-xs font-mono break-all max-h-20 overflow-y-auto">{pixData.qrCode}</div>
+          <Button size="sm" variant="outline" className="mt-2 w-full" onClick={async () => {
+            try { await navigator.clipboard.writeText(pixData.qrCode); setCopied(true); toast.success("Copiado!"); setTimeout(() => setCopied(false), 3000); } catch { window.prompt("Copie:", pixData.qrCode); }
+          }}>
+            {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+            {copied ? "Copiado!" : "Copiar código PIX"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground text-center">Valor: <span className="font-bold text-foreground">R$ {pixData.amount}</span></p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-        <QrCode className="h-4 w-4" /> Pagar com PIX
-      </h3>
-      <p className="text-xs text-muted-foreground">Preencha seus dados para gerar o QR Code PIX.</p>
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="pix-fn" className="text-sm">Nome *</Label>
-            <Input id="pix-fn" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="João" />
-          </div>
-          <div>
-            <Label htmlFor="pix-ln" className="text-sm">Sobrenome</Label>
-            <Input id="pix-ln" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Silva" />
-          </div>
-        </div>
-        <div>
-          <Label htmlFor="pix-email" className="text-sm">E-mail *</Label>
-          <Input id="pix-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="joao@email.com" />
-        </div>
-        <div>
-          <Label htmlFor="pix-cpf" className="text-sm">CPF *</Label>
-          <Input id="pix-cpf" value={cpf} onChange={(e) => setCpf(formatCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} />
-        </div>
-        <div className="pt-2 border-t">
-          <p className="text-xs text-muted-foreground mb-3">Endereço de entrega</p>
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-1">
-                <Label htmlFor="pix-cep" className="text-sm">CEP</Label>
-                <Input id="pix-cep" value={cep} onChange={(e) => { const v = formatCEP(e.target.value); setCep(v); lookupCep(v); }} placeholder="00000-000" maxLength={9} />
-              </div>
-              <div className="col-span-2">
-                <Label htmlFor="pix-st" className="text-sm">Rua</Label>
-                <Input id="pix-st" value={street} onChange={(e) => setStreet(e.target.value)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label htmlFor="pix-num" className="text-sm">Número</Label>
-                <Input id="pix-num" value={number} onChange={(e) => setNumber(e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="pix-nb" className="text-sm">Bairro</Label>
-                <Input id="pix-nb" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="pix-ct" className="text-sm">Cidade</Label>
-                <Input id="pix-ct" value={city} onChange={(e) => setCity(e.target.value)} />
-              </div>
-            </div>
-            <div className="w-20">
-              <Label htmlFor="pix-uf" className="text-sm">UF</Label>
-              <Input id="pix-uf" value={state} onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))} maxLength={2} />
-            </div>
-          </div>
-        </div>
-      </div>
+      <p className="text-sm text-muted-foreground">Seus dados já foram preenchidos. Clique para gerar o PIX.</p>
       <Button onClick={handleGeneratePix} disabled={isGenerating} className="w-full h-14 text-lg font-semibold" size="lg">
         {isGenerating ? <><Loader2 className="h-5 w-5 animate-spin mr-2" />Gerando PIX...</> : <><QrCode className="h-5 w-5 mr-2" />Gerar PIX - R$ {amount.toFixed(2)}</>}
       </Button>
@@ -393,53 +568,20 @@ function PixPaymentSection({ orderId, amount, onPaymentConfirmed }: { orderId: s
   );
 }
 
-// ── Credit Card Section ─────────────────────────────────────────
-function CreditCardSection({
-  orderId,
-  amount,
-  products,
-  installmentConfig,
-  onPaymentConfirmed,
+// ── Credit Card Payment Form (step 3) ───────────────────────────
+function CardPaymentForm({
+  orderId, amount, products, form, installmentConfig, onPaymentConfirmed,
 }: {
-  orderId: string;
-  amount: number;
-  products: OrderProduct[];
-  installmentConfig: InstallmentConfig;
-  onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
+  orderId: string; amount: number; products: OrderProduct[]; form: CustomerFormData;
+  installmentConfig: InstallmentConfig; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
 }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [cpf, setCpf] = useState("");
-  const [phone, setPhone] = useState("");
   const [cardNumber, setCardNumber] = useState("");
   const [cardName, setCardName] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
   const [installments, setInstallments] = useState("1");
-  const [cep, setCep] = useState("");
-  const [street, setStreet] = useState("");
-  const [number, setNumber] = useState("");
-  const [neighborhood, setNeighborhood] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const lookupCep = async (cepValue: string) => {
-    const digits = cepValue.replace(/\D/g, "");
-    if (digits.length !== 8) return;
-    try {
-      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
-      const data = await res.json();
-      if (!data.erro) {
-        setStreet(data.logradouro || "");
-        setNeighborhood(data.bairro || "");
-        setCity(data.localidade || "");
-        setState(data.uf || "");
-      }
-    } catch {}
-  };
-
-  // Build installment options
   const installmentOptions = [];
   for (let i = 1; i <= installmentConfig.max_installments; i++) {
     const calc = calculateInstallmentAmount(amount, i, installmentConfig);
@@ -453,19 +595,6 @@ function CreditCardSection({
   const { totalWithInterest } = calculateInstallmentAmount(amount, selectedInstallments, installmentConfig);
 
   const handleSubmit = async () => {
-    // Validate
-    if (!name.trim() || !email.trim() || !cpf.trim() || !phone.trim()) {
-      toast.error("Preencha todos os dados pessoais");
-      return;
-    }
-    if (cpf.replace(/\D/g, "").length !== 11) {
-      toast.error("CPF inválido");
-      return;
-    }
-    if (phone.replace(/\D/g, "").length < 10) {
-      toast.error("Telefone inválido. Mínimo 10 dígitos.");
-      return;
-    }
     if (!cardNumber.trim() || !cardName.trim() || !expiry.trim() || !cvv.trim()) {
       toast.error("Preencha todos os dados do cartão");
       return;
@@ -474,11 +603,6 @@ function CreditCardSection({
       toast.error("Número do cartão inválido");
       return;
     }
-    if (!cep.trim() || !street.trim() || !number.trim() || !city.trim() || !state.trim()) {
-      toast.error("Preencha o endereço de cobrança completo");
-      return;
-    }
-
     const expiryParts = expiry.split("/");
     if (expiryParts.length !== 2) {
       toast.error("Validade inválida. Use MM/AA");
@@ -489,7 +613,6 @@ function CreditCardSection({
     trackPixelEvent("AddPaymentInfo", { content_category: "credit_card" });
     try {
       const totalCents = Math.round(totalWithInterest * 100);
-
       const { data, error } = await supabase.functions.invoke("pagarme-create-charge", {
         body: {
           orderId,
@@ -502,18 +625,18 @@ function CreditCardSection({
           },
           installments: selectedInstallments,
           customer: {
-            name: name.trim(),
-            email: email.trim(),
-            cpf: cpf.trim(),
-            phone: phone.trim(),
+            name: form.fullName,
+            email: form.email,
+            cpf: form.cpf,
+            phone: form.whatsapp,
           },
           billingAddress: {
-            street: street.trim(),
-            number: number.trim(),
-            neighborhood: neighborhood.trim(),
-            city: city.trim(),
-            state: state.trim(),
-            zipCode: cep.trim(),
+            street: form.address,
+            number: form.addressNumber,
+            neighborhood: form.neighborhood,
+            city: form.city,
+            state: form.state,
+            zipCode: form.cep,
             country: "BR",
           },
           totalAmountCents: totalCents,
@@ -525,17 +648,13 @@ function CreditCardSection({
       if (data?.success) {
         toast.success(`Pagamento aprovado via ${data.gateway === 'pagarme' ? 'Pagar.me' : 'APPMAX'}!`);
         onPaymentConfirmed({ platform: data.gateway || "pagarme", method: "credit_card", customerData: {
-          name: name.trim(),
-          email: email.trim(),
-          cpf: cpf.replace(/\D/g, ""),
-          phone: phone.replace(/\D/g, ""),
-          address: { street: street.trim(), number: number.trim(), neighborhood: neighborhood.trim(), city: city.trim(), state: state.trim(), cep: cep.replace(/\D/g, "") },
+          name: form.fullName, email: form.email, cpf: form.cpf.replace(/\D/g, ""), phone: form.whatsapp.replace(/\D/g, ""),
+          address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
         }});
       } else {
-        throw new Error(data?.error || "Pagamento recusado. Verifique os dados do cartão.");
+        throw new Error(data?.error || "Pagamento recusado.");
       }
     } catch (error) {
-      console.error("Card payment error:", error);
       toast.error(error instanceof Error ? error.message : "Erro ao processar pagamento.");
     } finally {
       setIsProcessing(false);
@@ -544,38 +663,7 @@ function CreditCardSection({
 
   return (
     <div className="space-y-4">
-      <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-        <CreditCard className="h-4 w-4" /> Cartão de Crédito
-      </h3>
-
-      {/* Personal data */}
       <div className="space-y-3">
-        <p className="text-xs text-muted-foreground font-medium">Dados pessoais</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-sm">Nome completo *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="João Silva" />
-          </div>
-          <div>
-            <Label className="text-sm">E-mail *</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="joao@email.com" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-sm">CPF *</Label>
-            <Input value={cpf} onChange={(e) => setCpf(formatCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} />
-          </div>
-          <div>
-            <Label className="text-sm">Telefone *</Label>
-            <Input value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} placeholder="(11) 99999-9999" maxLength={15} />
-          </div>
-        </div>
-      </div>
-
-      {/* Card data */}
-      <div className="space-y-3 pt-3 border-t">
-        <p className="text-xs text-muted-foreground font-medium">Dados do cartão</p>
         <div>
           <Label className="text-sm">Nome no cartão *</Label>
           <Input value={cardName} onChange={(e) => setCardName(e.target.value.toUpperCase())} placeholder="JOÃO SILVA" />
@@ -596,13 +684,10 @@ function CreditCardSection({
         </div>
       </div>
 
-      {/* Installments */}
-      <div className="space-y-2 pt-3 border-t">
+      <div className="space-y-2">
         <Label className="text-sm">Parcelas</Label>
         <Select value={installments} onValueChange={setInstallments}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {installmentOptions.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
@@ -611,72 +696,25 @@ function CreditCardSection({
         </Select>
       </div>
 
-      {/* Billing address */}
-      <div className="space-y-3 pt-3 border-t">
-        <p className="text-xs text-muted-foreground font-medium">Endereço de cobrança</p>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-1">
-            <Label className="text-sm">CEP *</Label>
-            <Input value={cep} onChange={(e) => { const v = formatCEP(e.target.value); setCep(v); lookupCep(v); }} placeholder="00000-000" maxLength={9} />
-          </div>
-          <div className="col-span-2">
-            <Label className="text-sm">Rua *</Label>
-            <Input value={street} onChange={(e) => setStreet(e.target.value)} />
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <Label className="text-sm">Número *</Label>
-            <Input value={number} onChange={(e) => setNumber(e.target.value)} />
-          </div>
-          <div>
-            <Label className="text-sm">Bairro</Label>
-            <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} />
-          </div>
-          <div>
-            <Label className="text-sm">Cidade *</Label>
-            <Input value={city} onChange={(e) => setCity(e.target.value)} />
-          </div>
-        </div>
-        <div className="w-20">
-          <Label className="text-sm">UF *</Label>
-          <Input value={state} onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))} maxLength={2} />
-        </div>
-      </div>
-
       <Button onClick={handleSubmit} disabled={isProcessing} className="w-full h-14 text-lg font-semibold" size="lg">
-        {isProcessing ? (
-          <><Loader2 className="h-5 w-5 animate-spin mr-2" />Processando...</>
-        ) : (
-          <><Lock className="h-5 w-5 mr-2" />Pagar R$ {totalWithInterest.toFixed(2)}</>
-        )}
+        {isProcessing ? <><Loader2 className="h-5 w-5 animate-spin mr-2" />Processando...</> : <><Lock className="h-5 w-5 mr-2" />Pagar R$ {totalWithInterest.toFixed(2)}</>}
       </Button>
     </div>
   );
 }
 
-// ── Main Transparent Checkout ───────────────────────────────────
-// ── Floating Live Mini Player ────────────────────────────────────
+// ── Floating Live Mini Player ───────────────────────────────────
 function LiveMiniPlayer({ videoId }: { videoId: string }) {
   const [dismissed, setDismissed] = useState(false);
   const [muted, setMuted] = useState(false);
 
   if (dismissed || !videoId) return null;
 
-  const handleGoBackToLive = () => {
-    window.location.href = "/live";
-  };
-
   return (
     <div className="fixed top-3 right-3 z-50 flex flex-col items-center gap-2">
       <div className="w-[140px] rounded-xl overflow-hidden shadow-2xl border-2 border-primary/40 bg-black">
         <div className="relative aspect-[9/16]">
-          {/* Clickable overlay to go back to live */}
-          <div
-            className="absolute inset-0 z-10 cursor-pointer"
-            onClick={handleGoBackToLive}
-            title="Voltar para a Live"
-          />
+          <div className="absolute inset-0 z-10 cursor-pointer" onClick={() => window.location.href = "/live"} title="Voltar para a Live" />
           <iframe
             src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${muted ? 1 : 0}&rel=0&modestbranding=1&playsinline=1&controls=0`}
             className="absolute inset-0 w-full h-full pointer-events-none"
@@ -684,35 +722,24 @@ function LiveMiniPlayer({ videoId }: { videoId: string }) {
             title="Live"
           />
           <div className="absolute top-1 left-1 flex gap-1 z-20">
-            <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded">AO VIVO</span>
+            <span className="bg-destructive text-destructive-foreground text-[8px] font-bold px-1.5 py-0.5 rounded">AO VIVO</span>
           </div>
           <div className="absolute bottom-1 right-1 flex gap-1 z-20">
-            <button
-              onClick={(e) => { e.stopPropagation(); setMuted(!muted); }}
-              className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]"
-            >
+            <button onClick={(e) => { e.stopPropagation(); setMuted(!muted); }} className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]">
               {muted ? "🔇" : "🔊"}
             </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setDismissed(true); }}
-              className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]"
-            >
-              ✕
-            </button>
+            <button onClick={(e) => { e.stopPropagation(); setDismissed(true); }} className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]">✕</button>
           </div>
         </div>
       </div>
-      {/* Explicit back-to-live button */}
-      <button
-        onClick={handleGoBackToLive}
-        className="w-[140px] bg-primary text-primary-foreground text-xs font-bold py-2 rounded-lg shadow-lg hover:opacity-90 transition-opacity"
-      >
+      <button onClick={() => window.location.href = "/live"} className="w-[140px] bg-primary text-primary-foreground text-xs font-bold py-2 rounded-lg shadow-lg hover:opacity-90 transition-opacity">
         ↩ VOLTAR À LIVE
       </button>
     </div>
   );
 }
 
+// ── Main Transparent Checkout ───────────────────────────────────
 export default function TransparentCheckout() {
   const { orderId } = useParams<{ orderId: string }>();
   const [searchParams] = useSearchParams();
@@ -727,15 +754,24 @@ export default function TransparentCheckout() {
     interest_free_installments: 6,
     monthly_interest_rate: 2.49,
   });
+  const [summaryCollapsed, setSummaryCollapsed] = useState(true);
 
-  // Init Meta Pixel + InitiateCheckout
+  // 3-step state
+  const [currentStep, setCurrentStep] = useState(1);
+  const [customerForm, setCustomerForm] = useState<CustomerFormData>({
+    fullName: "", email: "", cpf: "", whatsapp: "",
+    cep: "", address: "", addressNumber: "", complement: "",
+    neighborhood: "", city: "", state: "",
+  });
+  const [registrationId, setRegistrationId] = useState<string | null>(null);
+
+  // Init Meta Pixel
   useEffect(() => {
     initMetaPixel();
     trackPixelEvent("InitiateCheckout");
   }, []);
 
   useEffect(() => {
-    // Try live cart data from query params first
     const liveParam = searchParams.get("live");
     if (liveParam && !orderId) {
       try {
@@ -743,32 +779,18 @@ export default function TransparentCheckout() {
         const products: OrderProduct[] = decoded.items || [];
         const subtotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
         const now = new Date().toISOString();
-        // Store raw live cart data for Shopify order creation after payment
         setLiveCartRaw({ items: decoded.items || [], customer: decoded.customer || null });
-        
-        // Calculate shipping from freight config
         let shippingCost = 0;
         let freeShipping = false;
         const fc = decoded.freightConfig;
         if (fc && fc.enabled) {
-          if (fc.free_above && subtotal >= fc.free_above) {
-            freeShipping = true;
-          } else if (fc.flat_rate) {
-            shippingCost = fc.flat_rate;
-          }
+          if (fc.free_above && subtotal >= fc.free_above) freeShipping = true;
+          else if (fc.flat_rate) shippingCost = fc.flat_rate;
         }
-        
         setOrderData({
-          id: `live-${Date.now()}`,
-          customerName: decoded.customer?.name || "Cliente Live",
-          products,
-          subtotal,
-          discountAmount: 0,
-          totalAmount: Math.round((subtotal + shippingCost) * 100) / 100,
-          isPaid: false,
-          checkoutStartedAt: now,
-          freeShipping,
-          shippingCost,
+          id: `live-${Date.now()}`, customerName: decoded.customer?.name || "Cliente Live",
+          products, subtotal, discountAmount: 0, totalAmount: Math.round((subtotal + shippingCost) * 100) / 100,
+          isPaid: false, checkoutStartedAt: now, freeShipping, shippingCost,
         });
         setIsLoading(false);
         loadInstallmentConfig();
@@ -806,14 +828,10 @@ export default function TransparentCheckout() {
       setOrderData({
         id: order.id,
         customerName: (order.customer as any)?.instagram_handle || "Cliente",
-        products,
-        subtotal,
-        discountAmount,
-        totalAmount,
-        isPaid: order.is_paid,
-        checkoutStartedAt: order.checkout_started_at,
-        freeShipping: order.free_shipping || false,
-        shippingCost: 0,
+        customerId: order.customer_id || undefined,
+        products, subtotal, discountAmount, totalAmount,
+        isPaid: order.is_paid, checkoutStartedAt: order.checkout_started_at,
+        freeShipping: order.free_shipping || false, shippingCost: 0,
       });
 
       if (order.is_paid) {
@@ -822,6 +840,28 @@ export default function TransparentCheckout() {
         const now = new Date().toISOString();
         await supabase.from("orders").update({ checkout_started_at: now }).eq("id", order.id);
         setOrderData((prev) => prev ? { ...prev, checkoutStartedAt: now } : prev);
+      }
+
+      // Pre-fill from existing registration
+      if (order.customer_id) {
+        const { data: prevReg } = await supabase
+          .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
+          .maybeSingle();
+        if (prevReg) {
+          setCustomerForm({
+            fullName: prevReg.full_name || "",
+            email: prevReg.email || "",
+            cpf: formatCPF(prevReg.cpf || ""),
+            whatsapp: formatPhone(prevReg.whatsapp || ""),
+            cep: formatCEP(prevReg.cep || ""),
+            address: prevReg.address || "",
+            addressNumber: prevReg.address_number || "",
+            complement: prevReg.complement || "",
+            neighborhood: prevReg.neighborhood || "",
+            city: prevReg.city || "",
+            state: prevReg.state || "",
+          });
+        }
       }
     } catch (error) {
       console.error("Error loading order:", error);
@@ -833,10 +873,7 @@ export default function TransparentCheckout() {
   const loadInstallmentConfig = async () => {
     try {
       const { data } = await supabase
-        .from("app_settings")
-        .select("value")
-        .eq("key", "installment_config")
-        .maybeSingle();
+        .from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
       if (data?.value) {
         const config = data.value as any;
         setInstallmentConfig({
@@ -848,18 +885,69 @@ export default function TransparentCheckout() {
     } catch {}
   };
 
+  // Save/update registration progressively
+  const saveRegistration = async (step: number) => {
+    if (!orderData || orderData.id.startsWith("live-")) return;
+    try {
+      if (registrationId) {
+        // Update existing
+        await supabase.from("customer_registrations").update({
+          full_name: customerForm.fullName,
+          email: customerForm.email,
+          cpf: customerForm.cpf.replace(/\D/g, ""),
+          whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
+          ...(step >= 2 ? {
+            cep: customerForm.cep.replace(/\D/g, ""),
+            address: customerForm.address,
+            address_number: customerForm.addressNumber,
+            complement: customerForm.complement,
+            neighborhood: customerForm.neighborhood,
+            city: customerForm.city,
+            state: customerForm.state,
+          } : {}),
+        }).eq("id", registrationId);
+      } else {
+        // Insert new
+        const { data: reg } = await supabase.from("customer_registrations").insert({
+          order_id: orderData.id,
+          full_name: customerForm.fullName,
+          email: customerForm.email,
+          cpf: customerForm.cpf.replace(/\D/g, ""),
+          whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
+          cep: customerForm.cep.replace(/\D/g, "") || "00000000",
+          address: customerForm.address || "Pendente",
+          address_number: customerForm.addressNumber || "0",
+          neighborhood: customerForm.neighborhood || "Pendente",
+          city: customerForm.city || "Pendente",
+          state: customerForm.state || "SP",
+          complement: customerForm.complement,
+          ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
+        }).select("id").single();
+        if (reg) setRegistrationId(reg.id);
+      }
+    } catch (err) {
+      console.error("Error saving registration:", err);
+    }
+  };
+
+  const handleStep1Next = async () => {
+    await saveRegistration(1);
+    setCurrentStep(2);
+  };
+
+  const handleStep2Next = async () => {
+    await saveRegistration(2);
+    setCurrentStep(3);
+  };
+
   const handlePaymentConfirmed = useCallback(async (paymentInfo?: { platform: string; method: string; customerData?: any }) => {
     setPaymentStatus("success");
-
     const cd = paymentInfo?.customerData;
 
-    // Pixel: Purchase event
     if (orderData) {
       trackPixelEvent("Purchase", {
-        value: orderData.totalAmount,
-        currency: "BRL",
-        content_type: "product",
-        num_items: orderData.products.reduce((s, p) => s + p.quantity, 0),
+        value: orderData.totalAmount, currency: "BRL",
+        content_type: "product", num_items: orderData.products.reduce((s, p) => s + p.quantity, 0),
       });
     }
 
@@ -867,13 +955,11 @@ export default function TransparentCheckout() {
       const elapsed = (Date.now() - new Date(orderData.checkoutStartedAt).getTime()) / 1000;
       if (elapsed <= 600) {
         setIsEligibleForPrize(true);
-        if (orderId) {
-          supabase.from("orders").update({ eligible_for_prize: true }).eq("id", orderId);
-        }
+        if (orderId) supabase.from("orders").update({ eligible_for_prize: true }).eq("id", orderId);
       }
     }
-    
-    // Mark checkout_completed in live_viewers and save payment info
+
+    // Mark live viewer checkout completed
     const liveParam = searchParams.get("live");
     if (liveParam) {
       try {
@@ -881,92 +967,60 @@ export default function TransparentCheckout() {
         const customer = decoded.customer;
         const sessionId = decoded.sessionId;
         if (customer?.phone && sessionId) {
-          const phone = customer.phone;
           await supabase.from("live_viewers").update({
-            checkout_completed: true,
-            checkout_completed_at: new Date().toISOString(),
-            payment_platform: paymentInfo?.platform || null,
-            payment_method: paymentInfo?.method || null,
-          }).eq("session_id", sessionId).eq("phone", phone);
+            checkout_completed: true, checkout_completed_at: new Date().toISOString(),
+            payment_platform: paymentInfo?.platform || null, payment_method: paymentInfo?.method || null,
+          }).eq("session_id", sessionId).eq("phone", customer.phone);
         }
       } catch {}
     }
-    
-    // Create Shopify order for live commerce checkouts
+
+    // Create Shopify order for live commerce
     if (liveCartRaw && liveCartRaw.items.length > 0) {
       try {
-        // Merge checkout form data with live customer data
         const enrichedCustomer = {
           ...liveCartRaw.customer,
-          ...(cd ? {
-            name: cd.name || liveCartRaw.customer?.name,
-            email: cd.email || liveCartRaw.customer?.email,
-            phone: cd.phone || liveCartRaw.customer?.phone,
-            cpf: cd.cpf,
-            address: cd.address,
-          } : {}),
+          ...(cd ? { name: cd.name, email: cd.email, phone: cd.phone, cpf: cd.cpf, address: cd.address } : {}),
         };
-        const { data, error } = await supabase.functions.invoke("shopify-create-live-order", {
+        await supabase.functions.invoke("shopify-create-live-order", {
           body: {
             items: liveCartRaw.items.map((item: any) => ({
-              variantId: item.variantId,
-              title: item.title || item.productTitle,
-              price: item.price,
-              quantity: item.quantity || 1,
+              variantId: item.variantId, title: item.title || item.productTitle, price: item.price, quantity: item.quantity || 1,
             })),
             customer: enrichedCustomer,
           },
         });
-        if (error) {
-          console.error("Error creating Shopify live order:", error);
-        } else {
-          console.log("Shopify live order created:", data?.shopifyOrderName);
-        }
-      } catch (err) {
-        console.error("Error calling shopify-create-live-order:", err);
-      }
+      } catch (err) { console.error("Error creating Shopify live order:", err); }
     }
 
-    // Save customer data to customer_registrations for CRM orders, so shopify-create-order picks it up
+    // Save final customer data for CRM orders
     if (orderId && !liveCartRaw && cd) {
       try {
-        const nameParts = (cd.name || "").split(" ");
-        const addr = cd.address || {};
-        await supabase.from("customer_registrations").insert({
+        await supabase.from("customer_registrations").upsert({
           order_id: orderId,
           full_name: cd.name || "Cliente",
           email: cd.email || "",
           cpf: cd.cpf || "",
           whatsapp: cd.phone || "",
-          cep: addr.cep || "",
-          address: addr.street || "",
-          address_number: addr.number || "",
+          cep: cd.address?.cep || "",
+          address: cd.address?.street || "",
+          address_number: cd.address?.number || "",
           complement: "",
-          neighborhood: addr.neighborhood || "",
-          city: addr.city || "",
-          state: addr.state || "",
-        });
-      } catch (err) {
-        console.error("Error saving customer registration:", err);
-      }
+          neighborhood: cd.address?.neighborhood || "",
+          city: cd.address?.city || "",
+          state: cd.address?.state || "",
+          ...(orderData?.customerId ? { customer_id: orderData.customerId } : {}),
+        }, { onConflict: 'order_id' });
+      } catch (err) { console.error("Error saving customer registration:", err); }
     }
 
-    // Create Shopify order for CRM orders (non-live)
+    // Create Shopify order for CRM orders
     if (orderId && !liveCartRaw) {
       try {
-        const { data, error } = await supabase.functions.invoke("shopify-create-order", {
-          body: { orderId },
-        });
-        if (error) {
-          console.error("Error creating Shopify order:", error);
-        } else {
-          console.log("Shopify order created:", data?.shopifyOrderName);
-        }
-      } catch (err) {
-        console.error("Error calling shopify-create-order:", err);
-      }
+        await supabase.functions.invoke("shopify-create-order", { body: { orderId } });
+      } catch (err) { console.error("Error creating Shopify order:", err); }
     }
-  }, [orderData?.checkoutStartedAt, orderId, liveCartRaw, searchParams]);
+  }, [orderData, orderId, liveCartRaw, searchParams]);
 
   if (isLoading) {
     return (
@@ -994,9 +1048,9 @@ export default function TransparentCheckout() {
   }
 
   if (paymentStatus === "success") {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      {liveVideoId && <LiveMiniPlayer videoId={liveVideoId} />}
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        {liveVideoId && <LiveMiniPlayer videoId={liveVideoId} />}
         <Card className="w-full max-w-md mx-4">
           <CardContent className="pt-8 pb-8 text-center space-y-6">
             <div className="relative">
@@ -1015,30 +1069,15 @@ export default function TransparentCheckout() {
             <div className="p-4 bg-secondary/50 rounded-xl space-y-3">
               <p className="text-sm text-muted-foreground">Valor pago</p>
               <p className="text-3xl font-bold text-primary">R$ {orderData.totalAmount.toFixed(2)}</p>
-              {orderData.products.length > 0 && (
-                <div className="border-t pt-3 mt-3 space-y-2">
-                  {orderData.products.map((product, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm">
-                      {product.image && <img src={product.image} alt={product.title} className="w-8 h-8 rounded object-cover" />}
-                      <span className="truncate text-muted-foreground">{product.title}</span>
-                      <span className="text-xs text-muted-foreground ml-auto">x{product.quantity}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
             {isEligibleForPrize && (
               <div className="p-4 bg-accent/50 border-2 border-primary/30 rounded-xl">
                 <Trophy className="h-10 w-10 text-primary mx-auto mb-2" />
                 <p className="font-bold text-lg">🎉 Parabéns!</p>
                 <p className="text-sm text-muted-foreground">Você pagou dentro do prazo e está participando da <strong>Roleta de Prêmios</strong>!</p>
-                <p className="text-xs text-muted-foreground mt-1">Prêmios de até R$ 200,00! Fique de olho na live! 🎰</p>
               </div>
             )}
-            <div className="pt-2 space-y-2">
-              <p className="text-xs text-muted-foreground">📦 Acompanhe a entrega pelo WhatsApp</p>
-              <p className="text-xs text-muted-foreground">Qualquer dúvida, fale conosco!</p>
-            </div>
+            <p className="text-xs text-muted-foreground">📦 Acompanhe a entrega pelo WhatsApp</p>
           </CardContent>
         </Card>
       </div>
@@ -1046,84 +1085,66 @@ export default function TransparentCheckout() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background p-4">
       {liveVideoId && <LiveMiniPlayer videoId={liveVideoId} />}
-      <Card className="w-full max-w-lg">
-        <CardHeader className="text-center pb-2">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <ShoppingBag className="h-6 w-6 text-primary" />
-            <CardTitle className="text-xl">Checkout</CardTitle>
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-4">
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <Lock className="h-4 w-4 text-primary" />
+            <h1 className="text-lg font-bold">Checkout Seguro</h1>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Olá, {orderData.customerName}! Confira seu pedido abaixo.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <CountdownTimer checkoutStartedAt={orderData.checkoutStartedAt} />
-          <ProductList products={orderData.products} />
+          <p className="text-xs text-muted-foreground">Olá, {orderData.customerName}!</p>
+        </div>
 
-          {/* Total */}
-          <div className="border-t pt-4 space-y-1">
-            {orderData.discountAmount > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Desconto</span>
-                <span className="text-primary font-medium">-R$ {orderData.discountAmount.toFixed(2)}</span>
-              </div>
-            )}
-            {orderData.shippingCost > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Frete</span>
-                <span className="font-medium">R$ {orderData.shippingCost.toFixed(2)}</span>
-              </div>
-            )}
-            {orderData.freeShipping && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Frete</span>
-                <span className="text-green-600 font-medium">GRÁTIS 🎉</span>
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-medium">Total</span>
-              <span className="text-2xl font-bold text-primary">R$ {orderData.totalAmount.toFixed(2)}</span>
+        <StepIndicator currentStep={currentStep} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main content */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardContent className="p-6">
+                <CountdownTimer checkoutStartedAt={orderData.checkoutStartedAt} />
+                <div className="mt-6">
+                  {currentStep === 1 && (
+                    <StepIdentification form={customerForm} setForm={setCustomerForm} onNext={handleStep1Next} />
+                  )}
+                  {currentStep === 2 && (
+                    <StepDelivery form={customerForm} setForm={setCustomerForm} onNext={handleStep2Next} onBack={() => setCurrentStep(1)} />
+                  )}
+                  {currentStep === 3 && (
+                    <StepPayment
+                      orderId={orderData.id}
+                      amount={orderData.totalAmount}
+                      products={orderData.products}
+                      form={customerForm}
+                      installmentConfig={installmentConfig}
+                      onPaymentConfirmed={handlePaymentConfirmed}
+                      onBack={() => setCurrentStep(2)}
+                    />
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sidebar - Order Summary */}
+          <div className="lg:col-span-1">
+            {/* Mobile: collapsible, Desktop: always visible */}
+            <div className="lg:hidden">
+              <OrderSummary orderData={orderData} collapsed={summaryCollapsed} onToggle={() => setSummaryCollapsed(!summaryCollapsed)} />
+            </div>
+            <div className="hidden lg:block sticky top-4">
+              <OrderSummary orderData={orderData} />
             </div>
           </div>
+        </div>
 
-          {/* Payment tabs */}
-          <Tabs defaultValue="card" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="card" className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4" /> Cartão de Crédito
-              </TabsTrigger>
-              <TabsTrigger value="pix" className="flex items-center gap-2">
-                <QrCode className="h-4 w-4" /> PIX
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="card" className="mt-4">
-              <CreditCardSection
-                orderId={orderData.id}
-                amount={orderData.totalAmount}
-                products={orderData.products}
-                installmentConfig={installmentConfig}
-                onPaymentConfirmed={handlePaymentConfirmed}
-              />
-            </TabsContent>
-
-            <TabsContent value="pix" className="mt-4">
-              <PixPaymentSection
-                orderId={orderData.id}
-                amount={orderData.totalAmount}
-                onPaymentConfirmed={handlePaymentConfirmed}
-              />
-            </TabsContent>
-          </Tabs>
-
-          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-            <Lock className="h-3 w-3" />
-            <span>Pagamento processado com segurança</span>
-          </div>
-        </CardContent>
-      </Card>
+        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mt-6">
+          <Lock className="h-3 w-3" />
+          <span>Pagamento processado com segurança</span>
+        </div>
+      </div>
     </div>
   );
 }
