@@ -58,9 +58,10 @@ serve(async (req) => {
 
     const quotes: any[] = [];
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
     try {
+      console.log('Quoting via Frenet...', JSON.stringify(frenetBody));
       const frenetRealResponse = await fetch('https://api.frenet.com.br/shipping/quote', {
         method: 'POST',
         headers: {
@@ -73,8 +74,10 @@ serve(async (req) => {
       });
       clearTimeout(timeout);
 
+      console.log('Frenet status:', frenetRealResponse.status);
       if (frenetRealResponse.ok) {
         const frenetData = await frenetRealResponse.json();
+        console.log('Frenet response:', JSON.stringify(frenetData).substring(0, 500));
         const shippingServices = frenetData.ShippingSevicesArray || frenetData.ShippingServices || [];
         
         for (const svc of shippingServices) {
@@ -88,7 +91,8 @@ serve(async (req) => {
           });
         }
       } else {
-        await frenetRealResponse.text();
+        const errText = await frenetRealResponse.text();
+        console.error('Frenet error response:', errText.substring(0, 300));
       }
     } catch (e) {
       clearTimeout(timeout);
@@ -113,7 +117,7 @@ serve(async (req) => {
         // Fetch SEDEX and PAC in parallel with timeout
         const correiosPromises = services.map(async (svc) => {
           const ctrl = new AbortController();
-          const t = setTimeout(() => ctrl.abort(), 6000);
+          const t = setTimeout(() => ctrl.abort(), 15000);
           try {
             const correiosUrl = `http://ws.correios.com.br/calculador/CalcPrecoPrazo.aspx?nCdEmpresa=${CORREIOS_CODIGO || ''}&sDsSenha=${CORREIOS_SENHA}&nCdServico=${svc.code}&sCepOrigem=01001000&sCepDestino=${shippingAddress.zip.replace(/\D/g, '')}&nVlPeso=${Math.max(0.3, totalWeight)}&nCdFormato=1&nVlComprimento=30&nVlAltura=${Math.max(4, Math.ceil(totalQty * 5))}&nVlLargura=25&nVlDiametro=0&sCdMaoPropria=N&nVlValorDeclarado=${order.total_price || 0}&sCdAvisoRecebimento=N&StrRetorno=xml&nIndicaCalculo=3`;
             const correiosResponse = await fetch(correiosUrl, { signal: ctrl.signal });
@@ -140,7 +144,16 @@ serve(async (req) => {
       }
     }
 
-    // Save quotes to DB
+    // Always add manual carrier options
+    quotes.push({
+      expedition_order_id: order_id,
+      carrier: 'Mototaxista 🏍️',
+      service: 'Entrega Local',
+      price: 0,
+      delivery_days: 0,
+    });
+
+    console.log(`Total quotes: ${quotes.length}`);
     if (quotes.length > 0) {
       // Clear old quotes
       await supabase
