@@ -10,7 +10,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon, MessageCircle } from 'lucide-react';
+import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon, MessageCircle, Clock } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ExpeditionOrdersList } from '@/components/expedition/ExpeditionOrdersList';
@@ -136,6 +136,7 @@ export default function Expedition() {
     total: orders.length,
     approved: approvedOrders.length,
     pending: pendingOrders.length,
+    awaiting: orders.filter(o => o.expedition_status === 'awaiting_stock').length,
     picking: orders.filter(o => o.expedition_status === 'picking' || o.expedition_status === 'picked').length,
     packed: orders.filter(o => o.expedition_status === 'packed' || o.expedition_status === 'packing').length,
     dispatched: orders.filter(o => o.expedition_status === 'dispatched').length,
@@ -171,10 +172,11 @@ export default function Expedition() {
       {/* Stats Bar */}
       <div className="border-b border-border/40 bg-card">
         <div className="container py-3">
-          <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-8 gap-3">
             <StatCard label="Total" value={stats.total} icon={<Package className="h-4 w-4" />} />
             <StatCard label="Aprovados" value={stats.approved} icon={<CheckCircle2 className="h-4 w-4 text-green-500" />} />
             <StatCard label="Pendentes" value={stats.pending} icon={<AlertTriangle className="h-4 w-4 text-orange-500" />} />
+            <StatCard label="Aguardando" value={stats.awaiting} icon={<Clock className="h-4 w-4 text-amber-500" />} highlight={stats.awaiting > 0} />
             <StatCard label="Separando" value={stats.picking} icon={<ClipboardList className="h-4 w-4 text-blue-500" />} />
             <StatCard label="Embalados" value={stats.packed} icon={<PackageCheck className="h-4 w-4 text-purple-500" />} />
             <StatCard label="Despachados" value={stats.dispatched} icon={<Truck className="h-4 w-4 text-primary" />} />

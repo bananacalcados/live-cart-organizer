@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink, Clock, Play } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -20,6 +20,7 @@ const STATUS_FLOW = [
   { key: 'pending_sync', label: 'Pendente', next: 'approved' },
   { key: 'approved', label: 'Aprovado', next: 'picking' },
   { key: 'grouped', label: 'Agrupado', next: 'picking' },
+  { key: 'awaiting_stock', label: 'Aguardando Estoque', next: 'picking' },
   { key: 'picking', label: 'Separando', next: 'picked' },
   { key: 'picked', label: 'Separado', next: 'packing' },
   { key: 'packing', label: 'Bipando', next: 'packed' },
@@ -375,6 +376,30 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
 }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isMarking, setIsMarking] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
+
+  const isAwaiting = order.expedition_status === 'awaiting_stock';
+
+  const handleToggleAwaiting = async () => {
+    setIsToggling(true);
+    try {
+      const newStatus = isAwaiting ? 'approved' : 'awaiting_stock';
+      const { error } = await supabase
+        .from('expedition_orders')
+        .update({ expedition_status: newStatus })
+        .eq('id', order.id);
+      if (error) throw error;
+      toast.success(isAwaiting
+        ? `Pedido ${order.shopify_order_name} retomado!`
+        : `Pedido ${order.shopify_order_name} marcado como Aguardando Estoque`
+      );
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    } finally {
+      setIsToggling(false);
+    }
+  };
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -413,6 +438,7 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
     pending_sync: 'bg-muted text-muted-foreground',
     approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     grouped: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+    awaiting_stock: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
     picking: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     picked: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     packing: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
@@ -546,6 +572,21 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
                 >
                   <ArrowRight className="h-4 w-4" />
                   Avançar para: {nextStep.label}
+                </Button>
+              )}
+
+              {order.expedition_status !== 'dispatched' && (
+                <Button
+                  onClick={handleToggleAwaiting}
+                  disabled={isToggling}
+                  variant="outline"
+                  className={`gap-2 w-full ${isAwaiting
+                    ? 'border-green-500/50 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20'
+                    : 'border-amber-500/50 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20'
+                  }`}
+                >
+                  {isAwaiting ? <Play className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+                  {isToggling ? 'Processando...' : isAwaiting ? 'Retomar Pedido' : 'Aguardando Estoque'}
                 </Button>
               )}
 

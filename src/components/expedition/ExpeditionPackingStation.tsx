@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, ScanBarcode, Camera, Keyboard, Package, ShieldCheck, AlertTriangle, Gift, ArrowRightLeft, Loader2, MapPin } from 'lucide-react';
+import { CheckCircle2, ScanBarcode, Camera, Keyboard, Package, ShieldCheck, AlertTriangle, Gift, ArrowRightLeft, Loader2, MapPin, Clock, Play } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -45,7 +45,14 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
   const filtered = orders.filter(o => {
     const term = searchTerm.toLowerCase();
     if (term && !(o.shopify_order_name?.toLowerCase().includes(term) || o.customer_name?.toLowerCase().includes(term))) return false;
-    return ['approved', 'grouped', 'picked'].includes(o.expedition_status);
+    return ['approved', 'grouped', 'picked', 'awaiting_stock'].includes(o.expedition_status);
+  });
+
+  // Sort: ready orders first, awaiting_stock at the bottom
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    if (a.expedition_status === 'awaiting_stock' && b.expedition_status !== 'awaiting_stock') return 1;
+    if (a.expedition_status !== 'awaiting_stock' && b.expedition_status === 'awaiting_stock') return -1;
+    return 0;
   });
 
   const selectedOrder = filtered.find(o => o.id === selectedOrderId);
@@ -251,27 +258,58 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
         <h2 className="text-lg font-bold text-foreground">Conferência & Verificação (Packing)</h2>
         <p className="text-sm text-muted-foreground">Selecione um pedido para bipar produtos e verificar qualidade.</p>
 
-        {filtered.length === 0 ? (
+        {sortedFiltered.length === 0 ? (
           <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido pronto para conferência.</CardContent></Card>
         ) : (
           <div className="grid gap-2">
-            {filtered.map(order => (
-              <Card key={order.id} className="cursor-pointer hover:shadow-md transition-shadow hover:border-primary" onClick={() => setSelectedOrderId(order.id)}>
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Package className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-foreground">{order.shopify_order_name}</span>
-                        {order.has_gift && <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600"><Gift className="h-3 w-3 mr-0.5" />Brinde</Badge>}
+            {sortedFiltered.map(order => {
+              const isAwaiting = order.expedition_status === 'awaiting_stock';
+              return (
+                <Card
+                  key={order.id}
+                  className={`cursor-pointer transition-shadow ${isAwaiting ? 'opacity-60 border-amber-400/50' : 'hover:shadow-md hover:border-primary'}`}
+                  onClick={() => !isAwaiting && setSelectedOrderId(order.id)}
+                >
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {isAwaiting ? <Clock className="h-5 w-5 text-amber-500" /> : <Package className="h-5 w-5 text-muted-foreground" />}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-foreground">{order.shopify_order_name}</span>
+                          {isAwaiting && (
+                            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 gap-1">
+                              <Clock className="h-3 w-3" /> Aguardando
+                            </Badge>
+                          )}
+                          {order.has_gift && <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600"><Gift className="h-3 w-3 mr-0.5" />Brinde</Badge>}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{order.customer_name}</p>
                       </div>
-                      <p className="text-sm text-muted-foreground">{order.customer_name}</p>
                     </div>
-                  </div>
-                  <Badge>{order.expedition_order_items?.length || 0} itens</Badge>
-                </CardContent>
-              </Card>
-            ))}
+                    <div className="flex items-center gap-2">
+                      <Badge>{order.expedition_order_items?.length || 0} itens</Badge>
+                      {isAwaiting && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1 border-green-500/50 text-green-700 dark:text-green-400"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            supabase
+                              .from('expedition_orders')
+                              .update({ expedition_status: 'approved' })
+                              .eq('id', order.id)
+                              .then(() => { toast.success('Pedido retomado!'); onRefresh(); });
+                          }}
+                        >
+                          <Play className="h-3 w-3" /> Retomar
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
