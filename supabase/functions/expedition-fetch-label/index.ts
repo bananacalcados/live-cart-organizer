@@ -16,6 +16,36 @@ async function safeJson(response: Response, label: string) {
   }
 }
 
+// Map carrier name to Tiny's formaEnvio code
+function mapCarrierToFormaEnvio(carrier: string): string {
+  const c = (carrier || '').toLowerCase();
+  if (c.includes('correio') || c.includes('pac') || c.includes('sedex')) return 'C';
+  if (c.includes('j&t') || c.includes('jt ') || c.includes('j&t')) return 'J';
+  if (c.includes('jadlog')) return 'J';
+  if (c.includes('loggi')) return 'LOGGI';
+  if (c.includes('total express')) return 'TOTALEXPRESS';
+  if (c.includes('moto')) return 'X'; // Outros
+  return 'T'; // Transportadora genérica
+}
+
+// Map carrier+service to Frenet/Correios service code for Tiny
+function mapToServiceCode(carrier: string, service: string): string {
+  const c = (carrier || '').toLowerCase();
+  const s = (service || '').toLowerCase();
+  
+  // Correios service codes
+  if (c.includes('correio') || s.includes('pac') || s.includes('sedex')) {
+    if (s.includes('sedex') && s.includes('10')) return '03158';
+    if (s.includes('sedex') && s.includes('12')) return '03140';
+    if (s.includes('sedex')) return '03220';
+    if (s.includes('pac')) return '03298';
+    return '03298'; // Default PAC
+  }
+  
+  // For other carriers, return the carrier+service as description
+  return `${carrier} ${service}`.trim();
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -55,6 +85,39 @@ serve(async (req) => {
         success: false,
         error: 'O frete precisa ser cotado e selecionado antes de gerar a etiqueta.',
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Derive carrier codes
+    const formaEnvio = mapCarrierToFormaEnvio(order.freight_carrier);
+    const serviceCode = mapToServiceCode(order.freight_carrier, order.freight_service || '');
+    const formaFrete = order.freight_service
+      ? `${order.freight_carrier} ${order.freight_service}`.trim()
+      : order.freight_carrier;
+    const weightKg = order.total_weight_grams 
+      ? Math.max(0.3, order.total_weight_grams / 1000) 
+      : 0.5;
+
+    console.log(`Freight info: carrier="${order.freight_carrier}", service="${order.freight_service}", formaEnvio="${formaEnvio}", serviceCode="${serviceCode}", formaFrete="${formaFrete}", weightKg=${weightKg}`);
+
+    // Step 0: Update the Tiny SALES ORDER with freight data (pedido.alterar.php)
+    // This ensures the order has the shipping method set before expedition
+    if (order.tiny_order_id) {
+      console.log('Step 0: Updating Tiny sales order with freight data...');
+      const pedidoPayload = JSON.stringify({
+        pedido: {
+          forma_envio: formaEnvio,
+          forma_frete: formaFrete,
+          valor_frete: order.freight_price || 0,
+          peso_bruto: weightKg.toFixed(3),
+        }
+      });
+      const pedidoResp = await fetch('https://api.tiny.com.br/api2/pedido.alterar.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}&pedido=${encodeURIComponent(pedidoPayload)}`,
+      });
+      const pedidoData = await safeJson(pedidoResp, 'Alterar pedido de venda');
+      console.log('Update sales order response:', JSON.stringify(pedidoData));
     }
 
     const objectId = order.tiny_invoice_id;
@@ -137,20 +200,20 @@ serve(async (req) => {
       } else {
         const groupErr = groupData.retorno?.erros?.[0]?.erro || '';
         console.warn('Grouping error (may already exist):', groupErr);
-        // Try to extract existing grouping ID if already grouped
-        if (groupErr.includes('já') || groupErr.includes('agrupamento')) {
-          idAgrupamento = groupData.retorno?.idAgrupamento || null;
-        }
+        // Try to extract existing grouping ID from expedition data
+        idAgrupamento = expedition.idAgrupamento || groupData.retorno?.idAgrupamento || null;
       }
 
-      // 3b: Update expedition with packaging data (required to conclude)
-      console.log('Step 3b: Updating expedition packaging data...');
-      const weightKg = order.total_weight_grams ? (order.total_weight_grams / 1000).toFixed(3) : '0.500';
+      // 3b: Update expedition with packaging data AND freight service code
+      console.log('Step 3b: Updating expedition with packaging + freight data...');
       const expeditionUpdatePayload = JSON.stringify({
         expedicao: {
           id: idExpedicao,
-          pesoBruto: weightKg,
+          pesoBruto: weightKg.toFixed(3),
           qtdVolumes: 1,
+          formaEnvio: formaEnvio,
+          formaFrete: formaFrete,
+          codigoServico: serviceCode,
           embalagem: {
             tipo: 2, // pacote/caixa
             altura: 10,
@@ -159,6 +222,7 @@ serve(async (req) => {
           },
         },
       });
+      console.log('Expedition update payload:', expeditionUpdatePayload);
       const updateExpResp = await fetch('https://api.tiny.com.br/api2/expedicao.alterar.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -166,6 +230,18 @@ serve(async (req) => {
       });
       const updateExpData = await safeJson(updateExpResp, 'Alterar expedição');
       console.log('Update expedition response:', JSON.stringify(updateExpData));
+
+      // Verify that formaFrete was actually set
+      const updatedExp = updateExpData.retorno?.expedicao;
+      if (updatedExp) {
+        const ffId = updatedExp.formaFrete?.id || updatedExp.formaFrete;
+        const ffDesc = updatedExp.formaFrete?.descricao || '';
+        console.log(`After update - formaEnvio: ${updatedExp.formaEnvio}, formaFrete id: ${ffId}, desc: ${ffDesc}, pesoBruto: ${updatedExp.pesoBruto}`);
+        
+        if ((!ffId || ffId === 0 || ffId === '0') && (!ffDesc || ffDesc === '')) {
+          console.warn('WARNING: formaFrete still empty after update. Tiny may not recognize the service code.');
+        }
+      }
 
       // 3c: Conclude the grouping (this auto-purchases freight/label)
       if (idAgrupamento) {
@@ -271,7 +347,7 @@ serve(async (req) => {
         ? 'Etiqueta oficial obtida com sucesso!'
         : trackingCode
           ? 'Expedição concluída e frete comprado. A etiqueta pode levar alguns instantes para ficar disponível. Tente novamente em breve.'
-          : 'Expedição enviada ao Tiny, mas a etiqueta ainda não foi gerada. Verifique se a NF-e contém os dados da transportadora e tente novamente.',
+          : 'Expedição enviada ao Tiny, mas a etiqueta ainda não foi gerada. Verifique se a forma de frete está configurada no Tiny e tente novamente.',
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
