@@ -83,19 +83,39 @@ export default function Expedition() {
     setOpenSupportCount(count || 0);
   }, []);
 
-  // Auto-verify shipped orders on load
+  // Auto-verify shipped orders on load (batch processing)
   const verifyShippedOrders = useCallback(async () => {
     setIsVerifying(true);
+    let totalChecked = 0;
+    let totalUpdated = 0;
+    const allResults: any[] = [];
+    let cursor: string | null = null;
+    let hasMore = true;
+
     try {
-      const { data, error } = await supabase.functions.invoke('expedition-verify-shipped');
-      if (error) throw error;
-      if (data?.updated > 0) {
-        toast.success(`${data.updated} pedido(s) marcado(s) como enviado(s)!`, {
-          description: data.results?.map((r: any) => `${r.order_name} (${r.source})`).join(', '),
+      while (hasMore) {
+        const { data, error } = await supabase.functions.invoke('expedition-verify-shipped', {
+          body: { cursor },
+        });
+        if (error) throw error;
+
+        totalChecked += data?.checked || 0;
+        totalUpdated += data?.updated || 0;
+        if (data?.results) allResults.push(...data.results);
+        hasMore = data?.hasMore || false;
+        cursor = data?.cursor || null;
+
+        // Small delay between batches
+        if (hasMore) await new Promise(r => setTimeout(r, 500));
+      }
+
+      if (totalUpdated > 0) {
+        toast.success(`${totalUpdated} pedido(s) marcado(s) como enviado(s)!`, {
+          description: allResults.map((r: any) => `${r.order_name} (${r.source})`).join(', '),
         });
         fetchOrders();
-      } else if (data?.checked > 0) {
-        toast.info(`${data.checked} pedidos verificados, nenhum envio externo encontrado.`);
+      } else if (totalChecked > 0) {
+        toast.info(`${totalChecked} pedidos verificados, nenhum envio externo encontrado.`);
       }
     } catch (error: any) {
       console.error('Verify shipped error:', error);
