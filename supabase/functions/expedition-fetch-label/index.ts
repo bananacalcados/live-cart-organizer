@@ -6,6 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+async function safeJson(response: Response, label: string) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    console.error(`${label} returned non-JSON:`, text.substring(0, 500));
+    throw new Error(`${label}: resposta inválida da API Tiny - "${text.substring(0, 100)}"`);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -32,7 +42,7 @@ serve(async (req) => {
 
     if (orderError || !order) throw new Error('Order not found');
 
-    // Validate prerequisites: NF-e must be emitted first
+    // Validate prerequisites
     if (!order.tiny_invoice_id && !order.invoice_number) {
       return new Response(JSON.stringify({
         success: false,
@@ -47,7 +57,6 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Use the NF-e ID (notafiscal) to send to expedition, NOT the order (venda)
     const objectId = order.tiny_invoice_id;
     const objectType = 'notafiscal';
 
@@ -58,23 +67,22 @@ serve(async (req) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `token=${TINY_ERP_TOKEN}&formato=json&tipoObjetos=${objectType}&idObjetos=${objectId}`,
     });
-    const sendData = await sendResponse.json();
+    const sendData = await safeJson(sendResponse, 'Envio para expedição');
     console.log('Send to expedition response:', JSON.stringify(sendData));
 
-    // It's OK if it fails with "already in expedition" - we continue
     if (sendData.retorno?.status === 'Erro') {
       const errMsg = sendData.retorno?.erros?.[0]?.erro || JSON.stringify(sendData.retorno);
       console.log('Send to expedition error (may be already sent):', errMsg);
     }
 
-    // Step 2: Get expedition info for this NF-e
+    // Step 2: Get expedition info
     console.log('Step 2: Getting expedition info...');
     const expeditionResponse = await fetch('https://api.tiny.com.br/api2/expedicao.obter.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `token=${TINY_ERP_TOKEN}&formato=json&tipoObjeto=${objectType}&idObjeto=${objectId}`,
     });
-    const expeditionData = await expeditionResponse.json();
+    const expeditionData = await safeJson(expeditionResponse, 'Obter expedição');
     console.log('Expedition data:', JSON.stringify(expeditionData));
 
     if (expeditionData.retorno?.status !== 'OK' && expeditionData.retorno?.status !== 'Processado') {
@@ -100,14 +108,14 @@ serve(async (req) => {
 
     console.log(`Expedition ID: ${idExpedicao}, Tracking: ${trackingCode}, Carrier: ${carrier}`);
 
-    // Step 3: Get label URLs from expedition
+    // Step 3: Get label URLs
     console.log('Step 3: Fetching labels...');
     const labelResponse = await fetch('https://api.tiny.com.br/api2/expedicao.obter.etiquetas.impressao.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `token=${TINY_ERP_TOKEN}&formato=json&idExpedicao=${idExpedicao}`,
     });
-    const labelData = await labelResponse.json();
+    const labelData = await safeJson(labelResponse, 'Obter etiquetas');
     console.log('Label data:', JSON.stringify(labelData));
 
     let labelUrl: string | null = null;
