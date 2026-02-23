@@ -59,40 +59,110 @@ async function searchTinyOrderByNumber(token: string, orderNumber: string): Prom
 async function updateTinyOrderCustomerData(token: string, tinyOrderId: string, order: any) {
   const shippingAddress = order.shipping_address as any;
 
-  // Build update payload with customer data including CPF
-  const pedido: any = {
-    cliente: {
-      nome: order.customer_name || 'Cliente',
-      email: order.customer_email || '',
-      fone: order.customer_phone || '',
-    },
-  };
+  // Parse address1 to extract street, number, and neighborhood
+  let street = '';
+  let number = '';
+  let complement = '';
+  let bairro = '';
 
-  // Add CPF if available
-  if (order.customer_cpf) {
-    pedido.cliente.cpf_cnpj = order.customer_cpf;
+  if (shippingAddress?.address1) {
+    const parts = shippingAddress.address1.split(',').map((p: string) => p.trim());
+    street = parts[0] || '';
+    number = parts[1] || '';
+    if (parts.length > 2) {
+      complement = parts.slice(2).join(', ');
+    }
   }
 
-  // Add address if available
-  if (shippingAddress) {
-    pedido.cliente.endereco = shippingAddress.address1 || '';
-    pedido.cliente.complemento = shippingAddress.address2 || '';
-    pedido.cliente.cidade = shippingAddress.city || '';
-    pedido.cliente.uf = shippingAddress.province || '';
-    pedido.cliente.cep = shippingAddress.zip?.replace(/\D/g, '') || '';
+  if (shippingAddress?.address2) {
+    bairro = shippingAddress.address2;
   }
 
-  console.log(`Updating Tiny order ${tinyOrderId} with customer data:`, JSON.stringify(pedido));
-
-  const response = await fetch('https://api.tiny.com.br/api2/pedido.alterar.php', {
+  // Step 1: Get the order from Tiny to find the contact ID
+  console.log(`Step 1: Getting Tiny order ${tinyOrderId} to find contact...`);
+  const orderResponse = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `token=${token}&formato=json&id=${tinyOrderId}&pedido=${encodeURIComponent(JSON.stringify({ pedido }))}`,
+    body: `token=${token}&formato=json&id=${tinyOrderId}`,
   });
-  const data = await safeJson(response, 'Alterar pedido Tiny');
-  console.log('Update Tiny order response:', JSON.stringify(data));
+  const orderData = await safeJson(orderResponse, 'Obter pedido Tiny');
+  console.log('Tiny order data cliente:', JSON.stringify(orderData.retorno?.pedido?.cliente));
+
+  const tinyCliente = orderData.retorno?.pedido?.cliente;
+  if (!tinyCliente) {
+    console.error('Could not find cliente in Tiny order');
+    return { retorno: { status: 'Erro', erros: [{ erro: 'Cliente não encontrado no pedido Tiny' }] } };
+  }
+
+  // Check what data is missing
+  const missingFields: string[] = [];
+  if (!tinyCliente.cpf_cnpj && order.customer_cpf) missingFields.push('CPF');
+  if (!tinyCliente.endereco && shippingAddress) missingFields.push('Endereço');
+  if (!tinyCliente.bairro && bairro) missingFields.push('Bairro');
+  if (!tinyCliente.numero && number) missingFields.push('Número');
+  if (!tinyCliente.cep && shippingAddress?.zip) missingFields.push('CEP');
+
+  console.log('Missing fields in Tiny:', missingFields.join(', ') || 'none');
+
+  // If the contact already has all data, skip update
+  if (missingFields.length === 0 && tinyCliente.cpf_cnpj) {
+    console.log('Contact already has all data, skipping update');
+    return { retorno: { status: 'OK' }, skipped: true };
+  }
+
+  // Step 2: Update the contact (contato) in Tiny with CPF & address
+  const contactId = tinyCliente.id || tinyCliente.codigo;
+  const cpf = order.customer_cpf?.replace(/\D/g, '') || tinyCliente.cpf_cnpj || '';
+  const phone = order.customer_phone?.replace(/\D/g, '') || tinyCliente.fone || '';
+
+  const contatoPayload = {
+    contatos: [{
+      contato: {
+        sequencia: 1,
+        ...(contactId ? { id: contactId } : {}),
+        nome: order.customer_name || tinyCliente.nome || 'Cliente',
+        tipo_pessoa: cpf.length > 11 ? 'J' : 'F',
+        cpf_cnpj: cpf,
+        situacao: 'A',
+        endereco: street || tinyCliente.endereco || '',
+        numero: number || tinyCliente.numero || 'S/N',
+        complemento: complement || tinyCliente.complemento || '',
+        bairro: bairro || tinyCliente.bairro || '',
+        cep: shippingAddress?.zip?.replace(/\D/g, '') || tinyCliente.cep?.replace(/\D/g, '') || '',
+        cidade: shippingAddress?.city || tinyCliente.cidade || '',
+        uf: parseUF(shippingAddress?.province || tinyCliente.uf || ''),
+        fone: phone,
+        email: order.customer_email || tinyCliente.email || '',
+      }
+    }]
+  };
+
+  console.log(`Step 2: Updating Tiny contact with data:`, JSON.stringify(contatoPayload));
+
+  const response = await fetch('https://api.tiny.com.br/api2/contato.alterar.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `token=${token}&formato=json&contato=${encodeURIComponent(JSON.stringify(contatoPayload))}`,
+  });
+  const data = await safeJson(response, 'Alterar contato Tiny');
+  console.log('Update Tiny contact response:', JSON.stringify(data));
 
   return data;
+}
+
+// Map full province names to UF codes (Tiny requires 2-letter UF)
+function parseUF(province: string): string {
+  const map: Record<string, string> = {
+    'acre': 'AC', 'alagoas': 'AL', 'amapá': 'AP', 'amazonas': 'AM',
+    'bahia': 'BA', 'ceará': 'CE', 'distrito federal': 'DF', 'espírito santo': 'ES',
+    'goiás': 'GO', 'maranhão': 'MA', 'mato grosso': 'MT', 'mato grosso do sul': 'MS',
+    'minas gerais': 'MG', 'pará': 'PA', 'paraíba': 'PB', 'paraná': 'PR',
+    'pernambuco': 'PE', 'piauí': 'PI', 'rio de janeiro': 'RJ', 'rio grande do norte': 'RN',
+    'rio grande do sul': 'RS', 'rondônia': 'RO', 'roraima': 'RR', 'santa catarina': 'SC',
+    'são paulo': 'SP', 'sergipe': 'SE', 'tocantins': 'TO',
+  };
+  if (province.length === 2) return province.toUpperCase();
+  return map[province.toLowerCase()] || province;
 }
 
 serve(async (req) => {
