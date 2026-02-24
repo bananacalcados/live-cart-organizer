@@ -16,16 +16,12 @@ async function getTinyV3Token(supabase: any): Promise<string | null> {
     .single();
 
   if (!data?.value?.access_token) return null;
-
   const tokenData = data.value as any;
 
-  // Check if token needs refresh (expires_in is typically 300s = 5min)
   const connectedAt = new Date(tokenData.connected_at || tokenData.refreshed_at || 0).getTime();
   const expiresIn = (tokenData.expires_in || 300) * 1000;
-  const now = Date.now();
 
-  if (now - connectedAt > expiresIn - 30000) {
-    // Token expired or about to expire, refresh it
+  if (Date.now() - connectedAt > expiresIn - 30000) {
     console.log('Tiny v3 token expired, refreshing...');
     try {
       const refreshRes = await fetch('https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token', {
@@ -58,7 +54,6 @@ async function getTinyV3Token(supabase: any): Promise<string | null> {
         },
       }, { onConflict: 'key' });
 
-      console.log('Tiny v3 token refreshed successfully');
       return newTokens.access_token;
     } catch (e) {
       console.error('Token refresh error:', e);
@@ -81,11 +76,14 @@ async function tinyV3Get(token: string, path: string, params?: Record<string, st
   });
   if (!resp.ok) {
     const errText = await resp.text();
-    // Tiny often returns 200 with error in body, but if status is not 200:
     throw new Error(`Tiny v3 ${path} failed (${resp.status}): ${errText.substring(0, 300)}`);
   }
   return resp.json();
 }
+
+// Tiny V3 situacao codes (integers)
+// 0=em aberto, 3=aprovado, 5=faturado, 6=enviado, 7=entregue, 8=não entregue, 9=cancelado
+const SKIP_SITUACAO = new Set([6, 7, 8, 9]); // skip enviado, entregue, não entregue, cancelado
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -99,22 +97,23 @@ serve(async (req) => {
 
     const token = await getTinyV3Token(supabase);
     if (!token) {
-      throw new Error("Não foi possível obter o token de acesso do Tiny (OAuth). Verifique a conexão na área administrativa.");
+      throw new Error("Token OAuth do Tiny indisponível.");
     }
 
     console.log("Fetching orders from Tiny V3...");
 
-    // Tiny V3 API expects situacao as integer:
-    // We'll fetch all orders without situacao filter and skip canceled/shipped ones locally
-    // Or use known integer codes. Common Tiny V3 situacao integers:
-    // Let's fetch without filter and handle locally
-    
     let synced = 0;
     let skipped = 0;
     let page = 1;
     let hasMore = true;
+    const startTime = Date.now();
     
     while (hasMore) {
+      if (Date.now() - startTime > 45000) {
+        console.log('Approaching timeout, stopping.');
+        break;
+      }
+
       console.log(`Fetching page ${page}...`);
       const data = await tinyV3Get(token, '/pedidos', { 
         pagina: String(page),
@@ -122,112 +121,96 @@ serve(async (req) => {
       });
         
       const orders = data.itens || data.items || [];
-      if (orders.length === 0) {
-        hasMore = false;
-        break;
-      }
+      if (orders.length === 0) { hasMore = false; break; }
 
-      // Filter locally: skip canceled, shipped, delivered orders
-      const skipStatuses = ['cancelado', 'cancelada', 'enviado', 'entregue', 'nao_entregue'];
-      
       for (const item of orders) {
         try {
-          const situacao = (item.situacao || item.descricaoSituacao || '').toString().toLowerCase();
-          if (skipStatuses.some(s => situacao.includes(s))) {
-            continue; // Skip non-expedition statuses
-          }
+          // V3 situacao is integer
+          if (SKIP_SITUACAO.has(item.situacao)) continue;
 
           const tinyId = String(item.id);
-          const shopifyId = item.numero_ecommerce ? String(item.numero_ecommerce) : null;
+          const ecomNum = item.ecommerce?.numeroPedidoEcommerce || '';
           
-          // Check existence by tiny_order_id first
-          let existing = await supabase
+          // Check if already exists
+          const { data: existing } = await supabase
             .from("expedition_beta_orders")
             .select("id")
             .eq("tiny_order_id", tinyId)
             .maybeSingle();
+          if (existing) { skipped++; continue; }
 
-          if (!existing.data) {
-            existing = await supabase
-              .from("expedition_beta_orders")
-              .select("id")
-              .eq("shopify_order_id", shopifyId || `tiny-${tinyId}`)
-              .maybeSingle();
-          }
-
-          if (existing.data) {
-            skipped++;
-            continue;
-          }
-
-          // Fetch full details
+          // Fetch full details for items
           let order: any;
           try {
-            const details = await tinyV3Get(token, `/pedidos/${tinyId}`);
-            order = details;
-          } catch (detailErr) {
-            console.error(`Error fetching details for ${tinyId}:`, detailErr);
-            // Use list data as fallback
+            order = await tinyV3Get(token, `/pedidos/${tinyId}`);
+          } catch {
             order = item;
           }
 
-          const finalShopifyId = order.numero_ecommerce ? String(order.numero_ecommerce) : `tiny-${tinyId}`;
-          const customerName = order.cliente?.nome || order.nome || item.nome || "Cliente Tiny";
+          const orderNum = String(order.numeroPedido || item.numeroPedido || '');
+          const ecom = order.ecommerce?.numeroPedidoEcommerce || ecomNum;
+          const finalShopifyId = ecom ? String(ecom) : `tiny-${tinyId}`;
           
+          const cliente = order.cliente || {};
+          const endereco = cliente.endereco || {};
+          const customerName = cliente.nome || cliente.fantasia || "Cliente Tiny";
+
           const { data: inserted, error: insertError } = await supabase
             .from("expedition_beta_orders")
             .insert({
               shopify_order_id: finalShopifyId,
-              shopify_order_name: order.numero_ecommerce ? `#${order.numero_ecommerce}` : `T-${order.numero || item.numero}`,
-              shopify_order_number: order.numero_ecommerce || order.numero || item.numero,
-              shopify_created_at: order.data_pedido ? new Date(order.data_pedido.split('/').reverse().join('-')).toISOString() : new Date().toISOString(),
+              shopify_order_name: ecom ? `#${ecom}` : `T-${orderNum}`,
+              shopify_order_number: ecom || orderNum,
+              shopify_created_at: order.data || order.dataCriacao || item.dataCriacao || new Date().toISOString(),
               customer_name: customerName,
-              customer_email: order.cliente?.email || null,
-              customer_phone: order.cliente?.fone || order.cliente?.celular || null,
-              customer_cpf: order.cliente?.cpf_cnpj || null,
-              shipping_address: order.cliente ? {
-                address1: order.cliente.endereco,
-                address2: order.cliente.complemento,
-                city: order.cliente.cidade,
-                province: order.cliente.uf,
-                zip: order.cliente.cep,
+              customer_email: cliente.email || null,
+              customer_phone: cliente.telefone || cliente.celular || null,
+              customer_cpf: cliente.cpfCnpj || null,
+              shipping_address: endereco.endereco ? {
+                address1: endereco.endereco || '',
+                address2: endereco.complemento || '',
+                city: endereco.cidade || '',
+                province: endereco.uf || '',
+                zip: endereco.cep || '',
                 country: 'Brazil',
                 name: customerName,
-                phone: order.cliente.fone || order.cliente.celular
-              } : null,
+                number: endereco.numero || '',
+                neighborhood: endereco.bairro || '',
+                phone: cliente.telefone || cliente.celular || ''
+              } : (order.enderecoEntrega || null),
               financial_status: 'paid',
               fulfillment_status: 'unfulfilled',
               expedition_status: 'approved',
-              subtotal_price: parseFloat(order.totalProdutos || order.valor_itens || 0),
-              total_price: parseFloat(order.totalPedido || order.valor_total || 0),
-              total_discount: parseFloat(order.desconto || order.valor_desconto || 0),
-              total_shipping: parseFloat(order.frete || order.valor_frete || 0),
+              subtotal_price: parseFloat(order.valorTotalProdutos || item.valor || 0),
+              total_price: parseFloat(order.valorTotalPedido || item.valor || 0),
+              total_discount: parseFloat(order.valorDesconto || 0),
+              total_shipping: parseFloat(order.valorFrete || 0),
               total_weight_grams: 0,
-              has_gift: (order.obs || order.observacoes || '').toLowerCase().includes("brinde"),
-              notes: order.obs || order.observacoes || null,
+              has_gift: (order.observacoes || '').toLowerCase().includes("brinde"),
+              notes: order.observacoes || null,
               tiny_order_id: tinyId,
-              tiny_order_number: String(order.numero || item.numero || '')
+              tiny_order_number: orderNum
             })
             .select()
             .single();
 
           if (insertError) {
-            console.error(`Error inserting order ${tinyId}:`, insertError);
+            console.error(`Insert error ${tinyId}:`, insertError.message);
             continue;
           }
 
-          // Insert Items
+          // Insert Items - V3: itens[].produto.descricao, itens[].quantidade, itens[].valorUnitario
           const rawItems = order.itens || [];
-          if (Array.isArray(rawItems) && rawItems.length > 0) {
+          if (Array.isArray(rawItems) && rawItems.length > 0 && inserted) {
             const itemsToInsert = rawItems.map((li: any) => {
-              const i = li.item || li;
+              const prod = li.produto || {};
               return {
                 expedition_order_id: inserted.id,
-                product_name: i.descricao || i.nome || 'Produto',
+                product_name: prod.descricao || prod.nome || 'Produto',
                 variant_name: null,
-                sku: i.codigo,
-                quantity: parseFloat(i.quantidade || 1),
-                unit_price: parseFloat(i.valor_unitario || i.valorUnitario || 0),
+                sku: prod.sku || prod.codigo || null,
+                quantity: parseFloat(li.quantidade || 1),
+                unit_price: parseFloat(li.valorUnitario || 0),
                 weight_grams: 0
               };
             });
@@ -235,8 +218,8 @@ serve(async (req) => {
           }
           
           synced++;
-        } catch (err) {
-          console.error(`Error processing order ${item.id}:`, err);
+        } catch (err: any) {
+          console.error(`Error processing ${item.id}:`, err.message);
         }
       }
 
@@ -244,7 +227,7 @@ serve(async (req) => {
       if (page > 10) hasMore = false; 
     }
 
-    console.log(`Tiny Sync complete: ${synced} synced, ${skipped} skipped`);
+    console.log(`Sync complete: ${synced} synced, ${skipped} skipped`);
 
     return new Response(JSON.stringify({ success: true, synced, skipped }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

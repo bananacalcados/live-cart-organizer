@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Trash2, Unlink, Clock, ArrowRight, Gift, Radio, RotateCcw } from 'lucide-react';
@@ -35,9 +34,25 @@ const STATUS_LABELS: Record<string, string> = {
   dispatched: 'Despachado',
 };
 
+type StatusFilter = 'todos' | 'nao_despachados' | 'approved' | 'grouped' | 'awaiting_stock' | 'picking' | 'picked' | 'packing' | 'packed' | 'dispatched';
+
+const STATUS_TABS: { key: StatusFilter; label: string; color: string }[] = [
+  { key: 'todos', label: 'Todos', color: 'text-foreground' },
+  { key: 'nao_despachados', label: 'Não despachados', color: 'text-orange-500' },
+  { key: 'approved', label: 'Aprovado', color: 'text-green-500' },
+  { key: 'grouped', label: 'Agrupado', color: 'text-blue-500' },
+  { key: 'awaiting_stock', label: 'Aguardando', color: 'text-amber-500' },
+  { key: 'picking', label: 'Separando', color: 'text-cyan-500' },
+  { key: 'picked', label: 'Separado', color: 'text-indigo-500' },
+  { key: 'packing', label: 'Bipando', color: 'text-purple-500' },
+  { key: 'packed', label: 'Embalado', color: 'text-violet-500' },
+  { key: 'dispatched', label: 'Despachado', color: 'text-emerald-500' },
+];
+
 export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('nao_despachados');
 
   const filtered = orders.filter(o => {
     const term = searchTerm.toLowerCase();
@@ -244,48 +259,65 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
     );
   }
 
+  // Apply status filter
+  const statusFiltered = filtered.filter(o => {
+    if (statusFilter === 'todos') return true;
+    if (statusFilter === 'nao_despachados') return o.expedition_status !== 'dispatched';
+    return o.expedition_status === statusFilter;
+  });
+
+  // Count per status
+  const statusCounts: Record<string, number> = { todos: filtered.length, nao_despachados: 0 };
+  filtered.forEach(o => {
+    const s = o.expedition_status || 'approved';
+    statusCounts[s] = (statusCounts[s] || 0) + 1;
+    if (s !== 'dispatched') statusCounts['nao_despachados']++;
+  });
+
   return (
     <div className="space-y-4">
-      <Tabs defaultValue="approved">
-        <TabsList>
-          <TabsTrigger value="approved" className="gap-2"><CheckCircle2 className="h-4 w-4" />Aprovados ({approved.length})</TabsTrigger>
-          <TabsTrigger value="pending" className="gap-2"><AlertTriangle className="h-4 w-4" />Pendentes ({pending.length})</TabsTrigger>
-        </TabsList>
+      {/* Status filter tabs like Tiny */}
+      <div className="flex flex-wrap gap-1 border-b border-border pb-2">
+        {STATUS_TABS.map(tab => {
+          const count = statusCounts[tab.key] || 0;
+          const isActive = statusFilter === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key)}
+              className={`flex flex-col items-center px-3 py-1.5 rounded-md text-xs transition-all ${
+                isActive
+                  ? 'bg-primary/10 border border-primary/30 font-semibold'
+                  : 'hover:bg-secondary/50'
+              }`}
+            >
+              <span className={`flex items-center gap-1 ${isActive ? tab.color : 'text-muted-foreground'}`}>
+                <span className={`w-2 h-2 rounded-full ${isActive ? 'opacity-100' : 'opacity-40'}`} style={{ backgroundColor: 'currentColor' }} />
+                {tab.label}
+              </span>
+              <span className={`text-sm font-bold ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>{count}</span>
+            </button>
+          );
+        })}
+      </div>
 
-        <TabsContent value="approved" className="space-y-2 mt-4">
-          {approved.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido aprovado.</CardContent></Card>
-          ) : approved.map(order => (
-            <BetaOrderRow
-              key={order.id}
-              order={order}
-              isExpanded={expandedId === order.id}
-              onToggle={() => setExpandedId(expandedId === order.id ? null : order.id)}
-              onAdvance={handleAdvanceStatus}
-              onDelete={handleDelete}
-              onToggleAwaiting={handleToggleAwaiting}
-              onReset={handleResetExpedition}
-            />
-          ))}
-        </TabsContent>
-
-        <TabsContent value="pending" className="space-y-2 mt-4">
-          {pending.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido pendente.</CardContent></Card>
-          ) : pending.map(order => (
-            <BetaOrderRow
-              key={order.id}
-              order={order}
-              isExpanded={expandedId === order.id}
-              onToggle={() => setExpandedId(expandedId === order.id ? null : order.id)}
-              onAdvance={handleAdvanceStatus}
-              onDelete={handleDelete}
-              onToggleAwaiting={handleToggleAwaiting}
-              onReset={handleResetExpedition}
-            />
-          ))}
-        </TabsContent>
-      </Tabs>
+      {/* Orders list */}
+      <div className="space-y-2">
+        {statusFiltered.length === 0 ? (
+          <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido neste filtro.</CardContent></Card>
+        ) : statusFiltered.map(order => (
+          <BetaOrderRow
+            key={order.id}
+            order={order}
+            isExpanded={expandedId === order.id}
+            onToggle={() => setExpandedId(expandedId === order.id ? null : order.id)}
+            onAdvance={handleAdvanceStatus}
+            onDelete={handleDelete}
+            onToggleAwaiting={handleToggleAwaiting}
+            onReset={handleResetExpedition}
+          />
+        ))}
+      </div>
     </div>
   );
 }
