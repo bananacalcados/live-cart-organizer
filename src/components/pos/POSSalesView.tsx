@@ -713,7 +713,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         // Award loyalty points if enabled and customer identified
         if (loyaltyConfig?.is_enabled && selectedCustomer?.whatsapp) {
           const phone = selectedCustomer.whatsapp.replace(/\D/g, '');
-          const points = Math.floor(totalWithDiscount * (loyaltyConfig.points_per_real || 0.1));
+          const rate = Number(loyaltyConfig?.points_per_real) || 0.1;
+          console.log('[Loyalty] points_per_real from config:', loyaltyConfig?.points_per_real, '→ rate:', rate, '→ total:', totalWithDiscount);
+          const points = Math.floor(totalWithDiscount * rate);
           if (points > 0) {
             setEarnedPoints(points);
             setShowLoyaltyScreen(true);
