@@ -104,153 +104,142 @@ serve(async (req) => {
 
     console.log("Fetching orders from Tiny V3...");
 
-    // Statuses to fetch: Approved, Invoiced, Ready for Shipping, Preparing
-    // Note: Tiny V3 status codes/slugs might differ slightly, but usually:
-    // 1=aberto, 2=aprovado, 3=faturado, 4=entregue, 5=cancelado, etc.
-    // Or string slugs. Let's try searching for non-shipped statuses.
-    // 'aprovado', 'preparando_envio', 'faturado', 'pronto_envio'
+    // Tiny V3 API expects situacao as integer:
+    // We'll fetch all orders without situacao filter and skip canceled/shipped ones locally
+    // Or use known integer codes. Common Tiny V3 situacao integers:
+    // Let's fetch without filter and handle locally
     
-    const statusesToFetch = ['aprovado', 'faturado', 'preparando_envio', 'pronto_envio'];
     let synced = 0;
     let skipped = 0;
+    let page = 1;
+    let hasMore = true;
     
-    // We'll process each status. 
-    // Pagination: Tiny V3 usually uses `pagina` (page) parameter.
-    
-    for (const status of statusesToFetch) {
-      let page = 1;
-      let hasMore = true;
-      
-      while (hasMore) {
-        console.log(`Fetching ${status} page ${page}...`);
-        // Assuming GET /pedidos with 'situacao' and 'pagina'
-        const data = await tinyV3Get(token, '/pedidos', { 
-          situacao: status, 
-          pagina: String(page) 
-        });
+    while (hasMore) {
+      console.log(`Fetching page ${page}...`);
+      const data = await tinyV3Get(token, '/pedidos', { 
+        pagina: String(page),
+        limite: '100'
+      });
         
-        const orders = data.itens || data.items || []; // Tiny V3 usually wraps list in 'itens'
-        if (orders.length === 0) {
-          hasMore = false;
-          break;
-        }
+      const orders = data.itens || data.items || [];
+      if (orders.length === 0) {
+        hasMore = false;
+        break;
+      }
 
-        // Process this page
-        await Promise.all(orders.map(async (item: any) => {
-          try {
-            // Check if order exists by Tiny ID (preferred) or Shopify ID
-            const tinyId = String(item.id);
-            const shopifyId = item.numero_ecommerce ? String(item.numero_ecommerce) : null;
-            
-            // Check existence by Tiny ID first
-            let existing = await supabase
+      // Filter locally: skip canceled, shipped, delivered orders
+      const skipStatuses = ['cancelado', 'cancelada', 'enviado', 'entregue', 'nao_entregue'];
+      
+      for (const item of orders) {
+        try {
+          const situacao = (item.situacao || item.descricaoSituacao || '').toString().toLowerCase();
+          if (skipStatuses.some(s => situacao.includes(s))) {
+            continue; // Skip non-expedition statuses
+          }
+
+          const tinyId = String(item.id);
+          const shopifyId = item.numero_ecommerce ? String(item.numero_ecommerce) : null;
+          
+          // Check existence
+          let existing = await supabase
+            .from("expedition_beta_orders")
+            .select("id")
+            .eq("shopify_order_id", shopifyId || `tiny-${tinyId}`)
+            .maybeSingle();
+
+          if (!existing.data) {
+            existing = await supabase
               .from("expedition_beta_orders")
               .select("id")
-              .eq("tiny_order_id", tinyId)
+              .eq("shopify_order_id", `tiny-${tinyId}`)
               .maybeSingle();
-              
-            if (!existing.data && shopifyId) {
-               existing = await supabase
-                .from("expedition_beta_orders")
-                .select("id")
-                .eq("shopify_order_id", shopifyId)
-                .maybeSingle();
-            }
-
-            if (existing.data) {
-              // Update status/tiny_id if needed
-              await supabase.from("expedition_beta_orders").update({
-                tiny_order_id: tinyId,
-                tiny_order_number: String(item.numero || ''),
-                // Don't overwrite expedition_status if already set to something advanced?
-                // Actually, if we are syncing, maybe we just want to ensure it exists.
-              }).eq("id", existing.data.id);
-              skipped++;
-              return;
-            }
-
-            // Fetch full details
-            const details = await tinyV3Get(token, `/pedidos/${tinyId}`);
-            const order = details.pedido || details; // Tiny V3 structure varies
-
-            // Determine identifiers
-            const finalShopifyId = order.numero_ecommerce ? String(order.numero_ecommerce) : `tiny-${tinyId}`;
-            const customerName = order.cliente?.nome || order.nome || "Cliente Tiny";
-            
-            // Create order
-            const { data: inserted, error: insertError } = await supabase
-              .from("expedition_beta_orders")
-              .insert({
-                shopify_order_id: finalShopifyId,
-                shopify_order_name: order.numero_ecommerce ? `#${order.numero_ecommerce}` : `T-${order.numero}`,
-                shopify_order_number: order.numero_ecommerce || order.numero,
-                tiny_order_id: tinyId,
-                tiny_order_number: String(order.numero || ''),
-                shopify_created_at: order.data_pedido ? new Date(order.data_pedido).toISOString() : new Date().toISOString(),
-                customer_name: customerName,
-                customer_email: order.cliente?.email || null,
-                customer_phone: order.cliente?.fone || order.cliente?.celular || null,
-                customer_cpf: order.cliente?.cpf_cnpj || null,
-                shipping_address: {
-                  address1: order.cliente?.endereco,
-                  address2: order.cliente?.complemento,
-                  city: order.cliente?.cidade,
-                  province: order.cliente?.uf,
-                  zip: order.cliente?.cep,
-                  country: 'Brazil',
-                  name: customerName,
-                  phone: order.cliente?.fone || order.cliente?.celular
-                },
-                financial_status: 'paid', // Assuming fetched statuses imply paid/approved
-                fulfillment_status: 'unfulfilled',
-                expedition_status: 'approved',
-                subtotal_price: parseFloat(order.valor_itens || 0),
-                total_price: parseFloat(order.valor_total || 0),
-                total_discount: parseFloat(order.valor_desconto || 0),
-                total_shipping: parseFloat(order.valor_frete || 0),
-                total_weight_grams: 0, // Tiny might not give total weight easily here without summing items
-                has_gift: (order.obs || '').toLowerCase().includes("brinde"),
-                notes: order.obs || null
-              })
-              .select()
-              .single();
-
-            if (insertError) {
-              console.error(`Error inserting order ${tinyId}:`, insertError);
-              return;
-            }
-
-            // Insert Items
-            if (order.itens && Array.isArray(order.itens)) {
-              const itemsToInsert = order.itens.map((li: any) => {
-                const i = li.item || li;
-                return {
-                  expedition_order_id: inserted.id,
-                  product_name: i.descricao || i.nome,
-                  variant_name: null, // Tiny separates variants differently
-                  sku: i.codigo,
-                  quantity: parseFloat(i.quantidade || 1),
-                  unit_price: parseFloat(i.valor_unitario || 0),
-                  weight_grams: 0 // Would need product lookup
-                };
-              });
-              
-              if (itemsToInsert.length > 0) {
-                await supabase.from("expedition_beta_order_items").insert(itemsToInsert);
-              }
-            }
-            
-            synced++;
-
-          } catch (err) {
-            console.error(`Error processing order ${item.id}:`, err);
           }
-        }));
 
-        page++;
-        // Limit pages to avoid timeout
-        if (page > 5) hasMore = false; 
+          if (existing.data) {
+            skipped++;
+            continue;
+          }
+
+          // Fetch full details
+          let order: any;
+          try {
+            const details = await tinyV3Get(token, `/pedidos/${tinyId}`);
+            order = details;
+          } catch (detailErr) {
+            console.error(`Error fetching details for ${tinyId}:`, detailErr);
+            // Use list data as fallback
+            order = item;
+          }
+
+          const finalShopifyId = order.numero_ecommerce ? String(order.numero_ecommerce) : `tiny-${tinyId}`;
+          const customerName = order.cliente?.nome || order.nome || item.nome || "Cliente Tiny";
+          
+          const { data: inserted, error: insertError } = await supabase
+            .from("expedition_beta_orders")
+            .insert({
+              shopify_order_id: finalShopifyId,
+              shopify_order_name: order.numero_ecommerce ? `#${order.numero_ecommerce}` : `T-${order.numero || item.numero}`,
+              shopify_order_number: order.numero_ecommerce || order.numero || item.numero,
+              shopify_created_at: order.data_pedido ? new Date(order.data_pedido.split('/').reverse().join('-')).toISOString() : new Date().toISOString(),
+              customer_name: customerName,
+              customer_email: order.cliente?.email || null,
+              customer_phone: order.cliente?.fone || order.cliente?.celular || null,
+              customer_cpf: order.cliente?.cpf_cnpj || null,
+              shipping_address: order.cliente ? {
+                address1: order.cliente.endereco,
+                address2: order.cliente.complemento,
+                city: order.cliente.cidade,
+                province: order.cliente.uf,
+                zip: order.cliente.cep,
+                country: 'Brazil',
+                name: customerName,
+                phone: order.cliente.fone || order.cliente.celular
+              } : null,
+              financial_status: 'paid',
+              fulfillment_status: 'unfulfilled',
+              expedition_status: 'approved',
+              subtotal_price: parseFloat(order.totalProdutos || order.valor_itens || 0),
+              total_price: parseFloat(order.totalPedido || order.valor_total || 0),
+              total_discount: parseFloat(order.desconto || order.valor_desconto || 0),
+              total_shipping: parseFloat(order.frete || order.valor_frete || 0),
+              total_weight_grams: 0,
+              has_gift: (order.obs || order.observacoes || '').toLowerCase().includes("brinde"),
+              notes: order.obs || order.observacoes || null
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error(`Error inserting order ${tinyId}:`, insertError);
+            continue;
+          }
+
+          // Insert Items
+          const rawItems = order.itens || [];
+          if (Array.isArray(rawItems) && rawItems.length > 0) {
+            const itemsToInsert = rawItems.map((li: any) => {
+              const i = li.item || li;
+              return {
+                expedition_order_id: inserted.id,
+                product_name: i.descricao || i.nome || 'Produto',
+                variant_name: null,
+                sku: i.codigo,
+                quantity: parseFloat(i.quantidade || 1),
+                unit_price: parseFloat(i.valor_unitario || i.valorUnitario || 0),
+                weight_grams: 0
+              };
+            });
+            await supabase.from("expedition_beta_order_items").insert(itemsToInsert);
+          }
+          
+          synced++;
+        } catch (err) {
+          console.error(`Error processing order ${item.id}:`, err);
+        }
       }
+
+      page++;
+      if (page > 10) hasMore = false; 
     }
 
     console.log(`Tiny Sync complete: ${synced} synced, ${skipped} skipped`);
