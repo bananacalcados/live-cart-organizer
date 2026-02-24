@@ -4490,10 +4490,14 @@ export type Database = {
           nfce_pdf_url: string | null
           notes: string | null
           payment_details: Json | null
+          payment_gateway: string | null
+          payment_link: string | null
           payment_method: string | null
+          sale_type: string
           seller_id: string | null
           source_order_id: string | null
           status: string
+          stock_source_store_id: string | null
           store_id: string
           subtotal: number
           tiny_invoice_id: string | null
@@ -4515,10 +4519,14 @@ export type Database = {
           nfce_pdf_url?: string | null
           notes?: string | null
           payment_details?: Json | null
+          payment_gateway?: string | null
+          payment_link?: string | null
           payment_method?: string | null
+          sale_type?: string
           seller_id?: string | null
           source_order_id?: string | null
           status?: string
+          stock_source_store_id?: string | null
           store_id: string
           subtotal?: number
           tiny_invoice_id?: string | null
@@ -4540,10 +4548,14 @@ export type Database = {
           nfce_pdf_url?: string | null
           notes?: string | null
           payment_details?: Json | null
+          payment_gateway?: string | null
+          payment_link?: string | null
           payment_method?: string | null
+          sale_type?: string
           seller_id?: string | null
           source_order_id?: string | null
           status?: string
+          stock_source_store_id?: string | null
           store_id?: string
           subtotal?: number
           tiny_invoice_id?: string | null
@@ -4579,6 +4591,13 @@ export type Database = {
             columns: ["source_order_id"]
             isOneToOne: false
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sales_stock_source_store_id_fkey"
+            columns: ["stock_source_store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
             referencedColumns: ["id"]
           },
           {
