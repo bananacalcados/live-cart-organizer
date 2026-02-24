@@ -81,149 +81,74 @@ async function tinyV3Get(token: string, path: string, params?: Record<string, st
   return resp.json();
 }
 
-// Tiny V3 situacao codes (integers)
-// 0=em aberto, 3=aprovado, 5=faturado, 6=enviado, 7=entregue, 8=não entregue, 9=cancelado
-const SKIP_SITUACAO = new Set([7, 8]);
-const CANCELLED_SITUACAO = new Set([9]);
-
-// Extract items from various possible Tiny V3 response structures
 function extractItems(order: any): any[] {
-  // Try multiple paths where items could be
-  const candidates = [
-    order.itens,
-    order.items,
-    order.produtos,
-  ];
+  const candidates = [order.itens, order.items, order.produtos];
   for (const c of candidates) {
     if (Array.isArray(c) && c.length > 0) return c;
   }
   return [];
 }
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+// === PASS 1: Import approved orders (situacao=3) ===
+async function passApproved(token: string, supabase: any, startTime: number) {
+  let synced = 0, skipped = 0, page = 1, hasMore = true;
 
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+  while (hasMore) {
+    if (Date.now() - startTime > 40000) { console.log('Pass1 timeout'); break; }
 
-    const token = await getTinyV3Token(supabase);
-    if (!token) {
-      throw new Error("Token OAuth do Tiny indisponível.");
-    }
+    console.log(`[Pass1-Approved] page ${page}`);
+    const data = await tinyV3Get(token, '/pedidos', { pagina: String(page), limite: '100', situacao: '3' });
+    const orders = data.itens || data.items || [];
+    if (orders.length === 0) { hasMore = false; break; }
 
-    console.log("Fetching orders from Tiny V3...");
+    for (const item of orders) {
+      try {
+        const tinyId = String(item.id);
+        const { data: existing } = await supabase
+          .from("expedition_beta_orders")
+          .select("id, expedition_status, tracking_code")
+          .eq("tiny_order_id", tinyId)
+          .maybeSingle();
 
-    let synced = 0;
-    let skipped = 0;
-    let page = 1;
-    let hasMore = true;
-    const startTime = Date.now();
-    
-    while (hasMore) {
-      if (Date.now() - startTime > 45000) {
-        console.log('Approaching timeout, stopping.');
-        break;
-      }
+        const ecomNum = item.ecommerce?.numeroPedidoEcommerce || '';
 
-      console.log(`Fetching page ${page}...`);
-      const data = await tinyV3Get(token, '/pedidos', { 
-        pagina: String(page),
-        limite: '100'
-      });
-        
-      const orders = data.itens || data.items || [];
-      if (orders.length === 0) { hasMore = false; break; }
-
-      for (const item of orders) {
+        // Fetch detail for items
+        let order: any;
+        let detailFailed = false;
         try {
-          // V3 situacao is integer
-          if (SKIP_SITUACAO.has(item.situacao)) continue;
+          await new Promise(r => setTimeout(r, 350));
+          order = await tinyV3Get(token, `/pedidos/${tinyId}`);
+        } catch (fetchErr: any) {
+          console.error(`Detail fetch failed for ${tinyId}: ${fetchErr.message}`);
+          if (!existing) { console.log(`Skipping new order ${tinyId} - no detail`); continue; }
+          order = item;
+          detailFailed = true;
+        }
 
-          const tinyId = String(item.id);
-          const isCancelled = CANCELLED_SITUACAO.has(item.situacao);
-
-          // Check if already exists
-          const { data: existing } = await supabase
-            .from("expedition_beta_orders")
-            .select("id, expedition_status, tracking_code")
-            .eq("tiny_order_id", tinyId)
-            .maybeSingle();
-
-          // If cancelled in Tiny, update existing record and skip new insert
-          if (isCancelled) {
-            if (existing && existing.expedition_status !== 'cancelled') {
-              await supabase.from('expedition_beta_orders').update({
-                expedition_status: 'cancelled',
-              }).eq('id', existing.id);
-              console.log(`Marked ${tinyId} as cancelled`);
-              synced++;
-            }
-            skipped++;
-            continue;
+        // If detail shows dispatched/invoiced, update existing and skip
+        const detailSituacao = order.situacao ?? item.situacao;
+        if ([5, 6].includes(detailSituacao)) {
+          if (existing && existing.expedition_status !== 'dispatched') {
+            const trackingCode = order.codigoRastreamento || order.codigoRastreio || null;
+            await supabase.from('expedition_beta_orders').update({
+              expedition_status: 'dispatched',
+              tracking_code: trackingCode || existing.tracking_code,
+            }).eq('id', existing.id);
+            synced++;
           }
+          skipped++;
+          continue;
+        }
 
-          const ecomNum = item.ecommerce?.numeroPedidoEcommerce || '';
-          
-          // Fetch full details for items and tracking (with rate limit delay)
-          let order: any;
-          let detailFailed = false;
-          try {
-            await new Promise(r => setTimeout(r, 350)); // Rate limit protection
-            order = await tinyV3Get(token, `/pedidos/${tinyId}`);
-          } catch (fetchErr: any) {
-            console.error(`Detail fetch failed for ${tinyId}: ${fetchErr.message}`);
-            // If we can't get details and order doesn't exist yet, skip it to avoid 0-item orders
-            if (!existing) {
-              console.log(`Skipping new order ${tinyId} - no detail available`);
-              continue;
-            }
-            order = item;
-            detailFailed = true;
-          }
+        if (existing) {
+          // Backfill items if needed
+          if (!detailFailed) {
+            const { count: itemCount } = await supabase
+              .from('expedition_beta_order_items')
+              .select('id', { count: 'exact', head: true })
+              .eq('expedition_order_id', existing.id);
 
-          // Also check situacao from detail (may differ from list)
-          const detailSituacao = order.situacao ?? item.situacao;
-          if (CANCELLED_SITUACAO.has(detailSituacao)) {
-            if (existing && existing.expedition_status !== 'cancelled') {
-              await supabase.from('expedition_beta_orders').update({
-                expedition_status: 'cancelled',
-              }).eq('id', existing.id);
-              synced++;
-            }
-            skipped++;
-            continue;
-          }
-
-          // Extract tracking code from order details
-          const trackingCode = order.codigoRastreamento || order.codigoRastreio || null;
-          const isDispatched = item.situacao === 6 || !!trackingCode;
-          
-          if (existing) {
-            // Update if now has tracking but wasn't dispatched
-            if (isDispatched && existing.expedition_status !== 'dispatched') {
-              await supabase.from('expedition_beta_orders').update({
-                expedition_status: 'dispatched',
-                tracking_code: trackingCode || existing.tracking_code,
-              }).eq('id', existing.id);
-              synced++;
-            } else if (trackingCode && !existing.tracking_code) {
-              await supabase.from('expedition_beta_orders').update({
-                tracking_code: trackingCode,
-              }).eq('id', existing.id);
-            }
-
-            // Backfill items if order has none and detail was fetched successfully
-            if (!detailFailed) {
-              const { count: itemCount } = await supabase
-                .from('expedition_beta_order_items')
-                .select('id', { count: 'exact', head: true })
-                .eq('expedition_order_id', existing.id);
-
-              if (itemCount === 0) {
+            if (itemCount === 0) {
               const rawItems = extractItems(order);
               if (rawItems.length > 0) {
                 const itemsToInsert = rawItems.map((li: any) => {
@@ -239,102 +164,208 @@ serve(async (req) => {
                   };
                 });
                 await supabase.from('expedition_beta_order_items').insert(itemsToInsert);
-                console.log(`Backfilled ${itemsToInsert.length} items for order ${tinyId}`);
+                console.log(`Backfilled ${itemsToInsert.length} items for ${tinyId}`);
                 synced++;
               }
-              }
             }
-
-            skipped++;
-            continue;
           }
+          skipped++;
+          continue;
+        }
 
-          const orderNum = String(order.numeroPedido || item.numeroPedido || '');
-          const ecom = order.ecommerce?.numeroPedidoEcommerce || ecomNum;
-          const finalShopifyId = ecom ? String(ecom) : `tiny-${tinyId}`;
-          
-          const cliente = order.cliente || {};
-          const endereco = cliente.endereco || {};
-          const customerName = cliente.nome || cliente.fantasia || "Cliente Tiny";
+        // Insert new approved order
+        const orderNum = String(order.numeroPedido || item.numeroPedido || '');
+        const ecom = order.ecommerce?.numeroPedidoEcommerce || ecomNum;
+        const finalShopifyId = ecom ? String(ecom) : `tiny-${tinyId}`;
+        const cliente = order.cliente || {};
+        const endereco = cliente.endereco || {};
+        const customerName = cliente.nome || cliente.fantasia || "Cliente Tiny";
 
-          const { data: inserted, error: insertError } = await supabase
-            .from("expedition_beta_orders")
-            .insert({
-              shopify_order_id: finalShopifyId,
-              shopify_order_name: ecom ? `#${ecom}` : `T-${orderNum}`,
-              shopify_order_number: ecom || orderNum,
-              shopify_created_at: order.data || order.dataCriacao || item.dataCriacao || new Date().toISOString(),
-              customer_name: customerName,
-              customer_email: cliente.email || null,
-              customer_phone: cliente.telefone || cliente.celular || null,
-              customer_cpf: cliente.cpfCnpj || null,
-              shipping_address: endereco.endereco ? {
-                address1: endereco.endereco || '',
-                address2: endereco.complemento || '',
-                city: endereco.cidade || '',
-                province: endereco.uf || '',
-                zip: endereco.cep || '',
-                country: 'Brazil',
-                name: customerName,
-                number: endereco.numero || '',
-                neighborhood: endereco.bairro || '',
-                phone: cliente.telefone || cliente.celular || ''
-              } : (order.enderecoEntrega || null),
-              financial_status: 'paid',
-              fulfillment_status: 'unfulfilled',
-              expedition_status: isDispatched ? 'dispatched' : 'approved',
-              tracking_code: trackingCode,
-              subtotal_price: parseFloat(order.valorTotalProdutos || item.valor || 0),
-              total_price: parseFloat(order.valorTotalPedido || item.valor || 0),
-              total_discount: parseFloat(order.valorDesconto || 0),
-              total_shipping: parseFloat(order.valorFrete || 0),
-              total_weight_grams: 0,
-              has_gift: (order.observacoes || '').toLowerCase().includes("brinde"),
-              notes: order.observacoes || null,
-              tiny_order_id: tinyId,
-              tiny_order_number: orderNum
-            })
-            .select()
-            .single();
+        const { data: inserted, error: insertError } = await supabase
+          .from("expedition_beta_orders")
+          .insert({
+            shopify_order_id: finalShopifyId,
+            shopify_order_name: ecom ? `#${ecom}` : `T-${orderNum}`,
+            shopify_order_number: ecom || orderNum,
+            shopify_created_at: order.data || order.dataCriacao || item.dataCriacao || new Date().toISOString(),
+            customer_name: customerName,
+            customer_email: cliente.email || null,
+            customer_phone: cliente.telefone || cliente.celular || null,
+            customer_cpf: cliente.cpfCnpj || null,
+            shipping_address: endereco.endereco ? {
+              address1: endereco.endereco || '', address2: endereco.complemento || '',
+              city: endereco.cidade || '', province: endereco.uf || '', zip: endereco.cep || '',
+              country: 'Brazil', name: customerName, number: endereco.numero || '',
+              neighborhood: endereco.bairro || '', phone: cliente.telefone || cliente.celular || ''
+            } : (order.enderecoEntrega || null),
+            financial_status: 'paid',
+            fulfillment_status: 'unfulfilled',
+            expedition_status: 'approved',
+            subtotal_price: parseFloat(order.valorTotalProdutos || item.valor || 0),
+            total_price: parseFloat(order.valorTotalPedido || item.valor || 0),
+            total_discount: parseFloat(order.valorDesconto || 0),
+            total_shipping: parseFloat(order.valorFrete || 0),
+            total_weight_grams: 0,
+            has_gift: (order.observacoes || '').toLowerCase().includes("brinde"),
+            notes: order.observacoes || null,
+            tiny_order_id: tinyId,
+            tiny_order_number: orderNum
+          })
+          .select().single();
 
-          if (insertError) {
-            console.error(`Insert error ${tinyId}:`, insertError.message);
-            continue;
-          }
+        if (insertError) { console.error(`Insert error ${tinyId}:`, insertError.message); continue; }
 
-          // Insert Items using extractItems helper
-          const rawItems = extractItems(order);
-          if (rawItems.length > 0 && inserted) {
-            const itemsToInsert = rawItems.map((li: any) => {
-              const prod = li.produto || li;
-              return {
-                expedition_order_id: inserted.id,
-                product_name: prod.descricao || prod.nome || prod.description || 'Produto',
-                variant_name: null,
-                sku: prod.sku || prod.codigo || null,
-                quantity: parseFloat(li.quantidade || li.quantity || 1),
-                unit_price: parseFloat(li.valorUnitario || li.valor || 0),
-                weight_grams: 0
-              };
-            });
-            await supabase.from("expedition_beta_order_items").insert(itemsToInsert);
-          } else if (inserted) {
-            console.log(`WARNING: No items found for order ${tinyId}, keys: ${Object.keys(order).join(',')}`);
-          }
-          
-          synced++;
-        } catch (err: any) {
-          console.error(`Error processing ${item.id}:`, err.message);
+        const rawItems = extractItems(order);
+        if (rawItems.length > 0 && inserted) {
+          const itemsToInsert = rawItems.map((li: any) => {
+            const prod = li.produto || li;
+            return {
+              expedition_order_id: inserted.id,
+              product_name: prod.descricao || prod.nome || prod.description || 'Produto',
+              variant_name: null,
+              sku: prod.sku || prod.codigo || null,
+              quantity: parseFloat(li.quantidade || li.quantity || 1),
+              unit_price: parseFloat(li.valorUnitario || li.valor || 0),
+              weight_grams: 0
+            };
+          });
+          await supabase.from("expedition_beta_order_items").insert(itemsToInsert);
+        }
+        synced++;
+      } catch (err: any) {
+        console.error(`Error processing ${item.id}:`, err.message);
+      }
+    }
+
+    page++;
+    if (page > 10) hasMore = false;
+  }
+
+  return { synced, skipped };
+}
+
+// === PASS 2: Update dispatched orders (situacao=5,6) ===
+async function passDispatched(token: string, supabase: any, startTime: number) {
+  let updated = 0;
+
+  for (const sit of ['5', '6']) {
+    let page = 1, hasMore = true;
+    while (hasMore) {
+      if (Date.now() - startTime > 50000) { console.log('Pass2 timeout'); return updated; }
+
+      console.log(`[Pass2-Dispatched] situacao=${sit} page ${page}`);
+      const data = await tinyV3Get(token, '/pedidos', { pagina: String(page), limite: '100', situacao: sit });
+      const orders = data.itens || data.items || [];
+      if (orders.length === 0) { hasMore = false; break; }
+
+      for (const item of orders) {
+        const tinyId = String(item.id);
+        const { data: existing } = await supabase
+          .from("expedition_beta_orders")
+          .select("id, expedition_status, tracking_code")
+          .eq("tiny_order_id", tinyId)
+          .maybeSingle();
+
+        if (existing && existing.expedition_status !== 'dispatched' && existing.expedition_status !== 'cancelled') {
+          // Try to get tracking code
+          let trackingCode = null;
+          try {
+            await new Promise(r => setTimeout(r, 350));
+            const detail = await tinyV3Get(token, `/pedidos/${tinyId}`);
+            trackingCode = detail.codigoRastreamento || detail.codigoRastreio || null;
+          } catch (_) { /* skip detail */ }
+
+          await supabase.from('expedition_beta_orders').update({
+            expedition_status: 'dispatched',
+            tracking_code: trackingCode || existing.tracking_code,
+          }).eq('id', existing.id);
+          updated++;
+          console.log(`Marked ${tinyId} as dispatched`);
+        } else if (existing && !existing.tracking_code) {
+          // Just update tracking if missing
+          try {
+            await new Promise(r => setTimeout(r, 350));
+            const detail = await tinyV3Get(token, `/pedidos/${tinyId}`);
+            const tc = detail.codigoRastreamento || detail.codigoRastreio || null;
+            if (tc) {
+              await supabase.from('expedition_beta_orders').update({ tracking_code: tc }).eq('id', existing.id);
+            }
+          } catch (_) { /* skip */ }
         }
       }
 
       page++;
-      if (page > 10) hasMore = false; 
+      if (page > 5) hasMore = false;
+    }
+  }
+
+  return updated;
+}
+
+// === PASS 3: Update cancelled orders (situacao=9) ===
+async function passCancelled(token: string, supabase: any, startTime: number) {
+  let updated = 0;
+  let page = 1, hasMore = true;
+
+  while (hasMore) {
+    if (Date.now() - startTime > 55000) { console.log('Pass3 timeout'); return updated; }
+
+    console.log(`[Pass3-Cancelled] page ${page}`);
+    const data = await tinyV3Get(token, '/pedidos', { pagina: String(page), limite: '100', situacao: '9' });
+    const orders = data.itens || data.items || [];
+    if (orders.length === 0) { hasMore = false; break; }
+
+    for (const item of orders) {
+      const tinyId = String(item.id);
+      const { data: existing } = await supabase
+        .from("expedition_beta_orders")
+        .select("id, expedition_status")
+        .eq("tiny_order_id", tinyId)
+        .maybeSingle();
+
+      if (existing && existing.expedition_status !== 'cancelled') {
+        await supabase.from('expedition_beta_orders').update({
+          expedition_status: 'cancelled',
+        }).eq('id', existing.id);
+        updated++;
+        console.log(`Marked ${tinyId} as cancelled`);
+      }
     }
 
-    console.log(`Sync complete: ${synced} synced, ${skipped} skipped`);
+    page++;
+    if (page > 5) hasMore = false;
+  }
 
-    return new Response(JSON.stringify({ success: true, synced, skipped }), {
+  return updated;
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const token = await getTinyV3Token(supabase);
+    if (!token) throw new Error("Token OAuth do Tiny indisponível.");
+
+    const startTime = Date.now();
+
+    console.log("=== PASS 1: Approved orders ===");
+    const { synced, skipped } = await passApproved(token, supabase, startTime);
+
+    console.log("=== PASS 2: Dispatched orders ===");
+    const dispatched = await passDispatched(token, supabase, startTime);
+
+    console.log("=== PASS 3: Cancelled orders ===");
+    const cancelled = await passCancelled(token, supabase, startTime);
+
+    console.log(`Sync complete: ${synced} synced, ${skipped} skipped, ${dispatched} dispatched, ${cancelled} cancelled`);
+
+    return new Response(JSON.stringify({ success: true, synced, skipped, dispatched, cancelled }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
