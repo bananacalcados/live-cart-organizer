@@ -118,14 +118,17 @@ function matchFrenetToTiny(
   const service = (frenetService || '').toLowerCase();
   const code = frenetServiceCode || '';
 
-  // Priority 1: Try to match "via Frenet" methods first (most specific)
-  const frenetMethods = tinyMethods.filter(m => m.formaEnvioDescricao.toLowerCase().includes('frenet'));
-  // Priority 2: Then try "via Melhor Envio" methods
+  // Priority 1: Try to match "via Frenet" methods with tipo 10 first (these generate shipping labels!)
+  // Tipo 10 = proper Frenet integration with label generation; Tipo 6 = pickup/no-label type
+  const frenetMethodsTipo10 = tinyMethods.filter(m => m.formaEnvioDescricao.toLowerCase().includes('frenet') && m.formaEnvioCodigo === '10');
+  // Priority 2: Frenet methods with other tipos (fallback)
+  const frenetMethodsOther = tinyMethods.filter(m => m.formaEnvioDescricao.toLowerCase().includes('frenet') && m.formaEnvioCodigo !== '10');
+  // Priority 3: Then try "via Melhor Envio" methods
   const melhorEnvioMethods = tinyMethods.filter(m => m.formaEnvioDescricao.toLowerCase().includes('melhor envio'));
-  // Priority 3: Then try generic methods
+  // Priority 4: Then try generic methods
   const genericMethods = tinyMethods.filter(m => !m.formaEnvioDescricao.toLowerCase().includes('frenet') && !m.formaEnvioDescricao.toLowerCase().includes('melhor envio'));
 
-  for (const methodGroup of [frenetMethods, melhorEnvioMethods, genericMethods]) {
+  for (const methodGroup of [frenetMethodsTipo10, frenetMethodsOther, melhorEnvioMethods, genericMethods]) {
     for (const method of methodGroup) {
       const desc = method.formaEnvioDescricao.toLowerCase();
       
