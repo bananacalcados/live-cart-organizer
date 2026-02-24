@@ -1,96 +1,134 @@
 
-## Plano: Correcao de Vendedores Duplicados, Recuperacao de Vendas e Otimizacao
+# Plano: Melhorias no POS - Metas, Comissoes e Checkout por Loja
 
-### Diagnostico
+## Resumo das Solicitacoes
 
-Apos investigacao detalhada no banco de dados:
-
-- **Centro**: 77 registros na tabela `pos_sellers` para apenas ~10 vendedoras unicas. Exemplo: "Live Shopping" tem 14 copias, "Emilly Rayane" tem 7 copias.
-- **Perola**: 23 registros para ~13 vendedoras unicas, com duplicatas similares.
-- **Vendas do Centro**: Todas as vendas existem e estao intactas (20+ vendas). O `seller_id` delas aponta para registros antigos que foram marcados como `is_active: false` quando novas copias foram criadas.
-- **Causa raiz**: O edge function `pos-tiny-sellers` cria NOVOS registros ao inves de reutilizar os existentes, porque o mapa `existingByTinyId` so pega o primeiro registro e ignora os demais. Ao marcar todos como `is_active: false` e depois inserir novos, os IDs antigos (referenciados nas vendas) ficam orfaos.
-- **Config mostra tudo**: `loadSellers` busca TODOS os registros (ativos e inativos), mostrando 77 linhas riscadas no Centro.
+1. **Cor do premio**: Texto do premio nas metas deve ser preto para maior destaque
+2. **Bug pontos fidelidade**: 0.1 pontos/R$ deveria dar 32 pts para R$320, mas esta dando 320
+3. **Dados particulares do vendedor**: Acesso via PIN de 4 digitos no Dashboard com comissao acumulada, progresso de metas e bonus
+4. **Sistema de metas escalonadas com comissao**: Metas por faixa de faturamento com % de comissao automatica por periodo
+5. **Checkout proprio por loja** (discussao): Vendas online do POS criando pedido no Tiny da loja ao inves de enviar para Shopify
 
 ---
 
-### Correcoes
+## 1. Cor do Premio (Rapido)
 
-#### 1. Limpeza do Banco de Dados (Dados)
-
-Executar via ferramenta de dados (nao migracao):
-
-**Passo A** - Para cada loja, manter apenas 1 registro por `tiny_seller_id` (o mais antigo, pois e o que as vendas referenciam):
-
-```text
-Para cada (store_id, tiny_seller_id):
-  - Manter o registro com created_at mais antigo
-  - Atualizar seller_id nas pos_sales que apontam para duplicatas
-  - Deletar todas as duplicatas
-  - Marcar o registro mantido como is_active = true
-```
-
-**Passo B** - Verificar que as vendas do Centro agora apontam para seller_ids validos e ativos.
-
-#### 2. Edge Function `pos-tiny-sellers` - Reescrever Logica de Sync
-
-Problemas atuais:
-- Cria novos registros ao inves de usar UPSERT
-- Nao deleta duplicatas existentes
-
-Nova logica:
-
-```text
-1. Buscar vendedores ativos da API Tiny (v2 com token da loja)
-2. Buscar TODOS os registros locais da loja
-3. Para cada vendedor do Tiny:
-   a. Se ja existe registro com mesmo tiny_seller_id -> UPDATE (nome, is_active=true)
-   b. Se nao existe -> INSERT
-4. Marcar como is_active=false todos os locais que NAO estao no retorno do Tiny
-5. DELETAR registros duplicados (mesmo tiny_seller_id, manter so o mais antigo)
-```
-
-Alem disso, adicionar constraint UNIQUE em `(store_id, tiny_seller_id)` via migracao para prevenir futuras duplicatas.
-
-#### 3. Frontend `POSConfig.tsx` - Mostrar Apenas Vendedoras Unicas
-
-- `loadSellers`: Filtrar para mostrar apenas vendedoras ATIVAS (nao todas)
-- Manter a opcao de desativar via toggle (que faz UPDATE, nao INSERT)
-- Remover a exibicao de vendedoras inativas riscadas (lixo visual e de armazenamento)
-
-#### 4. Recuperacao de Vendas do Centro
-
-As vendas ja existem no banco. O problema e apenas visual -- o `seller_id` referenciado esta em um registro `is_active: false`. A limpeza do Passo 1 resolve isso automaticamente ao:
-- Re-apontar vendas para o registro "canonico" (mais antigo) de cada vendedora
-- Marcar esse registro canonico como ativo
+Alterar a classe CSS do texto de premio no componente `POSGoalProgress.tsx` de `text-yellow-400` para `text-black font-black` para dar mais destaque visual no tema claro.
 
 ---
 
-### Migracao SQL
+## 2. Bug dos Pontos de Fidelidade
 
-Adicionar constraint para prevenir duplicatas futuras:
-
-```text
-ALTER TABLE pos_sellers 
-  ADD CONSTRAINT pos_sellers_store_tiny_unique 
-  UNIQUE (store_id, tiny_seller_id);
+**Diagnostico**: A formula no `POSSalesView.tsx` linha 716 e:
+```
+Math.floor(totalWithDiscount * (loyaltyConfig.points_per_real || 0.1))
 ```
 
-(Sera executada APOS a limpeza de dados para nao conflitar com duplicatas existentes)
+O banco confirma `points_per_real = 0.1`, mas o log mostra 319 pontos para R$319.99 (multiplicador de ~1). Isso indica que o `loyaltyConfig` nao estava carregado no momento da venda, e o fallback `|| 0.1` nao foi acionado porque o objeto existia mas o campo pode ter sido `undefined`.
+
+**Correcao**: Garantir que o valor seja lido com seguranca:
+```typescript
+const rate = Number(loyaltyConfig?.points_per_real) || 0.1;
+const points = Math.floor(totalWithDiscount * rate);
+```
+
+Adicionar tambem um log para depuracao e validacao.
 
 ---
 
-### Resumo de Arquivos
+## 3. Painel Privado do Vendedor (PIN 4 digitos)
 
-| Arquivo | Acao |
-|---------|------|
-| Dados: `pos_sellers` | Limpeza de duplicatas + re-link de vendas |
-| `supabase/functions/pos-tiny-sellers/index.ts` | Reescrever sync com UPSERT + dedup |
-| `src/components/pos/POSConfig.tsx` | Mostrar so vendedoras ativas + limpeza visual |
-| Migracao SQL | Constraint UNIQUE para prevenir duplicatas |
+### Banco de dados
+- Adicionar coluna `pin_code VARCHAR(4)` na tabela `pos_sellers`
+- Criar tabela `pos_seller_commissions` para registrar comissoes calculadas automaticamente
 
-### Ordem de Execucao
+```text
+pos_sellers
+  + pin_code TEXT (4 digitos, nullable)
 
-1. Limpeza de dados (dedup + re-link vendas)
-2. Migracao SQL (constraint UNIQUE)
-3. Reescrever edge function
-4. Atualizar frontend
+pos_seller_commission_tiers (NOVA)
+  id, store_id, tier_order, min_revenue, max_revenue,
+  commission_percent, period (monthly/custom),
+  period_start, period_end, is_active, created_at
+
+pos_seller_commissions (NOVA)
+  id, store_id, seller_id, period_start, period_end,
+  total_revenue, tier_id, commission_percent,
+  commission_value, bonus_value, status (pending/paid),
+  created_at
+```
+
+### Frontend - Dashboard
+- Adicionar botao "Meus Dados" na secao de Desempenho por Vendedor
+- Ao clicar, abrir dialog pedindo PIN de 4 digitos
+- Apos autenticacao, exibir painel privado com:
+  - Faturamento total do vendedor no periodo
+  - % da meta individual atingida
+  - Comissao acumulada em R$
+  - Quanto falta para a proxima faixa de comissao
+  - Bonus ja conquistados
+  - Historico resumido
+
+### Frontend - Config
+- Campo para definir PIN de cada vendedor na aba Config
+- Secao para criar faixas de comissao escalonadas (ex: ate R$10k = 1%, R$10k-20k = 1.5%, acima de R$20k = 2%)
+
+---
+
+## 4. Metas Escalonadas com Comissao Automatica
+
+O sistema atual de metas (`pos_goals`) ja suporta metas por vendedor e por periodo. A novidade e o **escalonamento de comissao**:
+
+- Tabela `pos_seller_commission_tiers` permite configurar faixas progressivas
+- Exemplo: Vendedora que fatura R$15.000 no mes:
+  - Faixa 1: Ate R$10.000 = 1% = R$100
+  - Faixa 2: R$10.001 a R$20.000 = 1.5% = R$75
+  - **Total comissao: R$175**
+- O calculo e feito automaticamente ao consultar os dados no painel privado
+- A comissao pode ser registrada com status "pendente" ate ser marcada como "paga"
+
+---
+
+## 5. Checkout Proprio por Loja (Discussao)
+
+**Sua ideia faz total sentido!** A separacao e a abordagem correta:
+
+- **Checkout atual** (`/checkout-transparente`): Continua servindo eventos online, criando pedidos na Shopify
+- **Novo checkout por loja** (`/checkout-loja/:storeId`): Rota dedicada que cria o pedido diretamente no Tiny ERP da loja correspondente
+
+**Vantagens**:
+- Nao mexe na estrutura existente dos eventos
+- Cada loja tem seu checkout com token Tiny proprio
+- Vendas online do POS vao direto pro Tiny da loja (sem passar pela Shopify)
+- Links de pagamento gerados no modulo "Online" do POS apontam para esse novo checkout
+
+**Implementacao proposta**:
+- Clonar a logica do checkout transparente em uma nova rota
+- No momento do pagamento confirmado, chamar `pos-tiny-create-sale` ao inves de `shopify-create-order`
+- O `storeId` na URL determina qual token Tiny usar
+
+> **Nota**: Essa parte e mais complexa e pode ser feita em uma etapa separada. Recomendo priorizar os itens 1-4 primeiro.
+
+---
+
+## Sequencia de Implementacao
+
+1. Corrigir cor do premio (1 minuto)
+2. Corrigir bug dos pontos de fidelidade (5 minutos)
+3. Migracoes do banco (novas tabelas e colunas)
+4. Config: PIN dos vendedores + faixas de comissao
+5. Dashboard: painel privado com PIN
+6. Checkout por loja (etapa futura)
+
+## Detalhes Tecnicos
+
+### Arquivos a modificar:
+- `src/components/pos/POSGoalProgress.tsx` - cor do premio
+- `src/components/pos/POSSalesView.tsx` - fix formula de pontos
+- `src/components/pos/POSDashboard.tsx` - botao "Meus Dados" + dialog PIN + painel privado
+- `src/components/pos/POSConfig.tsx` - campo PIN por vendedor + faixas de comissao
+
+### Novas migracoes SQL:
+- ALTER TABLE pos_sellers ADD COLUMN pin_code TEXT
+- CREATE TABLE pos_seller_commission_tiers
+- CREATE TABLE pos_seller_commissions
