@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, Plus, Tag, TrendingDown, Loader2 } from "lucide-react";
+import { Sparkles, Plus, Tag, TrendingDown, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -57,7 +57,6 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
     if (cart.length === 0) return;
     setLoading(true);
     try {
-      // Extract sizes from cart
       const cartSizes = [...new Set(cart.map(i => i.size).filter(Boolean))] as string[];
       const cartSkus = cart.map(i => i.sku);
 
@@ -67,31 +66,46 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
         return;
       }
 
-      // Get ABC curve data: sales counts in last 90 days
-      const ninetyDaysAgo = new Date();
-      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      // 1. Try to get ABC curve from Tiny sales history (6 months data)
+      const { data: tinyHistory } = await supabase
+        .from("tiny_sales_history" as any)
+        .select("sku, quantity_sold")
+        .eq("store_id", storeId)
+        .order("quantity_sold", { ascending: false })
+        .limit(2000);
 
-      const { data: salesData } = await supabase
-        .from("pos_sale_items" as any)
-        .select("sku, quantity")
-        .limit(1000);
+      // Build curve map from Tiny data or fall back to POS data
+      const curveMap = new Map<string, "A" | "B" | "C">();
 
-      // Aggregate sales by SKU
-      const skuSales = new Map<string, number>();
-      for (const item of (salesData as any[]) || []) {
-        skuSales.set(item.sku, (skuSales.get(item.sku) || 0) + (item.quantity || 0));
+      if (tinyHistory && tinyHistory.length > 20) {
+        // Use Tiny ERP data for ABC curve
+        const sorted = (tinyHistory as any[]).sort((a, b) => (b.quantity_sold || 0) - (a.quantity_sold || 0));
+        const total = sorted.length;
+        sorted.forEach((item, i) => {
+          const pct = (i + 1) / total;
+          curveMap.set(item.sku, pct <= 0.2 ? "A" : pct <= 0.5 ? "B" : "C");
+        });
+      } else {
+        // Fallback: use POS sale_items data
+        const { data: salesData } = await supabase
+          .from("pos_sale_items" as any)
+          .select("sku, quantity")
+          .limit(1000);
+
+        const skuSales = new Map<string, number>();
+        for (const item of (salesData as any[]) || []) {
+          skuSales.set(item.sku, (skuSales.get(item.sku) || 0) + (item.quantity || 0));
+        }
+
+        const sorted = [...skuSales.entries()].sort((a, b) => b[1] - a[1]);
+        const total = sorted.length;
+        sorted.forEach(([sku], i) => {
+          const pct = (i + 1) / total;
+          curveMap.set(sku, pct <= 0.2 ? "A" : pct <= 0.5 ? "B" : "C");
+        });
       }
 
-      // Sort and classify ABC
-      const sorted = [...skuSales.entries()].sort((a, b) => b[1] - a[1]);
-      const total = sorted.length;
-      const curveMap = new Map<string, "A" | "B" | "C">();
-      sorted.forEach(([sku], i) => {
-        const pct = (i + 1) / total;
-        curveMap.set(sku, pct <= 0.2 ? "A" : pct <= 0.5 ? "B" : "C");
-      });
-
-      // Get products in same sizes with stock > 0, not already in cart
+      // 2. Get products in same sizes with stock > 0, not already in cart
       const { data: products } = await supabase
         .from("pos_products")
         .select("*")
@@ -104,22 +118,45 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
         .limit(50);
 
       if (!products || products.length === 0) {
-        setSuggestions([]);
-        setLoading(false);
-        return;
+        // 3. Also look for products sitting in stock without any sales (dead stock)
+        // These won't appear in ABC curve at all
+        const { data: deadStock } = await supabase
+          .from("pos_products")
+          .select("*")
+          .eq("store_id", storeId)
+          .eq("is_active", true)
+          .in("size", cartSizes)
+          .gt("stock", 3)
+          .not("sku", "in", `(${cartSkus.join(",")})`)
+          .order("stock", { ascending: false })
+          .limit(10);
+
+        if (!deadStock || deadStock.length === 0) {
+          setSuggestions([]);
+          setLoading(false);
+          return;
+        }
       }
 
+      const allProducts = products || [];
+      
+      // Also fetch dead stock (products not in ABC curve at all = never sold)
+      const knownSkus = new Set(curveMap.keys());
+      
       const results: Suggestion[] = [];
 
-      for (const p of products) {
-        const curve = curveMap.get(p.sku) || "C"; // Not sold = curve C
+      for (const p of allProducts) {
+        const curve = curveMap.get(p.sku) || "C"; // Not in history = dead stock = curve C
         const isSize34 = p.size === "34";
+        const isDeadStock = !knownSkus.has(p.sku); // Never sold in 6 months
         
         let maxDiscount = 0;
         let reason = "";
 
-        if (isSize34) {
-          // Size 34 special rules
+        if (isDeadStock) {
+          maxDiscount = 50;
+          reason = `Sem vendas em 6 meses · Estoque parado (${p.stock} un)`;
+        } else if (isSize34) {
           if (curve === "A") {
             maxDiscount = 15;
             reason = "Tam 34 · Curva A · Estoque alto";
@@ -131,7 +168,6 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
             reason = "Tam 34 · Curva C · Oportunidade";
           }
         } else {
-          // Normal rules
           if (curve === "B") {
             maxDiscount = 15;
             reason = "Curva B · Rotação média";
@@ -139,13 +175,11 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
             maxDiscount = 30;
             reason = "Curva C · Baixa rotação";
           } else {
-            // Curve A without size 34 - no special discount, but can still suggest
             maxDiscount = 0;
             reason = "Curva A · Best seller";
           }
         }
 
-        // Only suggest if there's a discount or it's a high-value item
         if (maxDiscount > 0 || curve === "A") {
           results.push({
             id: `${p.tiny_id}-${p.sku}-${p.variant}`,
@@ -165,7 +199,6 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
         }
       }
 
-      // Sort: highest discount first, then by stock desc
       results.sort((a, b) => b.maxDiscount - a.maxDiscount || b.stock - a.stock);
       setSuggestions(results.slice(0, 6));
     } catch (e) {

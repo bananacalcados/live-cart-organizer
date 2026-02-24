@@ -5445,6 +5445,56 @@ export type Database = {
           },
         ]
       }
+      tiny_sales_history: {
+        Row: {
+          created_at: string
+          id: string
+          last_synced_at: string
+          period_end: string
+          period_start: string
+          product_name: string | null
+          quantity_sold: number
+          sale_count: number
+          sku: string
+          store_id: string
+          total_revenue: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_synced_at?: string
+          period_end: string
+          period_start: string
+          product_name?: string | null
+          quantity_sold?: number
+          sale_count?: number
+          sku: string
+          store_id: string
+          total_revenue?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_synced_at?: string
+          period_end?: string
+          period_start?: string
+          product_name?: string | null
+          quantity_sold?: number
+          sale_count?: number
+          sku?: string
+          store_id?: string
+          total_revenue?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiny_sales_history_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tiny_synced_orders: {
         Row: {
           created_at: string
