@@ -179,8 +179,8 @@ export function POSInterStoreRequests({ storeId }: Props) {
       const { error } = await supabase.from("pos_inter_store_requests").update(update).eq("id", id);
       if (error) throw error;
 
-      // When delivered, trigger automatic stock transfer in Tiny ERP
-      if (responseStatus === "delivered") {
+      // When confirmed, trigger automatic stock transfer in Tiny ERP
+      if (responseStatus === "confirmed") {
         toast.info("Ajustando estoque no Tiny...");
         try {
           const { data: transferResult, error: transferError } = await supabase.functions.invoke("pos-inter-store-stock-transfer", {

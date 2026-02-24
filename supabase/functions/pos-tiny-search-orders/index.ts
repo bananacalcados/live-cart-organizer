@@ -12,9 +12,8 @@ serve(async (req) => {
   }
 
   try {
-    const { store_id, search_term } = await req.json();
+    const { store_id, search_term, mode, tiny_order_id } = await req.json();
     if (!store_id) throw new Error('store_id is required');
-    if (!search_term || search_term.trim().length < 3) throw new Error('search_term must be at least 3 characters');
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -30,10 +29,81 @@ serve(async (req) => {
     if (!store?.tiny_token) throw new Error('Store token not configured');
 
     const token = store.tiny_token;
-    const term = search_term.trim();
 
-    // Search Tiny orders by client name (pesquisa field searches across order data)
-    const results: any[] = [];
+    // MODE: detail - fetch full order details
+    if (mode === 'detail' && tiny_order_id) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+
+      const resp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `token=${token}&formato=json&id=${tiny_order_id}`,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      const text = await resp.text();
+      let data: any;
+      try { data = JSON.parse(text); } catch {
+        return new Response(JSON.stringify({ success: false, error: 'Invalid response from Tiny' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (data.retorno?.status !== 'OK' || !data.retorno?.pedido) {
+        return new Response(JSON.stringify({ success: false, error: data.retorno?.erros?.[0]?.erro || 'Order not found' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const pedido = data.retorno.pedido;
+      const cliente = pedido.cliente || {};
+      const itens = (pedido.itens || []).map((i: any) => {
+        const item = i.item || i;
+        return {
+          product_name: item.descricao || '',
+          sku: item.codigo || '',
+          quantity: parseFloat(item.quantidade || '1'),
+          unit_price: parseFloat(item.valor_unitario || '0'),
+        };
+      });
+
+      const detail = {
+        tiny_order_id: String(pedido.id || ''),
+        tiny_order_number: String(pedido.numero || ''),
+        date: pedido.data_pedido || null,
+        status: pedido.situacao || null,
+        total: parseFloat(pedido.valor || '0'),
+        discount: parseFloat(pedido.desconto || '0'),
+        shipping: parseFloat(pedido.valor_frete || '0'),
+        payment_method: pedido.forma_pagamento || null,
+        obs: pedido.obs || null,
+        obs_interna: pedido.obs_interna || null,
+        customer: {
+          name: cliente.nome || null,
+          cpf: cliente.cpf_cnpj || null,
+          email: cliente.email || null,
+          phone: cliente.fone || cliente.celular || null,
+          address: cliente.endereco || null,
+          address_number: cliente.numero || null,
+          neighborhood: cliente.bairro || null,
+          city: cliente.cidade || null,
+          state: cliente.uf || null,
+          cep: cliente.cep || null,
+        },
+        items: itens,
+      };
+
+      return new Response(JSON.stringify({ success: true, detail }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // MODE: search (default)
+    if (!search_term || search_term.trim().length < 3) throw new Error('search_term must be at least 3 characters');
+
+    const term = search_term.trim();
 
     const searchTiny = async (pesquisa: string) => {
       try {
@@ -69,7 +139,6 @@ serve(async (req) => {
 
     const tinyOrders = await searchTiny(term);
 
-    // Map Tiny orders to a simplified format
     const mapped = tinyOrders.slice(0, 20).map((order: any) => ({
       tiny_order_id: String(order.id || ''),
       tiny_order_number: String(order.numero || ''),

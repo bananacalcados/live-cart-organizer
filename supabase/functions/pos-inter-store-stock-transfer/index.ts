@@ -101,19 +101,21 @@ serve(async (req) => {
         const originCurrentStock = getDepositStock(originStockData, originDeposit);
         const newOriginStock = Math.max(0, originCurrentStock - item.quantity);
 
-        // Update origin using XML with tipo=B and deposit
-        const originXml = `<estoque>` +
-          `<idProduto>${tinyId}</idProduto>` +
-          `<tipo>B</tipo>` +
-          `<quantidade>${newOriginStock}</quantidade>` +
-          (originDeposit ? `<deposito>${originDeposit}</deposito>` : '') +
-          `<observacoes>Transferência para ${destStore.name}: -${item.quantity}</observacoes>` +
-          `</estoque>`;
+        // Update origin using JSON format with tipo=B and deposit
+        const originJson = JSON.stringify({ estoque: {
+          idProduto: Number(tinyId), tipo: 'B', quantidade: String(newOriginStock),
+          ...(originDeposit ? { nome_deposito: originDeposit } : {}),
+          observacoes: `Transferencia para ${destStore.name}: -${item.quantity}`,
+        }});
+        const originForm = new URLSearchParams();
+        originForm.set('token', originStore.tiny_token);
+        originForm.set('formato', 'json');
+        originForm.set('estoque', originJson);
 
         const originUpdateResp = await fetch('https://api.tiny.com.br/api2/produto.atualizar.estoque.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${originStore.tiny_token}&formato=json&estoque=${encodeURIComponent(originXml)}`,
+          body: originForm.toString(),
         });
         const originUpdateData = await safeJson(originUpdateResp);
 
@@ -149,19 +151,21 @@ serve(async (req) => {
         const destCurrentStock = getDepositStock(destStockData, destDeposit);
         const newDestStock = destCurrentStock + item.quantity;
 
-        // Update dest using XML with tipo=B and deposit
-        const destXml = `<estoque>` +
-          `<idProduto>${destTinyId}</idProduto>` +
-          `<tipo>B</tipo>` +
-          `<quantidade>${newDestStock}</quantidade>` +
-          (destDeposit ? `<deposito>${destDeposit}</deposito>` : '') +
-          `<observacoes>Transferência de ${originStore.name}: +${item.quantity}</observacoes>` +
-          `</estoque>`;
+        // Update dest using JSON format with tipo=B and deposit
+        const destJson = JSON.stringify({ estoque: {
+          idProduto: Number(destTinyId), tipo: 'B', quantidade: String(newDestStock),
+          ...(destDeposit ? { nome_deposito: destDeposit } : {}),
+          observacoes: `Transferencia de ${originStore.name}: +${item.quantity}`,
+        }});
+        const destForm = new URLSearchParams();
+        destForm.set('token', destStore.tiny_token);
+        destForm.set('formato', 'json');
+        destForm.set('estoque', destJson);
 
         const destUpdateResp = await fetch('https://api.tiny.com.br/api2/produto.atualizar.estoque.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${destStore.tiny_token}&formato=json&estoque=${encodeURIComponent(destXml)}`,
+          body: destForm.toString(),
         });
         const destUpdateData = await safeJson(destUpdateResp);
 

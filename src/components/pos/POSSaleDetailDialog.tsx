@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -9,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
-  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText,
+  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail,
 } from "lucide-react";
 
 interface CustomerInfo {
@@ -26,13 +25,13 @@ interface CustomerInfo {
 }
 
 interface SaleItem {
-  sale_id: string;
+  sale_id?: string;
   quantity: number;
   unit_price: number;
   product_name: string;
-  variant_name: string | null;
-  size: string | null;
-  category: string | null;
+  variant_name?: string | null;
+  size?: string | null;
+  category?: string | null;
   sku?: string | null;
   barcode?: string | null;
 }
@@ -57,78 +56,102 @@ interface Props {
   customer: CustomerInfo | null;
   items: SaleItem[];
   sellerName: string | null;
-  onResend: (sale: Sale) => void;
-  resending: boolean;
+  onResend?: (sale: Sale) => void;
+  resending?: boolean;
+  isTinyOnly?: boolean;
 }
 
-export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, onResend, resending }: Props) {
+export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, onResend, resending, isTinyOnly }: Props) {
   if (!sale) return null;
 
   const date = new Date(sale.created_at);
 
   return (
     <Dialog open={!!sale} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg bg-[#1a1a2e] border-pos-orange/20 text-pos-white max-h-[90vh]">
+      <DialogContent className="max-w-lg bg-white border-2 border-orange-400/40 text-gray-900 max-h-[90vh] shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="text-pos-orange flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Detalhes do Pedido
-            {sale.tiny_order_number ? (
-              <Badge className="bg-green-500/20 text-green-400 border-green-500/30 ml-2">
-                Tiny #{sale.tiny_order_number}
-              </Badge>
-            ) : sale.status === 'pending_sync' ? (
-              <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 ml-2">
-                Pendente Tiny
-              </Badge>
-            ) : (
-              <Badge className="bg-red-500/20 text-red-400 border-red-500/30 ml-2">
-                Não criado no Tiny
-              </Badge>
-            )}
-          </DialogTitle>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-orange-500 flex items-center justify-center">
+              <FileText className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <DialogTitle className="text-gray-900 text-lg">
+                Detalhes do Pedido
+              </DialogTitle>
+              <div className="flex items-center gap-2 mt-1">
+                {sale.tiny_order_number ? (
+                  <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 font-bold text-xs">
+                    Tiny #{sale.tiny_order_number}
+                  </Badge>
+                ) : sale.status === 'pending_sync' ? (
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-300 font-bold text-xs">
+                    Pendente Tiny
+                  </Badge>
+                ) : isTinyOnly ? (
+                  <Badge className="bg-purple-100 text-purple-700 border-purple-300 font-bold text-xs">
+                    Pedido Tiny
+                  </Badge>
+                ) : (
+                  <Badge className="bg-red-100 text-red-700 border-red-300 font-bold text-xs">
+                    Não criado no Tiny
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
         </DialogHeader>
 
         <ScrollArea className="max-h-[70vh] pr-2">
           <div className="space-y-4">
             {/* Date & Seller */}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-pos-white/60">
+            <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+              <span className="text-sm text-gray-600 font-medium">
                 {format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
               </span>
               {sellerName && (
-                <Badge variant="outline" className="border-pos-orange/30 text-pos-orange">
+                <Badge className="bg-orange-100 text-orange-700 border-orange-300 font-bold">
                   {sellerName}
                 </Badge>
               )}
             </div>
 
             {/* Customer */}
-            {customer && (
+            {customer && (customer.name || customer.cpf || customer.whatsapp) && (
               <>
-                <Separator className="bg-pos-orange/10" />
                 <div className="space-y-2">
-                  <h4 className="text-xs uppercase tracking-wider text-pos-white/50 font-medium flex items-center gap-1.5">
-                    <User className="h-3.5 w-3.5" /> Cliente
+                  <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
+                    <User className="h-3.5 w-3.5 text-blue-600" /> Cliente
                   </h4>
-                  <div className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10 space-y-1.5">
-                    {customer.name && <p className="font-medium text-sm">{customer.name}</p>}
-                    {customer.cpf && <p className="text-xs text-pos-white/60">CPF: {customer.cpf}</p>}
-                    {customer.whatsapp && (
-                      <p className="text-xs text-pos-white/60 flex items-center gap-1">
-                        <Phone className="h-3 w-3" /> {customer.whatsapp}
+                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 space-y-2">
+                    {customer.name && <p className="font-bold text-sm text-gray-900">{customer.name}</p>}
+                    {customer.cpf && (
+                      <p className="text-xs text-gray-600 font-mono bg-white/60 inline-block px-2 py-0.5 rounded">
+                        CPF: {customer.cpf}
                       </p>
                     )}
-                    {customer.email && <p className="text-xs text-pos-white/60">{customer.email}</p>}
+                    <div className="flex flex-wrap gap-3">
+                      {customer.whatsapp && (
+                        <span className="text-xs text-gray-700 flex items-center gap-1 bg-green-50 px-2 py-1 rounded-md border border-green-200">
+                          <Phone className="h-3 w-3 text-green-600" /> {customer.whatsapp}
+                        </span>
+                      )}
+                      {customer.email && (
+                        <span className="text-xs text-gray-700 flex items-center gap-1 bg-purple-50 px-2 py-1 rounded-md border border-purple-200">
+                          <Mail className="h-3 w-3 text-purple-600" /> {customer.email}
+                        </span>
+                      )}
+                    </div>
                     {customer.address && (
-                      <p className="text-xs text-pos-white/60 flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {customer.address}{customer.address_number ? `, ${customer.address_number}` : ""}
-                        {customer.neighborhood ? ` - ${customer.neighborhood}` : ""}
-                        {customer.city ? `, ${customer.city}` : ""}
-                        {customer.state ? `/${customer.state}` : ""}
-                        {customer.cep ? ` - ${customer.cep}` : ""}
-                      </p>
+                      <div className="flex items-start gap-1.5 mt-1 bg-white/60 p-2 rounded-md">
+                        <MapPin className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
+                        <p className="text-xs text-gray-700 leading-relaxed">
+                          {customer.address}{customer.address_number ? `, ${customer.address_number}` : ""}
+                          {customer.neighborhood ? ` - ${customer.neighborhood}` : ""}
+                          {customer.city ? `, ${customer.city}` : ""}
+                          {customer.state ? `/${customer.state}` : ""}
+                          {customer.cep ? ` - CEP: ${customer.cep}` : ""}
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -136,25 +159,36 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
             )}
 
             {/* Items */}
-            <Separator className="bg-pos-orange/10" />
             <div className="space-y-2">
-              <h4 className="text-xs uppercase tracking-wider text-pos-white/50 font-medium flex items-center gap-1.5">
-                <Package className="h-3.5 w-3.5" /> Itens ({items.length})
+              <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
+                <Package className="h-3.5 w-3.5 text-orange-500" /> Itens ({items.length})
               </h4>
               <div className="space-y-1.5">
                 {items.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-pos-white/5 border border-pos-orange/10">
+                  <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.product_name}</p>
-                      <div className="flex items-center gap-2 text-[10px] text-pos-white/40">
-                        {item.variant_name && <span>{item.variant_name}</span>}
-                        {item.size && <span>Tam: {item.size}</span>}
-                        {item.sku && <span>SKU: {item.sku}</span>}
+                      <p className="text-sm font-semibold text-gray-900 truncate">{item.product_name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {item.variant_name && (
+                          <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-medium">
+                            {item.variant_name}
+                          </span>
+                        )}
+                        {item.size && (
+                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                            Tam: {item.size}
+                          </span>
+                        )}
+                        {item.sku && (
+                          <span className="text-[10px] text-gray-500 font-mono">
+                            SKU: {item.sku}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="text-right ml-2 shrink-0">
-                      <p className="text-xs text-pos-white/60">{item.quantity}x R$ {item.unit_price.toFixed(2)}</p>
-                      <p className="text-sm font-bold text-pos-orange">R$ {(item.quantity * item.unit_price).toFixed(2)}</p>
+                    <div className="text-right ml-3 shrink-0">
+                      <p className="text-xs text-gray-500">{item.quantity}x R$ {item.unit_price.toFixed(2)}</p>
+                      <p className="text-sm font-bold text-orange-600">R$ {(item.quantity * item.unit_price).toFixed(2)}</p>
                     </div>
                   </div>
                 ))}
@@ -162,46 +196,46 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
             </div>
 
             {/* Payment Summary */}
-            <Separator className="bg-pos-orange/10" />
             <div className="space-y-2">
-              <h4 className="text-xs uppercase tracking-wider text-pos-white/50 font-medium flex items-center gap-1.5">
-                <CreditCard className="h-3.5 w-3.5" /> Pagamento
+              <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
+                <CreditCard className="h-3.5 w-3.5 text-emerald-500" /> Pagamento
               </h4>
-              <div className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10 space-y-1.5">
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2">
                 {sale.payment_method && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-pos-white/60">Forma</span>
-                    <span>{sale.payment_method}</span>
+                    <span className="text-gray-600">Forma</span>
+                    <span className="font-semibold text-gray-900">{sale.payment_method}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">
-                  <span className="text-pos-white/60">Subtotal</span>
-                  <span>R$ {sale.subtotal.toFixed(2)}</span>
+                  <span className="text-gray-600">Subtotal</span>
+                  <span className="text-gray-900">R$ {sale.subtotal.toFixed(2)}</span>
                 </div>
                 {sale.discount > 0 && (
-                  <div className="flex justify-between text-sm text-red-400">
+                  <div className="flex justify-between text-sm text-red-600">
                     <span>Desconto</span>
-                    <span>-R$ {sale.discount.toFixed(2)}</span>
+                    <span className="font-semibold">-R$ {sale.discount.toFixed(2)}</span>
                   </div>
                 )}
-                <Separator className="bg-pos-orange/10" />
-                <div className="flex justify-between text-base font-bold text-pos-orange">
-                  <span>Total</span>
-                  <span>R$ {sale.total.toFixed(2)}</span>
+                <Separator className="bg-emerald-200" />
+                <div className="flex justify-between items-center">
+                  <span className="text-base font-bold text-gray-900">Total</span>
+                  <span className="text-xl font-black text-emerald-600">R$ {sale.total.toFixed(2)}</span>
                 </div>
               </div>
             </div>
 
             {/* Resend Button */}
-            <Button
-              variant="outline"
-              className="w-full gap-2 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10"
-              onClick={() => onResend(sale)}
-              disabled={resending}
-            >
-              {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {sale.tiny_order_id ? "Reenviar ao Tiny" : "Enviar ao Tiny"}
-            </Button>
+            {onResend && (
+              <Button
+                className="w-full gap-2 bg-orange-500 text-white hover:bg-orange-600 font-bold h-11 text-sm shadow-md"
+                onClick={() => onResend(sale)}
+                disabled={resending}
+              >
+                {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {sale.tiny_order_id ? "Reenviar ao Tiny" : "Enviar ao Tiny"}
+              </Button>
+            )}
           </div>
         </ScrollArea>
       </DialogContent>
