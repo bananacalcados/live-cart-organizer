@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle, Phone, Trophy, Target, ListChecks, Check, Sparkles, Calendar, Star, Gift } from "lucide-react";
+import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle, Phone, Trophy, Target, ListChecks, Check, Sparkles, Calendar, Star, Gift, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -154,30 +154,90 @@ export function POSConfig({ storeId }: Props) {
     setBrands(brs as string[]);
   };
 
-  const addGoal = async () => {
-    if (!newGoal.goal_value) return;
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+
+  const saveGoal = async (overrides?: Partial<typeof newGoal>) => {
+    const g = { ...newGoal, ...overrides };
+    if (!g.goal_value) return;
+
+    // Handle month-based periods inline
+    let period = g.period;
+    let periodStart = g.period_start || null;
+    let periodEnd = g.period_end || null;
+
+    if (period.startsWith('month_')) {
+      const parts = period.split('_');
+      const year = parseInt(parts[1]);
+      const month = parseInt(parts[2]) - 1; // 0-indexed
+      const start = new Date(year, month, 1);
+      const end = new Date(year, month + 1, 0);
+      // Use local date components to avoid UTC shift
+      periodStart = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+      periodEnd = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+      period = 'custom';
+    }
+
     try {
       const payload: any = {
         store_id: storeId,
-        goal_type: newGoal.goal_type,
-        goal_value: parseFloat(newGoal.goal_value),
-        period: newGoal.period,
-        seller_id: newGoal.seller_id === 'all' ? null : newGoal.seller_id,
+        goal_type: g.goal_type,
+        goal_value: parseFloat(g.goal_value),
+        period,
+        seller_id: g.seller_id === 'all' ? null : g.seller_id,
         is_active: true,
-        goal_category: newGoal.goal_category || null,
-        goal_brand: newGoal.goal_brand || null,
-        period_start: newGoal.period_start || null,
-        period_end: newGoal.period_end || null,
-        prize_label: newGoal.prize_label || null,
-        prize_value: newGoal.prize_value ? parseFloat(newGoal.prize_value) : null,
-        prize_type: newGoal.prize_type || null,
+        goal_category: g.goal_category || null,
+        goal_brand: g.goal_brand || null,
+        period_start: periodStart,
+        period_end: periodEnd,
+        prize_label: g.prize_label || null,
+        prize_value: g.prize_value ? parseFloat(g.prize_value) : null,
+        prize_type: g.prize_type || null,
       };
-      await supabase.from('pos_goals').insert(payload);
-      toast.success("Meta adicionada!");
+
+      if (editingGoalId) {
+        await supabase.from('pos_goals').update(payload).eq('id', editingGoalId);
+        toast.success("Meta atualizada!");
+      } else {
+        await supabase.from('pos_goals').insert(payload);
+        toast.success("Meta adicionada!");
+      }
       setNewGoal({ goal_type: "revenue", goal_value: "", period: "daily", seller_id: "all", goal_category: "", goal_brand: "", period_start: "", period_end: "", prize_label: "", prize_value: "", prize_type: "" });
+      setEditingGoalId(null);
       setShowAddGoal(false);
       loadGoals();
-    } catch { toast.error("Erro ao adicionar meta"); }
+    } catch { toast.error("Erro ao salvar meta"); }
+  };
+
+  const startEditGoal = (goal: any) => {
+    // Detect if it's a month-based custom period
+    let period = goal.period;
+    if (period === 'custom' && goal.period_start && goal.period_end) {
+      const start = new Date(goal.period_start + 'T12:00:00');
+      const end = new Date(goal.period_end + 'T12:00:00');
+      // Check if it's a full month (start is 1st, end is last day)
+      if (start.getDate() === 1) {
+        const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+        if (end.getDate() === lastDay && start.getMonth() === end.getMonth()) {
+          period = `month_${start.getFullYear()}_${start.getMonth() + 1}`;
+        }
+      }
+    }
+
+    setNewGoal({
+      goal_type: goal.goal_type,
+      goal_value: String(goal.goal_value),
+      period,
+      seller_id: goal.seller_id || 'all',
+      goal_category: goal.goal_category || '',
+      goal_brand: goal.goal_brand || '',
+      period_start: goal.period_start || '',
+      period_end: goal.period_end || '',
+      prize_label: goal.prize_label || '',
+      prize_value: goal.prize_value ? String(goal.prize_value) : '',
+      prize_type: goal.prize_type || '',
+    });
+    setEditingGoalId(goal.id);
+    setShowAddGoal(true);
   };
 
   const deleteGoal = async (id: string) => {
@@ -860,9 +920,14 @@ export function POSConfig({ storeId }: Props) {
                       <p className="text-xs text-yellow-400 mt-1">🏆 Prêmio: {g.prize_label}{g.prize_value ? ` (R$ ${g.prize_value})` : ''}</p>
                     )}
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-300" onClick={() => deleteGoal(g.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-pos-orange hover:text-pos-orange/80" onClick={() => startEditGoal(g)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-300" onClick={() => deleteGoal(g.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               );
             })}
@@ -1273,9 +1338,9 @@ export function POSConfig({ storeId }: Props) {
         </Dialog>
 
         {/* Add Goal Dialog */}
-        <Dialog open={showAddGoal} onOpenChange={setShowAddGoal}>
+        <Dialog open={showAddGoal} onOpenChange={(open) => { setShowAddGoal(open); if (!open) { setEditingGoalId(null); setNewGoal({ goal_type: "revenue", goal_value: "", period: "daily", seller_id: "all", goal_category: "", goal_brand: "", period_start: "", period_end: "", prize_label: "", prize_value: "", prize_type: "" }); } }}>
           <DialogContent className="bg-pos-black border-pos-orange/30 max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle className="text-pos-white">Nova Meta</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="text-pos-white">{editingGoalId ? 'Editar Meta' : 'Nova Meta'}</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div>
                 <Label className="text-pos-white/70 text-xs">Tipo de Meta</Label>
@@ -1402,25 +1467,8 @@ export function POSConfig({ storeId }: Props) {
               </div>
 
               <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => {
-                // Handle month-based periods by converting to custom with start/end dates
-                if (newGoal.period.startsWith('month_')) {
-                  const parts = newGoal.period.split('_');
-                  const year = parseInt(parts[1]);
-                  const month = parseInt(parts[2]) - 1;
-                  const start = new Date(year, month, 1);
-                  const end = new Date(year, month + 1, 0);
-                  setNewGoal(s => ({
-                    ...s,
-                    period: 'custom',
-                    period_start: start.toISOString().split('T')[0],
-                    period_end: end.toISOString().split('T')[0],
-                  }));
-                  // Need a small delay for state update, so call addGoal in next tick
-                  setTimeout(() => addGoal(), 50);
-                  return;
-                }
-                addGoal();
-              }}>Salvar Meta</Button>
+                saveGoal();
+              }}>{editingGoalId ? 'Atualizar Meta' : 'Salvar Meta'}</Button>
             </div>
           </DialogContent>
         </Dialog>

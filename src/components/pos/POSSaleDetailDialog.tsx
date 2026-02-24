@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -8,8 +9,12 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
-  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail,
+  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle,
 } from "lucide-react";
+import { toast } from "sonner";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 interface CustomerInfo {
   name: string | null;
@@ -59,15 +64,58 @@ interface Props {
   onResend?: (sale: Sale) => void;
   resending?: boolean;
   isTinyOnly?: boolean;
+  storeId?: string;
+  onDeleted?: () => void;
 }
 
-export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, onResend, resending, isTinyOnly }: Props) {
+export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, onResend, resending, isTinyOnly, storeId, onDeleted }: Props) {
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   if (!sale) return null;
 
   const date = new Date(sale.created_at);
 
+  const handleDelete = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    if (!storeId) {
+      toast.error("Store ID não disponível");
+      return;
+    }
+    setDeleting(true);
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-delete-sale`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({ store_id: storeId, sale_id: sale.id }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        const msgs = (data.messages || []).join("\n");
+        toast.success("Venda excluída!\n" + msgs);
+        onClose();
+        onDeleted?.();
+      } else {
+        toast.error(data.error || "Erro ao excluir venda");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao excluir venda");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
+
   return (
-    <Dialog open={!!sale} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={!!sale} onOpenChange={(open) => { if (!open) { onClose(); setConfirmDelete(false); } }}>
       <DialogContent className="max-w-lg bg-white border-2 border-orange-400/40 text-gray-900 max-h-[90vh] shadow-2xl">
         <DialogHeader>
           <div className="flex items-center gap-3">
@@ -225,17 +273,38 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               </div>
             </div>
 
-            {/* Resend Button */}
-            {onResend && (
-              <Button
-                className="w-full gap-2 bg-orange-500 text-white hover:bg-orange-600 font-bold h-11 text-sm shadow-md"
-                onClick={() => onResend(sale)}
-                disabled={resending}
-              >
-                {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                {sale.tiny_order_id ? "Reenviar ao Tiny" : "Enviar ao Tiny"}
-              </Button>
-            )}
+            {/* Action Buttons */}
+            <div className="space-y-2">
+              {onResend && (
+                <Button
+                  className="w-full gap-2 bg-orange-500 text-white hover:bg-orange-600 font-bold h-11 text-sm shadow-md"
+                  onClick={() => onResend(sale)}
+                  disabled={resending}
+                >
+                  {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {sale.tiny_order_id ? "Reenviar ao Tiny" : "Enviar ao Tiny"}
+                </Button>
+              )}
+
+              {/* Delete button - only for local sales, not tiny-only */}
+              {!isTinyOnly && storeId && (
+                <Button
+                  variant="outline"
+                  className={`w-full gap-2 font-bold h-11 text-sm ${confirmDelete ? 'bg-red-500 text-white hover:bg-red-600 border-red-500' : 'border-red-300 text-red-600 hover:bg-red-50'}`}
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : confirmDelete ? (
+                    <AlertTriangle className="h-4 w-4" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  {deleting ? "Excluindo..." : confirmDelete ? "Confirmar exclusão (cancela NFC-e e pedido Tiny)" : "Excluir Venda"}
+                </Button>
+              )}
+            </div>
           </div>
         </ScrollArea>
       </DialogContent>
