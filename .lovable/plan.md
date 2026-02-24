@@ -1,80 +1,62 @@
 
-## Plano: Filtro de Periodo Customizado + Correcao da Logica de Balanco no Tiny
 
-### 1. Dashboard - Seletor de Periodo com Calendario
+## Plano: Correcao de Estoque da Troca + Melhorias no POS
 
-O Dashboard atualmente so tem toggles de Dia/Semana/Mes. Vamos adicionar um **seletor de intervalo de datas** (date range picker) com calendario, mantendo os atalhos rapidos.
+### 1. Correcao Manual do Estoque da Troca no Centro
 
-**Mudancas em `src/components/pos/POSDashboard.tsx`:**
-- Adicionar estado `customRange: { from: Date; to: Date } | null`
-- Adicionar um botao "Personalizado" ao lado de Dia/Semana/Mes
-- Ao clicar em "Personalizado", abrir um Popover com calendario `mode="range"` (date-fns + shadcn Calendar)
-- Quando um range customizado estiver ativo, a funcao `getPeriodRange` retorna o range selecionado
-- Exibir o intervalo selecionado no header (ex: "01/02 - 24/02")
+A troca `6c33510b` na Loja Centro processou estoque incorretamente. Para corrigir, vou invocar a Edge Function `pos-exchange-stock-adjust` com os dados corretos dos 3 produtos envolvidos:
 
-### 2. Vendas Dia - Adicionar Semana, Mes e Periodo Customizado
+- **1444.105 TENIS LETICIA (tiny_id: 761752353)**: Voltou para o estoque (direction: "in", qty: 1)
+- **508069 RASTEIRA ZARA (tiny_id: 755331396)**: Saiu do estoque (direction: "out", qty: 1)
+- **27507 CHINELO IPANEMA PLUMA (tiny_id: 755431377)**: Saiu do estoque (direction: "out", qty: 1)
 
-Atualmente o Vendas Dia so permite navegar por dia unico. Vamos transformar o seletor de data num sistema de periodos.
+A Edge Function ja esta com a logica correta de Balanco (tipo B) com deposito "Centro". Vou chamar a funcao novamente para reprocessar o ajuste com os saldos atuais do Tiny.
 
-**Mudancas em `src/components/pos/POSDailySales.tsx`:**
-- Adicionar estado `periodMode: "day" | "week" | "month" | "custom"` (default: "day")
-- Adicionar `ToggleGroup` com opcoes Dia / Semana / Mes / Personalizado no header, ao lado do calendario
-- Para Semana: carregar ultimos 7 dias (data selecionada - 6 dias ate data selecionada)
-- Para Mes: carregar ultimos 30 dias
-- Para Personalizado: abrir calendario com `mode="range"` para selecionar intervalo
-- A funcao `loadData` usara o periodo calculado (nao apenas `dayStart`/`dayEnd`)
-- Os KPIs e graficos refletem o periodo inteiro
-- As setas de navegacao funcionam de acordo (avancar/recuar por semana ou mes)
+**Acao**: Invocar `pos-exchange-stock-adjust` via curl com os 3 itens e store_id da Loja Centro.
 
-### 3. Correcao da Logica de Balanco no Tiny (CRITICO)
+### 2. Detalhes do Pedido Tiny - Dialog Melhorado
 
-O problema identificado esta na Edge Function `pos-exchange-stock-adjust`. Ela faz o seguinte:
+Atualmente os pedidos encontrados apenas no Tiny (resultados roxos) nao sao clicaveis. Vou:
 
-```text
-Atual (ERRADO):
-1. GET estoque via produto.obter.estoque.php (sem deposito)
-2. Calcula: newStock = currentStock +/- quantity  
-3. Atualiza via produto.atualizar.estoque.php com estoque=newStock (SEM deposito, SEM XML tipo B)
-```
+- Tornar os cards de pedido Tiny clicaveis
+- Ao clicar, buscar detalhes completos do pedido no Tiny via a Edge Function `pos-tiny-search-orders` (adicionando um modo "detail" que busca `pedido.obter.php`)
+- Exibir um Dialog com: produtos, endereco do cliente, CPF, telefone, forma de pagamento, etc.
 
-Isso causa dois erros:
-- **Nao especifica o deposito**: le o saldo global (todas as lojas somadas) e grava sem deposito, sobrescrevendo o saldo errado
-- **Nao usa formato XML com tipo=B**: o formato correto para balanco no Tiny exige o XML com `<tipo>B</tipo>` e `<deposito>NomeDoDeposito</deposito>`
+### 3. Redesign Visual do Dialog de Detalhes do Pedido
 
-**Correcao em `supabase/functions/pos-exchange-stock-adjust/index.ts`:**
+O dialog atual (`POSSaleDetailDialog.tsx`) tem fundo escuro (`bg-[#1a1a2e]`) com bordas laranja fraca que nao contrasta. Vou redesenhar:
 
-```text
-Novo (CORRETO):
-1. Buscar tiny_deposit_name da loja em pos_stores
-2. GET estoque do deposito especifico via produto.obter.estoque.php 
-   (ou ler do pos_products.stock como cache local)
-3. Calcular: 
-   - item "in"  (devolvido): newStock = currentStock + quantity
-   - item "out" (saiu):      newStock = currentStock - quantity
-4. Atualizar via produto.atualizar.estoque.php com XML:
-   <estoque>
-     <idProduto>TINY_ID</idProduto>
-     <tipo>B</tipo>
-     <quantidade>NEW_STOCK</quantidade>
-     <deposito>NOME_DEPOSITO</deposito>
-     <observacoes>Troca POS: entrada/saida</observacoes>
-   </estoque>
-```
+- Fundo claro (`bg-white`) com texto escuro para maximo contraste
+- Secoes com fundo colorido sutil (laranja claro para header, azul claro para cliente, etc.)
+- Badges com cores mais vibrantes e legibilidade
+- Tipografia mais forte com hierarquia visual clara
+- Cards de produto com fundo branco e bordas mais marcadas
+- Area de pagamento com destaque verde para o total
 
-Este e o mesmo padrao usado com sucesso em `expedition-transfer-stock` e `inventory-correct-stock`.
+### 4. Mais Contraste no POS Geral
 
-**Tambem revisar `pos-inter-store-stock-transfer`:**
-- Atualmente usa `produto.atualizar.estoque.php` com `estoque=X` simples (sem XML, sem deposito)
-- Corrigir para usar o formato XML com `<tipo>B</tipo>` e `<deposito>` para cada loja
-- Buscar `tiny_deposit_name` de ambas as lojas (origem e destino)
+Aplicar melhorias de contraste nos componentes do POS:
+- Cards de venda: bordas mais visíveis, texto mais legível
+- KPIs: cores mais vibrantes nos valores
+- Badges de status: cores mais fortes e saturadas
+
+### 5. Transferencia de Estoque Automatica ao Confirmar Solicitacao
+
+Atualmente o ajuste de estoque so acontece quando o status muda para "delivered". O usuario quer que a transferencia no Tiny ocorra quando a **loja que recebeu a solicitacao confirma** (status "confirmed").
+
+**Mudanca em `POSInterStoreRequests.tsx`**:
+- Mover a logica de chamada `pos-inter-store-stock-transfer` do bloco `if (responseStatus === "delivered")` para `if (responseStatus === "confirmed")`
+- Isso faz o balanco automatico no Tiny no momento da confirmacao
+- O botao "Confirmar Recebimento" (quando a solicitacao chega fisicamente) apenas atualiza o status local sem mexer no estoque novamente
 
 ### Resumo de Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/pos/POSDashboard.tsx` | Editar - adicionar date range picker customizado |
-| `src/components/pos/POSDailySales.tsx` | Editar - adicionar toggles semana/mes/personalizado |
-| `supabase/functions/pos-exchange-stock-adjust/index.ts` | Editar - corrigir para usar XML com tipo=B e deposito |
-| `supabase/functions/pos-inter-store-stock-transfer/index.ts` | Editar - corrigir para usar XML com tipo=B e deposito |
+| `src/components/pos/POSSaleDetailDialog.tsx` | Redesign visual com cores claras e alto contraste |
+| `src/components/pos/POSDailySales.tsx` | Tornar pedidos Tiny clicaveis + mais contraste nos cards |
+| `src/components/pos/POSInterStoreRequests.tsx` | Mover transferencia de estoque para o momento da confirmacao |
+| `supabase/functions/pos-tiny-search-orders/index.ts` | Adicionar modo "detail" para buscar detalhes completos de um pedido Tiny |
 
 Nenhuma migracao SQL necessaria.
+
