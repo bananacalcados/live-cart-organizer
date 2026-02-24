@@ -1,62 +1,131 @@
 
+## Plano: Retirada na Loja (Online), Fechar Seller Gate, Metas, Sugestoes Inteligentes e Experiencia de Fidelidade Gamificada
 
-## Plano: Correcao de Estoque da Troca + Melhorias no POS
+Este plano cobre 5 grandes areas de melhoria no POS.
 
-### 1. Correcao Manual do Estoque da Troca no Centro
+---
 
-A troca `6c33510b` na Loja Centro processou estoque incorretamente. Para corrigir, vou invocar a Edge Function `pos-exchange-stock-adjust` com os dados corretos dos 3 produtos envolvidos:
+### 1. Opcao "Retirar na Loja" no Modulo Online
 
-- **1444.105 TENIS LETICIA (tiny_id: 761752353)**: Voltou para o estoque (direction: "in", qty: 1)
-- **508069 RASTEIRA ZARA (tiny_id: 755331396)**: Saiu do estoque (direction: "out", qty: 1)
-- **27507 CHINELO IPANEMA PLUMA (tiny_id: 755431377)**: Saiu do estoque (direction: "out", qty: 1)
+**O que muda:**
+- Adicionar um novo gateway "pickup" nos botoes de pagamento do `POSOnlineSales`
+- Ao selecionar "Retirar na Loja", o vendedor escolhe em qual loja o cliente vai retirar (seletor com todas as lojas ativas)
+- O pedido e salvo em `pos_sales` com `status: "pending_pickup"` e `store_id` da loja de retirada (nao da loja de origem)
+- O pedido aparece automaticamente na aba "Retiradas" (`POSPickupOrders`) da loja de destino via subscription Realtime ja existente
 
-A Edge Function ja esta com a logica correta de Balanco (tipo B) com deposito "Centro". Vou chamar a funcao novamente para reprocessar o ajuste com os saldos atuais do Tiny.
+**Arquivos:**
+- `src/components/pos/POSOnlineSales.tsx` - Adicionar gateway "pickup" com seletor de loja de destino
 
-**Acao**: Invocar `pos-exchange-stock-adjust` via curl com os 3 itens e store_id da Loja Centro.
+---
 
-### 2. Detalhes do Pedido Tiny - Dialog Melhorado
+### 2. Fechar a Janela do Seller Gate
 
-Atualmente os pedidos encontrados apenas no Tiny (resultados roxos) nao sao clicaveis. Vou:
+**O que muda:**
+- Adicionar um botao "X" ou "Fechar" no Dialog do `POSSellerGate` para permitir que o vendedor feche a janela sem selecionar vendedora
+- Na `POSSalesView`, quando o seller gate e fechado sem selecao, o componente emite um callback que permite navegar para outras abas
 
-- Tornar os cards de pedido Tiny clicaveis
-- Ao clicar, buscar detalhes completos do pedido no Tiny via a Edge Function `pos-tiny-search-orders` (adicionando um modo "detail" que busca `pedido.obter.php`)
-- Exibir um Dialog com: produtos, endereco do cliente, CPF, telefone, forma de pagamento, etc.
+**Arquivos:**
+- `src/components/pos/POSSellerGate.tsx` - Adicionar botao de fechar e prop `onClose`
+- `src/components/pos/POSSalesView.tsx` - Tratar o `onClose` do SellerGate
+- `src/pages/POS.tsx` - Passar callback de navegacao
 
-### 3. Redesign Visual do Dialog de Detalhes do Pedido
+---
 
-O dialog atual (`POSSaleDetailDialog.tsx`) tem fundo escuro (`bg-[#1a1a2e]`) com bordas laranja fraca que nao contrasta. Vou redesenhar:
+### 3. Sistema de Metas na Configuracao
 
-- Fundo claro (`bg-white`) com texto escuro para maximo contraste
-- Secoes com fundo colorido sutil (laranja claro para header, azul claro para cliente, etc.)
-- Badges com cores mais vibrantes e legibilidade
-- Tipografia mais forte com hierarquia visual clara
-- Cards de produto com fundo branco e bordas mais marcadas
-- Area de pagamento com destaque verde para o total
+**Nova tabela: `pos_goals`**
 
-### 4. Mais Contraste no POS Geral
+```text
+id          uuid PK default gen_random_uuid()
+store_id    uuid FK -> pos_stores
+goal_type   text (avg_ticket | revenue | seller_revenue | items_sold)
+goal_value  numeric
+period      text (daily | weekly | monthly)
+seller_id   uuid nullable FK -> pos_sellers (null = meta global)
+is_active   boolean default true
+created_at  timestamptz default now()
+updated_at  timestamptz default now()
+```
 
-Aplicar melhorias de contraste nos componentes do POS:
-- Cards de venda: bordas mais visíveis, texto mais legível
-- KPIs: cores mais vibrantes nos valores
-- Badges de status: cores mais fortes e saturadas
+**O que muda:**
+- Na aba Config: nova secao "Metas" com formulario para criar metas de ticket medio, faturamento, faturamento por vendedor e itens vendidos
+- No Dashboard: comparar KPIs atuais com as metas configuradas, mostrando progresso (barra de progresso + percentual) e alertas visuais
+- No Seller Gate: ao selecionar vendedora, mostrar o progresso individual dela em relacao as metas (ex: "Falta R$500 para sua meta de faturamento do dia")
 
-### 5. Transferencia de Estoque Automatica ao Confirmar Solicitacao
+**Arquivos:**
+- Migracao SQL para criar `pos_goals`
+- `src/components/pos/POSConfig.tsx` - Nova secao de metas
+- `src/components/pos/POSDashboard.tsx` - Exibir progresso vs metas
+- `src/components/pos/POSSellerGate.tsx` - Mostrar metas individuais
 
-Atualmente o ajuste de estoque so acontece quando o status muda para "delivered". O usuario quer que a transferencia no Tiny ocorra quando a **loja que recebeu a solicitacao confirma** (status "confirmed").
+---
 
-**Mudanca em `POSInterStoreRequests.tsx`**:
-- Mover a logica de chamada `pos-inter-store-stock-transfer` do bloco `if (responseStatus === "delivered")` para `if (responseStatus === "confirmed")`
-- Isso faz o balanco automatico no Tiny no momento da confirmacao
-- O botao "Confirmar Recebimento" (quando a solicitacao chega fisicamente) apenas atualiza o status local sem mexer no estoque novamente
+### 4. Sugestoes Inteligentes de Cross-Sell na Venda
+
+**Logica de Curva ABC:**
+- Curva A: produtos com alta rotacao (top 20% em vendas nos ultimos 90 dias)
+- Curva B: rotacao media (proximo 30%)
+- Curva C: baixa rotacao (restante 50%)
+- Calculado sob demanda com base em `pos_sale_items` agregados
+
+**O que muda:**
+Quando a vendedora adiciona um produto ao carrinho:
+
+1. Extrair o tamanho do produto adicionado
+2. Buscar produtos no mesmo tamanho com estoque disponivel (`pos_products`)
+3. Classificar por curva ABC (baseado em vendas dos ultimos 90 dias)
+4. Aplicar regras de desconto:
+   - Curva B: ate 15% de desconto
+   - Curva C: ate 30% de desconto
+   - Curva A tamanho 34 com estoque alto: ate 15% (Curva A), 30% (B), 50% (C)
+5. Exibir um painel de sugestoes abaixo do carrinho com produtos recomendados, desconto sugerido e botao "Adicionar ao pedido"
+6. Se o ticket medio estiver abaixo da meta, sugerir produtos mais caros
+
+**Arquivos:**
+- `src/components/pos/POSSalesView.tsx` - Painel de sugestoes de cross-sell com logica ABC
+- Nova funcao auxiliar para calcular curva ABC dos produtos
+
+---
+
+### 5. Experiencia Gamificada de Fidelidade Pos-Venda
+
+**Fluxo redesenhado apos a venda com cliente identificado:**
+
+1. **Tela 1 - Roleta de Pontos (automatica):**
+   - A roleta (slot machine) gira AUTOMATICAMENTE sem precisar puxar alavanca
+   - Animacao colorida e chamativa mostrando os pontos sendo calculados
+   - Mostra "+XX pontos conquistados!"
+
+2. **Tela 2 - Resumo de Pontos Acumulados:**
+   - Exibe o total de pontos acumulados do cliente
+   - Mostra uma barra de progresso ate o proximo premio
+   - Lista os premios disponiveis com quantos pontos faltam para cada um
+   - Se o cliente ja tiver pontos suficientes para um premio, destaca com animacao e abre a caixa de presente automaticamente
+
+3. **Tela 3 - Chamada para acao:**
+   - Se tem premio disponivel: mostra o premio ganho com codigo
+   - Se nao: mostra mensagem motivacional ("Faltam X pontos para ganhar [premio]! Volte em breve!")
+   - Botao "Finalizar" fecha o fluxo
+
+**Visual:** Cores vibrantes (amarelo, laranja, verde), emojis, animacoes de confete, fundo com gradiente. Interface pensada para tablet virado para o cliente.
+
+**Arquivos:**
+- `src/components/pos/POSSlotMachine.tsx` - Redesenhar para girar automaticamente e ser mais colorido
+- `src/components/pos/POSLoyaltyScreen.tsx` - **Novo componente** que orquestra o fluxo completo (pontos -> resumo -> premio)
+- `src/components/pos/POSSalesView.tsx` - Substituir a chamada direta do SlotMachine/GiftBox pelo novo `POSLoyaltyScreen`
+
+---
 
 ### Resumo de Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/pos/POSSaleDetailDialog.tsx` | Redesign visual com cores claras e alto contraste |
-| `src/components/pos/POSDailySales.tsx` | Tornar pedidos Tiny clicaveis + mais contraste nos cards |
-| `src/components/pos/POSInterStoreRequests.tsx` | Mover transferencia de estoque para o momento da confirmacao |
-| `supabase/functions/pos-tiny-search-orders/index.ts` | Adicionar modo "detail" para buscar detalhes completos de um pedido Tiny |
-
-Nenhuma migracao SQL necessaria.
-
+| Migracao SQL | Criar tabela `pos_goals` |
+| `src/components/pos/POSOnlineSales.tsx` | Adicionar opcao "Retirar na Loja" com seletor de loja |
+| `src/components/pos/POSSellerGate.tsx` | Adicionar botao fechar + metas individuais |
+| `src/components/pos/POSSalesView.tsx` | Tratar onClose do SellerGate + painel cross-sell + novo fluxo loyalty |
+| `src/pages/POS.tsx` | Passar callback de navegacao ao POSSalesView |
+| `src/components/pos/POSConfig.tsx` | Nova secao de metas |
+| `src/components/pos/POSDashboard.tsx` | Progresso vs metas |
+| `src/components/pos/POSSlotMachine.tsx` | Auto-spin + visual mais chamativo |
+| `src/components/pos/POSLoyaltyScreen.tsx` | **Novo** - Fluxo completo de fidelidade pos-venda |
