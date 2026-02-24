@@ -1,56 +1,77 @@
 
 
-## Problema
+## Plano: Corrigir Limpeza de Pedidos Antigos/Apagados do Tiny
 
-Pedidos com status "Enviado" (situacao=6) e "Faturado" (situacao=5) no Tiny estao sendo importados e ficando como "Aprovado" na Expedição Beta. Exemplo: Elzina de Oliveira Bernardo (pedido 4144) esta marcada como "Enviado" no Tiny mas aparece como "Aprovado" aqui.
+### Problema Raiz
 
-O Tiny mostra 67 pedidos aprovados, mas o sistema puxou 64 -- a diferença sao pedidos enviados/faturados que nao deveriam estar na aba de aprovados.
+A limpeza atual tenta encontrar pedidos cancelados/despachados no Tiny e cruzar com o banco local. Porém:
+- Pedidos **apagados** do Tiny nao aparecem em nenhuma lista de status
+- A verificacao individual (pedido por pedido) sofre timeout por erros 429 (rate limit)
+- Resultado: pedidos fantasmas ficam presos como "aprovados" para sempre
 
-## Solução
+### Solucao: Logica Invertida
 
-### 1. Filtrar pedidos na API do Tiny (edge function)
+Em vez de buscar "quais pedidos mudaram de status no Tiny", a nova abordagem faz o inverso:
 
-Adicionar o parâmetro `situacao=3` (aprovado) na chamada à API `/pedidos` para que o Tiny retorne **apenas** pedidos aprovados, em vez de trazer todos e filtrar localmente. Isso:
-- Reduz o volume de dados processados
-- Evita importar pedidos enviados/faturados/cancelados desnecessariamente
-- Alinha a contagem com o que o Tiny mostra (67 aprovados)
+1. Buscar TODOS os pedidos com situacao 3 (aprovados) no Tiny
+2. Construir um conjunto de tiny_order_ids validos
+3. Qualquer pedido local marcado como "approved" que NAO esteja nesse conjunto sera **apagado** do banco (junto com seus itens)
 
-### 2. Corrigir pedidos já importados errados
+Isso elimina completamente a necessidade de verificacoes individuais e resolve tanto pedidos cancelados quanto apagados.
 
-Na mesma função de sync, adicionar uma verificação para pedidos existentes: se o `detailSituacao` do Tiny for 5 (faturado) ou 6 (enviado), atualizar o status local para `dispatched`. Isso corrige retroativamente pedidos como o da Elzina.
+### Mudancas Tecnicas
 
-### 3. Manter busca complementar para pedidos despachados
+**Arquivo: `supabase/functions/expedition-beta-initial-sync/index.ts`**
 
-Fazer uma segunda passagem na API com `situacao=6` (enviado) para atualizar pedidos existentes que mudaram de status, garantindo que o código de rastreio seja capturado e o status local atualizado para `dispatched`.
+1. **Reescrever `passCleanup`** com logica invertida:
+   - Buscar pedidos aprovados (situacao=3) do Tiny, paginando ate 10 paginas
+   - Construir Set com todos os tiny_order_ids que sao aprovados no Tiny
+   - Buscar todos os pedidos locais com `expedition_status = 'approved'`
+   - Para cada pedido local cujo `tiny_order_id` NAO esta no Set:
+     - Deletar itens da tabela `expedition_beta_order_items`
+     - Deletar o pedido da tabela `expedition_beta_orders`
+   - Logar quantos pedidos foram removidos e quais tiny_order_ids
 
----
+2. **Remover a secao de verificacao individual** (linhas 442-474) que causa timeout
 
-### Detalhes Técnicos
+3. **Ajustar timeouts**:
+   - Cleanup: 30 segundos (so precisa paginar a lista de aprovados, sem detail fetches)
+   - Pass 1 (novos aprovados): 45 segundos
+   - Pass 2/3: manter como esta
 
-**Arquivo:** `supabase/functions/expedition-beta-initial-sync/index.ts`
+4. **Pass 1 tambem protegido**: ao inserir novos pedidos, verificar se o detail fetch retorna 404 e pular (ja existe mas pode ser melhorado)
 
-Mudanças:
-- Adicionar `situacao: '3'` nos parâmetros da chamada `tinyV3Get(token, '/pedidos', { ... })` para filtrar apenas aprovados
-- Adicionar `DISPATCHED_SITUACAO = new Set([5, 6])` para detectar pedidos faturados/enviados
-- Na verificação de pedidos existentes, se `detailSituacao` estiver em `DISPATCHED_SITUACAO`, atualizar para `dispatched`
-- Fazer uma segunda passagem com `situacao: '6'` para capturar códigos de rastreio de pedidos enviados e atualizar registros existentes
-- Manter a passagem com `situacao: '9'` para cancelados
+### Fluxo Revisado
 
-Fluxo da função:
 ```text
-Passagem 1: GET /pedidos?situacao=3 (aprovados)
-  -> Importar novos pedidos como 'approved'
-  -> Backfill itens em pedidos existentes sem itens
-
-Passagem 2: GET /pedidos?situacao=6 (enviados)
-  -> Atualizar pedidos existentes para 'dispatched'
-  -> Capturar código de rastreio
-
-Passagem 3: GET /pedidos?situacao=9 (cancelados)
-  -> Atualizar pedidos existentes para 'cancelled'
++------------------------------------------+
+|  PASS 0: Cleanup (30s)                   |
+|  1. Busca situacao=3 do Tiny (batch)     |
+|  2. Compara com approved locais          |
+|  3. DELETA os que nao existem no Tiny    |
++------------------------------------------+
+           |
++------------------------------------------+
+|  PASS 1: Importar novos aprovados (45s)  |
+|  Busca situacao=3 e insere novos         |
++------------------------------------------+
+           |
++------------------------------------------+
+|  PASS 2: Atualizar despachados           |
+|  Busca situacao=5,6 e atualiza locais    |
++------------------------------------------+
+           |
++------------------------------------------+
+|  PASS 3: Atualizar cancelados            |
+|  Busca situacao=9 e atualiza locais      |
++------------------------------------------+
 ```
 
-Isso garante que:
-- Apenas pedidos realmente aprovados apareçam na aba "Aprovado"
-- Pedidos que mudaram de status no Tiny sejam atualizados localmente
-- Códigos de rastreio sejam capturados para pedidos despachados
+### Resultado Esperado
+
+- Pedidos apagados do Tiny (como @rosanabifulco) serao removidos do sistema
+- Pedidos cancelados no Tiny (como @zildacatrolio) serao removidos do sistema
+- Apenas pedidos realmente aprovados (situacao=3) no Tiny permanecerao
+- Sem risco de timeout (nenhuma verificacao individual necessaria)
+- O numero de aprovados no sistema deve bater com o Tiny (67 pedidos)
+
