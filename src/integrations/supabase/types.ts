@@ -3845,6 +3845,57 @@ export type Database = {
           },
         ]
       }
+      pos_goals: {
+        Row: {
+          created_at: string
+          goal_type: string
+          goal_value: number
+          id: string
+          is_active: boolean
+          period: string
+          seller_id: string | null
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          goal_type: string
+          goal_value: number
+          id?: string
+          is_active?: boolean
+          period: string
+          seller_id?: string | null
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          goal_type?: string
+          goal_value?: number
+          id?: string
+          is_active?: boolean
+          period?: string
+          seller_id?: string | null
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_goals_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_goals_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_inter_store_requests: {
         Row: {
           courier_name: string | null

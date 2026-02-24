@@ -3,7 +3,7 @@ import {
   Globe, Search, Plus, Minus, Trash2, ShoppingCart, Loader2,
   Copy, Check, Image, Filter, Link2, ExternalLink, X, ArrowLeft,
   Truck, UserPlus, Banknote, CreditCard, MessageSquareText, Bike,
-  Pencil, Tag
+  Pencil, Tag, Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,7 +59,7 @@ interface Props {
   sellers: Seller[];
 }
 
-type Gateway = "yampi" | "checkout" | "paypal" | "pix" | "delivery";
+type Gateway = "yampi" | "checkout" | "paypal" | "pix" | "delivery" | "pickup";
 
 const GATEWAYS: { id: Gateway; label: string; color: string; icon: typeof Link2 }[] = [
   { id: "yampi", label: "Yampi", color: "bg-purple-600 hover:bg-purple-700", icon: Link2 },
@@ -67,6 +67,7 @@ const GATEWAYS: { id: Gateway; label: string; color: string; icon: typeof Link2 
   { id: "paypal", label: "PayPal", color: "bg-blue-600 hover:bg-blue-700", icon: Link2 },
   { id: "pix", label: "PIX", color: "bg-green-600 hover:bg-green-700", icon: Link2 },
   { id: "delivery", label: "Na Entrega", color: "bg-orange-600 hover:bg-orange-700", icon: Truck },
+  { id: "pickup", label: "Retirar na Loja", color: "bg-teal-600 hover:bg-teal-700", icon: Package },
 ];
 
 export function POSOnlineSales({ storeId, sellers }: Props) {
@@ -97,6 +98,10 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   // Delivery payment states
   const [showDeliveryOptions, setShowDeliveryOptions] = useState(false);
   const [deliveryMethod, setDeliveryMethod] = useState<"cash" | "card">("cash");
+
+  // Pickup states
+  const [showPickupOptions, setShowPickupOptions] = useState(false);
+  const [pickupStoreId, setPickupStoreId] = useState("");
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [deliveryConfirmed, setDeliveryConfirmed] = useState(false);
   const [installments, setInstallments] = useState("1");
@@ -247,12 +252,24 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       return;
     }
 
+    // If pickup, show store selector first
+    if (gateway === "pickup") {
+      setShowPickupOptions(true);
+      return;
+    }
+
     await processPayment(gateway);
   };
 
   const handleDeliveryConfirm = async () => {
     setShowDeliveryOptions(false);
     await processPayment("delivery");
+  };
+
+  const handlePickupConfirm = async () => {
+    if (!pickupStoreId) { toast.error("Selecione a loja de retirada"); return; }
+    setShowPickupOptions(false);
+    await processPayment("pickup");
   };
 
   const createTinyOrder = async () => {
@@ -369,7 +386,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     try {
       let link = "";
 
-      if (gateway === "delivery") {
+      if (gateway === "delivery" || gateway === "pickup") {
         link = "";
       } else if (gateway === "yampi") {
         const items = cart.map(c => ({
@@ -414,26 +431,28 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         link = data.ticket_url || data.qr_code_url || "";
       }
 
-      if (gateway !== "delivery" && !link) throw new Error("Link não gerado");
+      if (gateway !== "delivery" && gateway !== "pickup" && !link) throw new Error("Link não gerado");
 
       setGeneratedLink(link || "DELIVERY_CONFIRMED");
       if (gateway === "delivery") setDeliveryConfirmed(true);
+      if (gateway === "pickup") setDeliveryConfirmed(true);
 
       // Save sale to pos_sales
       const sellerObj = sellers.find(s => s.id === selectedSeller);
       const paymentGw = gateway === "delivery" ? `delivery_${deliveryMethod}` : gateway;
+      const saleStoreId = gateway === "pickup" ? pickupStoreId : storeId;
       const { data: sale, error: saleErr } = await supabase
         .from("pos_sales")
         .insert({
-          store_id: storeId,
+          store_id: saleStoreId,
           seller_id: selectedSeller,
           seller_name: sellerObj?.name || "",
           total: cartTotal,
           items_count: cartItems,
-          status: "online_pending",
-          sale_type: "online",
+          status: gateway === "pickup" ? "pending_pickup" : "online_pending",
+          sale_type: gateway === "pickup" ? "pickup" : "online",
           payment_gateway: paymentGw,
-          payment_link: gateway === "delivery" ? null : link,
+          payment_link: (gateway === "delivery" || gateway === "pickup") ? null : link,
           stock_source_store_id: stockStore,
           customer_name: linkedCustomer?.name || null,
           customer_phone: linkedCustomer?.whatsapp || null,
@@ -485,7 +504,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         }
       }
 
-      toast.success(gateway === "delivery" ? "Venda registrada!" : "Link gerado com sucesso!");
+      toast.success(gateway === "pickup" ? "Retirada na loja registrada!" : gateway === "delivery" ? "Venda registrada!" : "Link gerado com sucesso!");
     } catch (e: any) {
       console.error("Generate link error:", e);
       toast.error(e.message || "Erro ao gerar link");
@@ -527,6 +546,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     setDeliveryConfirmed(false);
     setDeliveryNotes("");
     setShowDeliveryOptions(false);
+    setShowPickupOptions(false);
+    setPickupStoreId("");
     setInstallments("1");
     setNeedsChange(false);
     setChangeAmount("");
@@ -878,7 +899,44 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
             {!generatedLink && !deliveryConfirmed ? (
               <>
                 {/* Delivery options inline */}
-                {showDeliveryOptions ? (
+                {showPickupOptions ? (
+                  <div className="space-y-3 rounded-lg border border-teal-500/30 bg-teal-500/5 p-3">
+                    <Label className="text-xs font-bold flex items-center gap-1.5">
+                      <Package className="h-3.5 w-3.5 text-teal-600" />
+                      Em qual loja o cliente vai retirar?
+                    </Label>
+                    <Select value={pickupStoreId} onValueChange={setPickupStoreId}>
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder="Selecione a loja de retirada" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stores.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Textarea
+                      placeholder="Observações (opcional)"
+                      value={deliveryNotes}
+                      onChange={e => setDeliveryNotes(e.target.value)}
+                      className="h-16 text-xs"
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="ghost" className="text-xs" onClick={() => setShowPickupOptions(false)}>
+                        Cancelar
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 text-xs bg-teal-600 hover:bg-teal-700 text-white"
+                        disabled={generating || !pickupStoreId}
+                        onClick={handlePickupConfirm}
+                      >
+                        {generating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Check className="h-3 w-3 mr-1" />}
+                        Confirmar Retirada
+                      </Button>
+                    </div>
+                  </div>
+                ) : showDeliveryOptions ? (
                   <div className="space-y-3 rounded-lg border border-orange-500/30 bg-orange-500/5 p-3">
                     <Label className="text-xs font-bold flex items-center gap-1.5">
                       <Truck className="h-3.5 w-3.5 text-orange-600" />
