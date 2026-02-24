@@ -133,17 +133,11 @@ export default function ExpeditionBeta() {
   const handleResyncItems = async () => {
     setIsInitialSyncing(true);
     try {
-      // Run sync multiple times to backfill items (rate limit means we process a few per run)
-      let totalBackfilled = 0;
-      for (let i = 0; i < 3; i++) {
-        const { data, error } = await supabase.functions.invoke('expedition-beta-initial-sync');
-        if (error) throw error;
-        if (data?.synced) totalBackfilled += data.synced;
-        // Small delay between runs
-        if (i < 2) await new Promise(r => setTimeout(r, 2000));
-      }
+      const { data, error } = await supabase.functions.invoke('expedition-beta-initial-sync');
+      if (error) throw error;
+      const total = (data?.synced || 0) + (data?.dispatched || 0) + (data?.cancelled || 0);
       toast.success(`Resincronização concluída!`, {
-        description: totalBackfilled > 0 ? `${totalBackfilled} pedidos atualizados` : 'Nenhuma atualização necessária',
+        description: total > 0 ? `${total} pedidos atualizados` : 'Nenhuma atualização necessária',
       });
       fetchOrders();
     } catch (error: any) {
