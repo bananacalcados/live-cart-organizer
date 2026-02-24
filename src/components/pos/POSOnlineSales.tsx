@@ -3,7 +3,7 @@ import {
   Globe, Search, Plus, Minus, Trash2, ShoppingCart, Loader2,
   Copy, Check, Image, Filter, Link2, ExternalLink, X, ArrowLeft,
   Truck, UserPlus, Banknote, CreditCard, MessageSquareText, Bike,
-  Pencil, Tag, Package
+  Pencil, Tag, Package, Percent
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,11 +59,12 @@ interface Props {
   sellers: Seller[];
 }
 
-type Gateway = "yampi" | "checkout" | "paypal" | "pix" | "delivery" | "pickup";
+type Gateway = "yampi" | "checkout" | "store-checkout" | "paypal" | "pix" | "delivery" | "pickup";
 
 const GATEWAYS: { id: Gateway; label: string; color: string; icon: typeof Link2 }[] = [
   { id: "yampi", label: "Yampi", color: "bg-purple-600 hover:bg-purple-700", icon: Link2 },
   { id: "checkout", label: "Checkout", color: "bg-primary hover:bg-primary/90", icon: Link2 },
+  { id: "store-checkout", label: "Checkout Loja", color: "bg-amber-600 hover:bg-amber-700", icon: Link2 },
   { id: "paypal", label: "PayPal", color: "bg-blue-600 hover:bg-blue-700", icon: Link2 },
   { id: "pix", label: "PIX", color: "bg-green-600 hover:bg-green-700", icon: Link2 },
   { id: "delivery", label: "Na Entrega", color: "bg-orange-600 hover:bg-orange-700", icon: Truck },
@@ -110,10 +111,12 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryReference, setDeliveryReference] = useState("");
 
-  // Coupon & price editing
+  // Coupon & price editing & discount
   const [couponCode, setCouponCode] = useState("");
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [editPriceValue, setEditPriceValue] = useState("");
+  const [discountValue, setDiscountValue] = useState("");
+  const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
   
   // Debounce search
   useEffect(() => {
@@ -230,7 +233,16 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
 
   const removeFromCart = (id: string) => setCart(prev => prev.filter(c => c.id !== id));
 
-  const cartTotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+  const cartSubtotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+
+  const discountAmount = (() => {
+    const val = parseFloat(discountValue);
+    if (!val || val <= 0) return 0;
+    if (discountType === "percent") return Math.min(cartSubtotal, cartSubtotal * (val / 100));
+    return Math.min(cartSubtotal, val);
+  })();
+
+  const cartTotal = Math.max(0, cartSubtotal - discountAmount);
 
   const updateCartPrice = (id: string, newPrice: number) => {
     if (newPrice <= 0) return;
@@ -409,6 +421,10 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         const orderId = await ensureCrmOrder();
         if (!orderId) throw new Error("Erro ao criar pedido no CRM");
         link = `https://checkout.bananacalcados.com.br/checkout/order/${orderId}`;
+      } else if (gateway === "store-checkout") {
+        // Store checkout: save sale first, then generate link
+        // Sale will be saved below in the common flow, so we generate a placeholder
+        link = "__STORE_CHECKOUT__";
       } else if (gateway === "paypal") {
         // Create CRM order first, then create PayPal order from it
         const orderId = await ensureCrmOrder();
@@ -431,9 +447,12 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         link = data.ticket_url || data.qr_code_url || "";
       }
 
-      if (gateway !== "delivery" && gateway !== "pickup" && !link) throw new Error("Link não gerado");
+      if (gateway !== "delivery" && gateway !== "pickup" && gateway !== "store-checkout" && !link) throw new Error("Link não gerado");
 
-      setGeneratedLink(link || "DELIVERY_CONFIRMED");
+      // For store-checkout, we need to save the sale first and then generate the link
+      if (gateway !== "store-checkout") {
+        setGeneratedLink(link || "DELIVERY_CONFIRMED");
+      }
       if (gateway === "delivery") setDeliveryConfirmed(true);
       if (gateway === "pickup") setDeliveryConfirmed(true);
 
@@ -452,12 +471,13 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           status: gateway === "pickup" ? "pending_pickup" : "online_pending",
           sale_type: gateway === "pickup" ? "pickup" : "online",
           payment_gateway: paymentGw,
-          payment_link: (gateway === "delivery" || gateway === "pickup") ? null : link,
+          payment_link: (gateway === "delivery" || gateway === "pickup" || gateway === "store-checkout") ? null : link,
           stock_source_store_id: stockStore,
           customer_name: linkedCustomer?.name || null,
           customer_phone: linkedCustomer?.whatsapp || null,
           customer_id: linkedCustomer?.id || null,
           payment_method_detail: gateway === "delivery" ? deliveryMethod : null,
+          discount_amount: discountAmount > 0 ? discountAmount : null,
         } as any)
         .select("id")
         .single();
@@ -476,6 +496,12 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           barcode: "",
         }));
         await supabase.from("pos_sale_items").insert(saleItems as any);
+      }
+
+      // For store-checkout, generate the link using the sale ID
+      if (gateway === "store-checkout" && sale) {
+        const storeCheckoutLink = `https://checkout.bananacalcados.com.br/checkout-loja/${storeId}/${sale.id}`;
+        setGeneratedLink(storeCheckoutLink);
       }
 
       // Create Tiny order for delivery, PayPal and PIX
@@ -556,6 +582,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     setCouponCode("");
     setEditingPriceId(null);
     setEditPriceValue("");
+    setDiscountValue("");
+    setDiscountType("fixed");
   };
 
   const selectCustomer = (c: FoundCustomer) => {
@@ -892,6 +920,52 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                   onChange={e => setCouponCode(e.target.value.toUpperCase())}
                   className="h-8 text-xs"
                 />
+              </div>
+            )}
+
+            {/* Discount Field */}
+            {!generatedLink && !deliveryConfirmed && cart.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1">
+                  <Percent className="h-3 w-3" /> Desconto
+                </Label>
+                <div className="flex gap-1.5">
+                  <div className="flex rounded-md border border-border overflow-hidden shrink-0">
+                    <button
+                      onClick={() => setDiscountType("fixed")}
+                      className={cn(
+                        "px-2 py-1 text-[11px] font-medium transition-colors",
+                        discountType === "fixed" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"
+                      )}
+                    >
+                      R$
+                    </button>
+                    <button
+                      onClick={() => setDiscountType("percent")}
+                      className={cn(
+                        "px-2 py-1 text-[11px] font-medium transition-colors",
+                        discountType === "percent" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"
+                      )}
+                    >
+                      %
+                    </button>
+                  </div>
+                  <Input
+                    type="number"
+                    placeholder={discountType === "fixed" ? "Valor do desconto" : "% de desconto"}
+                    value={discountValue}
+                    onChange={e => setDiscountValue(e.target.value)}
+                    className="h-8 text-xs flex-1"
+                    min="0"
+                    step={discountType === "percent" ? "1" : "0.01"}
+                  />
+                </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-xs px-1">
+                    <span className="text-muted-foreground">Subtotal: {fmt(cartSubtotal)}</span>
+                    <span className="text-green-600 font-medium">-{fmt(discountAmount)}</span>
+                  </div>
+                )}
               </div>
             )}
 

@@ -31,6 +31,7 @@ const BananaLanding = lazy(() => import("./pages/BananaLanding"));
 const BananaLandingGV = lazy(() => import("./pages/BananaLandingGV"));
 const LiveCommerce = lazy(() => import("./pages/LiveCommerce"));
 const DoseTriplaCatalog = lazy(() => import("./pages/DoseTriplaCatalog"));
+const StoreCheckout = lazy(() => import("./pages/StoreCheckout"));
 
 const queryClient = new QueryClient();
 
@@ -54,6 +55,7 @@ const App = () => (
               <Route path="/checkout/order/:orderId" element={<TransparentCheckout />} />
               <Route path="/checkout/live" element={<TransparentCheckout />} />
               <Route path="/checkout/:paypalOrderId" element={<Checkout />} />
+              <Route path="/checkout-loja/:storeId/:saleId" element={<StoreCheckout />} />
               <Route path="/register/:orderId" element={<CustomerRegister />} />
               <Route path="/lp/:slug" element={<LandingPage />} />
               <Route path="/banana-verao" element={<BananaLanding />} />
