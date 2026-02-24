@@ -56,6 +56,13 @@ const modules = [
     module: "expedition",
   },
   {
+    title: "Expedição Beta",
+    description: "Auto-sync Shopify + código de barras",
+    icon: Truck,
+    path: "/expedition-beta",
+    module: "expedition",
+  },
+  {
     title: "Frente de Caixa",
     description: "PDV para vendas em loja física",
     icon: Store,
