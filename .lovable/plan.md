@@ -1,56 +1,56 @@
 
-# Verificar Rastreio e Filtro de Pedidos do Dia
 
 ## Problema
-Pedidos que ja foram despachados no Tiny (como o da Cenira Santi, que ja tem codigo de rastreio JLH2P2YU) continuam aparecendo como "Aprovado" na Expedição Beta. Alem disso, falta um filtro rapido para ver apenas pedidos do dia.
+
+Pedidos com status "Enviado" (situacao=6) e "Faturado" (situacao=5) no Tiny estao sendo importados e ficando como "Aprovado" na Expedição Beta. Exemplo: Elzina de Oliveira Bernardo (pedido 4144) esta marcada como "Enviado" no Tiny mas aparece como "Aprovado" aqui.
+
+O Tiny mostra 67 pedidos aprovados, mas o sistema puxou 64 -- a diferença sao pedidos enviados/faturados que nao deveriam estar na aba de aprovados.
 
 ## Solução
 
-### 1. Verificar codigo de rastreio durante a sincronização
-Alterar a Edge Function `expedition-beta-initial-sync` para:
-- Ao buscar os detalhes de cada pedido no Tiny V3, verificar se o campo de rastreamento (`codigoRastreamento` ou campo equivalente na resposta V3) esta preenchido
-- Se o pedido ja tem rastreio, inserir com `expedition_status: 'dispatched'` ao inves de `'approved'`
-- Para pedidos ja existentes no banco, tambem atualizar: se antes estava como `approved` mas agora no Tiny tem rastreio, atualizar para `dispatched`
+### 1. Filtrar pedidos na API do Tiny (edge function)
 
-### 2. Adicionar coluna de codigo de rastreio
-- Criar migration adicionando coluna `tracking_code TEXT` na tabela `expedition_beta_orders`
-- Gravar o codigo de rastreio quando disponivel durante o sync
+Adicionar o parâmetro `situacao=3` (aprovado) na chamada à API `/pedidos` para que o Tiny retorne **apenas** pedidos aprovados, em vez de trazer todos e filtrar localmente. Isso:
+- Reduz o volume de dados processados
+- Evita importar pedidos enviados/faturados/cancelados desnecessariamente
+- Alinha a contagem com o que o Tiny mostra (67 aprovados)
 
-### 3. Atualizar pedidos existentes no sync
-A logica atual faz `skip` se o pedido ja existe. Mudar para: se ja existe, verificar se o Tiny agora tem rastreio e, caso tenha, atualizar o status para `dispatched` e gravar o `tracking_code`.
+### 2. Corrigir pedidos já importados errados
 
-### 4. Filtro "Pedidos do Dia" na UI
-No `ExpeditionBeta.tsx`, adicionar um botão rapido "Hoje" ao lado dos filtros de data existentes que:
-- Seta `dateFrom` e `dateTo` para a data atual
-- Facilita filtrar apenas os pedidos criados no dia
+Na mesma função de sync, adicionar uma verificação para pedidos existentes: se o `detailSituacao` do Tiny for 5 (faturado) ou 6 (enviado), atualizar o status local para `dispatched`. Isso corrige retroativamente pedidos como o da Elzina.
 
-### 5. Exibir codigo de rastreio na lista de pedidos
-No `BetaOrdersList.tsx`, dentro do `BetaOrderRow`:
-- Mostrar o codigo de rastreio quando disponivel (badge ou texto ao lado do status)
+### 3. Manter busca complementar para pedidos despachados
+
+Fazer uma segunda passagem na API com `situacao=6` (enviado) para atualizar pedidos existentes que mudaram de status, garantindo que o código de rastreio seja capturado e o status local atualizado para `dispatched`.
 
 ---
 
-## Detalhes Tecnicos
+### Detalhes Técnicos
 
-### Migration SQL
-```sql
-ALTER TABLE expedition_beta_orders ADD COLUMN tracking_code TEXT;
+**Arquivo:** `supabase/functions/expedition-beta-initial-sync/index.ts`
+
+Mudanças:
+- Adicionar `situacao: '3'` nos parâmetros da chamada `tinyV3Get(token, '/pedidos', { ... })` para filtrar apenas aprovados
+- Adicionar `DISPATCHED_SITUACAO = new Set([5, 6])` para detectar pedidos faturados/enviados
+- Na verificação de pedidos existentes, se `detailSituacao` estiver em `DISPATCHED_SITUACAO`, atualizar para `dispatched`
+- Fazer uma segunda passagem com `situacao: '6'` para capturar códigos de rastreio de pedidos enviados e atualizar registros existentes
+- Manter a passagem com `situacao: '9'` para cancelados
+
+Fluxo da função:
+```text
+Passagem 1: GET /pedidos?situacao=3 (aprovados)
+  -> Importar novos pedidos como 'approved'
+  -> Backfill itens em pedidos existentes sem itens
+
+Passagem 2: GET /pedidos?situacao=6 (enviados)
+  -> Atualizar pedidos existentes para 'dispatched'
+  -> Capturar código de rastreio
+
+Passagem 3: GET /pedidos?situacao=9 (cancelados)
+  -> Atualizar pedidos existentes para 'cancelled'
 ```
 
-### Edge Function (`expedition-beta-initial-sync`)
-- Para cada pedido buscado no detalhe (`/pedidos/{id}`), extrair `codigoRastreamento` (ou o campo correto da API V3)
-- Logica de insert: se tem rastreio, `expedition_status = 'dispatched'`
-- Logica de update (pedido ja existente): se agora tem rastreio e status atual nao e `dispatched`, atualizar status e gravar tracking_code
-
-### UI (`ExpeditionBeta.tsx`)
-- Adicionar botão "Hoje" que define dateFrom/dateTo para hoje
-
-### UI (`BetaOrdersList.tsx`)
-- Exibir `order.tracking_code` como badge quando presente
-- Pedidos despachados ja ficam filtrados por padrão (filtro "Não despachados" ativo)
-
-### Arquivos alterados
-- `supabase/functions/expedition-beta-initial-sync/index.ts`
-- `src/pages/ExpeditionBeta.tsx`
-- `src/components/expedition-beta/BetaOrdersList.tsx`
-- Nova migration para coluna `tracking_code`
+Isso garante que:
+- Apenas pedidos realmente aprovados apareçam na aba "Aprovado"
+- Pedidos que mudaram de status no Tiny sejam atualizados localmente
+- Códigos de rastreio sejam capturados para pedidos despachados
