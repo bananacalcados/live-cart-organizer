@@ -77,26 +77,8 @@ serve(async (req) => {
 
     console.log(`Freight info: carrier="${order.freight_carrier}", formaEnvio="${formaEnvio}" (stored=${!!order.tiny_forma_envio_id}), formaFrete="${formaFrete}" (stored=${!!order.tiny_forma_frete_id}), serviceCode="${serviceCode}", weightKg=${weightKg}`);
 
-    // Step 0: Update the Tiny SALES ORDER with freight data (pedido.alterar.php)
-    // This ensures the order has the shipping method set before expedition
-    if (order.tiny_order_id) {
-      console.log('Step 0: Updating Tiny sales order with freight data...');
-      const pedidoPayload = JSON.stringify({
-        pedido: {
-          forma_envio: formaEnvio,
-          forma_frete: formaFrete,
-          valor_frete: order.freight_price || 0,
-          peso_bruto: weightKg.toFixed(3),
-        }
-      });
-      const pedidoResp = await fetch('https://api.tiny.com.br/api2/pedido.alterar.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}&pedido=${encodeURIComponent(pedidoPayload)}`,
-      });
-      const pedidoData = await safeJson(pedidoResp, 'Alterar pedido de venda');
-      console.log('Update sales order response:', JSON.stringify(pedidoData));
-    }
+    // Note: pedido.alterar.php does NOT support forma_envio/valor_frete fields.
+    // Freight data is injected via nota.fiscal.incluir.php in the invoice step instead.
 
     const objectId = order.tiny_invoice_id;
     const objectType = 'notafiscal';
