@@ -3,7 +3,7 @@ import {
   DollarSign, ShoppingCart, TrendingUp, Package, Loader2,
   RefreshCw, BarChart3, Users, MessageSquare, Headphones,
   ArrowRightLeft, ChevronRight, CalendarIcon, AlertTriangle,
-  Globe, Store, Lock
+  Globe, Store, Lock, ListChecks, Check, Phone
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -83,6 +83,11 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [supportTickets, setSupportTickets] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [showPrivatePanel, setShowPrivatePanel] = useState(false);
+  
+  // Contact tasks
+  const [contactTasks, setContactTasks] = useState<any[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [influencedRevenue, setInfluencedRevenue] = useState(0);
 
   const loadAlerts = async () => {
     const [conversationRes, supportRes, interStoreRes, stockRes] = await Promise.all([

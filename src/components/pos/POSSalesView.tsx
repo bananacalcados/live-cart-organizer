@@ -595,7 +595,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
-  // Load wheel segments and loyalty config for this store
+  // Load wheel segments and loyalty config - GLOBAL (store_id IS NULL)
   const loadWheelSegments = async () => {
     const { data } = await supabase
       .from('prize_wheel_segments')
@@ -607,9 +607,19 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   };
 
   const loadLoyaltyConfig = async () => {
-    const { data } = await supabase.from('loyalty_config').select('*').eq('store_id', storeId).maybeSingle() as any;
+    // Try global config first (store_id IS NULL), fallback to store-specific
+    let { data } = await supabase.from('loyalty_config').select('*').is('store_id', null).maybeSingle() as any;
+    if (!data) {
+      const res = await supabase.from('loyalty_config').select('*').eq('store_id', storeId).maybeSingle() as any;
+      data = res.data;
+    }
     if (data) setLoyaltyConfig(data);
-    const { data: tiers } = await supabase.from('loyalty_prize_tiers').select('*').eq('store_id', storeId).eq('is_active', true).order('min_points') as any;
+    // Global tiers first, fallback to store-specific
+    let { data: tiers } = await supabase.from('loyalty_prize_tiers').select('*').is('store_id', null).eq('is_active', true).order('min_points') as any;
+    if (!tiers || tiers.length === 0) {
+      const res = await supabase.from('loyalty_prize_tiers').select('*').eq('store_id', storeId).eq('is_active', true).order('min_points') as any;
+      tiers = res.data;
+    }
     setLoyaltyTiers(tiers || []);
   };
 

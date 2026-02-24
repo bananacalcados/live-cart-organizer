@@ -20,29 +20,32 @@ interface Props {
 
 interface CommissionTier {
   id: string;
-  min_revenue: number;
-  max_revenue: number | null;
+  goal_value: number;
+  achievement_percent: number;
   commission_percent: number;
   tier_order: number;
 }
 
-function calculateTieredCommission(revenue: number, tiers: CommissionTier[]): { total: number; breakdown: { tier: CommissionTier; amount: number; revenue: number }[] } {
-  const sorted = [...tiers].sort((a, b) => a.tier_order - b.tier_order);
-  let remaining = revenue;
-  let total = 0;
-  const breakdown: { tier: CommissionTier; amount: number; revenue: number }[] = [];
+function calculateGoalCommission(revenue: number, tiers: CommissionTier[]): { commission: number; currentTier: CommissionTier | null; nextTier: CommissionTier | null; achievementPct: number; goalValue: number } {
+  if (tiers.length === 0) return { commission: 0, currentTier: null, nextTier: null, achievementPct: 0, goalValue: 0 };
 
-  for (const tier of sorted) {
-    if (remaining <= 0) break;
-    const tierMax = tier.max_revenue ? tier.max_revenue - tier.min_revenue : remaining;
-    const applicable = Math.min(remaining, tierMax);
-    const amount = applicable * (tier.commission_percent / 100);
-    breakdown.push({ tier, amount, revenue: applicable });
-    total += amount;
-    remaining -= applicable;
-  }
+  const goalValue = tiers[0]?.goal_value || 0;
+  if (goalValue <= 0) return { commission: 0, currentTier: null, nextTier: null, achievementPct: 0, goalValue: 0 };
 
-  return { total, breakdown };
+  const achievementPct = (revenue / goalValue) * 100;
+
+  // Sort by achievement_percent descending to find the highest tier achieved
+  const sorted = [...tiers].sort((a, b) => b.achievement_percent - a.achievement_percent);
+  const currentTier = sorted.find(t => achievementPct >= t.achievement_percent) || null;
+
+  // Next tier is the one just above
+  const sortedAsc = [...tiers].sort((a, b) => a.achievement_percent - b.achievement_percent);
+  const currentIdx = currentTier ? sortedAsc.findIndex(t => t.id === currentTier.id) : -1;
+  const nextTier = currentIdx >= 0 && currentIdx < sortedAsc.length - 1 ? sortedAsc[currentIdx + 1] : null;
+
+  const commission = currentTier ? revenue * (currentTier.commission_percent / 100) : 0;
+
+  return { commission, currentTier, nextTier, achievementPct, goalValue };
 }
 
 export function POSSellerPrivatePanel({ open, onClose, storeId, period, periodStart, periodEnd, sellerMetrics }: Props) {
@@ -99,19 +102,10 @@ export function POSSellerPrivatePanel({ open, onClose, storeId, period, periodSt
     : null;
 
   const sellerRevenue = sellerData?.totalSales || 0;
-  const commission = calculateTieredCommission(sellerRevenue, commissionTiers);
+  const commResult = calculateGoalCommission(sellerRevenue, commissionTiers);
 
   // Find seller goals
   const sellerGoals = goals.filter(g => g.seller_id === authenticatedSeller?.id);
-  
-  // Find next tier
-  const sortedTiers = [...commissionTiers].sort((a, b) => a.tier_order - b.tier_order);
-  const currentTierIdx = sortedTiers.findIndex(t => 
-    sellerRevenue >= t.min_revenue && (t.max_revenue === null || sellerRevenue < t.max_revenue)
-  );
-  const nextTier = currentTierIdx >= 0 && currentTierIdx < sortedTiers.length - 1 
-    ? sortedTiers[currentTierIdx + 1] 
-    : null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -153,23 +147,49 @@ export function POSSellerPrivatePanel({ open, onClose, storeId, period, periodSt
               </p>
             </div>
 
+            {/* Goal & Achievement */}
+            {commResult.goalValue > 0 && (
+              <div className="p-4 rounded-xl bg-pos-orange/5 border border-pos-orange/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-4 w-4 text-pos-orange" />
+                  <span className="text-xs text-pos-white/50">Meta do Período</span>
+                </div>
+                <p className="text-lg font-bold text-pos-orange">
+                  R$ {commResult.goalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+                <div className="mt-2">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-pos-white/60">Atingimento</span>
+                    <span className={`font-bold ${commResult.achievementPct >= 100 ? 'text-green-400' : 'text-pos-orange'}`}>
+                      {commResult.achievementPct.toFixed(1)}%
+                    </span>
+                  </div>
+                  <Progress 
+                    value={Math.min(120, commResult.achievementPct)} 
+                    className={`h-3 ${commResult.achievementPct >= 100 ? "[&>div]:bg-green-500" : "[&>div]:bg-pos-orange"} bg-pos-white/10`} 
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Commission */}
             <div className="p-4 rounded-xl bg-green-500/5 border border-green-500/20">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="h-4 w-4 text-green-400" />
-                <span className="text-xs text-pos-white/50">Comissão Acumulada</span>
+                <span className="text-xs text-pos-white/50">Comissão</span>
               </div>
               <p className="text-2xl font-bold text-green-400">
-                R$ {commission.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                R$ {commResult.commission.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
-              {commission.breakdown.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {commission.breakdown.map((b, i) => (
-                    <p key={i} className="text-[10px] text-pos-white/40">
-                      Faixa {i + 1}: R$ {b.revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} × {b.tier.commission_percent}% = R$ {b.amount.toFixed(2)}
-                    </p>
-                  ))}
-                </div>
+              {commResult.currentTier && (
+                <p className="text-xs text-pos-white/40 mt-1">
+                  Faixa atual: {commResult.currentTier.achievement_percent}% da meta → {commResult.currentTier.commission_percent}% de comissão
+                </p>
+              )}
+              {!commResult.currentTier && commissionTiers.length > 0 && (
+                <p className="text-xs text-red-400 mt-1">
+                  ⚠️ Abaixo do mínimo para comissão ({commissionTiers.sort((a,b) => a.achievement_percent - b.achievement_percent)[0]?.achievement_percent}% da meta)
+                </p>
               )}
               {commissionTiers.length === 0 && (
                 <p className="text-xs text-pos-white/40 mt-1">Nenhuma faixa de comissão configurada.</p>
@@ -177,10 +197,10 @@ export function POSSellerPrivatePanel({ open, onClose, storeId, period, periodSt
             </div>
 
             {/* Next tier */}
-            {nextTier && (
+            {commResult.nextTier && commResult.goalValue > 0 && (
               <div className="p-3 rounded-lg bg-pos-orange/10 border border-pos-orange/20">
                 <p className="text-xs text-pos-orange font-bold">
-                  🚀 Falta R$ {(nextTier.min_revenue - sellerRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} para a próxima faixa de {nextTier.commission_percent}%!
+                  🚀 Falta R$ {((commResult.nextTier.achievement_percent / 100 * commResult.goalValue) - sellerRevenue).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} para a faixa de {commResult.nextTier.commission_percent}% ({commResult.nextTier.achievement_percent}% da meta)!
                 </p>
               </div>
             )}
