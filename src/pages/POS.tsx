@@ -60,19 +60,21 @@ export default function POS() {
   const [sellers, setSellers] = useState<{ id: string; name: string; tiny_seller_id?: string }[]>([]);
   const [sellersLoaded, setSellersLoaded] = useState(false);
 
-  const loadSellers = useCallback(() => {
+  const loadSellers = useCallback(async () => {
     if (!selectedStore) { setSellers([]); setSellersLoaded(false); return; }
-    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-    const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sellers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-      body: JSON.stringify({ store_id: selectedStore }),
-    })
-      .then(r => r.json())
-      .then(data => { if (data.success) setSellers(data.sellers || []); })
-      .catch(e => console.error('Pre-load sellers error:', e))
-      .finally(() => setSellersLoaded(true));
+    try {
+      const { data } = await supabase
+        .from('pos_sellers')
+        .select('id, name, tiny_seller_id')
+        .eq('store_id', selectedStore)
+        .eq('is_active', true)
+        .order('name');
+      setSellers(data || []);
+    } catch (e) {
+      console.error('Load sellers error:', e);
+    } finally {
+      setSellersLoaded(true);
+    }
   }, [selectedStore]);
 
   useEffect(() => { loadSellers(); }, [loadSellers]);

@@ -123,13 +123,13 @@ export function POSPickupOrders({ storeId }: Props) {
 
   const loadSellers = useCallback(async () => {
     try {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sellers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-        body: JSON.stringify({ store_id: storeId }),
-      });
-      const data = await resp.json();
-      if (data.success) setSellers(data.sellers || []);
+      const { data } = await supabase
+        .from('pos_sellers')
+        .select('id, name, tiny_seller_id')
+        .eq('store_id', storeId)
+        .eq('is_active', true)
+        .order('name');
+      setSellers(data || []);
     } catch (e) {
       console.error(e);
     }
