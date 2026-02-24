@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink, Clock, Play } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink, Clock, Play, RotateCcw } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -377,6 +377,60 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isMarking, setIsMarking] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetExpedition = async () => {
+    setIsResetting(true);
+    try {
+      const { error } = await supabase
+        .from('expedition_orders')
+        .update({
+          expedition_status: 'approved',
+          freight_carrier: null,
+          freight_service: null,
+          freight_price: null,
+          freight_delivery_days: null,
+          freight_tracking_code: null,
+          freight_label_url: null,
+          invoice_number: null,
+          invoice_series: null,
+          invoice_key: null,
+          invoice_pdf_url: null,
+          invoice_xml_url: null,
+          tiny_invoice_id: null,
+          tiny_order_id: null,
+          tiny_forma_envio_id: null,
+          tiny_forma_frete_id: null,
+          tiny_service_code: null,
+          internal_barcode: null,
+          dispatch_verified: false,
+          dispatch_verified_at: null,
+          picking_list_id: null,
+          group_id: null,
+        })
+        .eq('id', order.id);
+      if (error) throw error;
+
+      // Reset item pick/pack flags
+      await supabase
+        .from('expedition_order_items')
+        .update({ pick_verified: false, picked_quantity: 0, pack_verified: false, packed_quantity: 0 })
+        .eq('expedition_order_id', order.id);
+
+      // Remove freight quotes
+      await supabase
+        .from('expedition_freight_quotes')
+        .delete()
+        .eq('expedition_order_id', order.id);
+
+      toast.success(`Expedição do pedido ${order.shopify_order_name} reiniciada!`);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro ao refazer expedição: ${error.message}`);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const isAwaiting = order.expedition_status === 'awaiting_stock';
 
@@ -600,6 +654,31 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
                   <CheckCheck className="h-4 w-4" />
                   {isMarking ? 'Marcando...' : 'Marcar como Despachado'}
                 </Button>
+              )}
+
+              {order.expedition_status !== 'approved' && order.expedition_status !== 'pending_sync' && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" className="gap-2 w-full border-orange-500/50 text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-900/20">
+                      <RotateCcw className="h-4 w-4" />
+                      Refazer Expedição
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Refazer expedição do pedido {order.shopify_order_name}?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Isso vai resetar o status para "Aprovado" e limpar todos os dados de frete, NF-e, etiqueta e conferência. O pedido voltará ao início do fluxo de expedição.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleResetExpedition} disabled={isResetting} className="bg-orange-600 text-white hover:bg-orange-700">
+                        {isResetting ? 'Resetando...' : 'Confirmar Reset'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               )}
 
               <AlertDialog>
