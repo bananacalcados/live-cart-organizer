@@ -130,6 +130,29 @@ export default function ExpeditionBeta() {
     }
   };
 
+  const handleResyncItems = async () => {
+    setIsInitialSyncing(true);
+    try {
+      // Run sync multiple times to backfill items (rate limit means we process a few per run)
+      let totalBackfilled = 0;
+      for (let i = 0; i < 3; i++) {
+        const { data, error } = await supabase.functions.invoke('expedition-beta-initial-sync');
+        if (error) throw error;
+        if (data?.synced) totalBackfilled += data.synced;
+        // Small delay between runs
+        if (i < 2) await new Promise(r => setTimeout(r, 2000));
+      }
+      toast.success(`Resincronização concluída!`, {
+        description: totalBackfilled > 0 ? `${totalBackfilled} pedidos atualizados` : 'Nenhuma atualização necessária',
+      });
+      fetchOrders();
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    } finally {
+      setIsInitialSyncing(false);
+    }
+  };
+
   const goToNextStep = useCallback(() => {
     const currentIndex = STEPS.findIndex(s => s.id === activeStep);
     if (currentIndex >= 0 && currentIndex < STEPS.length - 1) {
@@ -184,6 +207,10 @@ export default function ExpeditionBeta() {
             <Button onClick={handleInitialSync} disabled={isInitialSyncing} variant="outline" size="sm" className="gap-1 md:gap-2 text-xs md:text-sm">
               {isInitialSyncing ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <Package className="h-3 w-3 md:h-4 md:w-4" />}
               <span className="hidden sm:inline">Buscar do Tiny</span>
+            </Button>
+            <Button onClick={handleResyncItems} disabled={isInitialSyncing} variant="outline" size="sm" className="gap-1 md:gap-2 text-xs md:text-sm">
+              {isInitialSyncing ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <RotateCcw className="h-3 w-3 md:h-4 md:w-4" />}
+              <span className="hidden sm:inline">Resincronizar</span>
             </Button>
           </div>
         </div>
