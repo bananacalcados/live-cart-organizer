@@ -1,160 +1,140 @@
 
-# Plano: Melhorias Completas no PDV
+# Plano: Melhorias no PDV - Busca, Chat e Limpeza de Abas
 
-## 1. Programa de Fidelidade Global (Todas as Lojas)
+## 1. Corrigir Build Error (cn import)
 
-**Problema atual**: Cada loja tem sua propria `loyalty_config` e `loyalty_prize_tiers` separadas (filtradas por `store_id`).
-
-**Solucao**: Criar uma configuracao global (sem `store_id` ou com um `store_id` especial "global"). Quando o sistema buscar a configuracao de fidelidade, ele primeiro verifica se existe uma global e usa essa. Isso garante que todas as lojas compartilham as mesmas regras e premios.
-
-**Alteracoes**:
-- Migrar os dados existentes para um unico registro global na `loyalty_config` e `loyalty_prize_tiers` (store_id = NULL)
-- Ajustar `POSConfig.tsx`: a secao de fidelidade e tiers nao filtra mais por `store_id`, carrega e salva com `store_id = NULL`
-- Ajustar `POSSalesView.tsx`: `loadLoyaltyConfig` busca com `is_null('store_id')` ao inves de filtrar pela loja
+**Arquivo**: `src/components/pos/POSConfig.tsx` (linha 1364)
+- Adicionar `import { cn } from "@/lib/utils"` que esta faltando
 
 ---
 
-## 2. Desempenho - POS Lento para Entrar
+## 2. Scroll Vertical nos Resultados de Busca de Produtos
 
-**Diagnostico**: Ao selecionar a loja, o `POS.tsx` dispara `loadSellers` + `loadPending` (2 queries em paralelo) + monta o `POSDashboard` que dispara mais 4-5 queries pesadas simultaneamente (`loadSalesData`, `loadAlerts`, `POSGoalProgress`). O `POSConfig` dispara **15 queries** ao montar.
-
-**Solucao**:
-- Lazy-load do `POSConfig`: so carregar dados quando o usuario navegar pra aba Config (ja e assim no render, mas os dados sao carregados no useEffect ao montar; mudar para carregar sob demanda)
-- No Dashboard: paralelizar melhor as queries e adicionar cache local com `useState` para evitar re-fetches desnecessarios
-- Reduzir a quantidade de queries iniciais no `POSConfig` movendo os loads para dentro de `useEffect` condicionais (so carrega quando a secao e visivel)
+**Arquivo**: `src/components/pos/POSSalesView.tsx` (linhas 1128-1148)
+- Atualmente os resultados da busca sao renderizados em um `div` sem limite de altura
+- Envolver os resultados em um container com `max-h-[300px] overflow-y-auto` para permitir rolagem vertical quando ha muitas variacoes
 
 ---
 
-## 3. Comissoes por Escalonamento de Meta (Novo Modelo)
+## 3. Renomear "Vendas Dia" para "Pedidos de Vendas"
 
-**Modelo atual**: Faixas de comissao por intervalo de faturamento absoluto (min_revenue -> max_revenue).
-
-**Novo modelo** (conforme a imagem do usuario):
-- O admin define um **valor de meta** (ex: R$ 35.000)
-- Configura **faixas por % de atingimento** (ex: 80% = 0.8%, 90% = 0.9%, 100% = 1%, 110% = 1.2%, 120% = 1.5%)
-- Se a vendedora atingir 95% da meta, ela recebe a comissao da faixa de 90% (0.9%) sobre o **total vendido**
-- Se nao atingir pelo menos 80%, nao ganha comissao nenhuma
-
-**Alteracoes no banco**:
-- Reestruturar `pos_seller_commission_tiers` para armazenar: `goal_value` (meta base), `achievement_percent` (80, 90, 100, 110, 120), `commission_percent` (0.8, 0.9, 1, 1.2, 1.5)
-- Ou criar nova tabela mais simples, mantendo a anterior
-
-**Alteracoes no frontend**:
-- `POSConfig.tsx`: reformular a UI de Faixas de Comissao para o novo formato (meta + faixas por %)
-- `POSSellerPrivatePanel.tsx`: recalcular comissao com a nova logica
-  - Calcular % de atingimento da meta
-  - Encontrar a faixa correspondente (a mais alta que o vendedor alcancou)
-  - Comissao = faturamento * commission_percent da faixa
-  - Mostrar "Falta R$ X para subir de faixa"
+**Arquivo**: `src/pages/POS.tsx` (linha 40)
+- Alterar o label da secao `daily` de `"Vendas Dia"` para `"Pedidos de Vendas"`
+- O header dentro do `POSDailySales.tsx` (linha 637) tambem sera atualizado de "Vendas" para "Pedidos de Vendas"
 
 ---
 
-## 4. Senha para Aba Config (PIN 1530)
+## 4. Refinar Busca do Tiny (Problema Principal)
 
-**Solucao**: No `POS.tsx`, quando o usuario clicar na aba "Config", abrir um dialog pedindo PIN. O PIN master sera `1530` (hardcoded ou armazenado no banco). So monta o `POSConfig` apos autenticacao.
+**Problema**: A API do Tiny (`pedidos.pesquisa.php`) faz busca generica e retorna pedidos irrelevantes (ex: buscar "Matthews" traz "Maeda Mariane", "Kelly Cristiane Romero" etc.)
 
-**Alteracoes**:
-- `POS.tsx`: estado `configAuthenticated`, dialog de PIN antes de mostrar Config
+**Solucao**: Filtrar os resultados do Tiny no backend antes de devolver ao frontend.
 
----
-
-## 5. Tarefas de Contato no Dashboard
-
-**Solucao**: Adicionar uma secao no `POSDashboard.tsx` que mostra tarefas pendentes filtradas pela loja atual. As vendedoras podem ver e marcar como concluidas diretamente no dashboard.
-
-**Alteracoes**:
-- `POSDashboard.tsx`: nova secao "Tarefas de Contato do Dia" com query a `pos_seller_tasks` filtrada por `store_id` e `status = 'pending'`
+**Arquivo**: `supabase/functions/pos-tiny-search-orders/index.ts`
+- Apos receber os resultados do Tiny, filtrar `customer_name` para verificar se contem o termo buscado (case-insensitive)
+- Apenas retornar pedidos cujo nome do cliente realmente corresponde ao termo de busca
+- Isso elimina resultados falso-positivos da API do Tiny
 
 ---
 
-## 6. Segregacao de Tarefas por Loja (Regras de Atribuicao)
+## 5. Busca Cross-Store (Todas as Lojas) no Historico
 
-**Regras**:
-1. So puxar clientes de lojas fisicas (excluir "Tiny Shopify")
-2. Atribuir o cliente a loja onde ele mais comprou (baseado no vendedor que mais vendeu pra ele)
-3. Se o cliente mudar o comportamento de compra, a loja muda
+**Problema atual**: A busca local (`searchAllPeriods`) filtra apenas por `store_id` da loja atual. O usuario quer ver compras de TODAS as lojas.
 
-**Solucao**: Refatorar `generateRfmTasks` para:
-- Buscar apenas clientes de vendas fisicas (excluir store "Tiny Shopify" com id `2bd2c08d-321c-47ee-98a9-e27e936818ab`)
-- Cruzar telefone do cliente com `pos_sales` para encontrar qual vendedora/loja mais vendeu pra ele
-- Gerar tarefas apenas para a loja correspondente
+**Arquivo**: `src/components/pos/POSDailySales.tsx` (funcao `searchAllPeriods`)
+- Remover o filtro `.eq("store_id", storeId)` da query de vendas globais para buscar em todas as lojas
+- Carregar a lista de lojas (`pos_stores`) para exibir o nome da loja em cada resultado
+- No `renderSaleCard`: adicionar badge com o nome da loja quando for de outra loja
+- Na busca do Tiny: buscar em TODAS as lojas (iterar pelos tokens de cada store), nao apenas na loja atual
 
 ---
 
-## 7. Estrategias de Contato por Segmento RFM
+## 6. Informar Vendedor nos Detalhes do Pedido Tiny
 
-Cada segmento RFM tera uma estrategia de contato diferente com **instrucoes claras** para a vendedora:
+**Arquivo**: `supabase/functions/pos-tiny-search-orders/index.ts`
+- No modo `detail`: extrair o campo `vendedor` do pedido Tiny (normalmente em `pedido.vendedor` ou `pedido.nome_vendedor`)
+- Retornar como campo `seller_name` no objeto `detail`
 
-| Segmento | Tipo de Contato | Oferta | Script Resumido |
-|---|---|---|---|
-| Campeoes | Pos-Venda / Lancamento | Acesso antecipado a novidades | "Oi [nome], temos novidades exclusivas pra voce!" |
-| Leais | Lancamento / Convite | Convite para evento exclusivo | "Vem conhecer nossa nova colecao em primeira mao!" |
-| Potenciais | Oferta Moderada | R$ 30 off em compras acima de R$ 150 | "Sentimos sua falta! Temos R$ 30 de desconto esperando voce" |
-| Em Risco | Oferta Agressiva | R$ 50 off em compras acima de R$ 100 | "Faz tempo que voce nao aparece! R$ 50 de desconto so pra voce" |
-| Quase Dormindo | Resgate Urgente | R$ 50 off em compras acima de R$ 100 | "Voce e muito especial pra gente! Desconto exclusivo te esperando" |
-| Nao Pode Perder | VIP Resgate | R$ 80 off em compras acima de R$ 150 | "Volta pra gente! Desconto VIP de R$ 80 so pra voce" |
-| Hibernando | Reativacao | R$ 50 off em compras acima de R$ 100 | "Oi [nome]! Muito tempo sem te ver. Presente de R$ 50 pra voce" |
-| Novos | Boas-vindas / Pos-Venda | Obrigado pela primeira compra | "Que bom ter voce como cliente! Como foi sua experiencia?" |
-| Promissores | Cross-sell | R$ 30 off na proxima compra | "Vem conhecer nossos lancamentos! Desconto especial pra voce" |
-
-**Alteracoes**:
-- Refatorar `generateRfmTasks` para incluir: tipo de contato, oferta detalhada, script/instrucao, ticket medio do cliente
-- Adicionar campos `contact_strategy`, `offer_description`, `avg_ticket` no insert das tarefas
-- Mostrar essas informacoes no card da tarefa tanto no Config quanto no Dashboard
+**Arquivo**: `src/components/pos/POSSaleDetailDialog.tsx`
+- Exibir o nome do vendedor nos detalhes do pedido Tiny (campo `seller_name`)
 
 ---
 
-## 8. Informar Ticket Medio e Rastrear Faturamento Influenciado
+## 7. Excluir Aba "Ranking" (Gamification)
 
-**Alteracoes**:
-- Na geracao de tarefas, incluir ticket medio do cliente na descricao
-- No Dashboard: secao mostrando "Faturamento de Tarefas de Contato" - vendas feitas para clientes que tiveram tarefas de contato concluidas no periodo (cruzamento por telefone)
-
----
-
-## 9. Deduplicacao de Clientes
-
-**Problema**: Clientes duplicados (ex: Rita de Cassia) por troca de numero de telefone.
-
-**Solucao proposta para o CRM**:
-- Criar um detector de duplicatas baseado em similaridade de nome (Levenshtein/trigram)
-- Mostrar uma tela no CRM com "Possíveis Duplicados" listando pares de clientes com nome similar
-- Permitir ao usuario confirmar a unificacao (merge): manter o registro mais recente, somar historico de compras, atualizar telefone
-- Isso sera implementado em etapa separada (nao incluido neste sprint)
+**Arquivo**: `src/pages/POS.tsx`
+- Remover a entrada `{ id: "gamification", label: "Ranking", icon: Trophy }` do array `SECTIONS`
+- Remover o render condicional `{section === "gamification" && <POSGamificationMini ... />}`
+- Remover import do `POSGamificationMini`
+- Nota: O arquivo `POSGamificationMini.tsx` sera mantido pois pode ser reutilizado no futuro
 
 ---
 
-## 10. Selecao de Vendedoras para Tarefas de Contato
+## 8. Excluir Aba "Estoque Exp." (Stock Requests da Expedicao)
 
-**Solucao**: No dialog de "Gerar por RFM", adicionar multi-select de vendedoras que receberao as tarefas (ao inves de distribuir round-robin entre todas as ativas).
-
-**Alteracoes**:
-- `POSConfig.tsx`: adicionar multi-select de vendedoras antes de gerar tarefas
-- So distribuir round-robin entre as vendedoras selecionadas
-
----
-
-## 11. Botao Ativar/Desativar Roleta de Premios
-
-**Situacao atual**: Ja existe um switch "Roleta de Premios (Eventos)" na secao de Fidelidade. Porem esta vinculado a `wheel_enabled` que controla a exibicao da roleta apos a venda.
-
-**Solucao**: Tornar esse toggle mais visivel e explícito, possivelmente movendo-o para um Card independente ou adicionando um botao grande de ON/OFF no topo da secao de Roleta.
+**Arquivo**: `src/pages/POS.tsx`
+- Remover a entrada `{ id: "stockcheck", label: "Estoque Exp.", icon: Package, badge: true }` do array `SECTIONS`
+- Remover o render condicional `{section === "stockcheck" && <POSStockRequests ... />}`
+- Remover import do `POSStockRequests`
+- As solicitacoes de estoque da expedicao ja chegam na aba "Solicitacoes" (`POSInterStoreRequests`) que e o destino correto
 
 ---
 
-## Resumo das Alteracoes Tecnicas
+## 9. Chat da Equipe - Envio de Imagens, Audios e Confirmacao de Leitura
 
-### Migracao SQL:
-- ALTER TABLE `pos_seller_commission_tiers`: adicionar `goal_value`, `achievement_percent`, remover/adaptar `min_revenue`/`max_revenue`
-- Adicionar colunas em `pos_seller_tasks`: `contact_strategy`, `offer_description`, `avg_ticket`
+**Arquivo**: `src/components/pos/POSTeamChat.tsx`
 
-### Arquivos a modificar:
-- `src/pages/POS.tsx` - PIN para Config, lazy load
-- `src/components/pos/POSConfig.tsx` - comissao escalonada, fidelidade global, selecao de vendedoras para tarefas, roleta toggle, estrategias RFM
-- `src/components/pos/POSDashboard.tsx` - tarefas no dashboard, faturamento influenciado
-- `src/components/pos/POSSalesView.tsx` - loyalty config global
-- `src/components/pos/POSSellerPrivatePanel.tsx` - nova logica de comissao escalonada
+### Envio de Imagens
+- Adicionar botao de anexo (icone de imagem/paperclip) ao lado do input
+- Usar `uploadMediaToStorage` (ja disponivel no projeto) para fazer upload
+- Inserir mensagem com `message_type: 'image'` e `metadata: { media_url: ... }`
+- No `renderMessage`: renderizar imagens inline quando `message_type === 'image'`
 
-### Itens para etapa futura:
-- Deduplicacao de clientes no CRM (complexo, requer analise cuidadosa)
-- Checkout proprio por loja (discutido no plano anterior)
+### Envio de Audios
+- Adicionar botao de microfone (similar ao `ChatView.tsx` que ja tem essa funcionalidade)
+- Gravar audio usando `MediaRecorder`, fazer upload via `uploadMediaToStorage`
+- Inserir mensagem com `message_type: 'audio'` e `metadata: { media_url: ... }`
+- No `renderMessage`: renderizar player de audio quando `message_type === 'audio'`
+
+### Confirmacao de Leitura
+- Necessaria nova tabela ou coluna no banco para rastrear quem leu cada mensagem
+- Adicionar tabela `team_chat_reads` com colunas: `id`, `message_id`, `reader_name`, `read_at`
+- Quando o usuario visualiza mensagens, inserir registros de leitura para mensagens nao lidas
+- Exibir abaixo de cada mensagem os nomes de quem ja leu (ex: "Lido por: Ana, Bia")
+- Usar Realtime para atualizar confirmacoes em tempo real
+
+---
+
+## Migracao SQL Necessaria
+
+```text
+team_chat_reads (NOVA)
+  id UUID PK DEFAULT gen_random_uuid()
+  message_id UUID NOT NULL (FK para team_chat_messages.id)
+  reader_name TEXT NOT NULL
+  read_at TIMESTAMPTZ DEFAULT now()
+  UNIQUE(message_id, reader_name)
+```
+
+---
+
+## Sequencia de Implementacao
+
+1. Fix build error (`cn` import) - imediato
+2. Scroll nos resultados de busca de produtos
+3. Renomear aba "Vendas Dia" -> "Pedidos de Vendas"
+4. Excluir abas "Ranking" e "Estoque Exp."
+5. Refinar busca do Tiny (filtro no backend)
+6. Busca cross-store no historico
+7. Vendedor nos detalhes do Tiny
+8. Chat: imagens, audios e confirmacao de leitura (migracao + frontend)
+
+## Arquivos a Modificar
+
+- `src/components/pos/POSConfig.tsx` - fix cn import
+- `src/components/pos/POSSalesView.tsx` - scroll nos resultados
+- `src/pages/POS.tsx` - renomear aba, excluir Ranking e Estoque Exp
+- `src/components/pos/POSDailySales.tsx` - busca cross-store, header rename
+- `supabase/functions/pos-tiny-search-orders/index.ts` - filtro de nome + vendedor
+- `src/components/pos/POSSaleDetailDialog.tsx` - exibir vendedor do Tiny
+- `src/components/pos/POSTeamChat.tsx` - imagens, audios, confirmacao de leitura
