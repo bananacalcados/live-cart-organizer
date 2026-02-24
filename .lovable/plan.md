@@ -1,118 +1,105 @@
 
-## Plano: Retirada na Loja (Online), Fechar Seller Gate, Metas, Sugestoes Inteligentes e Experiencia de Fidelidade Gamificada
+## Plano: Correcoes e Melhorias no POS (Pontos, Cross-Sell, Metas, Fidelidade)
 
-Este plano cobre 5 grandes areas de melhoria no POS.
-
----
-
-### 1. Opcao "Retirar na Loja" no Modulo Online
-
-**O que muda:**
-- Adicionar um novo gateway "pickup" nos botoes de pagamento do `POSOnlineSales`
-- Ao selecionar "Retirar na Loja", o vendedor escolhe em qual loja o cliente vai retirar (seletor com todas as lojas ativas)
-- O pedido e salvo em `pos_sales` com `status: "pending_pickup"` e `store_id` da loja de retirada (nao da loja de origem)
-- O pedido aparece automaticamente na aba "Retiradas" (`POSPickupOrders`) da loja de destino via subscription Realtime ja existente
-
-**Arquivos:**
-- `src/components/pos/POSOnlineSales.tsx` - Adicionar gateway "pickup" com seletor de loja de destino
+Este plano cobre 5 areas de correcao e melhoria identificadas.
 
 ---
 
-### 2. Fechar a Janela do Seller Gate
+### 1. Pontos de Fidelidade Zerados na Tela (Bug Fix)
 
-**O que muda:**
-- Adicionar um botao "X" ou "Fechar" no Dialog do `POSSellerGate` para permitir que o vendedor feche a janela sem selecionar vendedora
-- Na `POSSalesView`, quando o seller gate e fechado sem selecao, o componente emite um callback que permite navegar para outras abas
+**Problema:** A tabela `customer_loyalty_points` ja existe e salva os pontos corretamente. Porem, no codigo (`POSSalesView.tsx` linha 689), o `setLoyaltyTotalPoints(newTotal)` so e chamado quando o cliente ja existe. Para clientes novos (primeira compra), o total fica em 0 no estado.
 
-**Arquivos:**
-- `src/components/pos/POSSellerGate.tsx` - Adicionar botao de fechar e prop `onClose`
-- `src/components/pos/POSSalesView.tsx` - Tratar o `onClose` do SellerGate
-- `src/pages/POS.tsx` - Passar callback de navegacao
+**Correcao:**
+- Adicionar `setLoyaltyTotalPoints(points)` no branch de novo cliente (linha ~704)
+- Mostrar o nome do cliente na tela da slot machine (`POSSlotMachine.tsx`) - adicionar prop `customerName`
 
 ---
 
-### 3. Sistema de Metas na Configuracao
+### 2. Resgate de Premio Opcional (Resgatar Agora vs Depois)
 
-**Nova tabela: `pos_goals`**
+**Problema:** Atualmente, quando o cliente atinge pontos suficientes para um premio, o sistema automaticamente deduz os pontos e gera o cupom (linhas 718-755 do `POSSalesView`). O usuario quer que o resgate seja **opcional**.
+
+**Correcao:**
+- No `POSSalesView.tsx`: ao detectar premio elegivel, **NAO** deduzir pontos nem gerar cupom automaticamente. Apenas marcar o `wonPrize` para exibicao
+- No `POSLoyaltyScreen.tsx`: na tela de resumo, quando existe premio elegivel, mostrar dois botoes:
+  - "Resgatar Agora" -> abre a caixa de presente, deduz pontos, gera cupom
+  - "Guardar para Depois" -> fecha a tela sem deduzir pontos
+- Passar callback `onRedeemPrize` para o `POSLoyaltyScreen` que executa a logica de deducao e geracao de cupom
+
+---
+
+### 3. Sugestoes Inteligentes Nao Funcionando (Bug Fix)
+
+**Problema identificado:** O campo `size` esta preenchido com valores como "Bege/Azul", "45", "Salvia" (cores misturadas com tamanhos) e muitos produtos tem `size = NULL`. O filtro `.in("size", cartSizes)` falha quando `cartSizes` esta vazio (produtos no carrinho sem campo size). Alem disso, `tiny_sales_history` esta vazio (sync nunca rodou), entao a curva ABC nao tem dados.
+
+**Correcao no `POSCrossSellSuggestions.tsx`:**
+- Remover dependencia exclusiva de `size` - se `cartSizes` estiver vazio, buscar produtos por **categoria** ou simplesmente produtos com alto estoque sem vendas
+- Adicionar fallback: quando nao ha dados de ABC (nem Tiny nem POS), sugerir produtos com **maior estoque** (estoque parado = oportunidade)
+- Buscar produtos que NAO estao no `tiny_sales_history` (dead stock) como sugestoes prioritarias
+- Quando nao tem tamanho, sugerir qualquer produto com estoque alto que nao esteja no carrinho
+
+---
+
+### 4. Sistema de Metas Expandido
+
+**Novas funcionalidades na tabela `pos_goals`:**
+
+Adicionar colunas via migracao:
 
 ```text
-id          uuid PK default gen_random_uuid()
-store_id    uuid FK -> pos_stores
-goal_type   text (avg_ticket | revenue | seller_revenue | items_sold)
-goal_value  numeric
-period      text (daily | weekly | monthly)
-seller_id   uuid nullable FK -> pos_sellers (null = meta global)
-is_active   boolean default true
-created_at  timestamptz default now()
-updated_at  timestamptz default now()
+goal_category   text nullable   -- categoria do Tiny (ex: "tenis masculino")
+goal_brand      text nullable   -- marca (ex: "Nike")
+period_start    date nullable   -- data inicio do periodo customizado
+period_end      date nullable   -- data fim do periodo customizado
+prize_label     text nullable   -- descricao do premio (ex: "Bonus de R$100")
+prize_value     numeric nullable -- valor do premio/comissao
+prize_type      text nullable   -- tipo (bonus, commission_percent, gift)
 ```
 
-**O que muda:**
-- Na aba Config: nova secao "Metas" com formulario para criar metas de ticket medio, faturamento, faturamento por vendedor e itens vendidos
-- No Dashboard: comparar KPIs atuais com as metas configuradas, mostrando progresso (barra de progresso + percentual) e alertas visuais
-- No Seller Gate: ao selecionar vendedora, mostrar o progresso individual dela em relacao as metas (ex: "Falta R$500 para sua meta de faturamento do dia")
+**Novos tipos de meta:**
+- `category_units`: vender X pares de uma categoria do Tiny
+- `brand_units`: vender X pares de uma marca
 
-**Arquivos:**
-- Migracao SQL para criar `pos_goals`
-- `src/components/pos/POSConfig.tsx` - Nova secao de metas
-- `src/components/pos/POSDashboard.tsx` - Exibir progresso vs metas
-- `src/components/pos/POSSellerGate.tsx` - Mostrar metas individuais
+**Novos periodos:**
+- `custom`: periodo com data inicio e fim especificas
+- Meses do ano como opcoes pre-definidas (Marco 2026, Abril 2026, etc.)
+
+**Rastreamento automatico:**
+- Na funcao `finalizeSale` do `POSSalesView`, apos salvar a venda, verificar se existem metas de categoria/marca ativas
+- Comparar os itens vendidos com as categorias/marcas das metas
+- Registrar progresso em uma nova tabela `pos_goal_progress`:
+
+```text
+id          uuid PK
+goal_id     uuid FK -> pos_goals
+seller_id   uuid nullable FK -> pos_sellers
+current_value  numeric default 0
+last_sale_id   uuid nullable
+updated_at  timestamptz
+```
+
+**No Dashboard:**
+- Exibir metas de categoria/marca com progresso
+- Mostrar "FALTA X PARA VOCE GANHAR SEU PREMIO Y (NOME DO VENDEDOR)" em destaque
+- Historico de metas passadas continua visivel
+
+**Na Config:**
+- Novos campos no dialog de metas: categoria, marca, datas customizadas, premio/comissao
+- Carregar categorias do Tiny (`tiny_categories` ou `pos_products`) para seletor
+
+**Arquivos modificados:**
+- Migracao SQL: adicionar colunas em `pos_goals` + criar `pos_goal_progress`
+- `src/components/pos/POSConfig.tsx`: expandir formulario de metas
+- `src/components/pos/POSGoalProgress.tsx`: exibir metas de categoria/marca + mensagem motivacional com premio
+- `src/components/pos/POSSalesView.tsx`: ao finalizar venda, atualizar progresso das metas
+- `src/components/pos/POSDashboard.tsx`: exibir mensagem de premio pendente
 
 ---
 
-### 4. Sugestoes Inteligentes de Cross-Sell na Venda
+### 5. Nome do Cliente na Slot Machine
 
-**Logica de Curva ABC:**
-- Curva A: produtos com alta rotacao (top 20% em vendas nos ultimos 90 dias)
-- Curva B: rotacao media (proximo 30%)
-- Curva C: baixa rotacao (restante 50%)
-- Calculado sob demanda com base em `pos_sale_items` agregados
-
-**O que muda:**
-Quando a vendedora adiciona um produto ao carrinho:
-
-1. Extrair o tamanho do produto adicionado
-2. Buscar produtos no mesmo tamanho com estoque disponivel (`pos_products`)
-3. Classificar por curva ABC (baseado em vendas dos ultimos 90 dias)
-4. Aplicar regras de desconto:
-   - Curva B: ate 15% de desconto
-   - Curva C: ate 30% de desconto
-   - Curva A tamanho 34 com estoque alto: ate 15% (Curva A), 30% (B), 50% (C)
-5. Exibir um painel de sugestoes abaixo do carrinho com produtos recomendados, desconto sugerido e botao "Adicionar ao pedido"
-6. Se o ticket medio estiver abaixo da meta, sugerir produtos mais caros
-
-**Arquivos:**
-- `src/components/pos/POSSalesView.tsx` - Painel de sugestoes de cross-sell com logica ABC
-- Nova funcao auxiliar para calcular curva ABC dos produtos
-
----
-
-### 5. Experiencia Gamificada de Fidelidade Pos-Venda
-
-**Fluxo redesenhado apos a venda com cliente identificado:**
-
-1. **Tela 1 - Roleta de Pontos (automatica):**
-   - A roleta (slot machine) gira AUTOMATICAMENTE sem precisar puxar alavanca
-   - Animacao colorida e chamativa mostrando os pontos sendo calculados
-   - Mostra "+XX pontos conquistados!"
-
-2. **Tela 2 - Resumo de Pontos Acumulados:**
-   - Exibe o total de pontos acumulados do cliente
-   - Mostra uma barra de progresso ate o proximo premio
-   - Lista os premios disponiveis com quantos pontos faltam para cada um
-   - Se o cliente ja tiver pontos suficientes para um premio, destaca com animacao e abre a caixa de presente automaticamente
-
-3. **Tela 3 - Chamada para acao:**
-   - Se tem premio disponivel: mostra o premio ganho com codigo
-   - Se nao: mostra mensagem motivacional ("Faltam X pontos para ganhar [premio]! Volte em breve!")
-   - Botao "Finalizar" fecha o fluxo
-
-**Visual:** Cores vibrantes (amarelo, laranja, verde), emojis, animacoes de confete, fundo com gradiente. Interface pensada para tablet virado para o cliente.
-
-**Arquivos:**
-- `src/components/pos/POSSlotMachine.tsx` - Redesenhar para girar automaticamente e ser mais colorido
-- `src/components/pos/POSLoyaltyScreen.tsx` - **Novo componente** que orquestra o fluxo completo (pontos -> resumo -> premio)
-- `src/components/pos/POSSalesView.tsx` - Substituir a chamada direta do SlotMachine/GiftBox pelo novo `POSLoyaltyScreen`
+**Correcao:**
+- `POSSlotMachine.tsx`: adicionar prop `customerName` e exibir "Parabens, [NOME]!" no titulo
 
 ---
 
@@ -120,12 +107,19 @@ Quando a vendedora adiciona um produto ao carrinho:
 
 | Arquivo | Acao |
 |---------|------|
-| Migracao SQL | Criar tabela `pos_goals` |
-| `src/components/pos/POSOnlineSales.tsx` | Adicionar opcao "Retirar na Loja" com seletor de loja |
-| `src/components/pos/POSSellerGate.tsx` | Adicionar botao fechar + metas individuais |
-| `src/components/pos/POSSalesView.tsx` | Tratar onClose do SellerGate + painel cross-sell + novo fluxo loyalty |
-| `src/pages/POS.tsx` | Passar callback de navegacao ao POSSalesView |
-| `src/components/pos/POSConfig.tsx` | Nova secao de metas |
-| `src/components/pos/POSDashboard.tsx` | Progresso vs metas |
-| `src/components/pos/POSSlotMachine.tsx` | Auto-spin + visual mais chamativo |
-| `src/components/pos/POSLoyaltyScreen.tsx` | **Novo** - Fluxo completo de fidelidade pos-venda |
+| Migracao SQL | Expandir `pos_goals` + criar `pos_goal_progress` |
+| `src/components/pos/POSSalesView.tsx` | Fix pontos zerados + resgate opcional + tracking de metas |
+| `src/components/pos/POSLoyaltyScreen.tsx` | Botoes "Resgatar Agora" vs "Guardar para Depois" |
+| `src/components/pos/POSSlotMachine.tsx` | Adicionar nome do cliente |
+| `src/components/pos/POSCrossSellSuggestions.tsx` | Remover dependencia de size, fallback por estoque |
+| `src/components/pos/POSConfig.tsx` | Expandir metas com categoria, marca, datas, premio |
+| `src/components/pos/POSGoalProgress.tsx` | Metas de categoria/marca + mensagem de premio |
+| `src/components/pos/POSDashboard.tsx` | Mensagem motivacional de premio |
+
+### Ordem de Implementacao
+
+1. Migracao SQL (pos_goals + pos_goal_progress)
+2. Bug fixes rapidos: pontos zerados, nome na slot machine
+3. Resgate opcional de premios
+4. Fix cross-sell suggestions
+5. Sistema de metas expandido (config + dashboard + tracking)
