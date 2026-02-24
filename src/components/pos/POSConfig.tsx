@@ -574,6 +574,7 @@ export function POSConfig({ storeId }: Props) {
   const toggleSellerActive = async (id: string, currentActive: boolean) => {
     const { error } = await supabase.from('pos_sellers').update({ is_active: !currentActive }).eq('id', id);
     if (error) { toast.error("Erro ao atualizar"); return; }
+    toast.success(!currentActive ? "Vendedora ativada!" : "Vendedora desativada!");
     loadSellers();
   };
 
@@ -856,9 +857,31 @@ export function POSConfig({ storeId }: Props) {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between text-pos-white">
               <span className="flex items-center gap-2"><Users className="h-4 w-4 text-pos-orange" /> Vendedoras</span>
-              <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddSeller(true)}>
-                <Plus className="h-3 w-3" /> Adicionar
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" className="border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 font-bold gap-1 text-xs" onClick={async () => {
+                  setSyncing(true);
+                  try {
+                    const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sellers`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+                      body: JSON.stringify({ store_id: storeId }),
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                      toast.success(`${data.sellers?.length || 0} vendedoras sincronizadas do Tiny!`);
+                      loadSellers();
+                    } else {
+                      toast.error(data.error || "Erro ao sincronizar");
+                    }
+                  } catch { toast.error("Erro de conexão"); }
+                  finally { setSyncing(false); }
+                }} disabled={syncing}>
+                  {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Sincronizar Tiny
+                </Button>
+                <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddSeller(true)}>
+                  <Plus className="h-3 w-3" /> Adicionar
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -870,6 +893,7 @@ export function POSConfig({ storeId }: Props) {
                 <Switch checked={s.is_active} onCheckedChange={() => toggleSellerActive(s.id, s.is_active)} />
               </div>
             ))}
+            <p className="text-[10px] text-pos-white/30">O toggle salva automaticamente. Use "Sincronizar Tiny" para puxar vendedores ativos da conta Tiny desta loja.</p>
           </CardContent>
         </Card>
 

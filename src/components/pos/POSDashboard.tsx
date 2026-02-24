@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import {
   DollarSign, ShoppingCart, TrendingUp, Package, Loader2,
   RefreshCw, BarChart3, Users, MessageSquare, Headphones,
-  ArrowRightLeft, ChevronRight, CalendarIcon, AlertTriangle
+  ArrowRightLeft, ChevronRight, CalendarIcon, AlertTriangle,
+  Globe, Store
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -65,6 +66,12 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [avgTicket, setAvgTicket] = useState(0);
   const [avgItemsPerSale, setAvgItemsPerSale] = useState(0);
 
+  // Online vs Physical
+  const [onlineRevenue, setOnlineRevenue] = useState(0);
+  const [onlineSalesCount, setOnlineSalesCount] = useState(0);
+  const [physicalRevenue, setPhysicalRevenue] = useState(0);
+  const [physicalSalesCount, setPhysicalSalesCount] = useState(0);
+
   // Seller metrics
   const [sellerMetrics, setSellerMetrics] = useState<SellerMetric[]>([]);
 
@@ -109,7 +116,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, total, seller_id, status")
+        .select("id, total, seller_id, status, sale_type")
         .eq("store_id", storeId)
         .eq("status", "completed")
         .gte("created_at", start.toISOString())
@@ -122,6 +129,14 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       setTotalRevenue(revenue);
       setSalesCount(count);
       setAvgTicket(count > 0 ? revenue / count : 0);
+
+      // Online vs Physical breakdown
+      const online = completedSales.filter((s: any) => s.sale_type === 'online');
+      const physical = completedSales.filter((s: any) => s.sale_type !== 'online');
+      setOnlineRevenue(online.reduce((sum, s) => sum + (s.total || 0), 0));
+      setOnlineSalesCount(online.length);
+      setPhysicalRevenue(physical.reduce((sum, s) => sum + (s.total || 0), 0));
+      setPhysicalSalesCount(physical.length);
 
       if (completedSales.length > 0) {
         const saleIds = completedSales.map((s) => s.id);
@@ -272,6 +287,31 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               <KPICard icon={ShoppingCart} label="Vendas" value={String(salesCount)} sub={periodLabel} color="text-pos-orange" />
               <KPICard icon={TrendingUp} label="Ticket Médio" value={`R$ ${avgTicket.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`} sub={periodLabel} color="text-blue-400" />
               <KPICard icon={Package} label="Itens/Venda" value={avgItemsPerSale.toFixed(1)} sub={periodLabel} color="text-purple-400" />
+            </div>
+
+            {/* Online vs Physical breakdown */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
+                <Store className="h-4 w-4 text-pos-orange" /> Vendas por Canal
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl bg-pos-white/5 border border-pos-orange/10 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Store className="h-4 w-4 text-green-400" />
+                    <span className="text-xs text-pos-white/50">Loja Física</span>
+                  </div>
+                  <p className="text-xl font-bold text-pos-white">R$ {physicalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[10px] text-pos-white/30">{physicalSalesCount} venda{physicalSalesCount !== 1 ? "s" : ""}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-pos-white/5 border border-pos-orange/10 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-blue-400" />
+                    <span className="text-xs text-pos-white/50">Online</span>
+                  </div>
+                  <p className="text-xl font-bold text-pos-white">R$ {onlineRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[10px] text-pos-white/30">{onlineSalesCount} venda{onlineSalesCount !== 1 ? "s" : ""}</p>
+                </div>
+              </div>
             </div>
 
             {/* Goal Progress */}
