@@ -508,7 +508,7 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
             <div className="text-right">
               <p className="font-bold text-foreground">R$ {Number(order.total_price || 0).toFixed(2)}</p>
               <p className="text-xs text-muted-foreground">
-                {items.length} itens • {order.total_weight_grams || 0}g
+                {items.length} itens • {((order.total_weight_grams || 0) / 1000).toFixed(1)}kg
               </p>
             </div>
             {isExpanded ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}

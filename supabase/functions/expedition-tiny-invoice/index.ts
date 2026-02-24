@@ -16,8 +16,8 @@ async function safeJson(response: Response, label: string) {
   }
 }
 
-// Fetch the description of a Tiny forma de envio by its numeric ID
-async function fetchFormaEnvioDescricao(token: string, formaEnvioId: string): Promise<string> {
+// Fetch the description of a Tiny forma de envio AND forma de frete by their numeric IDs
+async function fetchFormaEnvioAndFreteDescricao(token: string, formaEnvioId: string, formaFreteId?: string | null): Promise<{ envioDesc: string; freteDesc: string }> {
   try {
     const resp = await fetch('https://api.tiny.com.br/api2/formas.envio.obter.php', {
       method: 'POST',
@@ -25,16 +25,35 @@ async function fetchFormaEnvioDescricao(token: string, formaEnvioId: string): Pr
       body: `token=${token}&formato=json&idFormaEnvio=${formaEnvioId}`,
     });
     const data = await safeJson(resp, `Obter forma envio ${formaEnvioId}`);
+    let envioDesc = '';
+    let freteDesc = '';
     if (data.retorno?.status === 'OK' || data.retorno?.status === 'Processado') {
       const fe = data.retorno?.forma_envio || data.retorno?.formaEnvio || data.retorno || {};
-      const desc = fe.descricao || fe.nome || '';
-      console.log(`Forma envio ${formaEnvioId} description: "${desc}"`);
-      if (desc) return desc;
+      envioDesc = fe.descricao || fe.nome || '';
+      console.log(`Forma envio ${formaEnvioId} description: "${envioDesc}"`);
+      
+      // Find the frete description matching formaFreteId
+      if (formaFreteId) {
+        const fretesData = fe.formas_frete || fe.formasFrete || fe.fretes || fe.servicos || [];
+        const fretesList = Array.isArray(fretesData) ? fretesData : [];
+        for (const freteEntry of fretesList) {
+          const ff = freteEntry?.forma_frete || freteEntry?.formaFrete || freteEntry;
+          if (String(ff.id) === String(formaFreteId)) {
+            freteDesc = ff.descricao || ff.nome || '';
+            console.log(`Forma frete ${formaFreteId} description: "${freteDesc}"`);
+            break;
+          }
+        }
+        if (!freteDesc) {
+          console.warn(`Forma frete ${formaFreteId} not found in envio ${formaEnvioId} fretes list`);
+        }
+      }
     }
+    return { envioDesc, freteDesc };
   } catch (e) {
-    console.warn(`Could not fetch forma envio description for ${formaEnvioId}:`, e.message);
+    console.warn(`Could not fetch forma envio/frete description for ${formaEnvioId}:`, e.message);
   }
-  return '';
+  return { envioDesc: '', freteDesc: '' };
 }
 
 async function searchTinyOrderByNumber(token: string, orderNumber: string, customerName?: string): Promise<string | null> {
@@ -333,13 +352,15 @@ serve(async (req) => {
         throw new Error('O frete precisa ser cotado e selecionado antes de emitir a NF-e.');
       }
 
-      // Use stored Tiny IDs to fetch the DESCRIPTION (Tiny API needs text, not numeric IDs)
+      // Use stored Tiny IDs to fetch DESCRIPTIONS (Tiny API needs text, not numeric IDs)
       let formaEnvio = '';
-      let formaFrete = order.tiny_forma_frete_id || '';
+      let formaFrete = '';
       
       if (order.tiny_forma_envio_id) {
-        // Fetch the actual description from Tiny (e.g., "Jadlog via Frenet")
-        formaEnvio = await fetchFormaEnvioDescricao(TINY_ERP_TOKEN, order.tiny_forma_envio_id);
+        // Fetch the actual description from Tiny (e.g., "Jadlog via Frenet", "Correios via Frenet")
+        const envioResult = await fetchFormaEnvioAndFreteDescricao(TINY_ERP_TOKEN, order.tiny_forma_envio_id, order.tiny_forma_frete_id);
+        formaEnvio = envioResult.envioDesc;
+        formaFrete = envioResult.freteDesc;
       }
       
       if (!formaEnvio) {
@@ -357,9 +378,8 @@ serve(async (req) => {
       }
       
       if (!formaFrete) {
-        formaFrete = order.freight_service
-          ? `${order.freight_carrier} ${order.freight_service}`.trim()
-          : order.freight_carrier || '';
+        // Use freight_service directly (e.g., "Sedex", "PAC", "Jadlog Package")
+        formaFrete = order.freight_service || order.freight_carrier || '';
       }
 
       console.log(`Carrier mapping: tiny_forma_envio_id="${order.tiny_forma_envio_id}" → formaEnvio="${formaEnvio}", formaFrete="${formaFrete}"`);

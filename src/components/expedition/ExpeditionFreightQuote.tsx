@@ -387,7 +387,7 @@ export function ExpeditionFreightQuote({ orders, searchTerm, activeTab, onRefres
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {order.customer_name} • {addr?.city}/{addr?.province} • CEP: {addr?.zip}
-                  {order.total_weight_grams ? ` • ${order.total_weight_grams}g` : ''}
+                  {order.total_weight_grams ? ` • ${(order.total_weight_grams / 1000).toFixed(1)}kg` : ''}
                 </p>
               </CardHeader>
               <CardContent className="space-y-3">
