@@ -83,7 +83,8 @@ async function tinyV3Get(token: string, path: string, params?: Record<string, st
 
 // Tiny V3 situacao codes (integers)
 // 0=em aberto, 3=aprovado, 5=faturado, 6=enviado, 7=entregue, 8=não entregue, 9=cancelado
-const SKIP_SITUACAO = new Set([6, 7, 8, 9]); // skip enviado, entregue, não entregue, cancelado
+// Don't skip enviado (6) anymore - we need to check tracking codes
+const SKIP_SITUACAO = new Set([7, 8, 9]); // skip entregue, não entregue, cancelado
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -131,20 +132,40 @@ serve(async (req) => {
           const tinyId = String(item.id);
           const ecomNum = item.ecommerce?.numeroPedidoEcommerce || '';
           
-          // Check if already exists
-          const { data: existing } = await supabase
-            .from("expedition_beta_orders")
-            .select("id")
-            .eq("tiny_order_id", tinyId)
-            .maybeSingle();
-          if (existing) { skipped++; continue; }
-
-          // Fetch full details for items
+          // Fetch full details for items and tracking
           let order: any;
           try {
             order = await tinyV3Get(token, `/pedidos/${tinyId}`);
           } catch {
             order = item;
+          }
+
+          // Extract tracking code from order details
+          const trackingCode = order.codigoRastreamento || order.codigoRastreio || null;
+          const isDispatched = item.situacao === 6 || !!trackingCode;
+
+          // Check if already exists
+          const { data: existing } = await supabase
+            .from("expedition_beta_orders")
+            .select("id, expedition_status, tracking_code")
+            .eq("tiny_order_id", tinyId)
+            .maybeSingle();
+          
+          if (existing) {
+            // Update if now has tracking but wasn't dispatched
+            if (isDispatched && existing.expedition_status !== 'dispatched') {
+              await supabase.from('expedition_beta_orders').update({
+                expedition_status: 'dispatched',
+                tracking_code: trackingCode || existing.tracking_code,
+              }).eq('id', existing.id);
+              synced++;
+            } else if (trackingCode && !existing.tracking_code) {
+              await supabase.from('expedition_beta_orders').update({
+                tracking_code: trackingCode,
+              }).eq('id', existing.id);
+            }
+            skipped++;
+            continue;
           }
 
           const orderNum = String(order.numeroPedido || item.numeroPedido || '');
@@ -180,7 +201,8 @@ serve(async (req) => {
               } : (order.enderecoEntrega || null),
               financial_status: 'paid',
               fulfillment_status: 'unfulfilled',
-              expedition_status: 'approved',
+              expedition_status: isDispatched ? 'dispatched' : 'approved',
+              tracking_code: trackingCode,
               subtotal_price: parseFloat(order.valorTotalProdutos || item.valor || 0),
               total_price: parseFloat(order.valorTotalPedido || item.valor || 0),
               total_discount: parseFloat(order.valorDesconto || 0),

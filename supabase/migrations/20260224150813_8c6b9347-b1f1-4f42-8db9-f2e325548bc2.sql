@@ -1,0 +1,1 @@
+ALTER TABLE expedition_beta_orders ADD COLUMN tracking_code TEXT;

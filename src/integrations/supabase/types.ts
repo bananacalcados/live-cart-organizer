@@ -1356,6 +1356,7 @@ export type Database = {
           total_price: number | null
           total_shipping: number | null
           total_weight_grams: number | null
+          tracking_code: string | null
           updated_at: string
         }
         Insert: {
@@ -1391,6 +1392,7 @@ export type Database = {
           total_price?: number | null
           total_shipping?: number | null
           total_weight_grams?: number | null
+          tracking_code?: string | null
           updated_at?: string
         }
         Update: {
@@ -1426,6 +1428,7 @@ export type Database = {
           total_price?: number | null
           total_shipping?: number | null
           total_weight_grams?: number | null
+          tracking_code?: string | null
           updated_at?: string
         }
         Relationships: []

@@ -354,6 +354,11 @@ function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onTogg
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-sm">{order.shopify_order_name}</span>
               <Badge className={`text-[10px] ${statusColor}`}>{statusLabel}</Badge>
+              {order.tracking_code && (
+                <Badge variant="outline" className="text-[10px] gap-1 font-mono">
+                  🚚 {order.tracking_code}
+                </Badge>
+              )}
               {order.has_gift && <Gift className="h-3.5 w-3.5 text-pink-500" />}
               {order.is_from_live && <Radio className="h-3.5 w-3.5 text-red-500" />}
               {order.ean13_barcode && <Badge variant="outline" className="text-[10px] gap-1">EAN-13 ✓</Badge>}
