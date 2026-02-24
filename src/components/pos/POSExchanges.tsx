@@ -141,15 +141,14 @@ export function POSExchanges({ storeId }: Props) {
     try {
       const results: OriginalSaleResult[] = [];
 
-      // 1. Search local POS sales
+      // 1. Search local POS sales (ALL stores for cross-store exchanges)
       const searchTerm = `%${term}%`;
       const { data: posSales } = await supabase
         .from("pos_sales" as any)
-        .select("id, created_at, customer_name, customer_phone, seller_name, seller_id, total, status")
-        .eq("store_id", storeId)
+        .select("id, created_at, customer_name, customer_phone, seller_name, seller_id, total, status, store_id")
         .or(`customer_name.ilike.${searchTerm},customer_phone.ilike.${searchTerm}`)
         .order("created_at", { ascending: false })
-        .limit(10);
+        .limit(20);
 
       for (const sale of ((posSales as any[]) || [])) {
         const { data: saleItems } = await supabase
@@ -216,10 +215,10 @@ export function POSExchanges({ storeId }: Props) {
         }
       }
 
-      // 2. Search Tiny orders via edge function
+      // 2. Search Tiny orders via edge function (fix: use search_term param)
       try {
         const { data: tinyData } = await supabase.functions.invoke("pos-tiny-search-orders", {
-          body: { store_id: storeId, search: term },
+          body: { store_id: storeId, search_term: term },
         });
         if (tinyData?.success && tinyData?.orders) {
           for (const order of tinyData.orders) {
@@ -303,6 +302,20 @@ export function POSExchanges({ storeId }: Props) {
         return;
       }
     }
+    setFormStep("exchange_details");
+  };
+
+  const startExchangeWithoutOrder = () => {
+    setSelectedSale({
+      id: "manual",
+      source: "pos",
+      date: new Date().toISOString(),
+      customer_name: null,
+      seller_name: null,
+      seller_id: null,
+      total: 0,
+      items: [],
+    });
     setFormStep("exchange_details");
   };
 
@@ -611,6 +624,13 @@ export function POSExchanges({ storeId }: Props) {
                   <Button onClick={searchOriginalSale} disabled={searchingSale} className="bg-pos-orange text-pos-black gap-1">
                     {searchingSale ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                     Buscar
+                  </Button>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button variant="outline" className="text-xs border-pos-orange/30 text-pos-white/70 hover:bg-pos-white/5" onClick={startExchangeWithoutOrder}>
+                    <AlertTriangle className="h-3.5 w-3.5 mr-1.5 text-yellow-400" />
+                    Criar Sem Pedido
                   </Button>
                 </div>
 

@@ -392,9 +392,22 @@ export function POSTeamChat({ storeId }: Props) {
     setTaskTitle(''); setTaskAssignee(''); setTaskDescription('');
   };
 
+  const SENDER_COLORS = [
+    'bg-pink-500', 'bg-violet-500', 'bg-blue-500', 'bg-cyan-500',
+    'bg-emerald-500', 'bg-lime-500', 'bg-yellow-500', 'bg-rose-500',
+    'bg-indigo-500', 'bg-teal-500', 'bg-fuchsia-500', 'bg-sky-500',
+  ];
+
+  const getSenderColor = (name: string) => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return SENDER_COLORS[Math.abs(hash) % SENDER_COLORS.length];
+  };
+
   const renderMessage = (msg: ChatMessage) => {
     const isMe = msg.sender_name === senderName;
     const isAction = !['text', 'image', 'audio'].includes(msg.message_type);
+    const senderColor = getSenderColor(msg.sender_name);
     const actionColors: Record<string, string> = {
       transfer_request: 'border-blue-500/30 bg-blue-500/10',
       support_ticket: 'border-red-500/30 bg-red-500/10',
@@ -410,13 +423,13 @@ export function POSTeamChat({ storeId }: Props) {
 
     return (
       <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-        <span className="text-[10px] text-pos-white/40 mb-0.5">{msg.sender_name}</span>
+        <span className={`text-[10px] mb-0.5 font-semibold ${isMe ? 'text-pos-white/40' : senderColor.replace('bg-', 'text-')}`}>{msg.sender_name}</span>
         <div className={`max-w-[85%] px-3 py-2 rounded-xl text-sm whitespace-pre-line ${
           isAction
             ? `border ${actionColors[msg.message_type] || ''} text-pos-white`
             : isMe
               ? 'bg-pos-orange text-pos-black rounded-br-sm'
-              : 'bg-pos-white/10 text-pos-white rounded-bl-sm'
+              : `${senderColor}/20 text-pos-white rounded-bl-sm border border-${senderColor.replace('bg-', '')}/30`
         }`}>
           {isAction && (
             <div className="flex items-center gap-1.5 mb-1">

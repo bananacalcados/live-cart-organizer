@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, Lock, Unlock, ArrowDown, ArrowUp, Calculator, Clock } from "lucide-react";
+import { DollarSign, Lock, Unlock, ArrowDown, ArrowUp, Calculator, Clock, Search, Loader2, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -29,6 +30,17 @@ interface CashRegister {
   status: string;
 }
 
+interface CrediarioSale {
+  id: string;
+  created_at: string;
+  total: number;
+  customer_name: string | null;
+  customer_phone: string | null;
+  payment_method: string | null;
+  crediario_status: string | null;
+  crediario_due_date: string | null;
+}
+
 export function POSCashRegister({ storeId, sellerId }: Props) {
   const [register, setRegister] = useState<CashRegister | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,6 +51,16 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
   const [closingBalance, setClosingBalance] = useState("");
   const [movementAmount, setMovementAmount] = useState("");
   const [movementNotes, setMovementNotes] = useState("");
+
+  // Crediário
+  const [showCrediario, setShowCrediario] = useState(false);
+  const [crediarioSearch, setCrediarioSearch] = useState("");
+  const [crediarioResults, setCrediarioResults] = useState<CrediarioSale[]>([]);
+  const [searchingCrediario, setSearchingCrediario] = useState(false);
+  const [selectedCrediario, setSelectedCrediario] = useState<CrediarioSale | null>(null);
+  const [crediarioPayMethod, setCrediarioPayMethod] = useState("pix");
+  const [crediarioPayAmount, setCrediarioPayAmount] = useState("");
+  const [receivingCrediario, setReceivingCrediario] = useState(false);
 
   useEffect(() => {
     loadOpenRegister();
@@ -130,6 +152,93 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     } catch (e) {
       console.error(e);
       toast.error("Erro ao registrar movimentação");
+    }
+  };
+
+  // Crediário search
+  const searchCrediario = async () => {
+    if (crediarioSearch.trim().length < 2) { toast.error("Digite pelo menos 2 caracteres"); return; }
+    setSearchingCrediario(true);
+    try {
+      const term = `%${crediarioSearch.trim()}%`;
+      const { data } = await supabase
+        .from("pos_sales")
+        .select("id, created_at, total, payment_method, crediario_status, crediario_due_date" as any)
+        .eq("store_id", storeId)
+        .ilike("payment_method", "%crediario%")
+        .or(`crediario_status.is.null,crediario_status.eq.pending`)
+        .or(`customer_name.ilike.${term},customer_phone.ilike.${term}` as any)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      setCrediarioResults((data as any as CrediarioSale[]) || []);
+      if (!data || data.length === 0) toast.info("Nenhum crediário pendente encontrado");
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro na busca");
+    } finally {
+      setSearchingCrediario(false);
+    }
+  };
+
+  const loadAllPendingCrediarios = async () => {
+    setSearchingCrediario(true);
+    try {
+      const { data } = await supabase
+        .from("pos_sales")
+        .select("id, created_at, total, payment_method, crediario_status, crediario_due_date" as any)
+        .eq("store_id", storeId)
+        .ilike("payment_method", "%crediario%")
+        .or("crediario_status.is.null,crediario_status.eq.pending")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      setCrediarioResults((data as any as CrediarioSale[]) || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSearchingCrediario(false);
+    }
+  };
+
+  const receiveCrediario = async () => {
+    if (!selectedCrediario || !register) return;
+    const amount = parseFloat(crediarioPayAmount) || selectedCrediario.total;
+    if (amount <= 0) return;
+    setReceivingCrediario(true);
+    try {
+      // Update pos_sales crediario columns
+      const { error } = await supabase
+        .from("pos_sales")
+        .update({
+          crediario_status: "paid",
+          crediario_paid_at: new Date().toISOString(),
+          crediario_paid_method: crediarioPayMethod,
+          crediario_paid_amount: amount,
+        } as any)
+        .eq("id", selectedCrediario.id);
+      if (error) throw error;
+
+      // If cash, add as deposit (reforço) to cash register
+      if (crediarioPayMethod === "dinheiro") {
+        const currentDeposits = register.deposits || 0;
+        const currentCash = register.cash_sales || 0;
+        await supabase
+          .from("pos_cash_registers")
+          .update({ deposits: currentDeposits + amount, cash_sales: currentCash + amount })
+          .eq("id", register.id);
+        setRegister(r => r ? { ...r, deposits: currentDeposits + amount, cash_sales: currentCash + amount } : r);
+      }
+
+      toast.success(`Crediário de R$ ${amount.toFixed(2)} recebido via ${crediarioPayMethod}!`);
+      setSelectedCrediario(null);
+      setCrediarioPayAmount("");
+      setCrediarioPayMethod("pix");
+      // Refresh list
+      if (crediarioSearch.trim()) searchCrediario();
+      else loadAllPendingCrediarios();
+    } catch (e: any) {
+      toast.error("Erro ao receber: " + (e.message || "Erro desconhecido"));
+    } finally {
+      setReceivingCrediario(false);
     }
   };
 
@@ -244,6 +353,9 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
             <Button className="flex-1 gap-2 border-2 border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20" variant="outline" onClick={() => setShowMovement('deposit')}>
               <ArrowDown className="h-4 w-4" /> Reforço
             </Button>
+            <Button className="flex-1 gap-2 border-2 border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20" variant="outline" onClick={() => { setShowCrediario(true); loadAllPendingCrediarios(); }}>
+              <Receipt className="h-4 w-4" /> Receber Crediário
+            </Button>
             <Button className="flex-1 gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => setShowClose(true)}>
               <Lock className="h-4 w-4" /> Fechar Caixa
             </Button>
@@ -320,6 +432,117 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
             <Button className={`w-full font-bold h-12 ${showMovement === 'withdraw' ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`} onClick={handleMovement}>
               Confirmar
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Crediário Dialog */}
+      <Dialog open={showCrediario} onOpenChange={setShowCrediario}>
+        <DialogContent className="bg-pos-black border-pos-orange/30 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-pos-white flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-yellow-400" /> Receber Crediário
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {!selectedCrediario ? (
+              <>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-white/30" />
+                    <Input
+                      placeholder="Buscar por nome ou telefone..."
+                      value={crediarioSearch}
+                      onChange={e => setCrediarioSearch(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && searchCrediario()}
+                      className="pl-9 bg-pos-white/5 border-pos-orange/30 text-pos-white h-10"
+                    />
+                  </div>
+                  <Button onClick={searchCrediario} disabled={searchingCrediario} className="bg-pos-orange text-pos-black gap-1">
+                    {searchingCrediario ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                </div>
+
+                {searchingCrediario ? (
+                  <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-pos-orange" /></div>
+                ) : crediarioResults.length === 0 ? (
+                  <p className="text-center text-pos-white/40 text-sm py-4">Nenhum crediário pendente</p>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {crediarioResults.map(sale => (
+                      <button
+                        key={sale.id}
+                        onClick={() => { setSelectedCrediario(sale); setCrediarioPayAmount(String(sale.total)); }}
+                        className="w-full text-left p-3 rounded-lg border border-pos-orange/10 bg-pos-white/5 hover:border-pos-orange/40 transition-all"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-pos-white font-medium">{sale.customer_name || "Sem nome"}</span>
+                          <Badge className="bg-yellow-500/20 text-yellow-400 text-[9px] border-0">Pendente</Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-pos-white/50">
+                            {new Date(sale.created_at).toLocaleDateString("pt-BR")}
+                            {sale.customer_phone && ` · ${sale.customer_phone}`}
+                          </span>
+                          <span className="text-xs text-pos-orange font-bold">R$ {sale.total.toFixed(2)}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/20">
+                  <p className="text-xs text-pos-white/50">Crediário selecionado</p>
+                  <p className="text-sm text-pos-white font-medium">{selectedCrediario.customer_name || "Sem nome"}</p>
+                  <p className="text-xs text-pos-orange font-bold">R$ {selectedCrediario.total.toFixed(2)}</p>
+                  <p className="text-[10px] text-pos-white/40">{new Date(selectedCrediario.created_at).toLocaleDateString("pt-BR")}</p>
+                </div>
+
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Valor a receber</Label>
+                  <Input
+                    type="number"
+                    value={crediarioPayAmount}
+                    onChange={e => setCrediarioPayAmount(e.target.value)}
+                    className="h-10 bg-pos-white/5 border-pos-orange/30 text-pos-white"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Forma de pagamento</Label>
+                  <Select value={crediarioPayMethod} onValueChange={setCrediarioPayMethod}>
+                    <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dinheiro">💵 Dinheiro</SelectItem>
+                      <SelectItem value="cartao_credito">💳 Cartão Crédito</SelectItem>
+                      <SelectItem value="cartao_debito">💳 Cartão Débito</SelectItem>
+                      <SelectItem value="pix">📱 PIX</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {crediarioPayMethod === "dinheiro" && (
+                    <p className="text-[10px] text-yellow-400 mt-1">💰 Pagamento em dinheiro será registrado como reforço de caixa</p>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1 border-pos-orange/30 text-pos-white" onClick={() => setSelectedCrediario(null)}>
+                    Voltar
+                  </Button>
+                  <Button
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold"
+                    disabled={receivingCrediario}
+                    onClick={receiveCrediario}
+                  >
+                    {receivingCrediario ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <DollarSign className="h-4 w-4 mr-1" />}
+                    Confirmar Recebimento
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

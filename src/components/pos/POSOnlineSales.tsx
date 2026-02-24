@@ -59,12 +59,11 @@ interface Props {
   sellers: Seller[];
 }
 
-type Gateway = "yampi" | "checkout" | "store-checkout" | "paypal" | "pix" | "delivery" | "pickup";
+type Gateway = "yampi" | "store-checkout" | "paypal" | "pix" | "delivery" | "pickup";
 
-const GATEWAYS: { id: Gateway; label: string; color: string; icon: typeof Link2 }[] = [
+const GATEWAYS: { id: Gateway; label: string; color: string; icon: typeof Link2; highlight?: boolean }[] = [
+  { id: "store-checkout", label: "🏆 Checkout Loja (+10 pts)", color: "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700", icon: Link2, highlight: true },
   { id: "yampi", label: "Yampi", color: "bg-purple-600 hover:bg-purple-700", icon: Link2 },
-  { id: "checkout", label: "Checkout", color: "bg-primary hover:bg-primary/90", icon: Link2 },
-  { id: "store-checkout", label: "Checkout Loja", color: "bg-amber-600 hover:bg-amber-700", icon: Link2 },
   { id: "paypal", label: "PayPal", color: "bg-blue-600 hover:bg-blue-700", icon: Link2 },
   { id: "pix", label: "PIX", color: "bg-green-600 hover:bg-green-700", icon: Link2 },
   { id: "delivery", label: "Na Entrega", color: "bg-orange-600 hover:bg-orange-700", icon: Truck },
@@ -416,11 +415,6 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         });
         if (error || !data?.success) throw new Error(data?.error || error?.message || "Erro Yampi");
         link = data.payment_link;
-      } else if (gateway === "checkout") {
-        // Create order in CRM and redirect to transparent checkout
-        const orderId = await ensureCrmOrder();
-        if (!orderId) throw new Error("Erro ao criar pedido no CRM");
-        link = `https://checkout.bananacalcados.com.br/checkout/order/${orderId}`;
       } else if (gateway === "store-checkout") {
         // Store checkout: save sale first, then generate link
         // Sale will be saved below in the common flow, so we generate a placeholder
@@ -477,7 +471,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           customer_phone: linkedCustomer?.whatsapp || null,
           customer_id: linkedCustomer?.id || null,
           payment_method_detail: gateway === "delivery" ? deliveryMethod : null,
-          discount_amount: discountAmount > 0 ? discountAmount : null,
+          discount: discountAmount > 0 ? discountAmount : 0,
         } as any)
         .select("id")
         .single();
@@ -1125,12 +1119,17 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                         return (
                           <Button
                             key={gw.id}
-                            className={cn("text-xs text-white", gw.color, gw.id === "delivery" && "col-span-2")}
-                            size="sm"
+                            className={cn(
+                              "text-white",
+                              gw.color,
+                              gw.highlight ? "col-span-2 h-12 text-sm font-bold shadow-lg ring-2 ring-amber-400/50" : "text-xs",
+                              gw.id === "delivery" && "col-span-2"
+                            )}
+                            size={gw.highlight ? "lg" : "sm"}
                             disabled={generating || cart.length === 0}
                             onClick={() => handleGenerateLink(gw.id)}
                           >
-                            {generating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Icon className="h-3 w-3 mr-1" />}
+                            {generating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Icon className={cn("mr-1", gw.highlight ? "h-4 w-4" : "h-3 w-3")} />}
                             {gw.label}
                           </Button>
                         );
