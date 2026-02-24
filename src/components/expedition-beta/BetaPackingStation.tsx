@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,7 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CheckCircle2, ScanBarcode, Camera, Package, Loader2, PackageCheck, PackageMinus, PackageX, Search, Users, Gift } from 'lucide-react';
-import Barcode from 'react-barcode';
+
+const Barcode = lazy(() => import('react-barcode'));
+
+const BarcodeWrapper = ({ value, ...props }: any) => (
+  <Suspense fallback={<div className="h-[60px] flex items-center justify-center text-xs text-muted-foreground">Carregando código...</div>}>
+    <Barcode value={value} {...props} />
+  </Suspense>
+);
 
 interface Props {
   orders: any[];
@@ -269,7 +276,7 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
             {selectedGroup.orders.filter(o => o.ean13_barcode).map(o => (
               <div key={o.id} className="flex flex-col items-center">
                 <p className="text-xs text-muted-foreground mb-1">{o.shopify_order_name}</p>
-                <Barcode value={o.ean13_barcode} format="EAN13" width={2} height={60} fontSize={14} />
+                <BarcodeWrapper value={o.ean13_barcode} format="EAN13" width={2} height={60} fontSize={14} />
               </div>
             ))}
           </CardContent>
