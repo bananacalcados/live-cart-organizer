@@ -16,6 +16,27 @@ async function safeJson(response: Response, label: string) {
   }
 }
 
+// Fetch the description of a Tiny forma de envio by its numeric ID
+async function fetchFormaEnvioDescricao(token: string, formaEnvioId: string): Promise<string> {
+  try {
+    const resp = await fetch('https://api.tiny.com.br/api2/formas.envio.obter.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `token=${token}&formato=json&idFormaEnvio=${formaEnvioId}`,
+    });
+    const data = await safeJson(resp, `Obter forma envio ${formaEnvioId}`);
+    if (data.retorno?.status === 'OK' || data.retorno?.status === 'Processado') {
+      const fe = data.retorno?.forma_envio || data.retorno?.formaEnvio || data.retorno || {};
+      const desc = fe.descricao || fe.nome || '';
+      console.log(`Forma envio ${formaEnvioId} description: "${desc}"`);
+      if (desc) return desc;
+    }
+  } catch (e) {
+    console.warn(`Could not fetch forma envio description for ${formaEnvioId}:`, e.message);
+  }
+  return '';
+}
+
 async function searchTinyOrderByNumber(token: string, orderNumber: string, customerName?: string): Promise<string | null> {
   // Helper to filter valid (non-canceled) orders and optionally match customer name
   const findValidOrder = (pedidos: any[], requireNameMatch = false): string | null => {
@@ -312,19 +333,26 @@ serve(async (req) => {
         throw new Error('O frete precisa ser cotado e selecionado antes de emitir a NF-e.');
       }
 
-      // Use stored Tiny IDs if available, otherwise fallback to manual mapping
-      let formaEnvio = order.tiny_forma_envio_id || '';
+      // Use stored Tiny IDs to fetch the DESCRIPTION (Tiny API needs text, not numeric IDs)
+      let formaEnvio = '';
       let formaFrete = order.tiny_forma_frete_id || '';
       
+      if (order.tiny_forma_envio_id) {
+        // Fetch the actual description from Tiny (e.g., "Jadlog via Frenet")
+        formaEnvio = await fetchFormaEnvioDescricao(TINY_ERP_TOKEN, order.tiny_forma_envio_id);
+      }
+      
       if (!formaEnvio) {
-        // Fallback: manual mapping
+        // Fallback: construct description from carrier name
         const carrierLower = (order.freight_carrier || '').toLowerCase();
         if (carrierLower.includes('correio') || carrierLower.includes('pac') || carrierLower.includes('sedex')) {
-          formaEnvio = 'C';
-        } else if (carrierLower.includes('jadlog') || carrierLower.includes('j&t')) {
-          formaEnvio = 'J';
+          formaEnvio = 'Correios via Frenet';
+        } else if (carrierLower.includes('jadlog')) {
+          formaEnvio = 'Jadlog via Frenet';
+        } else if (carrierLower.includes('j&t') || carrierLower.includes('jet')) {
+          formaEnvio = 'J&T Express via Frenet';
         } else {
-          formaEnvio = 'T';
+          formaEnvio = order.freight_carrier || 'Transportadora';
         }
       }
       
@@ -334,8 +362,7 @@ serve(async (req) => {
           : order.freight_carrier || '';
       }
 
-      console.log(`Carrier mapping: tiny_forma_envio_id="${order.tiny_forma_envio_id}", tiny_forma_frete_id="${order.tiny_forma_frete_id}" → formaEnvio="${formaEnvio}", formaFrete="${formaFrete}"`);
-
+      console.log(`Carrier mapping: tiny_forma_envio_id="${order.tiny_forma_envio_id}" → formaEnvio="${formaEnvio}", formaFrete="${formaFrete}"`);
       // STRATEGY: First try gerar.nota.fiscal.pedido.php (auto-taxes).
       // Then check if transport data is missing. If so, create NF-e manually with nota.fiscal.incluir.php.
       
@@ -405,7 +432,7 @@ serve(async (req) => {
             atualizar_cliente: 'N', // Don't update client registry
           },
           itens: nfItems,
-          // TRANSPORT DATA - this is the key fix!
+          // TRANSPORT DATA - forma_envio must be the DESCRIPTION text, not numeric ID
           transportador: {
             nome: order.freight_carrier || '',
           },
@@ -413,14 +440,12 @@ serve(async (req) => {
           forma_frete: formaFrete,
           frete_por_conta: 'R', // CIF - Remetente
           valor_frete: order.freight_price || 0,
-          peso_bruto: totalWeightKg.toFixed(3),
-          peso_liquido: totalWeightKg.toFixed(3),
           volumes: [
             {
               quantidade: 1,
               especie: 'CAIXA',
-              peso_bruto: totalWeightKg.toFixed(3),
-              peso_liquido: totalWeightKg.toFixed(3),
+              peso_bruto: Number(totalWeightKg.toFixed(3)),
+              peso_liquido: Number(totalWeightKg.toFixed(3)),
             }
           ],
           forma_pagamento: tinyPedido.forma_pagamento || '',
