@@ -214,16 +214,27 @@ serve(async (req) => {
         idAgrupamento = expedition.idAgrupamento || groupData.retorno?.idAgrupamento || null;
       }
 
-      // 3b: Update expedition with packaging data AND freight service code
+      // 3b: Update expedition with packaging data + Tiny freight IDs
       console.log('Step 3b: Updating expedition with packaging + freight data...');
-      const expeditionUpdatePayload = JSON.stringify({
+
+      const tinyFormaFreteId = order.tiny_forma_frete_id ? Number(order.tiny_forma_frete_id) : null;
+      const formaFretePayload = tinyFormaFreteId
+        ? {
+            id: tinyFormaFreteId,
+            ...(formaFreteDesc ? { descricao: formaFreteDesc } : {}),
+          }
+        : formaFreteDesc
+          ? { descricao: formaFreteDesc }
+          : undefined;
+
+      const expeditionPayloadObj: Record<string, unknown> = {
         expedicao: {
           id: idExpedicao,
           pesoBruto: Number(weightKg.toFixed(3)),
           qtdVolumes: 1,
           formaEnvio: formaEnvioDesc,
-          formaFrete: formaFreteDesc,
-          codigoServico: serviceCode,
+          ...(serviceCode ? { codigoServico: serviceCode } : {}),
+          ...(formaFretePayload ? { formaFrete: formaFretePayload } : {}),
           embalagem: {
             tipo: 2, // pacote/caixa
             altura: 10,
@@ -231,7 +242,9 @@ serve(async (req) => {
             comprimento: 30,
           },
         },
-      });
+      };
+
+      const expeditionUpdatePayload = JSON.stringify(expeditionPayloadObj);
       console.log('Expedition update payload:', expeditionUpdatePayload);
       const updateExpResp = await fetch('https://api.tiny.com.br/api2/expedicao.alterar.php', {
         method: 'POST',
@@ -244,12 +257,18 @@ serve(async (req) => {
       // Verify that formaFrete was actually set
       const updatedExp = updateExpData.retorno?.expedicao;
       if (updatedExp) {
-        const ffId = updatedExp.formaFrete?.id || updatedExp.formaFrete;
-        const ffDesc = updatedExp.formaFrete?.descricao || '';
+        const returnedFormaFrete = updatedExp.formaFrete;
+        const ffId = typeof returnedFormaFrete === 'object'
+          ? returnedFormaFrete?.id
+          : returnedFormaFrete;
+        const ffDesc = typeof returnedFormaFrete === 'object'
+          ? returnedFormaFrete?.descricao || ''
+          : '';
+
         console.log(`After update - formaEnvio: ${updatedExp.formaEnvio}, formaFrete id: ${ffId}, desc: ${ffDesc}, pesoBruto: ${updatedExp.pesoBruto}`);
-        
-        if ((!ffId || ffId === 0 || ffId === '0') && (!ffDesc || ffDesc === '')) {
-          console.warn('WARNING: formaFrete still empty after update. Tiny may not recognize the service code.');
+
+        if ((!ffId || Number(ffId) === 0) && !ffDesc) {
+          console.warn('WARNING: formaFrete still empty after update.');
         }
       }
 
