@@ -16,8 +16,8 @@ async function safeJson(response: Response, label: string) {
   }
 }
 
-// Fetch the description of a Tiny forma de envio by its numeric ID
-async function fetchFormaEnvioDescricao(token: string, formaEnvioId: string): Promise<string> {
+// Fetch the description of a Tiny forma de envio AND forma de frete by their numeric IDs
+async function fetchFormaEnvioAndFreteDescricao(token: string, formaEnvioId: string, formaFreteId?: string | null): Promise<{ envioDesc: string; freteDesc: string }> {
   try {
     const resp = await fetch('https://api.tiny.com.br/api2/formas.envio.obter.php', {
       method: 'POST',
@@ -25,16 +25,31 @@ async function fetchFormaEnvioDescricao(token: string, formaEnvioId: string): Pr
       body: `token=${token}&formato=json&idFormaEnvio=${formaEnvioId}`,
     });
     const data = await safeJson(resp, `Obter forma envio ${formaEnvioId}`);
+    let envioDesc = '';
+    let freteDesc = '';
     if (data.retorno?.status === 'OK' || data.retorno?.status === 'Processado') {
       const fe = data.retorno?.forma_envio || data.retorno?.formaEnvio || data.retorno || {};
-      const desc = fe.descricao || fe.nome || '';
-      console.log(`Forma envio ${formaEnvioId} description: "${desc}"`);
-      if (desc) return desc;
+      envioDesc = fe.descricao || fe.nome || '';
+      console.log(`Forma envio ${formaEnvioId} description: "${envioDesc}"`);
+      
+      if (formaFreteId) {
+        const fretesData = fe.formas_frete || fe.formasFrete || fe.fretes || fe.servicos || [];
+        const fretesList = Array.isArray(fretesData) ? fretesData : [];
+        for (const freteEntry of fretesList) {
+          const ff = freteEntry?.forma_frete || freteEntry?.formaFrete || freteEntry;
+          if (String(ff.id) === String(formaFreteId)) {
+            freteDesc = ff.descricao || ff.nome || '';
+            console.log(`Forma frete ${formaFreteId} description: "${freteDesc}"`);
+            break;
+          }
+        }
+      }
     }
+    return { envioDesc, freteDesc };
   } catch (e) {
-    console.warn(`Could not fetch forma envio description for ${formaEnvioId}:`, e.message);
+    console.warn(`Could not fetch forma envio/frete description for ${formaEnvioId}:`, e.message);
   }
-  return '';
+  return { envioDesc: '', freteDesc: '' };
 }
 
 // Fallback: Map carrier name to Tiny's formaEnvio code (only used when tiny_forma_envio_id is not stored)
@@ -88,26 +103,29 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Use stored Tiny IDs - fetch DESCRIPTION for formaEnvio (Tiny needs text, not numeric IDs)
+    // Use stored Tiny IDs - fetch DESCRIPTIONS for formaEnvio AND formaFrete
     let formaEnvioDesc = '';
+    let formaFreteDesc = '';
     if (order.tiny_forma_envio_id) {
-      formaEnvioDesc = await fetchFormaEnvioDescricao(TINY_ERP_TOKEN, order.tiny_forma_envio_id);
+      const result = await fetchFormaEnvioAndFreteDescricao(TINY_ERP_TOKEN, order.tiny_forma_envio_id, order.tiny_forma_frete_id);
+      formaEnvioDesc = result.envioDesc;
+      formaFreteDesc = result.freteDesc;
     }
     if (!formaEnvioDesc) {
-      // Fallback: construct from carrier name
       const carrierLower = (order.freight_carrier || '').toLowerCase();
       if (carrierLower.includes('correio')) formaEnvioDesc = 'Correios via Frenet';
       else if (carrierLower.includes('jadlog')) formaEnvioDesc = 'Jadlog via Frenet';
       else if (carrierLower.includes('j&t') || carrierLower.includes('jet')) formaEnvioDesc = 'J&T Express via Frenet';
       else formaEnvioDesc = order.freight_carrier || 'Transportadora';
     }
-    const formaFrete = order.tiny_forma_frete_id || (order.freight_service
-      ? `${order.freight_carrier} ${order.freight_service}`.trim()
-      : order.freight_carrier);
+    if (!formaFreteDesc) {
+      // Fallback: use freight_service directly (e.g., "Sedex", "PAC", "Jadlog Package")
+      formaFreteDesc = order.freight_service || order.freight_carrier || '';
+    }
     const serviceCode = order.tiny_service_code || '';
     const weightKg = Math.max(0.3, (order.total_weight_grams || 300) / 1000);
 
-    console.log(`Freight info: carrier="${order.freight_carrier}", formaEnvio="${formaEnvioDesc}" (from ID=${order.tiny_forma_envio_id}), formaFrete="${formaFrete}", serviceCode="${serviceCode}", weightKg=${weightKg}`);
+    console.log(`Freight info: carrier="${order.freight_carrier}", formaEnvio="${formaEnvioDesc}" (from ID=${order.tiny_forma_envio_id}), formaFrete="${formaFreteDesc}" (from ID=${order.tiny_forma_frete_id}), serviceCode="${serviceCode}", weightKg=${weightKg}`);
 
     // Note: pedido.alterar.php does NOT support forma_envio/valor_frete fields.
     // Freight data is injected via nota.fiscal.incluir.php in the invoice step instead.
@@ -204,7 +222,7 @@ serve(async (req) => {
           pesoBruto: Number(weightKg.toFixed(3)),
           qtdVolumes: 1,
           formaEnvio: formaEnvioDesc,
-          formaFrete: formaFrete,
+          formaFrete: formaFreteDesc,
           codigoServico: serviceCode,
           embalagem: {
             tipo: 2, // pacote/caixa
