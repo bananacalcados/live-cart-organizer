@@ -1,96 +1,56 @@
 
-# Plano: Integrar Cotacao de Frete via Tiny ERP
+# Verificar Rastreio e Filtro de Pedidos do Dia
 
-## Problema Atual
+## Problema
+Pedidos que ja foram despachados no Tiny (como o da Cenira Santi, que ja tem codigo de rastreio JLH2P2YU) continuam aparecendo como "Aprovado" na Expedição Beta. Alem disso, falta um filtro rapido para ver apenas pedidos do dia.
 
-O sistema cota frete diretamente pela Frenet, mas o Tiny ERP tambem esta conectado a Frenet internamente. Isso causa:
+## Solução
 
-1. Os codigos de servico do Tiny nao batem com os da Frenet direta -- erro "forma de frete vazio"
-2. O contrato empresarial dos Correios configurado no Tiny nao e utilizado (precos piores)
-3. Peso sendo interpretado incorretamente (700g virando 700kg)
-4. Mapeamento manual de carrier para codigos Tiny e fragil e propenso a erros
+### 1. Verificar codigo de rastreio durante a sincronização
+Alterar a Edge Function `expedition-beta-initial-sync` para:
+- Ao buscar os detalhes de cada pedido no Tiny V3, verificar se o campo de rastreamento (`codigoRastreamento` ou campo equivalente na resposta V3) esta preenchido
+- Se o pedido ja tem rastreio, inserir com `expedition_status: 'dispatched'` ao inves de `'approved'`
+- Para pedidos ja existentes no banco, tambem atualizar: se antes estava como `approved` mas agora no Tiny tem rastreio, atualizar para `dispatched`
 
-## Solucao Proposta
+### 2. Adicionar coluna de codigo de rastreio
+- Criar migration adicionando coluna `tracking_code TEXT` na tabela `expedition_beta_orders`
+- Gravar o codigo de rastreio quando disponivel durante o sync
 
-Usar a API do Tiny para buscar as **formas de envio** e **formas de frete** reais cadastradas na conta, e armazenar os IDs do Tiny junto com cada cotacao. Assim, na hora de gerar etiqueta, usamos os IDs exatos que o Tiny reconhece.
+### 3. Atualizar pedidos existentes no sync
+A logica atual faz `skip` se o pedido ja existe. Mudar para: se ja existe, verificar se o Tiny agora tem rastreio e, caso tenha, atualizar o status para `dispatched` e gravar o `tracking_code`.
 
-### Fluxo Novo (Hibrido)
+### 4. Filtro "Pedidos do Dia" na UI
+No `ExpeditionBeta.tsx`, adicionar um botão rapido "Hoje" ao lado dos filtros de data existentes que:
+- Seta `dateFrom` e `dateTo` para a data atual
+- Facilita filtrar apenas os pedidos criados no dia
 
-```text
-1. Cotar Frete (botao)
-   |
-   v
-2. Edge Function busca formas de envio do Tiny
-   (formas.envio.pesquisa.php + formas.envio.obter.php)
-   |
-   v
-3. Tambem cota via Frenet (precos em tempo real)
-   |
-   v
-4. Cruza: para cada cotacao Frenet, encontra o ID
-   da forma de frete correspondente no Tiny
-   |
-   v
-5. Salva cotacoes com tiny_forma_envio_id + tiny_forma_frete_id
-   |
-   v
-6. Usuario seleciona -> salva IDs no pedido
-   |
-   v
-7. Na emissao de NF-e e geracao de etiqueta,
-   usa os IDs do Tiny diretamente (sem mapeamento manual)
+### 5. Exibir codigo de rastreio na lista de pedidos
+No `BetaOrdersList.tsx`, dentro do `BetaOrderRow`:
+- Mostrar o codigo de rastreio quando disponivel (badge ou texto ao lado do status)
+
+---
+
+## Detalhes Tecnicos
+
+### Migration SQL
+```sql
+ALTER TABLE expedition_beta_orders ADD COLUMN tracking_code TEXT;
 ```
 
-## Etapas de Implementacao
+### Edge Function (`expedition-beta-initial-sync`)
+- Para cada pedido buscado no detalhe (`/pedidos/{id}`), extrair `codigoRastreamento` (ou o campo correto da API V3)
+- Logica de insert: se tem rastreio, `expedition_status = 'dispatched'`
+- Logica de update (pedido ja existente): se agora tem rastreio e status atual nao e `dispatched`, atualizar status e gravar tracking_code
 
-### Etapa 1: Adicionar colunas para IDs do Tiny
+### UI (`ExpeditionBeta.tsx`)
+- Adicionar botão "Hoje" que define dateFrom/dateTo para hoje
 
-Adicionar colunas na tabela `expedition_freight_quotes` e `expedition_orders` para armazenar os IDs reais do Tiny:
+### UI (`BetaOrdersList.tsx`)
+- Exibir `order.tracking_code` como badge quando presente
+- Pedidos despachados ja ficam filtrados por padrão (filtro "Não despachados" ativo)
 
-- `expedition_freight_quotes`: `tiny_forma_envio_id`, `tiny_forma_frete_id`, `tiny_service_code`
-- `expedition_orders`: `tiny_forma_envio_id`, `tiny_forma_frete_id`, `tiny_service_code`
-
-### Etapa 2: Reescrever `expedition-quote-freight`
-
-A Edge Function passara a:
-
-1. Chamar `formas.envio.pesquisa.php` do Tiny para listar todas as formas de envio cadastradas (Correios, J&T, etc.)
-2. Para cada forma de envio, chamar `formas.envio.obter.php` para obter as formas de frete (PAC, SEDEX, etc.) com seus IDs
-3. Continuar cotando via Frenet para obter precos e prazos em tempo real
-4. Cruzar os resultados: associar cada cotacao Frenet com o ID correto da forma de frete no Tiny
-5. Salvar as cotacoes com `tiny_forma_envio_id` e `tiny_forma_frete_id`
-6. Manter a opcao "Mototaxista" como fallback manual
-
-### Etapa 3: Atualizar selecao de frete no frontend
-
-Quando o usuario selecionar um frete em `ExpeditionFreightQuote.tsx`, salvar tambem os IDs do Tiny no `expedition_orders`.
-
-### Etapa 4: Simplificar `expedition-tiny-invoice` e `expedition-fetch-label`
-
-Remover todo o mapeamento manual de carrier (as funcoes `mapCarrierToFormaEnvio` e `mapToServiceCode`). Em vez disso, usar diretamente os IDs armazenados:
-
-- Na NF-e: usar `tiny_forma_envio_id` e `tiny_forma_frete_id` no payload
-- Na etiqueta: usar os mesmos IDs ao atualizar o pedido de venda e a expedicao
-
-Isso elimina o problema de "forma de frete vazio" e garante que o Tiny reconheca o servico selecionado.
-
-### Etapa 5: Correcao de peso
-
-Garantir que TODOS os pontos que enviam peso ao Tiny facam a conversao `total_weight_grams / 1000` com minimo de 0.3 kg. Revisar `expedition-tiny-invoice` e `expedition-fetch-label`.
-
-## Arquivos Modificados
-
-| Arquivo | Alteracao |
-|---|---|
-| Migracao SQL (nova) | Adicionar colunas `tiny_forma_envio_id`, `tiny_forma_frete_id`, `tiny_service_code` nas tabelas |
-| `supabase/functions/expedition-quote-freight/index.ts` | Reescrever para buscar formas de envio do Tiny + cruzar com Frenet |
-| `src/components/expedition/ExpeditionFreightQuote.tsx` | Salvar IDs do Tiny ao selecionar frete |
-| `supabase/functions/expedition-tiny-invoice/index.ts` | Usar IDs do Tiny em vez de mapeamento manual |
-| `supabase/functions/expedition-fetch-label/index.ts` | Usar IDs do Tiny em vez de mapeamento manual; remover `mapCarrierToFormaEnvio` e `mapToServiceCode` |
-
-## Resultado Esperado
-
-- Cotacoes com precos do contrato empresarial dos Correios (via Frenet configurada no Tiny)
-- IDs exatos do Tiny em cada etapa -- sem mapeamento manual
-- Eliminacao do erro "forma de frete vazio" na geracao de etiquetas
-- Peso sempre em kg correto (nunca mais 700kg)
+### Arquivos alterados
+- `supabase/functions/expedition-beta-initial-sync/index.ts`
+- `src/pages/ExpeditionBeta.tsx`
+- `src/components/expedition-beta/BetaOrdersList.tsx`
+- Nova migration para coluna `tracking_code`
