@@ -22,12 +22,14 @@ import { POSDailySales } from "@/components/pos/POSDailySales";
 import { POSPickupOrders } from "@/components/pos/POSPickupOrders";
 import { POSTeamChat } from "@/components/pos/POSTeamChat";
 import { POSStockRequests } from "@/components/pos/POSStockRequests";
+import { POSDashboard } from "@/components/pos/POSDashboard";
 import { supabase } from "@/integrations/supabase/client";
 
-type POSSection = "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches" | "pickups" | "stockcheck";
+type POSSection = "dashboard" | "sales" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches" | "pickups" | "stockcheck";
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
 const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badge?: boolean; priority?: boolean }[] = [
+  { id: "dashboard", label: "Dashboard", icon: BarChart3, priority: true },
   { id: "sales", label: "Venda", icon: ShoppingCart, priority: true },
   { id: "daily", label: "Vendas Dia", icon: BarChart3, priority: true },
   { id: "pickups", label: "Retiradas", icon: Package, priority: true, badge: true },
@@ -46,7 +48,7 @@ export default function POS() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [selectedStore, setSelectedStore] = useState<string>("");
-  const [section, setSection] = useState<POSSection>("sales");
+  const [section, setSection] = useState<POSSection>("dashboard");
   const [whatsappFilter, setWhatsappFilter] = useState<WhatsAppFilter>(undefined);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [pendingStockChecks, setPendingStockChecks] = useState(0);
@@ -181,6 +183,12 @@ export default function POS() {
 
       {/* Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {section === "dashboard" && (
+          <POSDashboard
+            storeId={selectedStore}
+            onNavigateToSection={(s) => setSection(s as POSSection)}
+          />
+        )}
         {section === "sales" && (
           <POSSalesView
             storeId={selectedStore}
