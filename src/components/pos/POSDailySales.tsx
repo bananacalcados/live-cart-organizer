@@ -99,6 +99,8 @@ export function POSDailySales({ storeId }: Props) {
   const [selectedSale, setSelectedSale] = useState<SaleSummary | null>(null);
   const [detailItems, setDetailItems] = useState<SaleItem[]>([]);
   const [detailCustomer, setDetailCustomer] = useState<CustomerInfo | null>(null);
+  const [tinyDetailLoading, setTinyDetailLoading] = useState(false);
+  const [isTinyOnlyDetail, setIsTinyOnlyDetail] = useState(false);
 
   // Search
   const [searchTerm, setSearchTerm] = useState("");
@@ -202,6 +204,7 @@ export function POSDailySales({ storeId }: Props) {
 
   const openSaleDetail = async (sale: SaleSummary) => {
     setSelectedSale(sale);
+    setIsTinyOnlyDetail(false);
     let items = saleItems.filter(i => i.sale_id === sale.id);
     if (items.length === 0 && showGlobalResults) {
       items = globalResultItems.filter(i => i.sale_id === sale.id);
@@ -228,6 +231,49 @@ export function POSDailySales({ storeId }: Props) {
       }
     }
     setDetailCustomer(cust);
+  };
+
+  const openTinyOrderDetail = async (order: TinyOnlyOrder) => {
+    setTinyDetailLoading(true);
+    setIsTinyOnlyDetail(true);
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({ store_id: storeId, mode: "detail", tiny_order_id: order.tiny_order_id }),
+      });
+      const data = await resp.json();
+      if (data.success && data.detail) {
+        const d = data.detail;
+        const fakeSale: SaleSummary = {
+          id: `tiny-${d.tiny_order_id}`,
+          created_at: d.date ? new Date(d.date.split('/').reverse().join('-')).toISOString() : new Date().toISOString(),
+          subtotal: d.total + (d.discount || 0),
+          discount: d.discount || 0,
+          total: d.total,
+          payment_method: d.payment_method,
+          seller_id: null,
+          status: d.status || '',
+          tiny_order_number: d.tiny_order_number,
+          tiny_order_id: d.tiny_order_id,
+          customer_id: null,
+        };
+        setSelectedSale(fakeSale);
+        setDetailItems(d.items || []);
+        setDetailCustomer(d.customer || null);
+      } else {
+        toast.error("Erro ao buscar detalhes: " + (data.error || "Erro desconhecido"));
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao buscar detalhes do pedido Tiny");
+    } finally {
+      setTinyDetailLoading(false);
+    }
   };
 
   const searchAllPeriods = async () => {
@@ -875,7 +921,8 @@ export function POSDailySales({ storeId }: Props) {
                     {tinyOnlyResults.map((order) => (
                       <div
                         key={order.tiny_order_id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-purple-500/5 border border-purple-500/20"
+                        className="flex items-center justify-between p-3 rounded-lg bg-purple-500/10 border border-purple-500/30 cursor-pointer hover:bg-purple-500/20 transition-colors"
+                        onClick={() => openTinyOrderDetail(order)}
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <span className="text-xs text-pos-white/40 font-mono shrink-0">
@@ -891,7 +938,7 @@ export function POSDailySales({ storeId }: Props) {
                               )}
                             </div>
                             <p className="text-[10px] text-pos-white/40 truncate">
-                              {order.status || "—"}
+                              {order.status || "—"} • Clique para detalhes
                             </p>
                           </div>
                         </div>
@@ -908,6 +955,16 @@ export function POSDailySales({ storeId }: Props) {
         </div>
       </ScrollArea>
 
+      {/* Tiny detail loading overlay */}
+      {tinyDetailLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-pos-black p-6 rounded-xl flex items-center gap-3 border border-pos-orange/30">
+            <Loader2 className="h-5 w-5 animate-spin text-pos-orange" />
+            <span className="text-pos-white">Buscando detalhes no Tiny...</span>
+          </div>
+        </div>
+      )}
+
       {/* Sale Detail Dialog */}
       <POSSaleDetailDialog
         sale={selectedSale}
@@ -915,8 +972,9 @@ export function POSDailySales({ storeId }: Props) {
         customer={detailCustomer}
         items={detailItems}
         sellerName={selectedSale ? sellers.find(s => s.id === selectedSale.seller_id)?.name || null : null}
-        onResend={resendToTiny}
+        onResend={!isTinyOnlyDetail ? resendToTiny : undefined}
         resending={resending === selectedSale?.id}
+        isTinyOnly={isTinyOnlyDetail}
       />
     </div>
   );
