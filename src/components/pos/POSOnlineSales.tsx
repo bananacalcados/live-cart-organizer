@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Globe, Search, Plus, Minus, Trash2, ShoppingCart, Loader2,
   Copy, Check, Image, Filter, Link2, ExternalLink, X, ArrowLeft,
-  Truck, UserPlus, Banknote, CreditCard
+  Truck, UserPlus, Banknote, CreditCard, MessageSquareText, Bike
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,13 @@ interface FoundCustomer {
   whatsapp: string | null;
   cpf: string | null;
   email: string | null;
+  address?: string | null;
+  address_number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
+  cep?: string | null;
 }
 
 interface Props {
@@ -91,6 +98,11 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [deliveryMethod, setDeliveryMethod] = useState<"cash" | "card">("cash");
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [deliveryConfirmed, setDeliveryConfirmed] = useState(false);
+  const [installments, setInstallments] = useState("1");
+  const [needsChange, setNeedsChange] = useState(false);
+  const [changeAmount, setChangeAmount] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryReference, setDeliveryReference] = useState("");
 
   // Debounce search
   useEffect(() => {
@@ -126,7 +138,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       const term = `%${customerSearch}%`;
       const { data } = await supabase
         .from("pos_customers")
-        .select("id, name, whatsapp, cpf, email")
+        .select("id, name, whatsapp, cpf, email, address, address_number, complement, neighborhood, city, state, cep")
         .or(`name.ilike.${term},cpf.ilike.${term},whatsapp.ilike.${term}`)
         .limit(5);
       setCustomerResults((data as FoundCustomer[]) || []);
@@ -389,17 +401,63 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     setDeliveryConfirmed(false);
     setDeliveryNotes("");
     setShowDeliveryOptions(false);
+    setInstallments("1");
+    setNeedsChange(false);
+    setChangeAmount("");
+    setDeliveryAddress("");
+    setDeliveryReference("");
   };
 
   const selectCustomer = (c: FoundCustomer) => {
     setLinkedCustomer(c);
     setCustomerSearch("");
     setCustomerResults([]);
+    // Auto-fill address
+    const parts = [c.address, c.address_number, c.complement, c.neighborhood, c.city, c.state].filter(Boolean);
+    if (parts.length > 0) setDeliveryAddress(parts.join(", "));
   };
 
   const handleCustomerSaved = (customer: { id: string; name: string; cpf?: string }) => {
     setLinkedCustomer({ id: customer.id, name: customer.name, cpf: customer.cpf || null, whatsapp: null, email: null });
     setShowCustomerForm(false);
+  };
+
+  const getFullAddress = () => {
+    if (deliveryAddress) return deliveryAddress;
+    if (!linkedCustomer) return "";
+    const parts = [linkedCustomer.address, linkedCustomer.address_number, linkedCustomer.complement, linkedCustomer.neighborhood, linkedCustomer.city, linkedCustomer.state].filter(Boolean);
+    return parts.join(", ");
+  };
+
+  const buildClientText = () => {
+    const methodLabel = deliveryMethod === "cash"
+      ? `Dinheiro${needsChange ? ` (troco para R$ ${changeAmount})` : " (sem necessidade de troco)"}`
+      : `Cartão na maquininha${installments !== "1" ? ` em ${installments}x` : " à vista"}`;
+    const itemsList = cart.map(c => `• ${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity} — ${fmt(c.price * c.quantity)}`).join("\n");
+
+    return `Olá${linkedCustomer?.name ? `, ${linkedCustomer.name}` : ""}! 😊\n\nSeu pedido foi separado e já está saindo para entrega!\n\n📦 *Itens:*\n${itemsList}\n\n💰 *Total: ${fmt(cartTotal)}*\n💳 *Pagamento:* ${methodLabel}\n\n🏍️ O entregador é um *mototaxista parceiro*. Ele não consegue aguardar experimentação na porta, mas caso algum item não sirva, é só nos avisar que chamamos outro mototaxista para realizar a troca diretamente na sua casa! 🔄\n\nQualquer dúvida, estamos à disposição! 💛`;
+  };
+
+  const buildMotoText = () => {
+    const methodLabel = deliveryMethod === "cash"
+      ? `💵 DINHEIRO${needsChange ? ` — Levar troco para R$ ${changeAmount}` : " — Sem troco"}`
+      : `💳 MAQUININHA${installments !== "1" ? ` — ${installments}x` : " — À vista"}`;
+    const addr = getFullAddress();
+
+    return `🏍️ *ENTREGA BANANA CALÇADOS*\n\n👤 *Cliente:* ${linkedCustomer?.name || "—"}\n📱 *Telefone:* ${linkedCustomer?.whatsapp || "—"}\n\n📍 *Endereço:* ${addr || "—"}${deliveryReference ? `\n📌 *Referência:* ${deliveryReference}` : ""}\n\n💰 *Valor:* ${fmt(cartTotal)}\n${methodLabel}\n\n📦 *Itens:* ${cart.map(c => `${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity}`).join(", ")}${deliveryNotes ? `\n\n📝 *Obs:* ${deliveryNotes}` : ""}`;
+  };
+
+  const copyText = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Texto copiado!");
+  };
+
+  const openWhatsAppWith = (text: string, phone?: string) => {
+    const cleanPhone = phone?.replace(/\D/g, "") || "";
+    const url = cleanPhone
+      ? `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
   };
 
   // Desktop: 2 columns. Mobile: steps
@@ -672,6 +730,71 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                         </Label>
                       </div>
                     </RadioGroup>
+
+                    {/* Card: installments */}
+                    {deliveryMethod === "card" && (
+                      <div className="space-y-1">
+                        <Label className="text-[11px] text-muted-foreground">Parcelas</Label>
+                        <Select value={installments} onValueChange={setInstallments}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                              <SelectItem key={n} value={String(n)}>
+                                {n}x {n === 1 ? "(à vista)" : `de ${fmt(cartTotal / n)}`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Cash: change needed */}
+                    {deliveryMethod === "cash" && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="needsChange"
+                            checked={needsChange}
+                            onChange={e => setNeedsChange(e.target.checked)}
+                            className="rounded border-border"
+                          />
+                          <Label htmlFor="needsChange" className="text-[11px] cursor-pointer">Precisa de troco?</Label>
+                        </div>
+                        {needsChange && (
+                          <Input
+                            placeholder="Troco para quanto? (ex: 200)"
+                            value={changeAmount}
+                            onChange={e => setChangeAmount(e.target.value)}
+                            className="h-8 text-xs"
+                            type="number"
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Address */}
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Endereço de entrega</Label>
+                      <Input
+                        placeholder="Rua, número, bairro, cidade..."
+                        value={deliveryAddress}
+                        onChange={e => setDeliveryAddress(e.target.value)}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Referência</Label>
+                      <Input
+                        placeholder="Ponto de referência (opcional)"
+                        value={deliveryReference}
+                        onChange={e => setDeliveryReference(e.target.value)}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+
                     <Textarea
                       placeholder="Observações (opcional)"
                       value={deliveryNotes}
@@ -724,10 +847,59 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                       <Truck className="h-3.5 w-3.5" /> Venda Registrada — Pagamento na Entrega
                     </Label>
                     <div className="p-2 bg-orange-500/5 border border-orange-500/20 rounded-lg text-xs space-y-1">
-                      <p><span className="font-medium">Método:</span> {deliveryMethod === "cash" ? "Dinheiro" : "Maquininha"}</p>
+                      <p><span className="font-medium">Método:</span> {deliveryMethod === "cash" ? `Dinheiro${needsChange ? ` (troco p/ R$ ${changeAmount})` : ""}` : `Maquininha ${installments}x`}</p>
                       <p><span className="font-medium">Total:</span> {fmt(cartTotal)}</p>
                       {linkedCustomer?.name && <p><span className="font-medium">Cliente:</span> {linkedCustomer.name}</p>}
+                      {getFullAddress() && <p><span className="font-medium">Endereço:</span> {getFullAddress()}</p>}
                       {deliveryNotes && <p><span className="font-medium">Obs:</span> {deliveryNotes}</p>}
+                    </div>
+
+                    {/* Text generation buttons */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs gap-1"
+                        onClick={() => {
+                          const text = buildClientText();
+                          copyText(text);
+                        }}
+                      >
+                        <MessageSquareText className="h-3 w-3" />
+                        Texto Cliente
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs gap-1"
+                        onClick={() => openWhatsAppWith(buildClientText(), linkedCustomer?.whatsapp || undefined)}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Enviar Cliente
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs gap-1"
+                        onClick={() => {
+                          const text = buildMotoText();
+                          copyText(text);
+                        }}
+                      >
+                        <Bike className="h-3 w-3" />
+                        Texto Moto
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs gap-1"
+                        onClick={() => openWhatsAppWith(buildMotoText())}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Enviar Moto
+                      </Button>
                     </div>
                   </>
                 ) : (
@@ -741,13 +913,13 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                         {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
                         {copied ? "Copiado" : "Copiar"}
                       </Button>
+                      <Button size="sm" className="flex-1 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={sendWhatsApp}>
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        WhatsApp
+                      </Button>
                     </div>
                   </>
                 )}
-                <Button size="sm" className="w-full text-xs bg-green-600 hover:bg-green-700 text-white" onClick={sendWhatsApp}>
-                  <ExternalLink className="h-3 w-3 mr-1" />
-                  Enviar WhatsApp
-                </Button>
                 <Button size="sm" variant="ghost" className="w-full text-xs" onClick={resetSale}>
                   <Plus className="h-3 w-3 mr-1" /> Nova Venda
                 </Button>
