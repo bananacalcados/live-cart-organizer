@@ -75,8 +75,21 @@ export default function ExpeditionBeta() {
     setOpenSupportCount(count || 0);
   }, []);
 
+  // Auto-sync from Tiny on mount
   useEffect(() => {
-    fetchOrders();
+    const autoSync = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('expedition-beta-initial-sync');
+        if (error) console.error('Auto-sync error:', error);
+        if (data?.success && data.synced > 0) {
+          toast.success(`${data.synced} pedidos importados do Tiny!`);
+        }
+      } catch (e) {
+        console.error('Auto-sync failed:', e);
+      }
+      fetchOrders();
+    };
+    autoSync();
     fetchSupportCount();
 
     // Realtime subscription for new orders
