@@ -1,77 +1,60 @@
 
+## Plano: Dashboard do POS
 
-## Plano: Corrigir Limpeza de Pedidos Antigos/Apagados do Tiny
+Criar uma nova aba "Dashboard" como primeira aba do modulo POS, exibindo metricas de vendas, desempenho por vendedor e alertas operacionais.
 
-### Problema Raiz
+---
 
-A limpeza atual tenta encontrar pedidos cancelados/despachados no Tiny e cruzar com o banco local. Porém:
-- Pedidos **apagados** do Tiny nao aparecem em nenhuma lista de status
-- A verificacao individual (pedido por pedido) sofre timeout por erros 429 (rate limit)
-- Resultado: pedidos fantasmas ficam presos como "aprovados" para sempre
+### Estrutura da Tela
 
-### Solucao: Logica Invertida
+O dashboard sera dividido em 3 secoes principais:
 
-Em vez de buscar "quais pedidos mudaram de status no Tiny", a nova abordagem faz o inverso:
+**1. Metricas de Vendas (topo)**
+- Cards KPI com seletores de periodo (Hoje / Semana / Mes):
+  - Faturamento total
+  - Quantidade de vendas
+  - Ticket medio
+  - Itens por venda (media)
 
-1. Buscar TODOS os pedidos com situacao 3 (aprovados) no Tiny
-2. Construir um conjunto de tiny_order_ids validos
-3. Qualquer pedido local marcado como "approved" que NAO esteja nesse conjunto sera **apagado** do banco (junto com seus itens)
+**2. Desempenho por Vendedor (meio)**
+- Tabela/lista com cada vendedor mostrando:
+  - Total vendido (R$)
+  - Quantidade de vendas
+  - Ticket medio
+  - Media de itens por venda
+- Dados tambem filtrados pelo periodo selecionado (dia/semana/mes)
 
-Isso elimina completamente a necessidade de verificacoes individuais e resolve tanto pedidos cancelados quanto apagados.
+**3. Alertas Operacionais (rodape)**
+- WhatsApp aguardando resposta (usa RPC `get_conversation_counts` ja existente)
+- Tickets de suporte abertos (tabela `support_tickets` com status `new` ou `in_progress`)
+- Solicitacoes inter-loja pendentes (tabelas `pos_inter_store_requests` e `expedition_stock_requests` com status `pending`)
+
+---
 
 ### Mudancas Tecnicas
 
-**Arquivo: `supabase/functions/expedition-beta-initial-sync/index.ts`**
+**Novo arquivo: `src/components/pos/POSDashboard.tsx`**
+- Componente que recebe `storeId` como prop
+- Busca dados de `pos_sales` (com join em `pos_sale_items` para contar itens) e `pos_sellers`
+- Calcula metricas para 3 periodos: hoje, ultimos 7 dias, ultimo mes (30 dias)
+- Um seletor de periodo (toggle com 3 botoes: Dia / Semana / Mes) controla todos os KPIs
+- Secao de alertas busca contagens via:
+  - `supabase.rpc('get_conversation_counts')` para WhatsApp
+  - `supabase.from('support_tickets').select(count).in('status', ['new','in_progress'])`
+  - `supabase.from('pos_inter_store_requests').select(count).eq('to_store_id', storeId).eq('status','pending')`
+  - `supabase.from('expedition_stock_requests').select(count).eq('to_store_id', storeId).eq('status','pending')`
+- Alertas serao clicaveis, navegando para a aba correspondente
 
-1. **Reescrever `passCleanup`** com logica invertida:
-   - Buscar pedidos aprovados (situacao=3) do Tiny, paginando ate 10 paginas
-   - Construir Set com todos os tiny_order_ids que sao aprovados no Tiny
-   - Buscar todos os pedidos locais com `expedition_status = 'approved'`
-   - Para cada pedido local cujo `tiny_order_id` NAO esta no Set:
-     - Deletar itens da tabela `expedition_beta_order_items`
-     - Deletar o pedido da tabela `expedition_beta_orders`
-   - Logar quantos pedidos foram removidos e quais tiny_order_ids
+**Arquivo editado: `src/pages/POS.tsx`**
+- Adicionar `"dashboard"` como primeiro item no tipo `POSSection`
+- Adicionar entrada no array `SECTIONS` com `{ id: "dashboard", label: "Dashboard", icon: BarChart3, priority: true }`
+- Alterar estado inicial de `section` de `"sales"` para `"dashboard"`
+- Renderizar `<POSDashboard storeId={selectedStore} onNavigateToSection={setSection} />` quando `section === "dashboard"`
+- Importar o novo componente
 
-2. **Remover a secao de verificacao individual** (linhas 442-474) que causa timeout
+### Visual
 
-3. **Ajustar timeouts**:
-   - Cleanup: 30 segundos (so precisa paginar a lista de aprovados, sem detail fetches)
-   - Pass 1 (novos aprovados): 45 segundos
-   - Pass 2/3: manter como esta
-
-4. **Pass 1 tambem protegido**: ao inserir novos pedidos, verificar se o detail fetch retorna 404 e pular (ja existe mas pode ser melhorado)
-
-### Fluxo Revisado
-
-```text
-+------------------------------------------+
-|  PASS 0: Cleanup (30s)                   |
-|  1. Busca situacao=3 do Tiny (batch)     |
-|  2. Compara com approved locais          |
-|  3. DELETA os que nao existem no Tiny    |
-+------------------------------------------+
-           |
-+------------------------------------------+
-|  PASS 1: Importar novos aprovados (45s)  |
-|  Busca situacao=3 e insere novos         |
-+------------------------------------------+
-           |
-+------------------------------------------+
-|  PASS 2: Atualizar despachados           |
-|  Busca situacao=5,6 e atualiza locais    |
-+------------------------------------------+
-           |
-+------------------------------------------+
-|  PASS 3: Atualizar cancelados            |
-|  Busca situacao=9 e atualiza locais      |
-+------------------------------------------+
-```
-
-### Resultado Esperado
-
-- Pedidos apagados do Tiny (como @rosanabifulco) serao removidos do sistema
-- Pedidos cancelados no Tiny (como @zildacatrolio) serao removidos do sistema
-- Apenas pedidos realmente aprovados (situacao=3) no Tiny permanecerao
-- Sem risco de timeout (nenhuma verificacao individual necessaria)
-- O numero de aprovados no sistema deve bater com o Tiny (67 pedidos)
-
+- Usa o mesmo tema escuro do POS (`bg-pos-black`, `text-pos-white`, `text-pos-orange`)
+- Cards KPI no estilo ja usado em `POSDailySales` (icones coloridos, fundo semi-transparente)
+- Alertas com badges vermelhos piscantes para itens pendentes
+- Layout responsivo: 2 colunas em mobile, 4 em desktop para KPIs
