@@ -16,12 +16,20 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { phone, messageText, instance } = await req.json();
+    const { phone, messageText, instance, isGroup } = await req.json();
     // instance: 'zapi' | whatsapp_number_id (Meta)
 
     if (!phone) {
       return new Response(JSON.stringify({ error: 'phone required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Skip automation for group messages (VIP groups etc.)
+    if (isGroup) {
+      console.log(`[incoming-message-trigger] Skipping group message from ${phone}`);
+      return new Response(JSON.stringify({ triggered: 0, reason: 'group message ignored' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
