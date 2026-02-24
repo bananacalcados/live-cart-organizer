@@ -694,6 +694,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 expires_at: expiresAt.toISOString(),
               } as any).eq('id', existing.id);
             } else {
+              newTotal = points;
+              setLoyaltyTotalPoints(newTotal);
               await supabase.from('customer_loyalty_points').insert({
                 customer_phone: phone,
                 customer_name: selectedCustomer.name || null,
@@ -714,46 +716,65 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               description: `Venda R$ ${totalWithDiscount.toFixed(2)}`,
             } as any);
 
-            // Check if customer earned a prize tier
+            // Check if customer earned a prize tier (but DON'T redeem automatically)
             const eligibleTier = loyaltyTiers
               .filter(t => t.is_active && newTotal >= t.min_points)
               .sort((a: any, b: any) => b.min_points - a.min_points)[0];
 
             if (eligibleTier) {
-              const code = `FID-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
               setWonPrize(eligibleTier);
-              setWonCouponCode(code);
-
-              // Save prize
-              const prizeExpiry = new Date();
-              prizeExpiry.setDate(prizeExpiry.getDate() + 30);
-              await supabase.from('customer_prizes').insert({
-                customer_phone: phone,
-                customer_name: selectedCustomer.name || null,
-                customer_email: selectedCustomer.email || null,
-                store_id: storeId,
-                prize_label: eligibleTier.prize_label,
-                prize_type: eligibleTier.prize_type,
-                prize_value: eligibleTier.prize_value,
-                coupon_code: code,
-                expires_at: prizeExpiry.toISOString(),
-                source: 'loyalty',
-              } as any);
-
-              // Deduct points used
-              await supabase.from('customer_loyalty_points').update({
-                total_points: newTotal - eligibleTier.min_points,
-              } as any).eq('customer_phone', phone).eq('store_id', storeId);
-
-              await supabase.from('loyalty_points_log').insert({
-                customer_phone: phone,
-                store_id: storeId,
-                points: -eligibleTier.min_points,
-                type: 'redeem',
-                description: `Prêmio: ${eligibleTier.prize_label}`,
-              } as any);
+              // Don't auto-redeem - let the customer choose
             }
           }
+        }
+
+        // Track category/brand goal progress
+        try {
+          const { data: activeGoals } = await supabase
+            .from('pos_goals')
+            .select('*')
+            .eq('store_id', storeId)
+            .eq('is_active', true)
+            .in('goal_type', ['category_units', 'brand_units']);
+
+          if (activeGoals && activeGoals.length > 0) {
+            for (const goal of activeGoals) {
+              let matchingQty = 0;
+              for (const item of cart) {
+                if (goal.goal_type === 'category_units' && item.category && item.category.toLowerCase() === (goal.goal_category || '').toLowerCase()) {
+                  matchingQty += item.quantity;
+                } else if (goal.goal_type === 'brand_units' && (item as any).brand && (item as any).brand.toLowerCase() === (goal.goal_brand || '').toLowerCase()) {
+                  matchingQty += item.quantity;
+                }
+              }
+              if (matchingQty > 0) {
+                const sellerId = selectedSeller || null;
+                const { data: existing } = await supabase
+                  .from('pos_goal_progress' as any)
+                  .select('*')
+                  .eq('goal_id', goal.id)
+                  .eq('seller_id', sellerId || '00000000-0000-0000-0000-000000000000')
+                  .maybeSingle();
+
+                if (existing) {
+                  await supabase.from('pos_goal_progress' as any).update({
+                    current_value: (existing as any).current_value + matchingQty,
+                    last_sale_id: data.sale_id || null,
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', (existing as any).id);
+                } else {
+                  await supabase.from('pos_goal_progress' as any).insert({
+                    goal_id: goal.id,
+                    seller_id: sellerId,
+                    current_value: matchingQty,
+                    last_sale_id: data.sale_id || null,
+                  });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Goal tracking error:', e);
         }
       } else {
         toast.error(data.error || "Erro ao criar venda");
@@ -1547,13 +1568,44 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   customerName={selectedCustomer?.name}
                   onClose={() => {
                     setShowLoyaltyScreen(false);
-                    // Reset sale after loyalty flow
-                    if (wonPrize) {
-                      // Already shown prize, reset everything
-                      resetSale();
-                    } else {
-                      resetSale();
-                    }
+                    resetSale();
+                  }}
+                  onRedeemPrize={async () => {
+                    if (!wonPrize || !selectedCustomer?.whatsapp) return "";
+                    const phone = selectedCustomer.whatsapp.replace(/\D/g, '');
+                    const code = `FID-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+                    
+                    // Save prize
+                    const prizeExpiry = new Date();
+                    prizeExpiry.setDate(prizeExpiry.getDate() + 30);
+                    await supabase.from('customer_prizes').insert({
+                      customer_phone: phone,
+                      customer_name: selectedCustomer.name || null,
+                      customer_email: selectedCustomer.email || null,
+                      store_id: storeId,
+                      prize_label: wonPrize.prize_label,
+                      prize_type: wonPrize.prize_type,
+                      prize_value: wonPrize.prize_value,
+                      coupon_code: code,
+                      expires_at: prizeExpiry.toISOString(),
+                      source: 'loyalty',
+                    } as any);
+
+                    // Deduct points
+                    await supabase.from('customer_loyalty_points').update({
+                      total_points: loyaltyTotalPoints - wonPrize.min_points,
+                    } as any).eq('customer_phone', phone).eq('store_id', storeId);
+
+                    await supabase.from('loyalty_points_log').insert({
+                      customer_phone: phone,
+                      store_id: storeId,
+                      points: -wonPrize.min_points,
+                      type: 'redeem',
+                      description: `Prêmio: ${wonPrize.prize_label}`,
+                    } as any);
+
+                    setWonCouponCode(code);
+                    return code;
                   }}
                 />
               )}

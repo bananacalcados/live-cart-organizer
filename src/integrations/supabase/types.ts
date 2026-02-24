@@ -3845,36 +3845,99 @@ export type Database = {
           },
         ]
       }
+      pos_goal_progress: {
+        Row: {
+          current_value: number
+          goal_id: string
+          id: string
+          last_sale_id: string | null
+          seller_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          current_value?: number
+          goal_id: string
+          id?: string
+          last_sale_id?: string | null
+          seller_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          current_value?: number
+          goal_id?: string
+          id?: string
+          last_sale_id?: string | null
+          seller_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_goal_progress_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "pos_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_goal_progress_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_goals: {
         Row: {
           created_at: string
+          goal_brand: string | null
+          goal_category: string | null
           goal_type: string
           goal_value: number
           id: string
           is_active: boolean
           period: string
+          period_end: string | null
+          period_start: string | null
+          prize_label: string | null
+          prize_type: string | null
+          prize_value: number | null
           seller_id: string | null
           store_id: string
           updated_at: string
         }
         Insert: {
           created_at?: string
+          goal_brand?: string | null
+          goal_category?: string | null
           goal_type: string
           goal_value: number
           id?: string
           is_active?: boolean
           period: string
+          period_end?: string | null
+          period_start?: string | null
+          prize_label?: string | null
+          prize_type?: string | null
+          prize_value?: number | null
           seller_id?: string | null
           store_id: string
           updated_at?: string
         }
         Update: {
           created_at?: string
+          goal_brand?: string | null
+          goal_category?: string | null
           goal_type?: string
           goal_value?: number
           id?: string
           is_active?: boolean
           period?: string
+          period_end?: string | null
+          period_start?: string | null
+          prize_label?: string | null
+          prize_type?: string | null
+          prize_value?: number | null
           seller_id?: string | null
           store_id?: string
           updated_at?: string

@@ -3,7 +3,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { POSSlotMachine } from "./POSSlotMachine";
 import { POSGiftBox } from "./POSGiftBox";
 import { Progress } from "@/components/ui/progress";
-import { Gift, Star, Trophy, ArrowRight } from "lucide-react";
+import { Gift, Star, Trophy, Clock } from "lucide-react";
 
 interface PrizeTier {
   id: string;
@@ -24,23 +24,37 @@ interface Props {
   wonCouponCode: string;
   customerName?: string;
   onClose: () => void;
+  onRedeemPrize?: () => Promise<string>; // returns coupon code
 }
 
 type Phase = "slot" | "summary" | "prize";
 
-export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPrize, wonCouponCode, customerName, onClose }: Props) {
+export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPrize, wonCouponCode, customerName, onClose, onRedeemPrize }: Props) {
   const [phase, setPhase] = useState<Phase>("slot");
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemedCode, setRedeemedCode] = useState("");
 
   const handleSlotComplete = () => {
     setPhase("summary");
   };
 
-  const handleSummaryNext = () => {
-    if (wonPrize) {
+  const handleRedeemNow = async () => {
+    if (!onRedeemPrize) return;
+    setRedeeming(true);
+    try {
+      const code = await onRedeemPrize();
+      setRedeemedCode(code);
       setPhase("prize");
-    } else {
+    } catch {
+      // If redemption fails, just close
       onClose();
+    } finally {
+      setRedeeming(false);
     }
+  };
+
+  const handleSaveLater = () => {
+    onClose();
   };
 
   // Find next tier the customer hasn't reached yet
@@ -60,6 +74,7 @@ export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPr
           {phase === "slot" && (
             <POSSlotMachine
               pointsEarned={pointsEarned}
+              customerName={customerName}
               onComplete={handleSlotComplete}
             />
           )}
@@ -137,16 +152,32 @@ export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPr
                 </div>
               )}
 
-              {/* CTA */}
+              {/* CTA - Redeem or Save */}
               <div className="text-center space-y-3">
                 {wonPrize ? (
-                  <button
-                    onClick={handleSummaryNext}
-                    className="w-full px-8 py-4 rounded-2xl bg-gradient-to-r from-green-400 via-emerald-500 to-green-600 text-white font-bold text-lg hover:from-green-500 hover:via-emerald-600 hover:to-green-700 transition-all shadow-lg shadow-green-500/30 animate-pulse"
-                  >
-                    <Gift className="h-5 w-5 inline mr-2" />
-                    Abrir Presente! 🎁
-                  </button>
+                  <div className="space-y-3">
+                    <p className="text-sm text-green-400 font-bold">
+                      🎉 Você desbloqueou: {wonPrize.prize_label}!
+                    </p>
+                    <button
+                      onClick={handleRedeemNow}
+                      disabled={redeeming}
+                      className="w-full px-8 py-4 rounded-2xl bg-gradient-to-r from-green-400 via-emerald-500 to-green-600 text-white font-bold text-lg hover:from-green-500 hover:via-emerald-600 hover:to-green-700 transition-all shadow-lg shadow-green-500/30 animate-pulse disabled:opacity-50"
+                    >
+                      <Gift className="h-5 w-5 inline mr-2" />
+                      {redeeming ? 'Resgatando...' : 'Resgatar Agora! 🎁'}
+                    </button>
+                    <button
+                      onClick={handleSaveLater}
+                      className="w-full px-8 py-3 rounded-2xl bg-white/10 text-white/80 font-bold hover:bg-white/20 transition-all border border-white/20"
+                    >
+                      <Clock className="h-4 w-4 inline mr-2" />
+                      Guardar para Depois 💰
+                    </button>
+                    <p className="text-[10px] text-white/40">
+                      Ao guardar, seus pontos ficam acumulados para resgatar na próxima visita!
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     <p className="text-sm text-yellow-400/80">
@@ -172,7 +203,7 @@ export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPr
             <div className="p-6 animate-in fade-in zoom-in duration-700">
               <POSGiftBox
                 prize={wonPrize}
-                couponCode={wonCouponCode}
+                couponCode={redeemedCode || wonCouponCode}
                 onClose={onClose}
               />
             </div>
