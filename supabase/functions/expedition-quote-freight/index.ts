@@ -56,16 +56,49 @@ async function fetchTinyShippingMethods(token: string) {
 
       if (!feId) continue;
 
-      // Skip individual detail calls - they consume rate limits and return no frete data
-      // Just use the top-level forma de envio info for matching
+      // Fetch frete details to get actual forma_frete IDs
+      let fretes: Array<{ formaFreteId: string; formaFreteDescricao: string; serviceCode: string }> = [];
+      try {
+        const detailResp = await fetch('https://api.tiny.com.br/api2/formas.envio.obter.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${token}&formato=json&idFormaEnvio=${feId}`,
+        });
+        const detailData = await safeJson(detailResp, `Obter forma envio ${feId}`);
+        
+        
+        if (detailData.retorno?.status === 'OK' || detailData.retorno?.status === 'Processado') {
+          const formaEnvioDetail = detailData.retorno?.forma_envio || detailData.retorno?.formaEnvio || detailData.retorno || {};
+          // Try multiple possible keys for frete data
+          const fretesData = formaEnvioDetail.formas_frete || formaEnvioDetail.formasFrete || 
+                             formaEnvioDetail.fretes || formaEnvioDetail.servicos || [];
+          
+          console.log(`Frete data keys for ${feId}:`, Object.keys(formaEnvioDetail).join(', '));
+          
+          for (const freteEntry of (Array.isArray(fretesData) ? fretesData : [])) {
+            const ff = freteEntry?.forma_frete || freteEntry?.formaFrete || freteEntry;
+            if (ff.id) {
+              fretes.push({
+                formaFreteId: String(ff.id),
+                formaFreteDescricao: ff.descricao || ff.nome || '',
+                serviceCode: ff.codigo_servico || ff.codigoServico || ff.codigo || '',
+              });
+              console.log(`  Frete: "${ff.descricao}" id=${ff.id}, code=${ff.codigo_servico || ff.codigoServico || ff.codigo || ''}`);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`Could not fetch frete details for envio ${feId}:`, e.message);
+      }
+
       methods.push({
         formaEnvioId: feId,
         formaEnvioDescricao: feDescricao,
         formaEnvioCodigo: feCodigo,
-        fretes: [],
+        fretes,
       });
 
-      console.log(`Forma envio "${feDescricao}" (${feId}), tipo: ${feCodigo}`);
+      console.log(`Forma envio "${feDescricao}" (${feId}), tipo: ${feCodigo}, fretes: ${fretes.length}`);
     }
   } catch (e) {
     console.error('Error fetching Tiny shipping methods:', e);

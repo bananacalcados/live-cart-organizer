@@ -415,6 +415,8 @@ serve(async (req) => {
           valor_frete: order.freight_price || 0,
           quantidade_volumes: 1,
           especie_volumes: 'CAIXA',
+          peso_bruto: totalWeightKg.toFixed(3),
+          peso_liquido: totalWeightKg.toFixed(3),
           forma_pagamento: tinyPedido.forma_pagamento || '',
           obs: tinyPedido.obs || `Pedido ${order.shopify_order_name || ''}`,
         }
