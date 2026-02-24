@@ -52,13 +52,17 @@ async function fetchFormaEnvioAndFreteDescricao(token: string, formaEnvioId: str
   return { envioDesc: '', freteDesc: '' };
 }
 
-// Fallback: Map carrier name to Tiny's formaEnvio code (only used when tiny_forma_envio_id is not stored)
-function mapCarrierToFormaEnvioFallback(carrier: string): string {
+// Map carrier name to Tiny's formaEnvio TABLE CODE for expedicao.alterar.php
+// See: https://tiny.com.br/api-docs/api2-tabelas-formaenvio
+function mapCarrierToFormaEnvioCode(carrier: string, hasGateway: boolean): string {
   const c = (carrier || '').toLowerCase();
+  // If using Frenet (gateway logístico), use GATEWAY code
+  if (hasGateway) return 'GATEWAY';
   if (c.includes('correio') || c.includes('pac') || c.includes('sedex')) return 'C';
-  if (c.includes('j&t') || c.includes('jt ') || c.includes('j&t')) return 'J';
   if (c.includes('jadlog')) return 'J';
   if (c.includes('moto')) return 'X';
+  if (c.includes('loggi')) return 'LOGGI';
+  if (c.includes('total')) return 'TOTALEXPRESS';
   return 'T';
 }
 
@@ -119,13 +123,17 @@ serve(async (req) => {
       else formaEnvioDesc = order.freight_carrier || 'Transportadora';
     }
     if (!formaFreteDesc) {
-      // Fallback: use freight_service directly (e.g., "Sedex", "PAC", "Jadlog Package")
       formaFreteDesc = order.freight_service || order.freight_carrier || '';
     }
     const serviceCode = order.tiny_service_code || '';
     const weightKg = Math.max(0.3, (order.total_weight_grams || 300) / 1000);
 
-    console.log(`Freight info: carrier="${order.freight_carrier}", formaEnvio="${formaEnvioDesc}" (from ID=${order.tiny_forma_envio_id}), formaFrete="${formaFreteDesc}" (from ID=${order.tiny_forma_frete_id}), serviceCode="${serviceCode}", weightKg=${weightKg}`);
+    // Determine the Tiny TABLE CODE for formaEnvio (used in expedicao.alterar)
+    // GATEWAY = uses Frenet integration (generates labels), C = Correios, T = Transportadora
+    const hasGateway = !!order.tiny_forma_envio_id; // If we have a Tiny envio ID, it's a gateway method
+    const formaEnvioCode = mapCarrierToFormaEnvioCode(order.freight_carrier || '', hasGateway);
+
+    console.log(`Freight info: carrier="${order.freight_carrier}", formaEnvioDesc="${formaEnvioDesc}", formaEnvioCode="${formaEnvioCode}" (from ID=${order.tiny_forma_envio_id}), formaFrete="${formaFreteDesc}" (from ID=${order.tiny_forma_frete_id}), serviceCode="${serviceCode}", weightKg=${weightKg}`);
 
     // Note: pedido.alterar.php does NOT support forma_envio/valor_frete fields.
     // Freight data is injected via nota.fiscal.incluir.php in the invoice step instead.
@@ -232,7 +240,7 @@ serve(async (req) => {
           id: idExpedicao,
           pesoBruto: Number(weightKg.toFixed(3)),
           qtdVolumes: 1,
-          formaEnvio: formaEnvioDesc,
+          formaEnvio: formaEnvioCode,
           ...(serviceCode ? { codigoServico: serviceCode } : {}),
           ...(formaFretePayload ? { formaFrete: formaFretePayload } : {}),
           embalagem: {

@@ -497,32 +497,72 @@ serve(async (req) => {
         invoiceId = reg?.id || reg?.idNotaFiscal || reg?.[0]?.id || null;
         console.log('NF-e created via incluir with transport data. Invoice ID:', invoiceId);
       } else {
-        // Fallback: try gerar.nota.fiscal.pedido.php (auto-taxes but no transport)
-        const nfErr = nfData.retorno?.erros?.[0]?.erro || JSON.stringify(nfData.retorno);
-        console.warn('nota.fiscal.incluir failed:', nfErr, '- falling back to gerar.nota.fiscal.pedido.php');
-        usedFallback = true;
+        const nfErr = nfData.retorno?.registros?.registro?.erros?.erro
+          || nfData.retorno?.erros?.[0]?.erro
+          || JSON.stringify(nfData.retorno);
+        const isDuplicate = typeof nfErr === 'string' && (nfErr.includes('duplicidade') || nfErr.includes('já cadastrada'));
 
-        const fallbackResp = await fetch('https://api.tiny.com.br/api2/gerar.nota.fiscal.pedido.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}&modelo=NFe`,
-        });
-        const fallbackData = await safeJson(fallbackResp, 'Gerar NF-e (fallback)');
-        console.log('NF-e fallback response:', JSON.stringify(fallbackData));
+        if (isDuplicate) {
+          // NF-e already exists from a previous attempt — use gerar to find it, which returns the existing ID
+          console.warn('nota.fiscal.incluir: duplicate detected. Using gerar to find existing NF-e...');
+          const fallbackResp = await fetch('https://api.tiny.com.br/api2/gerar.nota.fiscal.pedido.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}&modelo=NFe`,
+          });
+          const fallbackData = await safeJson(fallbackResp, 'Gerar NF-e (duplicate recovery)');
+          console.log('NF-e gerar (duplicate recovery) response:', JSON.stringify(fallbackData));
 
-        if (fallbackData.retorno?.status === 'OK' || fallbackData.retorno?.status === 'Processado') {
-          const fbReg = fallbackData.retorno?.registros?.registro || fallbackData.retorno?.registros;
-          invoiceId = fbReg?.idNotaFiscal || fbReg?.[0]?.idNotaFiscal || null;
-        } else {
-          const fbErr = fallbackData.retorno?.erros?.[0]?.erro || JSON.stringify(fallbackData.retorno);
-          
-          // Check if NF-e already exists
-          if (fbErr.includes('Já foi gerada nota fiscal') || fbErr.includes('já foi gerada')) {
-            // Will be handled by the existing NF-e search logic below
+          if (fallbackData.retorno?.status === 'OK' || fallbackData.retorno?.status === 'Processado') {
+            const fbReg = fallbackData.retorno?.registros?.registro || fallbackData.retorno?.registros;
+            invoiceId = fbReg?.idNotaFiscal || fbReg?.[0]?.idNotaFiscal || null;
+          } else {
+            const fbErr = fallbackData.retorno?.erros?.[0]?.erro || JSON.stringify(fallbackData.retorno);
+            // "Já foi gerada nota fiscal" = NF-e exists, search by order
+            if (fbErr.includes('Já foi gerada') || fbErr.includes('já foi gerada')) {
+              console.log('NF-e already generated for this order. Searching...');
+              // Search NF-e by order number
+              const searchResp = await fetch('https://api.tiny.com.br/api2/notas.fiscais.pesquisa.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `token=${TINY_ERP_TOKEN}&formato=json&pesquisa=${encodeURIComponent(order.shopify_order_name?.replace('#', '') || '')}`,
+              });
+              const searchData = await safeJson(searchResp, 'Pesquisa NF-e');
+              const notas = searchData.retorno?.notas_fiscais || [];
+              if (notas.length > 0) {
+                const nf = notas[0]?.nota_fiscal || notas[0];
+                invoiceId = String(nf.id);
+                console.log('Found existing NF-e:', invoiceId);
+              }
+            }
           }
-          
-          if (!invoiceId) {
-            throw new Error(`Erro ao gerar NF-e: ${fbErr}`);
+
+          // Even though we found the existing NF-e, it may lack transport data.
+          // We'll continue with the authorize + detail flow below.
+          if (invoiceId) {
+            console.log(`Recovered existing NF-e ID: ${invoiceId}. Transport data may need manual update in Tiny.`);
+          }
+        } else {
+          // Real error (not duplicate) — fallback to gerar
+          console.warn('nota.fiscal.incluir failed:', nfErr, '- falling back to gerar.nota.fiscal.pedido.php');
+          usedFallback = true;
+
+          const fallbackResp = await fetch('https://api.tiny.com.br/api2/gerar.nota.fiscal.pedido.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `token=${TINY_ERP_TOKEN}&formato=json&id=${order.tiny_order_id}&modelo=NFe`,
+          });
+          const fallbackData = await safeJson(fallbackResp, 'Gerar NF-e (fallback)');
+          console.log('NF-e fallback response:', JSON.stringify(fallbackData));
+
+          if (fallbackData.retorno?.status === 'OK' || fallbackData.retorno?.status === 'Processado') {
+            const fbReg = fallbackData.retorno?.registros?.registro || fallbackData.retorno?.registros;
+            invoiceId = fbReg?.idNotaFiscal || fbReg?.[0]?.idNotaFiscal || null;
+          } else {
+            const fbErr = fallbackData.retorno?.erros?.[0]?.erro || JSON.stringify(fallbackData.retorno);
+            if (!invoiceId) {
+              throw new Error(`Erro ao gerar NF-e: ${fbErr}`);
+            }
           }
         }
       }
