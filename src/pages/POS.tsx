@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
   ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3, SearchX,
-  Menu, X, Package, Globe, Lock
+  Menu, X, Package, Globe, Lock, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,8 @@ import { POSStoreSelector } from "@/components/pos/POSStoreSelector";
 import { POSSalesView } from "@/components/pos/POSSalesView";
 import { POSCashRegister } from "@/components/pos/POSCashRegister";
 
-import { POSConfig } from "@/components/pos/POSConfig";
+import { lazy, Suspense } from "react";
+const POSConfig = lazy(() => import("@/components/pos/POSConfig").then(m => ({ default: m.POSConfig })));
 import { POSExchanges } from "@/components/pos/POSExchanges";
 import { POSInterStoreRequests } from "@/components/pos/POSInterStoreRequests";
 import { POSWhatsApp } from "@/components/pos/POSWhatsApp";
@@ -241,7 +242,11 @@ export default function POS() {
         )}
         {section === "cash" && <POSCashRegister storeId={selectedStore} />}
         
-        {section === "config" && configAuthenticated && <POSConfig storeId={selectedStore} />}
+        {section === "config" && configAuthenticated && (
+          <Suspense fallback={<div className="flex-1 flex items-center justify-center text-pos-white/50"><Loader2 className="h-6 w-6 animate-spin mr-2" />Carregando configurações...</div>}>
+            <POSConfig storeId={selectedStore} />
+          </Suspense>
+        )}
         {section === "returns" && <POSExchanges storeId={selectedStore} />}
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
         

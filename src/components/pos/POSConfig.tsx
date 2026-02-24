@@ -1225,10 +1225,20 @@ export function POSConfig({ storeId }: Props) {
                   <Input type="number" value={pointsExpiryDays} onChange={e => setPointsExpiryDays(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
                 </div>
               </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5">
-                <div>
-                  <p className="text-sm text-pos-white">Roleta de Prêmios (Eventos)</p>
-                  <p className="text-xs text-pos-white/40">Ativar roleta para situações especiais</p>
+              <div className={cn(
+                "flex items-center justify-between p-4 rounded-xl border-2 transition-all",
+                wheelEnabled
+                  ? "bg-pos-orange/10 border-pos-orange shadow-lg shadow-pos-orange/20"
+                  : "bg-pos-white/5 border-pos-white/10"
+              )}>
+                <div className="flex items-center gap-3">
+                  <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center text-lg", wheelEnabled ? "bg-pos-orange/20" : "bg-pos-white/10")}>
+                    🎰
+                  </div>
+                  <div>
+                    <p className={cn("text-sm font-bold", wheelEnabled ? "text-pos-orange" : "text-pos-white")}>Roleta de Prêmios</p>
+                    <p className="text-xs text-pos-white/40">Ativar roleta para situações especiais (eventos)</p>
+                  </div>
                 </div>
                 <Switch checked={wheelEnabled} onCheckedChange={setWheelEnabled} />
               </div>
