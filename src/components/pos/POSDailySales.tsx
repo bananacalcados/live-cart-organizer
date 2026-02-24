@@ -975,6 +975,8 @@ export function POSDailySales({ storeId }: Props) {
         onResend={!isTinyOnlyDetail ? resendToTiny : undefined}
         resending={resending === selectedSale?.id}
         isTinyOnly={isTinyOnlyDetail}
+        storeId={storeId}
+        onDeleted={() => { setSelectedSale(null); loadData(); }}
       />
     </div>
   );
