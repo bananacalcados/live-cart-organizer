@@ -1,65 +1,80 @@
 
+## Plano: Filtro de Periodo Customizado + Correcao da Logica de Balanco no Tiny
 
-## Plano: Melhorias na Aba "Vendas Dia"
+### 1. Dashboard - Seletor de Periodo com Calendario
 
-### 1. Historico de Vendas - Mostrar Cliente e Produtos
+O Dashboard atualmente so tem toggles de Dia/Semana/Mes. Vamos adicionar um **seletor de intervalo de datas** (date range picker) com calendario, mantendo os atalhos rapidos.
 
-Cada card de venda no historico passara a exibir:
-- **Nome do cliente** (buscado via `customer_id` -> `pos_customers.name`)
-- **Produtos resumidos** (ex: "Tamanco Joana 41, Sandalia Cecilia 39") a partir dos `pos_sale_items` ja carregados
+**Mudancas em `src/components/pos/POSDashboard.tsx`:**
+- Adicionar estado `customRange: { from: Date; to: Date } | null`
+- Adicionar um botao "Personalizado" ao lado de Dia/Semana/Mes
+- Ao clicar em "Personalizado", abrir um Popover com calendario `mode="range"` (date-fns + shadcn Calendar)
+- Quando um range customizado estiver ativo, a funcao `getPeriodRange` retorna o range selecionado
+- Exibir o intervalo selecionado no header (ex: "01/02 - 24/02")
 
-Ao **clicar no card**, abre um Dialog com todas as informacoes do pedido:
-- Data/hora, numero Tiny, vendedor
-- Nome, CPF, WhatsApp, endereco do cliente
-- Lista completa de itens com SKU, variante, tamanho, preco unitario, quantidade
-- Forma de pagamento, subtotal, desconto, total
-- Observacoes e botao de reenviar ao Tiny
+### 2. Vendas Dia - Adicionar Semana, Mes e Periodo Customizado
 
-### 2. Barra de Pesquisa Global de Pedidos
+Atualmente o Vendas Dia so permite navegar por dia unico. Vamos transformar o seletor de data num sistema de periodos.
 
-Logo abaixo do titulo "Historico de Vendas", uma barra de pesquisa que:
-- Busca **local** primeiro: filtra as vendas do dia pelo nome do cliente
-- Se o usuario digitar 3+ caracteres e nao encontrar resultados suficientes, ativa um **botao "Buscar em todos os periodos"**
-- Esse botao busca em `pos_sales` + `pos_customers` (JOIN) sem filtro de data, por nome, CPF ou WhatsApp (ILIKE)
-- Retorna ate 20 resultados de qualquer periodo
-- Os resultados aparecem na mesma lista, com a data completa visivel
-- Ao clicar, abre o mesmo Dialog de detalhes do pedido
+**Mudancas em `src/components/pos/POSDailySales.tsx`:**
+- Adicionar estado `periodMode: "day" | "week" | "month" | "custom"` (default: "day")
+- Adicionar `ToggleGroup` com opcoes Dia / Semana / Mes / Personalizado no header, ao lado do calendario
+- Para Semana: carregar ultimos 7 dias (data selecionada - 6 dias ate data selecionada)
+- Para Mes: carregar ultimos 30 dias
+- Para Personalizado: abrir calendario com `mode="range"` para selecionar intervalo
+- A funcao `loadData` usara o periodo calculado (nao apenas `dayStart`/`dayEnd`)
+- Os KPIs e graficos refletem o periodo inteiro
+- As setas de navegacao funcionam de acordo (avancar/recuar por semana ou mes)
 
-Isso permite localizar pedidos antigos para trocas sem carregar tudo na memoria.
+### 3. Correcao da Logica de Balanco no Tiny (CRITICO)
 
-### 3. Filtro de Produtos Mais Vendidos por "Produto Pai"
+O problema identificado esta na Edge Function `pos-exchange-stock-adjust`. Ela faz o seguinte:
 
-Adicionar um toggle/switch acima da lista de produtos mais vendidos:
-- **"Por variacao"** (padrao atual): mostra cada SKU/variante separado
-- **"Por produto"**: agrupa pelo nome-base do produto (extraido do `product_name` removendo a parte da variante/cor/tamanho, ou usando o prefixo do SKU como chave)
+```text
+Atual (ERRADO):
+1. GET estoque via produto.obter.estoque.php (sem deposito)
+2. Calcula: newStock = currentStock +/- quantity  
+3. Atualiza via produto.atualizar.estoque.php com estoque=newStock (SEM deposito, SEM XML tipo B)
+```
 
-A logica de agrupamento usara o campo `product_name` base. Como o padrao e `"CODIGO NOME - Tamanho - Cor"`, o agrupamento sera feito pelo texto antes do primeiro " - " (separador de variante). Quando agrupado, mostra o total de unidades e faturamento somado de todas as variacoes.
+Isso causa dois erros:
+- **Nao especifica o deposito**: le o saldo global (todas as lojas somadas) e grava sem deposito, sobrescrevendo o saldo errado
+- **Nao usa formato XML com tipo=B**: o formato correto para balanco no Tiny exige o XML com `<tipo>B</tipo>` e `<deposito>NomeDoDeposito</deposito>`
 
-### Mudancas Tecnicas
+**Correcao em `supabase/functions/pos-exchange-stock-adjust/index.ts`:**
 
-**Arquivo: `src/components/pos/POSDailySales.tsx`**
+```text
+Novo (CORRETO):
+1. Buscar tiny_deposit_name da loja em pos_stores
+2. GET estoque do deposito especifico via produto.obter.estoque.php 
+   (ou ler do pos_products.stock como cache local)
+3. Calcular: 
+   - item "in"  (devolvido): newStock = currentStock + quantity
+   - item "out" (saiu):      newStock = currentStock - quantity
+4. Atualizar via produto.atualizar.estoque.php com XML:
+   <estoque>
+     <idProduto>TINY_ID</idProduto>
+     <tipo>B</tipo>
+     <quantidade>NEW_STOCK</quantidade>
+     <deposito>NOME_DEPOSITO</deposito>
+     <observacoes>Troca POS: entrada/saida</observacoes>
+   </estoque>
+```
 
-1. **Buscar dados de clientes**: Na `loadData`, apos obter as vendas do dia, buscar os `customer_id`s unicos em `pos_customers` para montar um mapa `customerId -> { name, cpf, whatsapp }`. Incluir os items por venda num mapa `saleId -> items[]`.
+Este e o mesmo padrao usado com sucesso em `expedition-transfer-stock` e `inventory-correct-stock`.
 
-2. **Estado de pesquisa global**:
-   - `searchTerm` (string)
-   - `globalSearchResults` (SaleSummary[] com cliente e items)
-   - `searchLoading` (boolean)
-   - Funcao `searchAllPeriods(term)` que faz query em `pos_sales` JOIN `pos_customers` (via customer_id) filtrando por `name ILIKE`, `cpf ILIKE` ou `whatsapp ILIKE`, sem filtro de data, limit 20
+**Tambem revisar `pos-inter-store-stock-transfer`:**
+- Atualmente usa `produto.atualizar.estoque.php` com `estoque=X` simples (sem XML, sem deposito)
+- Corrigir para usar o formato XML com `<tipo>B</tipo>` e `<deposito>` para cada loja
+- Buscar `tiny_deposit_name` de ambas as lojas (origem e destino)
 
-3. **Dialog de detalhes do pedido**:
-   - `selectedSale` (SaleSummary | null)
-   - Ao selecionar, busca items + customer completo (se nao ja cacheado)
-   - Renderiza um Dialog com todas as informacoes
-
-4. **Toggle de agrupamento de produtos**:
-   - `groupByParent` (boolean, default false)
-   - Quando true, agrupa `saleItems` pelo nome-base (texto antes do primeiro " - ") somando qty e revenue
-   - A UI mostra um botao toggle simples ao lado do titulo "Produtos Mais Vendidos"
+### Resumo de Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/pos/POSDailySales.tsx` | Editar (adicionar cliente nos cards, dialog de detalhes, pesquisa global, toggle de agrupamento) |
+| `src/components/pos/POSDashboard.tsx` | Editar - adicionar date range picker customizado |
+| `src/components/pos/POSDailySales.tsx` | Editar - adicionar toggles semana/mes/personalizado |
+| `supabase/functions/pos-exchange-stock-adjust/index.ts` | Editar - corrigir para usar XML com tipo=B e deposito |
+| `supabase/functions/pos-inter-store-stock-transfer/index.ts` | Editar - corrigir para usar XML com tipo=B e deposito |
 
-Nenhuma migracao SQL necessaria - todos os dados ja existem nas tabelas `pos_sales`, `pos_sale_items` e `pos_customers`.
-
+Nenhuma migracao SQL necessaria.
