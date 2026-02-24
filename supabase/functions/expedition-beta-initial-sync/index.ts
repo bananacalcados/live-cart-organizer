@@ -373,11 +373,11 @@ async function passCancelled(token: string, supabase: any, existingMap: Map<stri
   return updated;
 }
 
-// === PASS 4: Cleanup - verify approved orders still approved in Tiny ===
+// === PASS 0: Cleanup - use batch approach: fetch cancelled/dispatched from Tiny and cross-reference ===
 async function passCleanup(token: string, supabase: any, startTime: number, timeoutMs = 50000) {
   let fixed = 0;
 
-  // Get all orders we have as 'approved'
+  // Get all local approved orders with tiny_order_id
   const { data: approvedOrders } = await supabase
     .from('expedition_beta_orders')
     .select('id, tiny_order_id')
@@ -386,50 +386,93 @@ async function passCleanup(token: string, supabase: any, startTime: number, time
 
   if (!approvedOrders || approvedOrders.length === 0) return 0;
 
-  console.log(`[Pass4-Cleanup] Checking ${approvedOrders.length} approved orders`);
+  const approvedMap = new Map<string, string>(); // tiny_order_id -> db id
+  for (const o of approvedOrders) approvedMap.set(String(o.tiny_order_id), o.id);
+  console.log(`[Cleanup] ${approvedMap.size} approved orders to verify`);
 
-  for (const order of approvedOrders) {
-    if (Date.now() - startTime > timeoutMs) { console.log('Pass4 timeout'); break; }
+  // Strategy: fetch cancelled (9), dispatched (5,6) lists from Tiny and match against our approved set
+  // This avoids per-order detail fetches entirely
 
+  const statusesToCheck: { sit: string; newStatus: string }[] = [
+    { sit: '9', newStatus: 'cancelled' },
+    { sit: '5', newStatus: 'dispatched' },
+    { sit: '6', newStatus: 'dispatched' },
+    { sit: '7', newStatus: 'dispatched' },
+    { sit: '8', newStatus: 'dispatched' },
+  ];
+
+  for (const { sit, newStatus } of statusesToCheck) {
+    if (Date.now() - startTime > timeoutMs) { console.log('Cleanup timeout'); break; }
+
+    let page = 1, hasMore = true;
+    while (hasMore) {
+      if (Date.now() - startTime > timeoutMs) break;
+      try {
+        const data = await tinyV3Get(token, '/pedidos', { pagina: String(page), limite: '100', situacao: sit });
+        const orders = data.itens || data.items || [];
+        if (orders.length === 0) { hasMore = false; break; }
+
+        const idsToUpdate: string[] = [];
+        for (const item of orders) {
+          const tinyId = String(item.id);
+          const dbId = approvedMap.get(tinyId);
+          if (dbId) {
+            idsToUpdate.push(dbId);
+            approvedMap.delete(tinyId); // no need to check again
+          }
+        }
+
+        if (idsToUpdate.length > 0) {
+          await supabase.from('expedition_beta_orders')
+            .update({ expedition_status: newStatus })
+            .in('id', idsToUpdate);
+          fixed += idsToUpdate.length;
+          console.log(`Cleanup: ${idsToUpdate.length} orders -> ${newStatus} (sit=${sit})`);
+        }
+
+        page++;
+        if (page > 10 || orders.length < 100) hasMore = false;
+      } catch (err: any) {
+        console.error(`Cleanup sit=${sit} p${page} error: ${err.message}`);
+        hasMore = false;
+      }
+    }
+  }
+
+  // For remaining approved orders still in map, do individual checks (they may be open/approved or deleted)
+  // Only if we have time left
+  let individualChecks = 0;
+  for (const [tinyId, dbId] of approvedMap.entries()) {
+    if (Date.now() - startTime > timeoutMs) { console.log('Cleanup individual timeout'); break; }
     try {
-      await new Promise(r => setTimeout(r, 250));
+      await new Promise(r => setTimeout(r, 200));
       let detail: any;
       try {
-        detail = await tinyV3Get(token, `/pedidos/${order.tiny_order_id}`);
+        detail = await tinyV3Get(token, `/pedidos/${tinyId}`);
       } catch (fetchErr: any) {
-        // If 404, the order was deleted in Tiny - mark as cancelled
         if (fetchErr.message?.includes('404')) {
-          await supabase.from('expedition_beta_orders').update({ expedition_status: 'cancelled' }).eq('id', order.id);
+          await supabase.from('expedition_beta_orders').update({ expedition_status: 'cancelled' }).eq('id', dbId);
           fixed++;
-          console.log(`Cleanup: ${order.tiny_order_id} -> cancelled (not found in Tiny)`);
+          console.log(`Cleanup: ${tinyId} -> cancelled (404)`);
           continue;
         }
         throw fetchErr;
       }
       const sit = detail.situacao;
-
       if (sit === 9) {
-        await supabase.from('expedition_beta_orders').update({ expedition_status: 'cancelled' }).eq('id', order.id);
+        await supabase.from('expedition_beta_orders').update({ expedition_status: 'cancelled' }).eq('id', dbId);
         fixed++;
-        console.log(`Cleanup: ${order.tiny_order_id} -> cancelled`);
-      } else if ([5, 6].includes(sit)) {
+      } else if ([5, 6, 7, 8].includes(sit)) {
         const tc = detail.codigoRastreamento || detail.codigoRastreio || null;
-        await supabase.from('expedition_beta_orders').update({ 
-          expedition_status: 'dispatched',
-          ...(tc ? { tracking_code: tc } : {}),
-        }).eq('id', order.id);
+        await supabase.from('expedition_beta_orders').update({ expedition_status: 'dispatched', ...(tc ? { tracking_code: tc } : {}) }).eq('id', dbId);
         fixed++;
-        console.log(`Cleanup: ${order.tiny_order_id} -> dispatched`);
-      } else if (sit === 7 || sit === 8) {
-        await supabase.from('expedition_beta_orders').update({ expedition_status: 'dispatched' }).eq('id', order.id);
-        fixed++;
-        console.log(`Cleanup: ${order.tiny_order_id} -> dispatched (delivered/failed)`);
       }
-      // sit === 0 or 3 = keep as approved
+      individualChecks++;
     } catch (err: any) {
-      console.error(`Cleanup fail ${order.tiny_order_id}: ${err.message}`);
+      console.error(`Cleanup individual ${tinyId}: ${err.message}`);
     }
   }
+  if (individualChecks > 0) console.log(`Cleanup: ${individualChecks} individual checks done`);
 
   return fixed;
 }
