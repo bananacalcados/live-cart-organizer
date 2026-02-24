@@ -170,11 +170,19 @@ serve(async (req) => {
           
           // Fetch full details for items and tracking (with rate limit delay)
           let order: any;
+          let detailFailed = false;
           try {
             await new Promise(r => setTimeout(r, 350)); // Rate limit protection
             order = await tinyV3Get(token, `/pedidos/${tinyId}`);
-          } catch {
+          } catch (fetchErr: any) {
+            console.error(`Detail fetch failed for ${tinyId}: ${fetchErr.message}`);
+            // If we can't get details and order doesn't exist yet, skip it to avoid 0-item orders
+            if (!existing) {
+              console.log(`Skipping new order ${tinyId} - no detail available`);
+              continue;
+            }
             order = item;
+            detailFailed = true;
           }
 
           // Also check situacao from detail (may differ from list)
@@ -208,13 +216,14 @@ serve(async (req) => {
               }).eq('id', existing.id);
             }
 
-            // Backfill items if order has none
-            const { count: itemCount } = await supabase
-              .from('expedition_beta_order_items')
-              .select('id', { count: 'exact', head: true })
-              .eq('expedition_order_id', existing.id);
+            // Backfill items if order has none and detail was fetched successfully
+            if (!detailFailed) {
+              const { count: itemCount } = await supabase
+                .from('expedition_beta_order_items')
+                .select('id', { count: 'exact', head: true })
+                .eq('expedition_order_id', existing.id);
 
-            if (itemCount === 0) {
+              if (itemCount === 0) {
               const rawItems = extractItems(order);
               if (rawItems.length > 0) {
                 const itemsToInsert = rawItems.map((li: any) => {
@@ -232,6 +241,7 @@ serve(async (req) => {
                 await supabase.from('expedition_beta_order_items').insert(itemsToInsert);
                 console.log(`Backfilled ${itemsToInsert.length} items for order ${tinyId}`);
                 synced++;
+              }
               }
             }
 
