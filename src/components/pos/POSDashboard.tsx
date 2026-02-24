@@ -14,6 +14,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { POSGoalProgress } from "./POSGoalProgress";
 import type { DateRange } from "react-day-picker";
 
 interface Props {
@@ -272,6 +273,17 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               <KPICard icon={TrendingUp} label="Ticket Médio" value={`R$ ${avgTicket.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`} sub={periodLabel} color="text-blue-400" />
               <KPICard icon={Package} label="Itens/Venda" value={avgItemsPerSale.toFixed(1)} sub={periodLabel} color="text-purple-400" />
             </div>
+
+            {/* Goal Progress */}
+            <POSGoalProgress
+              storeId={storeId}
+              totalRevenue={totalRevenue}
+              avgTicket={avgTicket}
+              avgItemsPerSale={avgItemsPerSale}
+              salesCount={salesCount}
+              period={period}
+              sellerMetrics={sellerMetrics.map(s => ({ ...s, sellerId: undefined }))}
+            />
 
             {/* Seller Metrics */}
             {sellerMetrics.length > 0 && (
