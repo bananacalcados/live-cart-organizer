@@ -177,17 +177,10 @@ export function POSSellerGate({ storeId, sellers, onSellerSelected, onClose }: P
   };
 
   return (
-    <Dialog open={true} onOpenChange={() => {}}>
-      <DialogContent className="bg-pos-black border-pos-orange/30 text-pos-white max-w-lg [&>button]:hidden" onPointerDownOutside={e => e.preventDefault()}>
+    <Dialog open={true} onOpenChange={() => onClose?.()}>
+      <DialogContent className="bg-pos-black border-pos-orange/30 text-pos-white max-w-lg" onPointerDownOutside={e => e.preventDefault()}>
         {/* Close button */}
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="absolute right-4 top-4 rounded-sm text-pos-white/50 hover:text-pos-white transition-opacity z-10"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        )}
+        {/* Close button is now rendered by DialogContent's built-in X button via onOpenChange */}
         {!selectedId ? (
           <div className="space-y-6 py-2">
             <div className="text-center">

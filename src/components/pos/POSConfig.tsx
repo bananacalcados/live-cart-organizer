@@ -812,7 +812,7 @@ export function POSConfig({ storeId }: Props) {
               const typeLabel = 
                 g.goal_type === 'revenue' ? 'Faturamento' : 
                 g.goal_type === 'avg_ticket' ? 'Ticket Médio' : 
-                g.goal_type === 'items_sold' ? 'Itens Vendidos' : 'Faturamento Vendedor';
+                g.goal_type === 'items_sold' ? 'Itens por Venda' : 'Faturamento Vendedor';
               const periodLabel = g.period === 'daily' ? 'Diária' : g.period === 'weekly' ? 'Semanal' : 'Mensal';
               
               return (
@@ -1253,7 +1253,7 @@ export function POSConfig({ storeId }: Props) {
                   <SelectContent>
                     <SelectItem value="revenue">Faturamento Loja</SelectItem>
                     <SelectItem value="avg_ticket">Ticket Médio</SelectItem>
-                    <SelectItem value="items_sold">Itens Vendidos</SelectItem>
+                    <SelectItem value="items_sold">Itens por Venda</SelectItem>
                     <SelectItem value="seller_revenue">Faturamento Vendedor</SelectItem>
                   </SelectContent>
                 </Select>

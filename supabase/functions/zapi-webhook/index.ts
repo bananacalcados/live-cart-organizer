@@ -194,11 +194,11 @@ serve(async (req) => {
         } else {
           console.log(`Saved incoming message from ${phone}`);
           
-          // Trigger incoming_message automations (fire-and-forget)
+          // Trigger incoming_message automations (fire-and-forget) - skip groups
           fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, messageText, instance: 'zapi' }),
+            body: JSON.stringify({ phone, messageText, instance: 'zapi', isGroup }),
           }).catch(err => console.error('automation-trigger-incoming error:', err));
         }
       }

@@ -25,7 +25,7 @@ interface Props {
 const goalTypeLabels: Record<string, string> = {
   revenue: "Faturamento",
   avg_ticket: "Ticket Médio",
-  items_sold: "Itens Vendidos",
+  items_sold: "Itens por Venda",
   seller_revenue: "Faturamento Vendedor",
 };
 
@@ -45,7 +45,7 @@ const periodLabels: Record<string, string> = {
 function mapPeriodToFilter(goalPeriod: string, dashPeriod: string): boolean {
   if (goalPeriod === "daily" && dashPeriod === "day") return true;
   if (goalPeriod === "weekly" && dashPeriod === "week") return true;
-  if (goalPeriod === "monthly" && dashPeriod === "month") return true;
+  if (goalPeriod === "monthly") return true; // Monthly goals always visible
   return false;
 }
 
@@ -76,7 +76,7 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
       case "avg_ticket":
         return avgTicket;
       case "items_sold":
-        return salesCount > 0 ? avgItemsPerSale * salesCount : 0;
+        return avgItemsPerSale; // Average items per sale, not total
       case "seller_revenue":
         if (goal.seller_id && sellerMetrics) {
           const seller = sellerMetrics.find(s => s.sellerId === goal.seller_id);
@@ -89,7 +89,7 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
   };
 
   const formatValue = (type: string, value: number): string => {
-    if (type === "items_sold") return Math.round(value).toString();
+    if (type === "items_sold") return value.toFixed(1);
     return `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
   };
 
