@@ -57,13 +57,15 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
   const [loading, setLoading] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
+  // Re-randomize when cart changes (use cart SKUs as key, not just length)
+  const cartKey = cart.map(i => i.sku).sort().join(",");
   useEffect(() => {
     if (cart.length === 0) {
       setSuggestions([]);
       return;
     }
     loadSuggestions();
-  }, [cart.length, storeId]);
+  }, [cartKey, storeId]);
 
   const loadSuggestions = async () => {
     if (cart.length === 0) return;
@@ -118,7 +120,7 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
         .gt("stock", 0)
         .not("sku", "in", `(${cartSkus.join(",")})`)
         .order("stock", { ascending: false })
-        .limit(200);
+        .limit(500);
 
       if (!products || products.length === 0) {
         setSuggestions([]);
@@ -272,24 +274,32 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
   );
 }
 
+/** Shuffle array in-place (Fisher-Yates) */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 /** Pick a diverse mix of suggestions across curves and categories */
 function diversifySuggestions(
   items: Suggestion[],
   cartCategories: string[],
   max: number
 ): Suggestion[] {
-  // Separate into buckets
-  const curveA = items.filter(i => i.curve === "A");
-  const curveB = items.filter(i => i.curve === "B");
-  const curveC = items.filter(i => i.curve === "C");
-  const dead = items.filter(i => i.curve === "dead");
+  const curveA = shuffle(items.filter(i => i.curve === "A"));
+  const curveB = shuffle(items.filter(i => i.curve === "B"));
+  const curveC = shuffle(items.filter(i => i.curve === "C"));
+  const dead = shuffle(items.filter(i => i.curve === "dead"));
 
   // Prioritize different categories within each bucket
   const sortByDiffCategory = (list: Suggestion[]) =>
     list.sort((a, b) => {
       const aDiff = cartCategories.length > 0 && !cartCategories.includes(a.category || "") ? 1 : 0;
       const bDiff = cartCategories.length > 0 && !cartCategories.includes(b.category || "") ? 1 : 0;
-      return bDiff - aDiff || b.stock - a.stock;
+      return bDiff - aDiff;
     });
 
   sortByDiffCategory(curveA);
@@ -297,21 +307,32 @@ function diversifySuggestions(
   sortByDiffCategory(curveC);
   sortByDiffCategory(dead);
 
-  // Pick from each bucket: 1A, 1B, 1C, 1dead, then fill remaining
+  // Round-robin: pick 1 from each bucket to guarantee mixed discounts
   const result: Suggestion[] = [];
   const buckets = [curveA, curveB, curveC, dead];
-  
-  // Round 1: 1 from each
+
+  // Round 1: 1 from each curve
   for (const bucket of buckets) {
     if (result.length >= max) break;
     if (bucket.length > 0) result.push(bucket.shift()!);
   }
 
-  // Round 2+: fill remaining from merged leftovers
-  const remaining = [...curveB, ...curveC, ...dead, ...curveA];
-  for (const item of remaining) {
-    if (result.length >= max) break;
-    if (!result.find(r => r.id === item.id)) result.push(item);
+  // Round 2: fill remaining, interleaving buckets to keep variety
+  let safety = 0;
+  while (result.length < max && safety < 50) {
+    let added = false;
+    for (const bucket of buckets) {
+      if (result.length >= max) break;
+      if (bucket.length > 0) {
+        const item = bucket.shift()!;
+        if (!result.find(r => r.id === item.id)) {
+          result.push(item);
+          added = true;
+        }
+      }
+    }
+    if (!added) break;
+    safety++;
   }
 
   return result;
