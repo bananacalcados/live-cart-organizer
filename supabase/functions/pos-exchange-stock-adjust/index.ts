@@ -13,6 +13,12 @@ interface StockItem {
   direction: "in" | "out"; // in = returned to store, out = given to customer
 }
 
+function safeJson(resp: Response) {
+  return resp.text().then(t => {
+    try { return JSON.parse(t); } catch { return { retorno: { status: 'Erro', erros: [{ erro: t.substring(0, 200) }] } }; }
+  });
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -29,48 +35,75 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Get store token
+    // Get store token AND deposit name
     const { data: store, error: storeError } = await supabase
       .from('pos_stores')
-      .select('tiny_token')
+      .select('tiny_token, tiny_deposit_name')
       .eq('id', store_id)
       .single();
 
     if (storeError || !store?.tiny_token) throw new Error('Store not found or token not configured');
 
     const token = store.tiny_token;
+    const depositName = store.tiny_deposit_name || '';
     const results: { product_name: string; success: boolean; error?: string }[] = [];
 
     for (const item of items) {
       try {
-        // Get current stock from Tiny
+        // Get current stock from Tiny for the specific deposit
         const stockResp = await fetch('https://api.tiny.com.br/api2/produto.obter.estoque.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: `token=${token}&formato=json&id=${item.tiny_id}`,
         });
-        const stockData = await stockResp.json();
-        const currentStock = parseFloat(stockData.retorno?.produto?.saldo || '0');
+        const stockData = await safeJson(stockResp);
+        
+        // Parse stock for specific deposit
+        let currentStock = 0;
+        if (depositName) {
+          const depositos = stockData.retorno?.produto?.depositos || [];
+          for (const dep of depositos) {
+            const d = dep.deposito || dep;
+            if (d.nome === depositName) {
+              currentStock = parseFloat(d.saldo || '0');
+              break;
+            }
+          }
+        } else {
+          currentStock = parseFloat(stockData.retorno?.produto?.saldo || '0');
+        }
 
-        // Calculate new stock
+        // Calculate new stock (absolute final quantity for Balanço)
         const newStock = item.direction === 'in'
           ? currentStock + item.quantity
-          : currentStock - item.quantity;
+          : Math.max(0, currentStock - item.quantity);
 
-        // Update stock in Tiny
+        // Update stock in Tiny using XML with tipo=B (Balanço) and deposit
+        const obsText = item.direction === 'in'
+          ? `Troca POS: devolução +${item.quantity}`
+          : `Troca POS: saída -${item.quantity}`;
+
+        const xml = `<estoque>` +
+          `<idProduto>${item.tiny_id}</idProduto>` +
+          `<tipo>B</tipo>` +
+          `<quantidade>${newStock}</quantidade>` +
+          (depositName ? `<deposito>${depositName}</deposito>` : '') +
+          `<observacoes>${obsText}</observacoes>` +
+          `</estoque>`;
+
         const updateResp = await fetch('https://api.tiny.com.br/api2/produto.atualizar.estoque.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${token}&formato=json&id=${item.tiny_id}&estoque=${Math.max(0, newStock)}`,
+          body: `token=${token}&formato=json&estoque=${encodeURIComponent(xml)}`,
         });
-        const updateData = await updateResp.json();
+        const updateData = await safeJson(updateResp);
 
         if (updateData.retorno?.status === 'Erro') {
           const errorMsg = updateData.retorno?.erros?.[0]?.erro || 'Unknown error';
           results.push({ product_name: item.product_name, success: false, error: errorMsg });
         } else {
           results.push({ product_name: item.product_name, success: true });
-          console.log(`Stock adjusted: ${item.product_name} (${item.tiny_id}) ${item.direction === 'in' ? '+' : '-'}${item.quantity} → ${newStock}`);
+          console.log(`Stock adjusted [${depositName || 'global'}]: ${item.product_name} (${item.tiny_id}) ${currentStock} → ${newStock} (${item.direction})`);
         }
 
         // Rate limit: wait 2s between Tiny API calls
