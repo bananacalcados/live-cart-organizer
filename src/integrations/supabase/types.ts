@@ -5427,6 +5427,35 @@ export type Database = {
         }
         Relationships: []
       }
+      team_chat_reads: {
+        Row: {
+          id: string
+          message_id: string
+          read_at: string
+          reader_name: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          read_at?: string
+          reader_name: string
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          read_at?: string
+          reader_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_chat_reads_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "team_chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_gamification: {
         Row: {
           badges: Json

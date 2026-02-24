@@ -80,6 +80,7 @@ serve(async (req) => {
         payment_method: pedido.forma_pagamento || null,
         obs: pedido.obs || null,
         obs_interna: pedido.obs_interna || null,
+        seller_name: pedido.nome_vendedor || pedido.vendedor || null,
         customer: {
           name: cliente.nome || null,
           cpf: cliente.cpf_cnpj || null,
@@ -139,7 +140,17 @@ serve(async (req) => {
 
     const tinyOrders = await searchTiny(term);
 
-    const mapped = tinyOrders.slice(0, 20).map((order: any) => ({
+    // Filter results: only keep orders whose customer name actually matches the search term
+    const termLower = term.toLowerCase();
+    const termWords = termLower.split(/\s+/).filter(w => w.length >= 2);
+    const filtered = tinyOrders.filter((order: any) => {
+      const name = (order.nome || '').toLowerCase();
+      if (!name) return false;
+      // At least one word from the search term must appear in the customer name
+      return termWords.some(word => name.includes(word));
+    });
+
+    const mapped = filtered.slice(0, 30).map((order: any) => ({
       tiny_order_id: String(order.id || ''),
       tiny_order_number: String(order.numero || ''),
       date: order.data_pedido || null,

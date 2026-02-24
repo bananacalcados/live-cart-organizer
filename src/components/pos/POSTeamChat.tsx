@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   Send, Package, HeadphonesIcon, ClipboardList, Plus,
-  ArrowRightLeft, AlertTriangle, CheckCircle2
+  ArrowRightLeft, AlertTriangle, CheckCircle2, ImageIcon, Mic, MicOff, Paperclip
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -23,6 +23,11 @@ interface ChatMessage {
   metadata: any;
 }
 
+interface ReadReceipt {
+  message_id: string;
+  reader_name: string;
+}
+
 interface Props {
   storeId: string;
 }
@@ -33,6 +38,15 @@ export function POSTeamChat({ storeId }: Props) {
   const [senderName, setSenderName] = useState('');
   const [isReady, setIsReady] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Read receipts
+  const [readReceipts, setReadReceipts] = useState<Map<string, string[]>>(new Map());
+
+  // Audio recording
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Action dialogs
   const [showTransfer, setShowTransfer] = useState(false);
@@ -62,7 +76,6 @@ export function POSTeamChat({ storeId }: Props) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           try {
-            // Check user_profiles by user_id first
             const { data: profileById } = await supabase
               .from('user_profiles')
               .select('display_name')
@@ -76,7 +89,6 @@ export function POSTeamChat({ storeId }: Props) {
               return;
             }
 
-            // Check by email placeholder (set by admin)
             const emailKey = `email:${(user.email || '').toLowerCase()}`;
             const { data: profileByEmail } = await supabase
               .from('user_profiles')
@@ -97,7 +109,6 @@ export function POSTeamChat({ storeId }: Props) {
             console.warn('user_profiles lookup failed:', profileErr);
           }
 
-          // Fallback to email-based name
           const emailName = (user.email || '').split('@')[0]
             .replace(/[._-]/g, ' ')
             .replace(/\b\w/g, c => c.toUpperCase());
@@ -128,6 +139,59 @@ export function POSTeamChat({ storeId }: Props) {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // Read receipts realtime
+  useEffect(() => {
+    loadReadReceipts();
+    const channel = supabase
+      .channel('pos-team-chat-reads')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_chat_reads' }, (payload) => {
+        const r = payload.new as any;
+        setReadReceipts(prev => {
+          const next = new Map(prev);
+          const existing = next.get(r.message_id) || [];
+          if (!existing.includes(r.reader_name)) {
+            next.set(r.message_id, [...existing, r.reader_name]);
+          }
+          return next;
+        });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // Mark messages as read when they come in
+  useEffect(() => {
+    if (!senderName || messages.length === 0) return;
+    const unreadIds = messages
+      .filter(m => m.sender_name !== senderName)
+      .filter(m => !(readReceipts.get(m.id) || []).includes(senderName))
+      .map(m => m.id);
+    if (unreadIds.length === 0) return;
+
+    const markRead = async () => {
+      const inserts = unreadIds.map(id => ({ message_id: id, reader_name: senderName }));
+      await supabase.from('team_chat_reads').upsert(inserts, { onConflict: 'message_id,reader_name' });
+    };
+    markRead();
+  }, [messages, senderName]);
+
+  const loadReadReceipts = async () => {
+    const { data } = await supabase
+      .from('team_chat_reads')
+      .select('message_id, reader_name')
+      .order('read_at', { ascending: true })
+      .limit(500);
+    if (data) {
+      const map = new Map<string, string[]>();
+      data.forEach((r: any) => {
+        const existing = map.get(r.message_id) || [];
+        existing.push(r.reader_name);
+        map.set(r.message_id, existing);
+      });
+      setReadReceipts(map);
+    }
+  };
 
   const loadMessages = async () => {
     const { data } = await supabase
@@ -163,12 +227,104 @@ export function POSTeamChat({ storeId }: Props) {
     });
   };
 
+  // Image upload
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !senderName) return;
+    
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const fileName = `team-chat/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('chat-media')
+        .upload(fileName, file, { contentType: file.type });
+      
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(fileName);
+      const publicUrl = urlData.publicUrl;
+
+      await supabase.from('team_chat_messages').insert({
+        sender_name: senderName,
+        message: '📷 Imagem',
+        channel: 'general',
+        message_type: 'image',
+        metadata: { media_url: publicUrl },
+      });
+      toast.success('Imagem enviada!');
+    } catch (err) {
+      console.error('Upload error:', err);
+      toast.error('Erro ao enviar imagem');
+    }
+    // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Audio recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await uploadAudio(blob);
+      };
+      
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Mic error:', err);
+      toast.error('Erro ao acessar microfone');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    setIsRecording(false);
+    setMediaRecorder(null);
+  };
+
+  const uploadAudio = async (blob: Blob) => {
+    try {
+      const fileName = `team-chat/${Date.now()}-audio.webm`;
+      const { error: uploadError } = await supabase.storage
+        .from('chat-media')
+        .upload(fileName, blob, { contentType: 'audio/webm' });
+      
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(fileName);
+      
+      await supabase.from('team_chat_messages').insert({
+        sender_name: senderName,
+        message: '🎤 Áudio',
+        channel: 'general',
+        message_type: 'audio',
+        metadata: { media_url: urlData.publicUrl },
+      });
+      toast.success('Áudio enviado!');
+    } catch (err) {
+      console.error('Audio upload error:', err);
+      toast.error('Erro ao enviar áudio');
+    }
+  };
+
   const handleTransferRequest = async () => {
     if (!transferProduct.trim() || !transferToStore) return;
     const storeName = stores.find(s => s.id === transferToStore)?.name || '';
     const msg = `📦 Solicitação de Transferência\nProduto: ${transferProduct}\nQtd: ${transferQuantity}\nPara: ${storeName}${transferNotes ? `\nObs: ${transferNotes}` : ''}`;
 
-    // Create inter-store request
     await supabase.from('pos_inter_store_requests').insert({
       from_store_id: storeId,
       to_store_id: transferToStore,
@@ -178,7 +334,6 @@ export function POSTeamChat({ storeId }: Props) {
       priority: 'normal',
     });
 
-    // Post to chat
     await supabase.from('team_chat_messages').insert({
       sender_name: senderName,
       message: msg,
@@ -239,41 +394,63 @@ export function POSTeamChat({ storeId }: Props) {
 
   const renderMessage = (msg: ChatMessage) => {
     const isMe = msg.sender_name === senderName;
-    const isAction = msg.message_type !== 'text';
-    const actionColors = {
+    const isAction = !['text', 'image', 'audio'].includes(msg.message_type);
+    const actionColors: Record<string, string> = {
       transfer_request: 'border-blue-500/30 bg-blue-500/10',
       support_ticket: 'border-red-500/30 bg-red-500/10',
       task: 'border-purple-500/30 bg-purple-500/10',
     };
-    const actionIcons = {
+    const actionIcons: Record<string, JSX.Element> = {
       transfer_request: <ArrowRightLeft className="h-3.5 w-3.5 text-blue-400" />,
       support_ticket: <HeadphonesIcon className="h-3.5 w-3.5 text-red-400" />,
       task: <ClipboardList className="h-3.5 w-3.5 text-purple-400" />,
     };
+
+    const readers = (readReceipts.get(msg.id) || []).filter(r => r !== msg.sender_name);
 
     return (
       <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
         <span className="text-[10px] text-pos-white/40 mb-0.5">{msg.sender_name}</span>
         <div className={`max-w-[85%] px-3 py-2 rounded-xl text-sm whitespace-pre-line ${
           isAction
-            ? `border ${actionColors[msg.message_type as keyof typeof actionColors] || ''} text-pos-white`
+            ? `border ${actionColors[msg.message_type] || ''} text-pos-white`
             : isMe
               ? 'bg-pos-orange text-pos-black rounded-br-sm'
               : 'bg-pos-white/10 text-pos-white rounded-bl-sm'
         }`}>
           {isAction && (
             <div className="flex items-center gap-1.5 mb-1">
-              {actionIcons[msg.message_type as keyof typeof actionIcons]}
+              {actionIcons[msg.message_type]}
               <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">
                 {msg.message_type === 'transfer_request' ? 'Transferência' : msg.message_type === 'support_ticket' ? 'Suporte' : 'Tarefa'}
               </span>
             </div>
           )}
-          {msg.message}
+          
+          {/* Image message */}
+          {msg.message_type === 'image' && msg.metadata?.media_url ? (
+            <img 
+              src={msg.metadata.media_url} 
+              alt="Imagem" 
+              className="max-w-[250px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+              onClick={() => window.open(msg.metadata.media_url, '_blank')}
+            />
+          ) : msg.message_type === 'audio' && msg.metadata?.media_url ? (
+            <audio controls src={msg.metadata.media_url} className="max-w-[250px]" />
+          ) : (
+            msg.message
+          )}
         </div>
-        <span className="text-[9px] text-pos-white/30 mt-0.5">
-          {new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-        </span>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[9px] text-pos-white/30">
+            {new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+          {readers.length > 0 && (
+            <span className="text-[9px] text-pos-white/25 italic">
+              Lido por {readers.join(', ')}
+            </span>
+          )}
+        </div>
       </div>
     );
   };
@@ -327,7 +504,36 @@ export function POSTeamChat({ storeId }: Props) {
       </div>
 
       {/* Input */}
-      <div className="border-t border-pos-orange/20 p-3 flex gap-2 bg-pos-white/5">
+      <div className="border-t border-pos-orange/20 p-3 flex gap-2 bg-pos-white/5 items-center">
+        {/* Image upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImageUpload}
+        />
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-9 w-9 shrink-0 text-pos-white/50 hover:text-pos-orange hover:bg-pos-orange/10"
+          onClick={() => fileInputRef.current?.click()}
+          title="Enviar imagem"
+        >
+          <ImageIcon className="h-4 w-4" />
+        </Button>
+
+        {/* Audio record */}
+        <Button
+          size="icon"
+          variant="ghost"
+          className={`h-9 w-9 shrink-0 ${isRecording ? 'text-red-500 bg-red-500/10 animate-pulse' : 'text-pos-white/50 hover:text-pos-orange hover:bg-pos-orange/10'}`}
+          onClick={isRecording ? stopRecording : startRecording}
+          title={isRecording ? 'Parar gravação' : 'Gravar áudio'}
+        >
+          {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        </Button>
+
         <Input
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}

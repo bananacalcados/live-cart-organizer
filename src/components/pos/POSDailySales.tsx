@@ -101,6 +101,7 @@ export function POSDailySales({ storeId }: Props) {
   const [detailCustomer, setDetailCustomer] = useState<CustomerInfo | null>(null);
   const [tinyDetailLoading, setTinyDetailLoading] = useState(false);
   const [isTinyOnlyDetail, setIsTinyOnlyDetail] = useState(false);
+  const [tinySellerName, setTinySellerName] = useState<string | null>(null);
 
   // Search
   const [searchTerm, setSearchTerm] = useState("");
@@ -265,6 +266,12 @@ export function POSDailySales({ storeId }: Props) {
         setSelectedSale(fakeSale);
         setDetailItems(d.items || []);
         setDetailCustomer(d.customer || null);
+        // Store the Tiny seller name for display
+        if (d.seller_name) {
+          setTinySellerName(d.seller_name);
+        } else {
+          setTinySellerName(null);
+        }
       } else {
         toast.error("Erro ao buscar detalhes: " + (data.error || "Erro desconhecido"));
       }
@@ -297,11 +304,10 @@ export function POSDailySales({ storeId }: Props) {
           const custIds = matchingCustomers.map(c => c.id);
           const { data: salesData } = await supabase
             .from("pos_sales")
-            .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id")
-            .eq("store_id", storeId)
+            .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, store_id")
             .in("customer_id", custIds)
             .order("created_at", { ascending: false })
-            .limit(20);
+            .limit(50);
           let items: SaleItem[] = [];
           if (salesData && salesData.length > 0) {
             const saleIds = salesData.map(s => s.id);
@@ -634,7 +640,7 @@ export function POSDailySales({ storeId }: Props) {
       <div className="flex items-center justify-between p-4 border-b border-pos-orange/20 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-pos-orange" />
-          <h2 className="text-lg font-bold text-pos-white">Vendas</h2>
+          <h2 className="text-lg font-bold text-pos-white">Pedidos de Vendas</h2>
           <Badge className="bg-pos-orange/20 text-pos-orange border-pos-orange/30">
             {completedSales.length} vendas
           </Badge>
@@ -971,7 +977,7 @@ export function POSDailySales({ storeId }: Props) {
         onClose={() => setSelectedSale(null)}
         customer={detailCustomer}
         items={detailItems}
-        sellerName={selectedSale ? sellers.find(s => s.id === selectedSale.seller_id)?.name || null : null}
+        sellerName={isTinyOnlyDetail && tinySellerName ? tinySellerName : (selectedSale ? sellers.find(s => s.id === selectedSale.seller_id)?.name || null : null)}
         onResend={!isTinyOnlyDetail ? resendToTiny : undefined}
         resending={resending === selectedSale?.id}
         isTinyOnly={isTinyOnlyDetail}
