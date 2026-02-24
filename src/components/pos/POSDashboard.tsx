@@ -117,6 +117,52 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
     setPendingRequests((interStoreRes.count || 0) + (stockRes.count || 0));
   };
 
+  const loadContactTasks = async () => {
+    setLoadingTasks(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("pos_seller_tasks" as any)
+        .select("*")
+        .eq("store_id", storeId)
+        .eq("status", "pending")
+        .lte("due_date", today)
+        .order("due_date", { ascending: true });
+      setContactTasks((data as any[]) || []);
+
+      // Calculate influenced revenue: sales from customers who were contacted (completed tasks) in the period
+      const { start, end } = getPeriodRange(period, customRange);
+      const { data: completedTasks } = await supabase
+        .from("pos_seller_tasks" as any)
+        .select("customer_phone")
+        .eq("store_id", storeId)
+        .eq("status", "completed");
+
+      if (completedTasks && (completedTasks as any[]).length > 0) {
+        const phones = [...new Set((completedTasks as any[]).map((t: any) => t.customer_phone).filter(Boolean))];
+        if (phones.length > 0) {
+          const query = supabase
+            .from("pos_sales")
+            .select("total")
+            .eq("store_id", storeId)
+            .eq("status", "completed")
+            .gte("created_at", start.toISOString())
+            .lte("created_at", end.toISOString());
+          const { data: influencedSales } = await (query as any).in("customer_phone", phones);
+          setInfluencedRevenue((influencedSales || []).reduce((s, sale) => s + (sale.total || 0), 0));
+        } else {
+          setInfluencedRevenue(0);
+        }
+      } else {
+        setInfluencedRevenue(0);
+      }
+    } catch (e) {
+      console.error("Load contact tasks error:", e);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
   const loadSalesData = async () => {
     setLoading(true);
     try {
@@ -198,7 +244,13 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
   useEffect(() => {
     loadAlerts();
+    loadContactTasks();
   }, [storeId]);
+
+  useEffect(() => {
+    if (period === "custom" && !customRange?.from) return;
+    loadContactTasks();
+  }, [period, customRange]);
 
   const handlePeriodChange = (v: string) => {
     if (!v) return;
@@ -370,6 +422,54 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Contact Tasks for Today */}
+            {contactTasks.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-pos-orange" /> Tarefas de Contato Hoje
+                  <Badge className="bg-pos-orange/20 text-pos-orange border-0 text-[10px]">{contactTasks.length}</Badge>
+                </h3>
+                <div className="space-y-2">
+                  {contactTasks.slice(0, 5).map((t: any) => (
+                    <div key={t.id} className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10">
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-pos-white truncate">{t.title}</p>
+                          {t.customer_name && (
+                            <p className="text-xs text-pos-white/50 mt-0.5">
+                              👤 {t.customer_name} {t.customer_phone ? `· 📞 ${t.customer_phone}` : ''}
+                            </p>
+                          )}
+                          {t.contact_strategy && (
+                            <p className="text-xs text-pos-white/40 mt-0.5 italic">💡 {t.contact_strategy}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {t.rfm_segment && <Badge className="text-[10px] bg-red-500/20 text-red-400 border-0">{t.rfm_segment}</Badge>}
+                          <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange border-0">{t.points_reward} pts</Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {contactTasks.length > 5 && (
+                    <p className="text-xs text-pos-white/40 text-center">+ {contactTasks.length - 5} tarefas restantes (ver em Config)</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Influenced Revenue */}
+            {influencedRevenue > 0 && (
+              <div className="p-4 rounded-xl bg-gradient-to-r from-green-500/10 to-pos-orange/10 border border-green-500/20 space-y-1">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-green-400" />
+                  <span className="text-xs text-pos-white/60">Faturamento Influenciado por CRM</span>
+                </div>
+                <p className="text-xl font-bold text-green-400">R$ {influencedRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                <p className="text-[10px] text-pos-white/30">Vendas para clientes que foram contatados via tarefas</p>
               </div>
             )}
 
