@@ -291,6 +291,20 @@ export default function ExpeditionBeta() {
                 <Calendar mode="single" selected={dateTo} onSelect={setDateTo} locale={pt} className={cn("p-3 pointer-events-auto")} />
               </PopoverContent>
             </Popover>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                setDateFrom(today);
+                setDateTo(today);
+              }}
+              className="text-xs gap-1"
+            >
+              <CalendarIcon className="h-3 w-3" />
+              Hoje
+            </Button>
             {(dateFrom || dateTo) && (
               <Button variant="ghost" size="sm" onClick={clearDateFilter} className="text-xs">Limpar</Button>
             )}
