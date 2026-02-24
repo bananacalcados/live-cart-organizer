@@ -32,9 +32,10 @@ const STATUS_LABELS: Record<string, string> = {
   packing: 'Bipando',
   packed: 'Embalado',
   dispatched: 'Despachado',
+  cancelled: 'Cancelado',
 };
 
-type StatusFilter = 'todos' | 'nao_despachados' | 'approved' | 'grouped' | 'awaiting_stock' | 'picking' | 'picked' | 'packing' | 'packed' | 'dispatched';
+type StatusFilter = 'todos' | 'nao_despachados' | 'approved' | 'grouped' | 'awaiting_stock' | 'picking' | 'picked' | 'packing' | 'packed' | 'dispatched' | 'cancelled';
 
 const STATUS_TABS: { key: StatusFilter; label: string; color: string }[] = [
   { key: 'todos', label: 'Todos', color: 'text-foreground' },
@@ -47,6 +48,7 @@ const STATUS_TABS: { key: StatusFilter; label: string; color: string }[] = [
   { key: 'packing', label: 'Bipando', color: 'text-purple-500' },
   { key: 'packed', label: 'Embalado', color: 'text-violet-500' },
   { key: 'dispatched', label: 'Despachado', color: 'text-emerald-500' },
+  { key: 'cancelled', label: 'Cancelado', color: 'text-red-500' },
 ];
 
 export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: Props) {
@@ -262,7 +264,7 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
   // Apply status filter
   const statusFiltered = filtered.filter(o => {
     if (statusFilter === 'todos') return true;
-    if (statusFilter === 'nao_despachados') return o.expedition_status !== 'dispatched';
+    if (statusFilter === 'nao_despachados') return o.expedition_status !== 'dispatched' && o.expedition_status !== 'cancelled';
     return o.expedition_status === statusFilter;
   });
 
@@ -271,7 +273,7 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
   filtered.forEach(o => {
     const s = o.expedition_status || 'approved';
     statusCounts[s] = (statusCounts[s] || 0) + 1;
-    if (s !== 'dispatched') statusCounts['nao_despachados']++;
+    if (s !== 'dispatched' && s !== 'cancelled') statusCounts['nao_despachados']++;
   });
 
   return (
@@ -344,6 +346,7 @@ function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onTogg
     packing: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
     packed: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
     dispatched: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   }[order.expedition_status] || '';
 
   return (
