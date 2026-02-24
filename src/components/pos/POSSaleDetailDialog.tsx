@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -8,10 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle,
+  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -71,6 +73,42 @@ interface Props {
 export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, onResend, resending, isTinyOnly, storeId, onDeleted }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editingPayment, setEditingPayment] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([]);
+  const [selectedPaymentId, setSelectedPaymentId] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
+
+  useEffect(() => {
+    if (editingPayment && storeId && paymentMethods.length === 0) {
+      supabase
+        .from('pos_payment_methods')
+        .select('id, name')
+        .eq('store_id', storeId)
+        .eq('is_active', true)
+        .order('sort_order')
+        .then(({ data }) => setPaymentMethods(data || []));
+    }
+  }, [editingPayment, storeId]);
+
+  const handleSavePayment = async () => {
+    if (!selectedPaymentId || !sale) return;
+    setSavingPayment(true);
+    try {
+      const method = paymentMethods.find(m => m.id === selectedPaymentId);
+      if (!method) return;
+      await supabase
+        .from('pos_sales')
+        .update({ payment_method: method.name } as any)
+        .eq('id', sale.id);
+      toast.success(`Forma de pagamento alterada para ${method.name}`);
+      setEditingPayment(false);
+      onDeleted?.(); // refresh list
+    } catch (e) {
+      toast.error("Erro ao alterar pagamento");
+    } finally {
+      setSavingPayment(false);
+    }
+  };
 
   if (!sale) return null;
 
@@ -250,9 +288,33 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               </h4>
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2">
                 {sale.payment_method && (
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Forma</span>
-                    <span className="font-semibold text-gray-900">{sale.payment_method}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-gray-900">{sale.payment_method}</span>
+                      {!isTinyOnly && storeId && (
+                        <button onClick={() => setEditingPayment(!editingPayment)} className="text-blue-500 hover:text-blue-700">
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {editingPayment && (
+                  <div className="flex gap-2 items-center">
+                    <Select value={selectedPaymentId} onValueChange={setSelectedPaymentId}>
+                      <SelectTrigger className="flex-1 h-8 text-xs">
+                        <SelectValue placeholder="Nova forma" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {paymentMethods.map(m => (
+                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" className="h-8 text-xs bg-blue-500 hover:bg-blue-600 text-white" onClick={handleSavePayment} disabled={savingPayment || !selectedPaymentId}>
+                      {savingPayment ? <Loader2 className="h-3 w-3 animate-spin" /> : "Salvar"}
+                    </Button>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">

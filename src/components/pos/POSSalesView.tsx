@@ -23,6 +23,7 @@ import { POSLoyaltyScreen } from "./POSLoyaltyScreen";
 import { POSSlotMachine } from "./POSSlotMachine";
 import { POSGiftBox } from "./POSGiftBox";
 import { POSCrossSellSuggestions } from "./POSCrossSellSuggestions";
+import { POSOrderVerification } from "./POSOrderVerification";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -51,7 +52,7 @@ interface Seller {
   tiny_seller_id?: string;
 }
 
-type SaleStep = "scan" | "customer" | "payment" | "invoice";
+type SaleStep = "scan" | "customer" | "verify" | "payment" | "invoice";
 
 interface Props {
   storeId: string;
@@ -664,6 +665,51 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         setSaleResult(data);
         setStep("invoice");
 
+        // Update cash register with sale amounts
+        try {
+          const { data: openRegister } = await supabase
+            .from('pos_cash_registers')
+            .select('id, cash_sales, card_sales, pix_sales, other_sales')
+            .eq('store_id', storeId)
+            .eq('status', 'open')
+            .limit(1)
+            .maybeSingle();
+
+          if (openRegister) {
+            const updateFields: Record<string, number> = {};
+            const classifyPayment = (name: string): string => {
+              const lower = name.toLowerCase();
+              if (lower.includes('dinheiro')) return 'cash_sales';
+              if (lower.includes('pix')) return 'pix_sales';
+              if (lower.includes('cartão') || lower.includes('cartao') || lower.includes('crédito') || lower.includes('credito') || lower.includes('débito') || lower.includes('debito')) return 'card_sales';
+              return 'other_sales';
+            };
+
+            if (useMultiPayment && multiPayments.length > 0) {
+              for (const p of multiPayments) {
+                const field = classifyPayment(p.method_name);
+                updateFields[field] = (updateFields[field] || 0) + p.amount;
+              }
+            } else {
+              const field = classifyPayment(paymentMethodName);
+              updateFields[field] = totalWithDiscount;
+            }
+
+            // Add to existing values
+            const patch: Record<string, number> = {};
+            for (const [field, amount] of Object.entries(updateFields)) {
+              patch[field] = ((openRegister as any)[field] || 0) + amount;
+            }
+
+            await supabase
+              .from('pos_cash_registers')
+              .update(patch)
+              .eq('id', openRegister.id);
+          }
+        } catch (e) {
+          console.error('Cash register update error:', e);
+        }
+
         // Award loyalty points if enabled and customer identified
         if (loyaltyConfig?.is_enabled && selectedCustomer?.whatsapp) {
           const phone = selectedCustomer.whatsapp.replace(/\D/g, '');
@@ -843,6 +889,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const steps: { id: SaleStep; label: string; icon: typeof ScanBarcode }[] = [
     { id: "scan", label: "Produtos", icon: ScanBarcode },
     { id: "customer", label: "Cliente", icon: User },
+    { id: "verify", label: "Conferência", icon: Check },
     { id: "payment", label: "Pagamento", icon: CreditCard },
     { id: "invoice", label: "Nota Fiscal", icon: Receipt },
   ];
@@ -1305,6 +1352,26 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {step === "verify" && (
+            <div className="p-6 space-y-6 overflow-auto">
+              <POSOrderVerification
+                saleId=""
+                storeId={storeId}
+                sellerId={selectedSeller}
+                items={cart.map(item => ({
+                  sku: item.sku,
+                  name: item.name,
+                  variant: item.variant,
+                  quantity: item.quantity,
+                  price: item.price,
+                  barcode: item.barcode,
+                }))}
+                onComplete={() => setStep("payment")}
+                onSkip={() => setStep("payment")}
+              />
             </div>
           )}
 

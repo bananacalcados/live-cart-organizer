@@ -98,58 +98,55 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Try API v3 first
-    const v3Token = await getTinyV3Token(supabase);
+    // ALWAYS use per-store v2 token first (each store has its own Tiny account)
+    const { data: store } = await supabase
+      .from('pos_stores')
+      .select('tiny_token')
+      .eq('id', store_id)
+      .single();
+
     let sellers: Array<{ tiny_id: string; name: string }> = [];
 
-    if (v3Token) {
-      try {
-        console.log('Using Tiny API v3 for sellers...');
-        const data = await tinyV3Get(v3Token, '/vendedores');
-        const items = data.itens || data.items || [];
-        
-        sellers = (Array.isArray(items) ? items : []).map((v: any) => ({
+    if (store?.tiny_token) {
+      console.log('Using Tiny API v2 for sellers (per-store token)...');
+      const resp = await fetch('https://api.tiny.com.br/api2/vendedores.pesquisa.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `token=${store.tiny_token}&formato=json&pesquisa=`,
+      });
+      const data = await resp.json();
+      const rawSellers = data.retorno?.vendedores || [];
+      sellers = rawSellers.map((item: any) => {
+        const v = item.vendedor || item;
+        return {
           tiny_id: String(v.id || ''),
-          name: v.contato?.nome || v.descricao || v.nome || v.name || '',
-          situacao: v.situacao || 'A',
-        })).filter((s: any) => s.tiny_id && s.name && s.situacao === 'A');
-        
-        console.log(`[v3] Found ${sellers.length} active sellers`);
-      } catch (e) {
-        console.warn('Tiny v3 sellers failed, falling back to v2:', e.message);
-      }
+          name: v.nome || 'Sem nome',
+          situacao: v.situacao || '',
+        };
+      }).filter((s: any) => {
+        const sit = (s.situacao || '').toString().trim();
+        return s.tiny_id && s.name && (sit === 'A' || sit === 'Ativo' || sit === '');
+      });
+      console.log(`[v2] Found ${sellers.length} active sellers`);
     }
 
-    // Fallback to API v2 if v3 failed or unavailable
-    if (sellers.length === 0) {
-      const { data: store } = await supabase
-        .from('pos_stores')
-        .select('tiny_token')
-        .eq('id', store_id)
-        .single();
-
-      if (store?.tiny_token) {
-        console.log('Using Tiny API v2 for sellers (fallback)...');
-        const resp = await fetch('https://api.tiny.com.br/api2/vendedores.pesquisa.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${store.tiny_token}&formato=json&pesquisa=`,
-        });
-        const data = await resp.json();
-        const rawSellers = data.retorno?.vendedores || [];
-        sellers = rawSellers.map((item: any) => {
-          const v = item.vendedor || item;
-          return {
+    // Fallback to v3 global token only if no per-store token
+    if (sellers.length === 0 && !store?.tiny_token) {
+      const v3Token = await getTinyV3Token(supabase);
+      if (v3Token) {
+        try {
+          console.log('Using Tiny API v3 for sellers (global fallback)...');
+          const data = await tinyV3Get(v3Token, '/vendedores');
+          const items = data.itens || data.items || [];
+          sellers = (Array.isArray(items) ? items : []).map((v: any) => ({
             tiny_id: String(v.id || ''),
-            name: v.nome || 'Sem nome',
-            situacao: v.situacao || '',
-          };
-        }).filter((s: any) => {
-          // Accept only active sellers - check both 'A' and 'Ativo'
-          const sit = (s.situacao || '').toString().trim();
-          return s.tiny_id && s.name && (sit === 'A' || sit === 'Ativo' || sit === '');
-        });
-        console.log(`[v2] Found ${sellers.length} active sellers`);
+            name: v.contato?.nome || v.descricao || v.nome || v.name || '',
+            situacao: v.situacao || 'A',
+          })).filter((s: any) => s.tiny_id && s.name && s.situacao === 'A');
+          console.log(`[v3] Found ${sellers.length} active sellers`);
+        } catch (e) {
+          console.warn('Tiny v3 sellers failed:', e.message);
+        }
       }
     }
 

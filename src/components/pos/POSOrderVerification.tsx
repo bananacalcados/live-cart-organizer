@@ -78,43 +78,26 @@ export function POSOrderVerification({ saleId, storeId, sellerId, items, onCompl
     }
     setCompleting(true);
     try {
-      const verificationData = verifiedItems.map(i => ({
-        sku: i.sku,
-        name: i.name,
-        feetChecked: i.feetChecked,
-        noDefects: i.noDefects,
-      }));
+      // If saleId is provided, save verification to DB
+      if (saleId) {
+        const verificationData = verifiedItems.map(i => ({
+          sku: i.sku,
+          name: i.name,
+          feetChecked: i.feetChecked,
+          noDefects: i.noDefects,
+        }));
 
-      // Update sale with verification
-      await supabase
-        .from("pos_sales")
-        .update({
-          verified_at: new Date().toISOString(),
-          verified_by: sellerId,
-          verification_data: verificationData,
-        } as any)
-        .eq("id", saleId);
-
-      // Award bonus points to seller
-      const { data: existingBonus } = await supabase
-        .from("pos_seller_bonus" as any)
-        .select("id, points")
-        .eq("seller_id", sellerId)
-        .eq("store_id", storeId)
-        .maybeSingle();
-
-      if (existingBonus) {
         await supabase
-          .from("pos_seller_bonus" as any)
-          .update({ points: (existingBonus as any).points + 5 })
-          .eq("id", (existingBonus as any).id);
-      } else {
-        await supabase
-          .from("pos_seller_bonus" as any)
-          .insert({ seller_id: sellerId, store_id: storeId, points: 5 });
+          .from("pos_sales")
+          .update({
+            verified_at: new Date().toISOString(),
+            verified_by: sellerId,
+            verification_data: verificationData,
+          } as any)
+          .eq("id", saleId);
       }
 
-      toast.success("✅ Conferência concluída! +5 pontos de bônus");
+      toast.success("✅ Conferência concluída!");
       onComplete();
     } catch (e: any) {
       console.error("Verification error:", e);
