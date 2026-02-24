@@ -158,7 +158,7 @@ export default function ExpeditionBeta() {
                 Expedição
                 <Badge variant="secondary" className="text-[10px]">BETA</Badge>
               </h1>
-              <p className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">Auto-sync com Shopify</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">Sincronizado via Tiny ERP</p>
             </div>
           </div>
           <div className="flex items-center gap-1 md:gap-2">
@@ -170,7 +170,7 @@ export default function ExpeditionBeta() {
             </div>
             <Button onClick={handleInitialSync} disabled={isInitialSyncing} variant="outline" size="sm" className="gap-1 md:gap-2 text-xs md:text-sm">
               {isInitialSyncing ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <Package className="h-3 w-3 md:h-4 md:w-4" />}
-              <span className="hidden sm:inline">Importar Pendentes</span>
+              <span className="hidden sm:inline">Buscar do Tiny</span>
             </Button>
           </div>
         </div>
