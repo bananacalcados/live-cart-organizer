@@ -22,6 +22,7 @@ import { POSPrizeWheel } from "./POSPrizeWheel";
 import { POSLoyaltyScreen } from "./POSLoyaltyScreen";
 import { POSSlotMachine } from "./POSSlotMachine";
 import { POSGiftBox } from "./POSGiftBox";
+import { POSCrossSellSuggestions } from "./POSCrossSellSuggestions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -1106,6 +1107,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                       </Button>
                     </div>
                   ))}
+
+                  {/* Cross-sell suggestions */}
+                  {cart.length > 0 && (
+                    <POSCrossSellSuggestions storeId={storeId} cart={cart} onAddToCart={addToCart} />
+                  )}
                 </div>
               </ScrollArea>
             </>
