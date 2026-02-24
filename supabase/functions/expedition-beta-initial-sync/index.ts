@@ -373,108 +373,57 @@ async function passCancelled(token: string, supabase: any, existingMap: Map<stri
   return updated;
 }
 
-// === PASS 0: Cleanup - use batch approach: fetch cancelled/dispatched from Tiny and cross-reference ===
-async function passCleanup(token: string, supabase: any, startTime: number, timeoutMs = 50000) {
-  let fixed = 0;
+// === PASS 0: Cleanup (inverted logic) - fetch approved from Tiny, delete locals not in that set ===
+async function passCleanup(token: string, supabase: any, startTime: number, timeoutMs = 30000) {
+  // Step 1: Fetch ALL approved (situacao=3) tiny_order_ids from Tiny
+  const tinyApprovedIds = new Set<string>();
+  let page = 1, hasMore = true;
 
-  // Get all local approved orders with tiny_order_id
-  const { data: approvedOrders } = await supabase
+  while (hasMore) {
+    if (Date.now() - startTime > timeoutMs) { console.log('Cleanup fetch timeout'); break; }
+    try {
+      const data = await tinyV3Get(token, '/pedidos', { pagina: String(page), limite: '100', situacao: '3' });
+      const orders = data.itens || data.items || [];
+      if (orders.length === 0) { hasMore = false; break; }
+      for (const item of orders) tinyApprovedIds.add(String(item.id));
+      console.log(`[Cleanup] Tiny approved page ${page}: ${orders.length} orders`);
+      page++;
+      if (page > 10 || orders.length < 100) hasMore = false;
+    } catch (err: any) {
+      console.error(`Cleanup fetch page ${page} error: ${err.message}`);
+      hasMore = false;
+    }
+  }
+
+  console.log(`[Cleanup] Total approved in Tiny: ${tinyApprovedIds.size}`);
+
+  // Step 2: Get all local approved orders
+  const { data: localApproved } = await supabase
     .from('expedition_beta_orders')
     .select('id, tiny_order_id')
     .eq('expedition_status', 'approved')
     .not('tiny_order_id', 'is', null);
 
-  if (!approvedOrders || approvedOrders.length === 0) return 0;
+  if (!localApproved || localApproved.length === 0) return 0;
 
-  const approvedMap = new Map<string, string>(); // tiny_order_id -> db id
-  for (const o of approvedOrders) approvedMap.set(String(o.tiny_order_id), o.id);
-  console.log(`[Cleanup] ${approvedMap.size} approved orders to verify`);
+  // Step 3: Find locals NOT in Tiny's approved set → delete them
+  const toDelete = localApproved.filter((o: any) => !tinyApprovedIds.has(String(o.tiny_order_id)));
 
-  // Strategy: fetch cancelled (9), dispatched (5,6) lists from Tiny and match against our approved set
-  // This avoids per-order detail fetches entirely
-
-  const statusesToCheck: { sit: string; newStatus: string }[] = [
-    { sit: '9', newStatus: 'cancelled' },
-    { sit: '5', newStatus: 'dispatched' },
-    { sit: '6', newStatus: 'dispatched' },
-    { sit: '7', newStatus: 'dispatched' },
-    { sit: '8', newStatus: 'dispatched' },
-  ];
-
-  for (const { sit, newStatus } of statusesToCheck) {
-    if (Date.now() - startTime > timeoutMs) { console.log('Cleanup timeout'); break; }
-
-    let page = 1, hasMore = true;
-    while (hasMore) {
-      if (Date.now() - startTime > timeoutMs) break;
-      try {
-        const data = await tinyV3Get(token, '/pedidos', { pagina: String(page), limite: '100', situacao: sit });
-        const orders = data.itens || data.items || [];
-        if (orders.length === 0) { hasMore = false; break; }
-
-        const idsToUpdate: string[] = [];
-        for (const item of orders) {
-          const tinyId = String(item.id);
-          const dbId = approvedMap.get(tinyId);
-          if (dbId) {
-            idsToUpdate.push(dbId);
-            approvedMap.delete(tinyId); // no need to check again
-          }
-        }
-
-        if (idsToUpdate.length > 0) {
-          await supabase.from('expedition_beta_orders')
-            .update({ expedition_status: newStatus })
-            .in('id', idsToUpdate);
-          fixed += idsToUpdate.length;
-          console.log(`Cleanup: ${idsToUpdate.length} orders -> ${newStatus} (sit=${sit})`);
-        }
-
-        page++;
-        if (page > 10 || orders.length < 100) hasMore = false;
-      } catch (err: any) {
-        console.error(`Cleanup sit=${sit} p${page} error: ${err.message}`);
-        hasMore = false;
-      }
-    }
+  if (toDelete.length === 0) {
+    console.log(`[Cleanup] All ${localApproved.length} local approved orders match Tiny. Nothing to delete.`);
+    return 0;
   }
 
-  // For remaining approved orders still in map, do individual checks (they may be open/approved or deleted)
-  // Only if we have time left
-  let individualChecks = 0;
-  for (const [tinyId, dbId] of approvedMap.entries()) {
-    if (Date.now() - startTime > timeoutMs) { console.log('Cleanup individual timeout'); break; }
-    try {
-      await new Promise(r => setTimeout(r, 200));
-      let detail: any;
-      try {
-        detail = await tinyV3Get(token, `/pedidos/${tinyId}`);
-      } catch (fetchErr: any) {
-        if (fetchErr.message?.includes('404')) {
-          await supabase.from('expedition_beta_orders').update({ expedition_status: 'cancelled' }).eq('id', dbId);
-          fixed++;
-          console.log(`Cleanup: ${tinyId} -> cancelled (404)`);
-          continue;
-        }
-        throw fetchErr;
-      }
-      const sit = detail.situacao;
-      if (sit === 9) {
-        await supabase.from('expedition_beta_orders').update({ expedition_status: 'cancelled' }).eq('id', dbId);
-        fixed++;
-      } else if ([5, 6, 7, 8].includes(sit)) {
-        const tc = detail.codigoRastreamento || detail.codigoRastreio || null;
-        await supabase.from('expedition_beta_orders').update({ expedition_status: 'dispatched', ...(tc ? { tracking_code: tc } : {}) }).eq('id', dbId);
-        fixed++;
-      }
-      individualChecks++;
-    } catch (err: any) {
-      console.error(`Cleanup individual ${tinyId}: ${err.message}`);
-    }
-  }
-  if (individualChecks > 0) console.log(`Cleanup: ${individualChecks} individual checks done`);
+  const deleteIds = toDelete.map((o: any) => o.id);
+  const deleteTinyIds = toDelete.map((o: any) => o.tiny_order_id);
+  console.log(`[Cleanup] Deleting ${toDelete.length} stale orders: ${deleteTinyIds.join(', ')}`);
 
-  return fixed;
+  // Delete items first (FK), then orders
+  await supabase.from('expedition_beta_order_items').delete().in('expedition_order_id', deleteIds);
+  await supabase.from('expedition_beta_orders').delete().in('id', deleteIds);
+
+  console.log(`[Cleanup] Deleted ${toDelete.length} orders + their items`);
+  return toDelete.length;
 }
 
 serve(async (req) => {
@@ -497,9 +446,9 @@ serve(async (req) => {
     const existingMap = await loadExistingOrders(supabase);
     console.log(`Loaded ${existingMap.size} existing orders in ${Date.now() - startTime}ms`);
 
-    // Run cleanup FIRST so stale approved orders get fixed before other passes consume time
-    console.log("=== PASS 0: Cleanup approved ===");
-    const cleaned = await passCleanup(token, supabase, startTime, 45000);
+    // Run cleanup FIRST - inverted logic: delete locals not in Tiny's approved list
+    console.log("=== PASS 0: Cleanup (inverted logic) ===");
+    const cleaned = await passCleanup(token, supabase, startTime, 30000);
 
     console.log("=== PASS 1: Approved ===");
     const { synced, skipped } = await passApproved(token, supabase, existingMap, startTime);
