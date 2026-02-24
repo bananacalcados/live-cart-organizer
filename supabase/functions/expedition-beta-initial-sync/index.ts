@@ -83,9 +83,22 @@ async function tinyV3Get(token: string, path: string, params?: Record<string, st
 
 // Tiny V3 situacao codes (integers)
 // 0=em aberto, 3=aprovado, 5=faturado, 6=enviado, 7=entregue, 8=não entregue, 9=cancelado
-// Don't skip enviado (6) - we need tracking codes. Don't skip cancelado (9) - we need to cancel existing orders.
-const SKIP_SITUACAO = new Set([7, 8]); // skip entregue, não entregue only
-const CANCELLED_SITUACAO = new Set([9]); // cancelado
+const SKIP_SITUACAO = new Set([7, 8]);
+const CANCELLED_SITUACAO = new Set([9]);
+
+// Extract items from various possible Tiny V3 response structures
+function extractItems(order: any): any[] {
+  // Try multiple paths where items could be
+  const candidates = [
+    order.itens,
+    order.items,
+    order.produtos,
+  ];
+  for (const c of candidates) {
+    if (Array.isArray(c) && c.length > 0) return c;
+  }
+  return [];
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -155,9 +168,10 @@ serve(async (req) => {
 
           const ecomNum = item.ecommerce?.numeroPedidoEcommerce || '';
           
-          // Fetch full details for items and tracking
+          // Fetch full details for items and tracking (with rate limit delay)
           let order: any;
           try {
+            await new Promise(r => setTimeout(r, 350)); // Rate limit protection
             order = await tinyV3Get(token, `/pedidos/${tinyId}`);
           } catch {
             order = item;
@@ -193,6 +207,34 @@ serve(async (req) => {
                 tracking_code: trackingCode,
               }).eq('id', existing.id);
             }
+
+            // Backfill items if order has none
+            const { count: itemCount } = await supabase
+              .from('expedition_beta_order_items')
+              .select('id', { count: 'exact', head: true })
+              .eq('expedition_order_id', existing.id);
+
+            if (itemCount === 0) {
+              const rawItems = extractItems(order);
+              if (rawItems.length > 0) {
+                const itemsToInsert = rawItems.map((li: any) => {
+                  const prod = li.produto || li;
+                  return {
+                    expedition_order_id: existing.id,
+                    product_name: prod.descricao || prod.nome || prod.description || 'Produto',
+                    variant_name: null,
+                    sku: prod.sku || prod.codigo || null,
+                    quantity: parseFloat(li.quantidade || li.quantity || 1),
+                    unit_price: parseFloat(li.valorUnitario || li.valor || 0),
+                    weight_grams: 0,
+                  };
+                });
+                await supabase.from('expedition_beta_order_items').insert(itemsToInsert);
+                console.log(`Backfilled ${itemsToInsert.length} items for order ${tinyId}`);
+                synced++;
+              }
+            }
+
             skipped++;
             continue;
           }
@@ -250,22 +292,24 @@ serve(async (req) => {
             continue;
           }
 
-          // Insert Items - V3: itens[].produto.descricao, itens[].quantidade, itens[].valorUnitario
-          const rawItems = order.itens || [];
-          if (Array.isArray(rawItems) && rawItems.length > 0 && inserted) {
+          // Insert Items using extractItems helper
+          const rawItems = extractItems(order);
+          if (rawItems.length > 0 && inserted) {
             const itemsToInsert = rawItems.map((li: any) => {
-              const prod = li.produto || {};
+              const prod = li.produto || li;
               return {
                 expedition_order_id: inserted.id,
-                product_name: prod.descricao || prod.nome || 'Produto',
+                product_name: prod.descricao || prod.nome || prod.description || 'Produto',
                 variant_name: null,
                 sku: prod.sku || prod.codigo || null,
-                quantity: parseFloat(li.quantidade || 1),
-                unit_price: parseFloat(li.valorUnitario || 0),
+                quantity: parseFloat(li.quantidade || li.quantity || 1),
+                unit_price: parseFloat(li.valorUnitario || li.valor || 0),
                 weight_grams: 0
               };
             });
             await supabase.from("expedition_beta_order_items").insert(itemsToInsert);
+          } else if (inserted) {
+            console.log(`WARNING: No items found for order ${tinyId}, keys: ${Object.keys(order).join(',')}`);
           }
           
           synced++;
