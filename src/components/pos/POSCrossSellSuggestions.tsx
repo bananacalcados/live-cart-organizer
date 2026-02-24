@@ -58,13 +58,8 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
     setLoading(true);
     try {
       const cartSizes = [...new Set(cart.map(i => i.size).filter(Boolean))] as string[];
+      const cartCategories = [...new Set(cart.map(i => i.category).filter(Boolean))] as string[];
       const cartSkus = cart.map(i => i.sku);
-
-      if (cartSizes.length === 0) {
-        setSuggestions([]);
-        setLoading(false);
-        return;
-      }
 
       // 1. Try to get ABC curve from Tiny sales history (6 months data)
       const { data: tinyHistory } = await supabase
@@ -105,40 +100,50 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
         });
       }
 
-      // 2. Get products in same sizes with stock > 0, not already in cart
-      const { data: products } = await supabase
+      let allProductsList: any[] = [];
+      let query = supabase
         .from("pos_products")
         .select("*")
         .eq("store_id", storeId)
         .eq("is_active", true)
-        .in("size", cartSizes)
         .gt("stock", 0)
         .not("sku", "in", `(${cartSkus.join(",")})`)
         .order("stock", { ascending: false })
         .limit(50);
 
+      // Filter by size if available, otherwise by category, otherwise just high stock
+      if (cartSizes.length > 0) {
+        query = query.in("size", cartSizes);
+      } else if (cartCategories.length > 0) {
+        query = query.in("category", cartCategories);
+      }
+      // If neither size nor category, we get all products sorted by stock (dead stock opportunity)
+
+      const { data: products } = await query;
+
       if (!products || products.length === 0) {
-        // 3. Also look for products sitting in stock without any sales (dead stock)
-        // These won't appear in ABC curve at all
-        const { data: deadStock } = await supabase
+        // Fallback: get ANY product with high stock (dead stock opportunity)
+        const { data: fallbackProducts } = await supabase
           .from("pos_products")
           .select("*")
           .eq("store_id", storeId)
           .eq("is_active", true)
-          .in("size", cartSizes)
           .gt("stock", 3)
           .not("sku", "in", `(${cartSkus.join(",")})`)
           .order("stock", { ascending: false })
-          .limit(10);
+          .limit(20);
 
-        if (!deadStock || deadStock.length === 0) {
+        if (!fallbackProducts || fallbackProducts.length === 0) {
           setSuggestions([]);
           setLoading(false);
           return;
         }
+        allProductsList = fallbackProducts;
+      } else {
+        allProductsList = products;
       }
 
-      const allProducts = products || [];
+      const allProducts = allProductsList;
       
       // Also fetch dead stock (products not in ABC curve at all = never sold)
       const knownSkus = new Set(curveMap.keys());

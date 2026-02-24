@@ -3,10 +3,11 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   pointsEarned: number;
+  customerName?: string;
   onComplete: () => void;
 }
 
-export function POSSlotMachine({ pointsEarned, onComplete }: Props) {
+export function POSSlotMachine({ pointsEarned, customerName, onComplete }: Props) {
   const [phase, setPhase] = useState<"spinning" | "done">("spinning");
   const [displayDigits, setDisplayDigits] = useState<number[]>([0, 0, 0]);
   const intervalRefs = useRef<ReturnType<typeof setInterval>[]>([]);
@@ -50,7 +51,7 @@ export function POSSlotMachine({ pointsEarned, onComplete }: Props) {
       {/* Colorful title */}
       <div className="text-center">
         <h3 className="text-2xl font-black bg-gradient-to-r from-yellow-300 via-orange-400 to-red-500 bg-clip-text text-transparent">
-          🎰 Seus Pontos de Fidelidade!
+          🎰 {customerName ? `Parabéns, ${customerName}!` : 'Seus Pontos de Fidelidade!'}
         </h3>
         <p className="text-sm text-pos-white/50 mt-1">Aguarde o resultado...</p>
       </div>

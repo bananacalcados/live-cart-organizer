@@ -87,7 +87,9 @@ export function POSConfig({ storeId }: Props) {
   // Goals
   const [goals, setGoals] = useState<any[]>([]);
   const [showAddGoal, setShowAddGoal] = useState(false);
-  const [newGoal, setNewGoal] = useState({ goal_type: "revenue", goal_value: "", period: "daily", seller_id: "all" });
+  const [newGoal, setNewGoal] = useState({ goal_type: "revenue", goal_value: "", period: "daily", seller_id: "all", goal_category: "", goal_brand: "", period_start: "", period_end: "", prize_label: "", prize_value: "", prize_type: "" });
+  const [categories, setCategories] = useState<string[]>([]);
+  const [brands, setBrands] = useState<string[]>([]);
 
   const SEGMENT_COLORS = ["#FF6B00", "#E91E63", "#9C27B0", "#3F51B5", "#00BCD4", "#4CAF50", "#FFEB3B", "#FF5722", "#795548", "#607D8B"];
 
@@ -103,6 +105,7 @@ export function POSConfig({ storeId }: Props) {
     loadLoyaltyTiers();
     loadPricingRules();
     loadGoals();
+    loadCategoriesAndBrands();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [storeId]);
 
@@ -142,20 +145,36 @@ export function POSConfig({ storeId }: Props) {
     setGoals(data || []);
   };
 
+  const loadCategoriesAndBrands = async () => {
+    const { data: catData } = await supabase.from('pos_products').select('category').eq('store_id', storeId).eq('is_active', true).not('category', 'is', null);
+    const { data: brandData } = await supabase.from('pos_products').select('brand' as any).eq('store_id', storeId).eq('is_active', true).not('brand' as any, 'is', null);
+    const cats = [...new Set((catData || []).map((r: any) => r.category).filter(Boolean))].sort();
+    const brs = [...new Set((brandData || []).map((r: any) => r.brand).filter(Boolean))].sort();
+    setCategories(cats as string[]);
+    setBrands(brs as string[]);
+  };
+
   const addGoal = async () => {
     if (!newGoal.goal_value) return;
     try {
-      const payload = {
+      const payload: any = {
         store_id: storeId,
         goal_type: newGoal.goal_type,
         goal_value: parseFloat(newGoal.goal_value),
         period: newGoal.period,
         seller_id: newGoal.seller_id === 'all' ? null : newGoal.seller_id,
-        is_active: true
+        is_active: true,
+        goal_category: newGoal.goal_category || null,
+        goal_brand: newGoal.goal_brand || null,
+        period_start: newGoal.period_start || null,
+        period_end: newGoal.period_end || null,
+        prize_label: newGoal.prize_label || null,
+        prize_value: newGoal.prize_value ? parseFloat(newGoal.prize_value) : null,
+        prize_type: newGoal.prize_type || null,
       };
-      await supabase.from('pos_goals').insert(payload as any);
+      await supabase.from('pos_goals').insert(payload);
       toast.success("Meta adicionada!");
-      setNewGoal({ goal_type: "revenue", goal_value: "", period: "daily", seller_id: "all" });
+      setNewGoal({ goal_type: "revenue", goal_value: "", period: "daily", seller_id: "all", goal_category: "", goal_brand: "", period_start: "", period_end: "", prize_label: "", prize_value: "", prize_type: "" });
       setShowAddGoal(false);
       loadGoals();
     } catch { toast.error("Erro ao adicionar meta"); }
@@ -819,15 +838,27 @@ export function POSConfig({ storeId }: Props) {
                 <div key={g.id} className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-white/10">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-pos-white">{typeLabel}</span>
-                      <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange">{periodLabel}</Badge>
+                      <span className="text-sm font-medium text-pos-white">
+                        {g.goal_type === 'revenue' ? 'Faturamento' : 
+                         g.goal_type === 'avg_ticket' ? 'Ticket Médio' : 
+                         g.goal_type === 'items_sold' ? 'Itens por Venda' : 
+                         g.goal_type === 'seller_revenue' ? 'Faturamento Vendedor' :
+                         g.goal_type === 'category_units' ? `Categoria: ${g.goal_category || ''}` :
+                         g.goal_type === 'brand_units' ? `Marca: ${g.goal_brand || ''}` : 'Meta'}
+                      </span>
+                      <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange">
+                        {g.period === 'daily' ? 'Diária' : g.period === 'weekly' ? 'Semanal' : g.period === 'monthly' ? 'Mensal' : g.period === 'custom' && g.period_start ? `${new Date(g.period_start).toLocaleDateString('pt-BR', {day:'2-digit',month:'short'})} - ${new Date(g.period_end).toLocaleDateString('pt-BR', {day:'2-digit',month:'short'})}` : 'Personalizado'}
+                      </Badge>
                       <Badge className="text-[10px] bg-pos-white/10 text-pos-white/60">{sellerName}</Badge>
                     </div>
                     <p className="text-lg font-bold text-pos-white mt-1">
                       {g.goal_type.includes('revenue') || g.goal_type === 'avg_ticket' 
                         ? `R$ ${g.goal_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
-                        : g.goal_value}
+                        : `${g.goal_value} pares`}
                     </p>
+                    {g.prize_label && (
+                      <p className="text-xs text-yellow-400 mt-1">🏆 Prêmio: {g.prize_label}{g.prize_value ? ` (R$ ${g.prize_value})` : ''}</p>
+                    )}
                   </div>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-300" onClick={() => deleteGoal(g.id)}>
                     <Trash2 className="h-4 w-4" />
@@ -1243,7 +1274,7 @@ export function POSConfig({ storeId }: Props) {
 
         {/* Add Goal Dialog */}
         <Dialog open={showAddGoal} onOpenChange={setShowAddGoal}>
-          <DialogContent className="bg-pos-black border-pos-orange/30">
+          <DialogContent className="bg-pos-black border-pos-orange/30 max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle className="text-pos-white">Nova Meta</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div>
@@ -1255,9 +1286,43 @@ export function POSConfig({ storeId }: Props) {
                     <SelectItem value="avg_ticket">Ticket Médio</SelectItem>
                     <SelectItem value="items_sold">Itens por Venda</SelectItem>
                     <SelectItem value="seller_revenue">Faturamento Vendedor</SelectItem>
+                    <SelectItem value="category_units">Pares por Categoria</SelectItem>
+                    <SelectItem value="brand_units">Pares por Marca</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Category selector for category_units */}
+              {newGoal.goal_type === 'category_units' && (
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Categoria do Tiny</Label>
+                  <Select value={newGoal.goal_category} onValueChange={v => setNewGoal(s => ({ ...s, goal_category: v }))}>
+                    <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue placeholder="Selecione a categoria" /></SelectTrigger>
+                    <SelectContent>
+                      {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {categories.length === 0 && <p className="text-[10px] text-pos-white/40 mt-1">Sincronize os produtos primeiro para carregar categorias.</p>}
+                </div>
+              )}
+
+              {/* Brand selector for brand_units */}
+              {newGoal.goal_type === 'brand_units' && (
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Marca</Label>
+                  {brands.length > 0 ? (
+                    <Select value={newGoal.goal_brand} onValueChange={v => setNewGoal(s => ({ ...s, goal_brand: v }))}>
+                      <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue placeholder="Selecione a marca" /></SelectTrigger>
+                      <SelectContent>
+                        {brands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input value={newGoal.goal_brand} onChange={e => setNewGoal(s => ({ ...s, goal_brand: e.target.value }))} placeholder="Ex: Nike, Adidas" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  )}
+                </div>
+              )}
+
               <div>
                 <Label className="text-pos-white/70 text-xs">Período</Label>
                 <Select value={newGoal.period} onValueChange={v => setNewGoal(s => ({ ...s, period: v }))}>
@@ -1266,9 +1331,33 @@ export function POSConfig({ storeId }: Props) {
                     <SelectItem value="daily">Diária</SelectItem>
                     <SelectItem value="weekly">Semanal</SelectItem>
                     <SelectItem value="monthly">Mensal</SelectItem>
+                    <SelectItem value="custom">Período Personalizado</SelectItem>
+                    {/* Pre-defined months */}
+                    {Array.from({ length: 6 }, (_, i) => {
+                      const d = new Date();
+                      d.setMonth(d.getMonth() + i);
+                      const label = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                      const value = `month_${d.getFullYear()}_${d.getMonth() + 1}`;
+                      return <SelectItem key={value} value={value}>{label.charAt(0).toUpperCase() + label.slice(1)}</SelectItem>;
+                    })}
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Custom date range */}
+              {(newGoal.period === 'custom' || newGoal.period.startsWith('month_')) && newGoal.period === 'custom' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-pos-white/70 text-xs">Data Início</Label>
+                    <Input type="date" value={newGoal.period_start} onChange={e => setNewGoal(s => ({ ...s, period_start: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  </div>
+                  <div>
+                    <Label className="text-pos-white/70 text-xs">Data Fim</Label>
+                    <Input type="date" value={newGoal.period_end} onChange={e => setNewGoal(s => ({ ...s, period_end: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label className="text-pos-white/70 text-xs">Aplicar a</Label>
                 <Select value={newGoal.seller_id} onValueChange={v => setNewGoal(s => ({ ...s, seller_id: v }))}>
@@ -1283,9 +1372,55 @@ export function POSConfig({ storeId }: Props) {
               </div>
               <div>
                 <Label className="text-pos-white/70 text-xs">Valor da Meta</Label>
-                <Input type="number" value={newGoal.goal_value} onChange={e => setNewGoal(s => ({ ...s, goal_value: e.target.value }))} placeholder="Ex: 5000" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                <Input type="number" value={newGoal.goal_value} onChange={e => setNewGoal(s => ({ ...s, goal_value: e.target.value }))} placeholder={newGoal.goal_type.includes('units') ? "Ex: 10 pares" : "Ex: 5000"} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
               </div>
-              <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addGoal}>Salvar Meta</Button>
+
+              {/* Prize/Commission section */}
+              <div className="border-t border-pos-orange/20 pt-4 space-y-3">
+                <p className="text-xs font-bold text-yellow-400 flex items-center gap-1"><Gift className="h-3 w-3" /> Prêmio / Comissão (opcional)</p>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Descrição do Prêmio</Label>
+                  <Input value={newGoal.prize_label} onChange={e => setNewGoal(s => ({ ...s, prize_label: e.target.value }))} placeholder="Ex: Bônus de R$100, Folga extra" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-pos-white/70 text-xs">Tipo</Label>
+                    <Select value={newGoal.prize_type} onValueChange={v => setNewGoal(s => ({ ...s, prize_type: v }))}>
+                      <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bonus">Bônus em R$</SelectItem>
+                        <SelectItem value="commission_percent">Comissão %</SelectItem>
+                        <SelectItem value="gift">Presente / Brinde</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-pos-white/70 text-xs">Valor (R$ ou %)</Label>
+                    <Input type="number" value={newGoal.prize_value} onChange={e => setNewGoal(s => ({ ...s, prize_value: e.target.value }))} placeholder="100" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  </div>
+                </div>
+              </div>
+
+              <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => {
+                // Handle month-based periods by converting to custom with start/end dates
+                if (newGoal.period.startsWith('month_')) {
+                  const parts = newGoal.period.split('_');
+                  const year = parseInt(parts[1]);
+                  const month = parseInt(parts[2]) - 1;
+                  const start = new Date(year, month, 1);
+                  const end = new Date(year, month + 1, 0);
+                  setNewGoal(s => ({
+                    ...s,
+                    period: 'custom',
+                    period_start: start.toISOString().split('T')[0],
+                    period_end: end.toISOString().split('T')[0],
+                  }));
+                  // Need a small delay for state update, so call addGoal in next tick
+                  setTimeout(() => addGoal(), 50);
+                  return;
+                }
+                addGoal();
+              }}>Salvar Meta</Button>
             </div>
           </DialogContent>
         </Dialog>
