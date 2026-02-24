@@ -4493,6 +4493,7 @@ export type Database = {
           payment_gateway: string | null
           payment_link: string | null
           payment_method: string | null
+          payment_method_detail: string | null
           sale_type: string
           seller_id: string | null
           source_order_id: string | null
@@ -4522,6 +4523,7 @@ export type Database = {
           payment_gateway?: string | null
           payment_link?: string | null
           payment_method?: string | null
+          payment_method_detail?: string | null
           sale_type?: string
           seller_id?: string | null
           source_order_id?: string | null
@@ -4551,6 +4553,7 @@ export type Database = {
           payment_gateway?: string | null
           payment_link?: string | null
           payment_method?: string | null
+          payment_method_detail?: string | null
           sale_type?: string
           seller_id?: string | null
           source_order_id?: string | null
