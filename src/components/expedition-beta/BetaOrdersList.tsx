@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Trash2, Unlink, Clock, ArrowRight, Gift, Radio, RotateCcw } from 'lucide-react';
-import Barcode from 'react-barcode';
+
+const Barcode = lazy(() => import('react-barcode'));
+
+const BarcodeWrapper = ({ value, ...props }: any) => (
+  <Suspense fallback={<div className="h-[60px] flex items-center justify-center text-xs text-muted-foreground">Carregando código...</div>}>
+    <Barcode value={value} {...props} />
+  </Suspense>
+);
 
 interface Props {
   orders: any[];
@@ -346,7 +353,7 @@ function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onTogg
           {/* EAN-13 Barcode display */}
           {order.ean13_barcode && (
             <div className="mb-3 p-3 rounded-lg bg-white border flex flex-col items-center">
-              <Barcode value={order.ean13_barcode} format="EAN13" width={2} height={60} fontSize={14} />
+              <BarcodeWrapper value={order.ean13_barcode} format="EAN13" width={2} height={60} fontSize={14} />
             </div>
           )}
 
