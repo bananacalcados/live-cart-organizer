@@ -64,21 +64,31 @@ async function getTinyV3Token(supabase: any): Promise<string | null> {
   return tokenData.access_token;
 }
 
-async function tinyV3Get(token: string, path: string, params?: Record<string, string>): Promise<any> {
+async function tinyV3Get(token: string, path: string, params?: Record<string, string>, maxRetries = 3): Promise<any> {
   const url = new URL(`${TINY_V3_BASE}${path}`);
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== null) url.searchParams.set(k, v);
     }
   }
-  const resp = await fetch(url.toString(), {
-    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
-  });
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`Tiny v3 ${path} failed (${resp.status}): ${errText.substring(0, 300)}`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await fetch(url.toString(), {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+    });
+    if (resp.status === 429) {
+      if (attempt < maxRetries) {
+        const wait = Math.min(2000 * Math.pow(2, attempt), 10000);
+        console.log(`429 on ${path}, retry ${attempt + 1} in ${wait}ms`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+    }
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`Tiny v3 ${path} failed (${resp.status}): ${errText.substring(0, 300)}`);
+    }
+    return resp.json();
   }
-  return resp.json();
 }
 
 function extractItems(order: any): any[] {
