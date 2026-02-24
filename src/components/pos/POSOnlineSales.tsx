@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Globe, Search, Plus, Minus, Trash2, ShoppingCart, Loader2,
   Copy, Check, Image, Filter, Link2, ExternalLink, X, ArrowLeft,
-  Truck, UserPlus, Banknote, CreditCard, MessageSquareText, Bike
+  Truck, UserPlus, Banknote, CreditCard, MessageSquareText, Bike,
+  Pencil, Tag
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -104,6 +105,11 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryReference, setDeliveryReference] = useState("");
 
+  // Coupon & price editing
+  const [couponCode, setCouponCode] = useState("");
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [editPriceValue, setEditPriceValue] = useState("");
+  
   // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -220,6 +226,13 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const removeFromCart = (id: string) => setCart(prev => prev.filter(c => c.id !== id));
 
   const cartTotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+
+  const updateCartPrice = (id: string, newPrice: number) => {
+    if (newPrice <= 0) return;
+    setCart(prev => prev.map(c => c.id === id ? { ...c, price: newPrice } : c));
+    setEditingPriceId(null);
+    setEditPriceValue("");
+  };
   const cartItems = cart.reduce((s, c) => s + c.quantity, 0);
 
   const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -242,6 +255,113 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     await processPayment("delivery");
   };
 
+  const createTinyOrder = async () => {
+    try {
+      const sellerObj = sellers.find(s => s.id === selectedSeller);
+      const { data } = await supabase.functions.invoke("pos-tiny-create-sale", {
+        body: {
+          store_id: storeId,
+          seller_id: selectedSeller,
+          tiny_seller_id: sellerObj?.tiny_seller_id || null,
+          customer: linkedCustomer ? {
+            name: linkedCustomer.name,
+            cpf: linkedCustomer.cpf,
+            email: linkedCustomer.email,
+            whatsapp: linkedCustomer.whatsapp,
+            address: linkedCustomer.address,
+            cep: linkedCustomer.cep,
+            city: linkedCustomer.city,
+            state: linkedCustomer.state,
+          } : undefined,
+          items: cart.map(c => ({
+            sku: c.sku,
+            name: c.title,
+            variant: c.variantLabel,
+            quantity: c.quantity,
+            price: c.price,
+          })),
+          payment_method_name: "Venda Online",
+          notes: deliveryNotes || undefined,
+        },
+      });
+      return data;
+    } catch (e) {
+      console.error("Tiny order creation failed:", e);
+      return null;
+    }
+  };
+
+  const ensureCrmOrder = async (): Promise<string | null> => {
+    try {
+      // Find or create default "Vendas Online" event
+      let { data: event } = await supabase
+        .from("events")
+        .select("id")
+        .eq("name", "Vendas Online POS")
+        .maybeSingle();
+
+      if (!event) {
+        const { data: newEvent } = await supabase
+          .from("events")
+          .insert({ name: "Vendas Online POS", description: "Pedidos gerados pelo módulo de venda online do POS", is_active: true })
+          .select("id")
+          .single();
+        event = newEvent;
+      }
+      if (!event) throw new Error("Evento não criado");
+
+      // Find or create customer in CRM customers table
+      let customerId: string | null = null;
+      const handle = linkedCustomer?.whatsapp || linkedCustomer?.name || "POS-Customer";
+      const { data: existingCust } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("instagram_handle", handle)
+        .maybeSingle();
+
+      if (existingCust) {
+        customerId = existingCust.id;
+      } else {
+        const { data: newCust } = await supabase
+          .from("customers")
+          .insert({ instagram_handle: handle, whatsapp: linkedCustomer?.whatsapp })
+          .select("id")
+          .single();
+        customerId = newCust?.id || null;
+      }
+      if (!customerId) throw new Error("Cliente não criado");
+
+      // Create order
+      const products = cart.map(c => ({
+        title: c.title,
+        variant: c.variantLabel,
+        price: c.price,
+        quantity: c.quantity,
+        image: c.imageUrl,
+        sku: c.sku,
+        shopifyId: c.variantId,
+      }));
+
+      const { data: order } = await supabase
+        .from("orders")
+        .insert({
+          event_id: event.id,
+          customer_id: customerId,
+          products,
+          stage: "new",
+          notes: deliveryNotes || null,
+          coupon_code: couponCode || null,
+        })
+        .select("id")
+        .single();
+
+      return order?.id || null;
+    } catch (e) {
+      console.error("CRM order creation failed:", e);
+      return null;
+    }
+  };
+
   const processPayment = async (gateway: Gateway) => {
     setGenerating(true);
     setGeneratedLink("");
@@ -250,7 +370,6 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       let link = "";
 
       if (gateway === "delivery") {
-        // No link needed for delivery payment
         link = "";
       } else if (gateway === "yampi") {
         const items = cart.map(c => ({
@@ -263,25 +382,22 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           body: {
             items,
             customer: linkedCustomer?.name || linkedCustomer?.whatsapp ? { name: linkedCustomer.name, phone: linkedCustomer.whatsapp } : undefined,
+            ...(couponCode && { coupon_code: couponCode }),
           },
         });
         if (error || !data?.success) throw new Error(data?.error || error?.message || "Erro Yampi");
         link = data.payment_link;
       } else if (gateway === "checkout") {
-        const variants = cart.map(c => {
-          const numericId = c.variantId.replace("gid://shopify/ProductVariant/", "");
-          return `${numericId}:${c.quantity}`;
-        }).join(",");
-        link = `https://checkout.bananacalcados.com.br/checkout?variants=${variants}`;
+        // Create order in CRM and redirect to transparent checkout
+        const orderId = await ensureCrmOrder();
+        if (!orderId) throw new Error("Erro ao criar pedido no CRM");
+        link = `https://checkout.bananacalcados.com.br/checkout/order/${orderId}`;
       } else if (gateway === "paypal") {
-        const items = cart.map(c => ({
-          name: `${c.title}${c.variantLabel ? ` - ${c.variantLabel}` : ""}`,
-          sku: c.sku,
-          quantity: c.quantity,
-          unit_amount: c.price,
-        }));
+        // Create CRM order first, then create PayPal order from it
+        const orderId = await ensureCrmOrder();
+        if (!orderId) throw new Error("Erro ao criar pedido para PayPal");
         const { data, error } = await supabase.functions.invoke("paypal-create-order", {
-          body: { items, currency: "BRL" },
+          body: { orderId },
         });
         if (error || !data?.approvalUrl) throw new Error(data?.error || "Erro PayPal");
         link = data.approvalUrl;
@@ -291,7 +407,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           body: {
             amount: cartTotal,
             description: description.substring(0, 140),
-            payer_email: "cliente@email.com",
+            payer_email: linkedCustomer?.email || "cliente@email.com",
           },
         });
         if (error || !data?.success) throw new Error(data?.error || "Erro PIX");
@@ -341,6 +457,16 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           barcode: "",
         }));
         await supabase.from("pos_sale_items").insert(saleItems as any);
+      }
+
+      // Create Tiny order for delivery, PayPal and PIX
+      if (gateway === "delivery" || gateway === "paypal" || gateway === "pix") {
+        const tinyResult = await createTinyOrder();
+        if (tinyResult?.success) {
+          console.log("Tiny order created:", tinyResult.tiny_order_id);
+        } else {
+          console.warn("Tiny order failed (sale saved locally):", tinyResult?.error);
+        }
       }
 
       // Transfer stock: source store -> Site
@@ -406,6 +532,9 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     setChangeAmount("");
     setDeliveryAddress("");
     setDeliveryReference("");
+    setCouponCode("");
+    setEditingPriceId(null);
+    setEditPriceValue("");
   };
 
   const selectCustomer = (c: FoundCustomer) => {
@@ -607,7 +736,31 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium line-clamp-1">{c.title}</p>
                       {c.variantLabel && <p className="text-[10px] text-muted-foreground">{c.variantLabel}</p>}
-                      <p className="text-xs font-bold text-primary">{fmt(c.price)}</p>
+                      {editingPriceId === c.id ? (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Input
+                            type="number"
+                            value={editPriceValue}
+                            onChange={e => setEditPriceValue(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") updateCartPrice(c.id, parseFloat(editPriceValue));
+                              if (e.key === "Escape") { setEditingPriceId(null); setEditPriceValue(""); }
+                            }}
+                            className="h-6 w-20 text-xs px-1"
+                            autoFocus
+                          />
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => updateCartPrice(c.id, parseFloat(editPriceValue))}>
+                            <Check className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          className="text-xs font-bold text-primary flex items-center gap-1 hover:underline"
+                          onClick={() => { setEditingPriceId(c.id); setEditPriceValue(String(c.price)); }}
+                        >
+                          {fmt(c.price)} <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateCartQty(c.id, -1)}>
@@ -705,6 +858,21 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
             </div>
 
             <Separator />
+
+            {/* Coupon Code */}
+            {!generatedLink && !deliveryConfirmed && (
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1">
+                  <Tag className="h-3 w-3" /> Cupom de Desconto
+                </Label>
+                <Input
+                  placeholder="Código do cupom (opcional)"
+                  value={couponCode}
+                  onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                  className="h-8 text-xs"
+                />
+              </div>
+            )}
 
             {/* Payment Gateways */}
             {!generatedLink && !deliveryConfirmed ? (
