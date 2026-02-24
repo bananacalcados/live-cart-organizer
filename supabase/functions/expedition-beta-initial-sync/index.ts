@@ -83,8 +83,9 @@ async function tinyV3Get(token: string, path: string, params?: Record<string, st
 
 // Tiny V3 situacao codes (integers)
 // 0=em aberto, 3=aprovado, 5=faturado, 6=enviado, 7=entregue, 8=não entregue, 9=cancelado
-// Don't skip enviado (6) anymore - we need to check tracking codes
-const SKIP_SITUACAO = new Set([7, 8, 9]); // skip entregue, não entregue, cancelado
+// Don't skip enviado (6) - we need tracking codes. Don't skip cancelado (9) - we need to cancel existing orders.
+const SKIP_SITUACAO = new Set([7, 8]); // skip entregue, não entregue only
+const CANCELLED_SITUACAO = new Set([9]); // cancelado
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -130,6 +131,28 @@ serve(async (req) => {
           if (SKIP_SITUACAO.has(item.situacao)) continue;
 
           const tinyId = String(item.id);
+          const isCancelled = CANCELLED_SITUACAO.has(item.situacao);
+
+          // Check if already exists
+          const { data: existing } = await supabase
+            .from("expedition_beta_orders")
+            .select("id, expedition_status, tracking_code")
+            .eq("tiny_order_id", tinyId)
+            .maybeSingle();
+
+          // If cancelled in Tiny, update existing record and skip new insert
+          if (isCancelled) {
+            if (existing && existing.expedition_status !== 'cancelled') {
+              await supabase.from('expedition_beta_orders').update({
+                expedition_status: 'cancelled',
+              }).eq('id', existing.id);
+              console.log(`Marked ${tinyId} as cancelled`);
+              synced++;
+            }
+            skipped++;
+            continue;
+          }
+
           const ecomNum = item.ecommerce?.numeroPedidoEcommerce || '';
           
           // Fetch full details for items and tracking
@@ -140,16 +163,22 @@ serve(async (req) => {
             order = item;
           }
 
+          // Also check situacao from detail (may differ from list)
+          const detailSituacao = order.situacao ?? item.situacao;
+          if (CANCELLED_SITUACAO.has(detailSituacao)) {
+            if (existing && existing.expedition_status !== 'cancelled') {
+              await supabase.from('expedition_beta_orders').update({
+                expedition_status: 'cancelled',
+              }).eq('id', existing.id);
+              synced++;
+            }
+            skipped++;
+            continue;
+          }
+
           // Extract tracking code from order details
           const trackingCode = order.codigoRastreamento || order.codigoRastreio || null;
           const isDispatched = item.situacao === 6 || !!trackingCode;
-
-          // Check if already exists
-          const { data: existing } = await supabase
-            .from("expedition_beta_orders")
-            .select("id, expedition_status, tracking_code")
-            .eq("tiny_order_id", tinyId)
-            .maybeSingle();
           
           if (existing) {
             // Update if now has tracking but wasn't dispatched
