@@ -1350,6 +1350,8 @@ export type Database = {
           source_event_date: string | null
           source_event_name: string | null
           subtotal_price: number | null
+          tiny_order_id: string | null
+          tiny_order_number: string | null
           total_discount: number | null
           total_price: number | null
           total_shipping: number | null
@@ -1383,6 +1385,8 @@ export type Database = {
           source_event_date?: string | null
           source_event_name?: string | null
           subtotal_price?: number | null
+          tiny_order_id?: string | null
+          tiny_order_number?: string | null
           total_discount?: number | null
           total_price?: number | null
           total_shipping?: number | null
@@ -1416,6 +1420,8 @@ export type Database = {
           source_event_date?: string | null
           source_event_name?: string | null
           subtotal_price?: number | null
+          tiny_order_id?: string | null
+          tiny_order_number?: string | null
           total_discount?: number | null
           total_price?: number | null
           total_shipping?: number | null
