@@ -8,6 +8,52 @@ const corsHeaders = {
 
 const TINY_V3_BASE = 'https://api.tiny.com.br/public-api/v3';
 
+type ParsedSeller = {
+  tiny_id: string;
+  name: string;
+  situacao: string;
+};
+
+const normalizeText = (value: unknown) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+
+const isExplicitInactive = (status: unknown) => {
+  if (status === false || status === 0) return true;
+  const normalized = normalizeText(status);
+  return [
+    'i',
+    'inativo',
+    'inativa',
+    'inactive',
+    '0',
+    'false',
+    'n',
+    'nao',
+    'desativado',
+    'desativada',
+  ].includes(normalized);
+};
+
+const parseTinyV2Seller = (item: any): ParsedSeller | null => {
+  const v = item?.vendedor || item || {};
+  const tinyId = String(v.id ?? v.id_vendedor ?? v.idVendedor ?? v.codigo ?? '').trim();
+  const name = String(v.nome ?? v.nome_contato ?? v.descricao ?? '').trim();
+  const situacao = v.situacao ?? v.status ?? v.ativo ?? '';
+
+  if (!tinyId || !name) return null;
+  if (isExplicitInactive(situacao)) return null;
+
+  return {
+    tiny_id: tinyId,
+    name,
+    situacao: String(situacao ?? ''),
+  };
+};
+
 async function getTinyV3Token(supabase: any): Promise<string | null> {
   const { data } = await supabase
     .from('app_settings')
@@ -98,14 +144,20 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // ALWAYS use per-store v2 token first (each store has its own Tiny account)
-    const { data: store } = await supabase
-      .from('pos_stores')
-      .select('tiny_token')
-      .eq('id', store_id)
-      .single();
+    const [{ data: store }, { data: existingSellers }] = await Promise.all([
+      supabase
+        .from('pos_stores')
+        .select('tiny_token')
+        .eq('id', store_id)
+        .single(),
+      supabase
+        .from('pos_sellers')
+        .select('id, tiny_seller_id, name, is_active, updated_at')
+        .eq('store_id', store_id)
+        .order('updated_at', { ascending: false }),
+    ]);
 
-    let sellers: Array<{ tiny_id: string; name: string }> = [];
+    let sellers: ParsedSeller[] = [];
 
     if (store?.tiny_token) {
       console.log('Using Tiny API v2 for sellers (per-store token)...');
@@ -114,20 +166,25 @@ serve(async (req) => {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `token=${store.tiny_token}&formato=json&pesquisa=`,
       });
-      const data = await resp.json();
-      const rawSellers = data.retorno?.vendedores || [];
-      sellers = rawSellers.map((item: any) => {
-        const v = item.vendedor || item;
-        return {
-          tiny_id: String(v.id || ''),
-          name: v.nome || 'Sem nome',
-          situacao: v.situacao || '',
-        };
-      }).filter((s: any) => {
-        const sit = (s.situacao || '').toString().trim();
-        return s.tiny_id && s.name && (sit === 'A' || sit === 'Ativo' || sit === '');
-      });
-      console.log(`[v2] Found ${sellers.length} active sellers`);
+
+      const rawResponse = await resp.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(rawResponse);
+      } catch {
+        throw new Error(`Tiny v2 respondeu formato inválido: ${rawResponse.slice(0, 250)}`);
+      }
+
+      if (!resp.ok) {
+        throw new Error(`Tiny v2 error (${resp.status}): ${rawResponse.slice(0, 250)}`);
+      }
+
+      const rawSellers = Array.isArray(data?.retorno?.vendedores) ? data.retorno.vendedores : [];
+      sellers = rawSellers
+        .map(parseTinyV2Seller)
+        .filter((seller): seller is ParsedSeller => !!seller);
+
+      console.log(`[v2] Found ${sellers.length} active sellers (${rawSellers.length} total)`);
     }
 
     // Fallback to v3 global token only if no per-store token
@@ -141,44 +198,78 @@ serve(async (req) => {
           sellers = (Array.isArray(items) ? items : []).map((v: any) => ({
             tiny_id: String(v.id || ''),
             name: v.contato?.nome || v.descricao || v.nome || v.name || '',
-            situacao: v.situacao || 'A',
-          })).filter((s: any) => s.tiny_id && s.name && s.situacao === 'A');
+            situacao: String(v.situacao || 'A'),
+          })).filter((s: ParsedSeller) => s.tiny_id && s.name && !isExplicitInactive(s.situacao));
           console.log(`[v3] Found ${sellers.length} active sellers`);
         } catch (e) {
-          console.warn('Tiny v3 sellers failed:', e.message);
+          console.warn('Tiny v3 sellers failed:', (e as Error).message);
         }
       }
     }
 
-    // CLEAN SYNC: Delete ALL existing sellers for this store, then re-insert only active ones
-    console.log(`Deleting all existing sellers for store ${store_id}...`);
-    const { error: deleteError } = await supabase
-      .from('pos_sellers')
-      .delete()
-      .eq('store_id', store_id);
-    
-    if (deleteError) {
-      console.warn('Delete sellers error (may have FK constraints):', deleteError.message);
-      // If delete fails due to FK constraints, deactivate instead
+    const existingRows = existingSellers || [];
+    const existingByTinyId = new Map<string, any>();
+    for (const row of existingRows) {
+      const key = String(row.tiny_seller_id || '').trim();
+      if (key && !existingByTinyId.has(key)) {
+        existingByTinyId.set(key, row);
+      }
+    }
+
+    let usedCachedFallback = false;
+
+    if (sellers.length > 0) {
       await supabase
         .from('pos_sellers')
         .update({ is_active: false })
         .eq('store_id', store_id);
+
+      for (const seller of sellers) {
+        const existing = existingByTinyId.get(seller.tiny_id);
+
+        if (existing) {
+          await supabase
+            .from('pos_sellers')
+            .update({ name: seller.name, tiny_seller_id: seller.tiny_id, is_active: true })
+            .eq('id', existing.id);
+        } else {
+          await supabase.from('pos_sellers').insert({
+            store_id,
+            name: seller.name,
+            tiny_seller_id: seller.tiny_id,
+            is_active: true,
+          });
+        }
+      }
+
+      console.log(`Synced ${sellers.length} active sellers for store ${store_id}`);
+    } else if (existingRows.length > 0) {
+      const seen = new Set<string>();
+      const fallbackIds: string[] = [];
+
+      for (const row of existingRows) {
+        const key = String(row.tiny_seller_id || '').trim() || normalizeText(row.name);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        fallbackIds.push(row.id);
+      }
+
+      await supabase
+        .from('pos_sellers')
+        .update({ is_active: false })
+        .eq('store_id', store_id);
+
+      if (fallbackIds.length > 0) {
+        await supabase
+          .from('pos_sellers')
+          .update({ is_active: true })
+          .in('id', fallbackIds);
+      }
+
+      usedCachedFallback = fallbackIds.length > 0;
+      console.warn(`Tiny returned 0 active sellers for store ${store_id}. Kept ${fallbackIds.length} cached sellers active.`);
     }
 
-    // Re-insert only active sellers from API
-    for (const seller of sellers) {
-      await supabase.from('pos_sellers').insert({
-        store_id,
-        name: seller.name,
-        tiny_seller_id: seller.tiny_id,
-        is_active: true,
-      });
-    }
-
-    console.log(`Inserted ${sellers.length} active sellers for store ${store_id}`);
-
-    // Return updated sellers from DB
     const { data: dbSellers } = await supabase
       .from('pos_sellers')
       .select('*')
@@ -186,12 +277,16 @@ serve(async (req) => {
       .eq('is_active', true)
       .order('name');
 
-    return new Response(JSON.stringify({ success: true, sellers: dbSellers || [] }), {
+    return new Response(JSON.stringify({
+      success: true,
+      sellers: dbSellers || [],
+      fallback_used: usedCachedFallback,
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message, sellers: [] }), {
+    return new Response(JSON.stringify({ success: false, error: (error as Error).message, sellers: [] }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
