@@ -373,6 +373,55 @@ async function passCancelled(token: string, supabase: any, existingMap: Map<stri
   return updated;
 }
 
+// === PASS 4: Cleanup - verify approved orders still approved in Tiny ===
+async function passCleanup(token: string, supabase: any, startTime: number) {
+  let fixed = 0;
+
+  // Get all orders we have as 'approved'
+  const { data: approvedOrders } = await supabase
+    .from('expedition_beta_orders')
+    .select('id, tiny_order_id')
+    .eq('expedition_status', 'approved')
+    .not('tiny_order_id', 'is', null);
+
+  if (!approvedOrders || approvedOrders.length === 0) return 0;
+
+  console.log(`[Pass4-Cleanup] Checking ${approvedOrders.length} approved orders`);
+
+  for (const order of approvedOrders) {
+    if (Date.now() - startTime > 55000) { console.log('Pass4 timeout'); break; }
+
+    try {
+      await new Promise(r => setTimeout(r, 300));
+      const detail = await tinyV3Get(token, `/pedidos/${order.tiny_order_id}`);
+      const sit = detail.situacao;
+
+      if (sit === 9) {
+        await supabase.from('expedition_beta_orders').update({ expedition_status: 'cancelled' }).eq('id', order.id);
+        fixed++;
+        console.log(`Cleanup: ${order.tiny_order_id} -> cancelled`);
+      } else if ([5, 6].includes(sit)) {
+        const tc = detail.codigoRastreamento || detail.codigoRastreio || null;
+        await supabase.from('expedition_beta_orders').update({ 
+          expedition_status: 'dispatched',
+          ...(tc ? { tracking_code: tc } : {}),
+        }).eq('id', order.id);
+        fixed++;
+        console.log(`Cleanup: ${order.tiny_order_id} -> dispatched`);
+      } else if (sit === 7 || sit === 8) {
+        await supabase.from('expedition_beta_orders').update({ expedition_status: 'dispatched' }).eq('id', order.id);
+        fixed++;
+        console.log(`Cleanup: ${order.tiny_order_id} -> dispatched (delivered/failed)`);
+      }
+      // sit === 0 or 3 = keep as approved
+    } catch (err: any) {
+      console.error(`Cleanup fail ${order.tiny_order_id}: ${err.message}`);
+    }
+  }
+
+  return fixed;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -402,10 +451,13 @@ serve(async (req) => {
     console.log("=== PASS 3: Cancelled ===");
     const cancelled = await passCancelled(token, supabase, existingMap, startTime);
 
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`Done in ${elapsed}s: ${synced} synced, ${skipped} skipped, ${dispatched} dispatched, ${cancelled} cancelled`);
+    console.log("=== PASS 4: Cleanup approved ===");
+    const cleaned = await passCleanup(token, supabase, startTime);
 
-    return new Response(JSON.stringify({ success: true, synced, skipped, dispatched, cancelled, elapsed }), {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`Done in ${elapsed}s: ${synced} synced, ${skipped} skipped, ${dispatched} dispatched, ${cancelled} cancelled, ${cleaned} cleaned`);
+
+    return new Response(JSON.stringify({ success: true, synced, skipped, dispatched, cancelled, cleaned, elapsed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
