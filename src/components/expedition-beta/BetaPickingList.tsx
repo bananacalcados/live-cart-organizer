@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, Loader2, ScanBarcode, Camera, X, Search, Hand } from 'lucide-react';
+import { CheckCircle2, Loader2, ScanBarcode, Camera, X, Search, Hand, Package, RefreshCw } from 'lucide-react';
 import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarcodeScanner';
 
 interface Props {
@@ -30,6 +30,14 @@ interface ItemEntry {
   }>;
 }
 
+interface StockInfo {
+  storeName: string;
+  depositName: string;
+  storeId: string;
+  stock: number;
+  reserved: number;
+}
+
 export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }: Props) {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [pendingConfirm, setPendingConfirm] = useState<{
@@ -41,6 +49,8 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
   const [savingConfirm, setSavingConfirm] = useState(false);
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [stockData, setStockData] = useState<Record<string, StockInfo[]>>({});
+  const [loadingStock, setLoadingStock] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
   const localUpdatedIdsRef = useRef<Set<string>>(new Set());
 
@@ -80,6 +90,42 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
         return 0;
       })
     : sortedItems;
+
+  // Load stock on mount for all unique SKUs
+  const loadStock = useCallback(async () => {
+    const skus = sortedItems
+      .map(([, item]) => item.sku)
+      .filter(s => s && s.length > 0);
+    
+    if (skus.length === 0) return;
+
+    setLoadingStock(true);
+    try {
+      // Call in batches of 15
+      const allStock: Record<string, StockInfo[]> = {};
+      for (let i = 0; i < skus.length; i += 15) {
+        const batch = skus.slice(i, i + 15);
+        const { data, error } = await supabase.functions.invoke('expedition-check-stock', {
+          body: { skus: batch }
+        });
+        if (data?.stock) {
+          Object.assign(allStock, data.stock);
+        }
+        if (error) console.error('Stock check error:', error);
+      }
+      setStockData(allStock);
+    } catch (err) {
+      console.error('Failed to load stock:', err);
+    } finally {
+      setLoadingStock(false);
+    }
+  }, [sortedItems.length]);
+
+  useEffect(() => {
+    if (sortedItems.length > 0 && Object.keys(stockData).length === 0) {
+      loadStock();
+    }
+  }, [sortedItems.length]);
 
   // Realtime
   useEffect(() => {
@@ -186,7 +232,13 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
         <h2 className="text-lg font-bold text-foreground">
           {showChecking ? 'Conferência' : 'Lista de Separação'}
         </h2>
-        <Badge variant="outline" className="text-sm">{totalPicked}/{totalItems} conferidos</Badge>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={loadStock} disabled={loadingStock} className="gap-1 text-xs">
+            {loadingStock ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+            Estoque
+          </Button>
+          <Badge variant="outline" className="text-sm">{totalPicked}/{totalItems} conferidos</Badge>
+        </div>
       </div>
 
       {showChecking && (
@@ -277,31 +329,63 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
       <div className="space-y-1">
         {displayItems.map(([key, item]) => {
           const isComplete = item.pickedQty >= item.totalQty;
+          const stores = stockData[item.sku] || [];
           return (
-            <div key={key} className={`flex items-center justify-between p-2.5 rounded-lg border transition-colors ${
+            <div key={key} className={`p-2.5 rounded-lg border transition-colors ${
               isComplete ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : 'bg-background border-border/50'
             }`}>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  {isComplete && <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />}
-                  <span className={`font-medium text-sm ${isComplete ? 'line-through text-muted-foreground' : ''}`}>{item.name}</span>
-                  {item.variant && <span className="text-xs text-muted-foreground">({item.variant})</span>}
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    {isComplete && <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />}
+                    <span className={`font-medium text-sm ${isComplete ? 'line-through text-muted-foreground' : ''}`}>{item.name}</span>
+                    {item.variant && <span className="text-xs text-muted-foreground">({item.variant})</span>}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {item.sku && <span className="font-mono mr-2">[{item.sku}]</span>}
+                    Pedidos: {item.orders.join(', ')}
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  {item.sku && <span className="font-mono mr-2">[{item.sku}]</span>}
-                  Pedidos: {item.orders.join(', ')}
+                <div className="flex items-center gap-2 shrink-0">
+                  {showChecking && (
+                    <Badge variant={isComplete ? 'default' : 'secondary'} className="text-xs">
+                      {item.pickedQty}/{item.totalQty}
+                    </Badge>
+                  )}
+                  {!showChecking && (
+                    <Badge variant="secondary" className="text-xs font-bold">{item.totalQty}×</Badge>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {showChecking && (
-                  <Badge variant={isComplete ? 'default' : 'secondary'} className="text-xs">
-                    {item.pickedQty}/{item.totalQty}
-                  </Badge>
-                )}
-                {!showChecking && (
-                  <Badge variant="secondary" className="text-xs font-bold">{item.totalQty}×</Badge>
-                )}
-              </div>
+              
+              {/* Stock per store */}
+              {stores.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5 ml-6">
+                  {stores.map((s, i) => {
+                    const hasStock = s.stock > 0;
+                    return (
+                      <span
+                        key={i}
+                        className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                          hasStock
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                        }`}
+                      >
+                        <Package className="h-2.5 w-2.5" />
+                        {s.depositName || s.storeName}: {s.stock}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {loadingStock && stores.length === 0 && item.sku && (
+                <div className="ml-6 mt-1">
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" /> Consultando estoque...
+                  </span>
+                </div>
+              )}
             </div>
           );
         })}
