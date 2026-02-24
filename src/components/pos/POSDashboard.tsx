@@ -3,7 +3,7 @@ import {
   DollarSign, ShoppingCart, TrendingUp, Package, Loader2,
   RefreshCw, BarChart3, Users, MessageSquare, Headphones,
   ArrowRightLeft, ChevronRight, CalendarIcon, AlertTriangle,
-  Globe, Store
+  Globe, Store, Lock
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { POSGoalProgress } from "./POSGoalProgress";
+import { POSSellerPrivatePanel } from "./POSSellerPrivatePanel";
 import type { DateRange } from "react-day-picker";
 
 interface Props {
@@ -30,6 +31,7 @@ interface SellerMetric {
   totalSales: number;
   salesCount: number;
   totalItems: number;
+  sellerId?: string;
 }
 
 function getPeriodRange(period: Period, customRange: DateRange | undefined): { start: Date; end: Date } {
@@ -80,6 +82,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [whatsappNew, setWhatsappNew] = useState(0);
   const [supportTickets, setSupportTickets] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [showPrivatePanel, setShowPrivatePanel] = useState(false);
 
   const loadAlerts = async () => {
     const [conversationRes, supportRes, interStoreRes, stockRes] = await Promise.all([
@@ -164,7 +167,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         for (const sale of completedSales) {
           const key = sale.seller_id || "sem-vendedor";
           const name = sellersMap.get(sale.seller_id || "") || "Sem vendedor";
-          const existing = metricsMap.get(key) || { name, totalSales: 0, salesCount: 0, totalItems: 0 };
+          const existing = metricsMap.get(key) || { name, totalSales: 0, salesCount: 0, totalItems: 0, sellerId: sale.seller_id || undefined };
           existing.totalSales += sale.total || 0;
           existing.salesCount += 1;
           existing.totalItems += saleItemsMap.get(sale.id) || 0;
@@ -322,15 +325,25 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               avgItemsPerSale={avgItemsPerSale}
               salesCount={salesCount}
               period={period}
-              sellerMetrics={sellerMetrics.map(s => ({ ...s, sellerId: undefined }))}
+              sellerMetrics={sellerMetrics.map(s => ({ ...s, sellerId: s.sellerId }))}
             />
 
             {/* Seller Metrics */}
             {sellerMetrics.length > 0 && (
               <div className="space-y-3">
-                <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
-                  <Users className="h-4 w-4 text-pos-orange" /> Desempenho por Vendedor
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
+                    <Users className="h-4 w-4 text-pos-orange" /> Desempenho por Vendedor
+                  </h3>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs"
+                    onClick={() => setShowPrivatePanel(true)}
+                  >
+                    <Lock className="h-3 w-3" /> Meus Dados
+                  </Button>
+                </div>
                 <div className="space-y-2">
                   {sellerMetrics.map((s, i) => (
                     <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10">
@@ -395,6 +408,16 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
           </div>
         </ScrollArea>
       )}
+
+      <POSSellerPrivatePanel
+        open={showPrivatePanel}
+        onClose={() => setShowPrivatePanel(false)}
+        storeId={storeId}
+        period={period}
+        periodStart={getPeriodRange(period, customRange).start}
+        periodEnd={getPeriodRange(period, customRange).end}
+        sellerMetrics={sellerMetrics}
+      />
     </div>
   );
 }

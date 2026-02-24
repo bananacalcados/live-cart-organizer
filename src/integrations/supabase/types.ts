@@ -4726,6 +4726,126 @@ export type Database = {
           },
         ]
       }
+      pos_seller_commission_tiers: {
+        Row: {
+          commission_percent: number
+          created_at: string
+          id: string
+          is_active: boolean
+          max_revenue: number | null
+          min_revenue: number
+          period: string
+          period_end: string | null
+          period_start: string | null
+          store_id: string
+          tier_order: number
+          updated_at: string
+        }
+        Insert: {
+          commission_percent?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_revenue?: number | null
+          min_revenue?: number
+          period?: string
+          period_end?: string | null
+          period_start?: string | null
+          store_id: string
+          tier_order?: number
+          updated_at?: string
+        }
+        Update: {
+          commission_percent?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_revenue?: number | null
+          min_revenue?: number
+          period?: string
+          period_end?: string | null
+          period_start?: string | null
+          store_id?: string
+          tier_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_seller_commission_tiers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_seller_commissions: {
+        Row: {
+          bonus_value: number
+          commission_percent: number
+          commission_value: number
+          created_at: string
+          id: string
+          period_end: string
+          period_start: string
+          seller_id: string
+          status: string
+          store_id: string
+          tier_id: string | null
+          total_revenue: number
+        }
+        Insert: {
+          bonus_value?: number
+          commission_percent?: number
+          commission_value?: number
+          created_at?: string
+          id?: string
+          period_end: string
+          period_start: string
+          seller_id: string
+          status?: string
+          store_id: string
+          tier_id?: string | null
+          total_revenue?: number
+        }
+        Update: {
+          bonus_value?: number
+          commission_percent?: number
+          commission_value?: number
+          created_at?: string
+          id?: string
+          period_end?: string
+          period_start?: string
+          seller_id?: string
+          status?: string
+          store_id?: string
+          tier_id?: string | null
+          total_revenue?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_seller_commissions_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_seller_commissions_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_seller_commissions_tier_id_fkey"
+            columns: ["tier_id"]
+            isOneToOne: false
+            referencedRelation: "pos_seller_commission_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_seller_tasks: {
         Row: {
           completed_at: string | null
@@ -4797,6 +4917,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          pin_code: string | null
           store_id: string | null
           tiny_seller_id: string | null
           updated_at: string
@@ -4806,6 +4927,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          pin_code?: string | null
           store_id?: string | null
           tiny_seller_id?: string | null
           updated_at?: string
@@ -4815,6 +4937,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          pin_code?: string | null
           store_id?: string | null
           tiny_seller_id?: string | null
           updated_at?: string
