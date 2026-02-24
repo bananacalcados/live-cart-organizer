@@ -140,6 +140,18 @@ function OrderSummary({ saleData }: { saleData: SaleData }) {
   const totalItems = saleData.items.reduce((s, i) => s + i.quantity, 0);
   return (
     <div className="bg-secondary/30 rounded-xl p-4 space-y-3">
+      {/* Discount Prize Banner */}
+      {saleData.discount_amount > 0 && (
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 p-4 text-white shadow-lg">
+          <div className="absolute top-0 right-0 opacity-20 text-6xl">🎁</div>
+          <div className="relative z-10 text-center">
+            <p className="text-xs font-medium uppercase tracking-wider opacity-90">Você ganhou</p>
+            <p className="text-2xl font-black mt-0.5">R$ {saleData.discount_amount.toFixed(2)} OFF</p>
+            <p className="text-xs opacity-80 mt-1">de desconto nesta compra! 🎉</p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 font-medium text-sm">
           <ShoppingBag className="h-4 w-4" />
@@ -162,11 +174,11 @@ function OrderSummary({ saleData }: { saleData: SaleData }) {
           <>
             <div className="flex justify-between text-xs">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>R$ {subtotal.toFixed(2)}</span>
+              <span className="line-through text-muted-foreground">R$ {subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Desconto</span>
-              <span className="text-green-600 font-medium">-R$ {saleData.discount_amount.toFixed(2)}</span>
+              <span className="text-green-600 font-medium">🎁 Desconto</span>
+              <span className="text-green-600 font-bold">-R$ {saleData.discount_amount.toFixed(2)}</span>
             </div>
           </>
         )}

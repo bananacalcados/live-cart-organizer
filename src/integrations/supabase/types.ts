@@ -3697,6 +3697,9 @@ export type Database = {
           new_total: number | null
           notes: string | null
           original_sale_id: string | null
+          original_sale_source: string | null
+          original_seller_id: string | null
+          original_seller_name: string | null
           return_reason: string | null
           returned_items: Json
           returned_total: number
@@ -3720,6 +3723,9 @@ export type Database = {
           new_total?: number | null
           notes?: string | null
           original_sale_id?: string | null
+          original_sale_source?: string | null
+          original_seller_id?: string | null
+          original_seller_name?: string | null
           return_reason?: string | null
           returned_items?: Json
           returned_total?: number
@@ -3743,6 +3749,9 @@ export type Database = {
           new_total?: number | null
           notes?: string | null
           original_sale_id?: string | null
+          original_sale_source?: string | null
+          original_seller_id?: string | null
+          original_seller_name?: string | null
           return_reason?: string | null
           returned_items?: Json
           returned_total?: number
@@ -4594,6 +4603,11 @@ export type Database = {
         Row: {
           cash_register_id: string | null
           created_at: string
+          crediario_due_date: string | null
+          crediario_paid_amount: number | null
+          crediario_paid_at: string | null
+          crediario_paid_method: string | null
+          crediario_status: string | null
           customer_id: string | null
           discount: number
           id: string
@@ -4624,6 +4638,11 @@ export type Database = {
         Insert: {
           cash_register_id?: string | null
           created_at?: string
+          crediario_due_date?: string | null
+          crediario_paid_amount?: number | null
+          crediario_paid_at?: string | null
+          crediario_paid_method?: string | null
+          crediario_status?: string | null
           customer_id?: string | null
           discount?: number
           id?: string
@@ -4654,6 +4673,11 @@ export type Database = {
         Update: {
           cash_register_id?: string | null
           created_at?: string
+          crediario_due_date?: string | null
+          crediario_paid_amount?: number | null
+          crediario_paid_at?: string | null
+          crediario_paid_method?: string | null
+          crediario_status?: string | null
           customer_id?: string | null
           discount?: number
           id?: string
@@ -6362,8 +6386,38 @@ export type Database = {
           phone: string
         }[]
       }
+      search_products_unaccent: {
+        Args: { p_store_id: string; search_term: string }
+        Returns: {
+          barcode: string
+          category: string | null
+          color: string | null
+          cost_price: number | null
+          created_at: string
+          id: string
+          image_url: string | null
+          is_active: boolean
+          name: string
+          price: number
+          size: string | null
+          sku: string
+          stock: number
+          store_id: string
+          synced_at: string
+          tiny_id: number
+          updated_at: string
+          variant: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "pos_products"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "manager" | "user"

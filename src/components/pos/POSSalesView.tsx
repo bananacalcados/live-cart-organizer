@@ -382,15 +382,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           }
         }
       } else {
-        // Text search: local DB with ilike (trigram index)
+        // Text search: use unaccent RPC for accent-insensitive search
         const { data } = await supabase
-          .from('pos_products')
-          .select('*')
-          .eq('store_id', storeId)
-          .eq('is_active', true)
-          .or(`name.ilike.%${query}%,sku.ilike.%${query}%,barcode.ilike.%${query}%`)
-          .order('name')
-          .limit(20);
+          .rpc('search_products_unaccent', { search_term: query, p_store_id: storeId }) as any;
 
         if (data && data.length > 0) {
           setSearchResults(data.map(mapDbProduct));

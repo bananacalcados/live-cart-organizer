@@ -291,17 +291,34 @@ export function POSDailySales({ storeId }: Props) {
       const term = `%${searchTerm.trim()}%`;
       const [localResult, tinyResult] = await Promise.all([
         (async () => {
+          // Use textSearch to normalize accents client-side
+          const normalizedTerm = searchTerm.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const termPattern = `%${normalizedTerm}%`;
           const { data: matchingCustomers } = await supabase
             .from("pos_customers")
             .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
             .or(`name.ilike.${term},cpf.ilike.${term},whatsapp.ilike.${term}`)
             .limit(50);
-          if (!matchingCustomers || matchingCustomers.length === 0) {
+          
+          // Also search with normalized term for accent-insensitive matches
+          let allCustomers = matchingCustomers || [];
+          if (normalizedTerm !== searchTerm.trim()) {
+            const { data: extraCustomers } = await supabase
+              .from("pos_customers")
+              .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+              .or(`name.ilike.${termPattern},cpf.ilike.${termPattern},whatsapp.ilike.${termPattern}`)
+              .limit(50);
+            const existingIds = new Set(allCustomers.map((c: any) => c.id));
+            for (const c of (extraCustomers || [])) {
+              if (!existingIds.has(c.id)) allCustomers.push(c);
+            }
+          }
+          if (!allCustomers || allCustomers.length === 0) {
             return { sales: [], items: [], customers: new Map<string, CustomerInfo>() };
           }
           const custMap = new Map<string, CustomerInfo>();
-          matchingCustomers.forEach((c: any) => custMap.set(c.id, c));
-          const custIds = matchingCustomers.map(c => c.id);
+          allCustomers.forEach((c: any) => custMap.set(c.id, c));
+          const custIds = allCustomers.map((c: any) => c.id);
           const { data: salesData } = await supabase
             .from("pos_sales")
             .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, store_id")

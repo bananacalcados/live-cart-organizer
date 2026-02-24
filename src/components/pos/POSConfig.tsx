@@ -233,10 +233,16 @@ export function POSConfig({ storeId }: Props) {
     }
 
     try {
+      const parsedValue = parseFloat(g.goal_value);
+      if (isNaN(parsedValue) || parsedValue <= 0) {
+        toast.error("Valor da meta deve ser um número positivo");
+        return;
+      }
+
       const payload: any = {
         store_id: storeId,
         goal_type: g.goal_type,
-        goal_value: parseFloat(g.goal_value),
+        goal_value: parsedValue,
         period,
         seller_id: g.seller_id === 'all' ? null : g.seller_id,
         is_active: true,
@@ -250,17 +256,19 @@ export function POSConfig({ storeId }: Props) {
       };
 
       if (editingGoalId) {
-        await supabase.from('pos_goals').update(payload).eq('id', editingGoalId);
+        const { error } = await supabase.from('pos_goals').update(payload).eq('id', editingGoalId);
+        if (error) throw error;
         toast.success("Meta atualizada!");
       } else {
-        await supabase.from('pos_goals').insert(payload);
+        const { error } = await supabase.from('pos_goals').insert(payload);
+        if (error) throw error;
         toast.success("Meta adicionada!");
       }
       setNewGoal({ goal_type: "revenue", goal_value: "", period: "daily", seller_id: "all", goal_category: "", goal_brand: "", period_start: "", period_end: "", prize_label: "", prize_value: "", prize_type: "" });
       setEditingGoalId(null);
       setShowAddGoal(false);
       loadGoals();
-    } catch { toast.error("Erro ao salvar meta"); }
+    } catch (err: any) { toast.error("Erro ao salvar meta: " + (err?.message || "Erro desconhecido")); }
   };
 
   const startEditGoal = (goal: any) => {
