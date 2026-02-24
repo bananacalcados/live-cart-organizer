@@ -73,9 +73,17 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
           <DialogTitle className="text-pos-orange flex items-center gap-2">
             <FileText className="h-5 w-5" />
             Detalhes do Pedido
-            {sale.tiny_order_number && (
-              <Badge className="bg-pos-orange/20 text-pos-orange border-pos-orange/30 ml-2">
-                #{sale.tiny_order_number}
+            {sale.tiny_order_number ? (
+              <Badge className="bg-green-500/20 text-green-400 border-green-500/30 ml-2">
+                Tiny #{sale.tiny_order_number}
+              </Badge>
+            ) : sale.status === 'pending_sync' ? (
+              <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 ml-2">
+                Pendente Tiny
+              </Badge>
+            ) : (
+              <Badge className="bg-red-500/20 text-red-400 border-red-500/30 ml-2">
+                Não criado no Tiny
               </Badge>
             )}
           </DialogTitle>

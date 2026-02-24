@@ -39,6 +39,16 @@ interface SaleSummary {
   customer_id: string | null;
 }
 
+interface TinyOnlyOrder {
+  tiny_order_id: string;
+  tiny_order_number: string;
+  date: string | null;
+  customer_name: string | null;
+  total: number;
+  status: string | null;
+  items_summary: string;
+}
+
 interface SellerStats {
   name: string;
   count: number;
@@ -89,6 +99,7 @@ export function POSDailySales({ storeId }: Props) {
   const [globalResults, setGlobalResults] = useState<SaleSummary[]>([]);
   const [globalResultItems, setGlobalResultItems] = useState<SaleItem[]>([]);
   const [globalResultCustomers, setGlobalResultCustomers] = useState<Map<string, CustomerInfo>>(new Map());
+  const [tinyOnlyResults, setTinyOnlyResults] = useState<TinyOnlyOrder[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showGlobalResults, setShowGlobalResults] = useState(false);
 
@@ -193,47 +204,77 @@ export function POSDailySales({ storeId }: Props) {
     setSearchLoading(true);
     setShowGlobalResults(true);
     try {
-      // Search customers matching the term
       const term = `%${searchTerm.trim()}%`;
-      const { data: matchingCustomers } = await supabase
-        .from("pos_customers")
-        .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
-        .or(`name.ilike.${term},cpf.ilike.${term},whatsapp.ilike.${term}`)
-        .limit(50);
 
-      if (!matchingCustomers || matchingCustomers.length === 0) {
-        setGlobalResults([]);
-        setGlobalResultItems([]);
-        setGlobalResultCustomers(new Map());
-        setSearchLoading(false);
-        return;
-      }
+      // Search local DB and Tiny API in parallel
+      const [localResult, tinyResult] = await Promise.all([
+        // Local: search customers then their sales
+        (async () => {
+          const { data: matchingCustomers } = await supabase
+            .from("pos_customers")
+            .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+            .or(`name.ilike.${term},cpf.ilike.${term},whatsapp.ilike.${term}`)
+            .limit(50);
 
-      const custMap = new Map<string, CustomerInfo>();
-      matchingCustomers.forEach((c: any) => custMap.set(c.id, c));
-      setGlobalResultCustomers(custMap);
+          if (!matchingCustomers || matchingCustomers.length === 0) {
+            return { sales: [], items: [], customers: new Map<string, CustomerInfo>() };
+          }
 
-      const custIds = matchingCustomers.map(c => c.id);
-      const { data: salesData } = await supabase
-        .from("pos_sales")
-        .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id")
-        .eq("store_id", storeId)
-        .in("customer_id", custIds)
-        .order("created_at", { ascending: false })
-        .limit(20);
+          const custMap = new Map<string, CustomerInfo>();
+          matchingCustomers.forEach((c: any) => custMap.set(c.id, c));
 
-      setGlobalResults(salesData || []);
+          const custIds = matchingCustomers.map(c => c.id);
+          const { data: salesData } = await supabase
+            .from("pos_sales")
+            .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id")
+            .eq("store_id", storeId)
+            .in("customer_id", custIds)
+            .order("created_at", { ascending: false })
+            .limit(20);
 
-      if (salesData && salesData.length > 0) {
-        const saleIds = salesData.map(s => s.id);
-        const { data: items } = await supabase
-          .from("pos_sale_items")
-          .select("sale_id, quantity, unit_price, product_name, variant_name, size, category, sku, barcode")
-          .in("sale_id", saleIds);
-        setGlobalResultItems((items as SaleItem[]) || []);
-      } else {
-        setGlobalResultItems([]);
-      }
+          let items: SaleItem[] = [];
+          if (salesData && salesData.length > 0) {
+            const saleIds = salesData.map(s => s.id);
+            const { data: itemsData } = await supabase
+              .from("pos_sale_items")
+              .select("sale_id, quantity, unit_price, product_name, variant_name, size, category, sku, barcode")
+              .in("sale_id", saleIds);
+            items = (itemsData as SaleItem[]) || [];
+          }
+
+          return { sales: salesData || [], items, customers: custMap };
+        })(),
+
+        // Tiny API search
+        (async () => {
+          try {
+            const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-orders`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: SUPABASE_KEY,
+                Authorization: `Bearer ${SUPABASE_KEY}`,
+              },
+              body: JSON.stringify({ store_id: storeId, search_term: searchTerm.trim() }),
+            });
+            const data = await resp.json();
+            return data.success ? (data.orders as TinyOnlyOrder[]) : [];
+          } catch {
+            return [];
+          }
+        })(),
+      ]);
+
+      setGlobalResults(localResult.sales);
+      setGlobalResultItems(localResult.items);
+      setGlobalResultCustomers(localResult.customers);
+
+      // Filter out Tiny orders that already exist in local results
+      const localTinyIds = new Set(localResult.sales.map((s: SaleSummary) => s.tiny_order_id).filter(Boolean));
+      const uniqueTinyOrders = (tinyResult || []).filter(
+        (t: TinyOnlyOrder) => !localTinyIds.has(t.tiny_order_id)
+      );
+      setTinyOnlyResults(uniqueTinyOrders);
     } catch (e) {
       console.error(e);
       toast.error("Erro ao buscar pedidos");
@@ -330,6 +371,7 @@ export function POSDailySales({ storeId }: Props) {
     loadData();
     setShowGlobalResults(false);
     setGlobalResults([]);
+    setTinyOnlyResults([]);
     setSearchTerm("");
   }, [storeId, selectedDate]);
 
@@ -458,9 +500,17 @@ export function POSDailySales({ storeId }: Props) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               {sale.tiny_order_number ? (
-                <p className="text-xs text-pos-orange font-medium">#{sale.tiny_order_number}</p>
+                <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-1.5 py-0">
+                  Tiny #{sale.tiny_order_number}
+                </Badge>
+              ) : sale.status === 'pending_sync' ? (
+                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
+                  Pendente Tiny
+                </Badge>
               ) : (
-                <p className="text-xs text-red-400 font-medium">Sem Tiny</p>
+                <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">
+                  Erro Tiny
+                </Badge>
               )}
               {custName && (
                 <p className="text-xs text-pos-white font-medium truncate">{custName}</p>
@@ -694,18 +744,23 @@ export function POSDailySales({ storeId }: Props) {
             {showGlobalResults && (
               <div className="flex items-center gap-2">
                 <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
-                  Busca global: {globalResults.length} resultado{globalResults.length !== 1 ? "s" : ""}
+                  POS: {globalResults.length} resultado{globalResults.length !== 1 ? "s" : ""}
                 </Badge>
+                {tinyOnlyResults.length > 0 && (
+                  <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
+                    Tiny: {tinyOnlyResults.length} pedido{tinyOnlyResults.length !== 1 ? "s" : ""}
+                  </Badge>
+                )}
                 <button
                   className="text-xs text-pos-white/40 hover:text-pos-white underline"
-                  onClick={() => { setShowGlobalResults(false); setGlobalResults([]); }}
+                  onClick={() => { setShowGlobalResults(false); setGlobalResults([]); setTinyOnlyResults([]); }}
                 >
                   Voltar ao dia
                 </button>
               </div>
             )}
 
-            {displaySales.length === 0 ? (
+            {displaySales.length === 0 && tinyOnlyResults.length === 0 ? (
               <div className="text-center py-12 text-pos-white/40">
                 <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
                 <p>{showGlobalResults ? "Nenhum resultado encontrado" : "Nenhuma venda registrada"}</p>
@@ -718,6 +773,47 @@ export function POSDailySales({ storeId }: Props) {
                     showGlobalResults ? globalResultItems : saleItems,
                     showGlobalResults ? globalResultCustomers : customers
                   )
+                )}
+
+                {/* Tiny-only results (orders from Tiny not in our POS) */}
+                {showGlobalResults && tinyOnlyResults.length > 0 && (
+                  <>
+                    {globalResults.length > 0 && (
+                      <div className="flex items-center gap-2 pt-2">
+                        <div className="flex-1 h-px bg-purple-500/20" />
+                        <span className="text-[10px] text-purple-400 uppercase tracking-wider">Pedidos do Tiny</span>
+                        <div className="flex-1 h-px bg-purple-500/20" />
+                      </div>
+                    )}
+                    {tinyOnlyResults.map((order) => (
+                      <div
+                        key={order.tiny_order_id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-purple-500/5 border border-purple-500/20"
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className="text-xs text-pos-white/40 font-mono shrink-0">
+                            {order.date || "—"}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[10px] px-1.5 py-0">
+                                Tiny #{order.tiny_order_number}
+                              </Badge>
+                              {order.customer_name && (
+                                <p className="text-xs text-pos-white font-medium truncate">{order.customer_name}</p>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-pos-white/40 truncate">
+                              {order.status || "—"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-bold text-sm text-pos-white">R$ {order.total.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </>
                 )}
               </div>
             )}
