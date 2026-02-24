@@ -356,6 +356,9 @@ function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onTogg
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-sm">{order.shopify_order_name}</span>
+              {order.tiny_order_number && (
+                <span className="text-xs text-muted-foreground font-mono">T:{order.tiny_order_number}</span>
+              )}
               <Badge className={`text-[10px] ${statusColor}`}>{statusLabel}</Badge>
               {order.tracking_code && (
                 <Badge variant="outline" className="text-[10px] gap-1 font-mono">
