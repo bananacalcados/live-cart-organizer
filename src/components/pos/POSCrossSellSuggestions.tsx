@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, Plus, Tag, TrendingDown, Loader2, RefreshCw } from "lucide-react";
+import { Sparkles, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,7 +29,7 @@ interface Suggestion {
   stock: number;
   barcode: string;
   category?: string;
-  curve: "A" | "B" | "C";
+  curve: "A" | "B" | "C" | "dead";
   maxDiscount: number;
   reason: string;
 }
@@ -38,6 +38,18 @@ interface Props {
   storeId: string;
   cart: CartItem[];
   onAddToCart: (product: any) => void;
+}
+
+/** Extract numeric shoe size from product name.  e.g. "TENIS NICE - 34 - Bege" → "34" */
+function extractSize(name: string): string | null {
+  const m = name.match(/ - (\d{2,3}(?:\/\d{2,3})?) (?:- |$)/);
+  return m ? m[1] : null;
+}
+
+/** Extract base product name (before first " - ") for deduplication */
+function extractBaseName(name: string): string {
+  const idx = name.indexOf(" - ");
+  return idx > 0 ? name.substring(0, idx).trim() : name.trim();
 }
 
 export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
@@ -57,11 +69,15 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
     if (cart.length === 0) return;
     setLoading(true);
     try {
-      const cartSizes = [...new Set(cart.map(i => i.size).filter(Boolean))] as string[];
+      // Extract real sizes from cart item names
+      const cartSizes = [...new Set(cart.map(i => extractSize(i.name)).filter(Boolean))] as string[];
       const cartCategories = [...new Set(cart.map(i => i.category).filter(Boolean))] as string[];
       const cartSkus = cart.map(i => i.sku);
+      const cartBaseNames = new Set(cart.map(i => extractBaseName(i.name)));
 
-      // 1. Try to get ABC curve from Tiny sales history (6 months data)
+      // Build ABC curve map from sales history
+      const curveMap = new Map<string, "A" | "B" | "C">();
+
       const { data: tinyHistory } = await supabase
         .from("tiny_sales_history" as any)
         .select("sku, quantity_sold")
@@ -69,11 +85,7 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
         .order("quantity_sold", { ascending: false })
         .limit(2000);
 
-      // Build curve map from Tiny data or fall back to POS data
-      const curveMap = new Map<string, "A" | "B" | "C">();
-
       if (tinyHistory && tinyHistory.length > 20) {
-        // Use Tiny ERP data for ABC curve
         const sorted = (tinyHistory as any[]).sort((a, b) => (b.quantity_sold || 0) - (a.quantity_sold || 0));
         const total = sorted.length;
         sorted.forEach((item, i) => {
@@ -81,17 +93,14 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
           curveMap.set(item.sku, pct <= 0.2 ? "A" : pct <= 0.5 ? "B" : "C");
         });
       } else {
-        // Fallback: use POS sale_items data
         const { data: salesData } = await supabase
           .from("pos_sale_items" as any)
           .select("sku, quantity")
           .limit(1000);
-
         const skuSales = new Map<string, number>();
         for (const item of (salesData as any[]) || []) {
           skuSales.set(item.sku, (skuSales.get(item.sku) || 0) + (item.quantity || 0));
         }
-
         const sorted = [...skuSales.entries()].sort((a, b) => b[1] - a[1]);
         const total = sorted.length;
         sorted.forEach(([sku], i) => {
@@ -100,8 +109,8 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
         });
       }
 
-      let allProductsList: any[] = [];
-      let query = supabase
+      // Fetch products from DB - get a broad set, we'll filter in-memory
+      const { data: products } = await supabase
         .from("pos_products")
         .select("*")
         .eq("store_id", storeId)
@@ -109,103 +118,83 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
         .gt("stock", 0)
         .not("sku", "in", `(${cartSkus.join(",")})`)
         .order("stock", { ascending: false })
-        .limit(50);
-
-      // Filter by size if available, otherwise by category, otherwise just high stock
-      if (cartSizes.length > 0) {
-        query = query.in("size", cartSizes);
-      } else if (cartCategories.length > 0) {
-        query = query.in("category", cartCategories);
-      }
-      // If neither size nor category, we get all products sorted by stock (dead stock opportunity)
-
-      const { data: products } = await query;
+        .limit(200);
 
       if (!products || products.length === 0) {
-        // Fallback: get ANY product with high stock (dead stock opportunity)
-        const { data: fallbackProducts } = await supabase
-          .from("pos_products")
-          .select("*")
-          .eq("store_id", storeId)
-          .eq("is_active", true)
-          .gt("stock", 3)
-          .not("sku", "in", `(${cartSkus.join(",")})`)
-          .order("stock", { ascending: false })
-          .limit(20);
-
-        if (!fallbackProducts || fallbackProducts.length === 0) {
-          setSuggestions([]);
-          setLoading(false);
-          return;
-        }
-        allProductsList = fallbackProducts;
-      } else {
-        allProductsList = products;
+        setSuggestions([]);
+        setLoading(false);
+        return;
       }
 
-      const allProducts = allProductsList;
-      
-      // Also fetch dead stock (products not in ABC curve at all = never sold)
       const knownSkus = new Set(curveMap.keys());
-      
-      const results: Suggestion[] = [];
 
-      for (const p of allProducts) {
-        const curve = curveMap.get(p.sku) || "C"; // Not in history = dead stock = curve C
-        const isSize34 = p.size === "34";
-        const isDeadStock = !knownSkus.has(p.sku); // Never sold in 6 months
-        
+      // Filter by matching size extracted from product name
+      const sizeFiltered = cartSizes.length > 0
+        ? products.filter(p => {
+            const pSize = extractSize(p.name || "");
+            return pSize && cartSizes.includes(pSize);
+          })
+        : products; // No size info in cart → show all
+
+      // Deduplicate by base product name (show only 1 variation per model)
+      const seenBaseNames = new Set<string>();
+      const deduplicated: typeof products = [];
+      for (const p of sizeFiltered) {
+        const baseName = extractBaseName(p.name || "");
+        // Skip if same base product already in cart or already suggested
+        if (cartBaseNames.has(baseName)) continue;
+        if (seenBaseNames.has(baseName)) continue;
+        seenBaseNames.add(baseName);
+        deduplicated.push(p);
+      }
+
+      // Build suggestions with curve-based discounts
+      const results: Suggestion[] = [];
+      for (const p of deduplicated) {
+        const curve = curveMap.get(p.sku);
+        const isDeadStock = !knownSkus.has(p.sku);
+        const pCategory = p.category || "";
+        const isDifferentCategory = cartCategories.length > 0 && !cartCategories.includes(pCategory);
+
         let maxDiscount = 0;
         let reason = "";
+        let curveLabel: "A" | "B" | "C" | "dead" = curve || "C";
 
         if (isDeadStock) {
+          curveLabel = "dead";
           maxDiscount = 50;
-          reason = `Sem vendas em 6 meses · Estoque parado (${p.stock} un)`;
-        } else if (isSize34) {
-          if (curve === "A") {
-            maxDiscount = 15;
-            reason = "Tam 34 · Curva A · Estoque alto";
-          } else if (curve === "B") {
-            maxDiscount = 30;
-            reason = "Tam 34 · Curva B";
-          } else {
-            maxDiscount = 50;
-            reason = "Tam 34 · Curva C · Oportunidade";
-          }
+          reason = `Sem vendas em 6 meses · Estoque: ${p.stock}`;
+        } else if (curve === "A") {
+          maxDiscount = 0;
+          reason = isDifferentCategory ? "Curva A · Categoria diferente" : "Curva A · Best seller";
+        } else if (curve === "B") {
+          maxDiscount = 15;
+          reason = "Curva B · Rotação média";
         } else {
-          if (curve === "B") {
-            maxDiscount = 15;
-            reason = "Curva B · Rotação média";
-          } else if (curve === "C") {
-            maxDiscount = 30;
-            reason = "Curva C · Baixa rotação";
-          } else {
-            maxDiscount = 0;
-            reason = "Curva A · Best seller";
-          }
+          maxDiscount = 30;
+          reason = "Curva C · Baixa rotação";
         }
 
-        if (maxDiscount > 0 || curve === "A") {
-          results.push({
-            id: `${p.tiny_id}-${p.sku}-${p.variant}`,
-            tiny_id: p.tiny_id,
-            sku: p.sku,
-            name: p.name,
-            variant: p.variant || "",
-            size: p.size,
-            price: parseFloat(String(p.price || "0")),
-            stock: parseFloat(String(p.stock || "0")),
-            barcode: p.barcode || "",
-            category: p.category,
-            curve,
-            maxDiscount,
-            reason,
-          });
-        }
+        results.push({
+          id: `${p.tiny_id}-${p.sku}-${p.variant}`,
+          tiny_id: p.tiny_id,
+          sku: p.sku,
+          name: p.name,
+          variant: p.variant || "",
+          size: extractSize(p.name || "") || p.size,
+          price: parseFloat(String(p.price || "0")),
+          stock: parseFloat(String(p.stock || "0")),
+          barcode: p.barcode || "",
+          category: p.category,
+          curve: curveLabel,
+          maxDiscount,
+          reason,
+        });
       }
 
-      results.sort((a, b) => b.maxDiscount - a.maxDiscount || b.stock - a.stock);
-      setSuggestions(results.slice(0, 6));
+      // Diversify: pick a mix of curves prioritizing different categories
+      const diversified = diversifySuggestions(results, cartCategories, 6);
+      setSuggestions(diversified);
     } catch (e) {
       console.error("Cross-sell error:", e);
     } finally {
@@ -221,6 +210,7 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
     A: "bg-green-500/20 text-green-400 border-green-500/30",
     B: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
     C: "bg-red-500/20 text-red-400 border-red-500/30",
+    dead: "bg-gray-500/20 text-gray-400 border-gray-500/30",
   };
 
   return (
@@ -239,7 +229,7 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
                 <p className="text-xs font-medium text-pos-white truncate">{s.name}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <Badge className={`text-[9px] px-1 py-0 ${curveColors[s.curve]}`}>
-                    {s.curve}
+                    {s.curve === "dead" ? "💀" : s.curve}
                   </Badge>
                   <span className="text-[10px] text-pos-white/40">{s.sku}</span>
                   {s.size && <span className="text-[10px] text-pos-white/40">Tam {s.size}</span>}
@@ -280,4 +270,49 @@ export function POSCrossSellSuggestions({ storeId, cart, onAddToCart }: Props) {
       </div>
     </div>
   );
+}
+
+/** Pick a diverse mix of suggestions across curves and categories */
+function diversifySuggestions(
+  items: Suggestion[],
+  cartCategories: string[],
+  max: number
+): Suggestion[] {
+  // Separate into buckets
+  const curveA = items.filter(i => i.curve === "A");
+  const curveB = items.filter(i => i.curve === "B");
+  const curveC = items.filter(i => i.curve === "C");
+  const dead = items.filter(i => i.curve === "dead");
+
+  // Prioritize different categories within each bucket
+  const sortByDiffCategory = (list: Suggestion[]) =>
+    list.sort((a, b) => {
+      const aDiff = cartCategories.length > 0 && !cartCategories.includes(a.category || "") ? 1 : 0;
+      const bDiff = cartCategories.length > 0 && !cartCategories.includes(b.category || "") ? 1 : 0;
+      return bDiff - aDiff || b.stock - a.stock;
+    });
+
+  sortByDiffCategory(curveA);
+  sortByDiffCategory(curveB);
+  sortByDiffCategory(curveC);
+  sortByDiffCategory(dead);
+
+  // Pick from each bucket: 1A, 1B, 1C, 1dead, then fill remaining
+  const result: Suggestion[] = [];
+  const buckets = [curveA, curveB, curveC, dead];
+  
+  // Round 1: 1 from each
+  for (const bucket of buckets) {
+    if (result.length >= max) break;
+    if (bucket.length > 0) result.push(bucket.shift()!);
+  }
+
+  // Round 2+: fill remaining from merged leftovers
+  const remaining = [...curveB, ...curveC, ...dead, ...curveA];
+  for (const item of remaining) {
+    if (result.length >= max) break;
+    if (!result.find(r => r.id === item.id)) result.push(item);
+  }
+
+  return result;
 }

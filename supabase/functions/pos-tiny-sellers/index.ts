@@ -19,13 +19,11 @@ async function getTinyV3Token(supabase: any): Promise<string | null> {
 
   const tokenData = data.value as any;
 
-  // Check if token needs refresh (expires_in is typically 300s = 5min)
   const connectedAt = new Date(tokenData.connected_at || tokenData.refreshed_at || 0).getTime();
   const expiresIn = (tokenData.expires_in || 300) * 1000;
   const now = Date.now();
 
   if (now - connectedAt > expiresIn - 30000) {
-    // Token expired or about to expire, refresh it
     console.log('Tiny v3 token expired, refreshing...');
     try {
       const refreshRes = await fetch('https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token', {
@@ -141,33 +139,47 @@ serve(async (req) => {
         const rawSellers = data.retorno?.vendedores || [];
         sellers = rawSellers.map((item: any) => {
           const v = item.vendedor || item;
-          return { tiny_id: String(v.id || ''), name: v.nome || 'Sem nome' };
+          return {
+            tiny_id: String(v.id || ''),
+            name: v.nome || 'Sem nome',
+            situacao: v.situacao || '',
+          };
         }).filter((s: any) => {
-          const situacao = (s as any).situacao || 'A';
-          return situacao === 'A' || situacao === 'Ativo';
+          // Accept only active sellers - check both 'A' and 'Ativo'
+          const sit = (s.situacao || '').toString().trim();
+          return s.tiny_id && s.name && (sit === 'A' || sit === 'Ativo' || sit === '');
         });
         console.log(`[v2] Found ${sellers.length} active sellers`);
       }
     }
 
-    // Sync sellers to pos_sellers table
-    for (const seller of sellers) {
-      const { data: existing } = await supabase
+    // CLEAN SYNC: Delete ALL existing sellers for this store, then re-insert only active ones
+    console.log(`Deleting all existing sellers for store ${store_id}...`);
+    const { error: deleteError } = await supabase
+      .from('pos_sellers')
+      .delete()
+      .eq('store_id', store_id);
+    
+    if (deleteError) {
+      console.warn('Delete sellers error (may have FK constraints):', deleteError.message);
+      // If delete fails due to FK constraints, deactivate instead
+      await supabase
         .from('pos_sellers')
-        .select('id')
-        .eq('store_id', store_id)
-        .eq('tiny_seller_id', seller.tiny_id)
-        .maybeSingle();
-
-      if (!existing) {
-        await supabase.from('pos_sellers').insert({
-          store_id,
-          name: seller.name,
-          tiny_seller_id: seller.tiny_id,
-          is_active: true,
-        });
-      }
+        .update({ is_active: false })
+        .eq('store_id', store_id);
     }
+
+    // Re-insert only active sellers from API
+    for (const seller of sellers) {
+      await supabase.from('pos_sellers').insert({
+        store_id,
+        name: seller.name,
+        tiny_seller_id: seller.tiny_id,
+        is_active: true,
+      });
+    }
+
+    console.log(`Inserted ${sellers.length} active sellers for store ${store_id}`);
 
     // Return updated sellers from DB
     const { data: dbSellers } = await supabase

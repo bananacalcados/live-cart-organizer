@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   DollarSign, ShoppingCart, TrendingUp, Package, Loader2,
   RefreshCw, BarChart3, Users, MessageSquare, Headphones,
-  ArrowRightLeft, ChevronRight, CalendarIcon
+  ArrowRightLeft, ChevronRight, CalendarIcon, AlertTriangle
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -315,6 +315,9 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               </div>
             )}
 
+            {/* Seller Complaints */}
+            <SellerComplaintsCard storeId={storeId} />
+
             {/* Operational Alerts */}
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
@@ -393,5 +396,66 @@ function AlertCard({ icon: Icon, label, count, detail, onClick }: { icon: typeof
         <ChevronRight className="h-4 w-4 text-pos-white/20 group-hover:text-pos-white/50 transition-colors" />
       </div>
     </button>
+  );
+}
+
+function SellerComplaintsCard({ storeId }: { storeId: string }) {
+  const [complaints, setComplaints] = useState<{ seller_name: string; wrong_feet: number; defective: number; total: number }[]>([]);
+
+  useEffect(() => {
+    loadComplaints();
+  }, [storeId]);
+
+  const loadComplaints = async () => {
+    const { data } = await supabase
+      .from("pos_seller_complaints" as any)
+      .select("seller_id, complaint_type, created_at")
+      .eq("store_id", storeId);
+
+    if (!data || (data as any[]).length === 0) return;
+
+    const { data: sellers } = await supabase
+      .from("pos_sellers")
+      .select("id, name")
+      .eq("store_id", storeId);
+
+    const sellerMap = new Map((sellers || []).map(s => [s.id, s.name]));
+    const map = new Map<string, { seller_name: string; wrong_feet: number; defective: number; total: number }>();
+
+    for (const c of (data as any[])) {
+      const name = sellerMap.get(c.seller_id) || "Desconhecido";
+      const entry = map.get(c.seller_id) || { seller_name: name, wrong_feet: 0, defective: 0, total: 0 };
+      if (c.complaint_type === "wrong_feet") entry.wrong_feet++;
+      else entry.defective++;
+      entry.total++;
+      map.set(c.seller_id, entry);
+    }
+
+    setComplaints(Array.from(map.values()).sort((a, b) => b.total - a.total));
+  };
+
+  if (complaints.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-red-400" /> Reclamações por Vendedor
+      </h3>
+      <div className="space-y-2">
+        {complaints.map((c, i) => (
+          <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-red-500/5 border border-red-500/10">
+            <div>
+              <p className="font-medium text-sm text-pos-white">{c.seller_name}</p>
+              <p className="text-[10px] text-pos-white/40">
+                {c.wrong_feet > 0 && `👟 Pés trocados: ${c.wrong_feet}`}
+                {c.wrong_feet > 0 && c.defective > 0 && " · "}
+                {c.defective > 0 && `🔧 Defeitos: ${c.defective}`}
+              </p>
+            </div>
+            <Badge className="bg-red-500/20 text-red-400 border-red-500/30">{c.total} ocorrência{c.total > 1 ? "s" : ""}</Badge>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
