@@ -1260,6 +1260,170 @@ export type Database = {
         }
         Relationships: []
       }
+      expedition_beta_order_items: {
+        Row: {
+          barcode: string | null
+          created_at: string
+          expedition_order_id: string
+          id: string
+          pack_verified: boolean | null
+          packed_quantity: number | null
+          pick_verified: boolean | null
+          picked_quantity: number | null
+          product_name: string
+          quantity: number
+          shopify_line_item_id: string | null
+          sku: string | null
+          unit_price: number | null
+          variant_name: string | null
+          weight_grams: number | null
+        }
+        Insert: {
+          barcode?: string | null
+          created_at?: string
+          expedition_order_id: string
+          id?: string
+          pack_verified?: boolean | null
+          packed_quantity?: number | null
+          pick_verified?: boolean | null
+          picked_quantity?: number | null
+          product_name: string
+          quantity?: number
+          shopify_line_item_id?: string | null
+          sku?: string | null
+          unit_price?: number | null
+          variant_name?: string | null
+          weight_grams?: number | null
+        }
+        Update: {
+          barcode?: string | null
+          created_at?: string
+          expedition_order_id?: string
+          id?: string
+          pack_verified?: boolean | null
+          packed_quantity?: number | null
+          pick_verified?: boolean | null
+          picked_quantity?: number | null
+          product_name?: string
+          quantity?: number
+          shopify_line_item_id?: string | null
+          sku?: string | null
+          unit_price?: number | null
+          variant_name?: string | null
+          weight_grams?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expedition_beta_order_items_expedition_order_id_fkey"
+            columns: ["expedition_order_id"]
+            isOneToOne: false
+            referencedRelation: "expedition_beta_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expedition_beta_orders: {
+        Row: {
+          created_at: string
+          customer_cpf: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          dispatch_verified: boolean | null
+          dispatch_verified_at: string | null
+          ean13_barcode: string | null
+          expedition_status: string
+          financial_status: string
+          fulfillment_status: string | null
+          group_id: string | null
+          has_gift: boolean
+          id: string
+          internal_barcode: string | null
+          is_from_live: boolean
+          notes: string | null
+          picking_list_id: string | null
+          shipping_address: Json | null
+          shopify_created_at: string | null
+          shopify_order_id: string
+          shopify_order_name: string | null
+          shopify_order_number: string | null
+          source_event_date: string | null
+          source_event_name: string | null
+          subtotal_price: number | null
+          total_discount: number | null
+          total_price: number | null
+          total_shipping: number | null
+          total_weight_grams: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          dispatch_verified?: boolean | null
+          dispatch_verified_at?: string | null
+          ean13_barcode?: string | null
+          expedition_status?: string
+          financial_status?: string
+          fulfillment_status?: string | null
+          group_id?: string | null
+          has_gift?: boolean
+          id?: string
+          internal_barcode?: string | null
+          is_from_live?: boolean
+          notes?: string | null
+          picking_list_id?: string | null
+          shipping_address?: Json | null
+          shopify_created_at?: string | null
+          shopify_order_id: string
+          shopify_order_name?: string | null
+          shopify_order_number?: string | null
+          source_event_date?: string | null
+          source_event_name?: string | null
+          subtotal_price?: number | null
+          total_discount?: number | null
+          total_price?: number | null
+          total_shipping?: number | null
+          total_weight_grams?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          dispatch_verified?: boolean | null
+          dispatch_verified_at?: string | null
+          ean13_barcode?: string | null
+          expedition_status?: string
+          financial_status?: string
+          fulfillment_status?: string | null
+          group_id?: string | null
+          has_gift?: boolean
+          id?: string
+          internal_barcode?: string | null
+          is_from_live?: boolean
+          notes?: string | null
+          picking_list_id?: string | null
+          shipping_address?: Json | null
+          shopify_created_at?: string | null
+          shopify_order_id?: string
+          shopify_order_name?: string | null
+          shopify_order_number?: string | null
+          source_event_date?: string | null
+          source_event_name?: string | null
+          subtotal_price?: number | null
+          total_discount?: number | null
+          total_price?: number | null
+          total_shipping?: number | null
+          total_weight_grams?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       expedition_dispatch_manifest_items: {
         Row: {
           created_at: string
@@ -5748,6 +5912,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_ean13_barcode: { Args: never; Returns: string }
       get_conversation_counts: {
         Args: never
         Returns: {

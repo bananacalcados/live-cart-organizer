@@ -21,6 +21,7 @@ const Checkout = lazy(() => import("./pages/Checkout"));
 const CustomerRegister = lazy(() => import("./pages/CustomerRegister"));
 const TransparentCheckout = lazy(() => import("./pages/TransparentCheckout"));
 const Expedition = lazy(() => import("./pages/Expedition"));
+const ExpeditionBeta = lazy(() => import("./pages/ExpeditionBeta"));
 const POS = lazy(() => import("./pages/POS"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Management = lazy(() => import("./pages/Management"));
@@ -69,6 +70,7 @@ const App = () => (
               <Route path="/marketing" element={<ProtectedRoute requiredModule="marketing"><Marketing /></ProtectedRoute>} />
               <Route path="/marketing/new" element={<ProtectedRoute requiredModule="marketing"><NewCampaign /></ProtectedRoute>} />
               <Route path="/expedition" element={<ProtectedRoute requiredModule="expedition"><Expedition /></ProtectedRoute>} />
+              <Route path="/expedition-beta" element={<ProtectedRoute requiredModule="expedition"><ExpeditionBeta /></ProtectedRoute>} />
               <Route path="/pos" element={<ProtectedRoute requiredModule="pos"><POS /></ProtectedRoute>} />
               <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><Inventory /></ProtectedRoute>} />
               <Route path="/management" element={<ProtectedRoute requiredModule="management"><Management /></ProtectedRoute>} />

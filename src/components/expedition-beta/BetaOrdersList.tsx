@@ -1,0 +1,396 @@
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Trash2, Unlink, Clock, ArrowRight, Gift, Radio, RotateCcw } from 'lucide-react';
+import Barcode from 'react-barcode';
+
+interface Props {
+  orders: any[];
+  searchTerm: string;
+  showGrouping: boolean;
+  onRefresh: () => void;
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  approved: 'Aprovado',
+  grouped: 'Agrupado',
+  awaiting_stock: 'Aguardando Estoque',
+  picking: 'Separando',
+  picked: 'Separado',
+  packing: 'Bipando',
+  packed: 'Embalado',
+  dispatched: 'Despachado',
+};
+
+export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: Props) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const filtered = orders.filter(o => {
+    const term = searchTerm.toLowerCase();
+    if (!term) return true;
+    return (
+      o.shopify_order_name?.toLowerCase().includes(term) ||
+      o.customer_name?.toLowerCase().includes(term) ||
+      o.customer_email?.toLowerCase().includes(term)
+    );
+  });
+
+  const approved = filtered.filter(o => o.financial_status === 'paid' || o.financial_status === 'partially_paid');
+  const pending = filtered.filter(o => o.financial_status !== 'paid' && o.financial_status !== 'partially_paid');
+
+  // Grouping
+  const customerGroups = new Map<string, any[]>();
+  if (showGrouping) {
+    approved.forEach(order => {
+      const key = order.customer_email || order.customer_name || order.id;
+      if (!customerGroups.has(key)) customerGroups.set(key, []);
+      customerGroups.get(key)!.push(order);
+    });
+  }
+  const multiOrderCustomers = Array.from(customerGroups.entries()).filter(([, o]) => o.length > 1);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleAutoGroup = async () => {
+    try {
+      for (const [email, groupOrders] of multiOrderCustomers) {
+        const { data: group } = await supabase
+          .from('expedition_groups')
+          .insert({
+            customer_email: email,
+            customer_name: groupOrders[0].customer_name,
+            order_count: groupOrders.length,
+            total_items: groupOrders.reduce((sum: number, o: any) => sum + (o.expedition_beta_order_items?.length || 0), 0),
+          })
+          .select().single();
+
+        if (group) {
+          const ids = groupOrders.map((o: any) => o.id);
+          await supabase.from('expedition_beta_orders').update({ group_id: group.id, expedition_status: 'grouped' }).in('id', ids);
+        }
+      }
+      toast.success(`${multiOrderCustomers.length} grupos criados!`);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro ao agrupar: ${error.message}`);
+    }
+  };
+
+  const handleManualGroup = async () => {
+    if (selectedIds.size < 2) { toast.error('Selecione pelo menos 2 pedidos.'); return; }
+    const selected = approved.filter(o => selectedIds.has(o.id));
+    try {
+      const { data: group } = await supabase
+        .from('expedition_groups')
+        .insert({
+          customer_email: selected[0].customer_email,
+          customer_name: selected[0].customer_name,
+          order_count: selected.length,
+          total_items: selected.reduce((sum: number, o: any) => sum + (o.expedition_beta_order_items?.length || 0), 0),
+        })
+        .select().single();
+
+      if (group) {
+        await supabase.from('expedition_beta_orders').update({ group_id: group.id, expedition_status: 'grouped' }).in('id', Array.from(selectedIds));
+      }
+      toast.success(`Grupo criado com ${selected.length} pedidos!`);
+      setSelectedIds(new Set());
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    }
+  };
+
+  const handleAdvanceStatus = async (orderId: string, currentStatus: string) => {
+    const flow: Record<string, string> = {
+      approved: 'picking', grouped: 'picking', awaiting_stock: 'picking',
+      picking: 'picked', picked: 'packing', packing: 'packed', packed: 'dispatched',
+    };
+    const next = flow[currentStatus];
+    if (!next) { toast.info('Último estágio.'); return; }
+    try {
+      await supabase.from('expedition_beta_orders').update({ expedition_status: next }).eq('id', orderId);
+      toast.success(`Status → ${STATUS_LABELS[next] || next}`);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    }
+  };
+
+  const handleDelete = async (orderId: string) => {
+    try {
+      await supabase.from('expedition_beta_orders').delete().eq('id', orderId);
+      toast.success('Pedido removido!');
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    }
+  };
+
+  const handleToggleAwaiting = async (orderId: string, isAwaiting: boolean) => {
+    const newStatus = isAwaiting ? 'approved' : 'awaiting_stock';
+    await supabase.from('expedition_beta_orders').update({ expedition_status: newStatus }).eq('id', orderId);
+    toast.success(isAwaiting ? 'Pedido retomado!' : 'Marcado como Aguardando Estoque');
+    onRefresh();
+  };
+
+  const handleResetExpedition = async (orderId: string, orderName: string) => {
+    try {
+      await supabase.from('expedition_beta_orders').update({
+        expedition_status: 'approved', group_id: null, picking_list_id: null,
+        internal_barcode: null, ean13_barcode: null, dispatch_verified: false, dispatch_verified_at: null,
+      }).eq('id', orderId);
+      await supabase.from('expedition_beta_order_items').update({
+        pick_verified: false, picked_quantity: 0, pack_verified: false, packed_quantity: 0,
+      }).eq('expedition_order_id', orderId);
+      toast.success(`Expedição do pedido ${orderName} reiniciada!`);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(`Erro: ${error.message}`);
+    }
+  };
+
+  if (showGrouping) {
+    return (
+      <div className="space-y-6">
+        <Card className="border-dashed border-2 border-primary/30">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2"><Package className="h-4 w-4" /> Agrupar Manualmente</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">{selectedIds.size} selecionados</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => selectedIds.size === approved.length ? setSelectedIds(new Set()) : setSelectedIds(new Set(approved.map(o => o.id)))}>
+                  {selectedIds.size === approved.length ? 'Desmarcar' : 'Selecionar todos'}
+                </Button>
+                {selectedIds.size >= 2 && (
+                  <Button onClick={handleManualGroup} size="sm" className="gap-2"><Users className="h-4 w-4" />Agrupar</Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1 max-h-[400px] overflow-y-auto">
+              {approved.map(o => (
+                <label key={o.id} className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${selectedIds.has(o.id) ? 'bg-primary/10' : 'hover:bg-secondary/50'}`}>
+                  <Checkbox checked={selectedIds.has(o.id)} onCheckedChange={() => toggleSelect(o.id)} />
+                  <div className="flex-1 flex items-center justify-between min-w-0">
+                    <div>
+                      <span className="font-medium text-sm">{o.shopify_order_name}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{o.customer_name}</span>
+                    </div>
+                    <span className="text-sm font-medium shrink-0">R$ {Number(o.total_price || 0).toFixed(2)}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-foreground">Agrupamento Automático</h2>
+            <p className="text-sm text-muted-foreground">{multiOrderCustomers.length} clientes com múltiplos pedidos</p>
+          </div>
+          {multiOrderCustomers.length > 0 && (
+            <Button onClick={handleAutoGroup} className="gap-2"><Users className="h-4 w-4" />Agrupar Automaticamente</Button>
+          )}
+        </div>
+
+        {multiOrderCustomers.length === 0 ? (
+          <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum cliente com múltiplos pedidos.</CardContent></Card>
+        ) : (
+          multiOrderCustomers.map(([email, groupOrders]) => (
+            <Card key={email} className="border-l-4 border-l-primary">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">{groupOrders[0].customer_name || email}</CardTitle>
+                  <Badge variant="secondary">{groupOrders.length} pedidos</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {groupOrders.map((o: any) => (
+                  <div key={o.id} className="flex items-center justify-between p-2 rounded bg-secondary/50 mb-1">
+                    <span className="font-medium text-sm">{o.shopify_order_name}</span>
+                    <span className="text-sm font-medium">R$ {Number(o.total_price || 0).toFixed(2)}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Tabs defaultValue="approved">
+        <TabsList>
+          <TabsTrigger value="approved" className="gap-2"><CheckCircle2 className="h-4 w-4" />Aprovados ({approved.length})</TabsTrigger>
+          <TabsTrigger value="pending" className="gap-2"><AlertTriangle className="h-4 w-4" />Pendentes ({pending.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="approved" className="space-y-2 mt-4">
+          {approved.length === 0 ? (
+            <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido aprovado.</CardContent></Card>
+          ) : approved.map(order => (
+            <BetaOrderRow
+              key={order.id}
+              order={order}
+              isExpanded={expandedId === order.id}
+              onToggle={() => setExpandedId(expandedId === order.id ? null : order.id)}
+              onAdvance={handleAdvanceStatus}
+              onDelete={handleDelete}
+              onToggleAwaiting={handleToggleAwaiting}
+              onReset={handleResetExpedition}
+            />
+          ))}
+        </TabsContent>
+
+        <TabsContent value="pending" className="space-y-2 mt-4">
+          {pending.length === 0 ? (
+            <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum pedido pendente.</CardContent></Card>
+          ) : pending.map(order => (
+            <BetaOrderRow
+              key={order.id}
+              order={order}
+              isExpanded={expandedId === order.id}
+              onToggle={() => setExpandedId(expandedId === order.id ? null : order.id)}
+              onAdvance={handleAdvanceStatus}
+              onDelete={handleDelete}
+              onToggleAwaiting={handleToggleAwaiting}
+              onReset={handleResetExpedition}
+            />
+          ))}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onToggleAwaiting, onReset }: {
+  order: any;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onAdvance: (id: string, status: string) => void;
+  onDelete: (id: string) => void;
+  onToggleAwaiting: (id: string, isAwaiting: boolean) => void;
+  onReset: (id: string, name: string) => void;
+}) {
+  const isAwaiting = order.expedition_status === 'awaiting_stock';
+  const items = order.expedition_beta_order_items || [];
+  const statusLabel = STATUS_LABELS[order.expedition_status] || order.expedition_status;
+
+  const statusColor = {
+    approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    grouped: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+    awaiting_stock: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+    picking: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
+    picked: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
+    packing: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+    packed: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
+    dispatched: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+  }[order.expedition_status] || '';
+
+  return (
+    <Card className={isAwaiting ? 'opacity-60' : ''}>
+      <div className="flex items-center justify-between p-3 cursor-pointer hover:bg-secondary/30 transition-colors" onClick={onToggle}>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-sm">{order.shopify_order_name}</span>
+              <Badge className={`text-[10px] ${statusColor}`}>{statusLabel}</Badge>
+              {order.has_gift && <Gift className="h-3.5 w-3.5 text-pink-500" />}
+              {order.is_from_live && <Radio className="h-3.5 w-3.5 text-red-500" />}
+              {order.ean13_barcode && <Badge variant="outline" className="text-[10px] gap-1">EAN-13 ✓</Badge>}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {order.customer_name} • {items.length} itens • R$ {Number(order.total_price || 0).toFixed(2)}
+            </p>
+          </div>
+        </div>
+        {isExpanded ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+      </div>
+
+      {isExpanded && (
+        <CardContent className="pt-0 border-t">
+          {/* Items */}
+          <div className="space-y-1 mb-3">
+            {items.map((item: any) => (
+              <div key={item.id} className="flex items-center justify-between text-sm p-1.5 rounded bg-secondary/30">
+                <div className="min-w-0">
+                  <span className="font-medium">{item.product_name}</span>
+                  {item.variant_name && <span className="text-muted-foreground ml-1">({item.variant_name})</span>}
+                  {item.sku && <span className="text-muted-foreground ml-1 text-xs font-mono">[{item.sku}]</span>}
+                </div>
+                <span className="font-medium shrink-0 ml-2">×{item.quantity}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* EAN-13 Barcode display */}
+          {order.ean13_barcode && (
+            <div className="mb-3 p-3 rounded-lg bg-white border flex flex-col items-center">
+              <Barcode value={order.ean13_barcode} format="EAN13" width={2} height={60} fontSize={14} />
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => onAdvance(order.id, order.expedition_status)} className="gap-1">
+              <ArrowRight className="h-3 w-3" /> Avançar
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => onToggleAwaiting(order.id, isAwaiting)} className="gap-1">
+              <Clock className="h-3 w-3" /> {isAwaiting ? 'Retomar' : 'Aguardar Estoque'}
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1 text-amber-600"><RotateCcw className="h-3 w-3" />Refazer</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Refazer expedição?</AlertDialogTitle>
+                  <AlertDialogDescription>Isso resetará todo o progresso do pedido {order.shopify_order_name}.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => onReset(order.id, order.shopify_order_name)}>Confirmar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="destructive" className="gap-1"><Trash2 className="h-3 w-3" />Excluir</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir pedido?</AlertDialogTitle>
+                  <AlertDialogDescription>Remover {order.shopify_order_name} da expedição beta.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => onDelete(order.id)}>Confirmar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
