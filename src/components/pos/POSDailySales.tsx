@@ -11,12 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { POSSaleDetailDialog } from "./POSSaleDetailDialog";
+import type { DateRange } from "react-day-picker";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -80,6 +82,8 @@ interface SaleItem {
   barcode?: string | null;
 }
 
+type PeriodMode = "day" | "week" | "month" | "custom";
+
 export function POSDailySales({ storeId }: Props) {
   const [sales, setSales] = useState<SaleSummary[]>([]);
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
@@ -88,6 +92,8 @@ export function POSDailySales({ storeId }: Props) {
   const [loading, setLoading] = useState(true);
   const [resending, setResending] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [periodMode, setPeriodMode] = useState<PeriodMode>("day");
+  const [customRange, setCustomRange] = useState<DateRange | undefined>();
 
   // Detail dialog
   const [selectedSale, setSelectedSale] = useState<SaleSummary | null>(null);
@@ -108,21 +114,50 @@ export function POSDailySales({ storeId }: Props) {
 
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
+  const getDateRange = (): { start: Date; end: Date } => {
+    if (periodMode === "custom" && customRange?.from) {
+      const start = new Date(customRange.from);
+      start.setHours(0, 0, 0, 0);
+      const end = customRange.to ? new Date(customRange.to) : new Date(customRange.from);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    if (periodMode === "week") {
+      const end = new Date(selectedDate);
+      end.setHours(23, 59, 59, 999);
+      const start = new Date(selectedDate);
+      start.setDate(start.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      return { start, end };
+    }
+    if (periodMode === "month") {
+      const end = new Date(selectedDate);
+      end.setHours(23, 59, 59, 999);
+      const start = new Date(selectedDate);
+      start.setDate(start.getDate() - 29);
+      start.setHours(0, 0, 0, 0);
+      return { start, end };
+    }
+    // day
+    const start = new Date(selectedDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(selectedDate);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const dayStart = new Date(selectedDate);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(selectedDate);
-      dayEnd.setHours(23, 59, 59, 999);
+      const { start, end } = getDateRange();
 
       const [salesRes, sellersRes] = await Promise.all([
         supabase
           .from("pos_sales")
           .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id")
           .eq("store_id", storeId)
-          .gte("created_at", dayStart.toISOString())
-          .lte("created_at", dayEnd.toISOString())
+          .gte("created_at", start.toISOString())
+          .lte("created_at", end.toISOString())
           .order("created_at", { ascending: false }),
         supabase
           .from("pos_sellers")
@@ -142,7 +177,6 @@ export function POSDailySales({ storeId }: Props) {
           .in("sale_id", saleIds);
         setSaleItems((items as SaleItem[]) || []);
 
-        // Fetch customers
         const customerIds = [...new Set(salesData.map(s => s.customer_id).filter(Boolean))] as string[];
         if (customerIds.length > 0) {
           const { data: custData } = await supabase
@@ -168,8 +202,6 @@ export function POSDailySales({ storeId }: Props) {
 
   const openSaleDetail = async (sale: SaleSummary) => {
     setSelectedSale(sale);
-
-    // Items for this sale
     let items = saleItems.filter(i => i.sale_id === sale.id);
     if (items.length === 0 && showGlobalResults) {
       items = globalResultItems.filter(i => i.sale_id === sale.id);
@@ -183,7 +215,6 @@ export function POSDailySales({ storeId }: Props) {
     }
     setDetailItems(items);
 
-    // Customer
     let cust: CustomerInfo | null = null;
     if (sale.customer_id) {
       cust = customers.get(sale.customer_id) || globalResultCustomers.get(sale.customer_id) || null;
@@ -205,24 +236,18 @@ export function POSDailySales({ storeId }: Props) {
     setShowGlobalResults(true);
     try {
       const term = `%${searchTerm.trim()}%`;
-
-      // Search local DB and Tiny API in parallel
       const [localResult, tinyResult] = await Promise.all([
-        // Local: search customers then their sales
         (async () => {
           const { data: matchingCustomers } = await supabase
             .from("pos_customers")
             .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
             .or(`name.ilike.${term},cpf.ilike.${term},whatsapp.ilike.${term}`)
             .limit(50);
-
           if (!matchingCustomers || matchingCustomers.length === 0) {
             return { sales: [], items: [], customers: new Map<string, CustomerInfo>() };
           }
-
           const custMap = new Map<string, CustomerInfo>();
           matchingCustomers.forEach((c: any) => custMap.set(c.id, c));
-
           const custIds = matchingCustomers.map(c => c.id);
           const { data: salesData } = await supabase
             .from("pos_sales")
@@ -231,7 +256,6 @@ export function POSDailySales({ storeId }: Props) {
             .in("customer_id", custIds)
             .order("created_at", { ascending: false })
             .limit(20);
-
           let items: SaleItem[] = [];
           if (salesData && salesData.length > 0) {
             const saleIds = salesData.map(s => s.id);
@@ -241,11 +265,8 @@ export function POSDailySales({ storeId }: Props) {
               .in("sale_id", saleIds);
             items = (itemsData as SaleItem[]) || [];
           }
-
           return { sales: salesData || [], items, customers: custMap };
         })(),
-
-        // Tiny API search
         (async () => {
           try {
             const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-orders`, {
@@ -264,12 +285,9 @@ export function POSDailySales({ storeId }: Props) {
           }
         })(),
       ]);
-
       setGlobalResults(localResult.sales);
       setGlobalResultItems(localResult.items);
       setGlobalResultCustomers(localResult.customers);
-
-      // Filter out Tiny orders that already exist in local results
       const localTinyIds = new Set(localResult.sales.map((s: SaleSummary) => s.tiny_order_id).filter(Boolean));
       const uniqueTinyOrders = (tinyResult || []).filter(
         (t: TinyOnlyOrder) => !localTinyIds.has(t.tiny_order_id)
@@ -290,12 +308,10 @@ export function POSDailySales({ storeId }: Props) {
         .from("pos_sale_items")
         .select("*")
         .eq("sale_id", sale.id);
-
       if (!items || items.length === 0) {
         toast.error("Nenhum item encontrado para esta venda");
         return;
       }
-
       let customer: any = undefined;
       if (sale.customer_id) {
         const { data: cust } = await supabase
@@ -311,7 +327,6 @@ export function POSDailySales({ storeId }: Props) {
           };
         }
       }
-
       let tinySellerId: string | undefined;
       if (sale.seller_id) {
         const { data: sellerData } = await supabase
@@ -321,7 +336,6 @@ export function POSDailySales({ storeId }: Props) {
           .maybeSingle();
         tinySellerId = sellerData?.tiny_seller_id || undefined;
       }
-
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-create-sale`, {
         method: "POST",
         headers: {
@@ -344,7 +358,6 @@ export function POSDailySales({ storeId }: Props) {
           discount: sale.discount > 0 ? sale.discount : undefined,
         }),
       });
-
       const data = await resp.json();
       if (data.success) {
         toast.success(`Venda reenviada ao Tiny! Pedido #${data.tiny_order_number || data.tiny_order_id}`);
@@ -368,24 +381,44 @@ export function POSDailySales({ storeId }: Props) {
   };
 
   useEffect(() => {
+    if (periodMode === "custom" && !customRange?.from) return;
     loadData();
     setShowGlobalResults(false);
     setGlobalResults([]);
     setTinyOnlyResults([]);
     setSearchTerm("");
-  }, [storeId, selectedDate]);
+  }, [storeId, selectedDate, periodMode, customRange]);
 
-  const goToPrevDay = () => {
+  const goToPrev = () => {
     const d = new Date(selectedDate);
-    d.setDate(d.getDate() - 1);
+    if (periodMode === "week") d.setDate(d.getDate() - 7);
+    else if (periodMode === "month") d.setMonth(d.getMonth() - 1);
+    else d.setDate(d.getDate() - 1);
     setSelectedDate(d);
   };
-  const goToNextDay = () => {
+  const goToNext = () => {
     const d = new Date(selectedDate);
-    d.setDate(d.getDate() + 1);
+    if (periodMode === "week") d.setDate(d.getDate() + 7);
+    else if (periodMode === "month") d.setMonth(d.getMonth() + 1);
+    else d.setDate(d.getDate() + 1);
     if (d <= new Date()) setSelectedDate(d);
   };
   const goToToday = () => setSelectedDate(new Date());
+
+  const dateLabel = (): string => {
+    if (periodMode === "custom" && customRange?.from) {
+      return `${format(customRange.from, "dd/MM")}${customRange.to ? ` - ${format(customRange.to, "dd/MM")}` : ""}`;
+    }
+    if (periodMode === "week") {
+      const { start, end } = getDateRange();
+      return `${format(start, "dd/MM")} - ${format(end, "dd/MM")}`;
+    }
+    if (periodMode === "month") {
+      const { start, end } = getDateRange();
+      return `${format(start, "dd/MM")} - ${format(end, "dd/MM")}`;
+    }
+    return isToday ? "Hoje" : format(selectedDate, "dd/MM/yyyy");
+  };
 
   // Calculations
   const completedSales = sales.filter((s) => s.status === "completed");
@@ -424,7 +457,6 @@ export function POSDailySales({ storeId }: Props) {
       let key: string;
       let name: string;
       if (groupByParent) {
-        // Group by parent: text before first " - "
         const dashIndex = item.product_name.indexOf(" - ");
         name = dashIndex > -1 ? item.product_name.substring(0, dashIndex).trim() : item.product_name;
         key = name;
@@ -442,7 +474,6 @@ export function POSDailySales({ storeId }: Props) {
       .slice(0, 10);
   }, [saleItems, groupByParent]);
 
-  // Helper: get items summary for a sale
   const getItemsSummary = (saleId: string, itemsSource: SaleItem[] = saleItems) => {
     const items = itemsSource.filter(i => i.sale_id === saleId);
     if (items.length === 0) return "";
@@ -475,7 +506,7 @@ export function POSDailySales({ storeId }: Props) {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center text-pos-white/50">
-        <Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando vendas do dia...
+        <Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando vendas...
       </div>
     );
   }
@@ -485,7 +516,7 @@ export function POSDailySales({ storeId }: Props) {
     const time = new Date(sale.created_at);
     const custName = sale.customer_id ? customerSource.get(sale.customer_id)?.name : null;
     const summary = getItemsSummary(sale.id, itemsSource);
-    const isGlobal = showGlobalResults;
+    const showFullDate = showGlobalResults || periodMode !== "day";
 
     return (
       <div
@@ -495,7 +526,7 @@ export function POSDailySales({ storeId }: Props) {
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <span className="text-xs text-pos-white/40 font-mono shrink-0">
-            {isGlobal ? format(time, "dd/MM HH:mm") : format(time, "HH:mm")}
+            {showFullDate ? format(time, "dd/MM HH:mm") : format(time, "HH:mm")}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -554,7 +585,7 @@ export function POSDailySales({ storeId }: Props) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-pos-orange/20">
+      <div className="flex items-center justify-between p-4 border-b border-pos-orange/20 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-pos-orange" />
           <h2 className="text-lg font-bold text-pos-white">Vendas</h2>
@@ -562,38 +593,94 @@ export function POSDailySales({ storeId }: Props) {
             {completedSales.length} vendas
           </Badge>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-pos-white/60 hover:text-pos-white" onClick={goToPrevDay}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs min-w-[120px]">
-                <CalendarIcon className="h-3.5 w-3.5" />
-                {isToday ? "Hoje" : format(selectedDate, "dd/MM/yyyy")}
+        <div className="flex items-center gap-1 flex-wrap">
+          <ToggleGroup
+            type="single"
+            value={periodMode}
+            onValueChange={(v) => {
+              if (!v) return;
+              if (v !== "custom") setCustomRange(undefined);
+              setPeriodMode(v as PeriodMode);
+            }}
+            className="bg-pos-white/5 rounded-lg p-0.5"
+          >
+            <ToggleGroupItem value="day" className="text-xs px-2.5 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
+              Dia
+            </ToggleGroupItem>
+            <ToggleGroupItem value="week" className="text-xs px-2.5 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
+              Semana
+            </ToggleGroupItem>
+            <ToggleGroupItem value="month" className="text-xs px-2.5 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
+              Mês
+            </ToggleGroupItem>
+            <ToggleGroupItem value="custom" className="text-xs px-2.5 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
+              <CalendarIcon className="h-3 w-3 mr-1" />
+              Período
+            </ToggleGroupItem>
+          </ToggleGroup>
+
+          {periodMode !== "custom" && (
+            <>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-pos-white/60 hover:text-pos-white" onClick={goToPrev}>
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(d) => d && setSelectedDate(d)}
-                disabled={(date) => date > new Date()}
-                locale={ptBR}
-                initialFocus
-                className={cn("p-3 pointer-events-auto")}
-              />
-            </PopoverContent>
-          </Popover>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-pos-white/60 hover:text-pos-white" onClick={goToNextDay} disabled={isToday}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          {!isToday && (
-            <Button variant="outline" size="sm" className="text-xs border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 ml-1" onClick={goToToday}>
-              Hoje
-            </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs min-w-[120px]">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    {dateLabel()}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={(d) => d && setSelectedDate(d)}
+                    disabled={(date) => date > new Date()}
+                    locale={ptBR}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-pos-white/60 hover:text-pos-white" onClick={goToNext} disabled={isToday}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              {!isToday && (
+                <Button variant="outline" size="sm" className="text-xs border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={goToToday}>
+                  Hoje
+                </Button>
+              )}
+            </>
           )}
-          <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 ml-1" onClick={loadData}>
+
+          {periodMode === "custom" && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  {customRange?.from
+                    ? `${format(customRange.from, "dd/MM")}${customRange.to ? ` - ${format(customRange.to, "dd/MM")}` : ""}`
+                    : "Selecionar datas"
+                  }
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="range"
+                  selected={customRange}
+                  onSelect={setCustomRange}
+                  disabled={(date) => date > new Date()}
+                  locale={ptBR}
+                  numberOfMonths={2}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+
+          <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={loadData}>
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -755,7 +842,7 @@ export function POSDailySales({ storeId }: Props) {
                   className="text-xs text-pos-white/40 hover:text-pos-white underline"
                   onClick={() => { setShowGlobalResults(false); setGlobalResults([]); setTinyOnlyResults([]); }}
                 >
-                  Voltar ao dia
+                  Voltar
                 </button>
               </div>
             )}
@@ -775,7 +862,7 @@ export function POSDailySales({ storeId }: Props) {
                   )
                 )}
 
-                {/* Tiny-only results (orders from Tiny not in our POS) */}
+                {/* Tiny-only results */}
                 {showGlobalResults && tinyOnlyResults.length > 0 && (
                   <>
                     {globalResults.length > 0 && (

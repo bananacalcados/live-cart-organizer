@@ -2,20 +2,26 @@ import { useState, useEffect } from "react";
 import {
   DollarSign, ShoppingCart, TrendingUp, Package, Loader2,
   RefreshCw, BarChart3, Users, MessageSquare, Headphones,
-  ArrowRightLeft, ChevronRight
+  ArrowRightLeft, ChevronRight, CalendarIcon
 } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import type { DateRange } from "react-day-picker";
 
 interface Props {
   storeId: string;
   onNavigateToSection: (section: string) => void;
 }
 
-type Period = "day" | "week" | "month";
+type Period = "day" | "week" | "month" | "custom";
 
 interface SellerMetric {
   name: string;
@@ -24,7 +30,15 @@ interface SellerMetric {
   totalItems: number;
 }
 
-function getPeriodRange(period: Period): { start: Date; end: Date } {
+function getPeriodRange(period: Period, customRange: DateRange | undefined): { start: Date; end: Date } {
+  if (period === "custom" && customRange?.from) {
+    const start = new Date(customRange.from);
+    start.setHours(0, 0, 0, 0);
+    const end = customRange.to ? new Date(customRange.to) : new Date(customRange.from);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+
   const now = new Date();
   const end = new Date(now);
   end.setHours(23, 59, 59, 999);
@@ -41,6 +55,7 @@ function getPeriodRange(period: Period): { start: Date; end: Date } {
 
 export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [period, setPeriod] = useState<Period>("day");
+  const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [loading, setLoading] = useState(true);
 
   // KPIs
@@ -89,9 +104,8 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const loadSalesData = async () => {
     setLoading(true);
     try {
-      const { start, end } = getPeriodRange(period);
+      const { start, end } = getPeriodRange(period, customRange);
 
-      // Fetch completed sales for the period
       const { data: sales } = await supabase
         .from("pos_sales")
         .select("id, total, seller_id, status")
@@ -108,7 +122,6 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       setSalesCount(count);
       setAvgTicket(count > 0 ? revenue / count : 0);
 
-      // Fetch items for these sales
       if (completedSales.length > 0) {
         const saleIds = completedSales.map((s) => s.id);
         const { data: items } = await supabase
@@ -119,7 +132,6 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         const totalItems = (items || []).reduce((s, i) => s + (i.quantity || 0), 0);
         setAvgItemsPerSale(count > 0 ? totalItems / count : 0);
 
-        // Build seller metrics
         const { data: sellersData } = await supabase
           .from("pos_sellers")
           .select("id, name")
@@ -128,7 +140,6 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         const sellersMap = new Map((sellersData || []).map((s) => [s.id, s.name]));
         const metricsMap = new Map<string, SellerMetric>();
 
-        // Items per sale per seller
         const saleItemsMap = new Map<string, number>();
         for (const item of items || []) {
           saleItemsMap.set(item.sale_id, (saleItemsMap.get(item.sale_id) || 0) + (item.quantity || 0));
@@ -157,29 +168,47 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   };
 
   useEffect(() => {
+    if (period === "custom" && !customRange?.from) return;
     loadSalesData();
-  }, [storeId, period]);
+  }, [storeId, period, customRange]);
 
   useEffect(() => {
     loadAlerts();
   }, [storeId]);
 
-  const periodLabel = period === "day" ? "Hoje" : period === "week" ? "Semana" : "Mês";
+  const handlePeriodChange = (v: string) => {
+    if (!v) return;
+    if (v !== "custom") {
+      setCustomRange(undefined);
+    }
+    setPeriod(v as Period);
+  };
+
+  const periodLabel = period === "day"
+    ? "Hoje"
+    : period === "week"
+    ? "Semana"
+    : period === "month"
+    ? "Mês"
+    : customRange?.from
+    ? `${format(customRange.from, "dd/MM", { locale: ptBR })}${customRange.to ? ` - ${format(customRange.to, "dd/MM", { locale: ptBR })}` : ""}`
+    : "Personalizado";
+
   const totalAlerts = whatsappAwaiting + whatsappNew + supportTickets + pendingRequests;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-pos-orange/20">
+      <div className="flex items-center justify-between p-4 border-b border-pos-orange/20 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-pos-orange" />
           <h2 className="text-lg font-bold text-pos-white">Dashboard</h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <ToggleGroup
             type="single"
             value={period}
-            onValueChange={(v) => v && setPeriod(v as Period)}
+            onValueChange={handlePeriodChange}
             className="bg-pos-white/5 rounded-lg p-0.5"
           >
             <ToggleGroupItem value="day" className="text-xs px-3 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
@@ -191,7 +220,38 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
             <ToggleGroupItem value="month" className="text-xs px-3 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
               Mês
             </ToggleGroupItem>
+            <ToggleGroupItem value="custom" className="text-xs px-3 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
+              <CalendarIcon className="h-3.5 w-3.5 mr-1" />
+              Período
+            </ToggleGroupItem>
           </ToggleGroup>
+
+          {period === "custom" && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  {customRange?.from
+                    ? `${format(customRange.from, "dd/MM")}${customRange.to ? ` - ${format(customRange.to, "dd/MM")}` : ""}`
+                    : "Selecionar datas"
+                  }
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="range"
+                  selected={customRange}
+                  onSelect={setCustomRange}
+                  disabled={(date) => date > new Date()}
+                  locale={ptBR}
+                  numberOfMonths={2}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+
           <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={() => { loadSalesData(); loadAlerts(); }}>
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
