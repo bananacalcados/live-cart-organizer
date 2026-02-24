@@ -14,7 +14,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { POSStoreSelector } from "@/components/pos/POSStoreSelector";
 import { POSSalesView } from "@/components/pos/POSSalesView";
 import { POSCashRegister } from "@/components/pos/POSCashRegister";
-import { POSGamificationMini } from "@/components/pos/POSGamificationMini";
+
 import { POSConfig } from "@/components/pos/POSConfig";
 import { POSExchanges } from "@/components/pos/POSExchanges";
 import { POSInterStoreRequests } from "@/components/pos/POSInterStoreRequests";
@@ -23,13 +23,13 @@ import { POSProductSearchLog } from "@/components/pos/POSProductSearchLog";
 import { POSDailySales } from "@/components/pos/POSDailySales";
 import { POSPickupOrders } from "@/components/pos/POSPickupOrders";
 import { POSTeamChat } from "@/components/pos/POSTeamChat";
-import { POSStockRequests } from "@/components/pos/POSStockRequests";
+
 import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineSales } from "@/components/pos/POSOnlineSales";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches" | "pickups" | "stockcheck";
+type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups";
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
 const CONFIG_PIN = "1530";
@@ -37,17 +37,15 @@ const CONFIG_PIN = "1530";
 const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badge?: boolean; priority?: boolean }[] = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3, priority: true },
   { id: "sales", label: "Venda", icon: ShoppingCart, priority: true },
-  { id: "daily", label: "Vendas Dia", icon: BarChart3, priority: true },
+  { id: "daily", label: "Pedidos", icon: BarChart3, priority: true },
   { id: "online", label: "Online", icon: Globe, priority: true },
   { id: "pickups", label: "Retiradas", icon: Package, priority: true, badge: true },
   { id: "cash", label: "Caixa", icon: DollarSign, priority: true },
   { id: "returns", label: "Trocas", icon: RotateCcw },
   { id: "requests", label: "Solicitações", icon: ArrowRightLeft, badge: true },
-  { id: "stockcheck", label: "Estoque Exp.", icon: Package, badge: true },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "whatsapp", label: "WhatsApp", icon: Phone },
   { id: "searches", label: "Procurados", icon: SearchX },
-  { id: "gamification", label: "Ranking", icon: Trophy },
   { id: "config", label: "Config", icon: Settings },
 ];
 
@@ -242,11 +240,11 @@ export default function POS() {
           />
         )}
         {section === "cash" && <POSCashRegister storeId={selectedStore} />}
-        {section === "gamification" && <POSGamificationMini storeId={selectedStore} />}
+        
         {section === "config" && configAuthenticated && <POSConfig storeId={selectedStore} />}
         {section === "returns" && <POSExchanges storeId={selectedStore} />}
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
-        {section === "stockcheck" && <POSStockRequests storeId={selectedStore} />}
+        
         {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} />}
         {section === "online" && <POSOnlineSales storeId={selectedStore} sellers={sellers} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}

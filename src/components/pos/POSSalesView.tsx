@@ -1126,7 +1126,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
               {/* Search Results */}
               {searchResults.length > 0 && (
-                <div className="p-4 border-b border-pos-orange/10 bg-pos-orange/5">
+                <div className="p-4 border-b border-pos-orange/10 bg-pos-orange/5 max-h-[300px] overflow-y-auto">
                   <p className="text-xs text-pos-orange mb-2 font-medium">Resultados da busca — clique para adicionar:</p>
                   <div className="space-y-1.5">
                     {searchResults.map((product, i) => (
