@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Globe, Search, Plus, Minus, Trash2, ShoppingCart, Loader2,
-  Copy, Check, Image, Filter, Link2, ExternalLink, X, ArrowLeft
+  Copy, Check, Image, Filter, Link2, ExternalLink, X, ArrowLeft,
+  Truck, UserPlus, Banknote, CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,10 +11,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
+import { fetchProducts } from "@/lib/shopify";
 import { toast } from "sonner";
+import { POSCustomerForm } from "./POSCustomerForm";
 
 interface Seller {
   id: string;
@@ -34,18 +38,27 @@ interface CartItem {
   imageUrl: string | null;
 }
 
+interface FoundCustomer {
+  id: string;
+  name: string | null;
+  whatsapp: string | null;
+  cpf: string | null;
+  email: string | null;
+}
+
 interface Props {
   storeId: string;
   sellers: Seller[];
 }
 
-type Gateway = "yampi" | "checkout" | "paypal" | "pix";
+type Gateway = "yampi" | "checkout" | "paypal" | "pix" | "delivery";
 
-const GATEWAYS: { id: Gateway; label: string; color: string }[] = [
-  { id: "yampi", label: "Yampi", color: "bg-purple-600 hover:bg-purple-700" },
-  { id: "checkout", label: "Checkout", color: "bg-primary hover:bg-primary/90" },
-  { id: "paypal", label: "PayPal", color: "bg-blue-600 hover:bg-blue-700" },
-  { id: "pix", label: "PIX", color: "bg-green-600 hover:bg-green-700" },
+const GATEWAYS: { id: Gateway; label: string; color: string; icon: typeof Link2 }[] = [
+  { id: "yampi", label: "Yampi", color: "bg-purple-600 hover:bg-purple-700", icon: Link2 },
+  { id: "checkout", label: "Checkout", color: "bg-primary hover:bg-primary/90", icon: Link2 },
+  { id: "paypal", label: "PayPal", color: "bg-blue-600 hover:bg-blue-700", icon: Link2 },
+  { id: "pix", label: "PIX", color: "bg-green-600 hover:bg-green-700", icon: Link2 },
+  { id: "delivery", label: "Na Entrega", color: "bg-orange-600 hover:bg-orange-700", icon: Truck },
 ];
 
 export function POSOnlineSales({ storeId, sellers }: Props) {
@@ -59,14 +72,25 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [selectedSeller, setSelectedSeller] = useState("");
   const [stockStore, setStockStore] = useState(storeId);
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
   const [mobileStep, setMobileStep] = useState<"catalog" | "cart">("catalog");
   const [allCollections, setAllCollections] = useState<string[]>([]);
   const [allSizes, setAllSizes] = useState<string[]>([]);
+
+  // Customer search states
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerResults, setCustomerResults] = useState<FoundCustomer[]>([]);
+  const [searchingCustomer, setSearchingCustomer] = useState(false);
+  const [linkedCustomer, setLinkedCustomer] = useState<FoundCustomer | null>(null);
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
+
+  // Delivery payment states
+  const [showDeliveryOptions, setShowDeliveryOptions] = useState(false);
+  const [deliveryMethod, setDeliveryMethod] = useState<"cash" | "card">("cash");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [deliveryConfirmed, setDeliveryConfirmed] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -91,6 +115,26 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     loadProducts();
   }, [debouncedSearch]);
 
+  // Customer search
+  useEffect(() => {
+    if (customerSearch.length < 3) {
+      setCustomerResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setSearchingCustomer(true);
+      const term = `%${customerSearch}%`;
+      const { data } = await supabase
+        .from("pos_customers")
+        .select("id, name, whatsapp, cpf, email")
+        .or(`name.ilike.${term},cpf.ilike.${term},whatsapp.ilike.${term}`)
+        .limit(5);
+      setCustomerResults((data as FoundCustomer[]) || []);
+      setSearchingCustomer(false);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [customerSearch]);
+
   const loadProducts = async () => {
     setLoading(true);
     const query = debouncedSearch.trim() ? `title:*${debouncedSearch}*` : undefined;
@@ -111,14 +155,12 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         const price = parseFloat(v.price.amount);
         const compareAt = v.compareAtPrice ? parseFloat(v.compareAtPrice.amount) : null;
 
-        let size: string | null = null;
         for (const opt of v.selectedOptions) {
           const n = opt.name.toLowerCase();
-          if (n === "tamanho" || n === "size") { size = opt.value; sizes.add(opt.value); }
+          if (n === "tamanho" || n === "size") sizes.add(opt.value);
         }
 
         const variantParts = v.selectedOptions.filter(o => o.value !== "Default Title").map(o => o.value);
-        const productCollections = node.collections?.edges?.map(e => e.node.title) || [];
 
         items.push({
           id: `${node.id}::${v.id}`,
@@ -142,11 +184,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   };
 
   const filtered = useMemo(() => {
-    return products.filter(p => {
-      // Collection and size filters would need product-level metadata
-      // For simplicity, we show all available products
-      return true;
-    });
+    return products.filter(() => true);
   }, [products, collectionFilter, sizeFilter]);
 
   const addToCart = (item: CartItem) => {
@@ -178,13 +216,31 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     if (!selectedSeller) { toast.error("Selecione a vendedora"); return; }
     if (cart.length === 0) { toast.error("Adicione produtos ao carrinho"); return; }
 
+    // If delivery, show options first
+    if (gateway === "delivery") {
+      setShowDeliveryOptions(true);
+      return;
+    }
+
+    await processPayment(gateway);
+  };
+
+  const handleDeliveryConfirm = async () => {
+    setShowDeliveryOptions(false);
+    await processPayment("delivery");
+  };
+
+  const processPayment = async (gateway: Gateway) => {
     setGenerating(true);
     setGeneratedLink("");
 
     try {
       let link = "";
 
-      if (gateway === "yampi") {
+      if (gateway === "delivery") {
+        // No link needed for delivery payment
+        link = "";
+      } else if (gateway === "yampi") {
         const items = cart.map(c => ({
           sku: c.sku,
           shopify_variant_id: c.variantId,
@@ -194,13 +250,12 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         const { data, error } = await supabase.functions.invoke("yampi-create-payment-link", {
           body: {
             items,
-            customer: customerName || customerPhone ? { name: customerName, phone: customerPhone } : undefined,
+            customer: linkedCustomer?.name || linkedCustomer?.whatsapp ? { name: linkedCustomer.name, phone: linkedCustomer.whatsapp } : undefined,
           },
         });
         if (error || !data?.success) throw new Error(data?.error || error?.message || "Erro Yampi");
         link = data.payment_link;
       } else if (gateway === "checkout") {
-        // Build checkout URL with variant IDs
         const variants = cart.map(c => {
           const numericId = c.variantId.replace("gid://shopify/ProductVariant/", "");
           return `${numericId}:${c.quantity}`;
@@ -231,12 +286,14 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         link = data.ticket_url || data.qr_code_url || "";
       }
 
-      if (!link) throw new Error("Link não gerado");
+      if (gateway !== "delivery" && !link) throw new Error("Link não gerado");
 
-      setGeneratedLink(link);
+      setGeneratedLink(link || "DELIVERY_CONFIRMED");
+      if (gateway === "delivery") setDeliveryConfirmed(true);
 
       // Save sale to pos_sales
       const sellerObj = sellers.find(s => s.id === selectedSeller);
+      const paymentGw = gateway === "delivery" ? `delivery_${deliveryMethod}` : gateway;
       const { data: sale, error: saleErr } = await supabase
         .from("pos_sales")
         .insert({
@@ -247,11 +304,13 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           items_count: cartItems,
           status: "online_pending",
           sale_type: "online",
-          payment_gateway: gateway,
-          payment_link: link,
+          payment_gateway: paymentGw,
+          payment_link: gateway === "delivery" ? null : link,
           stock_source_store_id: stockStore,
-          customer_name: customerName || null,
-          customer_phone: customerPhone || null,
+          customer_name: linkedCustomer?.name || null,
+          customer_phone: linkedCustomer?.whatsapp || null,
+          customer_id: linkedCustomer?.id || null,
+          payment_method_detail: gateway === "delivery" ? deliveryMethod : null,
         } as any)
         .select("id")
         .single();
@@ -288,7 +347,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         }
       }
 
-      toast.success("Link gerado com sucesso!");
+      toast.success(gateway === "delivery" ? "Venda registrada!" : "Link gerado com sucesso!");
     } catch (e: any) {
       console.error("Generate link error:", e);
       toast.error(e.message || "Erro ao gerar link");
@@ -305,8 +364,16 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   };
 
   const sendWhatsApp = () => {
-    const phone = customerPhone?.replace(/\D/g, "") || "";
-    const text = `Olá! Aqui está o link para pagamento: ${generatedLink}`;
+    const phone = linkedCustomer?.whatsapp?.replace(/\D/g, "") || "";
+    let text: string;
+
+    if (deliveryConfirmed) {
+      const methodLabel = deliveryMethod === "cash" ? "dinheiro" : "cartão (maquininha)";
+      text = `Olá${linkedCustomer?.name ? ` ${linkedCustomer.name}` : ""}! Seu pedido foi separado.\n\nValor total: ${fmt(cartTotal)}\nPagamento na entrega: ${methodLabel}\n\nItens:\n${cart.map(c => `• ${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity} - ${fmt(c.price * c.quantity)}`).join("\n")}${deliveryNotes ? `\n\nObs: ${deliveryNotes}` : ""}`;
+    } else {
+      text = `Olá! Aqui está o link para pagamento: ${generatedLink}`;
+    }
+
     const url = phone
       ? `https://wa.me/55${phone}?text=${encodeURIComponent(text)}`
       : `https://wa.me/?text=${encodeURIComponent(text)}`;
@@ -316,9 +383,23 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const resetSale = () => {
     setCart([]);
     setGeneratedLink("");
-    setCustomerName("");
-    setCustomerPhone("");
+    setLinkedCustomer(null);
+    setCustomerSearch("");
     setMobileStep("catalog");
+    setDeliveryConfirmed(false);
+    setDeliveryNotes("");
+    setShowDeliveryOptions(false);
+  };
+
+  const selectCustomer = (c: FoundCustomer) => {
+    setLinkedCustomer(c);
+    setCustomerSearch("");
+    setCustomerResults([]);
+  };
+
+  const handleCustomerSaved = (customer: { id: string; name: string; cpf?: string }) => {
+    setLinkedCustomer({ id: customer.id, name: customer.name, cpf: customer.cpf || null, whatsapp: null, email: null });
+    setShowCustomerForm(false);
   };
 
   // Desktop: 2 columns. Mobile: steps
@@ -515,60 +596,158 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
               </Select>
             </div>
 
-            {/* Customer Info */}
+            {/* Customer Search */}
             <div className="space-y-1.5">
-              <Label className="text-xs">Cliente (opcional)</Label>
-              <Input
-                placeholder="Nome do cliente"
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-                className="h-8 text-sm"
-              />
-              <Input
-                placeholder="WhatsApp (ex: 11999999999)"
-                value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value)}
-                className="h-8 text-sm"
-              />
+              <Label className="text-xs">Cliente</Label>
+              {linkedCustomer ? (
+                <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium">{linkedCustomer.name || "Sem nome"}</p>
+                    {linkedCustomer.whatsapp && <p className="text-[10px] text-muted-foreground">{linkedCustomer.whatsapp}</p>}
+                    {linkedCustomer.cpf && <p className="text-[10px] text-muted-foreground">CPF: {linkedCustomer.cpf}</p>}
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setLinkedCustomer(null)}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex gap-1">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                      <Input
+                        placeholder="CPF, nome ou WhatsApp..."
+                        value={customerSearch}
+                        onChange={e => setCustomerSearch(e.target.value)}
+                        className="pl-7 h-8 text-sm"
+                      />
+                      {searchingCustomer && <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-muted-foreground" />}
+                    </div>
+                    <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setShowCustomerForm(true)}>
+                      <UserPlus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  {customerResults.length > 0 && (
+                    <div className="border border-border rounded-lg overflow-hidden">
+                      {customerResults.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => selectCustomer(c)}
+                          className="w-full text-left px-2 py-1.5 hover:bg-accent text-xs border-b border-border last:border-0 transition-colors"
+                        >
+                          <span className="font-medium">{c.name || "Sem nome"}</span>
+                          {c.whatsapp && <span className="text-muted-foreground ml-2">{c.whatsapp}</span>}
+                          {c.cpf && <span className="text-muted-foreground ml-2">CPF: {c.cpf}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <Separator />
 
             {/* Payment Gateways */}
-            {!generatedLink ? (
-              <div className="space-y-2">
-                <Label className="text-xs font-bold">Gerar Link de Pagamento</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {GATEWAYS.map(gw => (
-                    <Button
-                      key={gw.id}
-                      className={cn("text-xs text-white", gw.color)}
-                      size="sm"
-                      disabled={generating || cart.length === 0}
-                      onClick={() => handleGenerateLink(gw.id)}
-                    >
-                      {generating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Link2 className="h-3 w-3 mr-1" />}
-                      {gw.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+            {!generatedLink && !deliveryConfirmed ? (
+              <>
+                {/* Delivery options inline */}
+                {showDeliveryOptions ? (
+                  <div className="space-y-3 rounded-lg border border-orange-500/30 bg-orange-500/5 p-3">
+                    <Label className="text-xs font-bold flex items-center gap-1.5">
+                      <Truck className="h-3.5 w-3.5 text-orange-600" />
+                      Como será o pagamento na entrega?
+                    </Label>
+                    <RadioGroup value={deliveryMethod} onValueChange={(v) => setDeliveryMethod(v as "cash" | "card")} className="flex gap-3">
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="cash" id="cash" />
+                        <Label htmlFor="cash" className="text-xs flex items-center gap-1 cursor-pointer">
+                          <Banknote className="h-3.5 w-3.5" /> Dinheiro
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="card" id="card" />
+                        <Label htmlFor="card" className="text-xs flex items-center gap-1 cursor-pointer">
+                          <CreditCard className="h-3.5 w-3.5" /> Maquininha
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                    <Textarea
+                      placeholder="Observações (opcional)"
+                      value={deliveryNotes}
+                      onChange={e => setDeliveryNotes(e.target.value)}
+                      className="h-16 text-xs"
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="ghost" className="text-xs" onClick={() => setShowDeliveryOptions(false)}>
+                        Cancelar
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 text-xs bg-orange-600 hover:bg-orange-700 text-white"
+                        disabled={generating}
+                        onClick={handleDeliveryConfirm}
+                      >
+                        {generating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Check className="h-3 w-3 mr-1" />}
+                        Confirmar Venda
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold">Gerar Link / Pagamento</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {GATEWAYS.map(gw => {
+                        const Icon = gw.icon;
+                        return (
+                          <Button
+                            key={gw.id}
+                            className={cn("text-xs text-white", gw.color, gw.id === "delivery" && "col-span-2")}
+                            size="sm"
+                            disabled={generating || cart.length === 0}
+                            onClick={() => handleGenerateLink(gw.id)}
+                          >
+                            {generating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Icon className="h-3 w-3 mr-1" />}
+                            {gw.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="space-y-2">
-                <Label className="text-xs font-bold text-green-600">✅ Link Gerado!</Label>
-                <div className="p-2 bg-muted rounded-lg">
-                  <p className="text-xs break-all text-muted-foreground">{generatedLink}</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={copyLink}>
-                    {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
-                    {copied ? "Copiado" : "Copiar"}
-                  </Button>
-                  <Button size="sm" className="flex-1 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={sendWhatsApp}>
-                    <ExternalLink className="h-3 w-3 mr-1" />
-                    WhatsApp
-                  </Button>
-                </div>
+                {deliveryConfirmed ? (
+                  <>
+                    <Label className="text-xs font-bold text-orange-600 flex items-center gap-1">
+                      <Truck className="h-3.5 w-3.5" /> Venda Registrada — Pagamento na Entrega
+                    </Label>
+                    <div className="p-2 bg-orange-500/5 border border-orange-500/20 rounded-lg text-xs space-y-1">
+                      <p><span className="font-medium">Método:</span> {deliveryMethod === "cash" ? "Dinheiro" : "Maquininha"}</p>
+                      <p><span className="font-medium">Total:</span> {fmt(cartTotal)}</p>
+                      {linkedCustomer?.name && <p><span className="font-medium">Cliente:</span> {linkedCustomer.name}</p>}
+                      {deliveryNotes && <p><span className="font-medium">Obs:</span> {deliveryNotes}</p>}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Label className="text-xs font-bold text-green-600">✅ Link Gerado!</Label>
+                    <div className="p-2 bg-muted rounded-lg">
+                      <p className="text-xs break-all text-muted-foreground">{generatedLink}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={copyLink}>
+                        {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                        {copied ? "Copiado" : "Copiar"}
+                      </Button>
+                    </div>
+                  </>
+                )}
+                <Button size="sm" className="w-full text-xs bg-green-600 hover:bg-green-700 text-white" onClick={sendWhatsApp}>
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  Enviar WhatsApp
+                </Button>
                 <Button size="sm" variant="ghost" className="w-full text-xs" onClick={resetSale}>
                   <Plus className="h-3 w-3 mr-1" /> Nova Venda
                 </Button>
@@ -577,6 +756,13 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           </div>
         </ScrollArea>
       </div>
+
+      {/* Customer Form Dialog */}
+      <POSCustomerForm
+        open={showCustomerForm}
+        onOpenChange={setShowCustomerForm}
+        onSaved={handleCustomerSaved}
+      />
     </div>
   );
 }
