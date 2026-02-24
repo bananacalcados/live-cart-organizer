@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle, Phone, Trophy, Target, ListChecks, Check, Sparkles, Calendar, Star, Gift, Pencil } from "lucide-react";
+import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle, Phone, Trophy, Target, ListChecks, Check, Sparkles, Calendar, Star, Gift, Pencil, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,7 @@ interface SellerRow {
   id: string;
   name: string;
   is_active: boolean;
+  pin_code?: string | null;
 }
 
 export function POSConfig({ storeId }: Props) {
@@ -91,6 +92,11 @@ export function POSConfig({ storeId }: Props) {
   const [categories, setCategories] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
 
+  // Commission Tiers
+  const [commissionTiers, setCommissionTiers] = useState<any[]>([]);
+  const [showAddCommTier, setShowAddCommTier] = useState(false);
+  const [newCommTier, setNewCommTier] = useState({ min_revenue: "", max_revenue: "", commission_percent: "" });
+
   const SEGMENT_COLORS = ["#FF6B00", "#E91E63", "#9C27B0", "#3F51B5", "#00BCD4", "#4CAF50", "#FFEB3B", "#FF5722", "#795548", "#607D8B"];
 
   useEffect(() => {
@@ -106,6 +112,7 @@ export function POSConfig({ storeId }: Props) {
     loadPricingRules();
     loadGoals();
     loadCategoriesAndBrands();
+    loadCommissionTiers();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [storeId]);
 
@@ -143,6 +150,33 @@ export function POSConfig({ storeId }: Props) {
   const loadGoals = async () => {
     const { data } = await supabase.from('pos_goals').select('*').eq('store_id', storeId).order('created_at', { ascending: false });
     setGoals(data || []);
+  };
+
+  const loadCommissionTiers = async () => {
+    const { data } = await supabase.from('pos_seller_commission_tiers' as any).select('*').eq('store_id', storeId).order('tier_order');
+    setCommissionTiers(data || []);
+  };
+
+  const addCommissionTier = async () => {
+    if (!newCommTier.min_revenue || !newCommTier.commission_percent) return;
+    try {
+      await supabase.from('pos_seller_commission_tiers' as any).insert({
+        store_id: storeId,
+        tier_order: commissionTiers.length,
+        min_revenue: parseFloat(newCommTier.min_revenue) || 0,
+        max_revenue: newCommTier.max_revenue ? parseFloat(newCommTier.max_revenue) : null,
+        commission_percent: parseFloat(newCommTier.commission_percent) || 0,
+      });
+      toast.success("Faixa de comissão adicionada!");
+      setNewCommTier({ min_revenue: "", max_revenue: "", commission_percent: "" });
+      setShowAddCommTier(false);
+      loadCommissionTiers();
+    } catch { toast.error("Erro ao adicionar faixa"); }
+  };
+
+  const deleteCommissionTier = async (id: string) => {
+    await supabase.from('pos_seller_commission_tiers' as any).delete().eq('id', id);
+    loadCommissionTiers();
   };
 
   const loadCategoriesAndBrands = async () => {
@@ -384,7 +418,7 @@ export function POSConfig({ storeId }: Props) {
   };
 
   const loadSellers = async () => {
-    const { data } = await supabase.from('pos_sellers').select('*').eq('store_id', storeId).eq('is_active', true).order('name');
+    const { data } = await supabase.from('pos_sellers').select('id, name, is_active, pin_code').eq('store_id', storeId).order('name');
     setSellers(data || []);
   };
 
@@ -888,12 +922,28 @@ export function POSConfig({ storeId }: Props) {
             {sellers.length === 0 ? (
               <p className="text-xs text-pos-white/40">Nenhuma vendedora cadastrada</p>
             ) : sellers.map(s => (
-              <div key={s.id} className="flex items-center justify-between p-2 rounded-lg bg-pos-white/5">
-                <span className="text-sm text-pos-white">{s.name}</span>
-                <Switch checked={s.is_active} onCheckedChange={() => toggleSellerActive(s.id, s.is_active)} />
+              <div key={s.id} className="flex items-center justify-between p-2 rounded-lg bg-pos-white/5 gap-2">
+                <span className="text-sm text-pos-white flex-1">{s.name}</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    maxLength={4}
+                    placeholder="PIN"
+                    value={s.pin_code || ''}
+                    onChange={async (e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                      setSellers(prev => prev.map(sel => sel.id === s.id ? { ...sel, pin_code: val } : sel));
+                      if (val.length === 4 || val.length === 0) {
+                        await supabase.from('pos_sellers').update({ pin_code: val || null } as any).eq('id', s.id);
+                      }
+                    }}
+                    className="w-16 h-7 text-xs text-center bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange"
+                  />
+                  <Switch checked={s.is_active} onCheckedChange={() => toggleSellerActive(s.id, s.is_active)} />
+                </div>
               </div>
             ))}
-            <p className="text-[10px] text-pos-white/30">O toggle salva automaticamente. Use "Sincronizar Tiny" para puxar vendedores ativos da conta Tiny desta loja.</p>
+            <p className="text-[10px] text-pos-white/30">PIN de 4 dígitos para acesso ao painel privado. O toggle salva automaticamente.</p>
           </CardContent>
         </Card>
 
@@ -955,6 +1005,60 @@ export function POSConfig({ storeId }: Props) {
                 </div>
               );
             })}
+          </CardContent>
+        </Card>
+
+        {/* ─── Commission Tiers Config ─── */}
+        <Card className="bg-pos-white/5 border-pos-orange/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center justify-between text-pos-white">
+              <span className="flex items-center gap-2"><DollarSign className="h-4 w-4 text-green-400" /> Faixas de Comissão</span>
+              <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddCommTier(true)}>
+                <Plus className="h-3 w-3" /> Nova Faixa
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-xs text-pos-white/50">Configure as faixas de comissão escalonada por faturamento. A comissão é calculada automaticamente no painel do vendedor.</p>
+            {commissionTiers.length === 0 ? (
+              <p className="text-xs text-pos-white/40">Nenhuma faixa configurada.</p>
+            ) : commissionTiers.map((tier: any) => (
+              <div key={tier.id} className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-white/10">
+                <div>
+                  <p className="text-sm text-pos-white">
+                    R$ {Number(tier.min_revenue).toLocaleString('pt-BR')}
+                    {tier.max_revenue ? ` → R$ ${Number(tier.max_revenue).toLocaleString('pt-BR')}` : ' em diante'}
+                  </p>
+                  <p className="text-lg font-bold text-green-400">{Number(tier.commission_percent)}% de comissão</p>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-300" onClick={() => deleteCommissionTier(tier.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+
+            {showAddCommTier && (
+              <div className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/30 space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-pos-white/70 text-xs">Mínimo (R$)</Label>
+                    <Input type="number" value={newCommTier.min_revenue} onChange={e => setNewCommTier(p => ({ ...p, min_revenue: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="0" />
+                  </div>
+                  <div>
+                    <Label className="text-pos-white/70 text-xs">Máximo (R$)</Label>
+                    <Input type="number" value={newCommTier.max_revenue} onChange={e => setNewCommTier(p => ({ ...p, max_revenue: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="Ilimitado" />
+                  </div>
+                  <div>
+                    <Label className="text-pos-white/70 text-xs">Comissão (%)</Label>
+                    <Input type="number" step="0.1" value={newCommTier.commission_percent} onChange={e => setNewCommTier(p => ({ ...p, commission_percent: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="1.5" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addCommissionTier}>Salvar Faixa</Button>
+                  <Button size="sm" variant="outline" className="border-pos-white/20 text-pos-white/60" onClick={() => setShowAddCommTier(false)}>Cancelar</Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
