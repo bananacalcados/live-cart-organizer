@@ -140,18 +140,18 @@ serve(async (req) => {
           const tinyId = String(item.id);
           const shopifyId = item.numero_ecommerce ? String(item.numero_ecommerce) : null;
           
-          // Check existence
+          // Check existence by tiny_order_id first
           let existing = await supabase
             .from("expedition_beta_orders")
             .select("id")
-            .eq("shopify_order_id", shopifyId || `tiny-${tinyId}`)
+            .eq("tiny_order_id", tinyId)
             .maybeSingle();
 
           if (!existing.data) {
             existing = await supabase
               .from("expedition_beta_orders")
               .select("id")
-              .eq("shopify_order_id", `tiny-${tinyId}`)
+              .eq("shopify_order_id", shopifyId || `tiny-${tinyId}`)
               .maybeSingle();
           }
 
@@ -204,7 +204,9 @@ serve(async (req) => {
               total_shipping: parseFloat(order.frete || order.valor_frete || 0),
               total_weight_grams: 0,
               has_gift: (order.obs || order.observacoes || '').toLowerCase().includes("brinde"),
-              notes: order.obs || order.observacoes || null
+              notes: order.obs || order.observacoes || null,
+              tiny_order_id: tinyId,
+              tiny_order_number: String(order.numero || item.numero || '')
             })
             .select()
             .single();
