@@ -185,12 +185,12 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
                   {pct.toFixed(0)}%
                 </span>
                 {!achieved && goal.prize_label && sellerName && (
-                  <span className="text-[10px] text-yellow-400 font-bold animate-pulse">
+                  <span className="text-[10px] text-black font-black animate-pulse">
                     🏆 FALTA {formatValue(goal.goal_type, remaining)} PARA {sellerName.toUpperCase()} GANHAR: {goal.prize_label}
                   </span>
                 )}
                 {!achieved && goal.prize_label && !sellerName && (
-                  <span className="text-[10px] text-yellow-400 font-bold">
+                  <span className="text-[10px] text-black font-black">
                     🏆 Prêmio: {goal.prize_label}
                   </span>
                 )}
