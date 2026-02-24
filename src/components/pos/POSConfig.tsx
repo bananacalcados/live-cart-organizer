@@ -384,7 +384,7 @@ export function POSConfig({ storeId }: Props) {
   };
 
   const loadSellers = async () => {
-    const { data } = await supabase.from('pos_sellers').select('*').eq('store_id', storeId).order('name');
+    const { data } = await supabase.from('pos_sellers').select('*').eq('store_id', storeId).eq('is_active', true).order('name');
     setSellers(data || []);
   };
 
@@ -889,7 +889,7 @@ export function POSConfig({ storeId }: Props) {
               <p className="text-xs text-pos-white/40">Nenhuma vendedora cadastrada</p>
             ) : sellers.map(s => (
               <div key={s.id} className="flex items-center justify-between p-2 rounded-lg bg-pos-white/5">
-                <span className={`text-sm ${s.is_active ? 'text-pos-white' : 'text-pos-white/40 line-through'}`}>{s.name}</span>
+                <span className="text-sm text-pos-white">{s.name}</span>
                 <Switch checked={s.is_active} onCheckedChange={() => toggleSellerActive(s.id, s.is_active)} />
               </div>
             ))}
