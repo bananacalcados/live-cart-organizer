@@ -108,12 +108,13 @@ serve(async (req) => {
       try {
         console.log('Using Tiny API v3 for sellers...');
         const data = await tinyV3Get(v3Token, '/vendedores');
+        console.log('V3 sellers raw response:', JSON.stringify(data).substring(0, 1500));
         const items = data.itens || data.items || data.vendedores || data || [];
         
         sellers = (Array.isArray(items) ? items : []).map((v: any) => ({
           tiny_id: String(v.id || ''),
-          name: v.nome || v.name || 'Sem nome',
-        })).filter((s: any) => s.tiny_id);
+          name: v.descricao || v.nome || v.name || 'Sem nome',
+        })).filter((s: any) => s.tiny_id && s.name !== 'Sem nome');
         
         console.log(`[v3] Found ${sellers.length} sellers`);
       } catch (e) {
