@@ -374,7 +374,7 @@ async function passCancelled(token: string, supabase: any, existingMap: Map<stri
 }
 
 // === PASS 4: Cleanup - verify approved orders still approved in Tiny ===
-async function passCleanup(token: string, supabase: any, startTime: number) {
+async function passCleanup(token: string, supabase: any, startTime: number, timeoutMs = 50000) {
   let fixed = 0;
 
   // Get all orders we have as 'approved'
@@ -389,11 +389,23 @@ async function passCleanup(token: string, supabase: any, startTime: number) {
   console.log(`[Pass4-Cleanup] Checking ${approvedOrders.length} approved orders`);
 
   for (const order of approvedOrders) {
-    if (Date.now() - startTime > 55000) { console.log('Pass4 timeout'); break; }
+    if (Date.now() - startTime > timeoutMs) { console.log('Pass4 timeout'); break; }
 
     try {
-      await new Promise(r => setTimeout(r, 300));
-      const detail = await tinyV3Get(token, `/pedidos/${order.tiny_order_id}`);
+      await new Promise(r => setTimeout(r, 250));
+      let detail: any;
+      try {
+        detail = await tinyV3Get(token, `/pedidos/${order.tiny_order_id}`);
+      } catch (fetchErr: any) {
+        // If 404, the order was deleted in Tiny - mark as cancelled
+        if (fetchErr.message?.includes('404')) {
+          await supabase.from('expedition_beta_orders').update({ expedition_status: 'cancelled' }).eq('id', order.id);
+          fixed++;
+          console.log(`Cleanup: ${order.tiny_order_id} -> cancelled (not found in Tiny)`);
+          continue;
+        }
+        throw fetchErr;
+      }
       const sit = detail.situacao;
 
       if (sit === 9) {
@@ -442,6 +454,10 @@ serve(async (req) => {
     const existingMap = await loadExistingOrders(supabase);
     console.log(`Loaded ${existingMap.size} existing orders in ${Date.now() - startTime}ms`);
 
+    // Run cleanup FIRST so stale approved orders get fixed before other passes consume time
+    console.log("=== PASS 0: Cleanup approved ===");
+    const cleaned = await passCleanup(token, supabase, startTime, 45000);
+
     console.log("=== PASS 1: Approved ===");
     const { synced, skipped } = await passApproved(token, supabase, existingMap, startTime);
 
@@ -451,11 +467,8 @@ serve(async (req) => {
     console.log("=== PASS 3: Cancelled ===");
     const cancelled = await passCancelled(token, supabase, existingMap, startTime);
 
-    console.log("=== PASS 4: Cleanup approved ===");
-    const cleaned = await passCleanup(token, supabase, startTime);
-
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`Done in ${elapsed}s: ${synced} synced, ${skipped} skipped, ${dispatched} dispatched, ${cancelled} cancelled, ${cleaned} cleaned`);
+    console.log(`Done in ${elapsed}s: ${cleaned} cleaned, ${synced} synced, ${skipped} skipped, ${dispatched} dispatched, ${cancelled} cancelled`);
 
     return new Response(JSON.stringify({ success: true, synced, skipped, dispatched, cancelled, cleaned, elapsed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
