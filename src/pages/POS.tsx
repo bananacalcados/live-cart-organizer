@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
   ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3, SearchX,
-  Menu, X, Package, Globe
+  Menu, X, Package, Globe, Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { POSStoreSelector } from "@/components/pos/POSStoreSelector";
@@ -25,9 +27,12 @@ import { POSStockRequests } from "@/components/pos/POSStockRequests";
 import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineSales } from "@/components/pos/POSOnlineSales";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "gamification" | "whatsapp" | "daily" | "searches" | "pickups" | "stockcheck";
 type WhatsAppFilter = "unanswered" | "new" | undefined;
+
+const CONFIG_PIN = "1530";
 
 const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badge?: boolean; priority?: boolean }[] = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3, priority: true },
@@ -56,6 +61,11 @@ export default function POS() {
   const [pendingStockChecks, setPendingStockChecks] = useState(0);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
+  // Config PIN gate
+  const [configAuthenticated, setConfigAuthenticated] = useState(false);
+  const [showConfigPin, setShowConfigPin] = useState(false);
+  const [configPin, setConfigPin] = useState("");
+
   // Pre-load sellers as soon as store is selected (before POSSalesView mounts)
   const [sellers, setSellers] = useState<{ id: string; name: string; tiny_seller_id?: string }[]>([]);
   const [sellersLoaded, setSellersLoaded] = useState(false);
@@ -83,6 +93,31 @@ export default function POS() {
   useEffect(() => {
     if (section === 'sales' && selectedStore) loadSellers();
   }, [section]);
+
+  // Handle config section click with PIN gate
+  const handleSectionClick = (sectionId: POSSection) => {
+    if (sectionId === "config" && !configAuthenticated) {
+      setShowConfigPin(true);
+      setConfigPin("");
+      return;
+    }
+    setSection(sectionId);
+  };
+
+  const handleConfigPinComplete = (value: string) => {
+    setConfigPin(value);
+    if (value.length === 4) {
+      if (value === CONFIG_PIN) {
+        setConfigAuthenticated(true);
+        setShowConfigPin(false);
+        setSection("config");
+        toast.success("Acesso liberado!");
+      } else {
+        toast.error("PIN incorreto!");
+        setConfigPin("");
+      }
+    }
+  };
 
   // Realtime count of pending requests for this store
   useEffect(() => {
@@ -145,7 +180,7 @@ export default function POS() {
               return (
                 <button
                   key={s.id}
-                  onClick={() => setSection(s.id)}
+                  onClick={() => handleSectionClick(s.id)}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-all relative",
                     isActive
@@ -155,6 +190,7 @@ export default function POS() {
                 >
                   <Icon className="h-4 w-4 flex-shrink-0" />
                   <span className="hidden lg:inline">{s.label}</span>
+                  {s.id === "config" && <Lock className="h-3 w-3 opacity-50 hidden lg:inline" />}
                   {s.badge && pendingRequests > 0 && (
                     <Badge className="absolute -top-1 -right-1 lg:static lg:ml-auto bg-red-500 text-white border-0 text-[10px] h-4 min-w-4 px-1">
                       {pendingRequests}
@@ -207,7 +243,7 @@ export default function POS() {
         )}
         {section === "cash" && <POSCashRegister storeId={selectedStore} />}
         {section === "gamification" && <POSGamificationMini storeId={selectedStore} />}
-        {section === "config" && <POSConfig storeId={selectedStore} />}
+        {section === "config" && configAuthenticated && <POSConfig storeId={selectedStore} />}
         {section === "returns" && <POSExchanges storeId={selectedStore} />}
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
         {section === "stockcheck" && <POSStockRequests storeId={selectedStore} />}
@@ -218,6 +254,28 @@ export default function POS() {
         {section === "searches" && <POSProductSearchLog storeId={selectedStore} />}
         {section === "chat" && <POSTeamChat storeId={selectedStore} />}
       </div>
+
+      {/* Config PIN Dialog */}
+      <Dialog open={showConfigPin} onOpenChange={setShowConfigPin}>
+        <DialogContent className="bg-pos-black border-pos-orange/30 text-pos-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-pos-white">
+              <Lock className="h-4 w-4 text-pos-orange" /> Acesso às Configurações
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-6 py-8">
+            <p className="text-sm text-pos-white/60">Digite o PIN para acessar as configurações</p>
+            <InputOTP maxLength={4} value={configPin} onChange={handleConfigPinComplete}>
+              <InputOTPGroup>
+                <InputOTPSlot index={0} className="border-pos-orange/30 text-pos-white bg-pos-white/5" />
+                <InputOTPSlot index={1} className="border-pos-orange/30 text-pos-white bg-pos-white/5" />
+                <InputOTPSlot index={2} className="border-pos-orange/30 text-pos-white bg-pos-white/5" />
+                <InputOTPSlot index={3} className="border-pos-orange/30 text-pos-white bg-pos-white/5" />
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Mobile Bottom Navigation */}
       {isMobile && (
@@ -233,7 +291,7 @@ export default function POS() {
                     return (
                       <button
                         key={s.id}
-                        onClick={() => { setSection(s.id); setShowMoreMenu(false); }}
+                        onClick={() => { handleSectionClick(s.id); setShowMoreMenu(false); }}
                         className={cn(
                           "flex flex-col items-center gap-1.5 p-3 rounded-xl text-xs font-medium transition-all relative",
                           isActive
@@ -273,7 +331,7 @@ export default function POS() {
                 return (
                   <button
                     key={s.id}
-                    onClick={() => { setSection(s.id); setShowMoreMenu(false); }}
+                    onClick={() => { handleSectionClick(s.id); setShowMoreMenu(false); }}
                     className={cn(
                       "flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-all relative",
                       isActive

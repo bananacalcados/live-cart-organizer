@@ -92,10 +92,14 @@ export function POSConfig({ storeId }: Props) {
   const [categories, setCategories] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
 
-  // Commission Tiers
+  // Commission Tiers (new goal-based model)
   const [commissionTiers, setCommissionTiers] = useState<any[]>([]);
   const [showAddCommTier, setShowAddCommTier] = useState(false);
-  const [newCommTier, setNewCommTier] = useState({ min_revenue: "", max_revenue: "", commission_percent: "" });
+  const [commGoalValue, setCommGoalValue] = useState("");
+  const [newCommTier, setNewCommTier] = useState({ achievement_percent: "", commission_percent: "" });
+
+  // Seller selection for RFM tasks
+  const [selectedTaskSellers, setSelectedTaskSellers] = useState<Set<string>>(new Set());
 
   const SEGMENT_COLORS = ["#FF6B00", "#E91E63", "#9C27B0", "#3F51B5", "#00BCD4", "#4CAF50", "#FFEB3B", "#FF5722", "#795548", "#607D8B"];
 
@@ -155,23 +159,39 @@ export function POSConfig({ storeId }: Props) {
   const loadCommissionTiers = async () => {
     const { data } = await supabase.from('pos_seller_commission_tiers' as any).select('*').eq('store_id', storeId).order('tier_order');
     setCommissionTiers(data || []);
+    // Load goal value from first tier
+    if (data && data.length > 0) {
+      setCommGoalValue(String((data as any[])[0].goal_value || ''));
+    }
   };
 
   const addCommissionTier = async () => {
-    if (!newCommTier.min_revenue || !newCommTier.commission_percent) return;
+    if (!newCommTier.achievement_percent || !newCommTier.commission_percent) return;
     try {
       await supabase.from('pos_seller_commission_tiers' as any).insert({
         store_id: storeId,
         tier_order: commissionTiers.length,
-        min_revenue: parseFloat(newCommTier.min_revenue) || 0,
-        max_revenue: newCommTier.max_revenue ? parseFloat(newCommTier.max_revenue) : null,
+        goal_value: parseFloat(commGoalValue) || 0,
+        achievement_percent: parseFloat(newCommTier.achievement_percent) || 0,
         commission_percent: parseFloat(newCommTier.commission_percent) || 0,
+        min_revenue: 0,
+        max_revenue: null,
       });
       toast.success("Faixa de comissão adicionada!");
-      setNewCommTier({ min_revenue: "", max_revenue: "", commission_percent: "" });
+      setNewCommTier({ achievement_percent: "", commission_percent: "" });
       setShowAddCommTier(false);
       loadCommissionTiers();
     } catch { toast.error("Erro ao adicionar faixa"); }
+  };
+
+  const saveCommGoalValue = async () => {
+    if (commissionTiers.length === 0) return;
+    const goalVal = parseFloat(commGoalValue) || 0;
+    for (const tier of commissionTiers) {
+      await supabase.from('pos_seller_commission_tiers' as any).update({ goal_value: goalVal }).eq('id', tier.id);
+    }
+    toast.success("Meta atualizada!");
+    loadCommissionTiers();
   };
 
   const deleteCommissionTier = async (id: string) => {
@@ -280,7 +300,12 @@ export function POSConfig({ storeId }: Props) {
   };
 
   const loadLoyaltyConfig = async () => {
-    const { data } = await supabase.from('loyalty_config').select('*').eq('store_id', storeId).maybeSingle() as any;
+    // Load global config (store_id IS NULL) first, fallback to store-specific
+    let { data } = await supabase.from('loyalty_config').select('*').is('store_id', null).maybeSingle() as any;
+    if (!data) {
+      const res = await supabase.from('loyalty_config').select('*').eq('store_id', storeId).maybeSingle() as any;
+      data = res.data;
+    }
     if (data) {
       setLoyaltyConfigId(data.id);
       setLoyaltyEnabled(data.is_enabled);
@@ -302,24 +327,31 @@ export function POSConfig({ storeId }: Props) {
       if (loyaltyConfigId) {
         await supabase.from('loyalty_config').update(payload).eq('id', loyaltyConfigId);
       } else {
-        const { data } = await supabase.from('loyalty_config').insert({ store_id: storeId, ...payload } as any).select('id').single();
+        // Create global config (store_id = null)
+        const { data } = await supabase.from('loyalty_config').insert({ store_id: null, ...payload } as any).select('id').single();
         if (data) setLoyaltyConfigId(data.id);
       }
-      toast.success("Configuração de fidelidade salva!");
+      toast.success("Configuração de fidelidade salva (global - todas as lojas)!");
     } catch { toast.error("Erro ao salvar"); }
     finally { setSavingLoyalty(false); }
   };
 
   const loadLoyaltyTiers = async () => {
-    const { data } = await supabase.from('loyalty_prize_tiers').select('*').eq('store_id', storeId).order('min_points') as any;
+    // Global tiers first, fallback to store-specific
+    let { data } = await supabase.from('loyalty_prize_tiers').select('*').is('store_id', null).order('min_points') as any;
+    if (!data || data.length === 0) {
+      const res = await supabase.from('loyalty_prize_tiers').select('*').eq('store_id', storeId).order('min_points') as any;
+      data = res.data;
+    }
     setLoyaltyTiers(data || []);
   };
 
   const addLoyaltyTier = async () => {
     if (!newTier.name.trim() || !newTier.prize_label.trim()) return;
     try {
+      // Save globally (store_id = null)
       const { error } = await supabase.from('loyalty_prize_tiers').insert({
-        store_id: storeId,
+        store_id: null,
         name: newTier.name,
         min_points: parseInt(newTier.min_points) || 50,
         prize_type: newTier.prize_type,
@@ -329,12 +361,13 @@ export function POSConfig({ storeId }: Props) {
         sort_order: loyaltyTiers.length,
       } as any);
       if (error) throw error;
-      toast.success("Tier adicionado!");
+      toast.success("Tier adicionado (global)!");
       setNewTier({ name: "", min_points: "50", prize_type: "discount_percent", prize_value: "10", prize_label: "", color: "#FFD700" });
       setShowAddTier(false);
       loadLoyaltyTiers();
     } catch { toast.error("Erro ao adicionar tier"); }
   };
+
 
   const removeLoyaltyTier = async (id: string) => {
     await supabase.from('loyalty_prize_tiers').delete().eq('id', id);
@@ -532,56 +565,116 @@ export function POSConfig({ storeId }: Props) {
     loadTasks();
   };
 
+  const TINY_SHOPIFY_STORE_ID = '2bd2c08d-321c-47ee-98a9-e27e936818ab';
+
+  const RFM_STRATEGIES: Record<string, { title: string; contact_type: string; offer: string; script: string; points: number }> = {
+    'Campeões': { title: 'Pós-Venda / Lançamento', contact_type: 'pos_venda', offer: 'Acesso antecipado a novidades', script: 'Oi [nome], temos novidades exclusivas pra você!', points: 10 },
+    'Leais': { title: 'Lançamento / Convite', contact_type: 'lancamento', offer: 'Convite para evento exclusivo', script: 'Vem conhecer nossa nova coleção em primeira mão!', points: 8 },
+    'Potenciais': { title: 'Oferta Moderada', contact_type: 'oferta', offer: 'R$ 30 off em compras acima de R$ 150', script: 'Sentimos sua falta! Temos R$ 30 de desconto esperando você', points: 8 },
+    'Em Risco': { title: 'Oferta Agressiva', contact_type: 'oferta', offer: 'R$ 50 off em compras acima de R$ 100', script: 'Faz tempo que você não aparece! R$ 50 de desconto só pra você', points: 12 },
+    'Quase Dormindo': { title: 'Resgate Urgente', contact_type: 'resgate', offer: 'R$ 50 off em compras acima de R$ 100', script: 'Você é muito especial pra gente! Desconto exclusivo te esperando', points: 10 },
+    'Não Pode Perder': { title: 'VIP Resgate', contact_type: 'resgate', offer: 'R$ 80 off em compras acima de R$ 150', script: 'Volta pra gente! Desconto VIP de R$ 80 só pra você', points: 15 },
+    'Hibernando': { title: 'Reativação', contact_type: 'reativacao', offer: 'R$ 50 off em compras acima de R$ 100', script: 'Oi [nome]! Muito tempo sem te ver. Presente de R$ 50 pra você', points: 8 },
+    'Novos': { title: 'Boas-vindas / Pós-Venda', contact_type: 'pos_venda', offer: 'Obrigado pela primeira compra', script: 'Que bom ter você como cliente! Como foi sua experiência?', points: 5 },
+    'Promissores': { title: 'Cross-sell', contact_type: 'oferta', offer: 'R$ 30 off na próxima compra', script: 'Vem conhecer nossos lançamentos! Desconto especial pra você', points: 8 },
+  };
+
   const generateRfmTasks = async () => {
     setGeneratingTasks(true);
     try {
-      // Fetch at-risk / sleeping customers from zoppy_customers
-      const { data: atRiskCustomers } = await supabase
+      // Fetch ALL segments for comprehensive contact strategies
+      const { data: rfmCustomers } = await supabase
         .from('zoppy_customers')
-        .select('first_name, last_name, phone, rfm_segment, total_spent, last_purchase_at')
-        .in('rfm_segment', ['Em Risco', 'Quase Dormindo', 'Não Pode Perder'])
+        .select('first_name, last_name, phone, rfm_segment, total_spent, last_purchase_at, total_orders')
         .not('phone', 'is', null)
+        .not('rfm_segment', 'is', null)
         .order('total_spent', { ascending: false })
-        .limit(20);
+        .limit(50);
 
-      if (!atRiskCustomers || atRiskCustomers.length === 0) {
-        toast.info("Nenhum cliente em risco encontrado");
+      if (!rfmCustomers || rfmCustomers.length === 0) {
+        toast.info("Nenhum cliente RFM encontrado");
         setGeneratingTasks(false);
         return;
       }
 
-      // Distribute among active sellers round-robin
-      const activeSellers = sellers.filter(s => s.is_active);
-      if (activeSellers.length === 0) { toast.error("Nenhuma vendedora ativa"); setGeneratingTasks(false); return; }
+      // Determine which sellers to assign tasks to
+      const taskSellers = selectedTaskSellers.size > 0 
+        ? sellers.filter(s => s.is_active && selectedTaskSellers.has(s.id))
+        : sellers.filter(s => s.is_active);
+      
+      if (taskSellers.length === 0) { toast.error("Nenhuma vendedora selecionada/ativa"); setGeneratingTasks(false); return; }
 
-      const taskTypeMap: Record<string, { title: string; points: number }> = {
-        'Em Risco': { title: 'Resgatar cliente em risco', points: 10 },
-        'Quase Dormindo': { title: 'Reativar cliente quase dormindo', points: 8 },
-        'Não Pode Perder': { title: 'Contato VIP - não pode perder', points: 15 },
-      };
+      // For each customer, find the store where they bought most (physical stores only)
+      const phones = rfmCustomers.map(c => c.phone).filter(Boolean);
+      const { data: salesByPhone } = await supabase
+        .from('pos_sales' as any)
+        .select('customer_phone, store_id, seller_id')
+        .in('customer_phone', phones)
+        .eq('status', 'completed')
+        .neq('store_id', TINY_SHOPIFY_STORE_ID);
 
-      const newTasks = atRiskCustomers.map((c, i) => {
-        const seller = activeSellers[i % activeSellers.length];
-        const info = taskTypeMap[c.rfm_segment || ''] || { title: 'Contato com cliente', points: 5 };
+      // Map phone -> most frequent store
+      const phoneStoreMap = new Map<string, string>();
+      if (salesByPhone) {
+        const phoneStoreCounts = new Map<string, Map<string, number>>();
+        for (const sale of salesByPhone as any[]) {
+          if (!sale.customer_phone) continue;
+          const suffix = sale.customer_phone.replace(/\D/g, '').slice(-8);
+          if (!phoneStoreCounts.has(suffix)) phoneStoreCounts.set(suffix, new Map());
+          const storeMap = phoneStoreCounts.get(suffix)!;
+          storeMap.set(sale.store_id, (storeMap.get(sale.store_id) || 0) + 1);
+        }
+        for (const [phone, stores] of phoneStoreCounts) {
+          let maxStore = '';
+          let maxCount = 0;
+          for (const [sid, count] of stores) {
+            if (count > maxCount) { maxStore = sid; maxCount = count; }
+          }
+          phoneStoreMap.set(phone, maxStore);
+        }
+      }
+
+      // Filter customers to this store only
+      const filteredCustomers = rfmCustomers.filter(c => {
+        const suffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+        const assignedStore = phoneStoreMap.get(suffix);
+        // If no purchase history, include them (new customers)
+        return !assignedStore || assignedStore === storeId;
+      });
+
+      if (filteredCustomers.length === 0) {
+        toast.info("Nenhum cliente atribuído a esta loja");
+        setGeneratingTasks(false);
+        return;
+      }
+
+      const newTasks = filteredCustomers.map((c, i) => {
+        const seller = taskSellers[i % taskSellers.length];
+        const segment = c.rfm_segment || 'Novos';
+        const strategy = RFM_STRATEGIES[segment] || RFM_STRATEGIES['Novos'];
         const name = `${c.first_name || ''} ${c.last_name || ''}`.trim();
+        const avgTicket = c.total_orders && c.total_orders > 0 ? (c.total_spent || 0) / c.total_orders : 0;
         return {
           store_id: storeId,
           seller_id: seller.id,
-          title: info.title,
-          description: `${name} - Última compra: ${c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : 'N/A'} - Total gasto: R$ ${(c.total_spent || 0).toFixed(2)}`,
+          title: `${strategy.title} - ${segment}`,
+          description: `${name} - Última compra: ${c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : 'N/A'} - Total gasto: R$ ${(c.total_spent || 0).toFixed(2)} - Ticket médio: R$ ${avgTicket.toFixed(2)}\n\n📋 Script: "${strategy.script.replace('[nome]', c.first_name || name)}"\n💰 Oferta: ${strategy.offer}`,
           customer_phone: c.phone,
           customer_name: name,
           task_type: 'contact',
-          points_reward: info.points,
+          points_reward: strategy.points,
           source: 'rfm_auto',
-          rfm_segment: c.rfm_segment,
+          rfm_segment: segment,
+          contact_strategy: strategy.contact_type,
+          offer_description: strategy.offer,
+          avg_ticket: avgTicket,
           due_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
         };
       });
 
       const { error } = await supabase.from('pos_seller_tasks').insert(newTasks);
       if (error) throw error;
-      toast.success(`${newTasks.length} tarefas geradas automaticamente!`);
+      toast.success(`${newTasks.length} tarefas geradas com estratégias de contato!`);
       loadTasks();
     } catch (e) {
       console.error(e);
@@ -1008,26 +1101,39 @@ export function POSConfig({ storeId }: Props) {
           </CardContent>
         </Card>
 
-        {/* ─── Commission Tiers Config ─── */}
+        {/* ─── Commission Tiers Config (Goal-based) ─── */}
         <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between text-pos-white">
-              <span className="flex items-center gap-2"><DollarSign className="h-4 w-4 text-green-400" /> Faixas de Comissão</span>
+              <span className="flex items-center gap-2"><DollarSign className="h-4 w-4 text-green-400" /> Comissão por Meta</span>
               <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddCommTier(true)}>
                 <Plus className="h-3 w-3" /> Nova Faixa
               </Button>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-xs text-pos-white/50">Configure as faixas de comissão escalonada por faturamento. A comissão é calculada automaticamente no painel do vendedor.</p>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-pos-white/50">Defina o valor da meta e as faixas de comissão por % de atingimento. A vendedora só ganha comissão se atingir pelo menos a faixa mínima.</p>
+            
+            {/* Goal Value */}
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Label className="text-pos-white/70 text-xs">Valor da Meta (R$)</Label>
+                <Input type="number" value={commGoalValue} onChange={e => setCommGoalValue(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange text-lg font-bold" placeholder="35000" />
+              </div>
+              <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-10" onClick={saveCommGoalValue} disabled={commissionTiers.length === 0}>
+                <Save className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+
+            {/* Tiers */}
             {commissionTiers.length === 0 ? (
-              <p className="text-xs text-pos-white/40">Nenhuma faixa configurada.</p>
-            ) : commissionTiers.map((tier: any) => (
+              <p className="text-xs text-pos-white/40">Nenhuma faixa configurada. Adicione faixas de atingimento.</p>
+            ) : commissionTiers.sort((a: any, b: any) => Number(a.achievement_percent) - Number(b.achievement_percent)).map((tier: any) => (
               <div key={tier.id} className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-white/10">
                 <div>
                   <p className="text-sm text-pos-white">
-                    R$ {Number(tier.min_revenue).toLocaleString('pt-BR')}
-                    {tier.max_revenue ? ` → R$ ${Number(tier.max_revenue).toLocaleString('pt-BR')}` : ' em diante'}
+                    Atingir <span className="text-pos-orange font-bold">{Number(tier.achievement_percent)}%</span> da meta
+                    {commGoalValue ? ` (R$ ${(Number(tier.achievement_percent) / 100 * parseFloat(commGoalValue)).toLocaleString('pt-BR', { minimumFractionDigits: 0 })})` : ''}
                   </p>
                   <p className="text-lg font-bold text-green-400">{Number(tier.commission_percent)}% de comissão</p>
                 </div>
@@ -1039,18 +1145,14 @@ export function POSConfig({ storeId }: Props) {
 
             {showAddCommTier && (
               <div className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/30 space-y-3">
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label className="text-pos-white/70 text-xs">Mínimo (R$)</Label>
-                    <Input type="number" value={newCommTier.min_revenue} onChange={e => setNewCommTier(p => ({ ...p, min_revenue: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="0" />
+                    <Label className="text-pos-white/70 text-xs">% Atingimento</Label>
+                    <Input type="number" value={newCommTier.achievement_percent} onChange={e => setNewCommTier(p => ({ ...p, achievement_percent: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="80" />
                   </div>
                   <div>
-                    <Label className="text-pos-white/70 text-xs">Máximo (R$)</Label>
-                    <Input type="number" value={newCommTier.max_revenue} onChange={e => setNewCommTier(p => ({ ...p, max_revenue: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="Ilimitado" />
-                  </div>
-                  <div>
-                    <Label className="text-pos-white/70 text-xs">Comissão (%)</Label>
-                    <Input type="number" step="0.1" value={newCommTier.commission_percent} onChange={e => setNewCommTier(p => ({ ...p, commission_percent: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="1.5" />
+                    <Label className="text-pos-white/70 text-xs">% Comissão</Label>
+                    <Input type="number" step="0.1" value={newCommTier.commission_percent} onChange={e => setNewCommTier(p => ({ ...p, commission_percent: e.target.value }))} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" placeholder="0.8" />
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -1105,7 +1207,7 @@ export function POSConfig({ storeId }: Props) {
         <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between text-pos-white">
-              <span className="flex items-center gap-2"><Star className="h-4 w-4 text-yellow-400" /> Programa de Fidelidade (Pontos)</span>
+              <span className="flex items-center gap-2"><Star className="h-4 w-4 text-yellow-400" /> Programa de Fidelidade (Global - Todas as Lojas)</span>
               <Switch checked={loyaltyEnabled} onCheckedChange={setLoyaltyEnabled} />
             </CardTitle>
           </CardHeader>
@@ -1246,6 +1348,31 @@ export function POSConfig({ storeId }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            {/* Seller selection for RFM generation */}
+            <div className="p-3 rounded-lg bg-pos-white/5 border border-pos-white/10">
+              <p className="text-xs text-pos-white/50 mb-2">Selecione as vendedoras que receberão as tarefas RFM (vazio = todas ativas):</p>
+              <div className="flex flex-wrap gap-2">
+                {sellers.filter(s => s.is_active).map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedTaskSellers(prev => {
+                      const next = new Set(prev);
+                      if (next.has(s.id)) next.delete(s.id);
+                      else next.add(s.id);
+                      return next;
+                    })}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
+                      selectedTaskSellers.has(s.id)
+                        ? "bg-pos-orange text-pos-black border-pos-orange"
+                        : "bg-pos-white/5 text-pos-white/60 border-pos-white/20 hover:border-pos-orange/50"
+                    )}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
             {tasks.length === 0 ? (
               <p className="text-xs text-pos-white/40">Nenhuma tarefa. Crie manualmente ou gere automaticamente a partir de clientes RFM em risco.</p>
             ) : tasks.map(t => {

@@ -4728,8 +4728,10 @@ export type Database = {
       }
       pos_seller_commission_tiers: {
         Row: {
+          achievement_percent: number | null
           commission_percent: number
           created_at: string
+          goal_value: number | null
           id: string
           is_active: boolean
           max_revenue: number | null
@@ -4742,8 +4744,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          achievement_percent?: number | null
           commission_percent?: number
           created_at?: string
+          goal_value?: number | null
           id?: string
           is_active?: boolean
           max_revenue?: number | null
@@ -4756,8 +4760,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          achievement_percent?: number | null
           commission_percent?: number
           created_at?: string
+          goal_value?: number | null
           id?: string
           is_active?: boolean
           max_revenue?: number | null
@@ -4848,13 +4854,16 @@ export type Database = {
       }
       pos_seller_tasks: {
         Row: {
+          avg_ticket: number | null
           completed_at: string | null
+          contact_strategy: string | null
           created_at: string
           customer_name: string | null
           customer_phone: string | null
           description: string | null
           due_date: string | null
           id: string
+          offer_description: string | null
           points_reward: number
           rfm_segment: string | null
           seller_id: string
@@ -4866,13 +4875,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          avg_ticket?: number | null
           completed_at?: string | null
+          contact_strategy?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
           description?: string | null
           due_date?: string | null
           id?: string
+          offer_description?: string | null
           points_reward?: number
           rfm_segment?: string | null
           seller_id: string
@@ -4884,13 +4896,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          avg_ticket?: number | null
           completed_at?: string | null
+          contact_strategy?: string | null
           created_at?: string
           customer_name?: string | null
           customer_phone?: string | null
           description?: string | null
           due_date?: string | null
           id?: string
+          offer_description?: string | null
           points_reward?: number
           rfm_segment?: string | null
           seller_id?: string
