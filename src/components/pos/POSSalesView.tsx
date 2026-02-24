@@ -19,6 +19,7 @@ import { POSCustomerForm } from "./POSCustomerForm";
 import { POSBarcodeScanner } from "./POSBarcodeScanner";
 import { POSSellerGate } from "./POSSellerGate";
 import { POSPrizeWheel } from "./POSPrizeWheel";
+import { POSLoyaltyScreen } from "./POSLoyaltyScreen";
 import { POSSlotMachine } from "./POSSlotMachine";
 import { POSGiftBox } from "./POSGiftBox";
 import { supabase } from "@/integrations/supabase/client";
@@ -57,12 +58,13 @@ interface Props {
   preloadedSellers?: Seller[];
   sellersPreloaded?: boolean;
   onNavigateToWhatsApp?: (filter?: "unanswered" | "new") => void;
+  onCloseSalesView?: () => void;
 }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPreloaded, onNavigateToWhatsApp }: Props) {
+export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPreloaded, onNavigateToWhatsApp, onCloseSalesView }: Props) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState("");
   const [step, setStep] = useState<SaleStep>("scan");
@@ -81,9 +83,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   // Loyalty points
   const [loyaltyConfig, setLoyaltyConfig] = useState<{ is_enabled: boolean; points_per_real: number; points_expiry_days: number; wheel_enabled: boolean } | null>(null);
   const [loyaltyTiers, setLoyaltyTiers] = useState<any[]>([]);
-  const [showSlotMachine, setShowSlotMachine] = useState(false);
+  const [showLoyaltyScreen, setShowLoyaltyScreen] = useState(false);
   const [earnedPoints, setEarnedPoints] = useState(0);
-  const [showGiftBox, setShowGiftBox] = useState(false);
+  const [loyaltyTotalPoints, setLoyaltyTotalPoints] = useState(0);
   const [wonPrize, setWonPrize] = useState<any>(null);
   const [wonCouponCode, setWonCouponCode] = useState("");
   const [searching, setSearching] = useState(false);
@@ -667,7 +669,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           const points = Math.floor(totalWithDiscount * (loyaltyConfig.points_per_real || 0.1));
           if (points > 0) {
             setEarnedPoints(points);
-            setShowSlotMachine(true);
+            setShowLoyaltyScreen(true);
 
             // Upsert customer points
             const { data: existing } = await supabase
@@ -683,6 +685,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             let newTotal = points;
             if (existing) {
               newTotal = existing.total_points + points;
+              setLoyaltyTotalPoints(newTotal);
               await supabase.from('customer_loyalty_points').update({
                 total_points: newTotal,
                 lifetime_points: existing.lifetime_points + points,
@@ -809,8 +812,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setDiscount("");
     setDiscountType("value");
     setShowWheel(false);
-    setShowSlotMachine(false);
-    setShowGiftBox(false);
+    setShowLoyaltyScreen(false);
     setWonPrize(null);
     setWonCouponCode("");
     setEarnedPoints(0);
@@ -864,6 +866,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         storeId={storeId}
         sellers={sellers}
         onSellerSelected={(id) => setSelectedSeller(id)}
+        onClose={onCloseSalesView}
       />
     );
   }
@@ -1526,25 +1529,26 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 </Button>
               </div>
 
-              {/* Slot Machine - Loyalty Points */}
-              {showSlotMachine && (
-                <POSSlotMachine
+              {/* Loyalty Screen (Slot -> Summary -> Prize) */}
+              {showLoyaltyScreen && (
+                <POSLoyaltyScreen
+                  open={showLoyaltyScreen}
                   pointsEarned={earnedPoints}
-                  onComplete={() => {
-                    setShowSlotMachine(false);
+                  totalPoints={loyaltyTotalPoints}
+                  tiers={loyaltyTiers}
+                  wonPrize={wonPrize}
+                  wonCouponCode={wonCouponCode}
+                  customerName={selectedCustomer?.name}
+                  onClose={() => {
+                    setShowLoyaltyScreen(false);
+                    // Reset sale after loyalty flow
                     if (wonPrize) {
-                      setShowGiftBox(true);
+                      // Already shown prize, reset everything
+                      resetSale();
+                    } else {
+                      resetSale();
                     }
                   }}
-                />
-              )}
-
-              {/* Gift Box - Prize Reveal */}
-              {showGiftBox && wonPrize && (
-                <POSGiftBox
-                  prize={wonPrize}
-                  couponCode={wonCouponCode}
-                  onClose={() => setShowGiftBox(false)}
                 />
               )}
 

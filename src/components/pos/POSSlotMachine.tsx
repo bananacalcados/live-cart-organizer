@@ -7,142 +7,126 @@ interface Props {
 }
 
 export function POSSlotMachine({ pointsEarned, onComplete }: Props) {
-  const [phase, setPhase] = useState<"idle" | "pulling" | "spinning" | "done">("idle");
+  const [phase, setPhase] = useState<"spinning" | "done">("spinning");
   const [displayDigits, setDisplayDigits] = useState<number[]>([0, 0, 0]);
   const intervalRefs = useRef<ReturnType<typeof setInterval>[]>([]);
 
   const digits = String(pointsEarned).padStart(3, "0").split("").map(Number);
 
-  const startSpin = () => {
-    setPhase("pulling");
-    setTimeout(() => {
-      setPhase("spinning");
-
-      // Start all reels spinning with random numbers
-      digits.forEach((_, i) => {
-        const ref = setInterval(() => {
-          setDisplayDigits(prev => {
-            const next = [...prev];
-            next[i] = Math.floor(Math.random() * 10);
-            return next;
-          });
-        }, 80);
-        intervalRefs.current.push(ref);
-      });
-
-      // Stop reels sequentially
-      setTimeout(() => {
-        clearInterval(intervalRefs.current[0]);
-        setDisplayDigits(prev => { const n = [...prev]; n[0] = digits[0]; return n; });
-      }, 1200);
-      setTimeout(() => {
-        clearInterval(intervalRefs.current[1]);
-        setDisplayDigits(prev => { const n = [...prev]; n[1] = digits[1]; return n; });
-      }, 1800);
-      setTimeout(() => {
-        clearInterval(intervalRefs.current[2]);
-        setDisplayDigits(prev => { const n = [...prev]; n[2] = digits[2]; return n; });
-        setPhase("done");
-      }, 2400);
-    }, 600);
-  };
-
+  // Auto-start spinning on mount
   useEffect(() => {
+    // Start all reels spinning with random numbers
+    digits.forEach((_, i) => {
+      const ref = setInterval(() => {
+        setDisplayDigits(prev => {
+          const next = [...prev];
+          next[i] = Math.floor(Math.random() * 10);
+          return next;
+        });
+      }, 70);
+      intervalRefs.current.push(ref);
+    });
+
+    // Stop reels sequentially
+    setTimeout(() => {
+      clearInterval(intervalRefs.current[0]);
+      setDisplayDigits(prev => { const n = [...prev]; n[0] = digits[0]; return n; });
+    }, 1000);
+    setTimeout(() => {
+      clearInterval(intervalRefs.current[1]);
+      setDisplayDigits(prev => { const n = [...prev]; n[1] = digits[1]; return n; });
+    }, 1600);
+    setTimeout(() => {
+      clearInterval(intervalRefs.current[2]);
+      setDisplayDigits(prev => { const n = [...prev]; n[2] = digits[2]; return n; });
+      setPhase("done");
+    }, 2200);
+
     return () => intervalRefs.current.forEach(clearInterval);
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-6 py-6">
-      <h3 className="text-xl font-black text-pos-orange flex items-center gap-2">
-        🎰 Seus Pontos de Fidelidade!
-      </h3>
-      <p className="text-sm text-pos-white/60">Puxe a alavanca para revelar seus pontos</p>
+    <div className="flex flex-col items-center gap-6 py-8 px-4">
+      {/* Colorful title */}
+      <div className="text-center">
+        <h3 className="text-2xl font-black bg-gradient-to-r from-yellow-300 via-orange-400 to-red-500 bg-clip-text text-transparent">
+          🎰 Seus Pontos de Fidelidade!
+        </h3>
+        <p className="text-sm text-pos-white/50 mt-1">Aguarde o resultado...</p>
+      </div>
 
+      {/* Slot machine body */}
       <div className="relative">
-        {/* Slot machine body */}
-        <div className="bg-gradient-to-b from-zinc-800 to-zinc-900 rounded-2xl p-6 border-2 border-yellow-500/40 shadow-[0_0_40px_rgba(255,215,0,0.15)]">
-          {/* Top decoration */}
-          <div className="flex items-center justify-center mb-4">
-            <div className="h-3 w-3 rounded-full bg-red-500 animate-pulse mx-1" />
-            <div className="h-3 w-3 rounded-full bg-yellow-400 animate-pulse mx-1 delay-100" />
-            <div className="h-3 w-3 rounded-full bg-green-400 animate-pulse mx-1 delay-200" />
-            <span className="text-xs font-bold text-yellow-400 ml-3 tracking-widest">PONTOS</span>
-            <div className="h-3 w-3 rounded-full bg-green-400 animate-pulse mx-1 delay-200" />
-            <div className="h-3 w-3 rounded-full bg-yellow-400 animate-pulse mx-1 delay-100" />
-            <div className="h-3 w-3 rounded-full bg-red-500 animate-pulse mx-1" />
+        <div className="bg-gradient-to-b from-yellow-500/20 via-orange-500/10 to-red-500/20 rounded-3xl p-8 border-2 border-yellow-400/50 shadow-[0_0_60px_rgba(255,215,0,0.2)]">
+          {/* Top lights */}
+          <div className="flex items-center justify-center mb-5 gap-1.5">
+            {[...Array(7)].map((_, i) => (
+              <div
+                key={i}
+                className="h-3 w-3 rounded-full animate-pulse"
+                style={{
+                  backgroundColor: ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#FF6B6B', '#FFD93D', '#6BCB77'][i],
+                  animationDelay: `${i * 150}ms`
+                }}
+              />
+            ))}
           </div>
 
           {/* Reels */}
-          <div className="flex gap-3">
+          <div className="flex gap-4">
             {displayDigits.map((digit, i) => (
               <div key={i} className="relative overflow-hidden">
                 <div className={cn(
-                  "w-20 h-28 bg-gradient-to-b from-zinc-700 via-zinc-600 to-zinc-700 rounded-xl border-2 border-zinc-500/50 flex items-center justify-center shadow-inner",
-                  phase === "spinning" && "border-yellow-400/50"
+                  "w-24 h-32 rounded-2xl border-3 flex items-center justify-center shadow-inner transition-all duration-300",
+                  phase === "spinning"
+                    ? "bg-gradient-to-b from-yellow-400/20 via-orange-400/30 to-yellow-400/20 border-yellow-400/60"
+                    : "bg-gradient-to-b from-green-400/20 via-green-500/30 to-green-400/20 border-green-400/60"
                 )}>
                   <span className={cn(
-                    "text-5xl font-black tabular-nums transition-all",
-                    phase === "spinning" ? "text-yellow-300 scale-110" : "text-white",
-                    phase === "done" && "text-yellow-400 scale-125"
+                    "text-6xl font-black tabular-nums transition-all duration-500",
+                    phase === "spinning" ? "text-yellow-300 scale-110 animate-pulse" : "text-green-400 scale-125"
                   )}>
                     {digit}
                   </span>
                 </div>
-                {/* Highlight line */}
-                <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-yellow-400/30 -translate-y-1/2 pointer-events-none" />
+                {/* Glow line */}
+                <div className="absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-yellow-400/40 to-transparent -translate-y-1/2 pointer-events-none" />
               </div>
             ))}
           </div>
 
           {/* Bottom bar */}
-          <div className="mt-4 flex items-center justify-center gap-2">
-            <div className="h-1 flex-1 bg-gradient-to-r from-transparent via-yellow-400/30 to-transparent rounded" />
-            <span className="text-[10px] text-yellow-400/60 font-bold tracking-wider">FIDELIDADE</span>
-            <div className="h-1 flex-1 bg-gradient-to-r from-transparent via-yellow-400/30 to-transparent rounded" />
+          <div className="mt-5 flex items-center justify-center gap-2">
+            <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-yellow-400/40 to-transparent rounded" />
+            <span className="text-xs text-yellow-400/70 font-bold tracking-[0.3em]">PONTOS</span>
+            <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-yellow-400/40 to-transparent rounded" />
           </div>
-        </div>
-
-        {/* Lever */}
-        <div className="absolute -right-12 top-1/2 -translate-y-1/2 flex flex-col items-center">
-          <button
-            onClick={phase === "idle" ? startSpin : undefined}
-            disabled={phase !== "idle"}
-            className={cn(
-              "flex flex-col items-center cursor-pointer transition-transform",
-              phase === "pulling" && "translate-y-6",
-              phase === "idle" && "hover:-translate-y-1"
-            )}
-          >
-            {/* Ball */}
-            <div className={cn(
-              "w-10 h-10 rounded-full shadow-lg transition-all",
-              phase === "idle"
-                ? "bg-gradient-to-b from-red-500 to-red-700 hover:from-red-400 hover:to-red-600 cursor-grab"
-                : "bg-gradient-to-b from-red-700 to-red-900"
-            )} />
-            {/* Stick */}
-            <div className="w-3 h-20 bg-gradient-to-b from-zinc-400 to-zinc-600 rounded-b-lg" />
-          </button>
         </div>
       </div>
 
       {phase === "done" && (
-        <div className="text-center space-y-3 animate-in fade-in zoom-in duration-500">
-          <p className="text-3xl font-black text-yellow-400">
-            +{pointsEarned} pontos!
-          </p>
-          <p className="text-sm text-pos-white/60">Pontos acumulados com sucesso</p>
+        <div className="text-center space-y-4 animate-in fade-in zoom-in duration-700">
+          <div className="space-y-1">
+            <p className="text-4xl font-black bg-gradient-to-r from-yellow-300 via-orange-400 to-green-400 bg-clip-text text-transparent">
+              +{pointsEarned} pontos! 🎉
+            </p>
+            <p className="text-sm text-pos-white/50">Pontos acumulados com sucesso!</p>
+          </div>
           <button
             onClick={onComplete}
-            className="px-8 py-3 rounded-xl bg-pos-orange text-pos-black font-bold hover:bg-pos-orange-muted transition-colors"
+            className="px-10 py-3.5 rounded-2xl bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-bold text-lg hover:from-yellow-500 hover:via-orange-600 hover:to-red-600 transition-all shadow-lg shadow-orange-500/30"
           >
             Continuar ✨
           </button>
         </div>
       )}
 
-      {phase === "idle" && (
-        <p className="text-xs text-yellow-400/70 animate-pulse">👆 Puxe a alavanca!</p>
+      {phase === "spinning" && (
+        <div className="flex items-center gap-2 text-yellow-400/70 animate-pulse">
+          <span className="text-2xl">🎲</span>
+          <p className="text-sm font-bold">Calculando seus pontos...</p>
+          <span className="text-2xl">🎲</span>
+        </div>
       )}
     </div>
   );

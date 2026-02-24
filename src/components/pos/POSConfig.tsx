@@ -84,6 +84,11 @@ export function POSConfig({ storeId }: Props) {
   const [pricingActive, setPricingActive] = useState(true);
   const [savingPricing, setSavingPricing] = useState(false);
 
+  // Goals
+  const [goals, setGoals] = useState<any[]>([]);
+  const [showAddGoal, setShowAddGoal] = useState(false);
+  const [newGoal, setNewGoal] = useState({ goal_type: "revenue", goal_value: "", period: "daily", seller_id: "all" });
+
   const SEGMENT_COLORS = ["#FF6B00", "#E91E63", "#9C27B0", "#3F51B5", "#00BCD4", "#4CAF50", "#FFEB3B", "#FF5722", "#795548", "#607D8B"];
 
   useEffect(() => {
@@ -97,6 +102,7 @@ export function POSConfig({ storeId }: Props) {
     loadLoyaltyConfig();
     loadLoyaltyTiers();
     loadPricingRules();
+    loadGoals();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [storeId]);
 
@@ -129,6 +135,35 @@ export function POSConfig({ storeId }: Props) {
       toast.success("Precificação salva!");
     } catch { toast.error("Erro ao salvar"); }
     finally { setSavingPricing(false); }
+  };
+
+  const loadGoals = async () => {
+    const { data } = await supabase.from('pos_goals').select('*').eq('store_id', storeId).order('created_at', { ascending: false });
+    setGoals(data || []);
+  };
+
+  const addGoal = async () => {
+    if (!newGoal.goal_value) return;
+    try {
+      const payload = {
+        store_id: storeId,
+        goal_type: newGoal.goal_type,
+        goal_value: parseFloat(newGoal.goal_value),
+        period: newGoal.period,
+        seller_id: newGoal.seller_id === 'all' ? null : newGoal.seller_id,
+        is_active: true
+      };
+      await supabase.from('pos_goals').insert(payload as any);
+      toast.success("Meta adicionada!");
+      setNewGoal({ goal_type: "revenue", goal_value: "", period: "daily", seller_id: "all" });
+      setShowAddGoal(false);
+      loadGoals();
+    } catch { toast.error("Erro ao adicionar meta"); }
+  };
+
+  const deleteGoal = async (id: string) => {
+    await supabase.from('pos_goals').delete().eq('id', id);
+    loadGoals();
   };
 
   const loadLoyaltyConfig = async () => {
@@ -759,6 +794,50 @@ export function POSConfig({ storeId }: Props) {
           </CardContent>
         </Card>
 
+        {/* ─── Goals Config ─── */}
+        <Card className="bg-pos-white/5 border-pos-orange/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center justify-between text-pos-white">
+              <span className="flex items-center gap-2"><Target className="h-4 w-4 text-pos-orange" /> Metas da Loja</span>
+              <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddGoal(true)}>
+                <Plus className="h-3 w-3" /> Nova Meta
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {goals.length === 0 ? (
+              <p className="text-xs text-pos-white/40">Nenhuma meta configurada.</p>
+            ) : goals.map(g => {
+              const sellerName = g.seller_id ? sellers.find(s => s.id === g.seller_id)?.name : "Loja Toda";
+              const typeLabel = 
+                g.goal_type === 'revenue' ? 'Faturamento' : 
+                g.goal_type === 'avg_ticket' ? 'Ticket Médio' : 
+                g.goal_type === 'items_sold' ? 'Itens Vendidos' : 'Faturamento Vendedor';
+              const periodLabel = g.period === 'daily' ? 'Diária' : g.period === 'weekly' ? 'Semanal' : 'Mensal';
+              
+              return (
+                <div key={g.id} className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-white/10">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-pos-white">{typeLabel}</span>
+                      <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange">{periodLabel}</Badge>
+                      <Badge className="text-[10px] bg-pos-white/10 text-pos-white/60">{sellerName}</Badge>
+                    </div>
+                    <p className="text-lg font-bold text-pos-white mt-1">
+                      {g.goal_type.includes('revenue') || g.goal_type === 'avg_ticket' 
+                        ? `R$ ${g.goal_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
+                        : g.goal_value}
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-300" onClick={() => deleteGoal(g.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
         {/* ─── Prizes Config ─── */}
         <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
@@ -1162,7 +1241,54 @@ export function POSConfig({ storeId }: Props) {
           </DialogContent>
         </Dialog>
 
-        {/* Add Wheel Segment Dialog */}
+        {/* Add Goal Dialog */}
+        <Dialog open={showAddGoal} onOpenChange={setShowAddGoal}>
+          <DialogContent className="bg-pos-black border-pos-orange/30">
+            <DialogHeader><DialogTitle className="text-pos-white">Nova Meta</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-pos-white/70 text-xs">Tipo de Meta</Label>
+                <Select value={newGoal.goal_type} onValueChange={v => setNewGoal(s => ({ ...s, goal_type: v }))}>
+                  <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="revenue">Faturamento Loja</SelectItem>
+                    <SelectItem value="avg_ticket">Ticket Médio</SelectItem>
+                    <SelectItem value="items_sold">Itens Vendidos</SelectItem>
+                    <SelectItem value="seller_revenue">Faturamento Vendedor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-pos-white/70 text-xs">Período</Label>
+                <Select value={newGoal.period} onValueChange={v => setNewGoal(s => ({ ...s, period: v }))}>
+                  <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Diária</SelectItem>
+                    <SelectItem value="weekly">Semanal</SelectItem>
+                    <SelectItem value="monthly">Mensal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-pos-white/70 text-xs">Aplicar a</Label>
+                <Select value={newGoal.seller_id} onValueChange={v => setNewGoal(s => ({ ...s, seller_id: v }))}>
+                  <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Loja Toda</SelectItem>
+                    {sellers.filter(s => s.is_active).map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-pos-white/70 text-xs">Valor da Meta</Label>
+                <Input type="number" value={newGoal.goal_value} onChange={e => setNewGoal(s => ({ ...s, goal_value: e.target.value }))} placeholder="Ex: 5000" className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+              </div>
+              <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={addGoal}>Salvar Meta</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
         <Dialog open={showAddSegment} onOpenChange={setShowAddSegment}>
           <DialogContent className="bg-pos-black border-pos-orange/30">
             <DialogHeader><DialogTitle className="text-pos-white">Novo Segmento da Roleta</DialogTitle></DialogHeader>

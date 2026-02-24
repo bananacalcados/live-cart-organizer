@@ -200,6 +200,7 @@ export default function POS() {
               setSection("whatsapp");
               setWhatsappFilter(filter);
             }}
+            onCloseSalesView={() => setSection("dashboard")}
           />
         )}
         {section === "cash" && <POSCashRegister storeId={selectedStore} />}

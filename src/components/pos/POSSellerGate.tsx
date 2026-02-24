@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { Star, Trophy, TrendingUp, TrendingDown, Lightbulb, Zap, Target, Users } from 'lucide-react';
+import { Star, Trophy, TrendingUp, TrendingDown, Lightbulb, Zap, Target, Users, X } from 'lucide-react';
 import { startOfDay, startOfWeek, endOfDay, endOfWeek } from 'date-fns';
 
 interface Seller {
@@ -32,9 +32,10 @@ interface Props {
   storeId: string;
   sellers: Seller[];
   onSellerSelected: (sellerId: string) => void;
+  onClose?: () => void;
 }
 
-export function POSSellerGate({ storeId, sellers, onSellerSelected }: Props) {
+export function POSSellerGate({ storeId, sellers, onSellerSelected, onClose }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [stats, setStats] = useState<SellerStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -178,6 +179,15 @@ export function POSSellerGate({ storeId, sellers, onSellerSelected }: Props) {
   return (
     <Dialog open={true} onOpenChange={() => {}}>
       <DialogContent className="bg-pos-black border-pos-orange/30 text-pos-white max-w-lg [&>button]:hidden" onPointerDownOutside={e => e.preventDefault()}>
+        {/* Close button */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 rounded-sm text-pos-white/50 hover:text-pos-white transition-opacity z-10"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
         {!selectedId ? (
           <div className="space-y-6 py-2">
             <div className="text-center">
