@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   DollarSign, ShoppingCart, Tag, Users, TrendingUp,
   Package, Loader2, RefreshCw, BarChart3, Send, RotateCcw,
-  CalendarIcon, ChevronLeft, ChevronRight
+  CalendarIcon, ChevronLeft, ChevronRight, Search, X, Layers
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -11,9 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { POSSaleDetailDialog } from "./POSSaleDetailDialog";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -42,13 +45,55 @@ interface SellerStats {
   total: number;
 }
 
+interface CustomerInfo {
+  name: string | null;
+  cpf: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  address: string | null;
+  address_number: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  cep: string | null;
+}
+
+interface SaleItem {
+  sale_id: string;
+  quantity: number;
+  unit_price: number;
+  product_name: string;
+  variant_name: string | null;
+  size: string | null;
+  category: string | null;
+  sku?: string | null;
+  barcode?: string | null;
+}
+
 export function POSDailySales({ storeId }: Props) {
   const [sales, setSales] = useState<SaleSummary[]>([]);
-  const [saleItems, setSaleItems] = useState<any[]>([]);
+  const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
+  const [customers, setCustomers] = useState<Map<string, CustomerInfo>>(new Map());
   const [loading, setLoading] = useState(true);
   const [resending, setResending] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // Detail dialog
+  const [selectedSale, setSelectedSale] = useState<SaleSummary | null>(null);
+  const [detailItems, setDetailItems] = useState<SaleItem[]>([]);
+  const [detailCustomer, setDetailCustomer] = useState<CustomerInfo | null>(null);
+
+  // Search
+  const [searchTerm, setSearchTerm] = useState("");
+  const [globalResults, setGlobalResults] = useState<SaleSummary[]>([]);
+  const [globalResultItems, setGlobalResultItems] = useState<SaleItem[]>([]);
+  const [globalResultCustomers, setGlobalResultCustomers] = useState<Map<string, CustomerInfo>>(new Map());
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showGlobalResults, setShowGlobalResults] = useState(false);
+
+  // Product grouping
+  const [groupByParent, setGroupByParent] = useState(false);
 
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
@@ -60,7 +105,7 @@ export function POSDailySales({ storeId }: Props) {
       const dayEnd = new Date(selectedDate);
       dayEnd.setHours(23, 59, 59, 999);
 
-      const [salesRes, itemsRes, sellersRes] = await Promise.all([
+      const [salesRes, sellersRes] = await Promise.all([
         supabase
           .from("pos_sales")
           .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id")
@@ -68,14 +113,6 @@ export function POSDailySales({ storeId }: Props) {
           .gte("created_at", dayStart.toISOString())
           .lte("created_at", dayEnd.toISOString())
           .order("created_at", { ascending: false }),
-        supabase
-          .from("pos_sale_items")
-          .select("sale_id, quantity, unit_price, product_name, variant_name, size, category")
-          .in(
-            "sale_id",
-            // we'll filter after
-            []
-          ),
         supabase
           .from("pos_sellers")
           .select("id, name")
@@ -86,16 +123,30 @@ export function POSDailySales({ storeId }: Props) {
       setSales(salesData);
       setSellers(sellersRes.data || []);
 
-      // Now fetch items for today's sales
       if (salesData.length > 0) {
         const saleIds = salesData.map((s) => s.id);
         const { data: items } = await supabase
           .from("pos_sale_items")
-          .select("sale_id, quantity, unit_price, product_name, variant_name, size, category")
+          .select("sale_id, quantity, unit_price, product_name, variant_name, size, category, sku, barcode")
           .in("sale_id", saleIds);
-        setSaleItems(items || []);
+        setSaleItems((items as SaleItem[]) || []);
+
+        // Fetch customers
+        const customerIds = [...new Set(salesData.map(s => s.customer_id).filter(Boolean))] as string[];
+        if (customerIds.length > 0) {
+          const { data: custData } = await supabase
+            .from("pos_customers")
+            .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+            .in("id", customerIds);
+          const map = new Map<string, CustomerInfo>();
+          (custData || []).forEach((c: any) => map.set(c.id, c));
+          setCustomers(map);
+        } else {
+          setCustomers(new Map());
+        }
       } else {
         setSaleItems([]);
+        setCustomers(new Map());
       }
     } catch (e) {
       console.error(e);
@@ -104,10 +155,96 @@ export function POSDailySales({ storeId }: Props) {
     }
   };
 
+  const openSaleDetail = async (sale: SaleSummary) => {
+    setSelectedSale(sale);
+
+    // Items for this sale
+    let items = saleItems.filter(i => i.sale_id === sale.id);
+    if (items.length === 0 && showGlobalResults) {
+      items = globalResultItems.filter(i => i.sale_id === sale.id);
+    }
+    if (items.length === 0) {
+      const { data } = await supabase
+        .from("pos_sale_items")
+        .select("sale_id, quantity, unit_price, product_name, variant_name, size, category, sku, barcode")
+        .eq("sale_id", sale.id);
+      items = (data as SaleItem[]) || [];
+    }
+    setDetailItems(items);
+
+    // Customer
+    let cust: CustomerInfo | null = null;
+    if (sale.customer_id) {
+      cust = customers.get(sale.customer_id) || globalResultCustomers.get(sale.customer_id) || null;
+      if (!cust) {
+        const { data } = await supabase
+          .from("pos_customers")
+          .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+          .eq("id", sale.customer_id)
+          .maybeSingle();
+        cust = data as CustomerInfo | null;
+      }
+    }
+    setDetailCustomer(cust);
+  };
+
+  const searchAllPeriods = async () => {
+    if (searchTerm.trim().length < 3) return;
+    setSearchLoading(true);
+    setShowGlobalResults(true);
+    try {
+      // Search customers matching the term
+      const term = `%${searchTerm.trim()}%`;
+      const { data: matchingCustomers } = await supabase
+        .from("pos_customers")
+        .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+        .or(`name.ilike.${term},cpf.ilike.${term},whatsapp.ilike.${term}`)
+        .limit(50);
+
+      if (!matchingCustomers || matchingCustomers.length === 0) {
+        setGlobalResults([]);
+        setGlobalResultItems([]);
+        setGlobalResultCustomers(new Map());
+        setSearchLoading(false);
+        return;
+      }
+
+      const custMap = new Map<string, CustomerInfo>();
+      matchingCustomers.forEach((c: any) => custMap.set(c.id, c));
+      setGlobalResultCustomers(custMap);
+
+      const custIds = matchingCustomers.map(c => c.id);
+      const { data: salesData } = await supabase
+        .from("pos_sales")
+        .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id")
+        .eq("store_id", storeId)
+        .in("customer_id", custIds)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      setGlobalResults(salesData || []);
+
+      if (salesData && salesData.length > 0) {
+        const saleIds = salesData.map(s => s.id);
+        const { data: items } = await supabase
+          .from("pos_sale_items")
+          .select("sale_id, quantity, unit_price, product_name, variant_name, size, category, sku, barcode")
+          .in("sale_id", saleIds);
+        setGlobalResultItems((items as SaleItem[]) || []);
+      } else {
+        setGlobalResultItems([]);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao buscar pedidos");
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
   const resendToTiny = async (sale: SaleSummary) => {
     setResending(sale.id);
     try {
-      // Fetch sale items
       const { data: items } = await supabase
         .from("pos_sale_items")
         .select("*")
@@ -118,7 +255,6 @@ export function POSDailySales({ storeId }: Props) {
         return;
       }
 
-      // Fetch customer if exists
       let customer: any = undefined;
       if (sale.customer_id) {
         const { data: cust } = await supabase
@@ -128,20 +264,13 @@ export function POSDailySales({ storeId }: Props) {
           .maybeSingle();
         if (cust) {
           customer = {
-            id: cust.id,
-            name: cust.name,
-            cpf: cust.cpf,
-            email: cust.email,
-            whatsapp: cust.whatsapp,
-            address: cust.address,
-            cep: cust.cep,
-            city: cust.city,
-            state: cust.state,
+            id: cust.id, name: cust.name, cpf: cust.cpf,
+            email: cust.email, whatsapp: cust.whatsapp,
+            address: cust.address, cep: cust.cep, city: cust.city, state: cust.state,
           };
         }
       }
 
-      // Look up tiny_seller_id for the seller
       let tinySellerId: string | undefined;
       if (sale.seller_id) {
         const { data: sellerData } = await supabase
@@ -165,15 +294,10 @@ export function POSDailySales({ storeId }: Props) {
           tiny_seller_id: tinySellerId,
           customer,
           items: items.map((item: any) => ({
-            tiny_id: item.tiny_product_id,
-            sku: item.sku,
-            name: item.product_name,
-            variant: item.variant_name,
-            size: item.size,
-            category: item.category,
-            price: item.unit_price,
-            quantity: item.quantity,
-            barcode: item.barcode,
+            tiny_id: item.tiny_product_id, sku: item.sku,
+            name: item.product_name, variant: item.variant_name,
+            size: item.size, category: item.category,
+            price: item.unit_price, quantity: item.quantity, barcode: item.barcode,
           })),
           payment_method_name: sale.payment_method || undefined,
           discount: sale.discount > 0 ? sale.discount : undefined,
@@ -183,7 +307,6 @@ export function POSDailySales({ storeId }: Props) {
       const data = await resp.json();
       if (data.success) {
         toast.success(`Venda reenviada ao Tiny! Pedido #${data.tiny_order_number || data.tiny_order_id}`);
-        // Update sale record with new tiny IDs
         await supabase
           .from("pos_sales")
           .update({
@@ -205,6 +328,9 @@ export function POSDailySales({ storeId }: Props) {
 
   useEffect(() => {
     loadData();
+    setShowGlobalResults(false);
+    setGlobalResults([]);
+    setSearchTerm("");
   }, [storeId, selectedDate]);
 
   const goToPrevDay = () => {
@@ -249,18 +375,60 @@ export function POSDailySales({ storeId }: Props) {
     paymentStats.set(method, existing);
   }
 
-  // Top products
-  const productMap = new Map<string, { name: string; qty: number; revenue: number }>();
-  for (const item of saleItems) {
-    const key = item.product_name + (item.variant_name ? ` - ${item.variant_name}` : "");
-    const existing = productMap.get(key) || { name: key, qty: 0, revenue: 0 };
-    existing.qty += item.quantity || 0;
-    existing.revenue += (item.quantity || 0) * (item.unit_price || 0);
-    productMap.set(key, existing);
-  }
-  const topProducts = Array.from(productMap.values())
-    .sort((a, b) => b.qty - a.qty)
-    .slice(0, 10);
+  // Top products (with grouping toggle)
+  const topProducts = useMemo(() => {
+    const productMap = new Map<string, { name: string; qty: number; revenue: number }>();
+    for (const item of saleItems) {
+      let key: string;
+      let name: string;
+      if (groupByParent) {
+        // Group by parent: text before first " - "
+        const dashIndex = item.product_name.indexOf(" - ");
+        name = dashIndex > -1 ? item.product_name.substring(0, dashIndex).trim() : item.product_name;
+        key = name;
+      } else {
+        name = item.product_name + (item.variant_name ? ` - ${item.variant_name}` : "");
+        key = name;
+      }
+      const existing = productMap.get(key) || { name, qty: 0, revenue: 0 };
+      existing.qty += item.quantity || 0;
+      existing.revenue += (item.quantity || 0) * (item.unit_price || 0);
+      productMap.set(key, existing);
+    }
+    return Array.from(productMap.values())
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 10);
+  }, [saleItems, groupByParent]);
+
+  // Helper: get items summary for a sale
+  const getItemsSummary = (saleId: string, itemsSource: SaleItem[] = saleItems) => {
+    const items = itemsSource.filter(i => i.sale_id === saleId);
+    if (items.length === 0) return "";
+    const names = items.slice(0, 2).map(i => {
+      const base = i.product_name.indexOf(" - ") > -1
+        ? i.product_name.substring(i.product_name.indexOf(" ") + 1, i.product_name.indexOf(" - ")).trim()
+        : i.product_name;
+      const short = base.length > 20 ? base.substring(0, 20) + "…" : base;
+      return `${short}${i.size ? ` ${i.size}` : ""}`;
+    });
+    if (items.length > 2) names.push(`+${items.length - 2}`);
+    return names.join(", ");
+  };
+
+  // Local search filter
+  const filteredSales = searchTerm.trim().length > 0
+    ? completedSales.filter(sale => {
+        if (!sale.customer_id) return false;
+        const cust = customers.get(sale.customer_id);
+        if (!cust) return false;
+        const term = searchTerm.toLowerCase();
+        return (cust.name?.toLowerCase().includes(term)) ||
+               (cust.cpf?.includes(term)) ||
+               (cust.whatsapp?.includes(term));
+      })
+    : completedSales;
+
+  const displaySales = showGlobalResults ? globalResults : filteredSales;
 
   if (loading) {
     return (
@@ -269,6 +437,69 @@ export function POSDailySales({ storeId }: Props) {
       </div>
     );
   }
+
+  const renderSaleCard = (sale: SaleSummary, itemsSource: SaleItem[] = saleItems, customerSource: Map<string, CustomerInfo> = customers) => {
+    const sellerName = sellers.find((s) => s.id === sale.seller_id)?.name;
+    const time = new Date(sale.created_at);
+    const custName = sale.customer_id ? customerSource.get(sale.customer_id)?.name : null;
+    const summary = getItemsSummary(sale.id, itemsSource);
+    const isGlobal = showGlobalResults;
+
+    return (
+      <div
+        key={sale.id}
+        className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10 cursor-pointer hover:bg-pos-white/10 transition-colors"
+        onClick={() => openSaleDetail(sale)}
+      >
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <span className="text-xs text-pos-white/40 font-mono shrink-0">
+            {isGlobal ? format(time, "dd/MM HH:mm") : format(time, "HH:mm")}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              {sale.tiny_order_number ? (
+                <p className="text-xs text-pos-orange font-medium">#{sale.tiny_order_number}</p>
+              ) : (
+                <p className="text-xs text-red-400 font-medium">Sem Tiny</p>
+              )}
+              {custName && (
+                <p className="text-xs text-pos-white font-medium truncate">{custName}</p>
+              )}
+            </div>
+            {summary && (
+              <p className="text-[10px] text-pos-white/40 truncate">{summary}</p>
+            )}
+            <p className="text-[10px] text-pos-white/40">
+              {sale.payment_method || "—"}
+              {sellerName && ` • ${sellerName}`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-right">
+            <p className="font-bold text-sm text-pos-white">R$ {(sale.total || 0).toFixed(2)}</p>
+            {sale.discount > 0 && (
+              <p className="text-[10px] text-red-400">-R$ {sale.discount.toFixed(2)}</p>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs"
+            onClick={(e) => { e.stopPropagation(); resendToTiny(sale); }}
+            disabled={resending === sale.id}
+          >
+            {resending === sale.id ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Send className="h-3 w-3" />
+            )}
+            <span className="hidden sm:inline">{sale.tiny_order_id ? "Reenviar" : "Enviar"}</span>
+          </Button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -387,9 +618,20 @@ export function POSDailySales({ storeId }: Props) {
           {/* Top Products */}
           {topProducts.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
-                <Package className="h-4 w-4 text-pos-orange" /> Produtos Mais Vendidos
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
+                  <Package className="h-4 w-4 text-pos-orange" /> Produtos Mais Vendidos
+                </h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-pos-white/40">Por produto</span>
+                  <Switch
+                    checked={groupByParent}
+                    onCheckedChange={setGroupByParent}
+                    className="data-[state=checked]:bg-pos-orange h-4 w-7"
+                  />
+                  <Layers className="h-3.5 w-3.5 text-pos-white/40" />
+                </div>
+              </div>
               <div className="space-y-2">
                 {topProducts.map((p, i) => (
                   <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10">
@@ -409,62 +651,90 @@ export function POSDailySales({ storeId }: Props) {
           {/* Sales List */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-pos-white">Histórico de Vendas</h3>
-            {completedSales.length === 0 ? (
+
+            {/* Search bar */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-pos-white/30" />
+                <Input
+                  placeholder="Buscar por nome, CPF ou telefone..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    if (e.target.value.trim().length === 0) {
+                      setShowGlobalResults(false);
+                      setGlobalResults([]);
+                    }
+                  }}
+                  className="pl-9 bg-pos-white/5 border-pos-orange/20 text-pos-white placeholder:text-pos-white/30 text-sm h-9"
+                />
+                {searchTerm && (
+                  <button
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-pos-white/30 hover:text-pos-white"
+                    onClick={() => { setSearchTerm(""); setShowGlobalResults(false); setGlobalResults([]); }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              {searchTerm.trim().length >= 3 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs whitespace-nowrap"
+                  onClick={searchAllPeriods}
+                  disabled={searchLoading}
+                >
+                  {searchLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+                  Todos os períodos
+                </Button>
+              )}
+            </div>
+
+            {showGlobalResults && (
+              <div className="flex items-center gap-2">
+                <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
+                  Busca global: {globalResults.length} resultado{globalResults.length !== 1 ? "s" : ""}
+                </Badge>
+                <button
+                  className="text-xs text-pos-white/40 hover:text-pos-white underline"
+                  onClick={() => { setShowGlobalResults(false); setGlobalResults([]); }}
+                >
+                  Voltar ao dia
+                </button>
+              </div>
+            )}
+
+            {displaySales.length === 0 ? (
               <div className="text-center py-12 text-pos-white/40">
                 <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p>Nenhuma venda registrada hoje</p>
+                <p>{showGlobalResults ? "Nenhum resultado encontrado" : "Nenhuma venda registrada"}</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {completedSales.map((sale) => {
-                  const sellerName = sellers.find((s) => s.id === sale.seller_id)?.name;
-                  const time = new Date(sale.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-                  return (
-                    <div key={sale.id} className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-pos-white/40 font-mono">{time}</span>
-                        <div>
-                          {sale.tiny_order_number ? (
-                            <p className="text-xs text-pos-orange font-medium">#{sale.tiny_order_number}</p>
-                          ) : (
-                            <p className="text-xs text-red-400 font-medium">Sem Tiny</p>
-                          )}
-                          <p className="text-xs text-pos-white/50">
-                            {sale.payment_method || "—"}
-                            {sellerName && ` • ${sellerName}`}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <p className="font-bold text-sm text-pos-white">R$ {(sale.total || 0).toFixed(2)}</p>
-                          {sale.discount > 0 && (
-                            <p className="text-[10px] text-red-400">-R$ {sale.discount.toFixed(2)}</p>
-                          )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs"
-                          onClick={() => resendToTiny(sale)}
-                          disabled={resending === sale.id}
-                        >
-                          {resending === sale.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Send className="h-3 w-3" />
-                          )}
-                          <span className="hidden sm:inline">{sale.tiny_order_id ? "Reenviar" : "Enviar"}</span>
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+                {displaySales.map((sale) =>
+                  renderSaleCard(
+                    sale,
+                    showGlobalResults ? globalResultItems : saleItems,
+                    showGlobalResults ? globalResultCustomers : customers
+                  )
+                )}
               </div>
             )}
           </div>
         </div>
       </ScrollArea>
+
+      {/* Sale Detail Dialog */}
+      <POSSaleDetailDialog
+        sale={selectedSale}
+        onClose={() => setSelectedSale(null)}
+        customer={detailCustomer}
+        items={detailItems}
+        sellerName={selectedSale ? sellers.find(s => s.id === selectedSale.seller_id)?.name || null : null}
+        onResend={resendToTiny}
+        resending={resending === selectedSale?.id}
+      />
     </div>
   );
 }
