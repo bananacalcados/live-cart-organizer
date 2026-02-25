@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, Loader2, ScanBarcode, Camera, X, Search, Hand, Package, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Loader2, ScanBarcode, Camera, X, Search, Hand, Package, RefreshCw, Store, MapPin } from 'lucide-react';
 import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarcodeScanner';
+import { StockCheckRequestDialog } from '@/components/expedition/StockCheckRequestDialog';
 
 interface Props {
   orders: any[];
@@ -91,7 +92,10 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
       })
     : sortedItems;
 
-  // Load stock on mount for all unique SKUs
+  // Stock check request dialog state
+  const [stockCheckRequest, setStockCheckRequest] = useState<{ sku: string; name: string; variant: string; qty: number; orderNames: string[]; orderIds: string[] } | null>(null);
+
+  // Load stock from local pos_products cache (fast) instead of calling Tiny API
   const loadStock = useCallback(async () => {
     const skus = sortedItems
       .map(([, item]) => item.sku)
@@ -101,10 +105,52 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
 
     setLoadingStock(true);
     try {
-      // Call in batches of 15
+      const [{ data: bySku }, { data: byBarcode }] = await Promise.all([
+        supabase
+          .from('pos_products')
+          .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
+          .in('sku', skus),
+        supabase
+          .from('pos_products')
+          .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
+          .in('barcode', skus),
+      ]);
+
       const allStock: Record<string, StockInfo[]> = {};
-      for (let i = 0; i < skus.length; i += 15) {
-        const batch = skus.slice(i, i + 15);
+      const addProduct = (p: any, matchedKey: string) => {
+        const storeName = p.pos_stores?.name || 'Desconhecida';
+        const depositName = p.pos_stores?.tiny_deposit_name || '';
+        if (!allStock[matchedKey]) allStock[matchedKey] = [];
+        if (!allStock[matchedKey].some((l: StockInfo) => l.storeId === p.store_id)) {
+          allStock[matchedKey].push({ storeName, depositName, storeId: p.store_id, stock: p.stock, reserved: 0 });
+        }
+      };
+
+      (bySku || []).forEach((p: any) => addProduct(p, p.sku));
+      (byBarcode || []).forEach((p: any) => addProduct(p, p.barcode));
+
+      setStockData(allStock);
+    } catch (err) {
+      console.error('Failed to load stock:', err);
+    } finally {
+      setLoadingStock(false);
+    }
+  }, [sortedItems.length]);
+
+  // Refresh stock from Tiny API (manual, slower but real-time)
+  const handleRefreshStockFromTiny = useCallback(async () => {
+    const skus = sortedItems
+      .map(([, item]) => item.sku)
+      .filter(s => s && s.length > 0);
+    
+    if (skus.length === 0) return;
+
+    setLoadingStock(true);
+    toast.info('Buscando estoque em tempo real do Tiny ERP...');
+    try {
+      const allStock: Record<string, StockInfo[]> = { ...stockData };
+      for (let i = 0; i < skus.length; i += 10) {
+        const batch = skus.slice(i, i + 10);
         const { data, error } = await supabase.functions.invoke('expedition-check-stock', {
           body: { skus: batch }
         });
@@ -114,12 +160,14 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
         if (error) console.error('Stock check error:', error);
       }
       setStockData(allStock);
-    } catch (err) {
-      console.error('Failed to load stock:', err);
+      toast.success('Estoque atualizado em tempo real!');
+    } catch (err: any) {
+      console.error('Failed to refresh stock:', err);
+      toast.error(`Erro ao atualizar: ${err.message}`);
     } finally {
       setLoadingStock(false);
     }
-  }, [sortedItems.length]);
+  }, [sortedItems.length, stockData]);
 
   useEffect(() => {
     if (sortedItems.length > 0 && Object.keys(stockData).length === 0) {
@@ -237,6 +285,10 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
             {loadingStock ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
             Estoque
           </Button>
+          <Button variant="ghost" size="sm" onClick={handleRefreshStockFromTiny} disabled={loadingStock} className="gap-1 text-xs text-purple-600 dark:text-purple-400">
+            <RefreshCw className="h-3 w-3" />
+            Tiny
+          </Button>
           <Badge variant="outline" className="text-sm">{totalPicked}/{totalItems} conferidos</Badge>
         </div>
       </div>
@@ -347,6 +399,25 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {showChecking && !isComplete && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStockCheckRequest({
+                        sku: item.sku || key,
+                        name: item.name,
+                        variant: item.variant,
+                        qty: item.totalQty - item.pickedQty,
+                        orderNames: item.lineItems.map(li => li.orderName).filter(Boolean),
+                        orderIds: item.lineItems.map(li => li.orderId),
+                      })}
+                      className="gap-1 text-[10px] h-7 px-2 border-purple-400/50 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                      title="Solicitar produto à loja física"
+                    >
+                      <Store className="h-3 w-3" />
+                      <span className="hidden sm:inline">Pedir Loja</span>
+                    </Button>
+                  )}
                   {showChecking && (
                     <Badge variant={isComplete ? 'default' : 'secondary'} className="text-xs">
                       {item.pickedQty}/{item.totalQty}
@@ -390,6 +461,20 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
           );
         })}
       </div>
+
+      {/* Stock check request dialog */}
+      {stockCheckRequest && (
+        <StockCheckRequestDialog
+          open={!!stockCheckRequest}
+          onClose={() => setStockCheckRequest(null)}
+          sku={stockCheckRequest.sku}
+          productName={stockCheckRequest.name}
+          variantName={stockCheckRequest.variant}
+          quantityNeeded={stockCheckRequest.qty}
+          orderNames={stockCheckRequest.orderNames}
+          expeditionOrderIds={stockCheckRequest.orderIds}
+        />
+      )}
     </div>
   );
 }
