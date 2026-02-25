@@ -537,6 +537,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   };
 
   const copyToClipboard = async (text: string) => {
+    // Method 1: Clipboard API
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
@@ -546,20 +547,27 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       // fallthrough
     }
 
-    // Fallback for browsers/contexts where Clipboard API fails
+    // Method 2: execCommand fallback
     try {
       const el = document.createElement("textarea");
       el.value = text;
       el.setAttribute("readonly", "");
-      el.style.position = "fixed";
-      el.style.top = "-9999px";
-      el.style.left = "-9999px";
+      Object.assign(el.style, { position: "fixed", top: "0", left: "0", opacity: "0", width: "1px", height: "1px" });
       document.body.appendChild(el);
       el.focus();
       el.select();
+      el.setSelectionRange(0, text.length);
       const ok = document.execCommand("copy");
       document.body.removeChild(el);
-      return ok;
+      if (ok) return true;
+    } catch {
+      // fallthrough
+    }
+
+    // Method 3: window.prompt fallback (user can Ctrl+C)
+    try {
+      window.prompt("Copie o link abaixo (Ctrl+C):", text);
+      return true;
     } catch {
       return false;
     }
@@ -660,9 +668,10 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     return `🏍️ *ENTREGA BANANA CALÇADOS*\n\n👤 *Cliente:* ${linkedCustomer?.name || "—"}\n📱 *Telefone:* ${linkedCustomer?.whatsapp || "—"}\n\n📍 *Endereço:* ${addr || "—"}${deliveryReference ? `\n📌 *Referência:* ${deliveryReference}` : ""}\n\n💰 *Valor:* ${fmt(cartTotal)}\n${methodLabel}\n\n📦 *Itens:* ${cart.map(c => `${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity}`).join(", ")}${deliveryNotes ? `\n\n📝 *Obs:* ${deliveryNotes}` : ""}`;
   };
 
-  const copyText = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Texto copiado!");
+  const copyText = async (text: string) => {
+    const ok = await copyToClipboard(text);
+    if (ok) toast.success("Texto copiado!");
+    else toast.error("Não foi possível copiar. Selecione e copie manualmente.");
   };
 
   const openWhatsAppWith = (text: string, phone?: string) => {
@@ -1282,7 +1291,13 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">Copie o link abaixo ou envie direto no WhatsApp.</p>
             <div className="rounded-lg border border-border bg-muted/50 p-3">
-              <p className="text-xs break-all text-muted-foreground">{generatedLink}</p>
+              <input
+                readOnly
+                value={generatedLink}
+                className="w-full text-xs bg-transparent border-none outline-none select-all text-foreground cursor-text"
+                onClick={e => (e.target as HTMLInputElement).select()}
+                onFocus={e => e.target.select()}
+              />
             </div>
             <div className="flex gap-2">
               <Button type="button" variant="outline" className="flex-1" onClick={copyLink}>
