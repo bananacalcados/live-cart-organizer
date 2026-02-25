@@ -26,6 +26,7 @@ interface CustomerInfo {
   email: string | null;
   address: string | null;
   address_number: string | null;
+  complement: string | null;
   neighborhood: string | null;
   city: string | null;
   state: string | null;
@@ -144,23 +145,38 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         customerName = attempt.customer_name;
         customerPhone = attempt.customer_phone;
         customerEmail = attempt.customer_email;
+        // Extract CPF and address from metadata if available
+        const meta = attempt.metadata as Record<string, any> | null;
+        if (meta) {
+          if (meta.cpf) customerCpf = meta.cpf;
+          if (meta.cep || meta.address) {
+            customerAddress = {
+              address: meta.address || null, address_number: meta.address_number || null,
+              complement: meta.complement || null, neighborhood: meta.neighborhood || null,
+              city: meta.city || null, state: meta.state || null, cep: meta.cep || null,
+            };
+          }
+        }
       }
 
-      // Source 2: customer_registrations (linked by order or sale)
-      if (!customerName) {
-        const { data: reg } = await supabase
-          .from("customer_registrations")
-          .select("full_name, whatsapp, email, cpf, address, address_number, complement, neighborhood, city, state, cep")
-          .eq("order_id", sale.id)
-          .maybeSingle();
-        if (reg?.full_name) {
+      // Source 2: customer_registrations (always check for additional data like CPF/address)
+      const { data: reg } = await supabase
+        .from("customer_registrations")
+        .select("full_name, whatsapp, email, cpf, address, address_number, complement, neighborhood, city, state, cep")
+        .eq("order_id", sale.id)
+        .maybeSingle();
+      if (reg) {
+        if (!customerName && reg.full_name) {
           customerName = reg.full_name;
           customerPhone = reg.whatsapp;
           customerEmail = reg.email;
-          customerCpf = reg.cpf;
+        }
+        if (!customerCpf && reg.cpf) customerCpf = reg.cpf;
+        if (!customerAddress.address && reg.address) {
           customerAddress = {
             address: reg.address, address_number: reg.address_number,
-            neighborhood: reg.neighborhood, city: reg.city, state: reg.state, cep: reg.cep,
+            complement: reg.complement || null, neighborhood: reg.neighborhood,
+            city: reg.city, state: reg.state, cep: reg.cep,
           };
         }
       }
@@ -172,6 +188,14 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
           customerName = pd.customer_name;
           customerPhone = pd.customer_phone || null;
           customerEmail = pd.customer_email || null;
+        }
+        if (!customerCpf && pd.customer_cpf) customerCpf = pd.customer_cpf;
+        if (!customerAddress.address && pd.customer_address) {
+          customerAddress = {
+            address: pd.customer_address || null, address_number: pd.customer_address_number || null,
+            complement: pd.customer_complement || null, neighborhood: pd.customer_neighborhood || null,
+            city: pd.customer_city || null, state: pd.customer_state || null, cep: pd.customer_cep || null,
+          };
         }
       }
 
@@ -227,7 +251,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         await supabase.from("pos_sales").update({ customer_id: customerId } as any).eq("id", sale.id);
         const { data: freshCust } = await supabase
           .from("pos_customers")
-          .select("name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+          .select("name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
           .eq("id", customerId)
           .maybeSingle();
         if (freshCust) setCurrentCustomer(freshCust as CustomerInfo);
@@ -384,7 +408,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     <div className="flex items-start gap-1.5 mt-1 bg-white/60 p-2 rounded-md">
                       <MapPin className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
                       <p className="text-xs text-gray-700 leading-relaxed">
-                        {currentCustomer.address}{currentCustomer.address_number ? `, ${currentCustomer.address_number}` : ""}
+                        {currentCustomer.address}{currentCustomer.address_number ? `, ${currentCustomer.address_number}` : ""}{currentCustomer.complement ? ` - ${currentCustomer.complement}` : ""}
                         {currentCustomer.neighborhood ? ` - ${currentCustomer.neighborhood}` : ""}
                         {currentCustomer.city ? `, ${currentCustomer.city}` : ""}
                         {currentCustomer.state ? `/${currentCustomer.state}` : ""}
@@ -552,6 +576,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               cep: currentCustomer.cep || undefined,
               address: currentCustomer.address || undefined,
               address_number: currentCustomer.address_number || undefined,
+              complement: currentCustomer.complement || undefined,
               neighborhood: currentCustomer.neighborhood || undefined,
               city: currentCustomer.city || undefined,
               state: currentCustomer.state || undefined,
@@ -565,7 +590,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               // Refresh customer data
               const { data: freshCust } = await supabase
                 .from("pos_customers")
-                .select("name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+                .select("name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
                 .eq("id", savedCustomer.id)
                 .maybeSingle();
               if (freshCust) setCurrentCustomer(freshCust as CustomerInfo);
