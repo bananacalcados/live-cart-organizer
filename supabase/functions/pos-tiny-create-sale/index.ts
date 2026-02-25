@@ -159,8 +159,11 @@ serve(async (req) => {
           tinyFailed = true;
         }
       } else {
-        const erros = tinyData.retorno?.erros || [];
-        const errorMessages = erros.map((e: any) => e.erro || '').join(' | ');
+        // Errors can be at retorno.erros OR retorno.registros.registro.erros
+        const topErros = tinyData.retorno?.erros || [];
+        const registroErros = tinyData.retorno?.registros?.registro?.erros || [];
+        const allErros = [...topErros, ...registroErros];
+        const errorMessages = allErros.map((e: any) => e.erro || '').join(' | ');
 
         // Check for "produto pai" error and retry with child SKU
         if (errorMessages.toLowerCase().includes('produto pai')) {
