@@ -6,9 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, Loader2, ScanBarcode, Camera, X, Search, Hand, Package, RefreshCw, Store, MapPin } from 'lucide-react';
+import { CheckCircle2, Loader2, ScanBarcode, Camera, X, Search, Hand, Package, RefreshCw, Store, MapPin, Wrench } from 'lucide-react';
 import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarcodeScanner';
 import { StockCheckRequestDialog } from '@/components/expedition/StockCheckRequestDialog';
+import { StockCorrectionDialog } from '@/components/expedition-beta/StockCorrectionDialog';
 
 interface Props {
   orders: any[];
@@ -94,6 +95,7 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
 
   // Stock check request dialog state
   const [stockCheckRequest, setStockCheckRequest] = useState<{ sku: string; name: string; variant: string; qty: number; orderNames: string[]; orderIds: string[] } | null>(null);
+  const [stockCorrection, setStockCorrection] = useState<{ sku: string; name: string; variant: string; stores: StockInfo[] } | null>(null);
 
   // Load stock from local pos_products cache (fast) instead of calling Tiny API
   const loadStock = useCallback(async () => {
@@ -400,23 +402,40 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {!isComplete && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setStockCheckRequest({
-                        sku: item.sku || key,
-                        name: item.name,
-                        variant: item.variant,
-                        qty: item.totalQty - item.pickedQty,
-                        orderNames: item.lineItems.map(li => li.orderName).filter(Boolean),
-                        orderIds: item.lineItems.map(li => li.orderId),
-                      })}
-                      className="gap-1 text-[10px] h-7 px-2 border-purple-400/50 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20"
-                      title="Solicitar produto à loja física"
-                    >
-                      <Store className="h-3 w-3" />
-                      <span className="hidden sm:inline">Pedir Loja</span>
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setStockCorrection({
+                          sku: item.sku || key,
+                          name: item.name,
+                          variant: item.variant,
+                          stores,
+                        })}
+                        className="gap-1 text-[10px] h-7 px-2 border-orange-400/50 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                        title="Corrigir estoque (Balanço)"
+                      >
+                        <Wrench className="h-3 w-3" />
+                        <span className="hidden sm:inline">Corrigir</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setStockCheckRequest({
+                          sku: item.sku || key,
+                          name: item.name,
+                          variant: item.variant,
+                          qty: item.totalQty - item.pickedQty,
+                          orderNames: item.lineItems.map(li => li.orderName).filter(Boolean),
+                          orderIds: item.lineItems.map(li => li.orderId),
+                        })}
+                        className="gap-1 text-[10px] h-7 px-2 border-purple-400/50 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                        title="Solicitar produto à loja física"
+                      >
+                        <Store className="h-3 w-3" />
+                        <span className="hidden sm:inline">Pedir Loja</span>
+                      </Button>
+                    </>
                   )}
                   {showChecking && (
                     <Badge variant={isComplete ? 'default' : 'secondary'} className="text-xs">
@@ -473,6 +492,18 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
           quantityNeeded={stockCheckRequest.qty}
           orderNames={stockCheckRequest.orderNames}
           expeditionOrderIds={stockCheckRequest.orderIds}
+        />
+      )}
+      {/* Stock correction dialog */}
+      {stockCorrection && (
+        <StockCorrectionDialog
+          open={!!stockCorrection}
+          onClose={() => setStockCorrection(null)}
+          sku={stockCorrection.sku}
+          productName={stockCorrection.name}
+          variantName={stockCorrection.variant}
+          stockData={stockCorrection.stores}
+          onCorrected={loadStock}
         />
       )}
     </div>
