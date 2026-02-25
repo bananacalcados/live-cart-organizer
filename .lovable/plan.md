@@ -1,63 +1,42 @@
 
 
-## Plano de Implementacao
+## Adicionar opcao de Brinde na Venda Online e Conferencia
 
-### Problema 1: Checkout sem detalhamento de frete
+### 1. Modulo Online (POSOnlineSales.tsx)
 
-O checkout (`StoreCheckout.tsx`) ja mostra frete no `OrderSummary`, mas o **total exibido no botao de pagamento e no resumo nao discrimina claramente o frete**. O `shipping_amount` esta sendo carregado do `payment_details` corretamente, porem:
-
-- Quando `shipping_amount === 0`, mostra "Frete gratis!" - isso ja funciona
-- Quando `shipping_amount > 0`, mostra o valor - isso ja funciona
-
-O problema pode ser que o **total da venda ja inclui o frete**, entao o resumo nao mostra a decomposicao correta (subtotal produtos + frete = total). Vou garantir que o resumo mostre:
-
-1. **Subtotal dos produtos** (sem frete)
-2. **Frete: R$ X,XX** ou **Frete gratis!**
-3. **Total final** (subtotal + frete)
-
-**Arquivo:** `src/pages/StoreCheckout.tsx` (componente `OrderSummary`)
-- Ajustar calculo do total exibido para separar `subtotal - descontos + frete`
-- Garantir que a linha de frete sempre apareca (gratis ou com valor)
-
----
-
-### Problema 2: Troca "Criar Sem Pedido" sem selecao de produtos
-
-Quando o usuario clica "Criar Sem Pedido", o fluxo pula direto para `exchange_details` com `selectedSale.items = []`. Isso significa:
-- **Nao ha local para selecionar os itens que estao VOLTANDO** (devolvidos)
-- **Os itens novos** ja tem o `POSTinyProductPicker`, mas falta o mesmo para devolvidos
-
-**Solucao:**
-No step `exchange_details`, quando `selectedSale.id === "manual"` (sem pedido), adicionar uma secao de **"Itens Devolvidos"** com barra de pesquisa (`POSTinyProductPicker`) para bipar/buscar os produtos que estao voltando, assim como ja existe para os novos produtos.
-
-**Arquivo:** `src/components/pos/POSExchanges.tsx`
+Adicionar no carrinho (area de desconto/frete) um toggle "Incluir Brinde?" e, quando ativado, um campo de texto para descrever o brinde (ex: "Meia de presente", "Necessaire rosa").
 
 Mudancas:
-1. Adicionar estado `returnedItemsManual` (array de `ExchangeItem[]`) para o fluxo manual
-2. No step `exchange_details`, quando `selectedSale.id === "manual"`:
-   - Exibir secao "Itens Devolvidos" com `POSTinyProductPicker` (mesma logica do `ItemRow`)
-   - Exibir secao "Novos Produtos" (ja existe)
-3. Ajustar `handleSave` para usar `returnedItemsManual` quando no fluxo manual
-4. Ajustar `adjustStockInTiny` para funcionar com os itens manuais
-5. Recalcular `returnedTotal` e `differenceAmount` considerando os itens manuais
+- Novos estados: `hasGift` (boolean) e `giftDescription` (string)
+- UI: Switch + Input condicional, posicionado abaixo do campo de frete
+- Salvar `has_gift` e `gift_description` dentro do campo JSONB `payment_details` da `pos_sales`
+- Incluir info do brinde na mensagem WhatsApp gerada
 
-### Logica de Balanco Tiny (confirmacao)
+### 2. Conferencia do Pedido (POSOrderVerification.tsx)
 
-Sim, a logica de balanco (tipo B) funciona assim:
-1. Buscar saldo atual do deposito especifico via `produto.obter.estoque.php`
-2. Calcular quantidade final absoluta: `saldo_atual + quantidade` (devolucao) ou `saldo_atual - quantidade` (saida)
-3. Enviar via `produto.atualizar.estoque.php` com tipo B e `nome_deposito`
+Receber a informacao de brinde via props e, quando houver brinde, exibir um checkbox adicional: "Brinde colocado na embalagem" com a descricao do brinde.
 
-A funcao `pos-exchange-stock-adjust` ja implementa isso corretamente. Basta garantir que os itens manuais incluam `tiny_id` (obtido via `POSTinyProductPicker`) para que o ajuste funcione.
+Mudancas:
+- Novas props: `hasGift?: boolean` e `giftDescription?: string`
+- Quando `hasGift === true`, renderizar uma secao extra no checklist com checkbox "Brinde adicionado: {descricao}"
+- Incluir `giftChecked` no estado de verificacao
+- Ajustar `allVerified` para exigir `giftChecked` quando houver brinde
+- Salvar no `verification_data` se o brinde foi conferido
 
----
+### 3. Integracao - Passar dados do brinde para conferencia
 
-### Resumo tecnico das alteracoes
+Os componentes que chamam `POSOrderVerification` precisam passar `hasGift` e `giftDescription`. Como esses dados ficam em `payment_details`, basta extrair de la ao carregar a venda.
+
+Arquivo: `src/components/pos/POSSalesView.tsx` (ou onde a conferencia e instanciada)
+- Ao montar as props do `POSOrderVerification`, ler `payment_details.has_gift` e `payment_details.gift_description`
+
+### Resumo tecnico
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/pages/StoreCheckout.tsx` | Melhorar decomposicao de frete no OrderSummary |
-| `src/components/pos/POSExchanges.tsx` | Adicionar picker de produtos devolvidos no fluxo "Criar Sem Pedido" |
+| `src/components/pos/POSOnlineSales.tsx` | Switch de brinde + campo descricao, salvar em payment_details |
+| `src/components/pos/POSOrderVerification.tsx` | Props de brinde, checkbox "Brinde na embalagem", validacao |
+| Componente que instancia verificacao | Passar has_gift/gift_description do payment_details |
 
-Nenhuma alteracao de banco de dados necessaria.
+Nenhuma alteracao de banco de dados necessaria (usa campo JSONB existente).
 
