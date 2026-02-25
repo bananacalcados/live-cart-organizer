@@ -57,6 +57,7 @@ interface Sale {
   tiny_order_id: string | null;
   customer_id: string | null;
   sale_type?: string | null;
+  payment_details?: Record<string, any> | null;
 }
 
 interface Props {
@@ -123,26 +124,76 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!sale) return;
     setRecovering(true);
     try {
-      // Find checkout attempt with customer data
+      let customerName: string | null = null;
+      let customerPhone: string | null = null;
+      let customerEmail: string | null = null;
+      let customerCpf: string | null = null;
+      let customerAddress: Record<string, string | null> = {};
+
+      // Source 1: pos_checkout_attempts
       const { data: attempt } = await supabase
         .from("pos_checkout_attempts")
-        .select("customer_name, customer_phone, customer_email")
+        .select("customer_name, customer_phone, customer_email, metadata")
         .eq("sale_id", sale.id)
         .eq("status", "success")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (!attempt || !attempt.customer_name) {
-        toast.error("Nenhum dado de cliente encontrado no checkout");
+      if (attempt?.customer_name) {
+        customerName = attempt.customer_name;
+        customerPhone = attempt.customer_phone;
+        customerEmail = attempt.customer_email;
+      }
+
+      // Source 2: customer_registrations (linked by order or sale)
+      if (!customerName) {
+        const { data: reg } = await supabase
+          .from("customer_registrations")
+          .select("full_name, whatsapp, email, cpf, address, address_number, complement, neighborhood, city, state, cep")
+          .eq("order_id", sale.id)
+          .maybeSingle();
+        if (reg?.full_name) {
+          customerName = reg.full_name;
+          customerPhone = reg.whatsapp;
+          customerEmail = reg.email;
+          customerCpf = reg.cpf;
+          customerAddress = {
+            address: reg.address, address_number: reg.address_number,
+            neighborhood: reg.neighborhood, city: reg.city, state: reg.state, cep: reg.cep,
+          };
+        }
+      }
+
+      // Source 3: payment_details on the sale itself
+      if (!customerName && sale.payment_details) {
+        const pd = sale.payment_details as Record<string, any>;
+        if (pd.customer_name) {
+          customerName = pd.customer_name;
+          customerPhone = pd.customer_phone || null;
+          customerEmail = pd.customer_email || null;
+        }
+      }
+
+      if (!customerName) {
+        toast.error("Nenhum dado de cliente encontrado para esta venda");
         return;
       }
 
-      const phoneDigits = (attempt.customer_phone || "").replace(/\D/g, "");
+      const phoneDigits = (customerPhone || "").replace(/\D/g, "");
+      const cpfDigits = (customerCpf || "").replace(/\D/g, "");
 
       // Find or create customer
       let customerId: string | null = null;
-      if (phoneDigits) {
+      if (cpfDigits) {
+        const { data: existing } = await supabase
+          .from("pos_customers")
+          .select("id")
+          .eq("cpf", cpfDigits)
+          .maybeSingle();
+        if (existing) customerId = existing.id;
+      }
+      if (!customerId && phoneDigits) {
         const { data: existing } = await supabase
           .from("pos_customers")
           .select("id")
@@ -151,19 +202,23 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         if (existing) customerId = existing.id;
       }
 
-      const payload = {
-        name: attempt.customer_name,
-        whatsapp: phoneDigits,
-        email: attempt.customer_email || null,
+      const payload: Record<string, any> = {
+        name: customerName,
+        whatsapp: phoneDigits || null,
+        email: customerEmail || null,
         store_id: storeId,
       };
+      if (cpfDigits) payload.cpf = cpfDigits;
+      if (customerAddress.address) {
+        Object.assign(payload, customerAddress);
+      }
 
       if (customerId) {
-        await supabase.from("pos_customers").update(payload as any).eq("id", customerId);
+        await supabase.from("pos_customers").update(payload).eq("id", customerId);
       } else {
         const { data: newCust } = await supabase
           .from("pos_customers")
-          .insert(payload as any)
+          .insert(payload)
           .select("id")
           .single();
         customerId = newCust?.id || null;
@@ -171,7 +226,6 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
 
       if (customerId) {
         await supabase.from("pos_sales").update({ customer_id: customerId } as any).eq("id", sale.id);
-        // Refresh customer display
         const { data: freshCust } = await supabase
           .from("pos_customers")
           .select("name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
