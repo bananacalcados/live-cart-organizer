@@ -782,33 +782,194 @@ export default function StoreCheckout() {
   }
 
   if (paymentStatus === "success") {
+    const totalItems = saleData.items.reduce((s, i) => s + i.quantity, 0);
+    const fullSubtotal = saleData.items.reduce((s, i) => {
+      const full = i.compare_at_price && i.compare_at_price > i.price ? i.compare_at_price : i.price;
+      return s + full * i.quantity;
+    }, 0);
+    const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
+    const itemSavings = fullSubtotal - subtotal;
+    const totalSavings = itemSavings + saleData.discount_amount;
+    const shippingAmount = saleData.shipping_amount || 0;
+    const displayName = customerForm.fullName || saleData.customer_name;
+    const displayPhone = customerForm.whatsapp || saleData.customer_phone;
+    const whatsappLink = displayPhone
+      ? `https://wa.me/55${displayPhone.replace(/\D/g, "")}`
+      : null;
+
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md mx-4">
-          <CardContent className="pt-8 pb-8 text-center space-y-6">
-            <div className="relative">
+      <div className="min-h-screen bg-gradient-to-b from-primary/5 via-background to-background p-4">
+        <div className="max-w-lg mx-auto space-y-5 pt-6 pb-10">
+
+          {/* ── Header com animação ── */}
+          <div className="text-center space-y-3">
+            <div className="relative inline-block">
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-24 h-24 rounded-full bg-primary/10 animate-pulse" />
+                <div className="w-28 h-28 rounded-full bg-green-500/10 animate-ping" style={{ animationDuration: '2s' }} />
               </div>
-              <CheckCircle2 className="h-16 w-16 text-primary mx-auto relative" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-20 h-20 rounded-full bg-green-500/20 animate-pulse" />
+              </div>
+              <CheckCircle2 className="h-16 w-16 text-green-500 relative" />
             </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold">Pagamento Confirmado! 🎉</h2>
-              <p className="text-muted-foreground">
-                Obrigado, <span className="font-semibold text-foreground">{saleData.customer_name}</span>!
+            <h1 className="text-2xl font-black tracking-tight">Compra Aprovada! 🎉</h1>
+            <p className="text-muted-foreground text-sm">
+              Obrigado, <span className="font-semibold text-foreground">{displayName}</span>!
+            </p>
+          </div>
+
+          {/* ── Valor total pago ── */}
+          <Card className="border-green-500/30 bg-green-500/5">
+            <CardContent className="py-5 text-center space-y-1">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Valor pago</p>
+              <p className="text-4xl font-black text-green-600">R$ {saleData.total.toFixed(2)}</p>
+              {totalSavings > 0 && (
+                <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs font-semibold">
+                  🎁 Você economizou R$ {totalSavings.toFixed(2)}
+                </Badge>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Itens do pedido ── */}
+          <Card>
+            <CardContent className="py-4 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <ShoppingBag className="h-4 w-4 text-primary" />
+                Seus itens ({totalItems} {totalItems === 1 ? 'item' : 'itens'})
+              </div>
+              <div className="divide-y">
+                {saleData.items.map((item, i) => {
+                  const hasCompare = item.compare_at_price && item.compare_at_price > item.price;
+                  return (
+                    <div key={i} className="py-2.5 flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{item.name}</p>
+                        {item.variant && <p className="text-xs text-muted-foreground">{item.variant}</p>}
+                        <p className="text-xs text-muted-foreground">Qtd: {item.quantity}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        {hasCompare && (
+                          <p className="text-[10px] line-through text-muted-foreground">R$ {(item.compare_at_price! * item.quantity).toFixed(2)}</p>
+                        )}
+                        <p className="text-sm font-bold">R$ {(item.price * item.quantity).toFixed(2)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Detalhamento de valores */}
+              <div className="border-t pt-3 space-y-1.5 text-xs">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span>R$ {subtotal.toFixed(2)}</span>
+                </div>
+                {saleData.discount_amount > 0 && (
+                  <div className="flex justify-between text-green-600 font-medium">
+                    <span>Desconto</span>
+                    <span>-R$ {saleData.discount_amount.toFixed(2)}</span>
+                  </div>
+                )}
+                {shippingAmount > 0 ? (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Frete</span>
+                    <span>R$ {shippingAmount.toFixed(2)}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-green-600 font-medium">
+                    <span>Frete</span>
+                    <span>Grátis ✨</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-sm pt-1 border-t">
+                  <span>Total</span>
+                  <span className="text-primary">R$ {saleData.total.toFixed(2)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Dados do cliente ── */}
+          {(customerForm.fullName || customerForm.email || customerForm.address) && (
+            <Card>
+              <CardContent className="py-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <User className="h-4 w-4 text-primary" />
+                  Dados da compra
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  {customerForm.fullName && (
+                    <div>
+                      <p className="text-muted-foreground">Nome</p>
+                      <p className="font-medium">{customerForm.fullName}</p>
+                    </div>
+                  )}
+                  {customerForm.email && (
+                    <div>
+                      <p className="text-muted-foreground">E-mail</p>
+                      <p className="font-medium truncate">{customerForm.email}</p>
+                    </div>
+                  )}
+                  {customerForm.cpf && (
+                    <div>
+                      <p className="text-muted-foreground">CPF</p>
+                      <p className="font-medium">{customerForm.cpf}</p>
+                    </div>
+                  )}
+                  {customerForm.whatsapp && (
+                    <div>
+                      <p className="text-muted-foreground">WhatsApp</p>
+                      <p className="font-medium">{customerForm.whatsapp}</p>
+                    </div>
+                  )}
+                </div>
+                {customerForm.address && (
+                  <div className="text-xs border-t pt-2">
+                    <p className="text-muted-foreground mb-1">Endereço de entrega</p>
+                    <p className="font-medium">
+                      {customerForm.address}, {customerForm.addressNumber}
+                      {customerForm.complement ? ` - ${customerForm.complement}` : ""}
+                    </p>
+                    <p className="font-medium">
+                      {customerForm.neighborhood} · {customerForm.city}/{customerForm.state}
+                    </p>
+                    {customerForm.cep && <p className="text-muted-foreground">CEP: {customerForm.cep}</p>}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Mensagem e contato ── */}
+          <Card className="bg-secondary/30">
+            <CardContent className="py-4 text-center space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Seu pedido foi confirmado e está sendo preparado. Você receberá atualizações pelo WhatsApp.
               </p>
-              <p className="text-sm text-muted-foreground">Seu pedido foi confirmado e está sendo preparado.</p>
-            </div>
-            <div className="p-4 bg-secondary/50 rounded-xl space-y-3">
-              <p className="text-sm text-muted-foreground">Valor pago</p>
-              <p className="text-3xl font-bold text-primary">R$ {saleData.total.toFixed(2)}</p>
-            </div>
-            <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-              <Store className="h-3 w-3" />
-              <span>{saleData.store_name}</span>
-            </div>
-          </CardContent>
-        </Card>
+              {whatsappLink && (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="w-full gap-2"
+                >
+                  <a href={whatsappLink} target="_blank" rel="noopener noreferrer">
+                    💬 Falar com a loja via WhatsApp
+                  </a>
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Loja ── */}
+          <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <Store className="h-3 w-3" />
+            <span>{saleData.store_name}</span>
+            <span>·</span>
+            <Lock className="h-3 w-3" />
+            <span>Pagamento seguro</span>
+          </div>
+        </div>
       </div>
     );
   }
