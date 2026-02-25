@@ -131,15 +131,16 @@ serve(async (req) => {
         body: `token=${token}&formato=json&pedido=${encodeURIComponent(JSON.stringify(tinyOrder))}`,
       });
 
-      // Validate response content-type before parsing
-      const contentType = tinyResp.headers.get('content-type') || '';
-      if (!contentType.includes('application/json') && !contentType.includes('text/json')) {
-        const textBody = await tinyResp.text();
-        console.error('Tiny returned non-JSON response:', contentType, textBody.substring(0, 300));
+      // Try to parse as JSON regardless of content-type (Tiny sometimes returns text/html with JSON body)
+      let tinyData: any;
+      const rawBody = await tinyResp.text();
+      try {
+        tinyData = JSON.parse(rawBody);
+      } catch {
+        console.error('Tiny returned unparseable response:', rawBody.substring(0, 300));
         throw new Error(`Tiny API returned non-JSON response (${tinyResp.status})`);
       }
 
-      const tinyData = await tinyResp.json();
       console.log('Tiny create order response:', JSON.stringify(tinyData));
 
       // Guard against null/empty response
