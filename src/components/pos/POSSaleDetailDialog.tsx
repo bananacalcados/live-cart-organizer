@@ -68,6 +68,7 @@ interface Props {
   customer: CustomerInfo | null;
   items: SaleItem[];
   sellerName: string | null;
+  sellers?: { id: string; name: string }[];
   onResend?: (sale: Sale) => void;
   resending?: boolean;
   isTinyOnly?: boolean;
@@ -75,7 +76,7 @@ interface Props {
   onDeleted?: () => void;
 }
 
-export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, onResend, resending, isTinyOnly, storeId, onDeleted }: Props) {
+export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, sellers, onResend, resending, isTinyOnly, storeId, onDeleted }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingPayment, setEditingPayment] = useState(false);
@@ -88,6 +89,10 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [editItemSku, setEditItemSku] = useState("");
   const [savingItem, setSavingItem] = useState(false);
+  const [editingSeller, setEditingSeller] = useState(false);
+  const [selectedSellerId, setSelectedSellerId] = useState("");
+  const [savingSeller, setSavingSeller] = useState(false);
+  const [cancelingTiny, setCancelingTiny] = useState(false);
 
   useEffect(() => {
     setCurrentCustomer(customer);
@@ -122,6 +127,65 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       toast.error("Erro ao alterar pagamento");
     } finally {
       setSavingPayment(false);
+    }
+  };
+
+  const handleSaveSeller = async () => {
+    if (!selectedSellerId || !sale) return;
+    setSavingSeller(true);
+    try {
+      await supabase
+        .from('pos_sales')
+        .update({ seller_id: selectedSellerId } as any)
+        .eq('id', sale.id);
+      const newName = sellers?.find(s => s.id === selectedSellerId)?.name;
+      toast.success(`Vendedora alterada para ${newName}`);
+      setEditingSeller(false);
+      onDeleted?.();
+    } catch {
+      toast.error("Erro ao alterar vendedora");
+    } finally {
+      setSavingSeller(false);
+    }
+  };
+
+  const handleCancelTinyAndResend = async () => {
+    if (!sale || !storeId || !sale.tiny_order_id) return;
+    setCancelingTiny(true);
+    try {
+      // 1. Cancel existing Tiny order
+      const delResp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-delete-sale`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({ store_id: storeId, sale_id: sale.id, cancel_tiny_only: true }),
+      });
+      const delData = await delResp.json();
+      if (!delData.success) {
+        toast.error(delData.error || "Erro ao cancelar pedido no Tiny");
+        return;
+      }
+
+      // 2. Clear tiny references locally
+      await supabase
+        .from('pos_sales')
+        .update({ tiny_order_id: null, tiny_order_number: null, status: 'pending_sync' } as any)
+        .eq('id', sale.id);
+
+      toast.success("Pedido cancelado no Tiny! Reenviando...");
+
+      // 3. Resend
+      if (onResend) {
+        onResend({ ...sale, tiny_order_id: null, tiny_order_number: null });
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao cancelar/reenviar");
+    } finally {
+      setCancelingTiny(false);
     }
   };
 
@@ -359,14 +423,40 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         <ScrollArea className="max-h-[70vh] pr-2">
           <div className="space-y-4">
             {/* Date & Seller */}
-            <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
-              <span className="text-sm text-gray-600 font-medium">
-                {format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-              </span>
-              {sellerName && (
-                <Badge className="bg-orange-100 text-orange-700 border-orange-300 font-bold">
-                  {sellerName}
-                </Badge>
+            <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600 font-medium">
+                  {format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  {sellerName && (
+                    <Badge className="bg-orange-100 text-orange-700 border-orange-300 font-bold">
+                      {sellerName}
+                    </Badge>
+                  )}
+                  {!isTinyOnly && sellers && sellers.length > 0 && (
+                    <button onClick={() => { setEditingSeller(!editingSeller); if (!editingSeller && sale.seller_id) setSelectedSellerId(sale.seller_id); }} className="text-blue-500 hover:text-blue-700">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              {editingSeller && sellers && (
+                <div className="flex gap-2 items-center">
+                  <Select value={selectedSellerId} onValueChange={setSelectedSellerId}>
+                    <SelectTrigger className="flex-1 h-8 text-xs">
+                      <SelectValue placeholder="Selecione vendedora..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sellers.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-8 text-xs bg-blue-500 hover:bg-blue-600 text-white" onClick={handleSaveSeller} disabled={savingSeller || !selectedSellerId}>
+                    {savingSeller ? <Loader2 className="h-3 w-3 animate-spin" /> : "Salvar"}
+                  </Button>
+                </div>
               )}
             </div>
 
@@ -603,10 +693,23 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                 <Button
                   className="w-full gap-2 bg-orange-500 text-white hover:bg-orange-600 font-bold h-11 text-sm shadow-md"
                   onClick={() => onResend(sale)}
-                  disabled={resending}
+                  disabled={resending || cancelingTiny}
                 >
                   {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   {sale.tiny_order_id ? "Reenviar ao Tiny" : "Enviar ao Tiny"}
+                </Button>
+              )}
+
+              {/* Cancel Tiny order and resend with updated data */}
+              {onResend && sale.tiny_order_id && !isTinyOnly && storeId && (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 font-bold h-11 text-sm border-amber-400 text-amber-700 hover:bg-amber-50"
+                  onClick={handleCancelTinyAndResend}
+                  disabled={cancelingTiny || resending}
+                >
+                  {cancelingTiny ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                  Cancelar no Tiny e Reenviar
                 </Button>
               )}
 
