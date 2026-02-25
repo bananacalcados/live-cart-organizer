@@ -184,93 +184,124 @@ async function chargePagarme(
 }
 
 
-// ── APPMAX fallback ─────────────────────────────────────────────
+// ── APPMAX fallback (3-step API: customer → order → payment) ────
 async function chargeAppmax(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
   accessToken: string
 ): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  const base = "https://admin.appmax.com.br/api/v3";
+  const headers = { "Content-Type": "application/json" };
   const totalReais = params.totalAmountCents / 100;
   const phone = params.customer.phone.replace(/\D/g, "");
+  const cpf = params.customer.cpf.replace(/\D/g, "");
 
-  // Distribute discount proportionally across product prices for APPMAX
-  const productsTotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
-  const discountRatio = productsTotal > 0 ? totalReais / productsTotal : 1;
+  try {
+    // 1. Create customer
+    const custRes = await fetch(`${base}/customer`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        "access-token": accessToken,
+        firstname: params.customer.name.split(" ")[0],
+        lastname: params.customer.name.split(" ").slice(1).join(" ") || ".",
+        email: params.customer.email,
+        telephone: phone,
+        cpf,
+        postcode: params.billingAddress.zipCode.replace(/\D/g, ""),
+        address_street: params.billingAddress.street,
+        address_street_number: params.billingAddress.number,
+        address_street_district: params.billingAddress.neighborhood,
+        address_city: params.billingAddress.city,
+        address_state: params.billingAddress.state,
+        address_street_complement: "",
+        ip: "0.0.0.0",
+      }),
+    });
+    const custData = await custRes.json();
+    console.log("APPMAX customer response:", JSON.stringify(custData).substring(0, 500));
+    if (!custData.success || !custData.data?.id) {
+      return { success: false, gateway: "appmax", error: `AppMax customer error: ${custData.text || custData.message || JSON.stringify(custData.data).substring(0, 200)}` };
+    }
+    const customerId = custData.data.id;
 
-  const month = String(params.card.expMonth ?? "").replace(/\D/g, "").slice(-2).padStart(2, "0");
-  const rawYear = String(params.card.expYear ?? "").replace(/\D/g, "");
-  const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
-
-  const body: Record<string, unknown> = {
-    access_token: accessToken,
-    customer: {
-      firstname: params.customer.name.split(" ")[0],
-      lastname: params.customer.name.split(" ").slice(1).join(" ") || ".",
-      email: params.customer.email,
-      telephone: phone,
-      cpf: params.customer.cpf.replace(/\D/g, ""),
-    },
-    products: products.map((p, i) => ({
+    // 2. Create order
+    const productsTotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
+    const discountRatio = productsTotal > 0 ? totalReais / productsTotal : 1;
+    const orderProducts = products.map((p, i) => ({
       sku: `sku_${i}`,
       name: p.title.substring(0, 200),
       qty: p.quantity,
       price: Math.round(p.price * discountRatio * 100) / 100,
-      digital_product: 1,
-    })),
-    payment: {
-      method: "credit_card",
-      credit_card: {
-        number: params.card.number.replace(/\s/g, ""),
-        name: params.card.holderName,
-        month,
-        year,
-        cvv: params.card.cvv,
-      },
-      installments: params.installments,
-    },
-    total: totalReais,
-    shipping: {
-      firstname: params.customer.name.split(" ")[0],
-      lastname: params.customer.name.split(" ").slice(1).join(" ") || ".",
-      address_1: `${params.billingAddress.street}, ${params.billingAddress.number}`,
-      city: params.billingAddress.city,
-      zone: params.billingAddress.state,
-      postcode: params.billingAddress.zipCode.replace(/\D/g, ""),
-      country_id: "BR",
-    },
-    billing_address: {
-      firstname: params.customer.name.split(" ")[0],
-      lastname: params.customer.name.split(" ").slice(1).join(" ") || ".",
-      address_1: `${params.billingAddress.street}, ${params.billingAddress.number}`,
-      city: params.billingAddress.city,
-      zone: params.billingAddress.state,
-      postcode: params.billingAddress.zipCode.replace(/\D/g, ""),
-      country_id: "BR",
-    },
-  };
+      digital_product: 0,
+    }));
 
-  const res = await fetch("https://admin.appmax.com.br/api/v3/checkout/order", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+    const orderRes = await fetch(`${base}/order`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        "access-token": accessToken,
+        customer_id: customerId,
+        products: orderProducts,
+        shipping: {
+          firstname: params.customer.name.split(" ")[0],
+          lastname: params.customer.name.split(" ").slice(1).join(" ") || ".",
+          address_1: `${params.billingAddress.street}, ${params.billingAddress.number}`,
+          city: params.billingAddress.city,
+          zone: params.billingAddress.state,
+          postcode: params.billingAddress.zipCode.replace(/\D/g, ""),
+          country_id: "BR",
+        },
+      }),
+    });
+    const orderData = await orderRes.json();
+    console.log("APPMAX order response:", JSON.stringify(orderData).substring(0, 500));
+    if (!orderData.success || !orderData.data?.id) {
+      return { success: false, gateway: "appmax", error: `AppMax order error: ${orderData.text || orderData.message || JSON.stringify(orderData.data).substring(0, 200)}` };
+    }
+    const appmaxOrderId = orderData.data.id;
 
-  const data = await res.json();
-  console.log("APPMAX response:", JSON.stringify(data).substring(0, 500));
+    // 3. Process payment
+    const month = String(params.card.expMonth ?? "").replace(/\D/g, "").slice(-2).padStart(2, "0");
+    const rawYear = String(params.card.expYear ?? "").replace(/\D/g, "");
+    const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
 
-  if (data.success || data.data?.status === "approved" || data.data?.id) {
+    const payRes = await fetch(`${base}/payment/credit-card`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        "access-token": accessToken,
+        order_id: appmaxOrderId,
+        credit_card: {
+          number: params.card.number.replace(/\s/g, ""),
+          name: params.card.holderName,
+          month,
+          year,
+          cvv: params.card.cvv,
+        },
+        installments: params.installments,
+      }),
+    });
+    const payData = await payRes.json();
+    console.log("APPMAX payment response:", JSON.stringify(payData).substring(0, 500));
+
+    if (payData.success && (payData.data?.status === "approved" || payData.data?.status === "paid" || payData.data?.id)) {
+      return {
+        success: true,
+        gateway: "appmax",
+        transactionId: String(payData.data?.id || appmaxOrderId),
+      };
+    }
+
     return {
-      success: true,
+      success: false,
       gateway: "appmax",
-      transactionId: String(data.data?.id || data.id || ""),
+      error: payData.text || payData.message || payData.data?.message || "AppMax payment declined",
     };
+  } catch (e) {
+    console.error("APPMAX exception:", e);
+    return { success: false, gateway: "appmax", error: `AppMax exception: ${e.message}` };
   }
-
-  return {
-    success: false,
-    gateway: "appmax",
-    error: data.message || data.error || "APPMAX charge failed",
-  };
 }
 
 // ── Main handler ────────────────────────────────────────────────
