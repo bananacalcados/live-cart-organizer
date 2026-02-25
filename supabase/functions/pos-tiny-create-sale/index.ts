@@ -37,46 +37,91 @@ serve(async (req) => {
     let tinyOrderNumber: string | null = null;
     let tinyFailed = false;
 
+    // Helper: build Tiny order payload
+    const buildTinyOrder = (orderItems: any[]) => ({
+      pedido: {
+        situacao: 'aprovado',
+        data_pedido: new Date().toLocaleDateString('pt-BR'),
+        cliente: customer?.name ? {
+          nome: customer.name,
+          cpf_cnpj: customer.cpf || '',
+          email: customer.email || '',
+          fone: customer.whatsapp || '',
+          ...(customer.address && { endereco: customer.address }),
+          ...(customer.addressNumber && { numero: customer.addressNumber }),
+          ...(customer.complement && { complemento: customer.complement }),
+          ...(customer.neighborhood && { bairro: customer.neighborhood }),
+          ...(customer.cep && { cep: customer.cep.replace(/\D/g, '') }),
+          ...(customer.city && { cidade: customer.city }),
+          ...(customer.state && { uf: customer.state }),
+        } : {
+          nome: 'Consumidor Final',
+        },
+        itens: orderItems.map((item: any) => ({
+          item: {
+            codigo: item.codigo || item.sku || '',
+            descricao: `${item.name}${item.variant ? ` - ${item.variant}` : ''}`,
+            unidade: 'UN',
+            quantidade: item.quantity,
+            valor_unitario: item.price,
+          },
+        })),
+        ...(discount && discount > 0 && { valor_desconto: discount }),
+        ...(payment_method_name && { forma_pagamento: payment_method_name }),
+        ...(tiny_seller_id && { id_vendedor: tiny_seller_id }),
+        ...(notes && { obs: notes }),
+      },
+    });
+
+    // Helper: search Tiny product by SKU to find child variation code
+    const findChildCodeBySku = async (parentCode: string): Promise<string | null> => {
+      try {
+        // Search by the parent code as SKU
+        const searchResp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `token=${token}&formato=json&pesquisa=${encodeURIComponent(parentCode)}`,
+        });
+        const searchData = await searchResp.json();
+        const produtos = searchData.retorno?.produtos || [];
+
+        for (const p of produtos) {
+          const prod = p.produto || p;
+          const prodId = prod.id;
+          if (!prodId) continue;
+
+          // Get full product details to find variations
+          const detailResp = await fetch('https://api.tiny.com.br/api2/produto.obter.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `token=${token}&formato=json&id=${prodId}`,
+          });
+          const detailData = await detailResp.json();
+          const fullProd = detailData.retorno?.produto;
+          if (!fullProd) continue;
+
+          // Check if this is the parent product with variations
+          const variacoes = fullProd.variacoes || [];
+          if (variacoes.length > 0) {
+            // Return the first active variation's code
+            const firstVariation = variacoes[0]?.variacao || variacoes[0];
+            const childCode = firstVariation?.codigo || firstVariation?.sku;
+            if (childCode) {
+              console.log(`Found child code "${childCode}" for parent "${parentCode}"`);
+              return childCode;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error searching child product by SKU:', e);
+      }
+      return null;
+    };
+
     // Try to create order in Tiny ERP
     try {
-      const tinyOrder = {
-        pedido: {
-          situacao: 'aprovado',
-          data_pedido: new Date().toLocaleDateString('pt-BR'),
-          cliente: customer?.name ? {
-            nome: customer.name,
-            cpf_cnpj: customer.cpf || '',
-            email: customer.email || '',
-            fone: customer.whatsapp || '',
-            ...(customer.address && { endereco: customer.address }),
-            ...(customer.addressNumber && { numero: customer.addressNumber }),
-            ...(customer.complement && { complemento: customer.complement }),
-            ...(customer.neighborhood && { bairro: customer.neighborhood }),
-            ...(customer.cep && { cep: customer.cep.replace(/\D/g, '') }),
-            ...(customer.city && { cidade: customer.city }),
-            ...(customer.state && { uf: customer.state }),
-          } : {
-            nome: 'Consumidor Final',
-          },
-          itens: items.map((item: any) => ({
-            item: {
-              codigo: item.sku || '',
-              descricao: `${item.name}${item.variant ? ` - ${item.variant}` : ''}`,
-              unidade: 'UN',
-              quantidade: item.quantity,
-              valor_unitario: item.price,
-            },
-          })),
-          ...(discount && discount > 0 && { valor_desconto: discount }),
-          ...(payment_method_name && {
-            forma_pagamento: payment_method_name,
-          }),
-          ...(tiny_seller_id && {
-            id_vendedor: tiny_seller_id,
-          }),
-          ...(notes && { obs: notes }),
-        },
-      };
+      const orderItems = items.map((item: any) => ({ ...item, codigo: item.sku || '' }));
+      let tinyOrder = buildTinyOrder(orderItems);
 
       console.log('Creating Tiny order:', JSON.stringify(tinyOrder));
 
@@ -94,9 +139,65 @@ serve(async (req) => {
         tinyOrderId = records?.id || records?.[0]?.id || null;
         tinyOrderNumber = records?.numero || records?.[0]?.numero || null;
       } else {
-        const errorMsg = tinyData.retorno?.erros?.[0]?.erro || JSON.stringify(tinyData.retorno);
-        console.error('Tiny API failed, saving sale locally:', errorMsg);
-        tinyFailed = true;
+        const erros = tinyData.retorno?.erros || [];
+        const errorMessages = erros.map((e: any) => e.erro || '').join(' | ');
+
+        // Check for "produto pai" error and retry with child SKU
+        if (errorMessages.toLowerCase().includes('produto pai')) {
+          console.log('Parent product error detected, attempting to resolve child SKUs...');
+
+          // Extract the problematic product codes from error messages
+          const codeMatches = errorMessages.match(/código\s+(\S+)/gi) || [];
+          const problemCodes = codeMatches.map((m: string) => m.replace(/código\s+/i, '').trim());
+
+          let resolved = false;
+          const updatedItems = [...orderItems];
+
+          for (const problemCode of problemCodes) {
+            const childCode = await findChildCodeBySku(problemCode);
+            if (childCode) {
+              // Replace the parent code with child code in items
+              for (const item of updatedItems) {
+                if (item.codigo === problemCode || item.sku === problemCode) {
+                  item.codigo = childCode;
+                  console.log(`Replaced parent "${problemCode}" with child "${childCode}" for item "${item.name}"`);
+                  resolved = true;
+                }
+              }
+            }
+          }
+
+          if (resolved) {
+            // Retry with corrected codes
+            tinyOrder = buildTinyOrder(updatedItems);
+            console.log('Retrying Tiny order with child SKUs:', JSON.stringify(tinyOrder));
+
+            const retryResp = await fetch('https://api.tiny.com.br/api2/pedido.incluir.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: `token=${token}&formato=json&pedido=${encodeURIComponent(JSON.stringify(tinyOrder))}`,
+            });
+
+            const retryData = await retryResp.json();
+            console.log('Tiny retry response:', JSON.stringify(retryData));
+
+            if (retryData.retorno?.status === 'OK' || retryData.retorno?.status === 'Processado') {
+              const records = retryData.retorno?.registros?.registro || retryData.retorno?.registros;
+              tinyOrderId = records?.id || records?.[0]?.id || null;
+              tinyOrderNumber = records?.numero || records?.[0]?.numero || null;
+            } else {
+              const retryError = retryData.retorno?.erros?.[0]?.erro || JSON.stringify(retryData.retorno);
+              console.error('Tiny retry also failed:', retryError);
+              tinyFailed = true;
+            }
+          } else {
+            console.error('Could not resolve child SKUs, saving locally');
+            tinyFailed = true;
+          }
+        } else {
+          console.error('Tiny API failed, saving sale locally:', errorMessages);
+          tinyFailed = true;
+        }
       }
     } catch (tinyError) {
       console.error('Tiny API unreachable, saving sale locally:', tinyError);
