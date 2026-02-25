@@ -112,12 +112,13 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryReference, setDeliveryReference] = useState("");
 
-  // Coupon & price editing & discount
+  // Coupon & price editing & discount & shipping
   const [couponCode, setCouponCode] = useState("");
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [editPriceValue, setEditPriceValue] = useState("");
   const [discountValue, setDiscountValue] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
+  const [shippingValue, setShippingValue] = useState("");
   
   // Debounce search
   useEffect(() => {
@@ -244,6 +245,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   })();
 
   const cartTotal = Math.max(0, cartSubtotal - discountAmount);
+  const shippingAmount = parseFloat(shippingValue) || 0;
+  const orderTotal = cartTotal + shippingAmount;
 
   const updateCartPrice = (id: string, newPrice: number) => {
     if (newPrice <= 0) return;
@@ -434,7 +437,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         const description = cart.map(c => `${c.title} x${c.quantity}`).join(", ");
         const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
           body: {
-            amount: cartTotal,
+            amount: orderTotal,
             description: description.substring(0, 140),
             payer_email: linkedCustomer?.email || "cliente@email.com",
           },
@@ -462,7 +465,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         customer_id: linkedCustomer?.id || null,
         subtotal: cartSubtotal,
         discount: discountAmount > 0 ? discountAmount : 0,
-        total: cartTotal,
+        total: orderTotal,
         status: gateway === "pickup" ? "pending_pickup" : "online_pending",
         sale_type: gateway === "pickup" ? "pickup" : "online",
         payment_gateway: paymentGw,
@@ -478,6 +481,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           discount_amount: discountAmount,
           discount_type: discountType,
           discount_value: discountValue,
+          shipping_amount: shippingAmount,
+          net_product_total: cartTotal,
           items_detail: cart.map(c => ({
             title: c.title,
             variant: c.variantLabel,
@@ -616,7 +621,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
 
     if (deliveryConfirmed) {
       const methodLabel = deliveryMethod === "cash" ? "dinheiro" : "cartão (maquininha)";
-      text = `Olá${linkedCustomer?.name ? ` ${linkedCustomer.name}` : ""}! Seu pedido foi separado.\n\nValor total: ${fmt(cartTotal)}\nPagamento na entrega: ${methodLabel}\n\nItens:\n${cart.map(c => `• ${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity} - ${fmt(c.price * c.quantity)}`).join("\n")}${deliveryNotes ? `\n\nObs: ${deliveryNotes}` : ""}`;
+      text = `Olá${linkedCustomer?.name ? ` ${linkedCustomer.name}` : ""}! Seu pedido foi separado.\n\nValor dos produtos: ${fmt(cartTotal)}${shippingAmount > 0 ? `\nFrete: ${fmt(shippingAmount)}` : " (frete grátis)"}\nValor total: ${fmt(orderTotal)}\nPagamento na entrega: ${methodLabel}\n\nItens:\n${cart.map(c => `• ${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity} - ${fmt(c.price * c.quantity)}`).join("\n")}${deliveryNotes ? `\n\nObs: ${deliveryNotes}` : ""}`;
     } else {
       text = `Olá! Aqui está o link para pagamento: ${generatedLink}`;
     }
@@ -649,6 +654,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     setEditPriceValue("");
     setDiscountValue("");
     setDiscountType("fixed");
+    setShippingValue("");
   };
 
   const selectCustomer = (c: FoundCustomer) => {
@@ -678,7 +684,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       : `Cartão na maquininha${installments !== "1" ? ` em ${installments}x` : " à vista"}`;
     const itemsList = cart.map(c => `• ${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity} — ${fmt(c.price * c.quantity)}`).join("\n");
 
-    return `Olá${linkedCustomer?.name ? `, ${linkedCustomer.name}` : ""}! 😊\n\nSeu pedido foi separado e já está saindo para entrega!\n\n📦 *Itens:*\n${itemsList}\n\n💰 *Total: ${fmt(cartTotal)}*\n💳 *Pagamento:* ${methodLabel}\n\n🏍️ O entregador é um *mototaxista parceiro*. Ele não consegue aguardar experimentação na porta, mas caso algum item não sirva, é só nos avisar que chamamos outro mototaxista para realizar a troca diretamente na sua casa! 🔄\n\nQualquer dúvida, estamos à disposição! 💛`;
+    return `Olá${linkedCustomer?.name ? `, ${linkedCustomer.name}` : ""}! 😊\n\nSeu pedido foi separado e já está saindo para entrega!\n\n📦 *Itens:*\n${itemsList}\n\n💰 *Produtos: ${fmt(cartTotal)}*${shippingAmount > 0 ? `\n🚚 *Frete: ${fmt(shippingAmount)}*` : "\n🚚 *Frete grátis!*"}\n💰 *Total: ${fmt(orderTotal)}*\n💳 *Pagamento:* ${methodLabel}\n\n🏍️ O entregador é um *mototaxista parceiro*. Ele não consegue aguardar experimentação na porta, mas caso algum item não sirva, é só nos avisar que chamamos outro mototaxista para realizar a troca diretamente na sua casa! 🔄\n\nQualquer dúvida, estamos à disposição! 💛`;
   };
 
   const buildMotoText = () => {
@@ -687,7 +693,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       : `💳 MAQUININHA${installments !== "1" ? ` — ${installments}x` : " — À vista"}`;
     const addr = getFullAddress();
 
-    return `🏍️ *ENTREGA BANANA CALÇADOS*\n\n👤 *Cliente:* ${linkedCustomer?.name || "—"}\n📱 *Telefone:* ${linkedCustomer?.whatsapp || "—"}\n\n📍 *Endereço:* ${addr || "—"}${deliveryReference ? `\n📌 *Referência:* ${deliveryReference}` : ""}\n\n💰 *Valor:* ${fmt(cartTotal)}\n${methodLabel}\n\n📦 *Itens:* ${cart.map(c => `${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity}`).join(", ")}${deliveryNotes ? `\n\n📝 *Obs:* ${deliveryNotes}` : ""}`;
+    return `🏍️ *ENTREGA BANANA CALÇADOS*\n\n👤 *Cliente:* ${linkedCustomer?.name || "—"}\n📱 *Telefone:* ${linkedCustomer?.whatsapp || "—"}\n\n📍 *Endereço:* ${addr || "—"}${deliveryReference ? `\n📌 *Referência:* ${deliveryReference}` : ""}\n\n💰 *Valor produtos:* ${fmt(cartTotal)}${shippingAmount > 0 ? `\n🚚 *Frete:* ${fmt(shippingAmount)}` : ""}\n💰 *Total:* ${fmt(orderTotal)}\n${methodLabel}\n\n📦 *Itens:* ${cart.map(c => `${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity}`).join(", ")}${deliveryNotes ? `\n\n📝 *Obs:* ${deliveryNotes}` : ""}`;
   };
 
   const copyText = async (text: string) => {
@@ -833,7 +839,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           </Button>
           <ShoppingCart className="h-4 w-4 text-primary" />
           <span className="text-sm font-bold">Carrinho ({cartItems})</span>
-          <span className="ml-auto text-sm font-bold text-primary">{fmt(cartTotal)}</span>
+          <span className="ml-auto text-sm font-bold text-primary">{fmt(orderTotal)}</span>
         </div>
 
         <ScrollArea className="flex-1">
@@ -1035,6 +1041,42 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
               </div>
             )}
 
+            {/* Shipping / Frete */}
+            {!generatedLink && !deliveryConfirmed && cart.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1">
+                  <Truck className="h-3 w-3" /> Frete
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0,00 = frete grátis"
+                  value={shippingValue}
+                  onChange={e => setShippingValue(e.target.value)}
+                  className="h-8 text-xs"
+                  min="0"
+                  step="0.01"
+                />
+                {(discountAmount > 0 || shippingAmount > 0) && (
+                  <div className="space-y-0.5 px-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Produtos:</span>
+                      <span>{fmt(cartTotal)}</span>
+                    </div>
+                    {shippingAmount > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Frete:</span>
+                        <span>{fmt(shippingAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-xs font-bold">
+                      <span>Total:</span>
+                      <span className="text-primary">{fmt(orderTotal)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Payment Gateways */}
             {!generatedLink && !deliveryConfirmed ? (
               <>
@@ -1223,7 +1265,9 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                     </Label>
                     <div className="p-2 bg-orange-500/5 border border-orange-500/20 rounded-lg text-xs space-y-1">
                       <p><span className="font-medium">Método:</span> {deliveryMethod === "cash" ? `Dinheiro${needsChange ? ` (troco p/ R$ ${changeAmount})` : ""}` : `Maquininha ${installments}x`}</p>
-                      <p><span className="font-medium">Total:</span> {fmt(cartTotal)}</p>
+                      <p><span className="font-medium">Produtos:</span> {fmt(cartTotal)}</p>
+                      {shippingAmount > 0 && <p><span className="font-medium">Frete:</span> {fmt(shippingAmount)}</p>}
+                      <p><span className="font-medium">Total:</span> {fmt(orderTotal)}</p>
                       {linkedCustomer?.name && <p><span className="font-medium">Cliente:</span> {linkedCustomer.name}</p>}
                       {getFullAddress() && <p><span className="font-medium">Endereço:</span> {getFullAddress()}</p>}
                       {deliveryNotes && <p><span className="font-medium">Obs:</span> {deliveryNotes}</p>}

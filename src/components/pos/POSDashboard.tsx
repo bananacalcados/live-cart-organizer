@@ -229,7 +229,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, total, seller_id, status, sale_type")
+        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details")
         .eq("store_id", storeId)
         .eq("status", "completed")
         .gte("created_at", start.toISOString())
@@ -278,7 +278,11 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
           const key = sale.seller_id || "sem-vendedor";
           const name = sellersMap.get(sale.seller_id || "") || "Sem vendedor";
           const existing = metricsMap.get(key) || { name, totalSales: 0, salesCount: 0, totalItems: 0, sellerId: sale.seller_id || undefined };
-          existing.totalSales += sale.total || 0;
+          // Use net product value (total minus shipping) for seller metrics
+          const pd = (sale as any).payment_details as any;
+          const shippingAmt = pd?.shipping_amount || 0;
+          const netProductTotal = (sale.total || 0) - shippingAmt;
+          existing.totalSales += netProductTotal;
           existing.salesCount += 1;
           existing.totalItems += saleItemsMap.get(sale.id) || 0;
           metricsMap.set(key, existing);

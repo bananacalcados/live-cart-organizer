@@ -26,6 +26,7 @@ interface SaleData {
   store_name: string;
   total: number;
   discount_amount: number;
+  shipping_amount: number;
   customer_name: string;
   customer_phone: string;
   items: SaleItem[];
@@ -146,6 +147,7 @@ function OrderSummary({ saleData }: { saleData: SaleData }) {
   const hasItemDiscounts = saleData.items.some(i => i.compare_at_price && i.compare_at_price > i.price);
   const itemSavings = fullSubtotal - subtotal;
   const totalSavings = itemSavings + saleData.discount_amount;
+  const shippingAmount = saleData.shipping_amount || 0;
 
   return (
     <div className="bg-secondary/30 rounded-xl p-4 space-y-3">
@@ -225,6 +227,18 @@ function OrderSummary({ saleData }: { saleData: SaleData }) {
               </div>
             )}
           </>
+        )}
+        {shippingAmount > 0 && (
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">🚚 Frete</span>
+            <span>R$ {shippingAmount.toFixed(2)}</span>
+          </div>
+        )}
+        {shippingAmount === 0 && (
+          <div className="flex justify-between text-xs">
+            <span className="text-green-600 font-medium">🚚 Frete grátis!</span>
+            <span className="text-green-600 font-bold">R$ 0,00</span>
+          </div>
         )}
         <div className="flex justify-between font-bold text-sm pt-1">
           <span>Total</span>
@@ -585,6 +599,7 @@ export default function StoreCheckout() {
         store_name: store?.name || "Loja",
         total: Number(sale.total || 0),
         discount_amount: Number((sale as any).discount_amount ?? (sale as any).discount ?? 0),
+        shipping_amount: Number(paymentDetails.shipping_amount ?? 0),
         customer_name: customerName,
         customer_phone: customerPhone,
         items: saleItems,
