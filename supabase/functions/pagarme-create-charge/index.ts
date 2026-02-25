@@ -243,15 +243,7 @@ async function chargeAppmax(
         "access-token": accessToken,
         customer_id: customerId,
         products: orderProducts,
-        shipping: {
-          firstname: params.customer.name.split(" ")[0],
-          lastname: params.customer.name.split(" ").slice(1).join(" ") || ".",
-          address_1: `${params.billingAddress.street}, ${params.billingAddress.number}`,
-          city: params.billingAddress.city,
-          zone: params.billingAddress.state,
-          postcode: params.billingAddress.zipCode.replace(/\D/g, ""),
-          country_id: "BR",
-        },
+        shipping: 0,
       }),
     });
     const orderData = await orderRes.json();
