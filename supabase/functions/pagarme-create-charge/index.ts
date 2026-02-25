@@ -270,7 +270,7 @@ async function chargeAppmax(
           customer_id: customerId,
         },
         payment: {
-          credit_card: {
+          CreditCard: {
             number: params.card.number.replace(/\s/g, ""),
             name: params.card.holderName,
             month,
