@@ -538,7 +538,8 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
           },
         },
       });
-      if (error || !data?.success) {
+      console.log("Payment response:", JSON.stringify({ data, error }));
+      if (error || !data?.success || !data?.transactionId) {
         const errMsg = data?.error || (error && typeof error === "object" && "message" in error ? String((error as any).message) : null) || "Erro no pagamento";
         // Log failed attempt
         await supabase.from("pos_checkout_attempts").insert({
@@ -566,7 +567,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
         gateway: data.gateway || "pagarme",
         transaction_id: data.transactionId || null,
       } as any).then(() => {});
-      toast.success("Pagamento aprovado!");
+      toast.success(`Pagamento aprovado via ${(data.gateway || "pagarme").toUpperCase()}!`);
       onPaid();
     } catch (e: any) {
       toast.error(e.message || "Erro no pagamento");
