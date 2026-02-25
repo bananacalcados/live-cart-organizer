@@ -61,7 +61,27 @@ export function MarginFormation({ stores }: Props) {
   const [storeFixedCosts, setStoreFixedCosts] = useState<StoreFixedCost[]>([]);
   const [variableCosts, setVariableCosts] = useState<VariableCost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+
+  // Consolidated view
+  const [allStoreFixedCosts, setAllStoreFixedCosts] = useState<StoreFixedCost[]>([]);
+  const [allVariableCosts, setAllVariableCosts] = useState<VariableCost[]>([]);
+  const [consolidatedLoading, setConsolidatedLoading] = useState(false);
+
+  const loadConsolidated = async () => {
+    setConsolidatedLoading(true);
+    const [sfcRes, vcRes] = await Promise.all([
+      supabase.from("cost_center_store_fixed_costs").select("*"),
+      supabase.from("cost_center_variable_costs").select("*"),
+    ]);
+    setAllStoreFixedCosts((sfcRes.data || []) as StoreFixedCost[]);
+    setAllVariableCosts((vcRes.data || []) as VariableCost[]);
+    setConsolidatedLoading(false);
+  };
+
+  // Load consolidated data on mount
+  useEffect(() => { loadConsolidated(); }, []);
+
+  const saving = false; // kept for interface compat
 
   // Master list management
   const [showAddFixed, setShowAddFixed] = useState(false);
@@ -364,6 +384,7 @@ export function MarginFormation({ stores }: Props) {
           <TabsTrigger value="fixed">Custos Fixos</TabsTrigger>
           <TabsTrigger value="variable">Custos Variáveis</TabsTrigger>
           <TabsTrigger value="simulator">Simulador de Lucro</TabsTrigger>
+          <TabsTrigger value="consolidated" onClick={() => loadConsolidated()}>Consolidado</TabsTrigger>
         </TabsList>
 
         {/* Fixed Costs */}
@@ -783,6 +804,217 @@ export function MarginFormation({ stores }: Props) {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Consolidated View */}
+        <TabsContent value="consolidated" className="space-y-4">
+          {consolidatedLoading ? (
+            <div className="flex items-center justify-center h-64 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando consolidado...
+            </div>
+          ) : (
+            <>
+              {/* Consolidated KPI Cards */}
+              {(() => {
+                const storeMetrics = stores.map(store => {
+                  const sfc = allStoreFixedCosts.filter(s => s.store_id === store.id && s.is_active);
+                  const vc = allVariableCosts.filter(v => v.store_id === store.id && v.is_active);
+                  const totalFixed = sfc.reduce((sum, s) => sum + s.amount, 0);
+                  const totalVarPct = vc.reduce((sum, v) => sum + v.percentage, 0);
+                  const contribMargin = 100 - totalVarPct;
+                  const be = contribMargin > 0 ? totalFixed / (contribMargin / 100) : 0;
+                  return { store, totalFixed, totalVarPct, contribMargin, breakEven: be };
+                });
+                const grandFixed = storeMetrics.reduce((s, m) => s + m.totalFixed, 0);
+                const avgVarPct = storeMetrics.length > 0 ? storeMetrics.reduce((s, m) => s + m.totalVarPct, 0) / storeMetrics.length : 0;
+                const avgContrib = 100 - avgVarPct;
+                const grandBreakEven = avgContrib > 0 ? grandFixed / (avgContrib / 100) : 0;
+
+                return (
+                  <div className="space-y-4">
+                    {/* Grand totals */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <Card>
+                        <CardContent className="pt-4 pb-3 px-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] text-muted-foreground font-medium">Custos Fixos Total</span>
+                            <DollarSign className="h-3.5 w-3.5 text-destructive" />
+                          </div>
+                          <p className="text-lg font-bold text-destructive">{fmt(grandFixed)}</p>
+                          <p className="text-[10px] text-muted-foreground">soma das {stores.length} lojas</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-4 pb-3 px-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] text-muted-foreground font-medium">Custos Variáveis (média)</span>
+                            <Percent className="h-3.5 w-3.5 text-orange-500" />
+                          </div>
+                          <p className="text-lg font-bold">{fmtPct(avgVarPct)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-4 pb-3 px-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] text-muted-foreground font-medium">Margem Contribuição (média)</span>
+                            <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                          </div>
+                          <p className="text-lg font-bold text-primary">{fmtPct(avgContrib)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-primary">
+                        <CardContent className="pt-4 pb-3 px-4">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] text-muted-foreground font-medium">Ponto de Equilíbrio Total</span>
+                            <Target className="h-3.5 w-3.5 text-primary" />
+                          </div>
+                          <p className="text-lg font-bold text-primary">{fmt(grandBreakEven)}</p>
+                          <p className="text-[10px] text-muted-foreground">faturamento mínimo consolidado</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Per-store comparison table */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <BarChart3 className="h-4 w-4 text-primary" />
+                          Comparativo por Loja
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Loja</TableHead>
+                              <TableHead className="text-right">Custos Fixos</TableHead>
+                              <TableHead className="text-right">Custos Variáveis</TableHead>
+                              <TableHead className="text-right">Margem Contribuição</TableHead>
+                              <TableHead className="text-right">Ponto de Equilíbrio</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {storeMetrics.map(m => (
+                              <TableRow key={m.store.id}>
+                                <TableCell className="font-medium text-sm">{m.store.name}</TableCell>
+                                <TableCell className="text-right text-sm text-destructive font-medium">{fmt(m.totalFixed)}</TableCell>
+                                <TableCell className="text-right text-sm">{fmtPct(m.totalVarPct)}</TableCell>
+                                <TableCell className="text-right text-sm text-primary font-medium">{fmtPct(m.contribMargin)}</TableCell>
+                                <TableCell className="text-right text-sm font-bold">{fmt(m.breakEven)}</TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow className="border-t-2 bg-muted/30">
+                              <TableCell className="font-bold text-sm">TOTAL / MÉDIA</TableCell>
+                              <TableCell className="text-right text-sm text-destructive font-bold">{fmt(grandFixed)}</TableCell>
+                              <TableCell className="text-right text-sm font-bold">{fmtPct(avgVarPct)}</TableCell>
+                              <TableCell className="text-right text-sm text-primary font-bold">{fmtPct(avgContrib)}</TableCell>
+                              <TableCell className="text-right text-sm font-bold">{fmt(grandBreakEven)}</TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+
+                    {/* Fixed costs breakdown by category across stores */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-destructive" />
+                          Custos Fixos por Categoria
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Categoria</TableHead>
+                              {stores.map(s => (
+                                <TableHead key={s.id} className="text-right">{s.name}</TableHead>
+                              ))}
+                              <TableHead className="text-right">Total</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(() => {
+                              const catMap = new Map<string, Map<string, number>>();
+                              fixedCosts.forEach(fc => {
+                                const cat = fc.category || "Outros";
+                                if (!catMap.has(cat)) catMap.set(cat, new Map());
+                                const catStores = catMap.get(cat)!;
+                                stores.forEach(store => {
+                                  const sfc = allStoreFixedCosts.find(s => s.fixed_cost_id === fc.id && s.store_id === store.id && s.is_active);
+                                  const prev = catStores.get(store.id) || 0;
+                                  catStores.set(store.id, prev + (sfc?.amount || 0));
+                                });
+                              });
+                              const cats = [...catMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+                              return cats.map(([cat, storeMap]) => {
+                                const total = stores.reduce((s, st) => s + (storeMap.get(st.id) || 0), 0);
+                                return (
+                                  <TableRow key={cat}>
+                                    <TableCell className="font-medium text-xs">{cat}</TableCell>
+                                    {stores.map(s => (
+                                      <TableCell key={s.id} className="text-right text-xs">{fmt(storeMap.get(s.id) || 0)}</TableCell>
+                                    ))}
+                                    <TableCell className="text-right text-xs font-bold">{fmt(total)}</TableCell>
+                                  </TableRow>
+                                );
+                              });
+                            })()}
+                            <TableRow className="border-t-2 bg-muted/30">
+                              <TableCell className="font-bold text-xs">TOTAL</TableCell>
+                              {stores.map(s => {
+                                const storeTotal = allStoreFixedCosts
+                                  .filter(sfc => sfc.store_id === s.id && sfc.is_active)
+                                  .reduce((sum, sfc) => sum + sfc.amount, 0);
+                                return <TableCell key={s.id} className="text-right text-xs font-bold text-destructive">{fmt(storeTotal)}</TableCell>;
+                              })}
+                              <TableCell className="text-right text-xs font-bold text-destructive">{fmt(grandFixed)}</TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+
+                    {/* Variable costs comparison */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Percent className="h-4 w-4 text-orange-500" />
+                          Custos Variáveis por Loja
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {stores.map(store => {
+                            const vc = allVariableCosts.filter(v => v.store_id === store.id && v.is_active);
+                            const total = vc.reduce((s, v) => s + v.percentage, 0);
+                            return (
+                              <div key={store.id} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-medium">{store.name}</span>
+                                  <Badge variant="secondary" className="text-xs">{fmtPct(total)}</Badge>
+                                </div>
+                                <div className="space-y-1">
+                                  {vc.map(v => (
+                                    <div key={v.id} className="flex justify-between text-xs text-muted-foreground">
+                                      <span>{v.description}</span>
+                                      <span className="font-medium">{fmtPct(v.percentage)}</span>
+                                    </div>
+                                  ))}
+                                  {vc.length === 0 && <p className="text-xs text-muted-foreground italic">Nenhum custo variável</p>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                );
+              })()}
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>
