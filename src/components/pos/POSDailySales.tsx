@@ -1090,6 +1090,7 @@ export function POSDailySales({ storeId }: Props) {
         customer={detailCustomer}
         items={detailItems}
         sellerName={isTinyOnlyDetail && tinySellerName ? tinySellerName : (selectedSale ? sellers.find(s => s.id === selectedSale.seller_id)?.name || null : null)}
+        sellers={sellers}
         onResend={!isTinyOnlyDetail ? resendToTiny : undefined}
         resending={resending === selectedSale?.id}
         isTinyOnly={isTinyOnlyDetail}

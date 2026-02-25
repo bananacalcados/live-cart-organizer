@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { store_id, sale_id } = await req.json();
+    const { store_id, sale_id, cancel_tiny_only } = await req.json();
     if (!store_id || !sale_id) throw new Error('store_id and sale_id are required');
 
     const supabase = createClient(
@@ -101,6 +101,16 @@ serve(async (req) => {
         console.error('Error canceling order in Tiny:', orderError);
         results.push('Aviso: erro ao cancelar pedido no Tiny');
       }
+    }
+
+    // If cancel_tiny_only, stop here — don't touch local data
+    if (cancel_tiny_only) {
+      return new Response(JSON.stringify({
+        success: true,
+        messages: results,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // 3. Restore stock in pos_products
