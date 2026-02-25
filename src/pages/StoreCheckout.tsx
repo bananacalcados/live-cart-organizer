@@ -512,20 +512,30 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
         phone: form.whatsapp.replace(/\D/g, ""),
         address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
       };
+      const totalCents = Math.round(totalWithInterest * 100);
+      const expiryParts = expiry.split("/");
       const { data, error } = await supabase.functions.invoke("pagarme-create-charge", {
         body: {
           orderId: saleId,
-          amount: Math.round(totalWithInterest * 100),
+          totalAmountCents: totalCents,
           customer: customerData,
           card: {
             number: cardNumber.replace(/\s/g, ""),
             holderName: cardName,
-            expMonth: parseInt(expiry.split("/")[0]),
-            expYear: parseInt("20" + expiry.split("/")[1]),
+            expMonth: expiryParts[0],
+            expYear: expiryParts[1]?.length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
             cvv,
           },
           installments: selectedInstallments,
-          items: [],
+          billingAddress: {
+            street: form.address,
+            number: form.addressNumber || "S/N",
+            neighborhood: form.neighborhood,
+            city: form.city,
+            state: form.state,
+            zipCode: form.cep.replace(/\D/g, ""),
+            country: "BR",
+          },
         },
       });
       if (error || !data?.success) {
