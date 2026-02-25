@@ -9,8 +9,8 @@ const corsHeaders = {
 interface CardData {
   number: string;
   holderName: string;
-  expMonth: string;
-  expYear: string;
+  expMonth: string | number;
+  expYear: string | number;
   cvv: string;
 }
 
@@ -183,6 +183,10 @@ async function chargeAppmax(
   const productsTotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
   const discountRatio = productsTotal > 0 ? totalReais / productsTotal : 1;
 
+  const month = String(params.card.expMonth ?? "").replace(/\D/g, "").slice(-2).padStart(2, "0");
+  const rawYear = String(params.card.expYear ?? "").replace(/\D/g, "");
+  const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
+
   const body: Record<string, unknown> = {
     access_token: accessToken,
     customer: {
@@ -204,8 +208,8 @@ async function chargeAppmax(
       credit_card: {
         number: params.card.number.replace(/\s/g, ""),
         name: params.card.holderName,
-        month: params.card.expMonth.padStart(2, "0"),
-        year: params.card.expYear.length === 2 ? `20${params.card.expYear}` : params.card.expYear,
+        month,
+        year,
         cvv: params.card.cvv,
       },
       installments: params.installments,
