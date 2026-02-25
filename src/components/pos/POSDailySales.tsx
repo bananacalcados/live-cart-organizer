@@ -115,6 +115,7 @@ export function POSDailySales({ storeId }: Props) {
 
   // Product grouping
   const [groupByParent, setGroupByParent] = useState(false);
+  const [recoveringCustomers, setRecoveringCustomers] = useState(false);
 
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
@@ -451,6 +452,76 @@ export function POSDailySales({ storeId }: Props) {
     }
   };
 
+  const recoverMissingCustomers = async () => {
+    setRecoveringCustomers(true);
+    try {
+      // Find online sales without customer_id
+      const onlineSalesNoCustomer = sales.filter(s => s.sale_type === 'online' && !s.customer_id && s.status === 'completed');
+      if (onlineSalesNoCustomer.length === 0) {
+        toast.info("Nenhuma venda online sem cliente encontrada");
+        setRecoveringCustomers(false);
+        return;
+      }
+
+      let recovered = 0;
+      for (const sale of onlineSalesNoCustomer) {
+        const { data: attempt } = await supabase
+          .from("pos_checkout_attempts")
+          .select("customer_name, customer_phone, customer_email")
+          .eq("sale_id", sale.id)
+          .eq("status", "success")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!attempt?.customer_name) continue;
+
+        const phoneDigits = (attempt.customer_phone || "").replace(/\D/g, "");
+        let customerId: string | null = null;
+
+        if (phoneDigits) {
+          const { data: existing } = await supabase
+            .from("pos_customers")
+            .select("id")
+            .eq("whatsapp", phoneDigits)
+            .maybeSingle();
+          if (existing) customerId = existing.id;
+        }
+
+        const payload = {
+          name: attempt.customer_name,
+          whatsapp: phoneDigits,
+          email: attempt.customer_email || null,
+          store_id: storeId,
+        };
+
+        if (customerId) {
+          await supabase.from("pos_customers").update(payload as any).eq("id", customerId);
+        } else {
+          const { data: newCust } = await supabase
+            .from("pos_customers")
+            .insert(payload as any)
+            .select("id")
+            .single();
+          customerId = newCust?.id || null;
+        }
+
+        if (customerId) {
+          await supabase.from("pos_sales").update({ customer_id: customerId } as any).eq("id", sale.id);
+          recovered++;
+        }
+      }
+
+      toast.success(`${recovered} de ${onlineSalesNoCustomer.length} clientes recuperados!`);
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao recuperar clientes");
+    } finally {
+      setRecoveringCustomers(false);
+    }
+  };
+
   useEffect(() => {
     if (periodMode === "custom" && !customRange?.from) return;
     loadData();
@@ -758,6 +829,19 @@ export function POSDailySales({ storeId }: Props) {
                 />
               </PopoverContent>
             </Popover>
+          )}
+
+          {sales.some(s => s.sale_type === 'online' && !s.customer_id && s.status === 'completed') && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 border-orange-400/30 text-orange-400 hover:bg-orange-500/10 text-xs"
+              onClick={recoverMissingCustomers}
+              disabled={recoveringCustomers}
+            >
+              {recoveringCustomers ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">Recuperar Clientes</span>
+            </Button>
           )}
 
           <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={loadData}>
