@@ -263,15 +263,22 @@ async function chargeAppmax(
       headers,
       body: JSON.stringify({
         "access-token": accessToken,
-        order_id: appmaxOrderId,
-        credit_card: {
-          number: params.card.number.replace(/\s/g, ""),
-          name: params.card.holderName,
-          month,
-          year,
-          cvv: params.card.cvv,
+        cart: {
+          order_id: appmaxOrderId,
         },
-        installments: params.installments,
+        customer: {
+          customer_id: customerId,
+        },
+        payment: {
+          credit_card: {
+            number: params.card.number.replace(/\s/g, ""),
+            name: params.card.holderName,
+            month,
+            year,
+            cvv: params.card.cvv,
+          },
+          installments: params.installments,
+        },
       }),
     });
     const payData = await payRes.json();
