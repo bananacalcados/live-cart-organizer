@@ -3,7 +3,7 @@ import {
   Globe, Search, Plus, Minus, Trash2, ShoppingCart, Loader2,
   Copy, Check, Image, Filter, Link2, ExternalLink, X, ArrowLeft,
   Truck, UserPlus, Banknote, CreditCard, MessageSquareText, Bike,
-  Pencil, Tag, Package, Percent
+  Pencil, Tag, Package, Percent, Gift
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -119,6 +120,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [discountValue, setDiscountValue] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
   const [shippingValue, setShippingValue] = useState("");
+  const [hasGift, setHasGift] = useState(false);
+  const [giftDescription, setGiftDescription] = useState("");
   
   // Debounce search
   useEffect(() => {
@@ -482,6 +485,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           discount_type: discountType,
           discount_value: discountValue,
           shipping_amount: shippingAmount,
+          has_gift: hasGift,
+          gift_description: hasGift ? giftDescription : null,
           net_product_total: cartTotal,
           items_detail: cart.map(c => ({
             title: c.title,
@@ -621,7 +626,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
 
     if (deliveryConfirmed) {
       const methodLabel = deliveryMethod === "cash" ? "dinheiro" : "cartão (maquininha)";
-      text = `Olá${linkedCustomer?.name ? ` ${linkedCustomer.name}` : ""}! Seu pedido foi separado.\n\nValor dos produtos: ${fmt(cartTotal)}${shippingAmount > 0 ? `\nFrete: ${fmt(shippingAmount)}` : " (frete grátis)"}\nValor total: ${fmt(orderTotal)}\nPagamento na entrega: ${methodLabel}\n\nItens:\n${cart.map(c => `• ${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity} - ${fmt(c.price * c.quantity)}`).join("\n")}${deliveryNotes ? `\n\nObs: ${deliveryNotes}` : ""}`;
+      text = `Olá${linkedCustomer?.name ? ` ${linkedCustomer.name}` : ""}! Seu pedido foi separado.\n\nValor dos produtos: ${fmt(cartTotal)}${shippingAmount > 0 ? `\nFrete: ${fmt(shippingAmount)}` : " (frete grátis)"}\nValor total: ${fmt(orderTotal)}\nPagamento na entrega: ${methodLabel}\n\nItens:\n${cart.map(c => `• ${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity} - ${fmt(c.price * c.quantity)}`).join("\n")}${hasGift && giftDescription ? `\n\n🎁 *Brinde:* ${giftDescription}` : ""}${deliveryNotes ? `\n\nObs: ${deliveryNotes}` : ""}`;
     } else {
       text = `Olá! Aqui está o link para pagamento: ${generatedLink}`;
     }
@@ -655,6 +660,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     setDiscountValue("");
     setDiscountType("fixed");
     setShippingValue("");
+    setHasGift(false);
+    setGiftDescription("");
   };
 
   const selectCustomer = (c: FoundCustomer) => {
@@ -684,7 +691,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       : `Cartão na maquininha${installments !== "1" ? ` em ${installments}x` : " à vista"}`;
     const itemsList = cart.map(c => `• ${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity} — ${fmt(c.price * c.quantity)}`).join("\n");
 
-    return `Olá${linkedCustomer?.name ? `, ${linkedCustomer.name}` : ""}! 😊\n\nSeu pedido foi separado e já está saindo para entrega!\n\n📦 *Itens:*\n${itemsList}\n\n💰 *Produtos: ${fmt(cartTotal)}*${shippingAmount > 0 ? `\n🚚 *Frete: ${fmt(shippingAmount)}*` : "\n🚚 *Frete grátis!*"}\n💰 *Total: ${fmt(orderTotal)}*\n💳 *Pagamento:* ${methodLabel}\n\n🏍️ O entregador é um *mototaxista parceiro*. Ele não consegue aguardar experimentação na porta, mas caso algum item não sirva, é só nos avisar que chamamos outro mototaxista para realizar a troca diretamente na sua casa! 🔄\n\nQualquer dúvida, estamos à disposição! 💛`;
+    return `Olá${linkedCustomer?.name ? `, ${linkedCustomer.name}` : ""}! 😊\n\nSeu pedido foi separado e já está saindo para entrega!\n\n📦 *Itens:*\n${itemsList}\n\n💰 *Produtos: ${fmt(cartTotal)}*${shippingAmount > 0 ? `\n🚚 *Frete: ${fmt(shippingAmount)}*` : "\n🚚 *Frete grátis!*"}\n💰 *Total: ${fmt(orderTotal)}*\n💳 *Pagamento:* ${methodLabel}${hasGift && giftDescription ? `\n\n🎁 *Brinde:* ${giftDescription}` : ""}\n\n🏍️ O entregador é um *mototaxista parceiro*. Ele não consegue aguardar experimentação na porta, mas caso algum item não sirva, é só nos avisar que chamamos outro mototaxista para realizar a troca diretamente na sua casa! 🔄\n\nQualquer dúvida, estamos à disposição! 💛`;
   };
 
   const buildMotoText = () => {
@@ -693,7 +700,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       : `💳 MAQUININHA${installments !== "1" ? ` — ${installments}x` : " — À vista"}`;
     const addr = getFullAddress();
 
-    return `🏍️ *ENTREGA BANANA CALÇADOS*\n\n👤 *Cliente:* ${linkedCustomer?.name || "—"}\n📱 *Telefone:* ${linkedCustomer?.whatsapp || "—"}\n\n📍 *Endereço:* ${addr || "—"}${deliveryReference ? `\n📌 *Referência:* ${deliveryReference}` : ""}\n\n💰 *Valor produtos:* ${fmt(cartTotal)}${shippingAmount > 0 ? `\n🚚 *Frete:* ${fmt(shippingAmount)}` : ""}\n💰 *Total:* ${fmt(orderTotal)}\n${methodLabel}\n\n📦 *Itens:* ${cart.map(c => `${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity}`).join(", ")}${deliveryNotes ? `\n\n📝 *Obs:* ${deliveryNotes}` : ""}`;
+    return `🏍️ *ENTREGA BANANA CALÇADOS*\n\n👤 *Cliente:* ${linkedCustomer?.name || "—"}\n📱 *Telefone:* ${linkedCustomer?.whatsapp || "—"}\n\n📍 *Endereço:* ${addr || "—"}${deliveryReference ? `\n📌 *Referência:* ${deliveryReference}` : ""}\n\n💰 *Valor produtos:* ${fmt(cartTotal)}${shippingAmount > 0 ? `\n🚚 *Frete:* ${fmt(shippingAmount)}` : ""}\n💰 *Total:* ${fmt(orderTotal)}\n${methodLabel}${hasGift && giftDescription ? `\n\n🎁 *Brinde:* ${giftDescription}` : ""}\n\n📦 *Itens:* ${cart.map(c => `${c.title}${c.variantLabel ? ` (${c.variantLabel})` : ""} x${c.quantity}`).join(", ")}${deliveryNotes ? `\n\n📝 *Obs:* ${deliveryNotes}` : ""}`;
   };
 
   const copyText = async (text: string) => {
@@ -1073,6 +1080,26 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                       <span className="text-primary">{fmt(orderTotal)}</span>
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* Gift / Brinde */}
+            {!generatedLink && !deliveryConfirmed && cart.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs flex items-center gap-1">
+                    <Gift className="h-3 w-3" /> Incluir Brinde?
+                  </Label>
+                  <Switch checked={hasGift} onCheckedChange={setHasGift} />
+                </div>
+                {hasGift && (
+                  <Input
+                    placeholder="Ex: Meia de presente, Necessaire rosa..."
+                    value={giftDescription}
+                    onChange={e => setGiftDescription(e.target.value)}
+                    className="h-8 text-xs"
+                  />
                 )}
               </div>
             )}
