@@ -278,22 +278,55 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch order + products
+    // Fetch order — try CRM orders first, then pos_sales
+    let products: Array<{ title: string; price: number; quantity: number }> = [];
+    let isPaid = false;
+    let orderSource: "orders" | "pos_sales" = "orders";
+
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("*, customer:customers(*)")
       .eq("id", params.orderId)
       .maybeSingle();
 
-    if (orderError || !order) {
-      throw new Error(`Order not found: ${orderError?.message || "not found"}`);
-    }
+    if (order) {
+      if (order.is_paid) {
+        throw new Error("Este pedido já foi pago.");
+      }
+      isPaid = order.is_paid;
+      products = order.products as Array<{ title: string; price: number; quantity: number }>;
+      orderSource = "orders";
+    } else {
+      // Fallback: try pos_sales
+      const { data: sale, error: saleError } = await supabase
+        .from("pos_sales")
+        .select("*")
+        .eq("id", params.orderId)
+        .maybeSingle();
 
-    if (order.is_paid) {
-      throw new Error("Este pedido já foi pago.");
-    }
+      if (saleError || !sale) {
+        throw new Error(`Order not found in orders or pos_sales: ${orderError?.message || saleError?.message || "not found"}`);
+      }
 
-    const products = order.products as Array<{ title: string; price: number; quantity: number }>;
+      if (sale.status === "paid") {
+        throw new Error("Esta venda já foi paga.");
+      }
+
+      // Fetch sale items
+      const { data: items } = await supabase
+        .from("pos_sale_items")
+        .select("*")
+        .eq("sale_id", sale.id);
+
+      products = (items || []).map((it: any) => ({
+        title: it.product_name + (it.variant_name ? ` - ${it.variant_name}` : ""),
+        price: Number(it.unit_price),
+        quantity: it.quantity,
+      }));
+
+      orderSource = "pos_sales";
+      console.log(`Using pos_sales fallback for sale ${params.orderId}, ${products.length} items`);
+    }
 
     // Use the totalAmountCents from the frontend (includes interest calculation)
     const totalCents = params.totalAmountCents;
@@ -324,18 +357,27 @@ serve(async (req) => {
     }
 
     if (result.success) {
-      // Mark order as paid
-      await supabase
-        .from("orders")
-        .update({
-          is_paid: true,
-          paid_at: new Date().toISOString(),
-          stage: "paid",
-          notes: `${order.notes || ""}\n💳 Pago via ${result.gateway} (${result.transactionId})`.trim(),
-        })
-        .eq("id", params.orderId);
-
-      console.log(`Order ${params.orderId} paid via ${result.gateway}`);
+      if (orderSource === "orders") {
+        await supabase
+          .from("orders")
+          .update({
+            is_paid: true,
+            paid_at: new Date().toISOString(),
+            stage: "paid",
+            notes: `${order?.notes || ""}\n💳 Pago via ${result.gateway} (${result.transactionId})`.trim(),
+          })
+          .eq("id", params.orderId);
+      } else {
+        await supabase
+          .from("pos_sales")
+          .update({
+            status: "paid",
+            payment_gateway: result.gateway,
+            notes: `💳 Pago via ${result.gateway} (${result.transactionId})`,
+          })
+          .eq("id", params.orderId);
+      }
+      console.log(`${orderSource} ${params.orderId} paid via ${result.gateway}`);
     }
 
     return new Response(
