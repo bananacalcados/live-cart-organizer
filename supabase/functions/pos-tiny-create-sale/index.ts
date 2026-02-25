@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { store_id, seller_id, tiny_seller_id, customer, items, payment_method_id, payment_method_name, discount, notes } = await req.json();
+    const { store_id, sale_id, seller_id, tiny_seller_id, customer, items, payment_method_id, payment_method_name, discount, notes } = await req.json();
     if (!store_id) throw new Error('store_id is required');
     if (!items || items.length === 0) throw new Error('items is required');
 
@@ -49,6 +49,9 @@ serve(async (req) => {
             email: customer.email || '',
             fone: customer.whatsapp || '',
             ...(customer.address && { endereco: customer.address }),
+            ...(customer.addressNumber && { numero: customer.addressNumber }),
+            ...(customer.complement && { complemento: customer.complement }),
+            ...(customer.neighborhood && { bairro: customer.neighborhood }),
             ...(customer.cep && { cep: customer.cep.replace(/\D/g, '') }),
             ...(customer.city && { cidade: customer.city }),
             ...(customer.state && { uf: customer.state }),
@@ -100,28 +103,45 @@ serve(async (req) => {
       tinyFailed = true;
     }
 
-    // Always save sale to pos_sales (even if Tiny failed)
-    const { data: sale, error: saleError } = await supabase
-      .from('pos_sales')
-      .insert({
-        store_id,
-        seller_id: seller_id || null,
-        customer_id: customer?.id || null,
-        payment_method: payment_method_name || null,
-        subtotal,
-        discount: discount || 0,
-        total,
-        tiny_order_id: tinyOrderId ? String(tinyOrderId) : null,
-        tiny_order_number: tinyOrderNumber ? String(tinyOrderNumber) : null,
-        status: tinyFailed ? 'pending_sync' : 'completed',
-      })
-      .select('id')
-      .single();
+    // If sale_id is provided, update existing sale instead of creating a new one
+    let saleId = sale_id;
+    if (sale_id) {
+      await supabase
+        .from('pos_sales')
+        .update({
+          seller_id: seller_id || null,
+          customer_id: customer?.id || null,
+          payment_method: payment_method_name || null,
+          tiny_order_id: tinyOrderId ? String(tinyOrderId) : null,
+          tiny_order_number: tinyOrderNumber ? String(tinyOrderNumber) : null,
+          status: tinyFailed ? 'pending_sync' : 'completed',
+        } as any)
+        .eq('id', sale_id);
+    } else {
+      // Create new sale (original flow for POS in-store sales)
+      const { data: sale, error: saleError } = await supabase
+        .from('pos_sales')
+        .insert({
+          store_id,
+          seller_id: seller_id || null,
+          customer_id: customer?.id || null,
+          payment_method: payment_method_name || null,
+          subtotal,
+          discount: discount || 0,
+          total,
+          tiny_order_id: tinyOrderId ? String(tinyOrderId) : null,
+          tiny_order_number: tinyOrderNumber ? String(tinyOrderNumber) : null,
+          status: tinyFailed ? 'pending_sync' : 'completed',
+        })
+        .select('id')
+        .single();
+      saleId = sale?.id;
+    }
 
-    if (sale) {
-      // Save sale items
+    if (saleId && !sale_id) {
+      // Only insert items/stock/gamification for NEW sales (not existing checkout sales which already have items)
       const saleItems = items.map((item: any) => ({
-        sale_id: sale.id,
+        sale_id: saleId,
         sku: item.sku || '',
         product_name: item.name,
         variant_name: item.variant || null,
@@ -191,7 +211,7 @@ serve(async (req) => {
       success: true,
       tiny_order_id: tinyOrderId,
       tiny_order_number: tinyOrderNumber,
-      sale_id: sale?.id,
+      sale_id: saleId,
       tiny_failed: tinyFailed,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
