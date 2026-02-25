@@ -20,6 +20,7 @@ import { useZapi } from "@/hooks/useZapi";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import { toast } from "sonner";
+import { useSupportPhones } from "@/hooks/useSupportPhones";
 import { Message, Conversation, ChatFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
@@ -117,6 +118,7 @@ export default function ChatPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [numberFilter, setNumberFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>('all');
+  const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [chatContacts, setChatContacts] = useState<ChatContact[]>([]);
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
@@ -153,6 +155,7 @@ export default function ChatPage() {
   const { numbers, fetchNumbers, selectedNumberId, setSelectedNumberId } = useWhatsAppNumberStore();
   const { sendMessage: zapiSend, sendMedia: zapiSendMedia } = useZapi();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
+  const { hasActiveSupport, supportCount } = useSupportPhones();
 
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
@@ -577,6 +580,10 @@ export default function ChatPage() {
       if (c.isFinished) return false;
       return c.conversationStatus === statusFilter;
     })
+    .filter(c => {
+      if (supportFilterActive) return hasActiveSupport(c.phone);
+      return true;
+    })
     .filter(c =>
       c.phone.includes(searchQuery) ||
       c.customerName?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -660,6 +667,21 @@ export default function ChatPage() {
                 </button>
               ))}
             </div>
+            {/* Support filter */}
+            <button
+              onClick={() => setSupportFilterActive(prev => !prev)}
+              className={cn(
+                "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-full text-[10px] font-medium transition-colors",
+                supportFilterActive
+                  ? "bg-orange-500/20 text-orange-400"
+                  : "bg-[#202c33] text-[#8696a0] hover:bg-[#2a3942]"
+              )}
+            >
+              🎧 Suporte Ativo
+              {supportCount > 0 && (
+                <span className="ml-auto text-[9px] opacity-80">({supportCount})</span>
+              )}
+            </button>
             {/* Chat type filter */}
             <div className="flex gap-1.5">
               {(['all', 'contacts', 'groups'] as const).map(f => (

@@ -12,6 +12,7 @@ import { ConversationList } from "./chat/ConversationList";
 import { ChatView } from "./chat/ChatView";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "./chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
+import { useSupportPhones } from "@/hooks/useSupportPhones";
 import { toast } from "sonner";
 
 export function GlobalWhatsAppChat() {
@@ -26,6 +27,7 @@ export function GlobalWhatsAppChat() {
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [instanceFilter, setInstanceFilter] = useState<InstanceFilter>('all');
   const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>('all');
+  const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [sendVia, setSendVia] = useState<'zapi' | 'meta'>('zapi');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
@@ -36,6 +38,7 @@ export function GlobalWhatsAppChat() {
   const { events } = useEventStore();
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
+  const { hasActiveSupport, supportCount } = useSupportPhones();
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
@@ -321,6 +324,10 @@ export function GlobalWhatsAppChat() {
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
           metaNumbers={metaNumbers}
+          hasActiveSupport={hasActiveSupport}
+          supportFilterActive={supportFilterActive}
+          onSupportFilterToggle={() => setSupportFilterActive(prev => !prev)}
+          supportCount={supportCount}
         />
       ) : (
         <ChatView
