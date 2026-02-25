@@ -13,6 +13,7 @@ import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatView } from "@/components/chat/ChatView";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
+import { useSupportPhones } from "@/hooks/useSupportPhones";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { POSProductCatalogSender } from "./POSProductCatalogSender";
 import { NewConversationDialog } from "./NewConversationDialog";
@@ -61,9 +62,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showCrmPanel, setShowCrmPanel] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
+  const [supportFilterActive, setSupportFilterActive] = useState(false);
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
+  const { hasActiveSupport, supportCount } = useSupportPhones();
 
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
@@ -644,6 +647,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               }
               toast.success(`${phones.length} conversa${phones.length !== 1 ? 's' : ''} finalizada${phones.length !== 1 ? 's' : ''}`);
             }}
+            hasActiveSupport={hasActiveSupport}
+            supportFilterActive={supportFilterActive}
+            onSupportFilterToggle={() => setSupportFilterActive(prev => !prev)}
+            supportCount={supportCount}
           />
         </div>
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff } from "lucide-react";
+import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -38,6 +38,14 @@ interface ConversationListProps {
   contactNames?: Record<string, string>;
   selectedPhone?: string | null;
   onBulkFinish?: (phones: string[]) => void;
+  /** Optional: function to check if a phone has active support tickets */
+  hasActiveSupport?: (phone: string) => boolean;
+  /** Optional: whether support filter is active */
+  supportFilterActive?: boolean;
+  /** Optional: toggle support filter */
+  onSupportFilterToggle?: () => void;
+  /** Optional: count of conversations with active support */
+  supportCount?: number;
 }
 
 const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel: string }[] = [
@@ -66,6 +74,10 @@ export function ConversationList({
   contactNames = {},
   selectedPhone,
   onBulkFinish,
+  hasActiveSupport,
+  supportFilterActive,
+  onSupportFilterToggle,
+  supportCount,
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
@@ -102,6 +114,13 @@ export function ConversationList({
       if (statusFilter === 'finished') return c.isFinished;
       if (c.isFinished) return false; // finished conversations only show in finished tab
       return c.conversationStatus === statusFilter;
+    })
+    .filter(c => {
+      // Support filter
+      if (supportFilterActive && hasActiveSupport) {
+        return hasActiveSupport(c.phone);
+      }
+      return true;
     })
     .filter(c => {
       const cleanedQuery = searchQuery.replace(/\D/g, '');
@@ -199,6 +218,25 @@ export function ConversationList({
             </button>
           ))}
         </div>
+
+        {/* Support filter */}
+        {onSupportFilterToggle && (
+          <button
+            onClick={onSupportFilterToggle}
+            className={cn(
+              "w-full flex items-center gap-2 px-2 py-1.5 rounded text-[10px] font-medium transition-colors",
+              supportFilterActive
+                ? "bg-orange-500/20 text-orange-400"
+                : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
+            )}
+          >
+            <HeadphonesIcon className="h-3 w-3" />
+            Suporte Ativo
+            {(supportCount || 0) > 0 && (
+              <span className="ml-auto text-[9px] opacity-80">({supportCount})</span>
+            )}
+          </button>
+        )}
 
         {/* Instance filter */}
         <Select value={instanceFilter} onValueChange={onInstanceFilterChange}>

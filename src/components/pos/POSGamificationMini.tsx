@@ -111,6 +111,7 @@ export function POSGamificationMini({ storeId }: Props) {
           <div className="flex justify-between"><span>Cadastro completo (100%)</span><span className="text-pos-orange font-bold">+10 pts</span></div>
           <div className="flex justify-between"><span>Cadastro parcial (50%+)</span><span className="text-pos-orange font-bold">+5 pts</span></div>
           <div className="flex justify-between"><span>Venda realizada</span><span className="text-pos-orange font-bold">+3 pts</span></div>
+          <div className="flex justify-between"><span>Venda Queima de Estoque</span><span className="text-pos-orange font-bold">+20 pts</span></div>
           <div className="flex justify-between"><span>Solicitação atendida &lt;5min</span><span className="text-pos-orange font-bold">+5 pts</span></div>
           <div className="flex justify-between"><span>Troca/devolução por defeito</span><span className="text-red-400 font-bold">-2 pts</span></div>
         </div>
