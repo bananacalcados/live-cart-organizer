@@ -27,6 +27,7 @@ interface FixedCost {
   description: string | null;
   category: string | null;
   sort_order: number | null;
+  max_budget: number | null;
 }
 
 interface StoreFixedCost {
@@ -376,10 +377,54 @@ export function MarginFormation({ stores }: Props) {
             </Button>
           </div>
 
-          {groupedFixedCosts.map(([category, costs]) => (
-            <Card key={category}>
+          {groupedFixedCosts.map(([category, costs]) => {
+            // Calculate total spent in this category for this store
+            const categoryTotal = costs.reduce((sum, fc) => {
+              const sfc = storeFixedCosts.find(s => s.fixed_cost_id === fc.id);
+              return sum + (sfc?.is_active ? (sfc.amount || 0) : 0);
+            }, 0);
+            // Get max_budget from the first cost in category that has it set (category-level budget)
+            const categoryBudget = costs.reduce((budget, fc) => budget ?? fc.max_budget, null as number | null);
+            const isOverBudget = categoryBudget !== null && categoryBudget > 0 && categoryTotal > categoryBudget;
+
+            return (
+            <Card key={category} className={isOverBudget ? 'border-destructive/50' : ''}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">{category}</CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-sm">{category}</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Verba máx:</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Sem limite"
+                      value={categoryBudget ?? ""}
+                      onChange={async (e) => {
+                        const val = e.target.value ? parseFloat(e.target.value) : null;
+                        // Update all costs in this category with the budget value
+                        const ids = costs.map(fc => fc.id);
+                        setFixedCosts(prev => prev.map(fc => ids.includes(fc.id) ? { ...fc, max_budget: val } : fc));
+                        for (const id of ids) {
+                          await supabase.from("cost_center_fixed_costs").update({ max_budget: val }).eq("id", id);
+                        }
+                      }}
+                      className="h-7 text-xs w-[120px]"
+                    />
+                    {categoryBudget !== null && categoryBudget > 0 && (
+                      <span className={`text-xs font-medium ${isOverBudget ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {fmt(categoryTotal)} / {fmt(categoryBudget)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {isOverBudget && (
+                  <div className="flex items-center gap-1.5 mt-2 p-2 rounded-md bg-destructive/10 border border-destructive/20">
+                    <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                    <span className="text-xs text-destructive font-medium">
+                      Custos acima da verba em {fmt(categoryTotal - categoryBudget!)}! Reduza os custos desta categoria.
+                    </span>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 <Table>
@@ -431,7 +476,8 @@ export function MarginFormation({ stores }: Props) {
                 </Table>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
 
           {/* Add Fixed Cost Dialog */}
           <Dialog open={showAddFixed} onOpenChange={setShowAddFixed}>
