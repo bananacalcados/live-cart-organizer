@@ -4996,6 +4996,7 @@ export type Database = {
         Row: {
           avg_ticket: number | null
           completed_at: string | null
+          completed_by_seller_id: string | null
           completion_notes: string | null
           contact_strategy: string | null
           created_at: string
@@ -5018,6 +5019,7 @@ export type Database = {
         Insert: {
           avg_ticket?: number | null
           completed_at?: string | null
+          completed_by_seller_id?: string | null
           completion_notes?: string | null
           contact_strategy?: string | null
           created_at?: string
@@ -5040,6 +5042,7 @@ export type Database = {
         Update: {
           avg_ticket?: number | null
           completed_at?: string | null
+          completed_by_seller_id?: string | null
           completion_notes?: string | null
           contact_strategy?: string | null
           created_at?: string
@@ -5060,6 +5063,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "pos_seller_tasks_completed_by_seller_id_fkey"
+            columns: ["completed_by_seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pos_seller_tasks_store_id_fkey"
             columns: ["store_id"]

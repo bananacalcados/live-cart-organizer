@@ -1,0 +1,1 @@
+ALTER TABLE public.pos_seller_tasks ADD COLUMN IF NOT EXISTS completed_by_seller_id uuid REFERENCES public.pos_sellers(id);
