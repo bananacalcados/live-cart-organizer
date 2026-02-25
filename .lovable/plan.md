@@ -1,102 +1,134 @@
 
-# Plano: Retentativa Transparente Pagarme > Vindi > AppMax + Correção de Falso Positivo
+# Corrigir vinculacao de dados do cliente no checkout online
 
-## Problema Identificado
+## Problema identificado
 
-Os logs mostram que o backend **corretamente** identifica a recusa por fraude do Pagar.me (status="failed"), tenta o fallback APPMAX, mas o APPMAX retorna 404 (token/endpoint possivelmente inválido). O backend retorna `success: false`, porém o frontend pode estar mostrando "Pagamento aprovado" indevidamente em certas condições de parsing da resposta.
+O checkout da loja (`StoreCheckout.tsx`) coleta todos os dados do cliente (nome, CPF, email, WhatsApp, endereco), mas na hora de salvar apos o pagamento (`handlePaymentConfirmed`), tenta gravar `customer_name` e `customer_phone` diretamente na tabela `pos_sales` -- porem **essas colunas nao existem**. O `as any` no TypeScript silencia o erro, mas o Supabase simplesmente ignora os campos inexistentes.
 
-## Mudancas Planejadas
+Resultado: o pedido fica com `customer_id = null` e os dados da cliente se perdem. O unico lugar onde os dados ficam e na tabela `pos_checkout_attempts`, que e apenas um log.
 
-### 1. Corrigir falso positivo no frontend (`StoreCheckout.tsx`)
+## Solucao em 2 partes
 
-- Adicionar validacao extra: alem de checar `data.success`, verificar se `data.transactionId` existe
-- Logar no console o response completo para debug
-- Garantir que `supabase.functions.invoke` nao retorne um objeto `data` inesperado quando ha erro HTTP
+### Parte 1: Corrigir o fluxo automatico (novas compras)
 
-### 2. Criar Edge Function da Vindi (novo arquivo)
+**Arquivo: `src/pages/StoreCheckout.tsx`** - Funcao `handlePaymentConfirmed`
 
-**Arquivo:** `supabase/functions/pagarme-create-charge/index.ts` (adicionar funcao `chargeVindi`)
-
-Fluxo Vindi (API v1 - `https://app.vindi.com.br/api/v1`):
-- Autenticacao: Basic Auth (token como username, senha vazia)
-- Passo 1: Criar customer (`POST /customers`)
-- Passo 2: Criar payment_profile com dados do cartao (`POST /payment_profiles`)
-- Passo 3: Criar bill avulsa (`POST /bills`) com installments e items
-- Verificar se `bill.charges[0].status === "paid"`
-
-### 3. Atualizar cadeia de retentativa
-
-Ordem: **Pagarme -> Vindi -> AppMax**
+Alterar a logica para:
+1. Buscar se ja existe um `pos_customer` com o mesmo CPF ou WhatsApp
+2. Se nao existir, criar um novo registro em `pos_customers` com todos os dados coletados (nome, CPF, email, WhatsApp, endereco completo)
+3. Se existir, atualizar os campos que estiverem vazios
+4. Atualizar `pos_sales.customer_id` com o ID do cliente criado/encontrado
+5. Remover o `as any` e os campos inexistentes (`customer_name`, `customer_phone`)
 
 ```text
-Pagarme (principal)
+Fluxo corrigido:
+Pagamento aprovado
    |
-   v falhou?
-Vindi (segunda opcao)
+   v
+Busca pos_customer por CPF ou WhatsApp
    |
-   v falhou?
-AppMax (terceira opcao)
+   +--> Nao existe: INSERT em pos_customers --> retorna ID
+   |
+   +--> Existe: UPDATE campos vazios --> usa ID existente
+   |
+   v
+UPDATE pos_sales SET customer_id = <id>, status = 'completed'
+   |
+   v
+Envia para Tiny com dados do cliente
 ```
 
-Cada gateway loga o erro especifico e passa para o proximo. A mensagem de erro final ao cliente sera a mais descritiva entre os 3.
+### Parte 2: Backfill -- recuperar dados de clientes que ja pagaram
 
-### 4. Secret necessario
+**Novo botao no `POSSaleDetailDialog.tsx`** - Quando o pedido e `online` e `customer_id` e nulo:
 
-- `VINDI_API_KEY` - Token da API da Vindi (sera solicitado antes da implementacao)
+Adicionar um botao "Recuperar Dados do Cliente" que:
+1. Busca em `pos_checkout_attempts` o registro de `status = 'success'` para aquele `sale_id`
+2. Extrai `customer_name`, `customer_phone`, `customer_email`
+3. Cria/atualiza um `pos_customer` e vincula ao `pos_sales.customer_id`
+4. Atualiza a UI imediatamente
 
-## Detalhes Tecnicos
+**Tambem: Acao em lote no `POSDailySales.tsx`** - Um botao "Recuperar clientes pendentes" que faz o backfill automatico para todas as vendas online sem `customer_id` que tenham um `pos_checkout_attempts` com `status = 'success'`.
 
-### Funcao `chargeVindi` (dentro de `pagarme-create-charge/index.ts`)
+---
 
-```text
-1. POST /api/v1/customers
-   body: { name, email, document, document_type: "cpf", phones: [...] }
+## Detalhes tecnicos
 
-2. POST /api/v1/payment_profiles
-   body: {
-     customer_id, holder_name, card_number, card_expiration: "MM/YYYY",
-     card_cvv, payment_method_code: "credit_card"
-   }
+### StoreCheckout.tsx - handlePaymentConfirmed (alteracoes)
 
-3. POST /api/v1/bills
-   body: {
-     customer_id, payment_method_code: "credit_card",
-     installments, bill_items: [{ product_id, amount }],
-     payment_profile: { id: profile_id }
-   }
-```
+```typescript
+// 1. Upsert customer
+const cpfDigits = customerForm.cpf.replace(/\D/g, "");
+const phoneDigits = customerForm.whatsapp.replace(/\D/g, "");
 
-### Cadeia de fallback atualizada no handler principal
-
-```text
-let result = await chargePagarme(...)
-
-if (!result.success) {
-  const vindiKey = Deno.env.get("VINDI_API_KEY")
-  if (vindiKey) {
-    result = await chargeVindi(...)
-  }
-
-  if (!result.success) {
-    const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN")
-    if (appmaxToken) {
-      result = await chargeAppmax(...)
-    }
-  }
+// Try to find existing customer by CPF
+let customerId: string | null = null;
+if (cpfDigits) {
+  const { data: existing } = await supabase
+    .from("pos_customers")
+    .select("id")
+    .eq("cpf", cpfDigits)
+    .maybeSingle();
+  if (existing) customerId = existing.id;
 }
+// Fallback: find by phone
+if (!customerId && phoneDigits) {
+  const { data: existing } = await supabase
+    .from("pos_customers")
+    .select("id")
+    .eq("whatsapp", phoneDigits)
+    .maybeSingle();
+  if (existing) customerId = existing.id;
+}
+
+const customerPayload = {
+  name: customerForm.fullName,
+  cpf: cpfDigits,
+  email: customerForm.email,
+  whatsapp: phoneDigits,
+  address: customerForm.address,
+  address_number: customerForm.addressNumber,
+  complement: customerForm.complement,
+  neighborhood: customerForm.neighborhood,
+  city: customerForm.city,
+  state: customerForm.state,
+  cep: customerForm.cep.replace(/\D/g, ""),
+};
+
+if (customerId) {
+  await supabase.from("pos_customers").update(customerPayload).eq("id", customerId);
+} else {
+  const { data: newCust } = await supabase
+    .from("pos_customers")
+    .insert(customerPayload)
+    .select("id")
+    .single();
+  customerId = newCust?.id || null;
+}
+
+// 2. Update sale with customer_id
+await supabase.from("pos_sales").update({
+  status: "completed",
+  customer_id: customerId,
+}).eq("id", saleData.id);
 ```
 
-### Correcao no frontend
+### POSSaleDetailDialog.tsx - Botao de recuperacao
 
-- Adicionar log do response completo antes do check de sucesso
-- Validar `data.success === true` de forma estrita (triple equals)
-- Mostrar gateway utilizado na tela de confirmacao
+Quando `sale.sale_type === 'online'` e `!sale.customer_id`:
+- Mostrar botao "Recuperar Dados do Checkout"
+- Ao clicar: busca `pos_checkout_attempts` com `status = 'success'` para o `sale.id`
+- Cria `pos_customer` e vincula ao pedido
+- Atualiza a tela
 
-## Arquivos Modificados
+### POSDailySales.tsx - Backfill em lote
 
-1. `supabase/functions/pagarme-create-charge/index.ts` - Adicionar `chargeVindi`, reorganizar fallback chain
-2. `src/pages/StoreCheckout.tsx` - Corrigir validacao de resposta, adicionar logs
+Adicionar botao no header da secao de vendas online que:
+- Identifica todas as vendas online sem `customer_id`
+- Para cada uma, busca dados no `pos_checkout_attempts`
+- Cria/vincula clientes automaticamente
+- Mostra progresso e resultado
 
-## Passo Prévio
+### Envio ao Tiny
 
-Sera necessario configurar o secret `VINDI_API_KEY` antes de implementar.
+O envio ao Tiny ja recebe os dados do customer corretamente no body da funcao. A correcao garante que o `customer_id` esteja linkado para que o `POSSaleDetailDialog` tambem consiga exibir os dados ao reenviar.
