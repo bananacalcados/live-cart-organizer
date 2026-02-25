@@ -43,18 +43,18 @@ serve(async (req) => {
         pedido: {
           situacao: 'aprovado',
           data_pedido: new Date().toLocaleDateString('pt-BR'),
-          ...(customer?.name && {
-            cliente: {
-              nome: customer.name,
-              cpf_cnpj: customer.cpf || '',
-              email: customer.email || '',
-              fone: customer.whatsapp || '',
-              ...(customer.address && { endereco: customer.address }),
-              ...(customer.cep && { cep: customer.cep.replace(/\D/g, '') }),
-              ...(customer.city && { cidade: customer.city }),
-              ...(customer.state && { uf: customer.state }),
-            },
-          }),
+          cliente: customer?.name ? {
+            nome: customer.name,
+            cpf_cnpj: customer.cpf || '',
+            email: customer.email || '',
+            fone: customer.whatsapp || '',
+            ...(customer.address && { endereco: customer.address }),
+            ...(customer.cep && { cep: customer.cep.replace(/\D/g, '') }),
+            ...(customer.city && { cidade: customer.city }),
+            ...(customer.state && { uf: customer.state }),
+          } : {
+            nome: 'Consumidor Final',
+          },
           itens: items.map((item: any) => ({
             item: {
               codigo: item.sku || '',

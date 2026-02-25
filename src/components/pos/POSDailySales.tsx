@@ -39,6 +39,7 @@ interface SaleSummary {
   tiny_order_number: string | null;
   tiny_order_id: string | null;
   customer_id: string | null;
+  sale_type: string | null;
 }
 
 interface TinyOnlyOrder {
@@ -157,7 +158,7 @@ export function POSDailySales({ storeId }: Props) {
       const [salesRes, sellersRes] = await Promise.all([
         supabase
           .from("pos_sales")
-          .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id")
+          .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type")
           .eq("store_id", storeId)
           .gte("created_at", start.toISOString())
           .lte("created_at", end.toISOString())
@@ -262,6 +263,7 @@ export function POSDailySales({ storeId }: Props) {
           tiny_order_number: d.tiny_order_number,
           tiny_order_id: d.tiny_order_id,
           customer_id: null,
+          sale_type: null,
         };
         setSelectedSale(fakeSale);
         setDetailItems(d.items || []);
@@ -321,7 +323,7 @@ export function POSDailySales({ storeId }: Props) {
           const custIds = allCustomers.map((c: any) => c.id);
           const { data: salesData } = await supabase
             .from("pos_sales")
-            .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, store_id")
+            .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, store_id")
             .in("customer_id", custIds)
             .order("created_at", { ascending: false })
             .limit(50);
@@ -599,6 +601,15 @@ export function POSDailySales({ storeId }: Props) {
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
+              {sale.sale_type === 'online' ? (
+                <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0">
+                  Online
+                </Badge>
+              ) : (
+                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] px-1.5 py-0">
+                  Loja
+                </Badge>
+              )}
               {sale.tiny_order_number ? (
                 <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-1.5 py-0">
                   Tiny #{sale.tiny_order_number}
