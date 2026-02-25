@@ -128,7 +128,7 @@ serve(async (req) => {
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const supabase = createClient(supabaseUrl, supabaseKey);
 
-      // Check if already processed
+      // Try orders first
       const { data: existingOrder } = await supabase
         .from("orders")
         .select("is_paid")
@@ -136,7 +136,6 @@ serve(async (req) => {
         .single();
 
       if (existingOrder && !existingOrder.is_paid) {
-        // Mark as paid
         await supabase
           .from("orders")
           .update({
@@ -148,7 +147,6 @@ serve(async (req) => {
 
         console.log("Order marked as paid:", orderId);
 
-        // Fetch full order + customer for Shopify
         const { data: fullOrder } = await supabase
           .from("orders")
           .select("*, customer:customers(*)")
@@ -157,6 +155,26 @@ serve(async (req) => {
 
         if (fullOrder) {
           await createShopifyOrder(fullOrder, fullOrder.customer);
+        }
+      } else if (!existingOrder) {
+        // Fallback: try pos_sales
+        const { data: sale } = await supabase
+          .from("pos_sales")
+          .select("status")
+          .eq("id", orderId)
+          .single();
+
+        if (sale && sale.status !== "paid") {
+          await supabase
+            .from("pos_sales")
+            .update({
+              status: "paid",
+              payment_gateway: "mercadopago",
+              notes: `💳 Pago via PIX Mercado Pago (${paymentId})`,
+            })
+            .eq("id", orderId);
+
+          console.log("pos_sales marked as paid:", orderId);
         }
       }
     }
