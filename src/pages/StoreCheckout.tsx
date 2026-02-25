@@ -377,6 +377,18 @@ function PixPaymentForm({ saleId, amount, form, onPaid }: { saleId: string; amou
         if (data?.status === "approved") {
           setPaid(true);
           if (pollingRef.current) clearInterval(pollingRef.current);
+          // Log PIX success
+          await supabase.from("pos_checkout_attempts").insert({
+            sale_id: saleId,
+            payment_method: "pix",
+            status: "success",
+            amount,
+            customer_name: form.fullName,
+            customer_phone: form.whatsapp,
+            customer_email: form.email,
+            gateway: "mercadopago",
+            transaction_id: pixPaymentId,
+          } as any).then(() => {});
           onPaid();
         }
       } catch {}
@@ -406,6 +418,18 @@ function PixPaymentForm({ saleId, amount, form, onPaid }: { saleId: string; amou
       setPixData(data);
       if (data.paymentId) setPixPaymentId(String(data.paymentId));
     } catch (e: any) {
+      // Log PIX generation error
+      await supabase.from("pos_checkout_attempts").insert({
+        sale_id: saleId,
+        payment_method: "pix",
+        status: "failed",
+        error_message: e.message || "Erro ao gerar PIX",
+        amount,
+        customer_name: form.fullName,
+        customer_phone: form.whatsapp,
+        customer_email: form.email,
+        gateway: "mercadopago",
+      } as any).then(() => {});
       toast.error(e.message || "Erro ao gerar PIX");
     } finally {
       setGenerating(false);
@@ -504,7 +528,34 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
           items: [],
         },
       });
-      if (error || !data?.success) throw new Error(data?.error || "Erro no pagamento");
+      if (error || !data?.success) {
+        const errMsg = data?.error || "Erro no pagamento";
+        // Log failed attempt
+        await supabase.from("pos_checkout_attempts").insert({
+          sale_id: saleId,
+          payment_method: "card",
+          status: "failed",
+          error_message: errMsg,
+          amount: totalWithInterest,
+          customer_name: form.fullName,
+          customer_phone: form.whatsapp,
+          customer_email: form.email,
+          gateway: data?.gateway || "pagarme",
+        } as any).then(() => {});
+        throw new Error(errMsg);
+      }
+      // Log success
+      await supabase.from("pos_checkout_attempts").insert({
+        sale_id: saleId,
+        payment_method: "card",
+        status: "success",
+        amount: totalWithInterest,
+        customer_name: form.fullName,
+        customer_phone: form.whatsapp,
+        customer_email: form.email,
+        gateway: data.gateway || "pagarme",
+        transaction_id: data.transactionId || null,
+      } as any).then(() => {});
       toast.success("Pagamento aprovado!");
       onPaid();
     } catch (e: any) {

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
   ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3, SearchX,
-  Menu, X, Package, Globe, Lock, Loader2
+  Menu, X, Package, Globe, Lock, Loader2, CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,10 +27,11 @@ import { POSTeamChat } from "@/components/pos/POSTeamChat";
 
 import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineSales } from "@/components/pos/POSOnlineSales";
+import { POSCheckoutMonitor } from "@/components/pos/POSCheckoutMonitor";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups";
+type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout";
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
 const CONFIG_PIN = "1530";
@@ -46,6 +47,7 @@ const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badg
   { id: "requests", label: "Solicitações", icon: ArrowRightLeft, badge: true },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "whatsapp", label: "WhatsApp", icon: Phone },
+  { id: "checkout", label: "Checkout", icon: CreditCard },
   { id: "searches", label: "Procurados", icon: SearchX },
   { id: "config", label: "Config", icon: Settings },
 ];
@@ -255,6 +257,7 @@ export default function POS() {
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
         {section === "pickups" && <POSPickupOrders storeId={selectedStore} />}
         {section === "searches" && <POSProductSearchLog storeId={selectedStore} />}
+        {section === "checkout" && <POSCheckoutMonitor storeId={selectedStore} />}
         {section === "chat" && <POSTeamChat storeId={selectedStore} />}
       </div>
 
