@@ -160,13 +160,26 @@ async function chargePagarme(
     };
   }
 
-  const gatewayErrors = chargeData.charges?.[0]?.last_transaction?.gateway_response?.errors;
-  const acquirerMsg = chargeData.charges?.[0]?.last_transaction?.acquirer_message;
-  const errorMsg = gatewayErrors?.[0]?.message
-    || acquirerMsg
-    || chargeData.message
-    || "Charge failed";
-  console.error("Pagar.me detailed error:", { errorMsg, gatewayErrors, acquirerMsg, status: chargeData.status });
+  // Extract the REAL reason — Pagar.me anti-fraud may reject even when acquirer approves
+  const chargeObj = chargeData.charges?.[0];
+  const lastTx = chargeObj?.last_transaction;
+  const gatewayErrors = lastTx?.gateway_response?.errors;
+  const acquirerMsg = lastTx?.acquirer_message;
+  const antifraudStatus = lastTx?.antifraud_response?.status;
+  
+  // If antifraud rejected, the acquirer_message is misleading — use a clear message
+  let errorMsg: string;
+  if (antifraudStatus === "reproved" || antifraudStatus === "failed" || 
+      (chargeData.status === "failed" && acquirerMsg === "Transação aprovada com sucesso")) {
+    errorMsg = "Transação recusada pela análise de segurança. Tente outro cartão.";
+  } else {
+    errorMsg = gatewayErrors?.[0]?.message
+      || acquirerMsg
+      || chargeData.message
+      || "Cobrança recusada";
+  }
+  
+  console.error("Pagar.me detailed error:", { errorMsg, antifraudStatus, gatewayErrors, acquirerMsg, status: chargeData.status });
   return { success: false, gateway: "pagarme", error: errorMsg };
 }
 
