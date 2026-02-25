@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/shopify";
@@ -84,6 +85,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [generating, setGenerating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState("");
   const [copied, setCopied] = useState(false);
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [mobileStep, setMobileStep] = useState<"catalog" | "cart">("catalog");
   const [allCollections, setAllCollections] = useState<string[]>([]);
   const [allSizes, setAllSizes] = useState<string[]>([]);
@@ -496,6 +498,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       if (gateway === "store-checkout" && sale) {
         const storeCheckoutLink = `https://checkout.bananacalcados.com.br/checkout-loja/${storeId}/${sale.id}`;
         setGeneratedLink(storeCheckoutLink);
+        setShowLinkDialog(true);
       }
 
       // Create Tiny order for delivery, PayPal and PIX
@@ -533,8 +536,45 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     }
   };
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(generatedLink);
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // fallthrough
+    }
+
+    // Fallback for browsers/contexts where Clipboard API fails
+    try {
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.setAttribute("readonly", "");
+      el.style.position = "fixed";
+      el.style.top = "-9999px";
+      el.style.left = "-9999px";
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(el);
+      return ok;
+    } catch {
+      return false;
+    }
+  };
+
+  const copyLink = async () => {
+    if (!generatedLink) {
+      toast.error("Nenhum link para copiar");
+      return;
+    }
+    const ok = await copyToClipboard(generatedLink);
+    if (!ok) {
+      toast.error("Não foi possível copiar automaticamente. Copie manualmente o link exibido.");
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast.success("Link copiado!");
@@ -560,6 +600,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const resetSale = () => {
     setCart([]);
     setGeneratedLink("");
+    setShowLinkDialog(false);
     setLinkedCustomer(null);
     setCustomerSearch("");
     setMobileStep("catalog");
@@ -1127,7 +1168,11 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                             )}
                             size={gw.highlight ? "lg" : "sm"}
                             disabled={generating || cart.length === 0}
-                            onClick={() => handleGenerateLink(gw.id)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleGenerateLink(gw.id);
+                            }}
                           >
                             {generating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Icon className={cn("mr-1", gw.highlight ? "h-4 w-4" : "h-3 w-3")} />}
                             {gw.label}
@@ -1228,12 +1273,34 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         </ScrollArea>
       </div>
 
+      {/* Link Dialog (Checkout Loja / gateways) */}
+      <Dialog open={showLinkDialog} onOpenChange={setShowLinkDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Checkout Loja</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Copie o link abaixo ou envie direto no WhatsApp.</p>
+            <div className="rounded-lg border border-border bg-muted/50 p-3">
+              <p className="text-xs break-all text-muted-foreground">{generatedLink}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" className="flex-1" onClick={copyLink}>
+                {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+                {copied ? "Copiado" : "Copiar"}
+              </Button>
+              <Button type="button" className="flex-1" onClick={sendWhatsApp} disabled={!generatedLink}>
+                <ExternalLink className="h-4 w-4 mr-2" />
+                WhatsApp
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Customer Form Dialog */}
       <POSCustomerForm
         open={showCustomerForm}
         onOpenChange={setShowCustomerForm}
         onSaved={handleCustomerSaved}
       />
-    </div>
-  );
-}
