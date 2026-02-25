@@ -47,32 +47,38 @@ serve(async (req) => {
     if (!token) throw new Error(`Token do Tiny não configurado para a loja ${storeName || store_id}`);
     if (!product.tiny_id) throw new Error(`Produto sem tiny_id para SKU ${sku}`);
 
-    // Build XML for stock balance update (tipo B = balanço)
-    let xml = `<estoque>
-  <idProduto>${product.tiny_id}</idProduto>
-  <tipo>B</tipo>
-  <quantidade>${new_quantity}</quantidade>
-  <observacoes>Correção de balanço via Expedição</observacoes>`;
+    // Build estoque payload as JSON - Tiny API expects the object wrapped in "estoque" key
+    const estoqueInner: any = {
+      idProduto: Number(product.tiny_id),
+      tipo: 'B',
+      quantidade: new_quantity,
+      observacoes: 'Correcao de balanco via Expedicao',
+    };
 
     if (depositName) {
-      xml += `\n  <deposito>${depositName}</deposito>`;
+      estoqueInner.deposito = depositName;
     }
 
-    xml += `\n</estoque>`;
+    const estoqueJson = JSON.stringify({ estoque: estoqueInner });
+    const bodyStr = `token=${token}&formato=json&estoque=${encodeURIComponent(estoqueJson)}`;
 
-    console.log(`Correcting stock for SKU ${sku} (tiny_id ${product.tiny_id}) at ${storeName}: qty=${new_quantity}, deposit=${depositName || 'default'}`);
+    console.log(`Correcting stock: SKU=${sku}, tiny_id=${product.tiny_id}, store=${storeName}, qty=${new_quantity}, deposit=${depositName || 'default'}`);
+    console.log(`Estoque JSON: ${estoqueJson}`);
 
     const resp = await fetch('https://api.tiny.com.br/api2/produto.atualizar.estoque.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${token}&formato=json&estoque=${encodeURIComponent(xml)}`,
+      body: bodyStr,
     });
 
     const data = await resp.json();
     console.log('Tiny response:', JSON.stringify(data.retorno));
 
     if (data.retorno?.status === 'Erro') {
-      const errMsg = data.retorno?.erros?.[0]?.erro || 'Erro desconhecido do Tiny';
+      // Errors can be at top level or nested inside registros
+      const topErr = data.retorno?.erros?.[0]?.erro;
+      const regErr = data.retorno?.registros?.registro?.erros?.[0]?.erro;
+      const errMsg = topErr || regErr || 'Erro desconhecido do Tiny';
       throw new Error(errMsg);
     }
 

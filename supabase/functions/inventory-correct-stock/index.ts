@@ -62,18 +62,20 @@ serve(async (req) => {
       }).eq('id', item.id);
 
       try {
-        // Build XML for stock update
-        const xml = `<estoque>
-          <idProduto>${item.product_id}</idProduto>
-          <tipo>B</tipo>
-          <quantidade>${item.new_quantity}</quantidade>
-          <observacoes>Balanço de estoque - correção automática</observacoes>
-        </estoque>`;
+        // Build estoque payload as JSON (Tiny expects {"estoque": {...}})
+        const estoqueJson = JSON.stringify({
+          estoque: {
+            idProduto: Number(item.product_id),
+            tipo: 'B',
+            quantidade: item.new_quantity,
+            observacoes: 'Balanco de estoque - correcao automatica',
+          }
+        });
 
         const resp = await fetch('https://api.tiny.com.br/api2/produto.atualizar.estoque.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${token}&formato=json&estoque=${encodeURIComponent(xml)}`,
+          body: `token=${token}&formato=json&estoque=${encodeURIComponent(estoqueJson)}`,
         });
 
         const data = await resp.json();
