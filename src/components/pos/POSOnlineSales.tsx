@@ -1304,3 +1304,6 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         onOpenChange={setShowCustomerForm}
         onSaved={handleCustomerSaved}
       />
+    </div>
+  );
+}
