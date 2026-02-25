@@ -152,7 +152,7 @@ async function chargePagarme(
   console.log("Pagar.me charge response HTTP status:", chargeRes.status);
   console.log("Pagar.me charge full response:", JSON.stringify(chargeData).substring(0, 2000));
 
-  if (chargeData.status === "paid" || chargeData.status === "pending") {
+  if (chargeData.status === "paid") {
     return {
       success: true,
       gateway: "pagarme",
@@ -268,8 +268,8 @@ serve(async (req) => {
   try {
     const rawParams = await req.json();
 
-    if (!rawParams.orderId || !rawParams.card || !rawParams.customer) {
-      throw new Error("Missing required fields: orderId, card, customer");
+    if (!rawParams.orderId || !rawParams.card || !rawParams.customer || !rawParams.totalAmountCents) {
+      throw new Error("Missing required fields: orderId, card, customer, totalAmountCents");
     }
 
     // Build billingAddress from customer.address if not provided directly
