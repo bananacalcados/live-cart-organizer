@@ -392,6 +392,7 @@ function PixPaymentForm({ saleId, amount, form, onPaid }: { saleId: string; amou
             customer_email: form.email,
             gateway: "mercadopago",
             transaction_id: pixPaymentId,
+            metadata: { cpf: form.cpf, cep: form.cep, address: form.address, address_number: form.addressNumber, complement: form.complement, neighborhood: form.neighborhood, city: form.city, state: form.state },
           } as any).then(() => {});
           onPaid();
         }
@@ -570,6 +571,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
         customer_email: form.email,
         gateway: data.gateway || "pagarme",
         transaction_id: data.transactionId || null,
+        metadata: { cpf: form.cpf, cep: form.cep, address: form.address, address_number: form.addressNumber, complement: form.complement, neighborhood: form.neighborhood, city: form.city, state: form.state },
       } as any).then(() => {});
       toast.success(`Pagamento aprovado via ${(data.gateway || "pagarme").toUpperCase()}!`);
       onPaid();
@@ -745,11 +747,11 @@ export default function StoreCheckout() {
       whatsapp: phoneDigits,
       address: customerForm.address,
       address_number: customerForm.addressNumber,
+      complement: customerForm.complement || null,
       neighborhood: customerForm.neighborhood,
       city: customerForm.city,
       state: customerForm.state,
       cep: customerForm.cep.replace(/\D/g, ""),
-      store_id: saleData.store_id,
     };
 
     try {
