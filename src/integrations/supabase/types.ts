@@ -974,6 +974,76 @@ export type Database = {
         }
         Relationships: []
       }
+      cost_center_planned_fixed_cuts: {
+        Row: {
+          created_at: string
+          fixed_cost_id: string
+          id: string
+          reduction_amount: number
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fixed_cost_id: string
+          id?: string
+          reduction_amount?: number
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fixed_cost_id?: string
+          id?: string
+          reduction_amount?: number
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_center_planned_fixed_cuts_fixed_cost_id_fkey"
+            columns: ["fixed_cost_id"]
+            isOneToOne: false
+            referencedRelation: "cost_center_fixed_costs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cost_center_planned_variable_cuts: {
+        Row: {
+          created_at: string
+          id: string
+          reduction_percentage: number
+          store_id: string
+          updated_at: string
+          variable_cost_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reduction_percentage?: number
+          store_id: string
+          updated_at?: string
+          variable_cost_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reduction_percentage?: number
+          store_id?: string
+          updated_at?: string
+          variable_cost_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_center_planned_variable_cuts_variable_cost_id_fkey"
+            columns: ["variable_cost_id"]
+            isOneToOne: false
+            referencedRelation: "cost_center_variable_costs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cost_center_store_fixed_costs: {
         Row: {
           amount: number
