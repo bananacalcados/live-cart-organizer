@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import {
-  Calculator, Plus, Trash2, Save, Loader2, Building2, Pencil,
+  Plus, Trash2, Save, Loader2, Building2, Pencil,
   TrendingUp, AlertTriangle, DollarSign, Percent, Target, BarChart3, Copy, Share2
 } from "lucide-react";
+import { ProfitSimulator } from "./ProfitSimulator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Slider } from "@/components/ui/slider";
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -98,10 +99,7 @@ export function MarginFormation({ stores }: Props) {
   const [shareItems, setShareItems] = useState<{ id: string; description: string; percentage: string; selected: boolean }[]>([]);
   const [savingShare, setSavingShare] = useState(false);
 
-  // Simulator
-  const [simRevenue, setSimRevenue] = useState("100000");
-  const [simFixedReduction, setSimFixedReduction] = useState(0);
-  const [simVariableReduction, setSimVariableReduction] = useState(0);
+  // Simulator state removed - now handled by ProfitSimulator component
 
   // Track dirty fixed cost amounts for batch save
   const [dirtyFixedAmounts, setDirtyFixedAmounts] = useState<Map<string, number>>(new Map());
@@ -306,14 +304,19 @@ export function MarginFormation({ stores }: Props) {
   const contributionMarginPercent = 100 - totalVariablePercent;
   const breakEven = contributionMarginPercent > 0 ? totalFixedCosts / (contributionMarginPercent / 100) : 0;
 
-  // Simulator calculations
-  const revenue = parseFloat(simRevenue) || 0;
-  const adjustedFixed = totalFixedCosts * (1 - simFixedReduction / 100);
-  const adjustedVariablePercent = totalVariablePercent * (1 - simVariableReduction / 100);
-  const variableCostsAmount = revenue * (adjustedVariablePercent / 100);
-  const profit = revenue - variableCostsAmount - adjustedFixed;
-  const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
-  const adjustedBreakEven = (100 - adjustedVariablePercent) > 0 ? adjustedFixed / ((100 - adjustedVariablePercent) / 100) : 0;
+  // Build fixed cost items for simulator
+  const storeFixedCostItems = useMemo(() => {
+    return fixedCosts.map(fc => {
+      const sfc = storeFixedCosts.find(s => s.fixed_cost_id === fc.id && s.is_active);
+      return { id: fc.id, name: fc.name, category: fc.category, amount: sfc?.amount || 0 };
+    }).filter(item => item.amount > 0);
+  }, [fixedCosts, storeFixedCosts]);
+
+  const storeVariableCostItems = useMemo(() => {
+    return variableCosts.filter(v => v.is_active).map(v => ({
+      id: v.id, description: v.description, percentage: v.percentage,
+    }));
+  }, [variableCosts]);
 
   const storeName = stores.find(s => s.id === selectedStore)?.name || "Loja";
   const otherStores = stores.filter(s => s.id !== selectedStore);
@@ -710,100 +713,13 @@ export function MarginFormation({ stores }: Props) {
 
         {/* Simulator */}
         <TabsContent value="simulator" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Calculator className="h-4 w-4 text-primary" />
-                Simulador de Lucro — {storeName}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <Label className="text-xs font-medium">Faturamento Mensal (R$)</Label>
-                <Input type="number" value={simRevenue} onChange={e => setSimRevenue(e.target.value)} className="h-10 text-lg font-bold" />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label className="text-xs font-medium">Redução de Custos Fixos: {simFixedReduction}%</Label>
-                  <Slider value={[simFixedReduction]} onValueChange={v => setSimFixedReduction(v[0])} max={50} step={1} />
-                  <p className="text-[10px] text-muted-foreground">
-                    De {fmt(totalFixedCosts)} para {fmt(adjustedFixed)} (economia de {fmt(totalFixedCosts - adjustedFixed)})
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <Label className="text-xs font-medium">Redução de Custos Variáveis: {simVariableReduction}%</Label>
-                  <Slider value={[simVariableReduction]} onValueChange={v => setSimVariableReduction(v[0])} max={50} step={1} />
-                  <p className="text-[10px] text-muted-foreground">
-                    De {fmtPct(totalVariablePercent)} para {fmtPct(adjustedVariablePercent)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t">
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                  <p className="text-[10px] text-muted-foreground">Faturamento</p>
-                  <p className="text-lg font-bold">{fmt(revenue)}</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                  <p className="text-[10px] text-muted-foreground">Custos Variáveis</p>
-                  <p className="text-lg font-bold text-orange-500">- {fmt(variableCostsAmount)}</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                  <p className="text-[10px] text-muted-foreground">Custos Fixos</p>
-                  <p className="text-lg font-bold text-destructive">- {fmt(adjustedFixed)}</p>
-                </div>
-                <div className={`p-3 rounded-lg space-y-1 ${profit >= 0 ? "bg-green-500/10 border border-green-500/20" : "bg-destructive/10 border border-destructive/20"}`}>
-                  <p className="text-[10px] text-muted-foreground">Lucro Líquido</p>
-                  <p className={`text-lg font-bold ${profit >= 0 ? "text-green-500" : "text-destructive"}`}>{fmt(profit)}</p>
-                  <p className="text-[10px] text-muted-foreground">Margem: {fmtPct(profitMargin)}</p>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg border space-y-2">
-                <div className="flex items-center gap-2">
-                  <Target className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Ponto de Equilíbrio</span>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Atual</p>
-                    <p className="text-lg font-bold">{fmt(breakEven)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Com reduções</p>
-                    <p className="text-lg font-bold text-primary">{fmt(adjustedBreakEven)}</p>
-                    {adjustedBreakEven < breakEven && (
-                      <p className="text-[10px] text-green-500">↓ {fmt(breakEven - adjustedBreakEven)} a menos</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Cenários de Faturamento</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {[50000, 80000, 100000, 120000, 150000, 200000, 250000, 300000].map(rev => {
-                    const vc = rev * (adjustedVariablePercent / 100);
-                    const p = rev - vc - adjustedFixed;
-                    return (
-                      <button
-                        key={rev}
-                        onClick={() => setSimRevenue(String(rev))}
-                        className={`p-2 rounded-lg border text-xs text-left transition-all hover:border-primary/50 ${
-                          parseFloat(simRevenue) === rev ? "border-primary bg-primary/5" : ""
-                        }`}
-                      >
-                        <p className="text-muted-foreground">{fmt(rev)}</p>
-                        <p className={`font-bold ${p >= 0 ? "text-green-500" : "text-destructive"}`}>{fmt(p)}</p>
-                        <p className="text-[10px] text-muted-foreground">{rev > 0 ? fmtPct((p / rev) * 100) : "—"}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <ProfitSimulator
+            title={`Simulador de Lucro — ${storeName}`}
+            fixedCostItems={storeFixedCostItems}
+            variableCostItems={storeVariableCostItems}
+            totalFixedCosts={totalFixedCosts}
+            totalVariablePercent={totalVariablePercent}
+          />
         </TabsContent>
 
         {/* Consolidated View */}
@@ -1010,6 +926,40 @@ export function MarginFormation({ stores }: Props) {
                         </div>
                       </CardContent>
                     </Card>
+
+                    {/* Consolidated Profit Simulator */}
+                    {(() => {
+                      const allFixedItems = fixedCosts.flatMap(fc => {
+                        const totalAmount = stores.reduce((sum, store) => {
+                          const sfc = allStoreFixedCosts.find(s => s.fixed_cost_id === fc.id && s.store_id === store.id && s.is_active);
+                          return sum + (sfc?.amount || 0);
+                        }, 0);
+                        return totalAmount > 0 ? [{ id: fc.id, name: fc.name, category: fc.category, amount: totalAmount }] : [];
+                      });
+
+                      // Merge variable costs across stores by description (average percentages)
+                      const vcMap = new Map<string, { total: number; count: number }>();
+                      allVariableCosts.filter(v => v.is_active).forEach(v => {
+                        const existing = vcMap.get(v.description) || { total: 0, count: 0 };
+                        vcMap.set(v.description, { total: existing.total + v.percentage, count: existing.count + 1 });
+                      });
+                      const allVarItems = [...vcMap.entries()].map(([desc, data]) => ({
+                        id: desc, description: `${desc} (média)`, percentage: data.total / data.count,
+                      }));
+
+                      const grandFixed = storeMetrics.reduce((s, m) => s + m.totalFixed, 0);
+                      const avgVarPct = storeMetrics.length > 0 ? storeMetrics.reduce((s, m) => s + m.totalVarPct, 0) / storeMetrics.length : 0;
+
+                      return (
+                        <ProfitSimulator
+                          title="Simulador de Lucro — Consolidado"
+                          fixedCostItems={allFixedItems}
+                          variableCostItems={allVarItems}
+                          totalFixedCosts={grandFixed}
+                          totalVariablePercent={avgVarPct}
+                        />
+                      );
+                    })()}
                   </div>
                 );
               })()}
