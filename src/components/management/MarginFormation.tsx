@@ -73,6 +73,10 @@ export function MarginFormation({ stores }: Props) {
   const [fixedCutValues, setFixedCutValues] = useState<Record<string, number>>({});
   const [variableCutValues, setVariableCutValues] = useState<Record<string, number>>({});
 
+  // All stores' planned cuts for consolidated view
+  const [allFixedCuts, setAllFixedCuts] = useState<{ store_id: string; fixed_cost_id: string; reduction_amount: number }[]>([]);
+  const [allVariableCuts, setAllVariableCuts] = useState<{ store_id: string; variable_cost_id: string; reduction_percentage: number }[]>([]);
+
   // Inline editing for variable costs
   const [editingVarId, setEditingVarId] = useState<string | null>(null);
   const [editingVarDesc, setEditingVarDesc] = useState("");
@@ -80,12 +84,16 @@ export function MarginFormation({ stores }: Props) {
 
   const loadConsolidated = async () => {
     setConsolidatedLoading(true);
-    const [sfcRes, vcRes] = await Promise.all([
+    const [sfcRes, vcRes, fcutsRes, vcutsRes] = await Promise.all([
       supabase.from("cost_center_store_fixed_costs").select("*"),
       supabase.from("cost_center_variable_costs").select("*"),
+      supabase.from("cost_center_planned_fixed_cuts").select("*"),
+      supabase.from("cost_center_planned_variable_cuts").select("*"),
     ]);
     setAllStoreFixedCosts((sfcRes.data || []) as StoreFixedCost[]);
     setAllVariableCosts((vcRes.data || []) as VariableCost[]);
+    setAllFixedCuts((fcutsRes.data || []).map((r: any) => ({ store_id: r.store_id, fixed_cost_id: r.fixed_cost_id, reduction_amount: Number(r.reduction_amount) })));
+    setAllVariableCuts((vcutsRes.data || []).map((r: any) => ({ store_id: r.store_id, variable_cost_id: r.variable_cost_id, reduction_percentage: Number(r.reduction_percentage) })));
     setConsolidatedLoading(false);
   };
 
@@ -115,19 +123,67 @@ export function MarginFormation({ stores }: Props) {
 
   const loadData = async () => {
     setLoading(true);
-    const [fcRes, sfcRes, vcRes] = await Promise.all([
+    const [fcRes, sfcRes, vcRes, fcutsRes, vcutsRes] = await Promise.all([
       supabase.from("cost_center_fixed_costs").select("*").order("sort_order"),
       supabase.from("cost_center_store_fixed_costs").select("*").eq("store_id", selectedStore),
       supabase.from("cost_center_variable_costs").select("*").eq("store_id", selectedStore),
+      supabase.from("cost_center_planned_fixed_cuts").select("*").eq("store_id", selectedStore),
+      supabase.from("cost_center_planned_variable_cuts").select("*").eq("store_id", selectedStore),
     ]);
     setFixedCosts((fcRes.data || []) as FixedCost[]);
     setStoreFixedCosts((sfcRes.data || []) as StoreFixedCost[]);
     setVariableCosts((vcRes.data || []) as VariableCost[]);
+    
+    // Load saved cuts
+    const savedFixedCuts: Record<string, number> = {};
+    (fcutsRes.data || []).forEach((r: any) => {
+      if (Number(r.reduction_amount) > 0) savedFixedCuts[r.fixed_cost_id] = Number(r.reduction_amount);
+    });
+    setFixedCutValues(savedFixedCuts);
+
+    const savedVarCuts: Record<string, number> = {};
+    (vcutsRes.data || []).forEach((r: any) => {
+      if (Number(r.reduction_percentage) > 0) savedVarCuts[r.variable_cost_id] = Number(r.reduction_percentage);
+    });
+    setVariableCutValues(savedVarCuts);
+
     setDirtyFixedAmounts(new Map());
     setDrafts([]);
-    setFixedCutValues({});
-    setVariableCutValues({});
     setLoading(false);
+  };
+
+  // Save fixed cut to DB (debounced on blur)
+  const saveFixedCut = async (fixedCostId: string, value: number) => {
+    if (value > 0) {
+      await supabase.from("cost_center_planned_fixed_cuts").upsert({
+        store_id: selectedStore,
+        fixed_cost_id: fixedCostId,
+        reduction_amount: value,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "store_id,fixed_cost_id" });
+    } else {
+      await supabase.from("cost_center_planned_fixed_cuts")
+        .delete()
+        .eq("store_id", selectedStore)
+        .eq("fixed_cost_id", fixedCostId);
+    }
+  };
+
+  // Save variable cut to DB (debounced on blur)
+  const saveVariableCut = async (variableCostId: string, value: number) => {
+    if (value > 0) {
+      await supabase.from("cost_center_planned_variable_cuts").upsert({
+        store_id: selectedStore,
+        variable_cost_id: variableCostId,
+        reduction_percentage: value,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "store_id,variable_cost_id" });
+    } else {
+      await supabase.from("cost_center_planned_variable_cuts")
+        .delete()
+        .eq("store_id", selectedStore)
+        .eq("variable_cost_id", variableCostId);
+    }
   };
 
   // Group fixed costs by category
@@ -544,6 +600,7 @@ export function MarginFormation({ stores }: Props) {
                                 const val = parseFloat(e.target.value) || 0;
                                 setFixedCutValues(prev => ({ ...prev, [fc.id]: Math.min(val, amount) }));
                               }}
+                              onBlur={() => saveFixedCut(fc.id, fixedCutValues[fc.id] || 0)}
                               placeholder="0"
                               className="h-7 text-xs w-full"
                               disabled={!active || amount <= 0}
@@ -723,6 +780,7 @@ export function MarginFormation({ stores }: Props) {
                                 const val = parseFloat(e.target.value) || 0;
                                 setVariableCutValues(prev => ({ ...prev, [vc.id]: Math.min(val, vc.percentage) }));
                               }}
+                              onBlur={() => saveVariableCut(vc.id, variableCutValues[vc.id] || 0)}
                               placeholder="0"
                               className="h-7 text-xs w-full"
                             />
@@ -923,7 +981,6 @@ export function MarginFormation({ stores }: Props) {
             </div>
           ) : (
             <>
-              {/* Consolidated KPI Cards */}
               {(() => {
                 const storeMetrics = stores.map(store => {
                   const sfc = allStoreFixedCosts.filter(s => s.store_id === store.id && s.is_active);
@@ -932,12 +989,27 @@ export function MarginFormation({ stores }: Props) {
                   const totalVarPct = vc.reduce((sum, v) => sum + v.percentage, 0);
                   const contribMargin = 100 - totalVarPct;
                   const be = contribMargin > 0 ? totalFixed / (contribMargin / 100) : 0;
-                  return { store, totalFixed, totalVarPct, contribMargin, breakEven: be };
+
+                  // Store-level cuts
+                  const storeFixedCutTotal = allFixedCuts
+                    .filter(c => c.store_id === store.id)
+                    .reduce((sum, c) => sum + c.reduction_amount, 0);
+                  const storeVarCutPct = allVariableCuts
+                    .filter(c => c.store_id === store.id)
+                    .reduce((sum, c) => sum + c.reduction_percentage, 0);
+
+                  return { store, totalFixed, totalVarPct, contribMargin, breakEven: be, storeFixedCutTotal, storeVarCutPct };
                 });
                 const grandFixed = storeMetrics.reduce((s, m) => s + m.totalFixed, 0);
                 const avgVarPct = storeMetrics.length > 0 ? storeMetrics.reduce((s, m) => s + m.totalVarPct, 0) / storeMetrics.length : 0;
                 const avgContrib = 100 - avgVarPct;
                 const grandBreakEven = avgContrib > 0 ? grandFixed / (avgContrib / 100) : 0;
+
+                // Consolidated cuts: sum all stores
+                const consolidatedFixedCutTotal = storeMetrics.reduce((s, m) => s + m.storeFixedCutTotal, 0);
+                const consolidatedVarCutPct = storeMetrics.length > 0
+                  ? storeMetrics.reduce((s, m) => s + m.storeVarCutPct, 0) / storeMetrics.length
+                  : 0;
 
                 // Build consolidated items for simulator
                 const consolidatedFixedItems = fixedCosts.map(fc => {
@@ -946,6 +1018,12 @@ export function MarginFormation({ stores }: Props) {
                     .reduce((sum, s) => sum + s.amount, 0);
                   return { id: fc.id, name: fc.name, category: fc.category, amount: totalAmount };
                 }).filter(item => item.amount > 0);
+
+                // Build consolidated planned fixed cuts: sum R$ across stores for same fixed_cost_id
+                const consolidatedPlannedFixedCuts: Record<string, number> = {};
+                allFixedCuts.forEach(c => {
+                  consolidatedPlannedFixedCuts[c.fixed_cost_id] = (consolidatedPlannedFixedCuts[c.fixed_cost_id] || 0) + c.reduction_amount;
+                });
 
                 // Merge variable costs across stores (average by description)
                 const vcMap = new Map<string, { id: string; description: string; totalPct: number; count: number }>();
@@ -962,6 +1040,28 @@ export function MarginFormation({ stores }: Props) {
                 const consolidatedVariableItems = [...vcMap.values()].map(v => ({
                   id: v.id, description: v.description, percentage: v.totalPct / v.count,
                 }));
+
+                // Build consolidated planned variable cuts: average % across stores for same description
+                const vcCutMap = new Map<string, { totalCut: number; count: number; id: string }>();
+                allVariableCuts.forEach(c => {
+                  // Find the variable cost to get its description
+                  const vc = allVariableCosts.find(v => v.id === c.variable_cost_id);
+                  if (!vc) return;
+                  const key = vc.description.toLowerCase().trim();
+                  const existing = vcCutMap.get(key);
+                  if (existing) {
+                    existing.totalCut += c.reduction_percentage;
+                    existing.count += 1;
+                  } else {
+                    // Find the consolidated item id
+                    const consolItem = consolidatedVariableItems.find(ci => ci.description.toLowerCase().trim() === key);
+                    vcCutMap.set(key, { totalCut: c.reduction_percentage, count: 1, id: consolItem?.id || c.variable_cost_id });
+                  }
+                });
+                const consolidatedPlannedVarCuts: Record<string, number> = {};
+                vcCutMap.forEach((val) => {
+                  consolidatedPlannedVarCuts[val.id] = val.totalCut / val.count;
+                });
 
                 return (
                   <div className="space-y-4">
@@ -1005,6 +1105,34 @@ export function MarginFormation({ stores }: Props) {
                       </Card>
                     </div>
 
+                    {/* Consolidated savings summary */}
+                    {(consolidatedFixedCutTotal > 0 || consolidatedVarCutPct > 0) && (
+                      <Card className="border-primary/30 bg-primary/5">
+                        <CardContent className="pt-4 pb-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Scissors className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-bold">Economia Consolidada (soma de todas as lojas)</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            {consolidatedFixedCutTotal > 0 && (
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Custos Fixos</p>
+                                <p className="text-lg font-bold text-primary">- {fmt(consolidatedFixedCutTotal)}</p>
+                                <p className="text-[10px] text-muted-foreground">{fmt(grandFixed)} → {fmt(grandFixed - consolidatedFixedCutTotal)}/mês</p>
+                              </div>
+                            )}
+                            {consolidatedVarCutPct > 0 && (
+                              <div>
+                                <p className="text-[10px] text-muted-foreground">Custos Variáveis (média)</p>
+                                <p className="text-lg font-bold text-primary">- {fmtPct(consolidatedVarCutPct)}</p>
+                                <p className="text-[10px] text-muted-foreground">{fmtPct(avgVarPct)} → {fmtPct(avgVarPct - consolidatedVarCutPct)}</p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
                     {/* Per-store table */}
                     <Card>
                       <CardContent className="pt-4">
@@ -1016,6 +1144,18 @@ export function MarginFormation({ stores }: Props) {
                               <TableHead className="text-right">% Variável</TableHead>
                               <TableHead className="text-right">Margem</TableHead>
                               <TableHead className="text-right">Ponto Equilíbrio</TableHead>
+                              <TableHead className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Scissors className="h-3 w-3 text-primary" />
+                                  <span>Redução Fixo</span>
+                                </div>
+                              </TableHead>
+                              <TableHead className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Scissors className="h-3 w-3 text-primary" />
+                                  <span>Redução Var.</span>
+                                </div>
+                              </TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1026,6 +1166,12 @@ export function MarginFormation({ stores }: Props) {
                                 <TableCell className="text-right text-xs">{fmtPct(m.totalVarPct)}</TableCell>
                                 <TableCell className="text-right text-xs text-primary">{fmtPct(m.contribMargin)}</TableCell>
                                 <TableCell className="text-right text-xs font-bold">{fmt(m.breakEven)}</TableCell>
+                                <TableCell className="text-right text-xs text-primary font-medium">
+                                  {m.storeFixedCutTotal > 0 ? `- ${fmt(m.storeFixedCutTotal)}` : "—"}
+                                </TableCell>
+                                <TableCell className="text-right text-xs text-primary font-medium">
+                                  {m.storeVarCutPct > 0 ? `- ${fmtPct(m.storeVarCutPct)}` : "—"}
+                                </TableCell>
                               </TableRow>
                             ))}
                             <TableRow className="border-t-2 font-bold">
@@ -1034,6 +1180,12 @@ export function MarginFormation({ stores }: Props) {
                               <TableCell className="text-right text-xs">{fmtPct(avgVarPct)}</TableCell>
                               <TableCell className="text-right text-xs text-primary">{fmtPct(avgContrib)}</TableCell>
                               <TableCell className="text-right text-xs">{fmt(grandBreakEven)}</TableCell>
+                              <TableCell className="text-right text-xs text-primary">
+                                {consolidatedFixedCutTotal > 0 ? `- ${fmt(consolidatedFixedCutTotal)}` : "—"}
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-primary">
+                                {consolidatedVarCutPct > 0 ? `- ${fmtPct(consolidatedVarCutPct)}` : "—"}
+                              </TableCell>
                             </TableRow>
                           </TableBody>
                         </Table>
@@ -1047,6 +1199,8 @@ export function MarginFormation({ stores }: Props) {
                       variableCostItems={consolidatedVariableItems}
                       totalFixedCosts={grandFixed}
                       totalVariablePercent={avgVarPct}
+                      plannedFixedCuts={consolidatedPlannedFixedCuts}
+                      plannedVariableCuts={consolidatedPlannedVarCuts}
                     />
                   </div>
                 );
