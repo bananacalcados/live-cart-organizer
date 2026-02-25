@@ -474,6 +474,17 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
           customer_name: linkedCustomer?.name || null,
           customer_phone: linkedCustomer?.whatsapp || null,
           customer_email: linkedCustomer?.email || null,
+          original_subtotal: cartSubtotal,
+          discount_amount: discountAmount,
+          discount_type: discountType,
+          discount_value: discountValue,
+          items_detail: cart.map(c => ({
+            title: c.title,
+            variant: c.variantLabel,
+            unit_price: c.price,
+            compare_at_price: c.compareAtPrice,
+            quantity: c.quantity,
+          })),
         },
         notes: deliveryNotes || null,
       };

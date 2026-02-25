@@ -17,6 +17,7 @@ interface SaleItem {
   variant: string;
   price: number;
   quantity: number;
+  compare_at_price?: number | null;
 }
 
 interface SaleData {
@@ -137,16 +138,24 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
 // ── OrderSummary ────────────────────────────────────────────────
 function OrderSummary({ saleData }: { saleData: SaleData }) {
   const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const fullSubtotal = saleData.items.reduce((s, i) => {
+    const full = i.compare_at_price && i.compare_at_price > i.price ? i.compare_at_price : i.price;
+    return s + full * i.quantity;
+  }, 0);
   const totalItems = saleData.items.reduce((s, i) => s + i.quantity, 0);
+  const hasItemDiscounts = saleData.items.some(i => i.compare_at_price && i.compare_at_price > i.price);
+  const itemSavings = fullSubtotal - subtotal;
+  const totalSavings = itemSavings + saleData.discount_amount;
+
   return (
     <div className="bg-secondary/30 rounded-xl p-4 space-y-3">
       {/* Discount Prize Banner */}
-      {saleData.discount_amount > 0 && (
+      {totalSavings > 0 && (
         <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 p-4 text-white shadow-lg">
           <div className="absolute top-0 right-0 opacity-20 text-6xl">🎁</div>
           <div className="relative z-10 text-center">
             <p className="text-xs font-medium uppercase tracking-wider opacity-90">Você ganhou</p>
-            <p className="text-2xl font-black mt-0.5">R$ {saleData.discount_amount.toFixed(2)} OFF</p>
+            <p className="text-2xl font-black mt-0.5">R$ {totalSavings.toFixed(2)} OFF</p>
             <p className="text-xs opacity-80 mt-1">de desconto nesta compra! 🎉</p>
           </div>
         </div>
@@ -159,27 +168,62 @@ function OrderSummary({ saleData }: { saleData: SaleData }) {
         </div>
         <span className="font-bold text-primary">R$ {saleData.total.toFixed(2)}</span>
       </div>
-      {saleData.items.map((item, i) => (
-        <div key={i} className="flex items-center justify-between p-2 bg-background/50 rounded-lg">
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-xs truncate">{item.name}</p>
-            {item.variant && <p className="text-[10px] text-muted-foreground">{item.variant}</p>}
-            <p className="text-[10px] text-muted-foreground">Qtd: {item.quantity}</p>
+
+      {saleData.items.map((item, i) => {
+        const hasCompare = item.compare_at_price && item.compare_at_price > item.price;
+        const lineTotal = item.price * item.quantity;
+        const fullLineTotal = hasCompare ? item.compare_at_price! * item.quantity : lineTotal;
+        return (
+          <div key={i} className="p-2.5 bg-background/50 rounded-lg space-y-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-xs leading-snug">{item.name}</p>
+                {item.variant && <p className="text-[10px] text-muted-foreground">{item.variant}</p>}
+              </div>
+              <div className="text-right flex-shrink-0">
+                {hasCompare ? (
+                  <>
+                    <p className="text-[10px] line-through text-muted-foreground">R$ {fullLineTotal.toFixed(2)}</p>
+                    <p className="font-bold text-xs text-primary">R$ {lineTotal.toFixed(2)}</p>
+                  </>
+                ) : (
+                  <p className="font-semibold text-xs">R$ {lineTotal.toFixed(2)}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>Qtd: {item.quantity} × R$ {item.price.toFixed(2)}</span>
+              {hasCompare && (
+                <span className="text-green-600 font-medium">
+                  -{( ((item.compare_at_price! - item.price) / item.compare_at_price!) * 100 ).toFixed(0)}% OFF
+                </span>
+              )}
+            </div>
           </div>
-          <p className="font-semibold text-xs flex-shrink-0">R$ {(item.price * item.quantity).toFixed(2)}</p>
-        </div>
-      ))}
+        );
+      })}
+
       <div className="border-t pt-2 space-y-1">
-        {saleData.discount_amount > 0 && (
+        {(saleData.discount_amount > 0 || hasItemDiscounts) && (
           <>
             <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="line-through text-muted-foreground">R$ {subtotal.toFixed(2)}</span>
+              <span className="text-muted-foreground">Subtotal dos produtos</span>
+              <span className={saleData.discount_amount > 0 || hasItemDiscounts ? "line-through text-muted-foreground" : ""}>
+                R$ {fullSubtotal.toFixed(2)}
+              </span>
             </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-green-600 font-medium">🎁 Desconto</span>
-              <span className="text-green-600 font-bold">-R$ {saleData.discount_amount.toFixed(2)}</span>
-            </div>
+            {hasItemDiscounts && (
+              <div className="flex justify-between text-xs">
+                <span className="text-green-600 font-medium">🏷️ Desconto nos itens</span>
+                <span className="text-green-600 font-bold">-R$ {itemSavings.toFixed(2)}</span>
+              </div>
+            )}
+            {saleData.discount_amount > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-green-600 font-medium">🎁 Desconto extra</span>
+                <span className="text-green-600 font-bold">-R$ {saleData.discount_amount.toFixed(2)}</span>
+              </div>
+            )}
           </>
         )}
         <div className="flex justify-between font-bold text-sm pt-1">
@@ -516,15 +560,22 @@ export default function StoreCheckout() {
       // Load sale items
       const { data: items } = await supabase.from("pos_sale_items").select("*").eq("sale_id", saleId!);
 
-      const saleItems: SaleItem[] = (items || []).map((i: any) => ({
-        sku: i.sku || "",
-        name: i.product_name || i.name || "",
-        variant: i.variant_name || i.variant || "",
-        price: Number(i.unit_price ?? i.price ?? 0),
-        quantity: Number(i.quantity ?? 1),
-      }));
-
       const paymentDetails = ((sale as any).payment_details || {}) as Record<string, any>;
+
+      // Enrich items with compare_at_price from payment_details
+      const itemsDetail = (paymentDetails.items_detail || []) as Array<{ title?: string; compare_at_price?: number | null }>;
+
+      const saleItems: SaleItem[] = (items || []).map((i: any, idx: number) => {
+        const detail = itemsDetail[idx];
+        return {
+          sku: i.sku || "",
+          name: i.product_name || i.name || "",
+          variant: i.variant_name || i.variant || "",
+          price: Number(i.unit_price ?? i.price ?? 0),
+          quantity: Number(i.quantity ?? 1),
+          compare_at_price: detail?.compare_at_price ?? null,
+        };
+      });
       const customerName = (sale as any).customer_name || paymentDetails.customer_name || "Cliente";
       const customerPhone = (sale as any).customer_phone || paymentDetails.customer_phone || "";
 
