@@ -705,25 +705,37 @@ export default function StoreCheckout() {
     } catch {}
   };
 
+  const paymentConfirmedRef = useRef(false);
+
   const handlePaymentConfirmed = useCallback(async () => {
+    if (paymentConfirmedRef.current) return;
+    paymentConfirmedRef.current = true;
     setPaymentStatus("success");
 
     if (!saleData) return;
 
-    // Update sale status to completed
-    await supabase.from("pos_sales").update({ status: "completed" } as any).eq("id", saleData.id);
+    // Update sale status and save customer data
+    await supabase.from("pos_sales").update({
+      status: "completed",
+      customer_name: customerForm.fullName,
+      customer_phone: customerForm.whatsapp,
+    } as any).eq("id", saleData.id);
 
-    // Create Tiny order
+    // Create Tiny order — pass sale_id so it updates existing instead of creating duplicate
     try {
       await supabase.functions.invoke("pos-tiny-create-sale", {
         body: {
           store_id: saleData.store_id,
+          sale_id: saleData.id,
           customer: {
             name: customerForm.fullName,
             cpf: customerForm.cpf.replace(/\D/g, ""),
             email: customerForm.email,
             whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
             address: customerForm.address,
+            addressNumber: customerForm.addressNumber,
+            complement: customerForm.complement,
+            neighborhood: customerForm.neighborhood,
             cep: customerForm.cep.replace(/\D/g, ""),
             city: customerForm.city,
             state: customerForm.state,
