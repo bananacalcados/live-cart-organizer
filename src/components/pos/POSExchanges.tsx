@@ -62,6 +62,7 @@ interface OriginalSaleResult {
   seller_name: string | null;
   seller_id: string | null;
   total: number;
+  tiny_order_number?: string | null;
   items: { name: string; sku: string; quantity: number; price: number }[];
 }
 
@@ -215,26 +216,46 @@ export function POSExchanges({ storeId }: Props) {
         }
       }
 
-      // 2. Search Tiny orders via edge function (fix: use search_term param)
+      // 2. Search Tiny orders via edge function, then fetch detail for each
       try {
         const { data: tinyData } = await supabase.functions.invoke("pos-tiny-search-orders", {
           body: { store_id: storeId, search_term: term },
         });
         if (tinyData?.success && tinyData?.orders) {
-          for (const order of tinyData.orders) {
+          // Fetch details in parallel for up to 5 orders
+          const detailPromises = tinyData.orders.slice(0, 5).map(async (order: any) => {
+            try {
+              const { data: detailData } = await supabase.functions.invoke("pos-tiny-search-orders", {
+                body: { store_id: storeId, mode: "detail", tiny_order_id: order.tiny_order_id || order.id },
+              });
+              return detailData?.success ? detailData.detail : null;
+            } catch { return null; }
+          });
+          const details = await Promise.all(detailPromises);
+
+          for (let idx = 0; idx < tinyData.orders.length; idx++) {
+            const order = tinyData.orders[idx];
+            const detail = idx < details.length ? details[idx] : null;
+            const items = detail?.items || (order.itens || order.items || []).map((i: any) => ({
+              name: i.descricao || i.name || "",
+              sku: i.codigo || i.sku || "",
+              quantity: i.quantidade || i.quantity || 1,
+              price: parseFloat(i.valor_unitario || i.price || "0"),
+            }));
             results.push({
-              id: String(order.id),
+              id: String(order.tiny_order_id || order.id),
               source: "tiny",
-              date: order.data_pedido || order.created_at || "",
-              customer_name: order.cliente?.nome || order.customer_name || null,
-              seller_name: order.vendedor || order.seller_name || null,
+              date: detail?.date || order.date || order.data_pedido || order.created_at || "",
+              customer_name: detail?.customer?.name || order.customer_name || null,
+              seller_name: detail?.seller_name || order.seller_name || null,
               seller_id: null,
-              total: order.total || order.valor || 0,
-              items: (order.itens || order.items || []).map((i: any) => ({
-                name: i.descricao || i.name || "",
-                sku: i.codigo || i.sku || "",
-                quantity: i.quantidade || i.quantity || 1,
-                price: parseFloat(i.valor_unitario || i.price || "0"),
+              total: detail?.total ?? order.total ?? order.valor ?? 0,
+              tiny_order_number: detail?.tiny_order_number || order.tiny_order_number || null,
+              items: items.map((i: any) => ({
+                name: i.product_name || i.name || "",
+                sku: i.sku || "",
+                quantity: i.quantity || 1,
+                price: i.unit_price || i.price || 0,
               })),
             });
           }
@@ -648,10 +669,15 @@ export function POSExchanges({ storeId }: Props) {
                             <Badge className={`text-[9px] ${sale.source === "pos" ? "bg-green-500/20 text-green-400" : "bg-blue-500/20 text-blue-400"}`}>
                               {sale.source === "pos" ? "POS" : "Tiny"}
                             </Badge>
+                            {sale.tiny_order_number && (
+                              <Badge className="text-[9px] bg-pos-white/10 text-pos-white/70 border-0">
+                                Pedido #{sale.tiny_order_number}
+                              </Badge>
+                            )}
                             {sale.customer_name && <span className="text-xs text-pos-white font-medium">{sale.customer_name}</span>}
                           </div>
                           <span className="text-[10px] text-pos-white/40">
-                            {sale.date ? new Date(sale.date).toLocaleDateString("pt-BR") : ""}
+                            {sale.date ? new Date(sale.date + (sale.date.includes('T') ? '' : 'T12:00:00')).toLocaleDateString("pt-BR") : ""}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
@@ -660,9 +686,18 @@ export function POSExchanges({ storeId }: Props) {
                           </p>
                           <span className="text-xs text-pos-orange font-bold">R$ {sale.total.toFixed(2)}</span>
                         </div>
-                        <p className="text-[10px] text-pos-white/40 mt-1 truncate">
-                          {sale.items.map(i => i.name).join(", ")}
-                        </p>
+                        {sale.items.length > 0 && (
+                          <div className="mt-1.5 space-y-0.5">
+                            {sale.items.slice(0, 4).map((item, i) => (
+                              <p key={i} className="text-[10px] text-pos-white/50">
+                                {item.quantity}x {item.name} {item.sku ? `(${item.sku})` : ''} — R$ {(item.price * item.quantity).toFixed(2)}
+                              </p>
+                            ))}
+                            {sale.items.length > 4 && (
+                              <p className="text-[10px] text-pos-white/30">+ {sale.items.length - 4} item(s) a mais</p>
+                            )}
+                          </div>
+                        )}
                       </button>
                     ))}
                   </div>

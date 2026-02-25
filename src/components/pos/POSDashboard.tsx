@@ -3,7 +3,7 @@ import {
   DollarSign, ShoppingCart, TrendingUp, Package, Loader2,
   RefreshCw, BarChart3, Users, MessageSquare, Headphones,
   ArrowRightLeft, ChevronRight, CalendarIcon, AlertTriangle,
-  Globe, Store, Lock, ListChecks, Check, Phone
+  Globe, Store, Lock, ListChecks, Check, Phone, Send
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -13,6 +13,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { POSGoalProgress } from "./POSGoalProgress";
@@ -88,6 +90,8 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [contactTasks, setContactTasks] = useState<any[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [influencedRevenue, setInfluencedRevenue] = useState(0);
+  const [completingTask, setCompletingTask] = useState<string | null>(null);
+  const [completionNotes, setCompletionNotes] = useState<Record<string, string>>({});
 
   const loadAlerts = async () => {
     const [conversationRes, supportRes, interStoreRes, stockRes] = await Promise.all([
@@ -163,6 +167,43 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
     }
   };
 
+  const handleCompleteTask = async (task: any) => {
+    const notes = completionNotes[task.id];
+    if (!notes || notes.trim().length < 3) {
+      return; // require notes
+    }
+    setCompletingTask(task.id);
+    try {
+      await supabase.from("pos_seller_tasks" as any).update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        completion_notes: notes.trim(),
+      }).eq("id", task.id);
+
+      // Add gamification points
+      if (task.seller_id && task.points_reward) {
+        const { data: gam } = await supabase
+          .from("pos_gamification")
+          .select("id, weekly_points, total_points")
+          .eq("seller_id", task.seller_id)
+          .eq("store_id", storeId)
+          .maybeSingle();
+        if (gam) {
+          await supabase.from("pos_gamification").update({
+            weekly_points: (gam.weekly_points || 0) + (task.points_reward || 0),
+            total_points: (gam.total_points || 0) + (task.points_reward || 0),
+          }).eq("id", gam.id);
+        }
+      }
+
+      setCompletionNotes(prev => { const n = { ...prev }; delete n[task.id]; return n; });
+      loadContactTasks();
+    } catch (e) {
+      console.error("Complete task error:", e);
+    } finally {
+      setCompletingTask(null);
+    }
+  };
   const loadSalesData = async () => {
     setLoading(true);
     try {
@@ -433,30 +474,59 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                   <Badge className="bg-pos-orange/20 text-pos-orange border-0 text-[10px]">{contactTasks.length}</Badge>
                 </h3>
                 <div className="space-y-2">
-                  {contactTasks.slice(0, 5).map((t: any) => (
+                  {contactTasks.map((t: any) => (
                     <div key={t.id} className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10">
-                      <div className="flex items-center justify-between">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-pos-white truncate">{t.title}</p>
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={false}
+                          disabled={completingTask === t.id}
+                          onCheckedChange={() => {
+                            if (completionNotes[t.id]?.trim()) {
+                              handleCompleteTask(t);
+                            }
+                          }}
+                          className="mt-0.5 border-pos-orange/40 data-[state=checked]:bg-pos-orange"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-pos-white truncate">{t.title}</p>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {t.rfm_segment && <Badge className="text-[10px] bg-red-500/20 text-red-400 border-0">{t.rfm_segment}</Badge>}
+                              <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange border-0">{t.points_reward} pts</Badge>
+                            </div>
+                          </div>
                           {t.customer_name && (
                             <p className="text-xs text-pos-white/50 mt-0.5">
                               👤 {t.customer_name} {t.customer_phone ? `· 📞 ${t.customer_phone}` : ''}
                             </p>
                           )}
+                          {t.description && (
+                            <p className="text-[10px] text-pos-white/40 mt-0.5 whitespace-pre-line line-clamp-2">{t.description}</p>
+                          )}
                           {t.contact_strategy && (
                             <p className="text-xs text-pos-white/40 mt-0.5 italic">💡 {t.contact_strategy}</p>
                           )}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {t.rfm_segment && <Badge className="text-[10px] bg-red-500/20 text-red-400 border-0">{t.rfm_segment}</Badge>}
-                          <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange border-0">{t.points_reward} pts</Badge>
+                          {/* Completion notes */}
+                          <div className="mt-2 flex gap-2">
+                            <Textarea
+                              placeholder="Como foi o contato? (obrigatório para concluir)"
+                              value={completionNotes[t.id] || ""}
+                              onChange={e => setCompletionNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
+                              className="h-16 text-xs bg-pos-white/5 border-pos-orange/20 text-pos-white resize-none"
+                            />
+                            <Button
+                              size="sm"
+                              className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted h-16 px-3"
+                              disabled={!completionNotes[t.id]?.trim() || completingTask === t.id}
+                              onClick={() => handleCompleteTask(t)}
+                            >
+                              {completingTask === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   ))}
-                  {contactTasks.length > 5 && (
-                    <p className="text-xs text-pos-white/40 text-center">+ {contactTasks.length - 5} tarefas restantes (ver em Config)</p>
-                  )}
                 </div>
               </div>
             )}

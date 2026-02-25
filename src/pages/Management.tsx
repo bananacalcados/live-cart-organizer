@@ -5,7 +5,7 @@ import {
   BarChart3, Home, TrendingUp, DollarSign, Package, ShoppingCart, Store,
   ArrowDownRight, RefreshCw, Loader2, Box, ShoppingBag, Calendar, Receipt,
   AlertTriangle, CheckCircle2, Clock, Wallet, Plus, Trash2, Check, Building2,
-  Users, Save, UserCheck
+  Users, Save, UserCheck, Calculator
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { TeamProfilesManager } from "@/components/TeamProfilesManager";
 import { BankReconciliation } from "@/components/management/BankReconciliation";
 import { StrategyManager } from "@/components/management/StrategyManager";
+import { MarginFormation } from "@/components/management/MarginFormation";
 
 interface TinySyncedOrder {
   id: string;
@@ -1061,6 +1062,10 @@ export default function Management() {
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Estratégia
                 </TabsTrigger>
+                <TabsTrigger value="margin" className="gap-1">
+                  <Calculator className="h-3.5 w-3.5" />
+                  Formação de Margem
+                </TabsTrigger>
               </TabsList>
 
               {/* Overview */}
@@ -1256,6 +1261,11 @@ export default function Management() {
               {/* Estratégia */}
               <TabsContent value="strategy" className="space-y-4">
                 <StrategyManager stores={stores} />
+              </TabsContent>
+
+              {/* Formação de Margem */}
+              <TabsContent value="margin" className="space-y-4">
+                <MarginFormation stores={stores} />
               </TabsContent>
             </Tabs>
           </>
