@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   Plus, Trash2, Save, Loader2, Building2, Pencil,
-  TrendingUp, AlertTriangle, DollarSign, Percent, Target, BarChart3, Copy, Share2
+  TrendingUp, AlertTriangle, DollarSign, Percent, Target, BarChart3, Copy, Share2,
+  Scissors, Check, X
 } from "lucide-react";
 import { ProfitSimulator } from "./ProfitSimulator";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,15 @@ export function MarginFormation({ stores }: Props) {
   const [allVariableCosts, setAllVariableCosts] = useState<VariableCost[]>([]);
   const [consolidatedLoading, setConsolidatedLoading] = useState(false);
 
+  // Planned reductions (R$ for fixed, percentage points for variable)
+  const [fixedCutValues, setFixedCutValues] = useState<Record<string, number>>({});
+  const [variableCutValues, setVariableCutValues] = useState<Record<string, number>>({});
+
+  // Inline editing for variable costs
+  const [editingVarId, setEditingVarId] = useState<string | null>(null);
+  const [editingVarDesc, setEditingVarDesc] = useState("");
+  const [editingVarPct, setEditingVarPct] = useState("");
+
   const loadConsolidated = async () => {
     setConsolidatedLoading(true);
     const [sfcRes, vcRes] = await Promise.all([
@@ -79,10 +89,7 @@ export function MarginFormation({ stores }: Props) {
     setConsolidatedLoading(false);
   };
 
-  // Load consolidated data on mount
   useEffect(() => { loadConsolidated(); }, []);
-
-  const saving = false; // kept for interface compat
 
   // Master list management
   const [showAddFixed, setShowAddFixed] = useState(false);
@@ -98,8 +105,6 @@ export function MarginFormation({ stores }: Props) {
   const [shareTargetStore, setShareTargetStore] = useState("");
   const [shareItems, setShareItems] = useState<{ id: string; description: string; percentage: string; selected: boolean }[]>([]);
   const [savingShare, setSavingShare] = useState(false);
-
-  // Simulator state removed - now handled by ProfitSimulator component
 
   // Track dirty fixed cost amounts for batch save
   const [dirtyFixedAmounts, setDirtyFixedAmounts] = useState<Map<string, number>>(new Map());
@@ -120,6 +125,8 @@ export function MarginFormation({ stores }: Props) {
     setVariableCosts((vcRes.data || []) as VariableCost[]);
     setDirtyFixedAmounts(new Map());
     setDrafts([]);
+    setFixedCutValues({});
+    setVariableCutValues({});
     setLoading(false);
   };
 
@@ -149,7 +156,6 @@ export function MarginFormation({ stores }: Props) {
     const existing = storeFixedCosts.find(s => s.fixed_cost_id === fixedCostId);
     if (existing) {
       const newActive = !existing.is_active;
-      // Update locally first
       setStoreFixedCosts(prev => prev.map(s => s.id === existing.id ? { ...s, is_active: newActive } : s));
       await supabase.from("cost_center_store_fixed_costs").update({ is_active: newActive }).eq("id", existing.id);
     } else {
@@ -229,6 +235,30 @@ export function MarginFormation({ stores }: Props) {
     toast.success("Custo fixo removido!");
   };
 
+  // Variable costs - inline editing
+  const startEditingVar = (vc: VariableCost) => {
+    setEditingVarId(vc.id);
+    setEditingVarDesc(vc.description);
+    setEditingVarPct(String(vc.percentage));
+  };
+
+  const cancelEditingVar = () => {
+    setEditingVarId(null);
+    setEditingVarDesc("");
+    setEditingVarPct("");
+  };
+
+  const saveEditingVar = async () => {
+    if (!editingVarId) return;
+    const desc = editingVarDesc.trim();
+    const pct = parseFloat(editingVarPct) || 0;
+    if (!desc) { toast.error("Descrição obrigatória."); return; }
+    await supabase.from("cost_center_variable_costs").update({ description: desc, percentage: pct }).eq("id", editingVarId);
+    setVariableCosts(prev => prev.map(vc => vc.id === editingVarId ? { ...vc, description: desc, percentage: pct } : vc));
+    cancelEditingVar();
+    toast.success("Custo variável atualizado!");
+  };
+
   // Variable costs - drafts
   const addDraftRow = () => {
     setDrafts(prev => [...prev, { tempId: crypto.randomUUID(), description: "", percentage: "" }]);
@@ -303,6 +333,22 @@ export function MarginFormation({ stores }: Props) {
 
   const contributionMarginPercent = 100 - totalVariablePercent;
   const breakEven = contributionMarginPercent > 0 ? totalFixedCosts / (contributionMarginPercent / 100) : 0;
+
+  // Planned savings
+  const totalFixedSavings = useMemo(() => {
+    return Object.entries(fixedCutValues).reduce((sum, [fcId, cutVal]) => {
+      if (cutVal > 0 && isStoreActive(fcId)) return sum + cutVal;
+      return sum;
+    }, 0);
+  }, [fixedCutValues, storeFixedCosts]);
+
+  const totalVariableSavingsPct = useMemo(() => {
+    return Object.entries(variableCutValues).reduce((sum, [vcId, cutVal]) => {
+      const vc = variableCosts.find(v => v.id === vcId);
+      if (vc && cutVal > 0 && vc.is_active) return sum + cutVal;
+      return sum;
+    }, 0);
+  }, [variableCutValues, variableCosts]);
 
   // Build fixed cost items for simulator
   const storeFixedCostItems = useMemo(() => {
@@ -403,14 +449,13 @@ export function MarginFormation({ stores }: Props) {
           </div>
 
           {groupedFixedCosts.map(([category, costs]) => {
-            // Calculate total spent in this category for this store
             const categoryTotal = costs.reduce((sum, fc) => {
               const sfc = storeFixedCosts.find(s => s.fixed_cost_id === fc.id);
               return sum + (sfc?.is_active ? (sfc.amount || 0) : 0);
             }, 0);
-            // Get max_budget from the first cost in category that has it set (category-level budget)
             const categoryBudget = costs.reduce((budget, fc) => budget ?? fc.max_budget, null as number | null);
             const isOverBudget = categoryBudget !== null && categoryBudget > 0 && categoryTotal > categoryBudget;
+            const categoryCuts = costs.reduce((sum, fc) => sum + (fixedCutValues[fc.id] || 0), 0);
 
             return (
             <Card key={category} className={isOverBudget ? 'border-destructive/50' : ''}>
@@ -426,7 +471,6 @@ export function MarginFormation({ stores }: Props) {
                       value={categoryBudget ?? ""}
                       onChange={async (e) => {
                         const val = e.target.value ? parseFloat(e.target.value) : null;
-                        // Update all costs in this category with the budget value
                         const ids = costs.map(fc => fc.id);
                         setFixedCosts(prev => prev.map(fc => ids.includes(fc.id) ? { ...fc, max_budget: val } : fc));
                         for (const id of ids) {
@@ -458,7 +502,13 @@ export function MarginFormation({ stores }: Props) {
                       <TableHead className="w-10">Ativo</TableHead>
                       <TableHead>Custo</TableHead>
                       <TableHead>Descrição</TableHead>
-                      <TableHead className="w-[140px]">Valor (R$/mês)</TableHead>
+                      <TableHead className="w-[130px]">Valor (R$/mês)</TableHead>
+                      <TableHead className="w-[130px]">
+                        <div className="flex items-center gap-1">
+                          <Scissors className="h-3 w-3 text-primary" />
+                          <span>Redução (R$)</span>
+                        </div>
+                      </TableHead>
                       <TableHead className="w-20">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -466,6 +516,7 @@ export function MarginFormation({ stores }: Props) {
                     {costs.map(fc => {
                       const active = isStoreActive(fc.id);
                       const amount = getStoreAmount(fc.id);
+                      const cutVal = fixedCutValues[fc.id] || 0;
                       return (
                         <TableRow key={fc.id} className={active ? "" : "opacity-50"}>
                           <TableCell>
@@ -485,6 +536,20 @@ export function MarginFormation({ stores }: Props) {
                             />
                           </TableCell>
                           <TableCell>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={cutVal || ""}
+                              onChange={e => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setFixedCutValues(prev => ({ ...prev, [fc.id]: Math.min(val, amount) }));
+                              }}
+                              placeholder="0"
+                              className="h-7 text-xs w-full"
+                              disabled={!active || amount <= 0}
+                            />
+                          </TableCell>
+                          <TableCell>
                             <div className="flex gap-1">
                               <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingFixed(fc)}>
                                 <Pencil className="h-3 w-3" />
@@ -499,10 +564,36 @@ export function MarginFormation({ stores }: Props) {
                     })}
                   </TableBody>
                 </Table>
+                {categoryCuts > 0 && (
+                  <div className="flex items-center justify-end gap-2 mt-2 text-xs">
+                    <Scissors className="h-3 w-3 text-primary" />
+                    <span className="text-primary font-medium">Economia na categoria: {fmt(categoryCuts)}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
             );
           })}
+
+          {/* Fixed costs savings summary */}
+          {totalFixedSavings > 0 && (
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Scissors className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-bold">Economia Total em Custos Fixos</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-primary">{fmt(totalFixedSavings)}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      De {fmt(totalFixedCosts)} para {fmt(totalFixedCosts - totalFixedSavings)}/mês
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Add Fixed Cost Dialog */}
           <Dialog open={showAddFixed} onOpenChange={setShowAddFixed}>
@@ -579,23 +670,89 @@ export function MarginFormation({ stores }: Props) {
                     <TableRow>
                       <TableHead>Descrição</TableHead>
                       <TableHead className="text-right w-[120px]">% do Faturamento</TableHead>
-                      <TableHead className="text-right w-[140px]">Limite R$/mês</TableHead>
-                      <TableHead className="w-16">Ações</TableHead>
+                      <TableHead className="text-right w-[130px]">Limite R$/mês</TableHead>
+                      <TableHead className="w-[130px]">
+                        <div className="flex items-center gap-1">
+                          <Scissors className="h-3 w-3 text-primary" />
+                          <span>Redução (%)</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="w-24">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {variableCosts.map(vc => (
-                      <TableRow key={vc.id}>
-                        <TableCell className="font-medium text-xs">{vc.description}</TableCell>
-                        <TableCell className="text-right font-bold text-xs">{fmtPct(vc.percentage)}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">{fmt(breakEven * (vc.percentage / 100))}</TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteVariableCost(vc.id)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {variableCosts.map(vc => {
+                      const isEditing = editingVarId === vc.id;
+                      const cutVal = variableCutValues[vc.id] || 0;
+                      return (
+                        <TableRow key={vc.id}>
+                          <TableCell>
+                            {isEditing ? (
+                              <Input
+                                value={editingVarDesc}
+                                onChange={e => setEditingVarDesc(e.target.value)}
+                                className="h-7 text-xs"
+                                autoFocus
+                              />
+                            ) : (
+                              <span className="font-medium text-xs">{vc.description}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isEditing ? (
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={editingVarPct}
+                                onChange={e => setEditingVarPct(e.target.value)}
+                                className="h-7 text-xs text-right"
+                              />
+                            ) : (
+                              <span className="font-bold text-xs">{fmtPct(vc.percentage)}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {fmt(breakEven * (vc.percentage / 100))}
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={cutVal || ""}
+                              onChange={e => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setVariableCutValues(prev => ({ ...prev, [vc.id]: Math.min(val, vc.percentage) }));
+                              }}
+                              placeholder="0"
+                              className="h-7 text-xs w-full"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              {isEditing ? (
+                                <>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-green-500" onClick={saveEditingVar}>
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={cancelEditingVar}>
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => startEditingVar(vc)}>
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteVariableCost(vc.id)}>
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
 
                     {/* Draft rows */}
                     {drafts.map(d => (
@@ -619,6 +776,8 @@ export function MarginFormation({ stores }: Props) {
                             className="h-7 text-xs text-right"
                           />
                         </TableCell>
+                        <TableCell />
+                        <TableCell />
                         <TableCell>
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => removeDraft(d.tempId)}>
                             <Trash2 className="h-3 w-3" />
@@ -636,6 +795,9 @@ export function MarginFormation({ stores }: Props) {
                         <TableCell className="text-right font-bold text-primary text-xs">
                           {fmt(breakEven * ((totalVariablePercent + drafts.reduce((s, d) => s + (parseFloat(d.percentage) || 0), 0)) / 100))}
                         </TableCell>
+                        <TableCell className="text-xs font-bold text-primary text-right">
+                          {totalVariableSavingsPct > 0 && `- ${fmtPct(totalVariableSavingsPct)}`}
+                        </TableCell>
                         <TableCell />
                       </TableRow>
                     )}
@@ -644,6 +806,29 @@ export function MarginFormation({ stores }: Props) {
               )}
             </CardContent>
           </Card>
+
+          {/* Variable costs savings summary */}
+          {totalVariableSavingsPct > 0 && (
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Scissors className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-bold">Economia Total em Custos Variáveis</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-primary">- {fmtPct(totalVariableSavingsPct)}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      De {fmtPct(totalVariablePercent)} para {fmtPct(totalVariablePercent - totalVariableSavingsPct)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Economia em R$ (no PE): {fmt(breakEven * (totalVariableSavingsPct / 100))}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Draft action bar */}
           {drafts.length > 0 && (
@@ -725,6 +910,8 @@ export function MarginFormation({ stores }: Props) {
             variableCostItems={storeVariableCostItems}
             totalFixedCosts={totalFixedCosts}
             totalVariablePercent={totalVariablePercent}
+            plannedFixedCuts={fixedCutValues}
+            plannedVariableCuts={variableCutValues}
           />
         </TabsContent>
 
@@ -752,6 +939,30 @@ export function MarginFormation({ stores }: Props) {
                 const avgContrib = 100 - avgVarPct;
                 const grandBreakEven = avgContrib > 0 ? grandFixed / (avgContrib / 100) : 0;
 
+                // Build consolidated items for simulator
+                const consolidatedFixedItems = fixedCosts.map(fc => {
+                  const totalAmount = allStoreFixedCosts
+                    .filter(s => s.fixed_cost_id === fc.id && s.is_active)
+                    .reduce((sum, s) => sum + s.amount, 0);
+                  return { id: fc.id, name: fc.name, category: fc.category, amount: totalAmount };
+                }).filter(item => item.amount > 0);
+
+                // Merge variable costs across stores (average by description)
+                const vcMap = new Map<string, { id: string; description: string; totalPct: number; count: number }>();
+                allVariableCosts.filter(v => v.is_active).forEach(v => {
+                  const key = v.description.toLowerCase().trim();
+                  const existing = vcMap.get(key);
+                  if (existing) {
+                    existing.totalPct += v.percentage;
+                    existing.count += 1;
+                  } else {
+                    vcMap.set(key, { id: v.id, description: v.description, totalPct: v.percentage, count: 1 });
+                  }
+                });
+                const consolidatedVariableItems = [...vcMap.values()].map(v => ({
+                  id: v.id, description: v.description, percentage: v.totalPct / v.count,
+                }));
+
                 return (
                   <div className="space-y-4">
                     {/* Grand totals */}
@@ -759,17 +970,16 @@ export function MarginFormation({ stores }: Props) {
                       <Card>
                         <CardContent className="pt-4 pb-3 px-4">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] text-muted-foreground font-medium">Custos Fixos Total</span>
+                            <span className="text-[11px] text-muted-foreground font-medium">Total Fixos</span>
                             <DollarSign className="h-3.5 w-3.5 text-destructive" />
                           </div>
                           <p className="text-lg font-bold text-destructive">{fmt(grandFixed)}</p>
-                          <p className="text-[10px] text-muted-foreground">soma das {stores.length} lojas</p>
                         </CardContent>
                       </Card>
                       <Card>
                         <CardContent className="pt-4 pb-3 px-4">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] text-muted-foreground font-medium">Custos Variáveis (média)</span>
+                            <span className="text-[11px] text-muted-foreground font-medium">Média Variáveis</span>
                             <Percent className="h-3.5 w-3.5 text-orange-500" />
                           </div>
                           <p className="text-lg font-bold">{fmtPct(avgVarPct)}</p>
@@ -778,7 +988,7 @@ export function MarginFormation({ stores }: Props) {
                       <Card>
                         <CardContent className="pt-4 pb-3 px-4">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] text-muted-foreground font-medium">Margem Contribuição (média)</span>
+                            <span className="text-[11px] text-muted-foreground font-medium">Margem Contrib.</span>
                             <TrendingUp className="h-3.5 w-3.5 text-primary" />
                           </div>
                           <p className="text-lg font-bold text-primary">{fmtPct(avgContrib)}</p>
@@ -787,185 +997,57 @@ export function MarginFormation({ stores }: Props) {
                       <Card className="border-primary">
                         <CardContent className="pt-4 pb-3 px-4">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] text-muted-foreground font-medium">Ponto de Equilíbrio Total</span>
+                            <span className="text-[11px] text-muted-foreground font-medium">PE Consolidado</span>
                             <Target className="h-3.5 w-3.5 text-primary" />
                           </div>
                           <p className="text-lg font-bold text-primary">{fmt(grandBreakEven)}</p>
-                          <p className="text-[10px] text-muted-foreground">faturamento mínimo consolidado</p>
                         </CardContent>
                       </Card>
                     </div>
 
-                    {/* Per-store comparison table */}
+                    {/* Per-store table */}
                     <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <BarChart3 className="h-4 w-4 text-primary" />
-                          Comparativo por Loja
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
+                      <CardContent className="pt-4">
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead>Loja</TableHead>
                               <TableHead className="text-right">Custos Fixos</TableHead>
-                              <TableHead className="text-right">Custos Variáveis</TableHead>
-                              <TableHead className="text-right">Margem Contribuição</TableHead>
-                              <TableHead className="text-right">Ponto de Equilíbrio</TableHead>
+                              <TableHead className="text-right">% Variável</TableHead>
+                              <TableHead className="text-right">Margem</TableHead>
+                              <TableHead className="text-right">Ponto Equilíbrio</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {storeMetrics.map(m => (
                               <TableRow key={m.store.id}>
-                                <TableCell className="font-medium text-sm">{m.store.name}</TableCell>
-                                <TableCell className="text-right text-sm text-destructive font-medium">{fmt(m.totalFixed)}</TableCell>
-                                <TableCell className="text-right text-sm">{fmtPct(m.totalVarPct)}</TableCell>
-                                <TableCell className="text-right text-sm text-primary font-medium">{fmtPct(m.contribMargin)}</TableCell>
-                                <TableCell className="text-right text-sm font-bold">{fmt(m.breakEven)}</TableCell>
+                                <TableCell className="font-medium text-xs">{m.store.name}</TableCell>
+                                <TableCell className="text-right text-xs text-destructive">{fmt(m.totalFixed)}</TableCell>
+                                <TableCell className="text-right text-xs">{fmtPct(m.totalVarPct)}</TableCell>
+                                <TableCell className="text-right text-xs text-primary">{fmtPct(m.contribMargin)}</TableCell>
+                                <TableCell className="text-right text-xs font-bold">{fmt(m.breakEven)}</TableCell>
                               </TableRow>
                             ))}
-                            <TableRow className="border-t-2 bg-muted/30">
-                              <TableCell className="font-bold text-sm">TOTAL / MÉDIA</TableCell>
-                              <TableCell className="text-right text-sm text-destructive font-bold">{fmt(grandFixed)}</TableCell>
-                              <TableCell className="text-right text-sm font-bold">{fmtPct(avgVarPct)}</TableCell>
-                              <TableCell className="text-right text-sm text-primary font-bold">{fmtPct(avgContrib)}</TableCell>
-                              <TableCell className="text-right text-sm font-bold">{fmt(grandBreakEven)}</TableCell>
+                            <TableRow className="border-t-2 font-bold">
+                              <TableCell className="text-xs">CONSOLIDADO</TableCell>
+                              <TableCell className="text-right text-xs text-destructive">{fmt(grandFixed)}</TableCell>
+                              <TableCell className="text-right text-xs">{fmtPct(avgVarPct)}</TableCell>
+                              <TableCell className="text-right text-xs text-primary">{fmtPct(avgContrib)}</TableCell>
+                              <TableCell className="text-right text-xs">{fmt(grandBreakEven)}</TableCell>
                             </TableRow>
                           </TableBody>
                         </Table>
                       </CardContent>
                     </Card>
 
-                    {/* Fixed costs breakdown by category across stores */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-destructive" />
-                          Custos Fixos por Categoria
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Categoria</TableHead>
-                              {stores.map(s => (
-                                <TableHead key={s.id} className="text-right">{s.name}</TableHead>
-                              ))}
-                              <TableHead className="text-right">Total</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {(() => {
-                              const catMap = new Map<string, Map<string, number>>();
-                              fixedCosts.forEach(fc => {
-                                const cat = fc.category || "Outros";
-                                if (!catMap.has(cat)) catMap.set(cat, new Map());
-                                const catStores = catMap.get(cat)!;
-                                stores.forEach(store => {
-                                  const sfc = allStoreFixedCosts.find(s => s.fixed_cost_id === fc.id && s.store_id === store.id && s.is_active);
-                                  const prev = catStores.get(store.id) || 0;
-                                  catStores.set(store.id, prev + (sfc?.amount || 0));
-                                });
-                              });
-                              const cats = [...catMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-                              return cats.map(([cat, storeMap]) => {
-                                const total = stores.reduce((s, st) => s + (storeMap.get(st.id) || 0), 0);
-                                return (
-                                  <TableRow key={cat}>
-                                    <TableCell className="font-medium text-xs">{cat}</TableCell>
-                                    {stores.map(s => (
-                                      <TableCell key={s.id} className="text-right text-xs">{fmt(storeMap.get(s.id) || 0)}</TableCell>
-                                    ))}
-                                    <TableCell className="text-right text-xs font-bold">{fmt(total)}</TableCell>
-                                  </TableRow>
-                                );
-                              });
-                            })()}
-                            <TableRow className="border-t-2 bg-muted/30">
-                              <TableCell className="font-bold text-xs">TOTAL</TableCell>
-                              {stores.map(s => {
-                                const storeTotal = allStoreFixedCosts
-                                  .filter(sfc => sfc.store_id === s.id && sfc.is_active)
-                                  .reduce((sum, sfc) => sum + sfc.amount, 0);
-                                return <TableCell key={s.id} className="text-right text-xs font-bold text-destructive">{fmt(storeTotal)}</TableCell>;
-                              })}
-                              <TableCell className="text-right text-xs font-bold text-destructive">{fmt(grandFixed)}</TableCell>
-                            </TableRow>
-                          </TableBody>
-                        </Table>
-                      </CardContent>
-                    </Card>
-
-                    {/* Variable costs comparison */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <Percent className="h-4 w-4 text-orange-500" />
-                          Custos Variáveis por Loja
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {stores.map(store => {
-                            const vc = allVariableCosts.filter(v => v.store_id === store.id && v.is_active);
-                            const total = vc.reduce((s, v) => s + v.percentage, 0);
-                            return (
-                              <div key={store.id} className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-medium">{store.name}</span>
-                                  <Badge variant="secondary" className="text-xs">{fmtPct(total)}</Badge>
-                                </div>
-                                <div className="space-y-1">
-                                  {vc.map(v => (
-                                    <div key={v.id} className="flex justify-between text-xs text-muted-foreground">
-                                      <span>{v.description}</span>
-                                      <span className="font-medium">{fmtPct(v.percentage)}</span>
-                                    </div>
-                                  ))}
-                                  {vc.length === 0 && <p className="text-xs text-muted-foreground italic">Nenhum custo variável</p>}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Consolidated Profit Simulator */}
-                    {(() => {
-                      const allFixedItems = fixedCosts.flatMap(fc => {
-                        const totalAmount = stores.reduce((sum, store) => {
-                          const sfc = allStoreFixedCosts.find(s => s.fixed_cost_id === fc.id && s.store_id === store.id && s.is_active);
-                          return sum + (sfc?.amount || 0);
-                        }, 0);
-                        return totalAmount > 0 ? [{ id: fc.id, name: fc.name, category: fc.category, amount: totalAmount }] : [];
-                      });
-
-                      // Merge variable costs across stores by description (average percentages)
-                      const vcMap = new Map<string, { total: number; count: number }>();
-                      allVariableCosts.filter(v => v.is_active).forEach(v => {
-                        const existing = vcMap.get(v.description) || { total: 0, count: 0 };
-                        vcMap.set(v.description, { total: existing.total + v.percentage, count: existing.count + 1 });
-                      });
-                      const allVarItems = [...vcMap.entries()].map(([desc, data]) => ({
-                        id: desc, description: `${desc} (média)`, percentage: data.total / data.count,
-                      }));
-
-                      const grandFixed = storeMetrics.reduce((s, m) => s + m.totalFixed, 0);
-                      const avgVarPct = storeMetrics.length > 0 ? storeMetrics.reduce((s, m) => s + m.totalVarPct, 0) / storeMetrics.length : 0;
-
-                      return (
-                        <ProfitSimulator
-                          title="Simulador de Lucro — Consolidado"
-                          fixedCostItems={allFixedItems}
-                          variableCostItems={allVarItems}
-                          totalFixedCosts={grandFixed}
-                          totalVariablePercent={avgVarPct}
-                        />
-                      );
-                    })()}
+                    {/* Consolidated simulator */}
+                    <ProfitSimulator
+                      title="Simulador Consolidado"
+                      fixedCostItems={consolidatedFixedItems}
+                      variableCostItems={consolidatedVariableItems}
+                      totalFixedCosts={grandFixed}
+                      totalVariablePercent={avgVarPct}
+                    />
                   </div>
                 );
               })()}

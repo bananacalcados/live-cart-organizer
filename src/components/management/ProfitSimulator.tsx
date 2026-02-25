@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   Calculator, Target, DollarSign, Percent, TrendingUp, RotateCcw, Minus,
-  ArrowDownToLine, Crosshair,
+  ArrowDownToLine, Crosshair, Scissors,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -35,6 +35,8 @@ interface Props {
   variableCostItems: VariableCostItem[];
   totalFixedCosts: number;
   totalVariablePercent: number;
+  plannedFixedCuts?: Record<string, number>;
+  plannedVariableCuts?: Record<string, number>;
 }
 
 export function ProfitSimulator({
@@ -43,6 +45,8 @@ export function ProfitSimulator({
   variableCostItems,
   totalFixedCosts,
   totalVariablePercent,
+  plannedFixedCuts = {},
+  plannedVariableCuts = {},
 }: Props) {
   const [simRevenue, setSimRevenue] = useState("100000");
   const [globalFixedReduction, setGlobalFixedReduction] = useState(0);
@@ -88,10 +92,31 @@ export function ProfitSimulator({
     return totalVariablePercent * (1 - globalVariableReduction / 100);
   }, [variableCostItems, variableItemReductions, totalVariablePercent, globalVariableReduction]);
 
+  // Planned cuts from the cost tabs
+  const hasPlannedCuts = Object.values(plannedFixedCuts).some(v => v > 0) || Object.values(plannedVariableCuts).some(v => v > 0);
+  const plannedFixedTotal = Object.entries(plannedFixedCuts).reduce((sum, [id, val]) => {
+    const item = fixedCostItems.find(i => i.id === id);
+    return item && val > 0 ? sum + val : sum;
+  }, 0);
+  const plannedVarCutPct = Object.entries(plannedVariableCuts).reduce((sum, [id, val]) => {
+    const item = variableCostItems.find(i => i.id === id);
+    return item && val > 0 ? sum + val : sum;
+  }, 0);
+  const plannedNewFixed = totalFixedCosts - plannedFixedTotal;
+  const plannedNewVarPct = totalVariablePercent - plannedVarCutPct;
+  const plannedContrib = 100 - plannedNewVarPct;
+  const plannedBreakEven = plannedContrib > 0 ? plannedNewFixed / (plannedContrib / 100) : 0;
+
   const revenue = parseFloat(simRevenue) || 0;
   const variableCostsAmount = revenue * (adjustedVariablePercent / 100);
   const profit = revenue - variableCostsAmount - adjustedFixed;
   const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+  // Planned cuts profit calculation
+  const plannedVarCost = revenue * (plannedNewVarPct / 100);
+  const plannedProfit = revenue - plannedVarCost - plannedNewFixed;
+  const plannedProfitMargin = revenue > 0 ? (plannedProfit / revenue) * 100 : 0;
+
   const contributionMarginPercent = 100 - totalVariablePercent;
   const breakEven = contributionMarginPercent > 0 ? totalFixedCosts / (contributionMarginPercent / 100) : 0;
   const adjustedContrib = 100 - adjustedVariablePercent;
@@ -328,7 +353,44 @@ export function ProfitSimulator({
           </div>
         </div>
 
-        {/* Variable Cost Limits Table */}
+        {/* Planned Cuts Impact */}
+        {hasPlannedCuts && (
+          <div className="p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Scissors className="h-4 w-4 text-primary" />
+              <span className="text-sm font-bold">Impacto dos Cortes Planejados</span>
+              <Badge variant="secondary" className="text-[9px]">Preenchido nas abas de custos</Badge>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {plannedFixedTotal > 0 && (
+                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+                  <p className="text-[10px] text-muted-foreground">Economia Fixos</p>
+                  <p className="text-lg font-bold text-primary">- {fmt(plannedFixedTotal)}</p>
+                  <p className="text-[10px] text-muted-foreground">{fmt(totalFixedCosts)} → {fmt(plannedNewFixed)}</p>
+                </div>
+              )}
+              {plannedVarCutPct > 0 && (
+                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+                  <p className="text-[10px] text-muted-foreground">Economia Variáveis</p>
+                  <p className="text-lg font-bold text-primary">- {fmtPct(plannedVarCutPct)}</p>
+                  <p className="text-[10px] text-muted-foreground">{fmtPct(totalVariablePercent)} → {fmtPct(plannedNewVarPct)}</p>
+                </div>
+              )}
+              <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+                <p className="text-[10px] text-muted-foreground">Novo PE</p>
+                <p className="text-lg font-bold text-primary">{fmt(plannedBreakEven)}</p>
+                {plannedBreakEven < breakEven && (
+                  <p className="text-[10px] text-green-500">↓ {fmt(breakEven - plannedBreakEven)}</p>
+                )}
+              </div>
+              <div className={`p-3 rounded-lg space-y-1 ${plannedProfit >= 0 ? "bg-green-500/10 border border-green-500/20" : "bg-destructive/10 border border-destructive/20"}`}>
+                <p className="text-[10px] text-muted-foreground">Lucro c/ cortes</p>
+                <p className={`text-lg font-bold ${plannedProfit >= 0 ? "text-green-500" : "text-destructive"}`}>{fmt(plannedProfit)}</p>
+                <p className="text-[10px] text-muted-foreground">Margem: {fmtPct(plannedProfitMargin)}</p>
+              </div>
+            </div>
+          </div>
+        )}
         {variableCostItems.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
