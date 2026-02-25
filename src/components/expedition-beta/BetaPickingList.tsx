@@ -399,7 +399,7 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {showChecking && !isComplete && (
+                  {!isComplete && (
                     <Button
                       variant="outline"
                       size="sm"
