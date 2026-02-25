@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   Calculator, Plus, Trash2, Save, Loader2, Building2, Pencil,
-  TrendingUp, AlertTriangle, DollarSign, Percent, Target, BarChart3
+  TrendingUp, AlertTriangle, DollarSign, Percent, Target, BarChart3, Copy, Share2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,12 @@ interface VariableCost {
   is_active: boolean;
 }
 
+interface DraftVariableCost {
+  tempId: string;
+  description: string;
+  percentage: string;
+}
+
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtPct = (v: number) => `${v.toFixed(2)}%`;
 
@@ -61,14 +67,23 @@ export function MarginFormation({ stores }: Props) {
   const [newFixed, setNewFixed] = useState({ name: "", description: "", category: "" });
   const [editingFixed, setEditingFixed] = useState<FixedCost | null>(null);
 
-  // Variable costs
-  const [showAddVariable, setShowAddVariable] = useState(false);
-  const [newVariable, setNewVariable] = useState({ description: "", percentage: "" });
+  // Variable costs - batch drafts
+  const [drafts, setDrafts] = useState<DraftVariableCost[]>([]);
+  const [savingDrafts, setSavingDrafts] = useState(false);
+
+  // Share variable costs dialog
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareTargetStore, setShareTargetStore] = useState("");
+  const [shareItems, setShareItems] = useState<{ id: string; description: string; percentage: string; selected: boolean }[]>([]);
+  const [savingShare, setSavingShare] = useState(false);
 
   // Simulator
   const [simRevenue, setSimRevenue] = useState("100000");
   const [simFixedReduction, setSimFixedReduction] = useState(0);
   const [simVariableReduction, setSimVariableReduction] = useState(0);
+
+  // Track dirty fixed cost amounts for batch save
+  const [dirtyFixedAmounts, setDirtyFixedAmounts] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     loadData();
@@ -84,6 +99,8 @@ export function MarginFormation({ stores }: Props) {
     setFixedCosts((fcRes.data || []) as FixedCost[]);
     setStoreFixedCosts((sfcRes.data || []) as StoreFixedCost[]);
     setVariableCosts((vcRes.data || []) as VariableCost[]);
+    setDirtyFixedAmounts(new Map());
+    setDrafts([]);
     setLoading(false);
   };
 
@@ -99,6 +116,7 @@ export function MarginFormation({ stores }: Props) {
   }, [fixedCosts]);
 
   const getStoreAmount = (fixedCostId: string) => {
+    if (dirtyFixedAmounts.has(fixedCostId)) return dirtyFixedAmounts.get(fixedCostId)!;
     const sfc = storeFixedCosts.find(s => s.fixed_cost_id === fixedCostId);
     return sfc?.amount ?? 0;
   };
@@ -111,84 +129,148 @@ export function MarginFormation({ stores }: Props) {
   const toggleStoreFixedCost = async (fixedCostId: string) => {
     const existing = storeFixedCosts.find(s => s.fixed_cost_id === fixedCostId);
     if (existing) {
-      await supabase.from("cost_center_store_fixed_costs").update({ is_active: !existing.is_active }).eq("id", existing.id);
+      const newActive = !existing.is_active;
+      // Update locally first
+      setStoreFixedCosts(prev => prev.map(s => s.id === existing.id ? { ...s, is_active: newActive } : s));
+      await supabase.from("cost_center_store_fixed_costs").update({ is_active: newActive }).eq("id", existing.id);
     } else {
-      await supabase.from("cost_center_store_fixed_costs").insert({
-        fixed_cost_id: fixedCostId,
-        store_id: selectedStore,
-        amount: 0,
-        is_active: true,
-      });
+      const tempItem: StoreFixedCost = { id: crypto.randomUUID(), fixed_cost_id: fixedCostId, store_id: selectedStore, amount: 0, is_active: true };
+      setStoreFixedCosts(prev => [...prev, tempItem]);
+      const { data } = await supabase.from("cost_center_store_fixed_costs").insert({
+        fixed_cost_id: fixedCostId, store_id: selectedStore, amount: 0, is_active: true,
+      }).select().single();
+      if (data) {
+        setStoreFixedCosts(prev => prev.map(s => s.id === tempItem.id ? { ...data } as StoreFixedCost : s));
+      }
     }
-    loadData();
   };
 
-  const updateStoreAmount = async (fixedCostId: string, amount: number) => {
+  const updateStoreAmountLocal = (fixedCostId: string, amount: number) => {
+    setDirtyFixedAmounts(prev => new Map(prev).set(fixedCostId, amount));
+    setStoreFixedCosts(prev => {
+      const idx = prev.findIndex(s => s.fixed_cost_id === fixedCostId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], amount };
+        return next;
+      }
+      return [...prev, { id: 'temp-' + fixedCostId, fixed_cost_id: fixedCostId, store_id: selectedStore, amount, is_active: true }];
+    });
+  };
+
+  const saveFixedAmountOnBlur = async (fixedCostId: string) => {
+    const amount = dirtyFixedAmounts.get(fixedCostId);
+    if (amount === undefined) return;
     const existing = storeFixedCosts.find(s => s.fixed_cost_id === fixedCostId);
-    if (existing) {
+    if (existing && !existing.id.startsWith('temp-')) {
       await supabase.from("cost_center_store_fixed_costs").update({ amount }).eq("id", existing.id);
     } else {
-      await supabase.from("cost_center_store_fixed_costs").insert({
-        fixed_cost_id: fixedCostId,
-        store_id: selectedStore,
-        amount,
-        is_active: true,
-      });
+      const { data } = await supabase.from("cost_center_store_fixed_costs").insert({
+        fixed_cost_id: fixedCostId, store_id: selectedStore, amount, is_active: true,
+      }).select().single();
+      if (data) {
+        setStoreFixedCosts(prev => prev.map(s => s.fixed_cost_id === fixedCostId ? { ...data } as StoreFixedCost : s));
+      }
     }
-    loadData();
+    setDirtyFixedAmounts(prev => {
+      const next = new Map(prev);
+      next.delete(fixedCostId);
+      return next;
+    });
   };
 
   // Master list CRUD
   const addFixedCost = async () => {
     if (!newFixed.name.trim()) return;
-    await supabase.from("cost_center_fixed_costs").insert({
-      name: newFixed.name,
-      description: newFixed.description || null,
-      category: newFixed.category || null,
-      sort_order: fixedCosts.length + 1,
-    });
+    const { data } = await supabase.from("cost_center_fixed_costs").insert({
+      name: newFixed.name, description: newFixed.description || null,
+      category: newFixed.category || null, sort_order: fixedCosts.length + 1,
+    }).select().single();
+    if (data) setFixedCosts(prev => [...prev, data as FixedCost]);
     setNewFixed({ name: "", description: "", category: "" });
     setShowAddFixed(false);
-    loadData();
     toast.success("Custo fixo adicionado!");
   };
 
   const updateFixedCost = async () => {
     if (!editingFixed) return;
     await supabase.from("cost_center_fixed_costs").update({
-      name: editingFixed.name,
-      description: editingFixed.description,
-      category: editingFixed.category,
+      name: editingFixed.name, description: editingFixed.description, category: editingFixed.category,
     }).eq("id", editingFixed.id);
+    setFixedCosts(prev => prev.map(fc => fc.id === editingFixed.id ? editingFixed : fc));
     setEditingFixed(null);
-    loadData();
     toast.success("Custo fixo atualizado!");
   };
 
   const deleteFixedCost = async (id: string) => {
     await supabase.from("cost_center_store_fixed_costs").delete().eq("fixed_cost_id", id);
     await supabase.from("cost_center_fixed_costs").delete().eq("id", id);
-    loadData();
+    setFixedCosts(prev => prev.filter(fc => fc.id !== id));
+    setStoreFixedCosts(prev => prev.filter(s => s.fixed_cost_id !== id));
     toast.success("Custo fixo removido!");
   };
 
-  // Variable costs
-  const addVariableCost = async () => {
-    if (!newVariable.description.trim() || !newVariable.percentage) return;
-    await supabase.from("cost_center_variable_costs").insert({
+  // Variable costs - drafts
+  const addDraftRow = () => {
+    setDrafts(prev => [...prev, { tempId: crypto.randomUUID(), description: "", percentage: "" }]);
+  };
+
+  const updateDraft = (tempId: string, field: "description" | "percentage", value: string) => {
+    setDrafts(prev => prev.map(d => d.tempId === tempId ? { ...d, [field]: value } : d));
+  };
+
+  const removeDraft = (tempId: string) => {
+    setDrafts(prev => prev.filter(d => d.tempId !== tempId));
+  };
+
+  const saveAllDrafts = async () => {
+    const valid = drafts.filter(d => d.description.trim() && d.percentage);
+    if (valid.length === 0) { toast.error("Preencha ao menos um custo variável."); return; }
+    setSavingDrafts(true);
+    const rows = valid.map(d => ({
       store_id: selectedStore,
-      description: newVariable.description,
-      percentage: parseFloat(newVariable.percentage) || 0,
-    });
-    setNewVariable({ description: "", percentage: "" });
-    setShowAddVariable(false);
-    loadData();
-    toast.success("Custo variável adicionado!");
+      description: d.description.trim(),
+      percentage: parseFloat(d.percentage) || 0,
+    }));
+    const { data, error } = await supabase.from("cost_center_variable_costs").insert(rows).select();
+    if (error) { toast.error("Erro ao salvar: " + error.message); setSavingDrafts(false); return; }
+    setVariableCosts(prev => [...prev, ...(data as VariableCost[])]);
+    setDrafts([]);
+    setSavingDrafts(false);
+    toast.success(`${valid.length} custo(s) variável(is) adicionado(s)!`);
   };
 
   const deleteVariableCost = async (id: string) => {
     await supabase.from("cost_center_variable_costs").delete().eq("id", id);
-    loadData();
+    setVariableCosts(prev => prev.filter(vc => vc.id !== id));
+    toast.success("Custo variável removido!");
+  };
+
+  // Share variable costs to another store
+  const openShareDialog = () => {
+    setShareItems(variableCosts.map(vc => ({
+      id: vc.id, description: vc.description, percentage: String(vc.percentage), selected: true,
+    })));
+    setShareTargetStore("");
+    setShareDialogOpen(true);
+  };
+
+  const saveSharedCosts = async () => {
+    if (!shareTargetStore) { toast.error("Selecione a loja destino."); return; }
+    const selected = shareItems.filter(s => s.selected);
+    if (selected.length === 0) { toast.error("Selecione ao menos um custo."); return; }
+    setSavingShare(true);
+    const rows = selected.map(s => ({
+      store_id: shareTargetStore,
+      description: s.description,
+      percentage: parseFloat(s.percentage) || 0,
+    }));
+    const { error } = await supabase.from("cost_center_variable_costs").insert(rows);
+    if (error) { toast.error("Erro: " + error.message); setSavingShare(false); return; }
+    setSavingShare(false);
+    setShareDialogOpen(false);
+    const targetName = stores.find(s => s.id === shareTargetStore)?.name || "outra loja";
+    toast.success(`${selected.length} custo(s) copiado(s) para ${targetName}!`);
   };
 
   // Calculations
@@ -200,14 +282,8 @@ export function MarginFormation({ stores }: Props) {
     return variableCosts.filter(v => v.is_active).reduce((sum, v) => sum + v.percentage, 0);
   }, [variableCosts]);
 
-  // Break-even: Revenue where profit = 0
-  // Profit = Revenue - (Revenue * variablePercent/100) - FixedCosts = 0
-  // Revenue * (1 - variablePercent/100) = FixedCosts
-  // Revenue = FixedCosts / (1 - variablePercent/100)
   const contributionMarginPercent = 100 - totalVariablePercent;
-  const breakEven = contributionMarginPercent > 0
-    ? totalFixedCosts / (contributionMarginPercent / 100)
-    : 0;
+  const breakEven = contributionMarginPercent > 0 ? totalFixedCosts / (contributionMarginPercent / 100) : 0;
 
   // Simulator calculations
   const revenue = parseFloat(simRevenue) || 0;
@@ -216,11 +292,10 @@ export function MarginFormation({ stores }: Props) {
   const variableCostsAmount = revenue * (adjustedVariablePercent / 100);
   const profit = revenue - variableCostsAmount - adjustedFixed;
   const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
-  const adjustedBreakEven = (100 - adjustedVariablePercent) > 0
-    ? adjustedFixed / ((100 - adjustedVariablePercent) / 100)
-    : 0;
+  const adjustedBreakEven = (100 - adjustedVariablePercent) > 0 ? adjustedFixed / ((100 - adjustedVariablePercent) / 100) : 0;
 
   const storeName = stores.find(s => s.id === selectedStore)?.name || "Loja";
+  const otherStores = stores.filter(s => s.id !== selectedStore);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando...</div>;
@@ -333,20 +408,8 @@ export function MarginFormation({ stores }: Props) {
                               type="number"
                               step="0.01"
                               value={amount || ""}
-                              onChange={e => {
-                                const val = parseFloat(e.target.value) || 0;
-                                // Update locally for responsiveness
-                                setStoreFixedCosts(prev => {
-                                  const idx = prev.findIndex(s => s.fixed_cost_id === fc.id);
-                                  if (idx >= 0) {
-                                    const next = [...prev];
-                                    next[idx] = { ...next[idx], amount: val };
-                                    return next;
-                                  }
-                                  return [...prev, { id: 'temp', fixed_cost_id: fc.id, store_id: selectedStore, amount: val, is_active: true }];
-                                });
-                              }}
-                              onBlur={e => updateStoreAmount(fc.id, parseFloat(e.target.value) || 0)}
+                              onChange={e => updateStoreAmountLocal(fc.id, parseFloat(e.target.value) || 0)}
+                              onBlur={() => saveFixedAmountOnBlur(fc.id)}
                               className="h-7 text-xs w-full"
                               disabled={!active}
                             />
@@ -419,25 +482,32 @@ export function MarginFormation({ stores }: Props) {
 
         {/* Variable Costs */}
         <TabsContent value="variable" className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm text-muted-foreground">
               Custos variáveis de <strong>{storeName}</strong> — percentuais sobre o faturamento.
             </p>
-            <Button size="sm" className="gap-1" onClick={() => setShowAddVariable(true)}>
-              <Plus className="h-3.5 w-3.5" /> Novo Custo Variável
-            </Button>
+            <div className="flex gap-2">
+              {variableCosts.length > 0 && otherStores.length > 0 && (
+                <Button size="sm" variant="outline" className="gap-1" onClick={openShareDialog}>
+                  <Share2 className="h-3.5 w-3.5" /> Compartilhar com outra loja
+                </Button>
+              )}
+              <Button size="sm" className="gap-1" onClick={addDraftRow}>
+                <Plus className="h-3.5 w-3.5" /> Adicionar Custo
+              </Button>
+            </div>
           </div>
 
           <Card>
             <CardContent className="pt-4">
-              {variableCosts.length === 0 ? (
+              {variableCosts.length === 0 && drafts.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8 text-sm">Nenhum custo variável cadastrado.</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Descrição</TableHead>
-                      <TableHead className="text-right w-[100px]">% do Faturamento</TableHead>
+                      <TableHead className="text-right w-[120px]">% do Faturamento</TableHead>
                       <TableHead className="w-16">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -453,30 +523,119 @@ export function MarginFormation({ stores }: Props) {
                         </TableCell>
                       </TableRow>
                     ))}
-                    <TableRow className="border-t-2">
-                      <TableCell className="font-bold text-xs">TOTAL</TableCell>
-                      <TableCell className="text-right font-bold text-primary text-xs">{fmtPct(totalVariablePercent)}</TableCell>
-                      <TableCell />
-                    </TableRow>
+
+                    {/* Draft rows */}
+                    {drafts.map(d => (
+                      <TableRow key={d.tempId} className="bg-primary/5">
+                        <TableCell>
+                          <Input
+                            value={d.description}
+                            onChange={e => updateDraft(d.tempId, "description", e.target.value)}
+                            placeholder="Ex: Imposto sobre vendas"
+                            className="h-7 text-xs"
+                            autoFocus
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={d.percentage}
+                            onChange={e => updateDraft(d.tempId, "percentage", e.target.value)}
+                            placeholder="6.00"
+                            className="h-7 text-xs text-right"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => removeDraft(d.tempId)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+
+                    {(variableCosts.length > 0 || drafts.length > 0) && (
+                      <TableRow className="border-t-2">
+                        <TableCell className="font-bold text-xs">TOTAL</TableCell>
+                        <TableCell className="text-right font-bold text-primary text-xs">
+                          {fmtPct(totalVariablePercent + drafts.reduce((s, d) => s + (parseFloat(d.percentage) || 0), 0))}
+                        </TableCell>
+                        <TableCell />
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               )}
             </CardContent>
           </Card>
 
-          <Dialog open={showAddVariable} onOpenChange={setShowAddVariable}>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Novo Custo Variável</DialogTitle></DialogHeader>
-              <div className="space-y-3">
+          {/* Draft action bar */}
+          {drafts.length > 0 && (
+            <div className="flex items-center justify-between p-3 rounded-lg border border-primary/30 bg-primary/5">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{drafts.length} novo(s)</Badge>
+                <Button size="sm" variant="ghost" className="gap-1 text-xs" onClick={addDraftRow}>
+                  <Plus className="h-3 w-3" /> Mais um
+                </Button>
+              </div>
+              <Button size="sm" className="gap-1" onClick={saveAllDrafts} disabled={savingDrafts}>
+                {savingDrafts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Salvar todos
+              </Button>
+            </div>
+          )}
+
+          {/* Share Variable Costs Dialog */}
+          <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Share2 className="h-4 w-4" /> Compartilhar Custos Variáveis
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div>
-                  <Label className="text-xs">Descrição *</Label>
-                  <Input value={newVariable.description} onChange={e => setNewVariable(p => ({ ...p, description: e.target.value }))} placeholder="Ex: Imposto sobre vendas (Simples)" className="h-9" />
+                  <Label className="text-xs font-medium">Loja destino *</Label>
+                  <Select value={shareTargetStore} onValueChange={setShareTargetStore}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
+                    <SelectContent>
+                      {otherStores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
+
                 <div>
-                  <Label className="text-xs">Percentual (% sobre faturamento) *</Label>
-                  <Input type="number" step="0.01" value={newVariable.percentage} onChange={e => setNewVariable(p => ({ ...p, percentage: e.target.value }))} placeholder="Ex: 6.00" className="h-9" />
+                  <Label className="text-xs font-medium mb-2 block">Custos a copiar (ajuste os percentuais se necessário)</Label>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {shareItems.map((item, idx) => (
+                      <div key={item.id} className="flex items-center gap-2 p-2 rounded border">
+                        <Checkbox
+                          checked={item.selected}
+                          onCheckedChange={(checked) => setShareItems(prev =>
+                            prev.map((s, i) => i === idx ? { ...s, selected: !!checked } : s)
+                          )}
+                        />
+                        <span className="text-xs flex-1">{item.description}</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={item.percentage}
+                          onChange={e => setShareItems(prev =>
+                            prev.map((s, i) => i === idx ? { ...s, percentage: e.target.value } : s)
+                          )}
+                          className="h-7 w-20 text-xs text-right"
+                          disabled={!item.selected}
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <Button className="w-full" onClick={addVariableCost}>Adicionar</Button>
+
+                <Button className="w-full gap-2" onClick={saveSharedCosts} disabled={savingShare}>
+                  {savingShare ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                  Copiar {shareItems.filter(s => s.selected).length} custo(s) para a loja
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -492,46 +651,28 @@ export function MarginFormation({ stores }: Props) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Revenue input */}
               <div>
                 <Label className="text-xs font-medium">Faturamento Mensal (R$)</Label>
-                <Input
-                  type="number"
-                  value={simRevenue}
-                  onChange={e => setSimRevenue(e.target.value)}
-                  className="h-10 text-lg font-bold"
-                />
+                <Input type="number" value={simRevenue} onChange={e => setSimRevenue(e.target.value)} className="h-10 text-lg font-bold" />
               </div>
 
-              {/* Reduction sliders */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <Label className="text-xs font-medium">Redução de Custos Fixos: {simFixedReduction}%</Label>
-                  <Slider
-                    value={[simFixedReduction]}
-                    onValueChange={v => setSimFixedReduction(v[0])}
-                    max={50}
-                    step={1}
-                  />
+                  <Slider value={[simFixedReduction]} onValueChange={v => setSimFixedReduction(v[0])} max={50} step={1} />
                   <p className="text-[10px] text-muted-foreground">
                     De {fmt(totalFixedCosts)} para {fmt(adjustedFixed)} (economia de {fmt(totalFixedCosts - adjustedFixed)})
                   </p>
                 </div>
                 <div className="space-y-3">
                   <Label className="text-xs font-medium">Redução de Custos Variáveis: {simVariableReduction}%</Label>
-                  <Slider
-                    value={[simVariableReduction]}
-                    onValueChange={v => setSimVariableReduction(v[0])}
-                    max={50}
-                    step={1}
-                  />
+                  <Slider value={[simVariableReduction]} onValueChange={v => setSimVariableReduction(v[0])} max={50} step={1} />
                   <p className="text-[10px] text-muted-foreground">
                     De {fmtPct(totalVariablePercent)} para {fmtPct(adjustedVariablePercent)}
                   </p>
                 </div>
               </div>
 
-              {/* Results */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t">
                 <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                   <p className="text-[10px] text-muted-foreground">Faturamento</p>
@@ -552,7 +693,6 @@ export function MarginFormation({ stores }: Props) {
                 </div>
               </div>
 
-              {/* Break-even comparison */}
               <div className="p-4 rounded-lg border space-y-2">
                 <div className="flex items-center gap-2">
                   <Target className="h-4 w-4 text-primary" />
@@ -573,7 +713,6 @@ export function MarginFormation({ stores }: Props) {
                 </div>
               </div>
 
-              {/* Revenue scenarios */}
               <div className="space-y-2">
                 <p className="text-sm font-medium">Cenários de Faturamento</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
