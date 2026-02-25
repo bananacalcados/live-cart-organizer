@@ -183,104 +183,6 @@ async function chargePagarme(
   return { success: false, gateway: "pagarme", error: errorMsg };
 }
 
-// ── Vindi fallback ──────────────────────────────────────────────
-async function chargeVindi(
-  params: ChargeRequest,
-  products: Array<{ title: string; price: number; quantity: number }>,
-  apiKey: string
-): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
-  const auth = btoa(`${apiKey}:`);
-  const headers = {
-    "Content-Type": "application/json",
-    Authorization: `Basic ${auth}`,
-  };
-  const base = "https://app.vindi.com.br/api/v1";
-
-  try {
-    // 1. Create customer
-    const phoneDigits = params.customer.phone.replace(/\D/g, "");
-    const custRes = await fetch(`${base}/customers`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        name: params.customer.name,
-        email: params.customer.email,
-        registry_code: params.customer.cpf.replace(/\D/g, ""),
-        phones: [{ phone_type: "mobile", number: phoneDigits }],
-      }),
-    });
-    const custData = await custRes.json();
-    console.log("Vindi customer response:", JSON.stringify(custData).substring(0, 500));
-    if (!custData.customer?.id) {
-      return { success: false, gateway: "vindi", error: `Vindi customer error: ${JSON.stringify(custData.errors || custData).substring(0, 200)}` };
-    }
-    const customerId = custData.customer.id;
-
-    // 2. Create payment profile (card)
-    const expMonth = String(params.card.expMonth).padStart(2, "0");
-    const rawYear = String(params.card.expYear).replace(/\D/g, "");
-    const expYear = rawYear.length === 2 ? `20${rawYear}` : rawYear;
-
-    const ppRes = await fetch(`${base}/payment_profiles`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        customer_id: customerId,
-        holder_name: params.card.holderName,
-        card_number: params.card.number.replace(/\s/g, ""),
-        card_expiration: `${expMonth}/${expYear}`,
-        card_cvv: params.card.cvv,
-        payment_method_code: "credit_card",
-      }),
-    });
-    const ppData = await ppRes.json();
-    console.log("Vindi payment_profile response:", JSON.stringify(ppData).substring(0, 500));
-    if (!ppData.payment_profile?.id) {
-      return { success: false, gateway: "vindi", error: `Vindi card error: ${JSON.stringify(ppData.errors || ppData).substring(0, 200)}` };
-    }
-    const profileId = ppData.payment_profile.id;
-
-    // 3. Create one-off bill
-    const totalReais = params.totalAmountCents / 100;
-    const billRes = await fetch(`${base}/bills`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        customer_id: customerId,
-        payment_method_code: "credit_card",
-        installments: params.installments,
-        bill_items: [{
-          product_id: null,
-          description: products.map(p => p.title).join(", ").substring(0, 255) || "Pedido",
-          amount: totalReais,
-          quantity: 1,
-          pricing_schema: { price: totalReais, schema_type: "flat" },
-        }],
-        payment_profile: { id: profileId },
-      }),
-    });
-    const billData = await billRes.json();
-    console.log("Vindi bill response:", JSON.stringify(billData).substring(0, 1000));
-
-    const chargeStatus = billData.bill?.charges?.[0]?.status;
-    if (chargeStatus === "paid" || billData.bill?.status === "paid") {
-      return {
-        success: true,
-        gateway: "vindi",
-        transactionId: String(billData.bill?.id || billData.bill?.charges?.[0]?.id || ""),
-      };
-    }
-
-    const vindiError = billData.bill?.charges?.[0]?.last_transaction?.gateway_message
-      || billData.errors?.[0]?.message
-      || billData.message
-      || "Vindi charge failed";
-    return { success: false, gateway: "vindi", error: vindiError };
-  } catch (e) {
-    console.error("Vindi exception:", e);
-    return { success: false, gateway: "vindi", error: `Vindi exception: ${e.message}` };
-  }
-}
 
 // ── APPMAX fallback ─────────────────────────────────────────────
 async function chargeAppmax(
@@ -480,30 +382,17 @@ serve(async (req) => {
     const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY") || "";
     let result = await chargePagarme(chargeParams, products, pagarmeKey);
 
-    // Fallback chain: Pagar.me -> Vindi -> AppMax
+    // Fallback chain: Pagar.me -> AppMax
     if (!result.success) {
       const pagarmeError = result.error;
-      console.log(`Pagar.me failed: ${pagarmeError}. Trying Vindi fallback...`);
-
-      // Try Vindi
-      const vindiKey = Deno.env.get("VINDI_API_KEY") || "";
-      if (vindiKey) {
-        const vindiResult = await chargeVindi(chargeParams, products, vindiKey);
-        if (vindiResult.success) {
-          result = vindiResult;
-        } else {
-          console.log(`Vindi failed: ${vindiResult.error}. Trying APPMAX fallback...`);
-        }
-      }
+      console.log(`Pagar.me failed: ${pagarmeError}. Trying APPMAX fallback...`);
 
       // Try AppMax
-      if (!result.success) {
-        const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
-        if (appmaxToken) {
-          const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken);
-          if (appmaxResult.success) {
-            result = appmaxResult;
-          }
+      const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
+      if (appmaxToken) {
+        const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken);
+        if (appmaxResult.success) {
+          result = appmaxResult;
         }
       }
 
