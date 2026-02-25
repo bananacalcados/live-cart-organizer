@@ -6,11 +6,12 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil, UserPlus, Store, Globe, RotateCcw,
+  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil, UserPlus, Store, Globe, RotateCcw, Check, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,6 +85,9 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [currentCustomer, setCurrentCustomer] = useState<CustomerInfo | null>(customer);
   const [recovering, setRecovering] = useState(false);
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [editItemSku, setEditItemSku] = useState("");
+  const [savingItem, setSavingItem] = useState(false);
 
   useEffect(() => {
     setCurrentCustomer(customer);
@@ -445,31 +449,95 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               </h4>
               <div className="space-y-1.5">
                 {items.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{item.product_name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {item.variant_name && (
-                          <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-medium">
-                            {item.variant_name}
-                          </span>
-                        )}
-                        {item.size && (
-                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
-                            Tam: {item.size}
-                          </span>
-                        )}
-                        {item.sku && (
-                          <span className="text-[10px] text-gray-500 font-mono">
-                            SKU: {item.sku}
-                          </span>
-                        )}
+                  <div key={i} className="p-3 rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{item.product_name}</p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          {item.variant_name && (
+                            <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-medium">
+                              {item.variant_name}
+                            </span>
+                          )}
+                          {item.size && (
+                            <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                              Tam: {item.size}
+                            </span>
+                          )}
+                          {item.sku && editingItemIndex !== i && (
+                            <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
+                              SKU: {item.sku}
+                              {!isTinyOnly && (
+                                <button
+                                  onClick={() => { setEditingItemIndex(i); setEditItemSku(item.sku || ""); }}
+                                  className="text-blue-500 hover:text-blue-700"
+                                >
+                                  <Pencil className="h-2.5 w-2.5" />
+                                </button>
+                              )}
+                            </span>
+                          )}
+                          {!item.sku && editingItemIndex !== i && !isTinyOnly && (
+                            <button
+                              onClick={() => { setEditingItemIndex(i); setEditItemSku(""); }}
+                              className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-0.5"
+                            >
+                              <Pencil className="h-2.5 w-2.5" /> Adicionar SKU
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right ml-3 shrink-0">
+                        <p className="text-xs text-gray-500">{item.quantity}x R$ {item.unit_price.toFixed(2)}</p>
+                        <p className="text-sm font-bold text-orange-600">R$ {(item.quantity * item.unit_price).toFixed(2)}</p>
                       </div>
                     </div>
-                    <div className="text-right ml-3 shrink-0">
-                      <p className="text-xs text-gray-500">{item.quantity}x R$ {item.unit_price.toFixed(2)}</p>
-                      <p className="text-sm font-bold text-orange-600">R$ {(item.quantity * item.unit_price).toFixed(2)}</p>
-                    </div>
+                    {editingItemIndex === i && (
+                      <div className="flex gap-2 items-center mt-2 pt-2 border-t border-gray-200">
+                        <Input
+                          value={editItemSku}
+                          onChange={(e) => setEditItemSku(e.target.value)}
+                          placeholder="Novo SKU do produto"
+                          className="flex-1 h-8 text-xs font-mono"
+                          autoFocus
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8 w-8 p-0 bg-emerald-500 hover:bg-emerald-600 text-white"
+                          disabled={savingItem}
+                          onClick={async () => {
+                            if (!sale || !item.sale_id) return;
+                            setSavingItem(true);
+                            try {
+                              await supabase
+                                .from('pos_sale_items')
+                                .update({ sku: editItemSku } as any)
+                                .eq('sale_id', item.sale_id)
+                                .eq('product_name', item.product_name)
+                                .eq('unit_price', item.unit_price);
+                              items[i] = { ...items[i], sku: editItemSku };
+                              toast.success("SKU atualizado!");
+                              setEditingItemIndex(null);
+                              onDeleted?.();
+                            } catch {
+                              toast.error("Erro ao salvar SKU");
+                            } finally {
+                              setSavingItem(false);
+                            }
+                          }}
+                        >
+                          {savingItem ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 p-0"
+                          onClick={() => setEditingItemIndex(null)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
