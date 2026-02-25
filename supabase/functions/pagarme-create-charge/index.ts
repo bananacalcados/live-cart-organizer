@@ -262,11 +262,35 @@ serve(async (req) => {
   }
 
   try {
-    const params: ChargeRequest = await req.json();
+    const rawParams = await req.json();
 
-    if (!params.orderId || !params.card || !params.customer) {
+    if (!rawParams.orderId || !rawParams.card || !rawParams.customer) {
       throw new Error("Missing required fields: orderId, card, customer");
     }
+
+    // Build billingAddress from customer.address if not provided directly
+    if (!rawParams.billingAddress && rawParams.customer?.address) {
+      const addr = rawParams.customer.address;
+      rawParams.billingAddress = {
+        street: addr.street || "",
+        number: addr.number || "S/N",
+        neighborhood: addr.neighborhood || "",
+        city: addr.city || "",
+        state: addr.state || "",
+        zipCode: (addr.cep || addr.zipCode || "").replace(/\D/g, ""),
+        country: "BR",
+      };
+    }
+
+    // Ensure billingAddress exists with defaults
+    if (!rawParams.billingAddress) {
+      rawParams.billingAddress = {
+        street: "Não informado", number: "S/N", neighborhood: "Não informado",
+        city: "Não informado", state: "MG", zipCode: "00000000", country: "BR",
+      };
+    }
+
+    const params: ChargeRequest = rawParams;
 
     // Validate phone
     const phoneDigits = params.customer.phone.replace(/\D/g, "");
