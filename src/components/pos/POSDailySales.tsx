@@ -492,7 +492,6 @@ export function POSDailySales({ storeId }: Props) {
           name: attempt.customer_name,
           whatsapp: phoneDigits,
           email: attempt.customer_email || null,
-          store_id: storeId,
         };
 
         if (customerId) {

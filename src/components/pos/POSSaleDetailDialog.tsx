@@ -206,7 +206,6 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         name: customerName,
         whatsapp: phoneDigits || null,
         email: customerEmail || null,
-        store_id: storeId,
       };
       if (cpfDigits) payload.cpf = cpfDigits;
       if (customerAddress.address) {
