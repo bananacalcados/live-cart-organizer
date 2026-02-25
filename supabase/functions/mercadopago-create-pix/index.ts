@@ -27,31 +27,64 @@ serve(async (req) => {
       throw new Error("MERCADOPAGO_ACCESS_TOKEN is not configured");
     }
 
-    // Fetch order with customer data
+    // Fetch order — try CRM orders first, then pos_sales
+    let products: Array<{ price: number; quantity: number; title: string }> = [];
+    let discountType: string | null = null;
+    let discountValue: number | null = null;
+    let customer: Record<string, unknown> | null = null;
+
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("*, customer:customers(*)")
       .eq("id", orderId)
       .maybeSingle();
 
-    if (orderError || !order) {
-      throw new Error(`Order not found: ${orderError?.message || "not found"}`);
+    if (order) {
+      products = order.products as Array<{ price: number; quantity: number; title: string }>;
+      discountType = order.discount_type;
+      discountValue = order.discount_value;
+      customer = order.customer as Record<string, unknown> | null;
+    } else {
+      // Fallback: try pos_sales
+      const { data: sale, error: saleError } = await supabase
+        .from("pos_sales")
+        .select("*")
+        .eq("id", orderId)
+        .maybeSingle();
+
+      if (saleError || !sale) {
+        throw new Error(`Order not found in orders or pos_sales: ${orderError?.message || saleError?.message || "not found"}`);
+      }
+
+      // Fetch sale items
+      const { data: items } = await supabase
+        .from("pos_sale_items")
+        .select("*")
+        .eq("sale_id", sale.id);
+
+      products = (items || []).map((it: any) => ({
+        title: it.product_name + (it.variant_name ? ` - ${it.variant_name}` : ""),
+        price: Number(it.unit_price),
+        quantity: it.quantity,
+      }));
+
+      discountType = sale.discount ? "fixed" : null;
+      discountValue = sale.discount ? Number(sale.discount) : null;
+      console.log(`Using pos_sales fallback for PIX, sale ${orderId}, ${products.length} items`);
     }
 
     // Calculate total with discount
-    const products = order.products as Array<{ price: number; quantity: number; title: string }>;
     const subtotal = products.reduce((sum: number, p) => sum + p.price * p.quantity, 0);
 
     let discountAmount = 0;
-    if (order.discount_type && order.discount_value) {
-      discountAmount = order.discount_type === "percentage"
-        ? subtotal * (order.discount_value / 100)
-        : order.discount_value;
+    if (discountType && discountValue) {
+      discountAmount = discountType === "percentage"
+        ? subtotal * (discountValue / 100)
+        : discountValue;
     }
     const totalAmount = Math.round(Math.max(0, subtotal - discountAmount) * 100) / 100;
 
     // Use payer data from request, or fallback to customer data
-    const customer = order.customer as Record<string, unknown> | null;
     const payerEmail = payer?.email || 
       ((customer?.whatsapp as string) 
         ? `${(customer.whatsapp as string).replace(/\D/g, "")}@pix.mercadopago.com`
