@@ -529,7 +529,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
         },
       });
       if (error || !data?.success) {
-        const errMsg = data?.error || "Erro no pagamento";
+        const errMsg = data?.error || (error && typeof error === "object" && "message" in error ? String((error as any).message) : null) || "Erro no pagamento";
         // Log failed attempt
         await supabase.from("pos_checkout_attempts").insert({
           sale_id: saleId,
