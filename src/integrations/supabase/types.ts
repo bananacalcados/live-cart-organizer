@@ -3658,6 +3658,57 @@ export type Database = {
           },
         ]
       }
+      pos_checkout_attempts: {
+        Row: {
+          amount: number | null
+          created_at: string
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          error_message: string | null
+          gateway: string | null
+          id: string
+          metadata: Json | null
+          payment_method: string
+          sale_id: string
+          status: string
+          store_id: string | null
+          transaction_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          error_message?: string | null
+          gateway?: string | null
+          id?: string
+          metadata?: Json | null
+          payment_method: string
+          sale_id: string
+          status?: string
+          store_id?: string | null
+          transaction_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          error_message?: string | null
+          gateway?: string | null
+          id?: string
+          metadata?: Json | null
+          payment_method?: string
+          sale_id?: string
+          status?: string
+          store_id?: string | null
+          transaction_id?: string | null
+        }
+        Relationships: []
+      }
       pos_conditionals: {
         Row: {
           conditional_type: string
