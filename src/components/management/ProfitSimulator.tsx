@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   Calculator, Target, DollarSign, Percent, TrendingUp, RotateCcw, Minus,
+  ArrowDownToLine, Crosshair,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -51,6 +53,10 @@ export function ProfitSimulator({
 
   const [showFixedDetails, setShowFixedDetails] = useState(false);
   const [showVariableDetails, setShowVariableDetails] = useState(false);
+
+  // Reverse simulator
+  const [reverseRevenue, setReverseRevenue] = useState("");
+  const [targetProfit, setTargetProfit] = useState("0");
 
   const hasItemReductions = Object.values(fixedItemReductions).some(v => v > 0) ||
     Object.values(variableItemReductions).some(v => v > 0);
@@ -340,6 +346,194 @@ export function ProfitSimulator({
               );
             })}
           </div>
+        </div>
+
+        {/* Reverse Simulator */}
+        <Separator />
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Crosshair className="h-4 w-4 text-primary" />
+            <span className="text-sm font-bold">Simulador Reverso — Quanto preciso cortar?</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Informe o faturamento previsto e a meta de lucro. O sistema calcula quanto você precisa reduzir em custos.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs font-medium">Faturamento Previsto (R$)</Label>
+              <Input
+                type="number"
+                value={reverseRevenue}
+                onChange={e => setReverseRevenue(e.target.value)}
+                placeholder="Ex: 80000"
+                className="h-9"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium">Meta de Lucro (R$)</Label>
+              <Input
+                type="number"
+                value={targetProfit}
+                onChange={e => setTargetProfit(e.target.value)}
+                placeholder="0 = empatar"
+                className="h-9"
+              />
+            </div>
+          </div>
+
+          {(() => {
+            const revRev = parseFloat(reverseRevenue) || 0;
+            const profitGoal = parseFloat(targetProfit) || 0;
+            if (revRev <= 0) return null;
+
+            // Current scenario with this revenue
+            const currentVarCost = revRev * (totalVariablePercent / 100);
+            const currentProfit = revRev - currentVarCost - totalFixedCosts;
+            const gap = profitGoal - currentProfit; // how much more profit we need
+
+            if (gap <= 0) {
+              // Already achieving the goal
+              return (
+                <Card className="border-green-500/30 bg-green-500/5">
+                  <CardContent className="pt-4 pb-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                      <span className="text-sm font-medium text-green-500">Meta já atingida!</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Com faturamento de {fmt(revRev)}, o lucro atual seria de{" "}
+                      <strong className="text-green-500">{fmt(currentProfit)}</strong>
+                      {profitGoal > 0 && <>, superando a meta de {fmt(profitGoal)} em {fmt(currentProfit - profitGoal)}</>}.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Margem líquida: <strong>{fmtPct((currentProfit / revRev) * 100)}</strong>
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            // Need to cut `gap` from costs
+            // Option 1: Cut only fixed costs
+            const fixedReductionNeeded = totalFixedCosts > 0 ? (gap / totalFixedCosts) * 100 : Infinity;
+            const newFixedTarget = totalFixedCosts - gap;
+
+            // Option 2: Cut only variable costs (reduce percentage)
+            // revRev * (newVarPct/100) + totalFixedCosts = revRev - profitGoal
+            // newVarPct = ((revRev - profitGoal - totalFixedCosts) / revRev) * 100
+            const newVarPctTarget = revRev > 0 ? ((revRev - profitGoal - totalFixedCosts) / revRev) * 100 : 0;
+            const varReductionNeeded = totalVariablePercent > 0 ? ((totalVariablePercent - newVarPctTarget) / totalVariablePercent) * 100 : Infinity;
+
+            // Option 3: Split 50/50
+            const halfGap = gap / 2;
+            const fixedHalfReduction = totalFixedCosts > 0 ? (halfGap / totalFixedCosts) * 100 : Infinity;
+            const newVarPctHalf = revRev > 0 ? ((revRev - profitGoal - (totalFixedCosts - halfGap)) / revRev) * 100 : 0;
+            const varHalfReduction = totalVariablePercent > 0 ? ((totalVariablePercent - newVarPctHalf) / totalVariablePercent) * 100 : Infinity;
+
+            const isPossibleFixed = fixedReductionNeeded <= 100 && newFixedTarget >= 0;
+            const isPossibleVar = varReductionNeeded <= 100 && newVarPctTarget >= 0;
+            const isPossibleSplit = fixedHalfReduction <= 100 && varHalfReduction <= 100;
+
+            return (
+              <div className="space-y-3">
+                <Card className="border-destructive/30 bg-destructive/5">
+                  <CardContent className="pt-4 pb-4 space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                      Com faturamento de {fmt(revRev)}, o lucro atual seria de{" "}
+                      <strong className="text-destructive">{fmt(currentProfit)}</strong>.
+                      {profitGoal > 0
+                        ? <> Para atingir {fmt(profitGoal)} de lucro, você precisa cortar <strong>{fmt(gap)}</strong> em custos.</>
+                        : <> Para empatar, você precisa cortar <strong>{fmt(gap)}</strong> em custos.</>
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Option 1: Only Fixed */}
+                  <Card className={!isPossibleFixed ? "opacity-50" : ""}>
+                    <CardContent className="pt-4 pb-4 space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <DollarSign className="h-3.5 w-3.5 text-destructive" />
+                        <span className="text-xs font-bold">Só Custos Fixos</span>
+                      </div>
+                      {isPossibleFixed ? (
+                        <>
+                          <p className="text-2xl font-bold text-destructive">
+                            -{fmtPct(fixedReductionNeeded)}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            De {fmt(totalFixedCosts)} para {fmt(newFixedTarget)}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            Cortar {fmt(gap)} em custos fixos
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-destructive">Inviável — corte necessário excede o total de custos fixos</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Option 2: Only Variable */}
+                  <Card className={!isPossibleVar ? "opacity-50" : ""}>
+                    <CardContent className="pt-4 pb-4 space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <Percent className="h-3.5 w-3.5 text-orange-500" />
+                        <span className="text-xs font-bold">Só Custos Variáveis</span>
+                      </div>
+                      {isPossibleVar ? (
+                        <>
+                          <p className="text-2xl font-bold text-orange-500">
+                            -{fmtPct(varReductionNeeded)}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            De {fmtPct(totalVariablePercent)} para {fmtPct(Math.max(0, newVarPctTarget))}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            Reduzir {fmtPct(totalVariablePercent - newVarPctTarget)} dos variáveis
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-destructive">Inviável — não é possível compensar apenas com variáveis</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Option 3: Split */}
+                  <Card className={`${isPossibleSplit ? "border-primary/30" : "opacity-50"}`}>
+                    <CardContent className="pt-4 pb-4 space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <ArrowDownToLine className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-xs font-bold">Misto (50/50)</span>
+                        {isPossibleSplit && <Badge variant="secondary" className="text-[9px]">Recomendado</Badge>}
+                      </div>
+                      {isPossibleSplit ? (
+                        <>
+                          <div className="space-y-1">
+                            <p className="text-xs">
+                              Fixos: <strong className="text-destructive">-{fmtPct(fixedHalfReduction)}</strong>
+                              <span className="text-muted-foreground ml-1">({fmt(totalFixedCosts)} → {fmt(totalFixedCosts - halfGap)})</span>
+                            </p>
+                            <p className="text-xs">
+                              Variáveis: <strong className="text-orange-500">-{fmtPct(varHalfReduction)}</strong>
+                              <span className="text-muted-foreground ml-1">({fmtPct(totalVariablePercent)} → {fmtPct(Math.max(0, newVarPctHalf))})</span>
+                            </p>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Cortar {fmt(halfGap)} de cada lado
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-destructive">Inviável — a combinação não é suficiente</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </CardContent>
     </Card>
