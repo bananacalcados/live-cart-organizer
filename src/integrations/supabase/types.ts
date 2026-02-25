@@ -947,6 +947,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          max_budget: number | null
           name: string
           sort_order: number | null
           updated_at: string
@@ -956,6 +957,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          max_budget?: number | null
           name: string
           sort_order?: number | null
           updated_at?: string
@@ -965,6 +967,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          max_budget?: number | null
           name?: string
           sort_order?: number | null
           updated_at?: string

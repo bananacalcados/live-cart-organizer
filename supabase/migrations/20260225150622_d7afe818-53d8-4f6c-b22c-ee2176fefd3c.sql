@@ -1,0 +1,1 @@
+ALTER TABLE public.cost_center_fixed_costs ADD COLUMN max_budget numeric DEFAULT NULL;
