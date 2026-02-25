@@ -107,6 +107,7 @@ export function POSExchanges({ storeId }: Props) {
   const [selectedSeller, setSelectedSeller] = useState("");
   const [notes, setNotes] = useState("");
   const [newItems, setNewItems] = useState<ExchangeItem[]>([{ product_name: "", sku: "", quantity: 1, unit_price: 0 }]);
+  const [returnedItemsManual, setReturnedItemsManual] = useState<ExchangeItem[]>([{ product_name: "", sku: "", quantity: 1, unit_price: 0 }]);
   const [diffPaymentMethod, setDiffPaymentMethod] = useState("pix");
   const [creditDays, setCreditDays] = useState("30");
   const [saving, setSaving] = useState(false);
@@ -308,7 +309,9 @@ export function POSExchanges({ storeId }: Props) {
     return selectedSale.items.filter((_, idx) => selectedReturnItems.get(idx)?.selected);
   };
 
-  const returnedTotal = getSelectedItems().reduce((s, i) => s + i.quantity * i.price, 0);
+  const isManual = selectedSale?.id === "manual";
+  const manualReturnedTotal = returnedItemsManual.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const returnedTotal = isManual ? manualReturnedTotal : getSelectedItems().reduce((s, i) => s + i.quantity * i.price, 0);
   const newTotal = newItems.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const differenceAmount = newTotal - returnedTotal;
 
@@ -367,8 +370,11 @@ export function POSExchanges({ storeId }: Props) {
 
   const handleSave = async () => {
     if (!selectedSale) { toast.error("Selecione o pedido original"); return; }
-    const selected = getSelectedItems();
-    if (selected.length === 0) { toast.error("Selecione itens devolvidos"); return; }
+    const isManualFlow = selectedSale.id === "manual";
+    const selected = isManualFlow ? [] : getSelectedItems();
+    const validManualReturns = returnedItemsManual.filter(i => i.product_name.trim());
+    if (!isManualFlow && selected.length === 0) { toast.error("Selecione itens devolvidos"); return; }
+    if (isManualFlow && validManualReturns.length === 0) { toast.error("Adicione pelo menos um item devolvido"); return; }
     setSaving(true);
     try {
       const creditExpires = exchangeType === "credit"
@@ -379,17 +385,31 @@ export function POSExchanges({ storeId }: Props) {
         : null;
 
       const returnedItems: ExchangeItem[] = [];
-      for (let i = 0; i < selectedSale.items.length; i++) {
-        const entry = selectedReturnItems.get(i);
-        if (!entry?.selected) continue;
-        const item = selectedSale.items[i];
-        returnedItems.push({
-          product_name: item.name,
-          sku: item.sku,
-          quantity: item.quantity,
-          unit_price: item.price,
-          reason: entry.reason,
-        });
+      if (isManualFlow) {
+        for (const item of validManualReturns) {
+          returnedItems.push({
+            product_name: item.product_name,
+            sku: item.sku,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            tiny_id: item.tiny_id,
+            barcode: item.barcode,
+            reason: item.reason || "outro",
+          });
+        }
+      } else {
+        for (let i = 0; i < selectedSale.items.length; i++) {
+          const entry = selectedReturnItems.get(i);
+          if (!entry?.selected) continue;
+          const item = selectedSale.items[i];
+          returnedItems.push({
+            product_name: item.name,
+            sku: item.sku,
+            quantity: item.quantity,
+            unit_price: item.price,
+            reason: entry.reason,
+          });
+        }
       }
 
       const validNewItems = exchangeType !== "credit" ? newItems.filter(i => i.product_name.trim()) : [];
@@ -464,6 +484,7 @@ export function POSExchanges({ storeId }: Props) {
     setSelectedSeller("");
     setNotes("");
     setNewItems([{ product_name: "", sku: "", quantity: 1, unit_price: 0 }]);
+    setReturnedItemsManual([{ product_name: "", sku: "", quantity: 1, unit_price: 0 }]);
     setDiffPaymentMethod("pix");
     setCreditDays("30");
   };
@@ -775,7 +796,25 @@ export function POSExchanges({ storeId }: Props) {
             {/* Step 3: Exchange Details */}
             {formStep === "exchange_details" && selectedSale && (
               <div className="space-y-4">
-                {/* Summary */}
+                {/* Manual: returned items picker */}
+                {isManual && (
+                  <>
+                    <Separator className="bg-pos-white/10" />
+                    <div>
+                      <Label className="text-pos-white text-sm font-bold mb-2 block">🔄 Itens Devolvidos</Label>
+                      <div className="space-y-2">
+                        {returnedItemsManual.map((_, idx) => <ItemRow key={idx} items={returnedItemsManual} setItems={setReturnedItemsManual} idx={idx} labelPrefix="Devolvido" />)}
+                      </div>
+                      <Button variant="ghost" className="mt-2 text-pos-orange text-xs gap-1" onClick={() => setReturnedItemsManual(p => [...p, { product_name: "", sku: "", quantity: 1, unit_price: 0 }])}>
+                        <Plus className="h-3 w-3" /> Adicionar Devolvido
+                      </Button>
+                      <p className="text-right text-sm text-pos-orange font-bold">Subtotal devolvido: R$ {manualReturnedTotal.toFixed(2)}</p>
+                    </div>
+                  </>
+                )}
+
+                {/* Summary for non-manual */}
+                {!isManual && (
                 <Card className="bg-pos-white/5 border-pos-orange/20">
                   <CardContent className="p-3">
                     <p className="text-xs text-pos-white/50 mb-1">Itens devolvidos ({getSelectedItems().length})</p>
@@ -785,6 +824,7 @@ export function POSExchanges({ storeId }: Props) {
                     <p className="text-sm text-pos-orange font-bold mt-1">Total: R$ {returnedTotal.toFixed(2)}</p>
                   </CardContent>
                 </Card>
+                )}
 
                 {/* Type */}
                 <div className="grid grid-cols-3 gap-2">
@@ -861,7 +901,7 @@ export function POSExchanges({ storeId }: Props) {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button variant="ghost" className="text-pos-white/60" onClick={() => setFormStep("select_items")}>
+                  <Button variant="ghost" className="text-pos-white/60" onClick={() => setFormStep(isManual ? "search_sale" : "select_items")}>
                     Voltar
                   </Button>
                   <Button className="flex-1 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-12 gap-2" onClick={handleSave} disabled={saving}>

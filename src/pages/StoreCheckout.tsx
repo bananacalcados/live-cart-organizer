@@ -148,6 +148,9 @@ function OrderSummary({ saleData }: { saleData: SaleData }) {
   const itemSavings = fullSubtotal - subtotal;
   const totalSavings = itemSavings + saleData.discount_amount;
   const shippingAmount = saleData.shipping_amount || 0;
+  // Net product subtotal after all discounts (before shipping)
+  const netProductSubtotal = subtotal - saleData.discount_amount;
+  const totalFinal = netProductSubtotal + shippingAmount;
 
   return (
     <div className="bg-secondary/30 rounded-xl p-4 space-y-3">
@@ -168,7 +171,6 @@ function OrderSummary({ saleData }: { saleData: SaleData }) {
           <ShoppingBag className="h-4 w-4" />
           Resumo ({totalItems} {totalItems === 1 ? 'item' : 'itens'})
         </div>
-        <span className="font-bold text-primary">R$ {saleData.total.toFixed(2)}</span>
       </div>
 
       {saleData.items.map((item, i) => {
@@ -205,44 +207,44 @@ function OrderSummary({ saleData }: { saleData: SaleData }) {
         );
       })}
 
-      <div className="border-t pt-2 space-y-1">
-        {(saleData.discount_amount > 0 || hasItemDiscounts) && (
-          <>
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Subtotal dos produtos</span>
-              <span className={saleData.discount_amount > 0 || hasItemDiscounts ? "line-through text-muted-foreground" : ""}>
-                R$ {fullSubtotal.toFixed(2)}
-              </span>
-            </div>
-            {hasItemDiscounts && (
-              <div className="flex justify-between text-xs">
-                <span className="text-green-600 font-medium">🏷️ Desconto nos itens</span>
-                <span className="text-green-600 font-bold">-R$ {itemSavings.toFixed(2)}</span>
-              </div>
-            )}
-            {saleData.discount_amount > 0 && (
-              <div className="flex justify-between text-xs">
-                <span className="text-green-600 font-medium">🎁 Desconto extra</span>
-                <span className="text-green-600 font-bold">-R$ {saleData.discount_amount.toFixed(2)}</span>
-              </div>
-            )}
-          </>
+      <div className="border-t pt-2 space-y-1.5">
+        {/* Always show subtotal of products */}
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Subtotal dos produtos</span>
+          <span className={totalSavings > 0 ? "line-through text-muted-foreground" : ""}>
+            R$ {fullSubtotal.toFixed(2)}
+          </span>
+        </div>
+        {hasItemDiscounts && (
+          <div className="flex justify-between text-xs">
+            <span className="text-green-600 font-medium">🏷️ Desconto nos itens</span>
+            <span className="text-green-600 font-bold">-R$ {itemSavings.toFixed(2)}</span>
+          </div>
         )}
-        {shippingAmount > 0 && (
+        {saleData.discount_amount > 0 && (
+          <div className="flex justify-between text-xs">
+            <span className="text-green-600 font-medium">🎁 Desconto extra</span>
+            <span className="text-green-600 font-bold">-R$ {saleData.discount_amount.toFixed(2)}</span>
+          </div>
+        )}
+
+        {/* Always show shipping line */}
+        {shippingAmount > 0 ? (
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">🚚 Frete</span>
             <span>R$ {shippingAmount.toFixed(2)}</span>
           </div>
-        )}
-        {shippingAmount === 0 && (
+        ) : (
           <div className="flex justify-between text-xs">
             <span className="text-green-600 font-medium">🚚 Frete grátis!</span>
-            <span className="text-green-600 font-bold">R$ 0,00</span>
+            <Badge variant="secondary" className="text-[10px] bg-green-500/10 text-green-600 border-0">Grátis</Badge>
           </div>
         )}
-        <div className="flex justify-between font-bold text-sm pt-1">
-          <span>Total</span>
-          <span className="text-primary">R$ {saleData.total.toFixed(2)}</span>
+
+        {/* Total Final */}
+        <div className="flex justify-between font-bold text-base pt-1.5 border-t">
+          <span>Total Final</span>
+          <span className="text-primary">R$ {totalFinal.toFixed(2)}</span>
         </div>
       </div>
       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
