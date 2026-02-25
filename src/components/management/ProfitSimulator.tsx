@@ -29,6 +29,14 @@ interface VariableCostItem {
   percentage: number;
 }
 
+interface PlannedCutDetail {
+  type: 'fixed' | 'variable';
+  costName: string;
+  storeName: string;
+  cutValue: string;
+  description: string;
+}
+
 interface Props {
   title: string;
   fixedCostItems: FixedCostItem[];
@@ -37,6 +45,7 @@ interface Props {
   totalVariablePercent: number;
   plannedFixedCuts?: Record<string, number>;
   plannedVariableCuts?: Record<string, number>;
+  plannedCutDetails?: PlannedCutDetail[];
 }
 
 export function ProfitSimulator({
@@ -47,6 +56,7 @@ export function ProfitSimulator({
   totalVariablePercent,
   plannedFixedCuts = {},
   plannedVariableCuts = {},
+  plannedCutDetails = [],
 }: Props) {
   const [simRevenue, setSimRevenue] = useState("100000");
   const [globalFixedReduction, setGlobalFixedReduction] = useState(0);
@@ -389,6 +399,36 @@ export function ProfitSimulator({
                 <p className="text-[10px] text-muted-foreground">Margem: {fmtPct(plannedProfitMargin)}</p>
               </div>
             </div>
+
+            {/* Detail table of planned cuts */}
+            {plannedCutDetails.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Custo</TableHead>
+                    <TableHead>Loja</TableHead>
+                    <TableHead className="text-right">Corte</TableHead>
+                    <TableHead>Como reduzir</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {plannedCutDetails.map((d, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[9px]">
+                          {d.type === 'fixed' ? 'Fixo' : 'Variável'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs font-medium">{d.costName}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{d.storeName}</TableCell>
+                      <TableCell className="text-right text-xs font-bold text-primary">{d.cutValue}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{d.description || '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </div>
         )}
         {variableCostItems.length > 0 && (
@@ -451,19 +491,32 @@ export function ProfitSimulator({
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Custo Variável</TableHead>
-                          <TableHead className="text-right w-[100px]">%</TableHead>
-                          <TableHead className="text-right w-[160px]">Limite R$/mês</TableHead>
+                          <TableHead>Custo</TableHead>
+                          <TableHead className="text-right w-[80px]">%</TableHead>
+                          <TableHead className="text-right w-[140px]">Limite R$/mês</TableHead>
+                          {hasPlannedCuts && (
+                            <TableHead className="text-right w-[140px]">
+                              <span className="text-primary">Limite c/ cortes</span>
+                            </TableHead>
+                          )}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {variableCostItems.map(item => {
                           const limitValue = effectiveRevenue * (item.percentage / 100);
+                          const cutPct = plannedVariableCuts[item.id] || 0;
+                          const adjustedPct = item.percentage - cutPct;
+                          const adjustedLimit = effectiveRevenue * (adjustedPct / 100);
                           return (
                             <TableRow key={item.id}>
                               <TableCell className="text-xs font-medium">{item.description}</TableCell>
                               <TableCell className="text-right text-xs">{fmtPct(item.percentage)}</TableCell>
                               <TableCell className="text-right text-sm font-bold text-orange-500">{fmt(limitValue)}</TableCell>
+                              {hasPlannedCuts && (
+                                <TableCell className="text-right text-sm font-bold text-primary">
+                                  {cutPct > 0 ? fmt(adjustedLimit) : '—'}
+                                </TableCell>
+                              )}
                             </TableRow>
                           );
                         })}
@@ -473,17 +526,28 @@ export function ProfitSimulator({
                           <TableCell className="text-right text-sm font-bold text-orange-500">
                             {fmt(effectiveRevenue * (totalVariablePercent / 100))}
                           </TableCell>
+                          {hasPlannedCuts && (
+                            <TableCell className="text-right text-sm font-bold text-primary">
+                              {fmt(effectiveRevenue * (plannedNewVarPct / 100))}
+                            </TableCell>
+                          )}
                         </TableRow>
                         <TableRow className="bg-muted/10">
                           <TableCell className="text-xs font-bold">CUSTOS FIXOS</TableCell>
                           <TableCell className="text-right text-xs">—</TableCell>
                           <TableCell className="text-right text-sm font-bold text-destructive">{fmt(adjustedFixed)}</TableCell>
+                          {hasPlannedCuts && (
+                            <TableCell className="text-right text-sm font-bold text-primary">
+                              {plannedFixedTotal > 0 ? fmt(plannedNewFixed) : '—'}
+                            </TableCell>
+                          )}
                         </TableRow>
                         {usingProfit && (
                           <TableRow className="bg-green-500/5">
                             <TableCell className="text-xs font-bold">LUCRO</TableCell>
                             <TableCell className="text-right text-xs">—</TableCell>
                             <TableCell className="text-right text-sm font-bold text-green-500">{fmt(profitGoal)}</TableCell>
+                            {hasPlannedCuts && <TableCell />}
                           </TableRow>
                         )}
                       </TableBody>

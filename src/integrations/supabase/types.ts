@@ -977,6 +977,7 @@ export type Database = {
       cost_center_planned_fixed_cuts: {
         Row: {
           created_at: string
+          description: string | null
           fixed_cost_id: string
           id: string
           reduction_amount: number
@@ -985,6 +986,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          description?: string | null
           fixed_cost_id: string
           id?: string
           reduction_amount?: number
@@ -993,6 +995,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          description?: string | null
           fixed_cost_id?: string
           id?: string
           reduction_amount?: number
@@ -1012,6 +1015,7 @@ export type Database = {
       cost_center_planned_variable_cuts: {
         Row: {
           created_at: string
+          description: string | null
           id: string
           reduction_percentage: number
           store_id: string
@@ -1020,6 +1024,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          description?: string | null
           id?: string
           reduction_percentage?: number
           store_id: string
@@ -1028,6 +1033,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          description?: string | null
           id?: string
           reduction_percentage?: number
           store_id?: string
