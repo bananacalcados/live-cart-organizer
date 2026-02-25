@@ -48,13 +48,14 @@ const modules = [
     path: "/marketing",
     module: "marketing",
   },
-  {
-    title: "Expedição",
-    description: "Picking, packing e despacho",
-    icon: Truck,
-    path: "/expedition",
-    module: "expedition",
-  },
+  // Expedição v1 oculta temporariamente
+  // {
+  //   title: "Expedição",
+  //   description: "Picking, packing e despacho",
+  //   icon: Truck,
+  //   path: "/expedition",
+  //   module: "expedition",
+  // },
   {
     title: "Expedição Beta",
     description: "Auto-sync Shopify + código de barras",
