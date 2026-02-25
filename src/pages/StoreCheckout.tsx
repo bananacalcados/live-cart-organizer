@@ -518,30 +518,34 @@ export default function StoreCheckout() {
 
       const saleItems: SaleItem[] = (items || []).map((i: any) => ({
         sku: i.sku || "",
-        name: i.name || "",
-        variant: i.variant || "",
-        price: i.price || 0,
-        quantity: i.quantity || 1,
+        name: i.product_name || i.name || "",
+        variant: i.variant_name || i.variant || "",
+        price: Number(i.unit_price ?? i.price ?? 0),
+        quantity: Number(i.quantity ?? 1),
       }));
+
+      const paymentDetails = ((sale as any).payment_details || {}) as Record<string, any>;
+      const customerName = (sale as any).customer_name || paymentDetails.customer_name || "Cliente";
+      const customerPhone = (sale as any).customer_phone || paymentDetails.customer_phone || "";
 
       setSaleData({
         id: sale.id,
         store_id: sale.store_id,
         store_name: store?.name || "Loja",
-        total: sale.total || 0,
-        discount_amount: (sale as any).discount_amount || 0,
-        customer_name: (sale as any).customer_name || "Cliente",
-        customer_phone: (sale as any).customer_phone || "",
+        total: Number(sale.total || 0),
+        discount_amount: Number((sale as any).discount_amount ?? (sale as any).discount ?? 0),
+        customer_name: customerName,
+        customer_phone: customerPhone,
         items: saleItems,
         status: sale.status || "",
       });
 
       // Pre-fill customer name/phone
-      if ((sale as any).customer_name) {
+      if (customerName && customerName !== "Cliente") {
         setCustomerForm(prev => ({
           ...prev,
-          fullName: (sale as any).customer_name || "",
-          whatsapp: (sale as any).customer_phone ? formatPhone((sale as any).customer_phone) : "",
+          fullName: customerName,
+          whatsapp: customerPhone ? formatPhone(customerPhone) : "",
         }));
       }
 

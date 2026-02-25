@@ -456,42 +456,53 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       const sellerObj = sellers.find(s => s.id === selectedSeller);
       const paymentGw = gateway === "delivery" ? `delivery_${deliveryMethod}` : gateway;
       const saleStoreId = gateway === "pickup" ? pickupStoreId : storeId;
-      const { data: sale, error: saleErr } = await supabase
-        .from("pos_sales")
-        .insert({
-          store_id: saleStoreId,
-          seller_id: selectedSeller,
+      const salePayload = {
+        store_id: saleStoreId,
+        seller_id: selectedSeller,
+        customer_id: linkedCustomer?.id || null,
+        subtotal: cartSubtotal,
+        discount: discountAmount > 0 ? discountAmount : 0,
+        total: cartTotal,
+        status: gateway === "pickup" ? "pending_pickup" : "online_pending",
+        sale_type: gateway === "pickup" ? "pickup" : "online",
+        payment_gateway: paymentGw,
+        payment_link: (gateway === "delivery" || gateway === "pickup" || gateway === "store-checkout") ? null : link,
+        stock_source_store_id: stockStore,
+        payment_method_detail: gateway === "delivery" ? deliveryMethod : null,
+        payment_details: {
           seller_name: sellerObj?.name || "",
-          total: cartTotal,
-          items_count: cartItems,
-          status: gateway === "pickup" ? "pending_pickup" : "online_pending",
-          sale_type: gateway === "pickup" ? "pickup" : "online",
-          payment_gateway: paymentGw,
-          payment_link: (gateway === "delivery" || gateway === "pickup" || gateway === "store-checkout") ? null : link,
-          stock_source_store_id: stockStore,
           customer_name: linkedCustomer?.name || null,
           customer_phone: linkedCustomer?.whatsapp || null,
-          customer_id: linkedCustomer?.id || null,
-          payment_method_detail: gateway === "delivery" ? deliveryMethod : null,
-          discount: discountAmount > 0 ? discountAmount : 0,
-        } as any)
+          customer_email: linkedCustomer?.email || null,
+        },
+        notes: deliveryNotes || null,
+      };
+
+      const { data: sale, error: saleErr } = await supabase
+        .from("pos_sales")
+        .insert(salePayload as any)
         .select("id")
         .single();
 
-      if (saleErr) console.error("Error saving sale:", saleErr);
+      if (saleErr || !sale) {
+        throw new Error(saleErr?.message || "Não foi possível salvar a venda");
+      }
 
       // Save sale items
-      if (sale) {
-        const saleItems = cart.map(c => ({
-          sale_id: sale.id,
-          sku: c.sku,
-          name: c.title,
-          variant: c.variantLabel,
-          price: c.price,
-          quantity: c.quantity,
-          barcode: "",
-        }));
-        await supabase.from("pos_sale_items").insert(saleItems as any);
+      const saleItems = cart.map(c => ({
+        sale_id: sale.id,
+        sku: c.sku || null,
+        barcode: null,
+        product_name: c.title,
+        variant_name: c.variantLabel || null,
+        unit_price: c.price,
+        quantity: c.quantity,
+        total_price: c.price * c.quantity,
+      }));
+
+      const { error: saleItemsErr } = await supabase.from("pos_sale_items").insert(saleItems as any);
+      if (saleItemsErr) {
+        throw new Error(saleItemsErr.message || "Não foi possível salvar os itens da venda");
       }
 
       // For store-checkout, generate the link using the sale ID
