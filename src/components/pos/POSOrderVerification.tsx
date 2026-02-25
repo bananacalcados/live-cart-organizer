@@ -22,6 +22,8 @@ interface Props {
   storeId: string;
   sellerId: string;
   items: SaleItem[];
+  hasGift?: boolean;
+  giftDescription?: string;
   onComplete: () => void;
   onSkip: () => void;
 }
@@ -32,14 +34,15 @@ interface VerifiedItem extends SaleItem {
   noDefects: boolean;
 }
 
-export function POSOrderVerification({ saleId, storeId, sellerId, items, onComplete, onSkip }: Props) {
+export function POSOrderVerification({ saleId, storeId, sellerId, items, hasGift, giftDescription, onComplete, onSkip }: Props) {
   const [verifiedItems, setVerifiedItems] = useState<VerifiedItem[]>(
     items.map(i => ({ ...i, scanned: false, feetChecked: false, noDefects: false }))
   );
   const [scanInput, setScanInput] = useState("");
   const [completing, setCompleting] = useState(false);
+  const [giftChecked, setGiftChecked] = useState(false);
 
-  const allVerified = verifiedItems.every(i => i.scanned && i.feetChecked && i.noDefects);
+  const allVerified = verifiedItems.every(i => i.scanned && i.feetChecked && i.noDefects) && (!hasGift || giftChecked);
   const verifiedCount = verifiedItems.filter(i => i.scanned && i.feetChecked && i.noDefects).length;
 
   const handleScan = () => {
@@ -80,12 +83,15 @@ export function POSOrderVerification({ saleId, storeId, sellerId, items, onCompl
     try {
       // If saleId is provided, save verification to DB
       if (saleId) {
-        const verificationData = verifiedItems.map(i => ({
-          sku: i.sku,
-          name: i.name,
-          feetChecked: i.feetChecked,
-          noDefects: i.noDefects,
-        }));
+        const verificationData = {
+          items: verifiedItems.map(i => ({
+            sku: i.sku,
+            name: i.name,
+            feetChecked: i.feetChecked,
+            noDefects: i.noDefects,
+          })),
+          ...(hasGift && { giftChecked: true, giftDescription }),
+        };
 
         await supabase
           .from("pos_sales")
@@ -134,6 +140,22 @@ export function POSOrderVerification({ saleId, storeId, sellerId, items, onCompl
           <Search className="h-3.5 w-3.5" /> Buscar
         </Button>
       </div>
+
+      {/* Gift check */}
+      {hasGift && (
+        <div className={`p-3 rounded-lg border transition-all ${giftChecked ? "border-green-500/30 bg-green-500/5" : "border-amber-500/30 bg-amber-500/5"}`}>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="gift-check"
+              checked={giftChecked}
+              onCheckedChange={(v) => setGiftChecked(!!v)}
+            />
+            <Label htmlFor="gift-check" className="text-xs cursor-pointer flex items-center gap-1">
+              🎁 Brinde colocado na embalagem: <span className="font-semibold">{giftDescription}</span>
+            </Label>
+          </div>
+        </div>
+      )}
 
       {/* Items checklist */}
       <div className="space-y-2">
