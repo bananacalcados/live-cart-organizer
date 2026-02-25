@@ -10,10 +10,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil,
+  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil, UserPlus, Store, Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { POSCustomerForm } from "./POSCustomerForm";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -55,6 +56,7 @@ interface Sale {
   tiny_order_number: string | null;
   tiny_order_id: string | null;
   customer_id: string | null;
+  sale_type?: string | null;
 }
 
 interface Props {
@@ -77,6 +79,12 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [paymentMethods, setPaymentMethods] = useState<{ id: string; name: string }[]>([]);
   const [selectedPaymentId, setSelectedPaymentId] = useState("");
   const [savingPayment, setSavingPayment] = useState(false);
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [currentCustomer, setCurrentCustomer] = useState<CustomerInfo | null>(customer);
+
+  useEffect(() => {
+    setCurrentCustomer(customer);
+  }, [customer]);
 
   useEffect(() => {
     if (editingPayment && storeId && paymentMethods.length === 0) {
@@ -182,6 +190,15 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     Não criado no Tiny
                   </Badge>
                 )}
+                {sale.sale_type === 'online' ? (
+                  <Badge className="bg-blue-100 text-blue-700 border-blue-300 font-bold text-xs flex items-center gap-1">
+                    <Globe className="h-3 w-3" /> Online
+                  </Badge>
+                ) : (
+                  <Badge className="bg-green-100 text-green-700 border-green-300 font-bold text-xs flex items-center gap-1">
+                    <Store className="h-3 w-3" /> Loja
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
@@ -202,47 +219,62 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
             </div>
 
             {/* Customer */}
-            {customer && (customer.name || customer.cpf || customer.whatsapp) && (
-              <>
-                <div className="space-y-2">
-                  <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
-                    <User className="h-3.5 w-3.5 text-blue-600" /> Cliente
-                  </h4>
-                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 space-y-2">
-                    {customer.name && <p className="font-bold text-sm text-gray-900">{customer.name}</p>}
-                    {customer.cpf && (
-                      <p className="text-xs text-gray-600 font-mono bg-white/60 inline-block px-2 py-0.5 rounded">
-                        CPF: {customer.cpf}
-                      </p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 text-blue-600" /> Cliente
+                </h4>
+                {!isTinyOnly && storeId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1 border-blue-300 text-blue-600 hover:bg-blue-50"
+                    onClick={() => setShowCustomerForm(true)}
+                  >
+                    {currentCustomer ? <Pencil className="h-3 w-3" /> : <UserPlus className="h-3 w-3" />}
+                    {currentCustomer ? "Editar" : "Adicionar"}
+                  </Button>
+                )}
+              </div>
+              {currentCustomer && (currentCustomer.name || currentCustomer.cpf || currentCustomer.whatsapp) ? (
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 space-y-2">
+                  {currentCustomer.name && <p className="font-bold text-sm text-gray-900">{currentCustomer.name}</p>}
+                  {currentCustomer.cpf && (
+                    <p className="text-xs text-gray-600 font-mono bg-white/60 inline-block px-2 py-0.5 rounded">
+                      CPF: {currentCustomer.cpf}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-3">
+                    {currentCustomer.whatsapp && (
+                      <span className="text-xs text-gray-700 flex items-center gap-1 bg-green-50 px-2 py-1 rounded-md border border-green-200">
+                        <Phone className="h-3 w-3 text-green-600" /> {currentCustomer.whatsapp}
+                      </span>
                     )}
-                    <div className="flex flex-wrap gap-3">
-                      {customer.whatsapp && (
-                        <span className="text-xs text-gray-700 flex items-center gap-1 bg-green-50 px-2 py-1 rounded-md border border-green-200">
-                          <Phone className="h-3 w-3 text-green-600" /> {customer.whatsapp}
-                        </span>
-                      )}
-                      {customer.email && (
-                        <span className="text-xs text-gray-700 flex items-center gap-1 bg-purple-50 px-2 py-1 rounded-md border border-purple-200">
-                          <Mail className="h-3 w-3 text-purple-600" /> {customer.email}
-                        </span>
-                      )}
-                    </div>
-                    {customer.address && (
-                      <div className="flex items-start gap-1.5 mt-1 bg-white/60 p-2 rounded-md">
-                        <MapPin className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
-                        <p className="text-xs text-gray-700 leading-relaxed">
-                          {customer.address}{customer.address_number ? `, ${customer.address_number}` : ""}
-                          {customer.neighborhood ? ` - ${customer.neighborhood}` : ""}
-                          {customer.city ? `, ${customer.city}` : ""}
-                          {customer.state ? `/${customer.state}` : ""}
-                          {customer.cep ? ` - CEP: ${customer.cep}` : ""}
-                        </p>
-                      </div>
+                    {currentCustomer.email && (
+                      <span className="text-xs text-gray-700 flex items-center gap-1 bg-purple-50 px-2 py-1 rounded-md border border-purple-200">
+                        <Mail className="h-3 w-3 text-purple-600" /> {currentCustomer.email}
+                      </span>
                     )}
                   </div>
+                  {currentCustomer.address && (
+                    <div className="flex items-start gap-1.5 mt-1 bg-white/60 p-2 rounded-md">
+                      <MapPin className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
+                      <p className="text-xs text-gray-700 leading-relaxed">
+                        {currentCustomer.address}{currentCustomer.address_number ? `, ${currentCustomer.address_number}` : ""}
+                        {currentCustomer.neighborhood ? ` - ${currentCustomer.neighborhood}` : ""}
+                        {currentCustomer.city ? `, ${currentCustomer.city}` : ""}
+                        {currentCustomer.state ? `/${currentCustomer.state}` : ""}
+                        {currentCustomer.cep ? ` - CEP: ${currentCustomer.cep}` : ""}
+                      </p>
+                    </div>
+                  )}
                 </div>
-              </>
-            )}
+              ) : (
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-center">
+                  <p className="text-xs text-gray-400">Nenhum cliente vinculado</p>
+                </div>
+              )}
+            </div>
 
             {/* Items */}
             <div className="space-y-2">
@@ -369,6 +401,44 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
             </div>
           </div>
         </ScrollArea>
+
+        {/* Customer Form Dialog */}
+        {showCustomerForm && sale && (
+          <POSCustomerForm
+            open={showCustomerForm}
+            onOpenChange={setShowCustomerForm}
+            existingCustomer={sale.customer_id && currentCustomer ? {
+              id: sale.customer_id,
+              name: currentCustomer.name || undefined,
+              email: currentCustomer.email || undefined,
+              whatsapp: currentCustomer.whatsapp || undefined,
+              cpf: currentCustomer.cpf || undefined,
+              cep: currentCustomer.cep || undefined,
+              address: currentCustomer.address || undefined,
+              address_number: currentCustomer.address_number || undefined,
+              neighborhood: currentCustomer.neighborhood || undefined,
+              city: currentCustomer.city || undefined,
+              state: currentCustomer.state || undefined,
+            } : null}
+            onSaved={async (savedCustomer) => {
+              // Link customer to sale if not already linked
+              await supabase
+                .from("pos_sales")
+                .update({ customer_id: savedCustomer.id } as any)
+                .eq("id", sale.id);
+              // Refresh customer data
+              const { data: freshCust } = await supabase
+                .from("pos_customers")
+                .select("name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+                .eq("id", savedCustomer.id)
+                .maybeSingle();
+              if (freshCust) setCurrentCustomer(freshCust as CustomerInfo);
+              toast.success("Cliente vinculado à venda!");
+              setShowCustomerForm(false);
+              onDeleted?.(); // refresh list
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
