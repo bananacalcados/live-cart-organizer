@@ -57,6 +57,7 @@ export function ProfitSimulator({
   // Reverse simulator
   const [reverseRevenue, setReverseRevenue] = useState("");
   const [targetProfit, setTargetProfit] = useState("0");
+  const [cutMode, setCutMode] = useState<"fixed" | "variable" | "both">("both");
 
   const hasItemReductions = Object.values(fixedItemReductions).some(v => v > 0) ||
     Object.values(variableItemReductions).some(v => v > 0);
@@ -355,9 +356,6 @@ export function ProfitSimulator({
             <Crosshair className="h-4 w-4 text-primary" />
             <span className="text-sm font-bold">Simulador Reverso — Quanto preciso cortar?</span>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Informe o faturamento previsto e a meta de lucro. O sistema calcula quanto você precisa reduzir em custos.
-          </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -371,7 +369,7 @@ export function ProfitSimulator({
               />
             </div>
             <div>
-              <Label className="text-xs font-medium">Meta de Lucro (R$)</Label>
+              <Label className="text-xs font-medium">Lucro Esperado (R$)</Label>
               <Input
                 type="number"
                 value={targetProfit}
@@ -382,155 +380,242 @@ export function ProfitSimulator({
             </div>
           </div>
 
+          {/* Cut mode selector */}
+          <div className="flex gap-2">
+            {([
+              { key: "fixed" as const, label: "Cortar Custo Fixo", icon: DollarSign },
+              { key: "variable" as const, label: "Cortar Custo Variável", icon: Percent },
+              { key: "both" as const, label: "Cortar Ambos", icon: ArrowDownToLine },
+            ]).map(opt => (
+              <Button
+                key={opt.key}
+                variant={cutMode === opt.key ? "default" : "outline"}
+                size="sm"
+                className="gap-1.5 text-xs flex-1"
+                onClick={() => setCutMode(opt.key)}
+              >
+                <opt.icon className="h-3.5 w-3.5" />
+                {opt.label}
+              </Button>
+            ))}
+          </div>
+
           {(() => {
             const revRev = parseFloat(reverseRevenue) || 0;
             const profitGoal = parseFloat(targetProfit) || 0;
-            if (revRev <= 0) return null;
+            if (revRev <= 0) return (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                Digite o faturamento previsto para ver o resultado.
+              </p>
+            );
 
-            // Current scenario with this revenue
             const currentVarCost = revRev * (totalVariablePercent / 100);
             const currentProfit = revRev - currentVarCost - totalFixedCosts;
-            const gap = profitGoal - currentProfit; // how much more profit we need
+            const gap = profitGoal - currentProfit;
 
             if (gap <= 0) {
-              // Already achieving the goal
               return (
                 <Card className="border-green-500/30 bg-green-500/5">
                   <CardContent className="pt-4 pb-4 space-y-2">
                     <div className="flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-green-500" />
-                      <span className="text-sm font-medium text-green-500">Meta já atingida!</span>
+                      <span className="text-sm font-bold text-green-500">Meta já atingida!</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Com faturamento de {fmt(revRev)}, o lucro atual seria de{" "}
-                      <strong className="text-green-500">{fmt(currentProfit)}</strong>
-                      {profitGoal > 0 && <>, superando a meta de {fmt(profitGoal)} em {fmt(currentProfit - profitGoal)}</>}.
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Margem líquida: <strong>{fmtPct((currentProfit / revRev) * 100)}</strong>
-                    </p>
+                    <div className="grid grid-cols-3 gap-3 pt-2">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Lucro projetado</p>
+                        <p className="text-lg font-bold text-green-500">{fmt(currentProfit)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Margem líquida</p>
+                        <p className="text-lg font-bold">{fmtPct((currentProfit / revRev) * 100)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Sobra da meta</p>
+                        <p className="text-lg font-bold text-green-500">+{fmt(Math.abs(gap))}</p>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               );
             }
 
-            // Need to cut `gap` from costs
-            // Option 1: Cut only fixed costs
-            const fixedReductionNeeded = totalFixedCosts > 0 ? (gap / totalFixedCosts) * 100 : Infinity;
-            const newFixedTarget = totalFixedCosts - gap;
+            // Current situation card
+            const situationCard = (
+              <Card className="border-destructive/20">
+                <CardContent className="pt-4 pb-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Lucro atual projetado</p>
+                      <p className="text-lg font-bold text-destructive">{fmt(currentProfit)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Meta de lucro</p>
+                      <p className="text-lg font-bold">{fmt(profitGoal)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground">Precisa cortar</p>
+                      <p className="text-lg font-bold text-destructive">{fmt(gap)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
 
-            // Option 2: Cut only variable costs (reduce percentage)
-            // revRev * (newVarPct/100) + totalFixedCosts = revRev - profitGoal
-            // newVarPct = ((revRev - profitGoal - totalFixedCosts) / revRev) * 100
-            const newVarPctTarget = revRev > 0 ? ((revRev - profitGoal - totalFixedCosts) / revRev) * 100 : 0;
-            const varReductionNeeded = totalVariablePercent > 0 ? ((totalVariablePercent - newVarPctTarget) / totalVariablePercent) * 100 : Infinity;
-
-            // Option 3: Split 50/50
-            const halfGap = gap / 2;
-            const fixedHalfReduction = totalFixedCosts > 0 ? (halfGap / totalFixedCosts) * 100 : Infinity;
-            const newVarPctHalf = revRev > 0 ? ((revRev - profitGoal - (totalFixedCosts - halfGap)) / revRev) * 100 : 0;
-            const varHalfReduction = totalVariablePercent > 0 ? ((totalVariablePercent - newVarPctHalf) / totalVariablePercent) * 100 : Infinity;
-
-            const isPossibleFixed = fixedReductionNeeded <= 100 && newFixedTarget >= 0;
-            const isPossibleVar = varReductionNeeded <= 100 && newVarPctTarget >= 0;
-            const isPossibleSplit = fixedHalfReduction <= 100 && varHalfReduction <= 100;
-
-            return (
-              <div className="space-y-3">
-                <Card className="border-destructive/30 bg-destructive/5">
-                  <CardContent className="pt-4 pb-4 space-y-1">
-                    <p className="text-xs text-muted-foreground">
-                      Com faturamento de {fmt(revRev)}, o lucro atual seria de{" "}
-                      <strong className="text-destructive">{fmt(currentProfit)}</strong>.
-                      {profitGoal > 0
-                        ? <> Para atingir {fmt(profitGoal)} de lucro, você precisa cortar <strong>{fmt(gap)}</strong> em custos.</>
-                        : <> Para empatar, você precisa cortar <strong>{fmt(gap)}</strong> em custos.</>
-                      }
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {/* Option 1: Only Fixed */}
-                  <Card className={!isPossibleFixed ? "opacity-50" : ""}>
-                    <CardContent className="pt-4 pb-4 space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <DollarSign className="h-3.5 w-3.5 text-destructive" />
-                        <span className="text-xs font-bold">Só Custos Fixos</span>
+            if (cutMode === "fixed") {
+              const newFixed = totalFixedCosts - gap;
+              const possible = newFixed >= 0;
+              const reductionPct = totalFixedCosts > 0 ? (gap / totalFixedCosts) * 100 : 0;
+              return (
+                <div className="space-y-3">
+                  {situationCard}
+                  <Card className={possible ? "border-primary/30" : "border-destructive/30"}>
+                    <CardContent className="pt-4 pb-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-bold">Resultado: Cortar Custos Fixos</span>
                       </div>
-                      {isPossibleFixed ? (
-                        <>
-                          <p className="text-2xl font-bold text-destructive">
-                            -{fmtPct(fixedReductionNeeded)}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">
-                            De {fmt(totalFixedCosts)} para {fmt(newFixedTarget)}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">
-                            Cortar {fmt(gap)} em custos fixos
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-xs text-destructive">Inviável — corte necessário excede o total de custos fixos</p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Option 2: Only Variable */}
-                  <Card className={!isPossibleVar ? "opacity-50" : ""}>
-                    <CardContent className="pt-4 pb-4 space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <Percent className="h-3.5 w-3.5 text-orange-500" />
-                        <span className="text-xs font-bold">Só Custos Variáveis</span>
-                      </div>
-                      {isPossibleVar ? (
-                        <>
-                          <p className="text-2xl font-bold text-orange-500">
-                            -{fmtPct(varReductionNeeded)}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">
-                            De {fmtPct(totalVariablePercent)} para {fmtPct(Math.max(0, newVarPctTarget))}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">
-                            Reduzir {fmtPct(totalVariablePercent - newVarPctTarget)} dos variáveis
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-xs text-destructive">Inviável — não é possível compensar apenas com variáveis</p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Option 3: Split */}
-                  <Card className={`${isPossibleSplit ? "border-primary/30" : "opacity-50"}`}>
-                    <CardContent className="pt-4 pb-4 space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <ArrowDownToLine className="h-3.5 w-3.5 text-primary" />
-                        <span className="text-xs font-bold">Misto (50/50)</span>
-                        {isPossibleSplit && <Badge variant="secondary" className="text-[9px]">Recomendado</Badge>}
-                      </div>
-                      {isPossibleSplit ? (
-                        <>
-                          <div className="space-y-1">
-                            <p className="text-xs">
-                              Fixos: <strong className="text-destructive">-{fmtPct(fixedHalfReduction)}</strong>
-                              <span className="text-muted-foreground ml-1">({fmt(totalFixedCosts)} → {fmt(totalFixedCosts - halfGap)})</span>
-                            </p>
-                            <p className="text-xs">
-                              Variáveis: <strong className="text-orange-500">-{fmtPct(varHalfReduction)}</strong>
-                              <span className="text-muted-foreground ml-1">({fmtPct(totalVariablePercent)} → {fmtPct(Math.max(0, newVarPctHalf))})</span>
-                            </p>
+                      {possible ? (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="p-3 rounded-lg bg-muted/50">
+                            <p className="text-[10px] text-muted-foreground">Custo fixo atual</p>
+                            <p className="text-lg font-bold">{fmt(totalFixedCosts)}</p>
                           </div>
-                          <p className="text-[10px] text-muted-foreground">
-                            Cortar {fmt(halfGap)} de cada lado
-                          </p>
-                        </>
+                          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                            <p className="text-[10px] text-muted-foreground">Cortar</p>
+                            <p className="text-lg font-bold text-destructive">- {fmt(gap)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                            <p className="text-[10px] text-muted-foreground">Novo custo fixo</p>
+                            <p className="text-lg font-bold text-primary">{fmt(newFixed)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-muted/50">
+                            <p className="text-[10px] text-muted-foreground">Redução de</p>
+                            <p className="text-lg font-bold">{fmtPct(reductionPct)}</p>
+                          </div>
+                        </div>
                       ) : (
-                        <p className="text-xs text-destructive">Inviável — a combinação não é suficiente</p>
+                        <p className="text-sm text-destructive">
+                          Inviável — o corte de {fmt(gap)} excede o total de custos fixos ({fmt(totalFixedCosts)}).
+                          Considere cortar variáveis também.
+                        </p>
                       )}
                     </CardContent>
                   </Card>
                 </div>
+              );
+            }
+
+            if (cutMode === "variable") {
+              const newVarPct = revRev > 0 ? ((revRev - profitGoal - totalFixedCosts) / revRev) * 100 : 0;
+              const varCutInReais = revRev * ((totalVariablePercent - newVarPct) / 100);
+              const possible = newVarPct >= 0 && newVarPct <= totalVariablePercent;
+              const reductionPct = totalVariablePercent > 0 ? ((totalVariablePercent - newVarPct) / totalVariablePercent) * 100 : 0;
+              return (
+                <div className="space-y-3">
+                  {situationCard}
+                  <Card className={possible ? "border-primary/30" : "border-destructive/30"}>
+                    <CardContent className="pt-4 pb-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Percent className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-bold">Resultado: Cortar Custos Variáveis</span>
+                      </div>
+                      {possible ? (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="p-3 rounded-lg bg-muted/50">
+                            <p className="text-[10px] text-muted-foreground">Variável atual</p>
+                            <p className="text-lg font-bold">{fmtPct(totalVariablePercent)}</p>
+                            <p className="text-[10px] text-muted-foreground">({fmt(currentVarCost)})</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                            <p className="text-[10px] text-muted-foreground">Cortar</p>
+                            <p className="text-lg font-bold text-destructive">- {fmtPct(totalVariablePercent - newVarPct)}</p>
+                            <p className="text-[10px] text-muted-foreground">(- {fmt(varCutInReais)})</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                            <p className="text-[10px] text-muted-foreground">Novo variável</p>
+                            <p className="text-lg font-bold text-primary">{fmtPct(newVarPct)}</p>
+                            <p className="text-[10px] text-muted-foreground">({fmt(revRev * (newVarPct / 100))})</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-muted/50">
+                            <p className="text-[10px] text-muted-foreground">Redução de</p>
+                            <p className="text-lg font-bold">{fmtPct(reductionPct)}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-destructive">
+                          Inviável — não é possível atingir a meta cortando apenas variáveis.
+                          Considere cortar fixos também.
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            }
+
+            // Both mode - split proportionally
+            const totalCostValue = totalFixedCosts + currentVarCost;
+            const fixedShare = totalCostValue > 0 ? totalFixedCosts / totalCostValue : 0.5;
+            const varShare = 1 - fixedShare;
+            const fixedCut = gap * fixedShare;
+            const varCut = gap * varShare;
+            const newFixedBoth = totalFixedCosts - fixedCut;
+            const newVarCostBoth = currentVarCost - varCut;
+            const newVarPctBoth = revRev > 0 ? (newVarCostBoth / revRev) * 100 : 0;
+            const possibleBoth = newFixedBoth >= 0 && newVarPctBoth >= 0;
+            const fixedReductionPct = totalFixedCosts > 0 ? (fixedCut / totalFixedCosts) * 100 : 0;
+            const varReductionPct = totalVariablePercent > 0 ? ((totalVariablePercent - newVarPctBoth) / totalVariablePercent) * 100 : 0;
+
+            return (
+              <div className="space-y-3">
+                {situationCard}
+                <Card className={possibleBoth ? "border-primary/30" : "border-destructive/30"}>
+                  <CardContent className="pt-4 pb-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <ArrowDownToLine className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-bold">Resultado: Cortar Ambos (proporcional)</span>
+                      <Badge variant="secondary" className="text-[9px]">
+                        Fixo {fmtPct(fixedShare * 100)} / Var {fmtPct(varShare * 100)}
+                      </Badge>
+                    </div>
+                    {possibleBoth ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                            <p className="text-[10px] text-muted-foreground">Cortar em fixos</p>
+                            <p className="text-lg font-bold text-destructive">- {fmt(fixedCut)}</p>
+                            <p className="text-[10px] text-muted-foreground">(-{fmtPct(fixedReductionPct)})</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                            <p className="text-[10px] text-muted-foreground">Cortar em variáveis</p>
+                            <p className="text-lg font-bold text-destructive">- {fmt(varCut)}</p>
+                            <p className="text-[10px] text-muted-foreground">(-{fmtPct(varReductionPct)})</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                            <p className="text-[10px] text-muted-foreground">Corte total</p>
+                            <p className="text-lg font-bold text-primary">{fmt(gap)}</p>
+                          </div>
+                        </div>
+                        <Separator />
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 rounded-lg bg-muted/50">
+                            <p className="text-[10px] text-muted-foreground">Custo fixo: {fmt(totalFixedCosts)} →</p>
+                            <p className="text-sm font-bold text-primary">{fmt(newFixedBoth)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-muted/50">
+                            <p className="text-[10px] text-muted-foreground">Custo variável: {fmtPct(totalVariablePercent)} →</p>
+                            <p className="text-sm font-bold text-primary">{fmtPct(newVarPctBoth)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-destructive">
+                        Inviável — o corte de {fmt(gap)} excede a soma dos custos. Revise o faturamento ou a meta de lucro.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             );
           })()}
