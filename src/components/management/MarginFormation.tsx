@@ -359,6 +359,7 @@ export function MarginFormation({ stores }: Props) {
               <Percent className="h-3.5 w-3.5 text-orange-500" />
             </div>
             <p className="text-lg font-bold">{fmtPct(totalVariablePercent)}</p>
+            <p className="text-[10px] text-muted-foreground">Limite: {fmt(breakEven * (totalVariablePercent / 100))}/mês</p>
           </CardContent>
         </Card>
         <Card>
@@ -578,6 +579,7 @@ export function MarginFormation({ stores }: Props) {
                     <TableRow>
                       <TableHead>Descrição</TableHead>
                       <TableHead className="text-right w-[120px]">% do Faturamento</TableHead>
+                      <TableHead className="text-right w-[140px]">Limite R$/mês</TableHead>
                       <TableHead className="w-16">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -586,6 +588,7 @@ export function MarginFormation({ stores }: Props) {
                       <TableRow key={vc.id}>
                         <TableCell className="font-medium text-xs">{vc.description}</TableCell>
                         <TableCell className="text-right font-bold text-xs">{fmtPct(vc.percentage)}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">{fmt(breakEven * (vc.percentage / 100))}</TableCell>
                         <TableCell>
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteVariableCost(vc.id)}>
                             <Trash2 className="h-3 w-3" />
@@ -629,6 +632,9 @@ export function MarginFormation({ stores }: Props) {
                         <TableCell className="font-bold text-xs">TOTAL</TableCell>
                         <TableCell className="text-right font-bold text-primary text-xs">
                           {fmtPct(totalVariablePercent + drafts.reduce((s, d) => s + (parseFloat(d.percentage) || 0), 0))}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-primary text-xs">
+                          {fmt(breakEven * ((totalVariablePercent + drafts.reduce((s, d) => s + (parseFloat(d.percentage) || 0), 0)) / 100))}
                         </TableCell>
                         <TableCell />
                       </TableRow>
