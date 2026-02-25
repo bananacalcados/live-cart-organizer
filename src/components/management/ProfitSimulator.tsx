@@ -4,6 +4,7 @@ import {
   ArrowDownToLine, Crosshair,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -57,6 +58,8 @@ export function ProfitSimulator({
   // Reverse simulator
   const [reverseRevenue, setReverseRevenue] = useState("");
   const [targetProfit, setTargetProfit] = useState("0");
+  const [limitRevenue, setLimitRevenue] = useState("");
+  const [limitProfit, setLimitProfit] = useState("");
   const [cutMode, setCutMode] = useState<"fixed" | "variable" | "both">("both");
 
   const hasItemReductions = Object.values(fixedItemReductions).some(v => v > 0) ||
@@ -324,6 +327,111 @@ export function ProfitSimulator({
             </div>
           </div>
         </div>
+
+        {/* Variable Cost Limits Table */}
+        {variableCostItems.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-orange-500" />
+              <span className="text-sm font-bold">Limite de Despesa Variável em R$</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs font-medium">Faturamento Base (R$)</Label>
+                <Input
+                  type="number"
+                  value={limitRevenue}
+                  onChange={e => setLimitRevenue(e.target.value)}
+                  placeholder={`Ponto de equilíbrio: ${fmt(breakEven)}`}
+                  className="h-9"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Deixe vazio para usar o ponto de equilíbrio ({fmt(breakEven)})
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs font-medium">Meta de Lucro (R$)</Label>
+                <Input
+                  type="number"
+                  value={limitProfit}
+                  onChange={e => setLimitProfit(e.target.value)}
+                  placeholder="0 = empatar"
+                  className="h-9"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  O sistema ajusta o faturamento necessário para cobrir o lucro desejado
+                </p>
+              </div>
+            </div>
+
+            {(() => {
+              const baseRevenue = parseFloat(limitRevenue) || breakEven;
+              const profitGoal = parseFloat(limitProfit) || 0;
+              // If profit goal is set, we need more revenue to cover it
+              // Required revenue = (fixedCosts + profitGoal) / contributionMargin%
+              const effectiveRevenue = profitGoal > 0 && contributionMarginPercent > 0
+                ? (adjustedFixed + profitGoal) / (contributionMarginPercent / 100)
+                : baseRevenue;
+              const usingCustom = limitRevenue !== "";
+              const usingProfit = limitProfit !== "" && profitGoal > 0;
+
+              return (
+                <Card>
+                  <CardContent className="pt-4 pb-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs text-muted-foreground">
+                        Base: <strong>{fmt(effectiveRevenue)}</strong>/mês
+                        {usingProfit && <span className="ml-1">(inclui lucro de {fmt(profitGoal)})</span>}
+                        {!usingCustom && !usingProfit && <span className="ml-1">(ponto de equilíbrio)</span>}
+                      </p>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Custo Variável</TableHead>
+                          <TableHead className="text-right w-[100px]">%</TableHead>
+                          <TableHead className="text-right w-[160px]">Limite R$/mês</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {variableCostItems.map(item => {
+                          const limitValue = effectiveRevenue * (item.percentage / 100);
+                          return (
+                            <TableRow key={item.id}>
+                              <TableCell className="text-xs font-medium">{item.description}</TableCell>
+                              <TableCell className="text-right text-xs">{fmtPct(item.percentage)}</TableCell>
+                              <TableCell className="text-right text-sm font-bold text-orange-500">{fmt(limitValue)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        <TableRow className="border-t-2 bg-muted/30">
+                          <TableCell className="text-xs font-bold">TOTAL VARIÁVEL</TableCell>
+                          <TableCell className="text-right text-xs font-bold">{fmtPct(totalVariablePercent)}</TableCell>
+                          <TableCell className="text-right text-sm font-bold text-orange-500">
+                            {fmt(effectiveRevenue * (totalVariablePercent / 100))}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow className="bg-muted/10">
+                          <TableCell className="text-xs font-bold">CUSTOS FIXOS</TableCell>
+                          <TableCell className="text-right text-xs">—</TableCell>
+                          <TableCell className="text-right text-sm font-bold text-destructive">{fmt(adjustedFixed)}</TableCell>
+                        </TableRow>
+                        {usingProfit && (
+                          <TableRow className="bg-green-500/5">
+                            <TableCell className="text-xs font-bold">LUCRO</TableCell>
+                            <TableCell className="text-right text-xs">—</TableCell>
+                            <TableCell className="text-right text-sm font-bold text-green-500">{fmt(profitGoal)}</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+          </div>
+        )}
 
         {/* Revenue scenarios */}
         <div className="space-y-2">
