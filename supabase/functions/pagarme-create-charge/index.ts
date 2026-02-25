@@ -276,8 +276,9 @@ async function chargeAppmax(
             month,
             year,
             cvv: params.card.cvv,
+            document_number: cpf,
+            installments: params.installments,
           },
-          installments: params.installments,
         },
       }),
     });
