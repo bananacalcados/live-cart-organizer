@@ -44,20 +44,6 @@ interface TinySyncedOrder {
   items: any;
 }
 
-interface ExpeditionOrder {
-  id: string;
-  shopify_order_name: string | null;
-  total_price: number | null;
-  subtotal_price: number | null;
-  total_shipping: number | null;
-  total_discount: number | null;
-  financial_status: string;
-  expedition_status: string;
-  created_at: string;
-  customer_name: string | null;
-  shopify_created_at: string | null;
-}
-
 interface StoreRow {
   id: string;
   name: string;
@@ -602,12 +588,11 @@ export default function Management() {
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [syncingShopify, setSyncingShopify] = useState(false);
+  
   const [syncingStock, setSyncingStock] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ currentDate: string; storeName: string; phase: string } | null>(null);
 
   const [tinyOrders, setTinyOrders] = useState<TinySyncedOrder[]>([]);
-  const [expeditionOrders, setExpeditionOrders] = useState<ExpeditionOrder[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [inventoryData, setInventoryData] = useState<InventorySummaryRow[]>([]);
   const [accountsPayable, setAccountsPayable] = useState<any[]>([]);
@@ -631,18 +616,18 @@ export default function Management() {
     const endDate = dateRange.end.toISOString().split('T')[0];
     const iso = { start: dateRange.start.toISOString(), end: dateRange.end.toISOString() };
 
-    const [tinyRes, expRes, storesRes, invRes, apRes] = await Promise.all([
+    const APPROVED_STATUSES = ['Faturado', 'Aprovado', 'Preparando envio', 'Pronto para envio', 'Enviado', 'Entregue', 'Não entregue'];
+
+    const [tinyRes, storesRes, invRes, apRes] = await Promise.all([
       supabase.from("tiny_synced_orders").select("*")
-        .gte("order_date", startDate).lte("order_date", endDate),
-      supabase.from("expedition_orders").select("id, shopify_order_name, total_price, subtotal_price, total_shipping, total_discount, financial_status, expedition_status, created_at, customer_name, shopify_created_at")
-        .gte("shopify_created_at", iso.start).lte("shopify_created_at", iso.end),
+        .gte("order_date", startDate).lte("order_date", endDate)
+        .in("status", APPROVED_STATUSES),
       supabase.from("pos_stores").select("id, name").eq("is_active", true),
       supabase.rpc("get_inventory_summary"),
       supabase.from("tiny_accounts_payable").select("*").order("data_vencimento", { ascending: true }),
     ]);
 
     setTinyOrders((tinyRes.data || []) as unknown as TinySyncedOrder[]);
-    setExpeditionOrders(expRes.data || []);
     setStores(storesRes.data || []);
     setInventoryData((invRes.data || []) as unknown as InventorySummaryRow[]);
     setAccountsPayable((apRes.data || []) as any[]);
@@ -800,28 +785,6 @@ export default function Management() {
     }
   };
 
-  const syncShopifyOrders = async () => {
-    setSyncingShopify(true);
-    try {
-      // Sync ALL Shopify orders (not just the dashboard filter range)
-      // Use a wide date range to capture all historical orders
-      const syncStart = new Date('2025-01-01').toISOString();
-      const syncEnd = new Date().toISOString();
-      const { data, error } = await supabase.functions.invoke('expedition-sync-orders', {
-        body: {
-          created_at_min: syncStart,
-          created_at_max: syncEnd,
-        },
-      });
-      if (error) throw error;
-      toast.success(`Shopify sincronizado: ${data?.orders_synced || 0} pedidos`);
-      fetchData();
-    } catch (e: any) {
-      toast.error(`Erro sync Shopify: ${e.message}`);
-    } finally {
-      setSyncingShopify(false);
-    }
-  };
 
   const syncAccountsPayable = async () => {
     setSyncingAP(true);
@@ -848,7 +811,7 @@ export default function Management() {
     return tinyOrders.filter(s => s.store_id === storeFilter);
   }, [tinyOrders, storeFilter]);
 
-  const shopifyPaidOrders = useMemo(() => expeditionOrders.filter(o => o.financial_status === "paid"), [expeditionOrders]);
+  
 
   // Parse items from tiny orders
   const allTinyItems = useMemo(() => {
@@ -867,11 +830,18 @@ export default function Management() {
   const tinyItemsSold = allTinyItems.reduce((s, v) => s + (v.quantity || 0), 0);
   const tinyDiscount = filteredTinyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
 
-  const shopifyRevenue = shopifyPaidOrders.reduce((s, o) => s + Number(o.total_price || 0), 0);
-  const shopifyDiscount = shopifyPaidOrders.reduce((s, o) => s + Number(o.total_discount || 0), 0);
+  const SHOPIFY_STORE_NAME = 'Tiny Shopify';
+  const shopifyStoreId = stores.find(s => s.name === SHOPIFY_STORE_NAME)?.id;
 
-  const totalRevenue = tinyTotalRevenue + shopifyRevenue;
-  const totalOrders = filteredTinyOrders.length + shopifyPaidOrders.length;
+  const filteredPhysicalOrders = useMemo(() => filteredTinyOrders.filter(o => o.store_id !== shopifyStoreId), [filteredTinyOrders, shopifyStoreId]);
+  const filteredShopifyOrders = useMemo(() => filteredTinyOrders.filter(o => o.store_id === shopifyStoreId), [filteredTinyOrders, shopifyStoreId]);
+
+  const physicalRevenue = filteredPhysicalOrders.reduce((s, v) => s + Number(v.total || 0), 0);
+  const shopifyRevenue = filteredShopifyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
+  const shopifyDiscount = filteredShopifyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
+
+  const totalRevenue = tinyTotalRevenue;
+  const totalOrders = filteredTinyOrders.length;
 
   // Top products (from Tiny items)
   const productRanking = useMemo(() => {
@@ -903,18 +873,15 @@ export default function Management() {
     filteredTinyOrders.forEach(s => {
       const day = s.order_date ? format(new Date(s.order_date + 'T12:00:00'), "dd/MM") : "??";
       const cur = map.get(day) || { lojas: 0, shopify: 0 };
-      cur.lojas += Number(s.total);
-      map.set(day, cur);
-    });
-    shopifyPaidOrders.forEach(o => {
-      const dateStr = o.shopify_created_at || o.created_at;
-      const day = format(new Date(dateStr), "dd/MM");
-      const cur = map.get(day) || { lojas: 0, shopify: 0 };
-      cur.shopify += Number(o.total_price || 0);
+      if (s.store_id === shopifyStoreId) {
+        cur.shopify += Number(s.total);
+      } else {
+        cur.lojas += Number(s.total);
+      }
       map.set(day, cur);
     });
     return [...map.entries()].map(([date, v]) => ({ date, ...v, total: v.lojas + v.shopify })).sort((a, b) => a.date.localeCompare(b.date));
-  }, [filteredTinyOrders, shopifyPaidOrders]);
+  }, [filteredTinyOrders, shopifyStoreId]);
 
   // Store comparison
   const storeComparison = useMemo(() => {
@@ -924,9 +891,8 @@ export default function Management() {
       const cur = map.get(s.store_id);
       if (cur) { cur.revenue += Number(s.total); cur.orders++; }
     });
-    const shopifyData = { name: "Shopify (Online)", revenue: shopifyRevenue, orders: shopifyPaidOrders.length };
-    return [...map.values(), shopifyData].filter(s => s.orders > 0).sort((a, b) => b.revenue - a.revenue);
-  }, [tinyOrders, stores, shopifyRevenue, shopifyPaidOrders]);
+    return [...map.values()].filter(s => s.orders > 0).sort((a, b) => b.revenue - a.revenue);
+  }, [tinyOrders, stores]);
 
   // Inventory summary (from DB function — no row limit)
   const inventorySummary = useMemo(() => {
@@ -1002,23 +968,19 @@ export default function Management() {
                 </PopoverContent>
               </Popover>
             )}
-            <Button variant="outline" size="sm" onClick={syncTinyOrders} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground">
+            <Button variant="outline" size="sm" onClick={syncTinyOrders} disabled={syncing || syncingStock} className="gap-1 h-8 text-xs bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground">
               {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               {syncing && syncProgress
                 ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
                 : syncing ? "Iniciando..." : "Pedidos Tiny"}
             </Button>
-            <Button variant="outline" size="sm" onClick={syncTinyStock} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(25,90%,52%)] text-white border-[hsl(25,90%,52%)] hover:bg-[hsl(25,90%,45%)] max-w-[280px]">
+            <Button variant="outline" size="sm" onClick={syncTinyStock} disabled={syncing || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(25,90%,52%)] text-white border-[hsl(25,90%,52%)] hover:bg-[hsl(25,90%,45%)] max-w-[280px]">
               {syncingStock ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Box className="h-3.5 w-3.5" />}
               <span className="truncate">
                 {syncingStock && syncProgress
                   ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
                   : syncingStock ? "Estoque..." : "Estoque"}
               </span>
-            </Button>
-            <Button variant="outline" size="sm" onClick={syncShopifyOrders} disabled={syncing || syncingShopify || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(0,0%,15%)] text-[hsl(45,10%,90%)] border-[hsl(0,0%,25%)] hover:bg-[hsl(0,0%,20%)]">
-              {syncingShopify ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingBag className="h-3.5 w-3.5" />}
-              {syncingShopify ? "Shopify..." : "Shopify"}
             </Button>
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1 h-8 text-[hsl(45,10%,90%)] hover:text-primary hover:bg-[hsl(0,0%,15%)]"><Home className="h-4 w-4" /></Button>
@@ -1034,8 +996,8 @@ export default function Management() {
             {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               <KPICard title="Faturamento Total" value={fmt(totalRevenue)} icon={DollarSign} />
-              <KPICard title="Vendas Lojas (Tiny)" value={fmt(tinyTotalRevenue)} icon={Store} sub={`${filteredTinyOrders.length} pedidos`} />
-              <KPICard title="Vendas Shopify" value={fmt(shopifyRevenue)} icon={ShoppingCart} sub={`${shopifyPaidOrders.length} pedidos`} />
+              <KPICard title="Lojas Físicas" value={fmt(physicalRevenue)} icon={Store} sub={`${filteredPhysicalOrders.length} pedidos`} />
+              <KPICard title="Shopify (Online)" value={fmt(shopifyRevenue)} icon={ShoppingCart} sub={`${filteredShopifyOrders.length} pedidos`} />
               <KPICard title="Ticket Médio" value={fmt(totalOrders > 0 ? totalRevenue / totalOrders : 0)} icon={TrendingUp} />
               <KPICard title="Itens Vendidos" value={tinyItemsSold.toString()} icon={Package} />
               <KPICard title="Descontos" value={fmt(tinyDiscount + shopifyDiscount)} icon={ArrowDownRight} variant="destructive" />
