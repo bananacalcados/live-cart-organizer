@@ -65,6 +65,7 @@ interface CustomerInfo {
   email: string | null;
   address: string | null;
   address_number: string | null;
+  complement: string | null;
   neighborhood: string | null;
   city: string | null;
   state: string | null;
@@ -186,7 +187,7 @@ export function POSDailySales({ storeId }: Props) {
         if (customerIds.length > 0) {
           const { data: custData } = await supabase
             .from("pos_customers")
-            .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+            .select("id, name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
             .in("id", customerIds);
           const map = new Map<string, CustomerInfo>();
           (custData || []).forEach((c: any) => map.set(c.id, c));
@@ -227,7 +228,7 @@ export function POSDailySales({ storeId }: Props) {
       if (!cust) {
         const { data } = await supabase
           .from("pos_customers")
-          .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+          .select("id, name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
           .eq("id", sale.customer_id)
           .maybeSingle();
         cust = data as CustomerInfo | null;
@@ -299,7 +300,7 @@ export function POSDailySales({ storeId }: Props) {
           const termPattern = `%${normalizedTerm}%`;
           const { data: matchingCustomers } = await supabase
             .from("pos_customers")
-            .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+            .select("id, name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
             .or(`name.ilike.${term},cpf.ilike.${term},whatsapp.ilike.${term}`)
             .limit(50);
           
@@ -308,7 +309,7 @@ export function POSDailySales({ storeId }: Props) {
           if (normalizedTerm !== searchTerm.trim()) {
             const { data: extraCustomers } = await supabase
               .from("pos_customers")
-              .select("id, name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+              .select("id, name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
               .or(`name.ilike.${termPattern},cpf.ilike.${termPattern},whatsapp.ilike.${termPattern}`)
               .limit(50);
             const existingIds = new Set(allCustomers.map((c: any) => c.id));
