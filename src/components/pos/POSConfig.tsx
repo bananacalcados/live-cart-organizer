@@ -99,10 +99,38 @@ export function POSConfig({ storeId }: Props) {
   const [commGoalValue, setCommGoalValue] = useState("");
   const [newCommTier, setNewCommTier] = useState({ achievement_percent: "", commission_percent: "" });
 
-  // Seller selection for RFM tasks
+  // Seller selection for RFM tasks (persisted)
   const [selectedTaskSellers, setSelectedTaskSellers] = useState<Set<string>>(new Set());
 
   const SEGMENT_COLORS = ["#FF6B00", "#E91E63", "#9C27B0", "#3F51B5", "#00BCD4", "#4CAF50", "#FFEB3B", "#FF5722", "#795548", "#607D8B"];
+
+  // Load persisted seller selection
+  useEffect(() => {
+    const loadPersistedSellers = async () => {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', `pos_task_sellers_${storeId}`)
+        .maybeSingle();
+      if (data?.value && Array.isArray(data.value)) {
+        setSelectedTaskSellers(new Set(data.value as string[]));
+      }
+    };
+    loadPersistedSellers();
+  }, [storeId]);
+
+  // Persist seller selection when it changes
+  const updateSelectedTaskSellers = useCallback((updater: (prev: Set<string>) => Set<string>) => {
+    setSelectedTaskSellers(prev => {
+      const next = updater(prev);
+      // Persist to app_settings
+      supabase
+        .from('app_settings')
+        .upsert({ key: `pos_task_sellers_${storeId}`, value: [...next] as any }, { onConflict: 'key' })
+        .then();
+      return next;
+    });
+  }, [storeId]);
 
   useEffect(() => {
     loadSellers();
@@ -1374,7 +1402,7 @@ export function POSConfig({ storeId }: Props) {
                 {sellers.filter(s => s.is_active).map(s => (
                   <button
                     key={s.id}
-                    onClick={() => setSelectedTaskSellers(prev => {
+                    onClick={() => updateSelectedTaskSellers(prev => {
                       const next = new Set(prev);
                       if (next.has(s.id)) next.delete(s.id);
                       else next.add(s.id);

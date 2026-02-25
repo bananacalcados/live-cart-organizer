@@ -26,6 +26,7 @@ import { TeamProfilesManager } from "@/components/TeamProfilesManager";
 import { BankReconciliation } from "@/components/management/BankReconciliation";
 import { StrategyManager } from "@/components/management/StrategyManager";
 import { MarginFormation } from "@/components/management/MarginFormation";
+import { CrmDuplicates } from "@/components/management/CrmDuplicates";
 
 interface TinySyncedOrder {
   id: string;
@@ -1066,6 +1067,10 @@ export default function Management() {
                   <Calculator className="h-3.5 w-3.5" />
                   Formação de Margem
                 </TabsTrigger>
+                <TabsTrigger value="crm_duplicates" className="gap-1">
+                  <Users className="h-3.5 w-3.5" />
+                  CRM Duplicados
+                </TabsTrigger>
               </TabsList>
 
               {/* Overview */}
@@ -1266,6 +1271,11 @@ export default function Management() {
               {/* Formação de Margem */}
               <TabsContent value="margin" className="space-y-4">
                 <MarginFormation stores={stores} />
+              </TabsContent>
+
+              {/* CRM Duplicados */}
+              <TabsContent value="crm_duplicates" className="space-y-4">
+                <CrmDuplicates />
               </TabsContent>
             </Tabs>
           </>
