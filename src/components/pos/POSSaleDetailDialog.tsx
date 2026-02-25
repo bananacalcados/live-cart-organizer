@@ -372,17 +372,31 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                 <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
                   <User className="h-3.5 w-3.5 text-blue-600" /> Cliente
                 </h4>
-                {!isTinyOnly && storeId && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1 border-blue-300 text-blue-600 hover:bg-blue-50"
-                    onClick={() => setShowCustomerForm(true)}
-                  >
-                    {currentCustomer ? <Pencil className="h-3 w-3" /> : <UserPlus className="h-3 w-3" />}
-                    {currentCustomer ? "Editar" : "Adicionar"}
-                  </Button>
-                )}
+                <div className="flex items-center gap-1">
+                  {sale.sale_type === 'online' && storeId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 border-orange-300 text-orange-600 hover:bg-orange-50"
+                      onClick={handleRecoverCustomer}
+                      disabled={recovering}
+                    >
+                      {recovering ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                      Puxar Dados
+                    </Button>
+                  )}
+                  {!isTinyOnly && storeId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 border-blue-300 text-blue-600 hover:bg-blue-50"
+                      onClick={() => setShowCustomerForm(true)}
+                    >
+                      {currentCustomer ? <Pencil className="h-3 w-3" /> : <UserPlus className="h-3 w-3" />}
+                      {currentCustomer ? "Editar" : "Adicionar"}
+                    </Button>
+                  )}
+                </div>
               </div>
               {currentCustomer && (currentCustomer.name || currentCustomer.cpf || currentCustomer.whatsapp) ? (
                 <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 space-y-2">
@@ -418,20 +432,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   )}
                 </div>
               ) : (
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-center space-y-2">
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-center">
                   <p className="text-xs text-gray-400">Nenhum cliente vinculado</p>
-                  {sale.sale_type === 'online' && !sale.customer_id && storeId && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1 border-orange-300 text-orange-600 hover:bg-orange-50"
-                      onClick={handleRecoverCustomer}
-                      disabled={recovering}
-                    >
-                      {recovering ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-                      Recuperar Dados do Checkout
-                    </Button>
-                  )}
                 </div>
               )}
             </div>
