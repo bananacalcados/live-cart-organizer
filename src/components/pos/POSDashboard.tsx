@@ -3,7 +3,7 @@ import {
   DollarSign, ShoppingCart, TrendingUp, Package, Loader2,
   RefreshCw, BarChart3, Users, MessageSquare, Headphones,
   ArrowRightLeft, ChevronRight, CalendarIcon, AlertTriangle,
-  Globe, Store, Lock, ListChecks, Check, Phone, Send
+  Globe, Store, Lock, ListChecks, Check, Phone, Send, UserCheck
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
@@ -92,6 +93,8 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [influencedRevenue, setInfluencedRevenue] = useState(0);
   const [completingTask, setCompletingTask] = useState<string | null>(null);
   const [completionNotes, setCompletionNotes] = useState<Record<string, string>>({});
+  const [completionSeller, setCompletionSeller] = useState<Record<string, string>>({});
+  const [storeSellers, setStoreSellers] = useState<{ id: string; name: string }[]>([]);
 
   const loadAlerts = async () => {
     const [conversationRes, supportRes, interStoreRes, stockRes] = await Promise.all([
@@ -167,10 +170,24 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
     }
   };
 
+  const loadSellers = async () => {
+    const { data } = await supabase
+      .from("pos_sellers")
+      .select("id, name")
+      .eq("store_id", storeId)
+      .eq("is_active", true)
+      .order("name");
+    setStoreSellers(data || []);
+  };
+
   const handleCompleteTask = async (task: any) => {
     const notes = completionNotes[task.id];
     if (!notes || notes.trim().length < 3) {
       return; // require notes
+    }
+    const selectedSellerId = completionSeller[task.id];
+    if (!selectedSellerId) {
+      return; // require seller selection
     }
     setCompletingTask(task.id);
     try {
@@ -178,14 +195,15 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         status: "completed",
         completed_at: new Date().toISOString(),
         completion_notes: notes.trim(),
+        completed_by_seller_id: selectedSellerId,
       }).eq("id", task.id);
 
-      // Add gamification points
-      if (task.seller_id && task.points_reward) {
+      // Add gamification points to the seller who completed the task
+      if (task.points_reward) {
         const { data: gam } = await supabase
           .from("pos_gamification")
           .select("id, weekly_points, total_points")
-          .eq("seller_id", task.seller_id)
+          .eq("seller_id", selectedSellerId)
           .eq("store_id", storeId)
           .maybeSingle();
         if (gam) {
@@ -197,6 +215,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       }
 
       setCompletionNotes(prev => { const n = { ...prev }; delete n[task.id]; return n; });
+      setCompletionSeller(prev => { const n = { ...prev }; delete n[task.id]; return n; });
       loadContactTasks();
     } catch (e) {
       console.error("Complete task error:", e);
@@ -286,6 +305,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   useEffect(() => {
     loadAlerts();
     loadContactTasks();
+    loadSellers();
   }, [storeId]);
 
   useEffect(() => {
@@ -466,13 +486,23 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               </div>
             )}
 
-            {/* Contact Tasks for Today */}
-            {contactTasks.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-pos-orange" /> Tarefas de Contato Hoje
+            {/* Tarefas */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
+                <ListChecks className="h-4 w-4 text-pos-orange" /> Tarefas
+                {contactTasks.length > 0 && (
                   <Badge className="bg-pos-orange/20 text-pos-orange border-0 text-[10px]">{contactTasks.length}</Badge>
-                </h3>
+                )}
+              </h3>
+              {loadingTasks ? (
+                <div className="flex items-center justify-center py-6 text-pos-white/50">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" /> Carregando tarefas...
+                </div>
+              ) : contactTasks.length === 0 ? (
+                <div className="p-4 rounded-lg bg-pos-white/5 border border-pos-orange/10 text-center">
+                  <p className="text-sm text-pos-white/40">Nenhuma tarefa pendente para hoje</p>
+                </div>
+              ) : (
                 <div className="space-y-2">
                   {contactTasks.map((t: any) => (
                     <div key={t.id} className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10">
@@ -481,7 +511,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                           checked={false}
                           disabled={completingTask === t.id}
                           onCheckedChange={() => {
-                            if (completionNotes[t.id]?.trim()) {
+                            if (completionNotes[t.id]?.trim() && completionSeller[t.id]) {
                               handleCompleteTask(t);
                             }
                           }}
@@ -506,30 +536,48 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                           {t.contact_strategy && (
                             <p className="text-xs text-pos-white/40 mt-0.5 italic">💡 {t.contact_strategy}</p>
                           )}
-                          {/* Completion notes */}
-                          <div className="mt-2 flex gap-2">
-                            <Textarea
-                              placeholder="Como foi o contato? (obrigatório para concluir)"
-                              value={completionNotes[t.id] || ""}
-                              onChange={e => setCompletionNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
-                              className="h-16 text-xs bg-pos-white/5 border-pos-orange/20 text-pos-white resize-none"
-                            />
-                            <Button
-                              size="sm"
-                              className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted h-16 px-3"
-                              disabled={!completionNotes[t.id]?.trim() || completingTask === t.id}
-                              onClick={() => handleCompleteTask(t)}
-                            >
-                              {completingTask === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                            </Button>
+                          {/* Seller selector + Completion notes */}
+                          <div className="mt-2 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <UserCheck className="h-3.5 w-3.5 text-pos-white/40 shrink-0" />
+                              <Select
+                                value={completionSeller[t.id] || ""}
+                                onValueChange={v => setCompletionSeller(prev => ({ ...prev, [t.id]: v }))}
+                              >
+                                <SelectTrigger className="h-8 text-xs bg-pos-white/5 border-pos-orange/20 text-pos-white">
+                                  <SelectValue placeholder="Quem realizou?" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {storeSellers.map(s => (
+                                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex gap-2">
+                              <Textarea
+                                placeholder="Como foi o contato? (obrigatório para concluir)"
+                                value={completionNotes[t.id] || ""}
+                                onChange={e => setCompletionNotes(prev => ({ ...prev, [t.id]: e.target.value }))}
+                                className="h-16 text-xs bg-pos-white/5 border-pos-orange/20 text-pos-white resize-none"
+                              />
+                              <Button
+                                size="sm"
+                                className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted h-16 px-3"
+                                disabled={!completionNotes[t.id]?.trim() || !completionSeller[t.id] || completingTask === t.id}
+                                onClick={() => handleCompleteTask(t)}
+                              >
+                                {completingTask === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Influenced Revenue */}
             {influencedRevenue > 0 && (
