@@ -714,11 +714,63 @@ export default function StoreCheckout() {
 
     if (!saleData) return;
 
-    // Update sale status and save customer data
+    // Upsert customer in pos_customers and link to sale
+    let customerId: string | null = null;
+    const cpfDigits = customerForm.cpf.replace(/\D/g, "");
+    const phoneDigits = customerForm.whatsapp.replace(/\D/g, "");
+
+    // Try to find existing customer by CPF
+    if (cpfDigits) {
+      const { data: existing } = await supabase
+        .from("pos_customers")
+        .select("id")
+        .eq("cpf", cpfDigits)
+        .maybeSingle();
+      if (existing) customerId = existing.id;
+    }
+    // Fallback: find by phone
+    if (!customerId && phoneDigits) {
+      const { data: existing } = await supabase
+        .from("pos_customers")
+        .select("id")
+        .eq("whatsapp", phoneDigits)
+        .maybeSingle();
+      if (existing) customerId = existing.id;
+    }
+
+    const customerPayload = {
+      name: customerForm.fullName,
+      cpf: cpfDigits,
+      email: customerForm.email,
+      whatsapp: phoneDigits,
+      address: customerForm.address,
+      address_number: customerForm.addressNumber,
+      neighborhood: customerForm.neighborhood,
+      city: customerForm.city,
+      state: customerForm.state,
+      cep: customerForm.cep.replace(/\D/g, ""),
+      store_id: saleData.store_id,
+    };
+
+    try {
+      if (customerId) {
+        await supabase.from("pos_customers").update(customerPayload as any).eq("id", customerId);
+      } else {
+        const { data: newCust } = await supabase
+          .from("pos_customers")
+          .insert(customerPayload as any)
+          .select("id")
+          .single();
+        customerId = newCust?.id || null;
+      }
+    } catch (e) {
+      console.error("Error upserting customer:", e);
+    }
+
+    // Update sale status with customer_id
     await supabase.from("pos_sales").update({
       status: "completed",
-      customer_name: customerForm.fullName,
-      customer_phone: customerForm.whatsapp,
+      customer_id: customerId,
     } as any).eq("id", saleData.id);
 
     // Create Tiny order — pass sale_id so it updates existing instead of creating duplicate

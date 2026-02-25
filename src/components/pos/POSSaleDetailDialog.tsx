@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil, UserPlus, Store, Globe,
+  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil, UserPlus, Store, Globe, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -81,6 +81,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [savingPayment, setSavingPayment] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [currentCustomer, setCurrentCustomer] = useState<CustomerInfo | null>(customer);
+  const [recovering, setRecovering] = useState(false);
 
   useEffect(() => {
     setCurrentCustomer(customer);
@@ -115,6 +116,76 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       toast.error("Erro ao alterar pagamento");
     } finally {
       setSavingPayment(false);
+    }
+  };
+
+  const handleRecoverCustomer = async () => {
+    if (!sale) return;
+    setRecovering(true);
+    try {
+      // Find checkout attempt with customer data
+      const { data: attempt } = await supabase
+        .from("pos_checkout_attempts")
+        .select("customer_name, customer_phone, customer_email")
+        .eq("sale_id", sale.id)
+        .eq("status", "success")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!attempt || !attempt.customer_name) {
+        toast.error("Nenhum dado de cliente encontrado no checkout");
+        return;
+      }
+
+      const phoneDigits = (attempt.customer_phone || "").replace(/\D/g, "");
+
+      // Find or create customer
+      let customerId: string | null = null;
+      if (phoneDigits) {
+        const { data: existing } = await supabase
+          .from("pos_customers")
+          .select("id")
+          .eq("whatsapp", phoneDigits)
+          .maybeSingle();
+        if (existing) customerId = existing.id;
+      }
+
+      const payload = {
+        name: attempt.customer_name,
+        whatsapp: phoneDigits,
+        email: attempt.customer_email || null,
+        store_id: storeId,
+      };
+
+      if (customerId) {
+        await supabase.from("pos_customers").update(payload as any).eq("id", customerId);
+      } else {
+        const { data: newCust } = await supabase
+          .from("pos_customers")
+          .insert(payload as any)
+          .select("id")
+          .single();
+        customerId = newCust?.id || null;
+      }
+
+      if (customerId) {
+        await supabase.from("pos_sales").update({ customer_id: customerId } as any).eq("id", sale.id);
+        // Refresh customer display
+        const { data: freshCust } = await supabase
+          .from("pos_customers")
+          .select("name, cpf, whatsapp, email, address, address_number, neighborhood, city, state, cep")
+          .eq("id", customerId)
+          .maybeSingle();
+        if (freshCust) setCurrentCustomer(freshCust as CustomerInfo);
+        toast.success("Cliente recuperado e vinculado!");
+        onDeleted?.();
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao recuperar dados do cliente");
+    } finally {
+      setRecovering(false);
     }
   };
 
@@ -270,8 +341,20 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   )}
                 </div>
               ) : (
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-center">
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-center space-y-2">
                   <p className="text-xs text-gray-400">Nenhum cliente vinculado</p>
+                  {sale.sale_type === 'online' && !sale.customer_id && storeId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 border-orange-300 text-orange-600 hover:bg-orange-50"
+                      onClick={handleRecoverCustomer}
+                      disabled={recovering}
+                    >
+                      {recovering ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                      Recuperar Dados do Checkout
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
