@@ -133,7 +133,6 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         .select("*")
         .eq("store_id", storeId)
         .eq("status", "pending")
-        .lte("due_date", today)
         .order("due_date", { ascending: true });
       setContactTasks((data as any[]) || []);
 
