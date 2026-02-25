@@ -941,6 +941,119 @@ export type Database = {
         }
         Relationships: []
       }
+      cost_center_fixed_costs: {
+        Row: {
+          category: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      cost_center_store_fixed_costs: {
+        Row: {
+          amount: number
+          created_at: string
+          fixed_cost_id: string
+          id: string
+          is_active: boolean
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          fixed_cost_id: string
+          id?: string
+          is_active?: boolean
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          fixed_cost_id?: string
+          id?: string
+          is_active?: boolean
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_center_store_fixed_costs_fixed_cost_id_fkey"
+            columns: ["fixed_cost_id"]
+            isOneToOne: false
+            referencedRelation: "cost_center_fixed_costs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cost_center_store_fixed_costs_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cost_center_variable_costs: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          is_active: boolean
+          percentage: number
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          is_active?: boolean
+          percentage?: number
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_active?: boolean
+          percentage?: number
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_center_variable_costs_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_loyalty_points: {
         Row: {
           created_at: string
@@ -4880,6 +4993,7 @@ export type Database = {
         Row: {
           avg_ticket: number | null
           completed_at: string | null
+          completion_notes: string | null
           contact_strategy: string | null
           created_at: string
           customer_name: string | null
@@ -4901,6 +5015,7 @@ export type Database = {
         Insert: {
           avg_ticket?: number | null
           completed_at?: string | null
+          completion_notes?: string | null
           contact_strategy?: string | null
           created_at?: string
           customer_name?: string | null
@@ -4922,6 +5037,7 @@ export type Database = {
         Update: {
           avg_ticket?: number | null
           completed_at?: string | null
+          completion_notes?: string | null
           contact_strategy?: string | null
           created_at?: string
           customer_name?: string | null
