@@ -368,13 +368,17 @@ function PixPaymentForm({ saleId, amount, form, onPaid }: { saleId: string; amou
   const [copied, setCopied] = useState(false);
   const [paid, setPaid] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pixConfirmedRef = useRef(false);
 
   useEffect(() => {
     if (!pixPaymentId || paid) return;
+    pixConfirmedRef.current = false;
     const check = async () => {
+      if (pixConfirmedRef.current) return;
       try {
         const { data } = await supabase.functions.invoke("mercadopago-check-payment", { body: { paymentId: pixPaymentId, orderId: saleId } });
-        if (data?.status === "approved") {
+        if (data?.status === "approved" && !pixConfirmedRef.current) {
+          pixConfirmedRef.current = true;
           setPaid(true);
           if (pollingRef.current) clearInterval(pollingRef.current);
           // Log PIX success
