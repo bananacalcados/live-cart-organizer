@@ -131,13 +131,33 @@ serve(async (req) => {
         body: `token=${token}&formato=json&pedido=${encodeURIComponent(JSON.stringify(tinyOrder))}`,
       });
 
+      // Validate response content-type before parsing
+      const contentType = tinyResp.headers.get('content-type') || '';
+      if (!contentType.includes('application/json') && !contentType.includes('text/json')) {
+        const textBody = await tinyResp.text();
+        console.error('Tiny returned non-JSON response:', contentType, textBody.substring(0, 300));
+        throw new Error(`Tiny API returned non-JSON response (${tinyResp.status})`);
+      }
+
       const tinyData = await tinyResp.json();
       console.log('Tiny create order response:', JSON.stringify(tinyData));
+
+      // Guard against null/empty response
+      if (!tinyData || !tinyData.retorno) {
+        console.error('Tiny returned null/empty response:', JSON.stringify(tinyData));
+        throw new Error('Tiny API returned null response');
+      }
 
       if (tinyData.retorno?.status === 'OK' || tinyData.retorno?.status === 'Processado') {
         const records = tinyData.retorno?.registros?.registro || tinyData.retorno?.registros;
         tinyOrderId = records?.id || records?.[0]?.id || null;
         tinyOrderNumber = records?.numero || records?.[0]?.numero || null;
+        
+        // Extra guard: if ID came back as null string or undefined, flag as failed
+        if (!tinyOrderId) {
+          console.error('Tiny returned OK but no order ID in records:', JSON.stringify(tinyData.retorno));
+          tinyFailed = true;
+        }
       } else {
         const erros = tinyData.retorno?.erros || [];
         const errorMessages = erros.map((e: any) => e.erro || '').join(' | ');
