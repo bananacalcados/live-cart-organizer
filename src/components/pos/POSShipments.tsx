@@ -129,7 +129,8 @@ export function POSShipments({ storeId }: Props) {
           ? supabase.from('pos_checkout_attempts')
               .select('sale_id, customer_name, customer_phone, customer_email')
               .in('sale_id', salesWithoutCustomer)
-              .eq('status', 'success')
+              .not('customer_name', 'is', null)
+              .order('created_at', { ascending: false })
           : { data: [] },
       ]);
 
