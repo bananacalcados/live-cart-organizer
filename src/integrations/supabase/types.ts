@@ -5345,10 +5345,11 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_simulation: boolean
           name: string
           revenue_target: number | null
           tiny_deposit_name: string | null
-          tiny_token: string
+          tiny_token: string | null
           updated_at: string
         }
         Insert: {
@@ -5356,10 +5357,11 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_simulation?: boolean
           name: string
           revenue_target?: number | null
           tiny_deposit_name?: string | null
-          tiny_token: string
+          tiny_token?: string | null
           updated_at?: string
         }
         Update: {
@@ -5367,10 +5369,11 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_simulation?: boolean
           name?: string
           revenue_target?: number | null
           tiny_deposit_name?: string | null
-          tiny_token?: string
+          tiny_token?: string | null
           updated_at?: string
         }
         Relationships: []

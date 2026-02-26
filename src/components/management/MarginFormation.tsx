@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
   Plus, Trash2, Save, Loader2, Building2, Pencil,
   TrendingUp, AlertTriangle, DollarSign, Percent, Target, BarChart3, Copy, Share2,
-  Scissors, Check, X
+  Scissors, Check, X, FlaskConical, Download
 } from "lucide-react";
 import { ProfitSimulator } from "./ProfitSimulator";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface Props {
-  stores: { id: string; name: string; revenue_target?: number }[];
+  stores: { id: string; name: string; revenue_target?: number; is_simulation?: boolean }[];
+  onStoresChanged?: () => void;
 }
 
 interface FixedCost {
@@ -57,7 +58,7 @@ interface DraftVariableCost {
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtPct = (v: number) => `${v.toFixed(2)}%`;
 
-export function MarginFormation({ stores }: Props) {
+export function MarginFormation({ stores, onStoresChanged }: Props) {
   const [selectedStore, setSelectedStore] = useState<string>(stores[0]?.id || "");
   const [fixedCosts, setFixedCosts] = useState<FixedCost[]>([]);
   const [storeFixedCosts, setStoreFixedCosts] = useState<StoreFixedCost[]>([]);
@@ -120,6 +121,24 @@ export function MarginFormation({ stores }: Props) {
 
   // Track dirty fixed cost amounts for batch save
   const [dirtyFixedAmounts, setDirtyFixedAmounts] = useState<Map<string, number>>(new Map());
+
+  // Simulation store creation
+  const [showCreateSim, setShowCreateSim] = useState(false);
+  const [newSimName, setNewSimName] = useState("");
+  const [newSimRevenue, setNewSimRevenue] = useState("");
+  const [savingSim, setSavingSim] = useState(false);
+
+  // Import costs from another store
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importSourceStore, setImportSourceStore] = useState("");
+  const [importFixed, setImportFixed] = useState(true);
+  const [importVariable, setImportVariable] = useState(true);
+  const [savingImport, setSavingImport] = useState(false);
+
+  const realStores = useMemo(() => stores.filter(s => !s.is_simulation), [stores]);
+  const simulationStores = useMemo(() => stores.filter(s => s.is_simulation), [stores]);
+  const currentStore = stores.find(s => s.id === selectedStore);
+  const isCurrentSimulation = currentStore?.is_simulation ?? false;
 
   useEffect(() => {
     loadData();
@@ -432,19 +451,99 @@ export function MarginFormation({ stores }: Props) {
     }));
   }, [variableCosts]);
 
-  const currentStore = stores.find(s => s.id === selectedStore);
   const storeName = currentStore?.name || "Loja";
   const storeRevenueTarget = currentStore?.revenue_target ?? 100000;
   const otherStores = stores.filter(s => s.id !== selectedStore);
 
 
+  // Simulation store CRUD
+  const createSimulationStore = async () => {
+    if (!newSimName.trim()) { toast.error("Nome obrigatório"); return; }
+    setSavingSim(true);
+    try {
+      const { error } = await supabase.from("pos_stores").insert({
+        name: newSimName.trim(),
+        is_simulation: true,
+        is_active: true,
+        revenue_target: parseFloat(newSimRevenue) || 100000,
+      });
+      if (error) throw error;
+      toast.success("Loja simulada criada!");
+      setNewSimName("");
+      setNewSimRevenue("");
+      setShowCreateSim(false);
+      onStoresChanged?.();
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    } finally {
+      setSavingSim(false);
+    }
+  };
 
+  const deleteSimulationStore = async (storeId: string) => {
+    if (!confirm("Excluir loja simulada? Custos associados serão removidos.")) return;
+    await supabase.from("cost_center_planned_variable_cuts").delete().eq("store_id", storeId);
+    await supabase.from("cost_center_planned_fixed_cuts").delete().eq("store_id", storeId);
+    await supabase.from("cost_center_variable_costs").delete().eq("store_id", storeId);
+    await supabase.from("cost_center_store_fixed_costs").delete().eq("store_id", storeId);
+    await supabase.from("pos_stores").delete().eq("id", storeId);
+    toast.success("Loja simulada excluída!");
+    if (selectedStore === storeId) setSelectedStore(stores[0]?.id || "");
+    onStoresChanged?.();
+  };
+
+  const importCostsFromStore = async () => {
+    if (!importSourceStore) { toast.error("Selecione a loja origem"); return; }
+    setSavingImport(true);
+    try {
+      if (importFixed) {
+        const { data: sourceFixed } = await supabase
+          .from("cost_center_store_fixed_costs")
+          .select("*")
+          .eq("store_id", importSourceStore);
+        if (sourceFixed && sourceFixed.length > 0) {
+          // Delete existing fixed costs for target store first
+          await supabase.from("cost_center_store_fixed_costs").delete().eq("store_id", selectedStore);
+          const rows = sourceFixed.map((sf: any) => ({
+            fixed_cost_id: sf.fixed_cost_id,
+            store_id: selectedStore,
+            amount: sf.amount,
+            is_active: sf.is_active,
+          }));
+          await supabase.from("cost_center_store_fixed_costs").insert(rows);
+        }
+      }
+      if (importVariable) {
+        const { data: sourceVar } = await supabase
+          .from("cost_center_variable_costs")
+          .select("*")
+          .eq("store_id", importSourceStore);
+        if (sourceVar && sourceVar.length > 0) {
+          // Delete existing variable costs for target store first
+          await supabase.from("cost_center_variable_costs").delete().eq("store_id", selectedStore);
+          const rows = sourceVar.map((sv: any) => ({
+            store_id: selectedStore,
+            description: sv.description,
+            percentage: sv.percentage,
+            is_active: sv.is_active,
+          }));
+          await supabase.from("cost_center_variable_costs").insert(rows);
+        }
+      }
+      toast.success("Custos importados com sucesso!");
+      setShowImportDialog(false);
+      loadData();
+    } catch (e: any) {
+      toast.error("Erro ao importar: " + e.message);
+    } finally {
+      setSavingImport(false);
+    }
+  };
 
   const saveRevenueTarget = async () => {
     const val = parseFloat(revenueTargetInput) || 0;
     if (val <= 0) { toast.error("Meta deve ser maior que zero"); return; }
     await supabase.from("pos_stores").update({ revenue_target: val }).eq("id", selectedStore);
-    // Update local stores reference
     if (currentStore) (currentStore as any).revenue_target = val;
     setEditingRevenueTarget(false);
     toast.success("Meta de faturamento atualizada!");
@@ -490,11 +589,40 @@ export function MarginFormation({ stores }: Props) {
             )}
           </div>
           <Select value={selectedStore} onValueChange={s => { setSelectedStore(s); setEditingRevenueTarget(false); }}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
+            <SelectTrigger className="w-[220px]"><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
             <SelectContent>
-              {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              {realStores.length > 0 && (
+                <>
+                  <p className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">Lojas Reais</p>
+                  {realStores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </>
+              )}
+              {simulationStores.length > 0 && (
+                <>
+                  <p className="px-2 py-1.5 text-[10px] font-semibold text-muted-foreground border-t mt-1">🧪 Simulações</p>
+                  {simulationStores.map(s => <SelectItem key={s.id} value={s.id}>🧪 {s.name}</SelectItem>)}
+                </>
+              )}
             </SelectContent>
           </Select>
+          {isCurrentSimulation && (
+            <Badge variant="outline" className="gap-1 text-[10px] border-amber-500/50 text-amber-600">
+              <FlaskConical className="h-3 w-3" /> Simulação
+            </Badge>
+          )}
+          <Button variant="outline" size="sm" className="gap-1 text-xs h-8" onClick={() => setShowCreateSim(true)}>
+            <FlaskConical className="h-3.5 w-3.5" /> Nova Simulação
+          </Button>
+          {isCurrentSimulation && (
+            <>
+              <Button variant="outline" size="sm" className="gap-1 text-xs h-8" onClick={() => { setImportSourceStore(""); setShowImportDialog(true); }}>
+                <Download className="h-3.5 w-3.5" /> Importar Custos
+              </Button>
+              <Button variant="ghost" size="sm" className="gap-1 text-xs h-8 text-destructive hover:text-destructive" onClick={() => deleteSimulationStore(selectedStore)}>
+                <Trash2 className="h-3.5 w-3.5" /> Excluir
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1405,6 +1533,63 @@ export function MarginFormation({ stores }: Props) {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Create Simulation Store Dialog */}
+      <Dialog open={showCreateSim} onOpenChange={setShowCreateSim}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><FlaskConical className="h-5 w-5" /> Criar Loja Simulada</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">Crie uma loja hipotética para simular cenários de custos e margem sem afetar dados reais.</p>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Nome da Simulação *</Label>
+              <Input value={newSimName} onChange={e => setNewSimName(e.target.value)} placeholder="Ex: Loja Nova Shopping X" className="h-9" />
+            </div>
+            <div>
+              <Label className="text-xs">Meta de Faturamento (R$)</Label>
+              <Input type="number" value={newSimRevenue} onChange={e => setNewSimRevenue(e.target.value)} placeholder="100000" className="h-9" />
+            </div>
+            <Button className="w-full" onClick={createSimulationStore} disabled={savingSim}>
+              {savingSim ? "Criando..." : "Criar Loja Simulada"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Costs Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Download className="h-5 w-5" /> Importar Custos</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Copie custos fixos e/ou variáveis de uma loja existente para <strong>{storeName}</strong>. Os custos atuais desta loja serão substituídos.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs">Loja Origem</Label>
+              <Select value={importSourceStore} onValueChange={setImportSourceStore}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione a loja origem" /></SelectTrigger>
+                <SelectContent>
+                  {stores.filter(s => s.id !== selectedStore).map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.is_simulation ? "🧪 " : ""}{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={importFixed} onCheckedChange={v => setImportFixed(!!v)} />
+                Custos Fixos
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={importVariable} onCheckedChange={v => setImportVariable(!!v)} />
+                Custos Variáveis
+              </label>
+            </div>
+            <Button className="w-full" onClick={importCostsFromStore} disabled={savingImport || !importSourceStore}>
+              {savingImport ? "Importando..." : "Importar Custos"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
