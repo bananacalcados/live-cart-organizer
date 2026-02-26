@@ -37,6 +37,16 @@ interface PlannedCutDetail {
   description: string;
 }
 
+interface StoreVariableCostDetail {
+  storeName: string;
+  storeId: string;
+  costDescription: string;
+  costId: string;
+  percentage: number;
+  revenueTarget: number;
+  plannedCutPct: number;
+}
+
 interface StoreExpenseData {
   storeName: string;
   fixedCosts: number;
@@ -59,6 +69,7 @@ interface Props {
   initialRevenue?: number;
   showBaseToggle?: boolean; // show toggle for "with reductions" / "without reductions" as base
   storeExpenseData?: StoreExpenseData[]; // per-store data for expense limits
+  storeVariableCostDetails?: StoreVariableCostDetail[]; // per-store per-item variable costs
 }
 
 export function ProfitSimulator({
@@ -73,6 +84,7 @@ export function ProfitSimulator({
   initialRevenue = 100000,
   showBaseToggle = false,
   storeExpenseData = [],
+  storeVariableCostDetails = [],
 }: Props) {
   const [simRevenue, setSimRevenue] = useState(String(initialRevenue));
   const [globalFixedReduction, setGlobalFixedReduction] = useState(0);
@@ -550,29 +562,13 @@ export function ProfitSimulator({
               const profitGoal = parseFloat(limitProfit) || 0;
 
               // If we have per-store data, calculate per-store limits
-              if (storeExpenseData.length > 0) {
-                const storeRows = storeExpenseData.map(store => {
-                  const storeContrib = 100 - store.variablePercent;
-                  const storeBE = store.breakEven;
-                  // Each store's share of the profit goal proportional to its revenue target
-                  const totalRevTarget = storeExpenseData.reduce((s, d) => s + d.revenueTarget, 0);
-                  const storeProfitShare = totalRevTarget > 0 ? profitGoal * (store.revenueTarget / totalRevTarget) : 0;
-                  const storeEffectiveRev = storeProfitShare > 0 && storeContrib > 0
-                    ? (store.fixedCosts + storeProfitShare) / (storeContrib / 100)
-                    : storeBE;
-                  // With reductions
-                  const redFixed = store.fixedCosts - store.plannedFixedCut;
-                  const redVarPct = store.variablePercent - store.plannedVarCutPct;
-                  const redContrib = 100 - redVarPct;
-                  const redBE = redContrib > 0 ? redFixed / (redContrib / 100) : 0;
-                  const redEffectiveRev = storeProfitShare > 0 && redContrib > 0
-                    ? (redFixed + storeProfitShare) / (redContrib / 100)
-                    : redBE;
-                  return { ...store, storeEffectiveRev, redEffectiveRev, redFixed, redVarPct };
-                });
+              if (storeExpenseData.length > 0 && storeVariableCostDetails.length > 0) {
+                // Group variable cost details by store
+                const storeNames = [...new Set(storeVariableCostDetails.map(d => d.storeName))];
+                // Get unique cost descriptions across all stores
+                const allCostDescs = [...new Set(storeVariableCostDetails.map(d => d.costDescription))];
 
-                const totalEffectiveRev = storeRows.reduce((s, r) => s + r.storeEffectiveRev, 0);
-                const totalRedEffectiveRev = storeRows.reduce((s, r) => s + r.redEffectiveRev, 0);
+                const totalRevTarget = storeExpenseData.reduce((s, d) => s + d.revenueTarget, 0);
 
                 return (
                   <Card>
@@ -580,67 +576,128 @@ export function ProfitSimulator({
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Loja</TableHead>
-                            <TableHead className="text-right">PE</TableHead>
-                            <TableHead className="text-right">Fixos R$</TableHead>
-                            <TableHead className="text-right">% Var.</TableHead>
-                            <TableHead className="text-right">Var. Limite R$</TableHead>
-                            {hasPlannedCuts && (
-                              <>
-                                <TableHead className="text-right"><span className="text-primary">PE c/ Red.</span></TableHead>
-                                <TableHead className="text-right"><span className="text-primary">Fixos c/ Red.</span></TableHead>
-                                <TableHead className="text-right"><span className="text-primary">Var. Limite c/ Red.</span></TableHead>
-                              </>
-                            )}
+                            <TableHead>Custo Variável</TableHead>
+                            {storeExpenseData.map(store => (
+                              <TableHead key={store.storeName} className="text-right" colSpan={hasPlannedCuts ? 2 : 1}>
+                                {store.storeName}
+                              </TableHead>
+                            ))}
+                            <TableHead className="text-right" colSpan={hasPlannedCuts ? 2 : 1}>CONSOLIDADO</TableHead>
                           </TableRow>
+                          {hasPlannedCuts && (
+                            <TableRow>
+                              <TableHead />
+                              {storeExpenseData.map(store => (
+                                <>
+                                  <TableHead key={`${store.storeName}-atual`} className="text-right text-[10px]">Limite R$</TableHead>
+                                  <TableHead key={`${store.storeName}-red`} className="text-right text-[10px] text-primary">c/ Red.</TableHead>
+                                </>
+                              ))}
+                              <TableHead className="text-right text-[10px]">Limite R$</TableHead>
+                              <TableHead className="text-right text-[10px] text-primary">c/ Red.</TableHead>
+                            </TableRow>
+                          )}
+                          {!hasPlannedCuts && (
+                            <TableRow>
+                              <TableHead />
+                              {storeExpenseData.map(store => (
+                                <TableHead key={`${store.storeName}-h`} className="text-right text-[10px]">Limite R$</TableHead>
+                              ))}
+                              <TableHead className="text-right text-[10px]">Limite R$</TableHead>
+                            </TableRow>
+                          )}
                         </TableHeader>
                         <TableBody>
-                          {storeRows.map((row, i) => {
-                            const varLimitR$ = row.storeEffectiveRev * (row.variablePercent / 100);
-                            const redVarLimitR$ = row.redEffectiveRev * (row.redVarPct / 100);
-                            const hasStoreCuts = row.plannedFixedCut > 0 || row.plannedVarCutPct > 0;
+                          {allCostDescs.map(costDesc => {
+                            let consolidatedLimit = 0;
+                            let consolidatedRedLimit = 0;
                             return (
-                              <TableRow key={i}>
-                                <TableCell className="text-xs font-medium">{row.storeName}</TableCell>
-                                <TableCell className="text-right text-xs font-bold">{fmt(row.storeEffectiveRev)}</TableCell>
-                                <TableCell className="text-right text-xs text-destructive">{fmt(row.fixedCosts)}</TableCell>
-                                <TableCell className="text-right text-xs">{fmtPct(row.variablePercent)}</TableCell>
-                                <TableCell className="text-right text-sm font-bold text-orange-500">{fmt(varLimitR$)}</TableCell>
-                                {hasPlannedCuts && (
+                              <TableRow key={costDesc}>
+                                <TableCell className="text-xs font-medium whitespace-nowrap">{costDesc}</TableCell>
+                                {storeExpenseData.map(store => {
+                                  const detail = storeVariableCostDetails.find(
+                                    d => d.storeName === store.storeName && d.costDescription === costDesc
+                                  );
+                                  const pct = detail?.percentage ?? 0;
+                                  const cutPct = detail?.plannedCutPct ?? 0;
+                                  const limitR$ = store.revenueTarget * (pct / 100);
+                                  const redLimitR$ = store.revenueTarget * ((pct - cutPct) / 100);
+                                  consolidatedLimit += limitR$;
+                                  consolidatedRedLimit += redLimitR$;
+                                  return hasPlannedCuts ? (
+                                    <>
+                                      <TableCell key={`${store.storeName}-${costDesc}-v`} className="text-right text-xs">
+                                        {pct > 0 ? <><span className="text-muted-foreground">{fmtPct(pct)}</span> {fmt(limitR$)}</> : '—'}
+                                      </TableCell>
+                                      <TableCell key={`${store.storeName}-${costDesc}-r`} className="text-right text-xs text-primary">
+                                        {cutPct > 0 ? fmt(redLimitR$) : '—'}
+                                      </TableCell>
+                                    </>
+                                  ) : (
+                                    <TableCell key={`${store.storeName}-${costDesc}`} className="text-right text-xs">
+                                      {pct > 0 ? <><span className="text-muted-foreground">{fmtPct(pct)}</span> <strong className="text-orange-500">{fmt(limitR$)}</strong></> : '—'}
+                                    </TableCell>
+                                  );
+                                })}
+                                {hasPlannedCuts ? (
                                   <>
-                                    <TableCell className="text-right text-xs font-bold text-primary">
-                                      {hasStoreCuts ? fmt(row.redEffectiveRev) : '—'}
-                                    </TableCell>
-                                    <TableCell className="text-right text-xs text-primary">
-                                      {row.plannedFixedCut > 0 ? fmt(row.redFixed) : '—'}
-                                    </TableCell>
+                                    <TableCell className="text-right text-sm font-bold text-orange-500">{fmt(consolidatedLimit)}</TableCell>
                                     <TableCell className="text-right text-sm font-bold text-primary">
-                                      {hasStoreCuts ? fmt(redVarLimitR$) : '—'}
+                                      {consolidatedRedLimit < consolidatedLimit ? fmt(consolidatedRedLimit) : '—'}
                                     </TableCell>
                                   </>
+                                ) : (
+                                  <TableCell className="text-right text-sm font-bold text-orange-500">{fmt(consolidatedLimit)}</TableCell>
                                 )}
                               </TableRow>
                             );
                           })}
+                          {/* Total row */}
                           <TableRow className="border-t-2 font-bold bg-muted/30">
-                            <TableCell className="text-xs font-bold">CONSOLIDADO</TableCell>
-                            <TableCell className="text-right text-xs font-bold">{fmt(totalEffectiveRev)}</TableCell>
-                            <TableCell className="text-right text-xs text-destructive">{fmt(storeRows.reduce((s, r) => s + r.fixedCosts, 0))}</TableCell>
-                            <TableCell className="text-right text-xs">—</TableCell>
-                            <TableCell className="text-right text-sm font-bold text-orange-500">
-                              {fmt(storeRows.reduce((s, r) => s + r.storeEffectiveRev * (r.variablePercent / 100), 0))}
-                            </TableCell>
-                            {hasPlannedCuts && (
-                              <>
-                                <TableCell className="text-right text-xs font-bold text-primary">{fmt(totalRedEffectiveRev)}</TableCell>
-                                <TableCell className="text-right text-xs text-primary">
-                                  {fmt(storeRows.reduce((s, r) => s + r.redFixed, 0))}
+                            <TableCell className="text-xs font-bold">TOTAL</TableCell>
+                            {storeExpenseData.map(store => {
+                              const storeDetails = storeVariableCostDetails.filter(d => d.storeName === store.storeName);
+                              const totalPct = storeDetails.reduce((s, d) => s + d.percentage, 0);
+                              const totalLimitR$ = store.revenueTarget * (totalPct / 100);
+                              const totalCutPct = storeDetails.reduce((s, d) => s + d.plannedCutPct, 0);
+                              const totalRedLimitR$ = store.revenueTarget * ((totalPct - totalCutPct) / 100);
+                              return hasPlannedCuts ? (
+                                <>
+                                  <TableCell key={`${store.storeName}-total`} className="text-right text-sm font-bold text-orange-500">
+                                    {fmtPct(totalPct)} {fmt(totalLimitR$)}
+                                  </TableCell>
+                                  <TableCell key={`${store.storeName}-total-r`} className="text-right text-sm font-bold text-primary">
+                                    {totalCutPct > 0 ? fmt(totalRedLimitR$) : '—'}
+                                  </TableCell>
+                                </>
+                              ) : (
+                                <TableCell key={`${store.storeName}-total`} className="text-right text-sm font-bold text-orange-500">
+                                  {fmtPct(totalPct)} {fmt(totalLimitR$)}
                                 </TableCell>
-                                <TableCell className="text-right text-sm font-bold text-primary">
-                                  {fmt(storeRows.reduce((s, r) => s + r.redEffectiveRev * (r.redVarPct / 100), 0))}
-                                </TableCell>
-                              </>
-                            )}
+                              );
+                            })}
+                            {(() => {
+                              const grandLimit = storeExpenseData.reduce((s, store) => {
+                                const storeDetails = storeVariableCostDetails.filter(d => d.storeName === store.storeName);
+                                return s + store.revenueTarget * (storeDetails.reduce((ss, d) => ss + d.percentage, 0) / 100);
+                              }, 0);
+                              const grandRedLimit = storeExpenseData.reduce((s, store) => {
+                                const storeDetails = storeVariableCostDetails.filter(d => d.storeName === store.storeName);
+                                const totalPct = storeDetails.reduce((ss, d) => ss + d.percentage, 0);
+                                const totalCut = storeDetails.reduce((ss, d) => ss + d.plannedCutPct, 0);
+                                return s + store.revenueTarget * ((totalPct - totalCut) / 100);
+                              }, 0);
+                              return hasPlannedCuts ? (
+                                <>
+                                  <TableCell className="text-right text-sm font-bold text-orange-500">{fmt(grandLimit)}</TableCell>
+                                  <TableCell className="text-right text-sm font-bold text-primary">
+                                    {grandRedLimit < grandLimit ? fmt(grandRedLimit) : '—'}
+                                  </TableCell>
+                                </>
+                              ) : (
+                                <TableCell className="text-right text-sm font-bold text-orange-500">{fmt(grandLimit)}</TableCell>
+                              );
+                            })()}
                           </TableRow>
                         </TableBody>
                       </Table>
