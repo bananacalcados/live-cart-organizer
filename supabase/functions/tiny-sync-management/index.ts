@@ -57,6 +57,31 @@ serve(async (req) => {
       stores = data || [];
     }
 
+    // Build deposit-to-store mapping: maps Tiny "deposito" names to correct store IDs
+    const { data: allStoresForMapping } = await supabase
+      .from('pos_stores').select('id, name').eq('is_active', true);
+    const depositToStoreId: Record<string, string> = {};
+    for (const s of (allStoresForMapping || [])) {
+      // Map by common patterns: "Perola" -> Loja Perola, "Centro" -> Loja Centro, "Site" -> Tiny Shopify
+      const nameLower = s.name.toLowerCase();
+      if (nameLower.includes('shopify') || nameLower.includes('site') || nameLower.includes('online') || nameLower.includes('ecommerce')) {
+        depositToStoreId['Site'] = s.id;
+        depositToStoreId['site'] = s.id;
+        depositToStoreId['E-commerce'] = s.id;
+        depositToStoreId['Ecommerce'] = s.id;
+      }
+      // Also map the store name itself (e.g. "Perola" -> Loja Perola id, "Centro" -> Loja Centro id)
+      const shortName = s.name.replace(/^Loja\s+/i, '').trim();
+      depositToStoreId[shortName] = s.id;
+      depositToStoreId[s.name] = s.id;
+    }
+    console.log('Deposit mapping:', JSON.stringify(depositToStoreId));
+
+    const resolveStoreId = (deposito: string | undefined | null, fallbackStoreId: string): string => {
+      if (!deposito) return fallbackStoreId;
+      return depositToStoreId[deposito] || depositToStoreId[deposito.trim()] || fallbackStoreId;
+    };
+
     const results: any[] = [];
 
     for (const store of stores) {
