@@ -1236,58 +1236,106 @@ export function MarginFormation({ stores }: Props) {
 
                     {/* Per-store table */}
                     <Card>
-                      <CardContent className="pt-4">
+                      <CardContent className="pt-4 overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead>Loja</TableHead>
+                              <TableHead className="text-right">Meta Faturamento</TableHead>
                               <TableHead className="text-right">Custos Fixos</TableHead>
+                              <TableHead className="text-right">Custo Var. R$</TableHead>
                               <TableHead className="text-right">% Variável</TableHead>
                               <TableHead className="text-right">Margem</TableHead>
                               <TableHead className="text-right">Ponto Equilíbrio</TableHead>
+                              <TableHead className="text-right">Lucro Previsto</TableHead>
                               <TableHead className="text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <Scissors className="h-3 w-3 text-primary" />
-                                  <span>Redução Fixo</span>
+                                  <span>Fixos c/ Red.</span>
                                 </div>
                               </TableHead>
                               <TableHead className="text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <Scissors className="h-3 w-3 text-primary" />
-                                  <span>Redução Var.</span>
+                                  <span>Var. c/ Red. R$</span>
+                                </div>
+                              </TableHead>
+                              <TableHead className="text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Scissors className="h-3 w-3 text-primary" />
+                                  <span>Lucro c/ Red.</span>
                                 </div>
                               </TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {storeMetrics.map(m => (
+                            {storeMetrics.map(m => {
+                              const rev = m.store.revenue_target ?? 0;
+                              const varCostR$ = rev * (m.totalVarPct / 100);
+                              const profit = rev - varCostR$ - m.totalFixed;
+                              const reducedFixed = m.totalFixed - m.storeFixedCutTotal;
+                              const reducedVarPct = m.totalVarPct - m.storeVarCutPct;
+                              const reducedVarR$ = rev * (reducedVarPct / 100);
+                              const reducedProfit = rev - reducedVarR$ - reducedFixed;
+                              return (
                               <TableRow key={m.store.id}>
                                 <TableCell className="font-medium text-xs">{m.store.name}</TableCell>
+                                <TableCell className="text-right text-xs font-semibold">{fmt(rev)}</TableCell>
                                 <TableCell className="text-right text-xs text-destructive">{fmt(m.totalFixed)}</TableCell>
+                                <TableCell className="text-right text-xs text-orange-500">{fmt(varCostR$)}</TableCell>
                                 <TableCell className="text-right text-xs">{fmtPct(m.totalVarPct)}</TableCell>
                                 <TableCell className="text-right text-xs text-primary">{fmtPct(m.contribMargin)}</TableCell>
                                 <TableCell className="text-right text-xs font-bold">{fmt(m.breakEven)}</TableCell>
-                                <TableCell className="text-right text-xs text-primary font-medium">
-                                  {m.storeFixedCutTotal > 0 ? `- ${fmt(m.storeFixedCutTotal)}` : "—"}
+                                <TableCell className={`text-right text-xs font-bold ${profit >= 0 ? "text-green-500" : "text-destructive"}`}>
+                                  {fmt(profit)}
                                 </TableCell>
                                 <TableCell className="text-right text-xs text-primary font-medium">
-                                  {m.storeVarCutPct > 0 ? `- ${fmtPct(m.storeVarCutPct)}` : "—"}
+                                  {m.storeFixedCutTotal > 0 ? fmt(reducedFixed) : "—"}
+                                </TableCell>
+                                <TableCell className="text-right text-xs text-primary font-medium">
+                                  {m.storeVarCutPct > 0 ? fmt(reducedVarR$) : "—"}
+                                </TableCell>
+                                <TableCell className={`text-right text-xs font-bold ${(m.storeFixedCutTotal > 0 || m.storeVarCutPct > 0) ? (reducedProfit >= 0 ? "text-green-500" : "text-destructive") : ""}`}>
+                                  {(m.storeFixedCutTotal > 0 || m.storeVarCutPct > 0) ? fmt(reducedProfit) : "—"}
                                 </TableCell>
                               </TableRow>
-                            ))}
-                            <TableRow className="border-t-2 font-bold">
-                              <TableCell className="text-xs">CONSOLIDADO</TableCell>
-                              <TableCell className="text-right text-xs text-destructive">{fmt(grandFixed)}</TableCell>
-                              <TableCell className="text-right text-xs">{fmtPct(avgVarPct)}</TableCell>
-                              <TableCell className="text-right text-xs text-primary">{fmtPct(avgContrib)}</TableCell>
-                              <TableCell className="text-right text-xs">{fmt(grandBreakEven)}</TableCell>
-                              <TableCell className="text-right text-xs text-primary">
-                                {consolidatedFixedCutTotal > 0 ? `- ${fmt(consolidatedFixedCutTotal)}` : "—"}
-                              </TableCell>
-                              <TableCell className="text-right text-xs text-primary">
-                                {consolidatedVarCutPct > 0 ? `- ${fmtPct(consolidatedVarCutPct)}` : "—"}
-                              </TableCell>
-                            </TableRow>
+                              );
+                            })}
+                            {(() => {
+                              const totalRev = storeMetrics.reduce((s, m) => s + (m.store.revenue_target ?? 0), 0);
+                              const totalVarR$ = storeMetrics.reduce((s, m) => s + (m.store.revenue_target ?? 0) * (m.totalVarPct / 100), 0);
+                              const totalProfit = totalRev - totalVarR$ - grandFixed;
+                              const totalReducedFixed = grandFixed - consolidatedFixedCutTotal;
+                              const totalReducedVarR$ = storeMetrics.reduce((s, m) => {
+                                const rev = m.store.revenue_target ?? 0;
+                                return s + rev * ((m.totalVarPct - m.storeVarCutPct) / 100);
+                              }, 0);
+                              const totalReducedProfit = totalRev - totalReducedVarR$ - totalReducedFixed;
+                              const hasAnyCuts = consolidatedFixedCutTotal > 0 || consolidatedVarCutPct > 0;
+                              return (
+                              <TableRow className="border-t-2 font-bold">
+                                <TableCell className="text-xs">CONSOLIDADO</TableCell>
+                                <TableCell className="text-right text-xs font-bold">{fmt(totalRev)}</TableCell>
+                                <TableCell className="text-right text-xs text-destructive">{fmt(grandFixed)}</TableCell>
+                                <TableCell className="text-right text-xs text-orange-500">{fmt(totalVarR$)}</TableCell>
+                                <TableCell className="text-right text-xs">{fmtPct(avgVarPct)}</TableCell>
+                                <TableCell className="text-right text-xs text-primary">{fmtPct(avgContrib)}</TableCell>
+                                <TableCell className="text-right text-xs">{fmt(grandBreakEven)}</TableCell>
+                                <TableCell className={`text-right text-xs font-bold ${totalProfit >= 0 ? "text-green-500" : "text-destructive"}`}>
+                                  {fmt(totalProfit)}
+                                </TableCell>
+                                <TableCell className="text-right text-xs text-primary">
+                                  {consolidatedFixedCutTotal > 0 ? fmt(totalReducedFixed) : "—"}
+                                </TableCell>
+                                <TableCell className="text-right text-xs text-primary">
+                                  {hasAnyCuts ? fmt(totalReducedVarR$) : "—"}
+                                </TableCell>
+                                <TableCell className={`text-right text-xs font-bold ${hasAnyCuts ? (totalReducedProfit >= 0 ? "text-green-500" : "text-destructive") : ""}`}>
+                                  {hasAnyCuts ? fmt(totalReducedProfit) : "—"}
+                                </TableCell>
+                              </TableRow>
+                              );
+                            })()}
                           </TableBody>
                         </Table>
                       </CardContent>
@@ -1317,6 +1365,7 @@ export function MarginFormation({ stores }: Props) {
                         });
                         return details;
                       })()}
+                      showBaseToggle={true}
                     />
                   </div>
                 );

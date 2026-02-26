@@ -47,6 +47,7 @@ interface Props {
   plannedVariableCuts?: Record<string, number>;
   plannedCutDetails?: PlannedCutDetail[];
   initialRevenue?: number;
+  showBaseToggle?: boolean; // show toggle for "with reductions" / "without reductions" as base
 }
 
 export function ProfitSimulator({
@@ -59,10 +60,12 @@ export function ProfitSimulator({
   plannedVariableCuts = {},
   plannedCutDetails = [],
   initialRevenue = 100000,
+  showBaseToggle = false,
 }: Props) {
   const [simRevenue, setSimRevenue] = useState(String(initialRevenue));
   const [globalFixedReduction, setGlobalFixedReduction] = useState(0);
   const [globalVariableReduction, setGlobalVariableReduction] = useState(0);
+  const [useReductionsAsBase, setUseReductionsAsBase] = useState(false);
 
   // Sync with prop changes (store switch)
   useEffect(() => {
@@ -86,28 +89,45 @@ export function ProfitSimulator({
   const hasItemReductions = Object.values(fixedItemReductions).some(v => v > 0) ||
     Object.values(variableItemReductions).some(v => v > 0);
 
+  // Base values: either raw or with planned reductions applied
+  const baseFixedCosts = useMemo(() => {
+    if (!useReductionsAsBase) return totalFixedCosts;
+    return totalFixedCosts - Object.entries(plannedFixedCuts).reduce((sum, [id, val]) => {
+      const item = fixedCostItems.find(i => i.id === id);
+      return item && val > 0 ? sum + val : sum;
+    }, 0);
+  }, [useReductionsAsBase, totalFixedCosts, plannedFixedCuts, fixedCostItems]);
+
+  const baseVariablePercent = useMemo(() => {
+    if (!useReductionsAsBase) return totalVariablePercent;
+    return totalVariablePercent - Object.entries(plannedVariableCuts).reduce((sum, [id, val]) => {
+      const item = variableCostItems.find(i => i.id === id);
+      return item && val > 0 ? sum + val : sum;
+    }, 0);
+  }, [useReductionsAsBase, totalVariablePercent, plannedVariableCuts, variableCostItems]);
+
   // Adjusted values considering both global and per-item reductions
   const adjustedFixed = useMemo(() => {
     if (hasItemReductions) {
-      // Per-item mode: apply individual reductions
       return fixedCostItems.reduce((sum, item) => {
         const reduction = fixedItemReductions[item.id] || 0;
-        return sum + item.amount * (1 - reduction / 100);
+        const baseAmount = useReductionsAsBase ? Math.max(0, item.amount - (plannedFixedCuts[item.id] || 0)) : item.amount;
+        return sum + baseAmount * (1 - reduction / 100);
       }, 0);
     }
-    // Global mode
-    return totalFixedCosts * (1 - globalFixedReduction / 100);
-  }, [fixedCostItems, fixedItemReductions, totalFixedCosts, globalFixedReduction, hasItemReductions]);
+    return baseFixedCosts * (1 - globalFixedReduction / 100);
+  }, [fixedCostItems, fixedItemReductions, baseFixedCosts, globalFixedReduction, hasItemReductions, useReductionsAsBase, plannedFixedCuts]);
 
   const adjustedVariablePercent = useMemo(() => {
     if (Object.values(variableItemReductions).some(v => v > 0)) {
       return variableCostItems.reduce((sum, item) => {
         const reduction = variableItemReductions[item.id] || 0;
-        return sum + item.percentage * (1 - reduction / 100);
+        const basePct = useReductionsAsBase ? Math.max(0, item.percentage - (plannedVariableCuts[item.id] || 0)) : item.percentage;
+        return sum + basePct * (1 - reduction / 100);
       }, 0);
     }
-    return totalVariablePercent * (1 - globalVariableReduction / 100);
-  }, [variableCostItems, variableItemReductions, totalVariablePercent, globalVariableReduction]);
+    return baseVariablePercent * (1 - globalVariableReduction / 100);
+  }, [variableCostItems, variableItemReductions, baseVariablePercent, globalVariableReduction, useReductionsAsBase, plannedVariableCuts]);
 
   // Planned cuts from the cost tabs
   const hasPlannedCuts = Object.values(plannedFixedCuts).some(v => v > 0) || Object.values(plannedVariableCuts).some(v => v > 0);
@@ -134,11 +154,11 @@ export function ProfitSimulator({
   const plannedProfit = revenue - plannedVarCost - plannedNewFixed;
   const plannedProfitMargin = revenue > 0 ? (plannedProfit / revenue) * 100 : 0;
 
-  const contributionMarginPercent = 100 - totalVariablePercent;
-  const breakEven = contributionMarginPercent > 0 ? totalFixedCosts / (contributionMarginPercent / 100) : 0;
+  const contributionMarginPercent = 100 - baseVariablePercent;
+  const breakEven = contributionMarginPercent > 0 ? baseFixedCosts / (contributionMarginPercent / 100) : 0;
   const adjustedContrib = 100 - adjustedVariablePercent;
   const adjustedBreakEven = adjustedContrib > 0 ? adjustedFixed / (adjustedContrib / 100) : 0;
-  const totalSavings = totalFixedCosts - adjustedFixed;
+  const totalSavings = baseFixedCosts - adjustedFixed;
 
   const resetAll = () => {
     setGlobalFixedReduction(0);
@@ -174,6 +194,31 @@ export function ProfitSimulator({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Base toggle */}
+        {showBaseToggle && hasPlannedCuts && (
+          <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+            <span className="text-xs font-medium">Base de cálculo:</span>
+            <div className="flex gap-2">
+              <Button
+                variant={!useReductionsAsBase ? "default" : "outline"}
+                size="sm"
+                className="text-xs h-7"
+                onClick={() => setUseReductionsAsBase(false)}
+              >
+                Sem reduções
+              </Button>
+              <Button
+                variant={useReductionsAsBase ? "default" : "outline"}
+                size="sm"
+                className="text-xs h-7"
+                onClick={() => setUseReductionsAsBase(true)}
+              >
+                Com reduções planejadas
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Revenue */}
         <div>
           <Label className="text-xs font-medium">Faturamento Mensal (R$)</Label>
@@ -199,7 +244,7 @@ export function ProfitSimulator({
               step={1}
             />
             <p className="text-[10px] text-muted-foreground">
-              De {fmt(totalFixedCosts)} para {fmt(totalFixedCosts * (1 - globalFixedReduction / 100))}
+              De {fmt(baseFixedCosts)} para {fmt(baseFixedCosts * (1 - globalFixedReduction / 100))}
             </p>
           </div>
           <div className="space-y-3">
@@ -214,7 +259,7 @@ export function ProfitSimulator({
               step={1}
             />
             <p className="text-[10px] text-muted-foreground">
-              De {fmtPct(totalVariablePercent)} para {fmtPct(totalVariablePercent * (1 - globalVariableReduction / 100))}
+              De {fmtPct(baseVariablePercent)} para {fmtPct(baseVariablePercent * (1 - globalVariableReduction / 100))}
             </p>
           </div>
         </div>
