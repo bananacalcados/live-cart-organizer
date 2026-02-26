@@ -1102,15 +1102,17 @@ export function MarginFormation({ stores }: Props) {
                   return { store, totalFixed, totalVarPct, contribMargin, breakEven: be, storeFixedCutTotal, storeVarCutPct };
                 });
                 const grandFixed = storeMetrics.reduce((s, m) => s + m.totalFixed, 0);
-                const avgVarPct = storeMetrics.length > 0 ? storeMetrics.reduce((s, m) => s + m.totalVarPct, 0) / storeMetrics.length : 0;
+                // Weighted average variable % based on each store's revenue target
+                const totalRevTarget = storeMetrics.reduce((s, m) => s + (m.store.revenue_target ?? 0), 0);
+                const totalVarCostR$ = storeMetrics.reduce((s, m) => s + (m.store.revenue_target ?? 0) * (m.totalVarPct / 100), 0);
+                const avgVarPct = totalRevTarget > 0 ? (totalVarCostR$ / totalRevTarget) * 100 : 0;
                 const avgContrib = 100 - avgVarPct;
                 const grandBreakEven = avgContrib > 0 ? grandFixed / (avgContrib / 100) : 0;
 
-                // Consolidated cuts: sum all stores
+                // Consolidated cuts: weighted average for variable cuts too
                 const consolidatedFixedCutTotal = storeMetrics.reduce((s, m) => s + m.storeFixedCutTotal, 0);
-                const consolidatedVarCutPct = storeMetrics.length > 0
-                  ? storeMetrics.reduce((s, m) => s + m.storeVarCutPct, 0) / storeMetrics.length
-                  : 0;
+                const totalReducedVarCostR$ = storeMetrics.reduce((s, m) => s + (m.store.revenue_target ?? 0) * ((m.totalVarPct - m.storeVarCutPct) / 100), 0);
+                const consolidatedVarCutPct = totalRevTarget > 0 ? avgVarPct - (totalReducedVarCostR$ / totalRevTarget) * 100 : 0;
 
                 // Build consolidated items for simulator
                 const consolidatedFixedItems = fixedCosts.map(fc => {
@@ -1126,42 +1128,42 @@ export function MarginFormation({ stores }: Props) {
                   consolidatedPlannedFixedCuts[c.fixed_cost_id] = (consolidatedPlannedFixedCuts[c.fixed_cost_id] || 0) + c.reduction_amount;
                 });
 
-                // Merge variable costs across stores (average by description)
-                const vcMap = new Map<string, { id: string; description: string; totalPct: number; count: number }>();
+                // Merge variable costs across stores (weighted average by revenue target)
+                const vcMap = new Map<string, { id: string; description: string; totalWeightedPct: number; totalRevenue: number }>();
                 allVariableCosts.filter(v => v.is_active).forEach(v => {
                   const key = v.description.toLowerCase().trim();
+                  const storeRev = stores.find(s => s.id === v.store_id)?.revenue_target ?? 0;
                   const existing = vcMap.get(key);
                   if (existing) {
-                    existing.totalPct += v.percentage;
-                    existing.count += 1;
+                    existing.totalWeightedPct += v.percentage * storeRev;
+                    existing.totalRevenue += storeRev;
                   } else {
-                    vcMap.set(key, { id: v.id, description: v.description, totalPct: v.percentage, count: 1 });
+                    vcMap.set(key, { id: v.id, description: v.description, totalWeightedPct: v.percentage * storeRev, totalRevenue: storeRev });
                   }
                 });
                 const consolidatedVariableItems = [...vcMap.values()].map(v => ({
-                  id: v.id, description: v.description, percentage: v.totalPct / v.count,
+                  id: v.id, description: v.description, percentage: v.totalRevenue > 0 ? v.totalWeightedPct / v.totalRevenue : 0,
                 }));
 
-                // Build consolidated planned variable cuts: average % across stores for same description
-                const vcCutMap = new Map<string, { totalCut: number; count: number; id: string }>();
+                // Build consolidated planned variable cuts: weighted average across stores
+                const vcCutMap = new Map<string, { totalWeightedCut: number; totalRevenue: number; id: string }>();
                 allVariableCuts.forEach(c => {
-                  // Find the variable cost to get its description
                   const vc = allVariableCosts.find(v => v.id === c.variable_cost_id);
                   if (!vc) return;
                   const key = vc.description.toLowerCase().trim();
+                  const storeRev = stores.find(s => s.id === vc.store_id)?.revenue_target ?? 0;
                   const existing = vcCutMap.get(key);
                   if (existing) {
-                    existing.totalCut += c.reduction_percentage;
-                    existing.count += 1;
+                    existing.totalWeightedCut += c.reduction_percentage * storeRev;
+                    existing.totalRevenue += storeRev;
                   } else {
-                    // Find the consolidated item id
                     const consolItem = consolidatedVariableItems.find(ci => ci.description.toLowerCase().trim() === key);
-                    vcCutMap.set(key, { totalCut: c.reduction_percentage, count: 1, id: consolItem?.id || c.variable_cost_id });
+                    vcCutMap.set(key, { totalWeightedCut: c.reduction_percentage * storeRev, totalRevenue: storeRev, id: consolItem?.id || c.variable_cost_id });
                   }
                 });
                 const consolidatedPlannedVarCuts: Record<string, number> = {};
                 vcCutMap.forEach((val) => {
-                  consolidatedPlannedVarCuts[val.id] = val.totalCut / val.count;
+                  consolidatedPlannedVarCuts[val.id] = val.totalRevenue > 0 ? val.totalWeightedCut / val.totalRevenue : 0;
                 });
 
                 return (
