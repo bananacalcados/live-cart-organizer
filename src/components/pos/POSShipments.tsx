@@ -114,7 +114,10 @@ export function POSShipments({ storeId }: Props) {
       const sellerIds = [...new Set(sales.filter(s => s.seller_id).map(s => s.seller_id!))];
       const saleIds = sales.map(s => s.id);
 
-      const [customersRes, sellersRes, itemsRes] = await Promise.all([
+      // Also fetch checkout attempts for sales without customer_id
+      const salesWithoutCustomer = sales.filter(s => !s.customer_id).map(s => s.id);
+
+      const [customersRes, sellersRes, itemsRes, checkoutRes] = await Promise.all([
         customerIds.length > 0
           ? supabase.from('pos_customers').select('id, name, whatsapp, cep, city, state, address').in('id', customerIds)
           : { data: [] },
@@ -122,6 +125,12 @@ export function POSShipments({ storeId }: Props) {
           ? supabase.from('pos_sellers').select('id, name').in('id', sellerIds)
           : { data: [] },
         supabase.from('pos_sale_items').select('*').in('sale_id', saleIds),
+        salesWithoutCustomer.length > 0
+          ? supabase.from('pos_checkout_attempts')
+              .select('sale_id, customer_name, customer_phone, customer_email')
+              .in('sale_id', salesWithoutCustomer)
+              .eq('status', 'success')
+          : { data: [] },
       ]);
 
       const customerMap = new Map((customersRes.data || []).map(c => [c.id, c]));
@@ -132,18 +141,29 @@ export function POSShipments({ storeId }: Props) {
         itemsMap.get(item.sale_id)!.push(item);
       });
 
+      // Build checkout fallback map (sale_id -> customer data)
+      const checkoutMap = new Map<string, any>();
+      (checkoutRes.data || []).forEach((c: any) => {
+        if (c.customer_name) checkoutMap.set(c.sale_id, c);
+      });
+
       const enriched: ShipmentOrder[] = sales.map(s => {
         const customer = s.customer_id ? customerMap.get(s.customer_id) : null;
+        const checkoutFallback = !customer ? checkoutMap.get(s.id) : null;
         const seller = s.seller_id ? sellerMap.get(s.seller_id) : null;
+        
+        // Also check payment_details for seller name fallback
+        const paymentDetails = s.payment_details as any;
+
         return {
           ...s,
-          customer_name: customer?.name || null,
-          customer_phone: customer?.whatsapp || null,
+          customer_name: customer?.name || checkoutFallback?.customer_name || null,
+          customer_phone: customer?.whatsapp || checkoutFallback?.customer_phone || null,
           customer_cep: customer?.cep || null,
           customer_city: customer?.city || null,
           customer_state: customer?.state || null,
           customer_address: customer?.address || null,
-          seller_name: seller?.name || null,
+          seller_name: seller?.name || paymentDetails?.seller_name || null,
           items: itemsMap.get(s.id) || [],
         } as ShipmentOrder;
       });
