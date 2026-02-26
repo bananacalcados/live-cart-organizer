@@ -1145,8 +1145,8 @@ export function MarginFormation({ stores }: Props) {
                   id: v.id, description: v.description, percentage: v.totalRevenue > 0 ? v.totalWeightedPct / v.totalRevenue : 0,
                 }));
 
-                // Build consolidated planned variable cuts: weighted average across stores
-                const vcCutMap = new Map<string, { totalWeightedCut: number; totalRevenue: number; id: string }>();
+                // Build consolidated planned variable cuts: weighted by TOTAL revenue of that cost item (not just stores with cuts)
+                const vcCutMap = new Map<string, { totalWeightedCut: number; id: string }>();
                 allVariableCuts.forEach(c => {
                   const vc = allVariableCosts.find(v => v.id === c.variable_cost_id);
                   if (!vc) return;
@@ -1155,15 +1155,15 @@ export function MarginFormation({ stores }: Props) {
                   const existing = vcCutMap.get(key);
                   if (existing) {
                     existing.totalWeightedCut += c.reduction_percentage * storeRev;
-                    existing.totalRevenue += storeRev;
                   } else {
                     const consolItem = consolidatedVariableItems.find(ci => ci.description.toLowerCase().trim() === key);
-                    vcCutMap.set(key, { totalWeightedCut: c.reduction_percentage * storeRev, totalRevenue: storeRev, id: consolItem?.id || c.variable_cost_id });
+                    vcCutMap.set(key, { totalWeightedCut: c.reduction_percentage * storeRev, id: consolItem?.id || c.variable_cost_id });
                   }
                 });
                 const consolidatedPlannedVarCuts: Record<string, number> = {};
                 vcCutMap.forEach((val) => {
-                  consolidatedPlannedVarCuts[val.id] = val.totalRevenue > 0 ? val.totalWeightedCut / val.totalRevenue : 0;
+                  // Use totalRevTarget (all stores) as denominator so the cut % is relative to the consolidated percentage
+                  consolidatedPlannedVarCuts[val.id] = totalRevTarget > 0 ? val.totalWeightedCut / totalRevTarget : 0;
                 });
 
                 return (
