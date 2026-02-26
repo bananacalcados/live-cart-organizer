@@ -164,8 +164,9 @@ serve(async (req) => {
                       unit_price: parseFloat(i.item?.valor_unitario || '0'),
                       total: parseFloat(i.item?.valor_unitario || '0') * parseFloat(i.item?.quantidade || '1'),
                     }));
+                    const resolvedStoreId = resolveStoreId(full.deposito, store.id);
                     rows.push({
-                      store_id: store.id, tiny_order_id: String(full.id || o.id),
+                      store_id: resolvedStoreId, tiny_order_id: String(full.id || o.id),
                       tiny_order_number: String(full.numero || o.numero || ''),
                       order_date: formatISO(currentDate),
                       customer_name: full.cliente?.nome || o.nome_comprador || null,
