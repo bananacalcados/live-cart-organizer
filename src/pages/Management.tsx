@@ -48,6 +48,7 @@ interface StoreRow {
   id: string;
   name: string;
   revenue_target?: number;
+  is_simulation?: boolean;
 }
 
 interface InventorySummaryRow {
@@ -638,7 +639,7 @@ export default function Management() {
 
     const [tinyData, storesRes, invRes, apRes] = await Promise.all([
       fetchAllTinyOrders(startDate, endDate, APPROVED_STATUSES),
-      supabase.from("pos_stores").select("id, name, revenue_target").eq("is_active", true),
+      supabase.from("pos_stores").select("id, name, revenue_target, is_simulation").eq("is_active", true),
       supabase.rpc("get_inventory_summary"),
       supabase.from("tiny_accounts_payable").select("*").order("data_vencimento", { ascending: true }),
     ]);
@@ -1248,7 +1249,7 @@ export default function Management() {
 
               {/* Formação de Margem */}
               <TabsContent value="margin" className="space-y-4">
-                <MarginFormation stores={stores} />
+                <MarginFormation stores={stores} onStoresChanged={fetchData} />
               </TabsContent>
 
               {/* CRM Duplicados */}
