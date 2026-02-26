@@ -37,6 +37,16 @@ interface PlannedCutDetail {
   description: string;
 }
 
+interface StoreExpenseData {
+  storeName: string;
+  fixedCosts: number;
+  variablePercent: number;
+  revenueTarget: number;
+  breakEven: number;
+  plannedFixedCut: number;
+  plannedVarCutPct: number;
+}
+
 interface Props {
   title: string;
   fixedCostItems: FixedCostItem[];
@@ -48,6 +58,7 @@ interface Props {
   plannedCutDetails?: PlannedCutDetail[];
   initialRevenue?: number;
   showBaseToggle?: boolean; // show toggle for "with reductions" / "without reductions" as base
+  storeExpenseData?: StoreExpenseData[]; // per-store data for expense limits
 }
 
 export function ProfitSimulator({
@@ -61,6 +72,7 @@ export function ProfitSimulator({
   plannedCutDetails = [],
   initialRevenue = 100000,
   showBaseToggle = false,
+  storeExpenseData = [],
 }: Props) {
   const [simRevenue, setSimRevenue] = useState(String(initialRevenue));
   const [globalFixedReduction, setGlobalFixedReduction] = useState(0);
@@ -403,14 +415,42 @@ export function ProfitSimulator({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-[10px] text-muted-foreground">Atual</p>
-              <p className="text-lg font-bold">{fmt(breakEven)}</p>
+              <p className="text-lg font-bold">{fmt(hasPlannedCuts && storeExpenseData.length > 0
+                ? storeExpenseData.reduce((s, d) => s + d.breakEven, 0)
+                : breakEven)}</p>
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground">Com reduções</p>
-              <p className="text-lg font-bold text-primary">{fmt(adjustedBreakEven)}</p>
-              {adjustedBreakEven < breakEven && (
-                <p className="text-[10px] text-green-500">↓ {fmt(breakEven - adjustedBreakEven)} a menos</p>
-              )}
+              <p className="text-lg font-bold text-primary">{fmt(
+                hasPlannedCuts && storeExpenseData.length > 0
+                  ? storeExpenseData.reduce((s, d) => {
+                      const redFixed = d.fixedCosts - d.plannedFixedCut;
+                      const redVarPct = d.variablePercent - d.plannedVarCutPct;
+                      const redContrib = 100 - redVarPct;
+                      return s + (redContrib > 0 ? redFixed / (redContrib / 100) : 0);
+                    }, 0)
+                  : hasPlannedCuts
+                    ? plannedBreakEven
+                    : (hasItemReductions || globalFixedReduction > 0 || globalVariableReduction > 0)
+                      ? adjustedBreakEven
+                      : breakEven
+              )}</p>
+              {(() => {
+                const currentPE = hasPlannedCuts && storeExpenseData.length > 0
+                  ? storeExpenseData.reduce((s, d) => s + d.breakEven, 0)
+                  : breakEven;
+                const reducedPE = hasPlannedCuts && storeExpenseData.length > 0
+                  ? storeExpenseData.reduce((s, d) => {
+                      const redFixed = d.fixedCosts - d.plannedFixedCut;
+                      const redVarPct = d.variablePercent - d.plannedVarCutPct;
+                      const redContrib = 100 - redVarPct;
+                      return s + (redContrib > 0 ? redFixed / (redContrib / 100) : 0);
+                    }, 0)
+                  : hasPlannedCuts ? plannedBreakEven : adjustedBreakEven;
+                return reducedPE < currentPE && (
+                  <p className="text-[10px] text-green-500">↓ {fmt(currentPE - reducedPE)} a menos</p>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -492,19 +532,6 @@ export function ProfitSimulator({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label className="text-xs font-medium">Faturamento Base (R$)</Label>
-                <Input
-                  type="number"
-                  value={limitRevenue}
-                  onChange={e => setLimitRevenue(e.target.value)}
-                  placeholder={`Ponto de equilíbrio: ${fmt(breakEven)}`}
-                  className="h-9"
-                />
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Deixe vazio para usar o ponto de equilíbrio ({fmt(breakEven)})
-                </p>
-              </div>
-              <div>
                 <Label className="text-xs font-medium">Meta de Lucro (R$)</Label>
                 <Input
                   type="number"
@@ -520,10 +547,110 @@ export function ProfitSimulator({
             </div>
 
             {(() => {
-              const baseRevenue = parseFloat(limitRevenue) || breakEven;
               const profitGoal = parseFloat(limitProfit) || 0;
-              // If profit goal is set, we need more revenue to cover it
-              // Required revenue = (fixedCosts + profitGoal) / contributionMargin%
+
+              // If we have per-store data, calculate per-store limits
+              if (storeExpenseData.length > 0) {
+                const storeRows = storeExpenseData.map(store => {
+                  const storeContrib = 100 - store.variablePercent;
+                  const storeBE = store.breakEven;
+                  // Each store's share of the profit goal proportional to its revenue target
+                  const totalRevTarget = storeExpenseData.reduce((s, d) => s + d.revenueTarget, 0);
+                  const storeProfitShare = totalRevTarget > 0 ? profitGoal * (store.revenueTarget / totalRevTarget) : 0;
+                  const storeEffectiveRev = storeProfitShare > 0 && storeContrib > 0
+                    ? (store.fixedCosts + storeProfitShare) / (storeContrib / 100)
+                    : storeBE;
+                  // With reductions
+                  const redFixed = store.fixedCosts - store.plannedFixedCut;
+                  const redVarPct = store.variablePercent - store.plannedVarCutPct;
+                  const redContrib = 100 - redVarPct;
+                  const redBE = redContrib > 0 ? redFixed / (redContrib / 100) : 0;
+                  const redEffectiveRev = storeProfitShare > 0 && redContrib > 0
+                    ? (redFixed + storeProfitShare) / (redContrib / 100)
+                    : redBE;
+                  return { ...store, storeEffectiveRev, redEffectiveRev, redFixed, redVarPct };
+                });
+
+                const totalEffectiveRev = storeRows.reduce((s, r) => s + r.storeEffectiveRev, 0);
+                const totalRedEffectiveRev = storeRows.reduce((s, r) => s + r.redEffectiveRev, 0);
+
+                return (
+                  <Card>
+                    <CardContent className="pt-4 pb-3 overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Loja</TableHead>
+                            <TableHead className="text-right">PE</TableHead>
+                            <TableHead className="text-right">Fixos R$</TableHead>
+                            <TableHead className="text-right">% Var.</TableHead>
+                            <TableHead className="text-right">Var. Limite R$</TableHead>
+                            {hasPlannedCuts && (
+                              <>
+                                <TableHead className="text-right"><span className="text-primary">PE c/ Red.</span></TableHead>
+                                <TableHead className="text-right"><span className="text-primary">Fixos c/ Red.</span></TableHead>
+                                <TableHead className="text-right"><span className="text-primary">Var. Limite c/ Red.</span></TableHead>
+                              </>
+                            )}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {storeRows.map((row, i) => {
+                            const varLimitR$ = row.storeEffectiveRev * (row.variablePercent / 100);
+                            const redVarLimitR$ = row.redEffectiveRev * (row.redVarPct / 100);
+                            const hasStoreCuts = row.plannedFixedCut > 0 || row.plannedVarCutPct > 0;
+                            return (
+                              <TableRow key={i}>
+                                <TableCell className="text-xs font-medium">{row.storeName}</TableCell>
+                                <TableCell className="text-right text-xs font-bold">{fmt(row.storeEffectiveRev)}</TableCell>
+                                <TableCell className="text-right text-xs text-destructive">{fmt(row.fixedCosts)}</TableCell>
+                                <TableCell className="text-right text-xs">{fmtPct(row.variablePercent)}</TableCell>
+                                <TableCell className="text-right text-sm font-bold text-orange-500">{fmt(varLimitR$)}</TableCell>
+                                {hasPlannedCuts && (
+                                  <>
+                                    <TableCell className="text-right text-xs font-bold text-primary">
+                                      {hasStoreCuts ? fmt(row.redEffectiveRev) : '—'}
+                                    </TableCell>
+                                    <TableCell className="text-right text-xs text-primary">
+                                      {row.plannedFixedCut > 0 ? fmt(row.redFixed) : '—'}
+                                    </TableCell>
+                                    <TableCell className="text-right text-sm font-bold text-primary">
+                                      {hasStoreCuts ? fmt(redVarLimitR$) : '—'}
+                                    </TableCell>
+                                  </>
+                                )}
+                              </TableRow>
+                            );
+                          })}
+                          <TableRow className="border-t-2 font-bold bg-muted/30">
+                            <TableCell className="text-xs font-bold">CONSOLIDADO</TableCell>
+                            <TableCell className="text-right text-xs font-bold">{fmt(totalEffectiveRev)}</TableCell>
+                            <TableCell className="text-right text-xs text-destructive">{fmt(storeRows.reduce((s, r) => s + r.fixedCosts, 0))}</TableCell>
+                            <TableCell className="text-right text-xs">—</TableCell>
+                            <TableCell className="text-right text-sm font-bold text-orange-500">
+                              {fmt(storeRows.reduce((s, r) => s + r.storeEffectiveRev * (r.variablePercent / 100), 0))}
+                            </TableCell>
+                            {hasPlannedCuts && (
+                              <>
+                                <TableCell className="text-right text-xs font-bold text-primary">{fmt(totalRedEffectiveRev)}</TableCell>
+                                <TableCell className="text-right text-xs text-primary">
+                                  {fmt(storeRows.reduce((s, r) => s + r.redFixed, 0))}
+                                </TableCell>
+                                <TableCell className="text-right text-sm font-bold text-primary">
+                                  {fmt(storeRows.reduce((s, r) => s + r.redEffectiveRev * (r.redVarPct / 100), 0))}
+                                </TableCell>
+                              </>
+                            )}
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              // Fallback: single store view (original behavior)
+              const baseRevenue = parseFloat(limitRevenue) || breakEven;
               const effectiveRevenue = profitGoal > 0 && contributionMarginPercent > 0
                 ? (adjustedFixed + profitGoal) / (contributionMarginPercent / 100)
                 : baseRevenue;
@@ -557,8 +684,8 @@ export function ProfitSimulator({
                         {variableCostItems.map(item => {
                           const limitValue = effectiveRevenue * (item.percentage / 100);
                           const cutPct = plannedVariableCuts[item.id] || 0;
-                          const adjustedPct = item.percentage - cutPct;
-                          const adjustedLimit = effectiveRevenue * (adjustedPct / 100);
+                          const adjustedPctItem = item.percentage - cutPct;
+                          const adjustedLimitItem = effectiveRevenue * (adjustedPctItem / 100);
                           return (
                             <TableRow key={item.id}>
                               <TableCell className="text-xs font-medium">{item.description}</TableCell>
@@ -566,7 +693,7 @@ export function ProfitSimulator({
                               <TableCell className="text-right text-sm font-bold text-orange-500">{fmt(limitValue)}</TableCell>
                               {hasPlannedCuts && (
                                 <TableCell className="text-right text-sm font-bold text-primary">
-                                  {cutPct > 0 ? fmt(adjustedLimit) : '—'}
+                                  {cutPct > 0 ? fmt(adjustedLimitItem) : '—'}
                                 </TableCell>
                               )}
                             </TableRow>

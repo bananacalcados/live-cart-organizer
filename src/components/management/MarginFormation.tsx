@@ -1107,7 +1107,8 @@ export function MarginFormation({ stores }: Props) {
                 const totalVarCostR$ = storeMetrics.reduce((s, m) => s + (m.store.revenue_target ?? 0) * (m.totalVarPct / 100), 0);
                 const avgVarPct = totalRevTarget > 0 ? (totalVarCostR$ / totalRevTarget) * 100 : 0;
                 const avgContrib = 100 - avgVarPct;
-                const grandBreakEven = avgContrib > 0 ? grandFixed / (avgContrib / 100) : 0;
+                // PE consolidado = soma dos PEs individuais de cada loja (valor real, não média)
+                const grandBreakEven = storeMetrics.reduce((s, m) => s + m.breakEven, 0);
 
                 // Consolidated cuts: weighted average for variable cuts too
                 const consolidatedFixedCutTotal = storeMetrics.reduce((s, m) => s + m.storeFixedCutTotal, 0);
@@ -1368,6 +1369,15 @@ export function MarginFormation({ stores }: Props) {
                         return details;
                       })()}
                       showBaseToggle={true}
+                      storeExpenseData={storeMetrics.map(m => ({
+                        storeName: m.store.name,
+                        fixedCosts: m.totalFixed,
+                        variablePercent: m.totalVarPct,
+                        revenueTarget: m.store.revenue_target ?? 0,
+                        breakEven: m.breakEven,
+                        plannedFixedCut: m.storeFixedCutTotal,
+                        plannedVarCutPct: m.storeVarCutPct,
+                      }))}
                     />
                   </div>
                 );
