@@ -72,10 +72,10 @@ const EXPEDITION_TABS: { key: ExpeditionFilter; label: string; color: string }[]
 ];
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-  pending: { label: 'Pendente', color: 'bg-yellow-500/20 text-yellow-400', icon: Clock },
-  separating: { label: 'Separando', color: 'bg-cyan-500/20 text-cyan-400', icon: Package },
-  packed: { label: 'Embalado', color: 'bg-purple-500/20 text-purple-400', icon: PackageCheck },
-  shipped: { label: 'Enviado', color: 'bg-green-500/20 text-green-400', icon: Truck },
+  pending: { label: 'Pendente', color: 'bg-yellow-100 text-yellow-800 border border-yellow-300', icon: Clock },
+  separating: { label: 'Separando', color: 'bg-cyan-100 text-cyan-800 border border-cyan-300', icon: Package },
+  packed: { label: 'Embalado', color: 'bg-purple-100 text-purple-800 border border-purple-300', icon: PackageCheck },
+  shipped: { label: 'Enviado', color: 'bg-green-100 text-green-800 border border-green-300', icon: Truck },
 };
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -224,30 +224,30 @@ export function POSShipments({ storeId }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="p-3 md:p-4 border-b border-white/10 space-y-2">
+      <div className="p-3 md:p-4 border-b border-gray-200 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Truck className="h-5 w-5 text-pos-yellow" />
-            <h2 className="text-base md:text-lg font-bold text-white">Envios Online</h2>
+            <Truck className="h-5 w-5 text-amber-600" />
+            <h2 className="text-base md:text-lg font-bold text-black">Envios Online</h2>
             {counts.pending > 0 && (
               <Badge className="bg-red-500 text-white border-0 animate-pulse">{counts.pending}</Badge>
             )}
           </div>
-          <Button variant="ghost" size="sm" onClick={fetchOrders} className="text-white/50 hover:text-white">
+          <Button variant="outline" size="sm" onClick={fetchOrders} className="text-gray-500 hover:text-black border-gray-300">
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             placeholder="Buscar por nome, telefone, SKU..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 text-sm bg-white/5 border-white/20 text-white h-9"
+            className="pl-8 text-sm bg-gray-50 border-gray-300 text-black h-9 placeholder:text-gray-400"
           />
         </div>
 
@@ -260,8 +260,8 @@ export function POSShipments({ storeId }: Props) {
               className={cn(
                 'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all',
                 filter === tab.key
-                  ? 'bg-pos-yellow text-pos-black'
-                  : 'bg-white/5 text-white/50 hover:bg-white/10'
+                  ? 'bg-black text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               )}
             >
               {tab.label}
@@ -275,7 +275,7 @@ export function POSShipments({ storeId }: Props) {
       <ScrollArea className="flex-1 p-3 md:p-4">
         <div className="space-y-2">
           {filteredOrders.length === 0 && (
-            <div className="text-center py-12 text-white/30">
+            <div className="text-center py-12 text-gray-400">
               <Package className="h-10 w-10 mx-auto mb-2" />
               <p className="text-sm">Nenhum envio encontrado</p>
             </div>
@@ -291,8 +291,8 @@ export function POSShipments({ storeId }: Props) {
               <Card
                 key={order.id}
                 className={cn(
-                  'border-white/10 bg-white/5 transition-all',
-                  order.expedition_status === 'pending' && 'border-yellow-500/30 bg-yellow-500/5'
+                  'border-gray-200 bg-white shadow-sm transition-all',
+                  order.expedition_status === 'pending' && 'border-yellow-300 bg-yellow-50'
                 )}
               >
                 <CardContent className="p-3">
@@ -304,59 +304,59 @@ export function POSShipments({ storeId }: Props) {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-white text-sm">
+                          <span className="font-bold text-black text-sm">
                             {order.customer_name || 'Sem cliente'}
                           </span>
                           <Badge className={`text-[10px] ${status.color}`}>
                             <StatusIcon className="h-3 w-3 mr-0.5" />{status.label}
                           </Badge>
                           {order.sale_type === 'pickup' && (
-                            <Badge className="bg-teal-500/20 text-teal-400 text-[10px]">Retirada</Badge>
+                            <Badge className="bg-teal-100 text-teal-800 border border-teal-300 text-[10px]">Retirada</Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] text-white/40 mt-0.5">
+                        <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5">
                           {order.customer_phone && <span className="flex items-center gap-0.5"><Phone className="h-3 w-3" />{order.customer_phone}</span>}
                           {order.seller_name && <span>• {order.seller_name}</span>}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-white/50 mt-0.5">
-                          <span className="font-semibold text-pos-yellow">{fmt(order.total)}</span>
+                        <div className="flex items-center gap-2 text-xs text-gray-600 mt-0.5">
+                          <span className="font-semibold text-red-600">{fmt(order.total)}</span>
                           <span>• {itemCount} {itemCount === 1 ? 'item' : 'itens'}</span>
                           {order.payment_gateway && <span>• {order.payment_gateway}</span>}
                         </div>
                         {order.tracking_code && (
-                          <p className="text-[10px] text-green-400 mt-0.5">🚚 {order.tracking_code}</p>
+                          <p className="text-[10px] text-green-700 font-medium mt-0.5">🚚 {order.tracking_code}</p>
                         )}
-                        <p className="text-[10px] text-white/30 mt-0.5">
+                        <p className="text-[10px] text-gray-400 mt-0.5">
                           {new Date(order.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                           {order.tiny_order_number && ` • Tiny #${order.tiny_order_number}`}
                         </p>
                       </div>
                       <div className="shrink-0">
-                        {isExpanded ? <ChevronUp className="h-4 w-4 text-white/30" /> : <ChevronDown className="h-4 w-4 text-white/30" />}
+                        {isExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                       </div>
                     </div>
                   </button>
 
                   {/* Expanded details */}
                   {isExpanded && (
-                    <div className="mt-3 border-t border-white/10 pt-3 space-y-3">
+                    <div className="mt-3 border-t border-gray-200 pt-3 space-y-3">
                       {/* Items list */}
                       {order.items && order.items.length > 0 && (
                         <div className="space-y-1">
-                          <p className="text-xs font-semibold text-white/60">Itens:</p>
+                          <p className="text-xs font-semibold text-gray-500">Itens:</p>
                           {order.items.map((item, idx) => (
-                            <div key={item.id || idx} className="flex items-center justify-between gap-2 py-1 border-b border-white/5 last:border-0">
+                            <div key={item.id || idx} className="flex items-center justify-between gap-2 py-1 border-b border-gray-100 last:border-0">
                               <div className="min-w-0 flex-1">
-                                <p className="text-xs text-white truncate">{item.product_name}</p>
-                                <div className="flex gap-2 text-[10px] text-white/40">
+                                <p className="text-xs text-black truncate">{item.product_name}</p>
+                                <div className="flex gap-2 text-[10px] text-gray-500">
                                   {item.variant_name && <span>{item.variant_name}</span>}
                                   {item.size && <span>Tam: {item.size}</span>}
                                   {item.sku && <span className="font-mono">SKU: {item.sku}</span>}
                                 </div>
                               </div>
                               <div className="text-right shrink-0">
-                                <p className="text-xs text-white">{item.quantity}x</p>
-                                <p className="text-[10px] text-white/50">{fmt(item.unit_price)}</p>
+                                <p className="text-xs text-black font-medium">{item.quantity}x</p>
+                                <p className="text-[10px] text-gray-500">{fmt(item.unit_price)}</p>
                               </div>
                             </div>
                           ))}
@@ -365,7 +365,7 @@ export function POSShipments({ storeId }: Props) {
 
                       {/* Customer address */}
                       {(order.customer_address || order.customer_city) && (
-                        <div className="flex items-start gap-1.5 text-[10px] text-white/40">
+                        <div className="flex items-start gap-1.5 text-[10px] text-gray-500">
                           <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
                           <span>
                             {[order.customer_address, order.customer_city, order.customer_state, order.customer_cep].filter(Boolean).join(' - ')}
@@ -374,7 +374,7 @@ export function POSShipments({ storeId }: Props) {
                       )}
 
                       {order.notes && (
-                        <p className="text-[10px] text-white/40 italic">📝 {order.notes}</p>
+                        <p className="text-[10px] text-gray-500 italic">📝 {order.notes}</p>
                       )}
 
                       {/* Action buttons */}
@@ -417,7 +417,7 @@ export function POSShipments({ storeId }: Props) {
                         )}
 
                         {order.expedition_status === 'shipped' && (
-                          <Badge className="bg-green-500/20 text-green-400 text-xs">
+                          <Badge className="bg-green-100 text-green-800 border border-green-300 text-xs">
                             <CheckCircle2 className="h-3 w-3 mr-1" />
                             Enviado {order.shipped_at ? new Date(order.shipped_at).toLocaleDateString('pt-BR') : ''}
                           </Badge>
@@ -434,30 +434,30 @@ export function POSShipments({ storeId }: Props) {
 
       {/* Tracking Dialog */}
       <Dialog open={!!showTrackingDialog} onOpenChange={(open) => { if (!open) setShowTrackingDialog(null); }}>
-        <DialogContent className="bg-pos-black border-white/20 text-white max-w-sm">
+        <DialogContent className="bg-white border-gray-300 text-black max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Truck className="h-4 w-4 text-pos-yellow" /> Despachar Envio
+            <DialogTitle className="flex items-center gap-2 text-black">
+              <Truck className="h-4 w-4 text-amber-600" /> Despachar Envio
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-white/60 mb-1 block">Código de Rastreio (opcional)</label>
+              <label className="text-xs text-gray-600 mb-1 block">Código de Rastreio (opcional)</label>
               <Input
                 placeholder="Ex: BR123456789BR"
                 value={trackingInput}
                 onChange={(e) => setTrackingInput(e.target.value)}
-                className="bg-white/5 border-white/20 text-white text-sm"
+                className="bg-gray-50 border-gray-300 text-black text-sm"
               />
             </div>
             <div>
-              <label className="text-xs text-white/60 mb-1 block">Observações do envio</label>
+              <label className="text-xs text-gray-600 mb-1 block">Observações do envio</label>
               <Textarea
                 placeholder="Transportadora, prazo estimado..."
                 value={shippingNotesInput}
                 onChange={(e) => setShippingNotesInput(e.target.value)}
                 rows={2}
-                className="bg-white/5 border-white/20 text-white text-sm"
+                className="bg-gray-50 border-gray-300 text-black text-sm"
               />
             </div>
             <Button
