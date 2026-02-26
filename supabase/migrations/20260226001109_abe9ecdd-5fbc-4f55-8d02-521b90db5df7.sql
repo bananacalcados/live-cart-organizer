@@ -1,0 +1,1 @@
+ALTER TABLE public.pos_stores ADD COLUMN revenue_target numeric DEFAULT 100000;

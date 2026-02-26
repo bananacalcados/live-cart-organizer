@@ -47,6 +47,7 @@ interface TinySyncedOrder {
 interface StoreRow {
   id: string;
   name: string;
+  revenue_target?: number;
 }
 
 interface InventorySummaryRow {
@@ -622,7 +623,7 @@ export default function Management() {
       supabase.from("tiny_synced_orders").select("*")
         .gte("order_date", startDate).lte("order_date", endDate)
         .in("status", APPROVED_STATUSES),
-      supabase.from("pos_stores").select("id, name").eq("is_active", true),
+      supabase.from("pos_stores").select("id, name, revenue_target").eq("is_active", true),
       supabase.rpc("get_inventory_summary"),
       supabase.from("tiny_accounts_payable").select("*").order("data_vencimento", { ascending: true }),
     ]);
