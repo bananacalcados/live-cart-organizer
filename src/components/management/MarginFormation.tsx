@@ -1378,6 +1378,25 @@ export function MarginFormation({ stores }: Props) {
                         plannedFixedCut: m.storeFixedCutTotal,
                         plannedVarCutPct: m.storeVarCutPct,
                       }))}
+                      storeVariableCostDetails={(() => {
+                        const details: { storeName: string; storeId: string; costDescription: string; costId: string; percentage: number; revenueTarget: number; plannedCutPct: number }[] = [];
+                        stores.forEach(store => {
+                          const storeVCs = allVariableCosts.filter(v => v.store_id === store.id && v.is_active);
+                          storeVCs.forEach(vc => {
+                            const cut = allVariableCuts.find(c => c.store_id === store.id && c.variable_cost_id === vc.id);
+                            details.push({
+                              storeName: store.name,
+                              storeId: store.id,
+                              costDescription: vc.description,
+                              costId: vc.id,
+                              percentage: vc.percentage,
+                              revenueTarget: store.revenue_target ?? 0,
+                              plannedCutPct: cut?.reduction_percentage ?? 0,
+                            });
+                          });
+                        });
+                        return details;
+                      })()}
                     />
                   </div>
                 );
