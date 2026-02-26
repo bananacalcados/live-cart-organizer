@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Calculator, Target, DollarSign, Percent, TrendingUp, RotateCcw, Minus,
   ArrowDownToLine, Crosshair, Scissors,
@@ -46,6 +46,7 @@ interface Props {
   plannedFixedCuts?: Record<string, number>;
   plannedVariableCuts?: Record<string, number>;
   plannedCutDetails?: PlannedCutDetail[];
+  initialRevenue?: number;
 }
 
 export function ProfitSimulator({
@@ -57,10 +58,16 @@ export function ProfitSimulator({
   plannedFixedCuts = {},
   plannedVariableCuts = {},
   plannedCutDetails = [],
+  initialRevenue = 100000,
 }: Props) {
-  const [simRevenue, setSimRevenue] = useState("100000");
+  const [simRevenue, setSimRevenue] = useState(String(initialRevenue));
   const [globalFixedReduction, setGlobalFixedReduction] = useState(0);
   const [globalVariableReduction, setGlobalVariableReduction] = useState(0);
+
+  // Sync with prop changes (store switch)
+  useEffect(() => {
+    setSimRevenue(String(initialRevenue));
+  }, [initialRevenue]);
 
   // Per-item reductions: { [id]: reduction percentage 0-100 }
   const [fixedItemReductions, setFixedItemReductions] = useState<Record<string, number>>({});

@@ -20,7 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface Props {
-  stores: { id: string; name: string }[];
+  stores: { id: string; name: string; revenue_target?: number }[];
 }
 
 interface FixedCost {
@@ -63,6 +63,8 @@ export function MarginFormation({ stores }: Props) {
   const [storeFixedCosts, setStoreFixedCosts] = useState<StoreFixedCost[]>([]);
   const [variableCosts, setVariableCosts] = useState<VariableCost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingRevenueTarget, setEditingRevenueTarget] = useState(false);
+  const [revenueTargetInput, setRevenueTargetInput] = useState("");
 
   // Consolidated view
   const [allStoreFixedCosts, setAllStoreFixedCosts] = useState<StoreFixedCost[]>([]);
@@ -430,8 +432,23 @@ export function MarginFormation({ stores }: Props) {
     }));
   }, [variableCosts]);
 
-  const storeName = stores.find(s => s.id === selectedStore)?.name || "Loja";
+  const currentStore = stores.find(s => s.id === selectedStore);
+  const storeName = currentStore?.name || "Loja";
+  const storeRevenueTarget = currentStore?.revenue_target ?? 100000;
   const otherStores = stores.filter(s => s.id !== selectedStore);
+
+
+
+
+  const saveRevenueTarget = async () => {
+    const val = parseFloat(revenueTargetInput) || 0;
+    if (val <= 0) { toast.error("Meta deve ser maior que zero"); return; }
+    await supabase.from("pos_stores").update({ revenue_target: val }).eq("id", selectedStore);
+    // Update local stores reference
+    if (currentStore) (currentStore as any).revenue_target = val;
+    setEditingRevenueTarget(false);
+    toast.success("Meta de faturamento atualizada!");
+  };
 
   if (loading) {
     return <div className="flex items-center justify-center h-64 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando...</div>;
@@ -440,17 +457,45 @@ export function MarginFormation({ stores }: Props) {
   return (
     <div className="space-y-6">
       {/* Store selector */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Building2 className="h-5 w-5 text-primary" />
           <h3 className="text-lg font-bold">Formação de Margem</h3>
         </div>
-        <Select value={selectedStore} onValueChange={setSelectedStore}>
-          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
-          <SelectContent>
-            {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          {/* Revenue Target */}
+          <div className="flex items-center gap-2">
+            <Target className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Meta:</span>
+            {editingRevenueTarget ? (
+              <div className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  value={revenueTargetInput}
+                  onChange={e => setRevenueTargetInput(e.target.value)}
+                  className="h-7 w-[120px] text-xs"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') saveRevenueTarget(); if (e.key === 'Escape') setEditingRevenueTarget(false); }}
+                />
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={saveRevenueTarget}><Check className="h-3 w-3" /></Button>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingRevenueTarget(false)}><X className="h-3 w-3" /></Button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setRevenueTargetInput(String(storeRevenueTarget)); setEditingRevenueTarget(true); }}
+                className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+              >
+                {fmt(storeRevenueTarget)}
+              </button>
+            )}
+          </div>
+          <Select value={selectedStore} onValueChange={s => { setSelectedStore(s); setEditingRevenueTarget(false); }}>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
+            <SelectContent>
+              {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -1007,6 +1052,7 @@ export function MarginFormation({ stores }: Props) {
             variableCostItems={storeVariableCostItems}
             totalFixedCosts={totalFixedCosts}
             totalVariablePercent={totalVariablePercent}
+            initialRevenue={storeRevenueTarget}
             plannedFixedCuts={fixedCutValues}
             plannedVariableCuts={variableCutValues}
             plannedCutDetails={(() => {
@@ -1254,6 +1300,7 @@ export function MarginFormation({ stores }: Props) {
                       variableCostItems={consolidatedVariableItems}
                       totalFixedCosts={grandFixed}
                       totalVariablePercent={avgVarPct}
+                      initialRevenue={stores.reduce((sum, s) => sum + (s.revenue_target ?? 100000), 0)}
                       plannedFixedCuts={consolidatedPlannedFixedCuts}
                       plannedVariableCuts={consolidatedPlannedVarCuts}
                       plannedCutDetails={(() => {

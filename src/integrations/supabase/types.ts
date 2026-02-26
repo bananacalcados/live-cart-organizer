@@ -5331,6 +5331,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          revenue_target: number | null
           tiny_deposit_name: string | null
           tiny_token: string
           updated_at: string
@@ -5341,6 +5342,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          revenue_target?: number | null
           tiny_deposit_name?: string | null
           tiny_token: string
           updated_at?: string
@@ -5351,6 +5353,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          revenue_target?: number | null
           tiny_deposit_name?: string | null
           tiny_token?: string
           updated_at?: string
