@@ -4853,6 +4853,7 @@ export type Database = {
           crediario_status: string | null
           customer_id: string | null
           discount: number
+          expedition_status: string
           id: string
           invoice_number: string | null
           invoice_pdf_url: string | null
@@ -4867,6 +4868,9 @@ export type Database = {
           payment_method_detail: string | null
           sale_type: string
           seller_id: string | null
+          shipped_at: string | null
+          shipping_address: Json | null
+          shipping_notes: string | null
           source_order_id: string | null
           status: string
           stock_source_store_id: string | null
@@ -4876,6 +4880,7 @@ export type Database = {
           tiny_order_id: string | null
           tiny_order_number: string | null
           total: number
+          tracking_code: string | null
           updated_at: string
         }
         Insert: {
@@ -4888,6 +4893,7 @@ export type Database = {
           crediario_status?: string | null
           customer_id?: string | null
           discount?: number
+          expedition_status?: string
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
@@ -4902,6 +4908,9 @@ export type Database = {
           payment_method_detail?: string | null
           sale_type?: string
           seller_id?: string | null
+          shipped_at?: string | null
+          shipping_address?: Json | null
+          shipping_notes?: string | null
           source_order_id?: string | null
           status?: string
           stock_source_store_id?: string | null
@@ -4911,6 +4920,7 @@ export type Database = {
           tiny_order_id?: string | null
           tiny_order_number?: string | null
           total?: number
+          tracking_code?: string | null
           updated_at?: string
         }
         Update: {
@@ -4923,6 +4933,7 @@ export type Database = {
           crediario_status?: string | null
           customer_id?: string | null
           discount?: number
+          expedition_status?: string
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
@@ -4937,6 +4948,9 @@ export type Database = {
           payment_method_detail?: string | null
           sale_type?: string
           seller_id?: string | null
+          shipped_at?: string | null
+          shipping_address?: Json | null
+          shipping_notes?: string | null
           source_order_id?: string | null
           status?: string
           stock_source_store_id?: string | null
@@ -4946,6 +4960,7 @@ export type Database = {
           tiny_order_id?: string | null
           tiny_order_number?: string | null
           total?: number
+          tracking_code?: string | null
           updated_at?: string
         }
         Relationships: [

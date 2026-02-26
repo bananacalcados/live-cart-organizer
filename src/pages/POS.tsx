@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
   ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3, SearchX,
-  Menu, X, Package, Globe, Lock, Loader2, CreditCard, Flame
+  Menu, X, Package, Globe, Lock, Loader2, CreditCard, Flame, Truck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,7 @@ import { POSDailySales } from "@/components/pos/POSDailySales";
 import { POSPickupOrders } from "@/components/pos/POSPickupOrders";
 import { POSTeamChat } from "@/components/pos/POSTeamChat";
 import { POSSlowMovingProducts } from "@/components/pos/POSSlowMovingProducts";
+import { POSShipments } from "@/components/pos/POSShipments";
 
 import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineSales } from "@/components/pos/POSOnlineSales";
@@ -32,7 +33,7 @@ import { POSCheckoutMonitor } from "@/components/pos/POSCheckoutMonitor";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving";
+type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments";
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
 const CONFIG_PIN = "1530";
@@ -42,6 +43,7 @@ const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badg
   { id: "sales", label: "Venda", icon: ShoppingCart, priority: true },
   { id: "daily", label: "Pedidos", icon: BarChart3, priority: true },
   { id: "online", label: "Online", icon: Globe, priority: true },
+  { id: "shipments", label: "Envios", icon: Truck, priority: true, badge: true },
   { id: "pickups", label: "Retiradas", icon: Package, priority: true, badge: true },
   { id: "cash", label: "Caixa", icon: DollarSign, priority: true },
   { id: "returns", label: "Trocas", icon: RotateCcw },
@@ -262,6 +264,7 @@ export default function POS() {
         {section === "checkout" && <POSCheckoutMonitor storeId={selectedStore} />}
         {section === "chat" && <POSTeamChat storeId={selectedStore} />}
         {section === "slowmoving" && <POSSlowMovingProducts storeId={selectedStore} />}
+        {section === "shipments" && <POSShipments storeId={selectedStore} />}
       </div>
 
       {/* Config PIN Dialog */}
