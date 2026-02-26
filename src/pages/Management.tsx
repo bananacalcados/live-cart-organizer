@@ -611,24 +611,39 @@ export default function Management() {
     }
   }, [period, customFrom, customTo]);
 
+  const fetchAllTinyOrders = async (startDate: string, endDate: string, statuses: string[]) => {
+    const PAGE_SIZE = 1000;
+    let allData: any[] = [];
+    let from = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabase.from("tiny_synced_orders").select("*")
+        .gte("order_date", startDate).lte("order_date", endDate)
+        .in("status", statuses)
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      allData = allData.concat(data || []);
+      hasMore = (data?.length || 0) === PAGE_SIZE;
+      from += PAGE_SIZE;
+    }
+    return allData;
+  };
+
   const fetchData = async () => {
     setLoading(true);
     const startDate = dateRange.start.toISOString().split('T')[0];
     const endDate = dateRange.end.toISOString().split('T')[0];
-    const iso = { start: dateRange.start.toISOString(), end: dateRange.end.toISOString() };
 
     const APPROVED_STATUSES = ['Faturado', 'Aprovado', 'Preparando envio', 'Pronto para envio', 'Enviado', 'Entregue', 'Não entregue'];
 
-    const [tinyRes, storesRes, invRes, apRes] = await Promise.all([
-      supabase.from("tiny_synced_orders").select("*")
-        .gte("order_date", startDate).lte("order_date", endDate)
-        .in("status", APPROVED_STATUSES),
+    const [tinyData, storesRes, invRes, apRes] = await Promise.all([
+      fetchAllTinyOrders(startDate, endDate, APPROVED_STATUSES),
       supabase.from("pos_stores").select("id, name, revenue_target").eq("is_active", true),
       supabase.rpc("get_inventory_summary"),
       supabase.from("tiny_accounts_payable").select("*").order("data_vencimento", { ascending: true }),
     ]);
 
-    setTinyOrders((tinyRes.data || []) as unknown as TinySyncedOrder[]);
+    setTinyOrders(tinyData as unknown as TinySyncedOrder[]);
     setStores(storesRes.data || []);
     setInventoryData((invRes.data || []) as unknown as InventorySummaryRow[]);
     setAccountsPayable((apRes.data || []) as any[]);
@@ -804,7 +819,7 @@ export default function Management() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [period]);
+  useEffect(() => { fetchData(); }, [period, customFrom, customTo]);
 
   // --- Computed ---
   const filteredTinyOrders = useMemo(() => {
