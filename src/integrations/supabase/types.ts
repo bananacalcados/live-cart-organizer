@@ -5326,6 +5326,82 @@ export type Database = {
           },
         ]
       }
+      pos_stock_adjustments: {
+        Row: {
+          barcode: string | null
+          created_at: string | null
+          direction: string
+          id: string
+          new_stock: number | null
+          previous_stock: number | null
+          product_id: string | null
+          product_name: string
+          quantity: number
+          reason: string | null
+          seller_id: string | null
+          seller_name: string | null
+          sku: string | null
+          store_id: string
+          tiny_id: number
+        }
+        Insert: {
+          barcode?: string | null
+          created_at?: string | null
+          direction: string
+          id?: string
+          new_stock?: number | null
+          previous_stock?: number | null
+          product_id?: string | null
+          product_name: string
+          quantity: number
+          reason?: string | null
+          seller_id?: string | null
+          seller_name?: string | null
+          sku?: string | null
+          store_id: string
+          tiny_id: number
+        }
+        Update: {
+          barcode?: string | null
+          created_at?: string | null
+          direction?: string
+          id?: string
+          new_stock?: number | null
+          previous_stock?: number | null
+          product_id?: string | null
+          product_name?: string
+          quantity?: number
+          reason?: string | null
+          seller_id?: string | null
+          seller_name?: string | null
+          sku?: string | null
+          store_id?: string
+          tiny_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_stock_adjustments_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "pos_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_store_sellers: {
         Row: {
           created_at: string
