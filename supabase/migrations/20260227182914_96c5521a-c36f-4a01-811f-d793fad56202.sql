@@ -1,0 +1,1 @@
+ALTER TABLE product_capture_items ADD COLUMN cost_price NUMERIC DEFAULT 0;
