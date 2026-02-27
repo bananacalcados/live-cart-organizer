@@ -141,7 +141,7 @@ serve(async (req) => {
           if (rows.length > 0) {
             await supabase
               .from('pos_products')
-              .upsert(rows, { onConflict: 'store_id,tiny_id,sku,variant' });
+              .upsert(rows, { onConflict: 'store_id,sku,variant', ignoreDuplicates: false });
           }
 
           totalSynced += rows.length;
