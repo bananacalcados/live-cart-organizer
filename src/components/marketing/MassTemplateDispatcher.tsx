@@ -120,6 +120,7 @@ export function MassTemplateDispatcher() {
   const [isTesting, setIsTesting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [forceResend, setForceResend] = useState(false);
 
   useEffect(() => {
     if (numbers.length === 0) fetchNumbers();
@@ -542,27 +543,33 @@ export function MassTemplateDispatcher() {
     setIsSending(true);
     cancelSendRef.current = false;
 
-    // Resume: skip phones that already received this template today
-    toast.info("Verificando envios anteriores para retomar de onde parou...");
-    const alreadySent = await fetchAlreadySentPhones(selectedTemplate.name, selectedNumber);
+    // Resume: skip phones that already received this template today (unless force resend)
+    let phones = allPhones;
+    if (!forceResend) {
+      toast.info("Verificando envios anteriores para retomar de onde parou...");
+      const alreadySent = await fetchAlreadySentPhones(selectedTemplate.name, selectedNumber);
 
-    const phones = allPhones.filter(p => {
-      let formatted = p.replace(/\D/g, '');
-      if (!formatted.startsWith('55')) formatted = '55' + formatted;
-      return !alreadySent.has(formatted) && !alreadySent.has(p.replace(/\D/g, ''));
-    });
+      phones = allPhones.filter(p => {
+        let formatted = p.replace(/\D/g, '');
+        if (!formatted.startsWith('55')) formatted = '55' + formatted;
+        return !alreadySent.has(formatted) && !alreadySent.has(p.replace(/\D/g, ''));
+      });
+
+      const skipped = allPhones.length - phones.length;
+      if (skipped > 0) {
+        toast.success(`⏩ ${skipped} destinatários já receberam hoje — retomando dos restantes.`);
+      }
+
+      if (phones.length === 0) {
+        toast.success("✅ Todos os destinatários selecionados já receberam este template hoje!");
+        setIsSending(false);
+        return;
+      }
+    } else {
+      toast.info("⚠️ Forçando reenvio para TODOS os selecionados...");
+    }
 
     const skipped = allPhones.length - phones.length;
-    if (skipped > 0) {
-      toast.success(`⏩ ${skipped} destinatários já receberam hoje — retomando dos restantes.`);
-    }
-
-    if (phones.length === 0) {
-      toast.success("✅ Todos os destinatários selecionados já receberam este template hoje!");
-      setIsSending(false);
-      return;
-    }
-
     setSendProgress({ sent: skipped, total: allPhones.length, failed: 0 });
 
     try {
@@ -1147,6 +1154,16 @@ export function MassTemplateDispatcher() {
             </div>
             <div className="bg-[#dcf8c6] dark:bg-[#005c4b] rounded-lg p-3 text-sm whitespace-pre-wrap">
               {renderedMessage}
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox
+                id="force-resend"
+                checked={forceResend}
+                onCheckedChange={(v) => setForceResend(!!v)}
+              />
+              <Label htmlFor="force-resend" className="text-sm font-medium text-amber-600 dark:text-amber-400 cursor-pointer">
+                ⚠️ Forçar reenvio (envia mesmo para quem já recebeu hoje)
+              </Label>
             </div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" />
