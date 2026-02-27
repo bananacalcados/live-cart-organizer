@@ -1,0 +1,461 @@
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  History, Send, CheckCircle, XCircle, Eye, Clock, RefreshCw,
+  MessageSquare, BarChart3, Users, ChevronDown, ChevronUp,
+} from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+interface DispatchRecord {
+  id: string;
+  template_name: string;
+  audience_source: string;
+  audience_filters: any;
+  total_recipients: number;
+  sent_count: number;
+  failed_count: number;
+  rendered_message: string | null;
+  force_resend: boolean;
+  started_at: string;
+  completed_at: string | null;
+  status: string;
+  // Live stats from whatsapp_messages
+  stats?: {
+    delivered: number;
+    read: number;
+    sent: number;
+    failed: number;
+    total: number;
+  };
+}
+
+interface RecipientRow {
+  phone: string;
+  recipient_name: string | null;
+  status: string;
+  message_wamid: string | null;
+}
+
+export function DispatchHistoryList() {
+  const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedDispatch, setSelectedDispatch] = useState<DispatchRecord | null>(null);
+  const [recipients, setRecipients] = useState<RecipientRow[]>([]);
+  const [recipientStats, setRecipientStats] = useState<Record<string, string>>({});
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+
+  const loadHistory = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('dispatch_history')
+        .select('*')
+        .order('started_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        setDispatches([]);
+        return;
+      }
+
+      // For each dispatch, get live stats from whatsapp_messages
+      const enriched = await Promise.all(data.map(async (d: any) => {
+        // Get phones for this dispatch
+        const { data: recs } = await supabase
+          .from('dispatch_recipients')
+          .select('phone')
+          .eq('dispatch_id', d.id);
+
+        if (!recs || recs.length === 0) {
+          return { ...d, stats: { delivered: 0, read: 0, sent: 0, failed: 0, total: 0 } };
+        }
+
+        const phones = recs.map((r: any) => {
+          let p = r.phone.replace(/\D/g, '');
+          if (!p.startsWith('55')) p = '55' + p;
+          return p;
+        });
+
+        // Query message statuses for these phones around the dispatch time
+        const startTime = new Date(d.started_at);
+        startTime.setMinutes(startTime.getMinutes() - 2);
+        const endTime = d.completed_at
+          ? new Date(new Date(d.completed_at).getTime() + 60 * 60 * 1000)
+          : new Date();
+
+        // Batch phones in groups of 100 for the IN query
+        let allStatuses: { phone: string; status: string }[] = [];
+        for (let i = 0; i < phones.length; i += 100) {
+          const batch = phones.slice(i, i + 100);
+          const { data: msgs } = await supabase
+            .from('whatsapp_messages')
+            .select('phone, status')
+            .eq('direction', 'outgoing')
+            .in('phone', batch)
+            .gte('created_at', startTime.toISOString())
+            .lte('created_at', endTime.toISOString());
+          if (msgs) allStatuses.push(...msgs);
+        }
+
+        // Use best status per phone
+        const phoneStatus = new Map<string, string>();
+        const statusRank: Record<string, number> = { failed: 0, sent: 1, delivered: 2, read: 3 };
+        for (const msg of allStatuses) {
+          const current = phoneStatus.get(msg.phone);
+          if (!current || (statusRank[msg.status] || 0) > (statusRank[current] || 0)) {
+            phoneStatus.set(msg.phone, msg.status);
+          }
+        }
+
+        const stats = { delivered: 0, read: 0, sent: 0, failed: 0, total: phones.length };
+        for (const [, status] of phoneStatus) {
+          if (status === 'delivered') stats.delivered++;
+          else if (status === 'read') stats.read++;
+          else if (status === 'sent') stats.sent++;
+          else if (status === 'failed') stats.failed++;
+        }
+
+        return { ...d, stats };
+      }));
+
+      setDispatches(enriched);
+    } catch (err) {
+      console.error('Error loading dispatch history:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  const openDetail = async (dispatch: DispatchRecord) => {
+    setSelectedDispatch(dispatch);
+    setIsLoadingDetail(true);
+    try {
+      const { data } = await supabase
+        .from('dispatch_recipients')
+        .select('phone, recipient_name, status, message_wamid')
+        .eq('dispatch_id', dispatch.id)
+        .order('created_at', { ascending: true });
+
+      setRecipients(data || []);
+
+      // Get live statuses
+      if (data && data.length > 0) {
+        const phones = data.map((r: any) => {
+          let p = r.phone.replace(/\D/g, '');
+          if (!p.startsWith('55')) p = '55' + p;
+          return p;
+        });
+
+        const startTime = new Date(dispatch.started_at);
+        startTime.setMinutes(startTime.getMinutes() - 2);
+        const endTime = dispatch.completed_at
+          ? new Date(new Date(dispatch.completed_at).getTime() + 60 * 60 * 1000)
+          : new Date();
+
+        const statusMap: Record<string, string> = {};
+        const statusRank: Record<string, number> = { failed: 0, sent: 1, delivered: 2, read: 3 };
+
+        for (let i = 0; i < phones.length; i += 100) {
+          const batch = phones.slice(i, i + 100);
+          const { data: msgs } = await supabase
+            .from('whatsapp_messages')
+            .select('phone, status')
+            .eq('direction', 'outgoing')
+            .in('phone', batch)
+            .gte('created_at', startTime.toISOString())
+            .lte('created_at', endTime.toISOString());
+          if (msgs) {
+            for (const msg of msgs) {
+              const current = statusMap[msg.phone];
+              if (!current || (statusRank[msg.status] || 0) > (statusRank[current] || 0)) {
+                statusMap[msg.phone] = msg.status;
+              }
+            }
+          }
+        }
+        setRecipientStats(statusMap);
+      }
+    } catch (err) {
+      console.error('Error loading recipients:', err);
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'read': return <Badge className="bg-blue-500/20 text-blue-700 dark:text-blue-300 text-xs">Lida</Badge>;
+      case 'delivered': return <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs">Entregue</Badge>;
+      case 'sent': return <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs">Enviada</Badge>;
+      case 'failed': return <Badge variant="destructive" className="text-xs">Falhou</Badge>;
+      default: return <Badge variant="outline" className="text-xs">Pendente</Badge>;
+    }
+  };
+
+  const getDispatchStatusBadge = (d: DispatchRecord) => {
+    if (d.status === 'sending') return <Badge className="bg-amber-500/20 text-amber-700 animate-pulse text-xs"><Clock className="h-3 w-3 mr-1" />Enviando</Badge>;
+    if (d.status === 'completed') return <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs"><CheckCircle className="h-3 w-3 mr-1" />Concluído</Badge>;
+    if (d.status === 'cancelled') return <Badge variant="outline" className="text-xs"><XCircle className="h-3 w-3 mr-1" />Cancelado</Badge>;
+    return <Badge variant="outline" className="text-xs">{d.status}</Badge>;
+  };
+
+  const calcRate = (value: number, total: number) => {
+    if (total === 0) return '0%';
+    return `${((value / total) * 100).toFixed(1)}%`;
+  };
+
+  const getAudienceLabel = (source: string, filters: any) => {
+    const parts: string[] = [];
+    if (source === 'crm') parts.push('CRM');
+    else if (source === 'leads') parts.push('Leads');
+    else if (source === 'both') parts.push('CRM + Leads');
+
+    if (filters?.rfm && filters.rfm !== 'all') parts.push(`RFM: ${filters.rfm}`);
+    if (filters?.state && filters.state !== 'all') parts.push(`UF: ${filters.state}`);
+    if (filters?.city && filters.city !== 'all') parts.push(`Cidade: ${filters.city}`);
+    if (filters?.ddd && filters.ddd !== 'all') parts.push(`DDD: ${filters.ddd}`);
+    if (filters?.region && filters.region !== 'all') parts.push(`Região: ${filters.region}`);
+    if (filters?.campaign && filters.campaign !== 'all') parts.push(`Campanha: ${filters.campaign}`);
+
+    return parts.length > 0 ? parts.join(' • ') : source || 'N/A';
+  };
+
+  if (dispatches.length === 0 && !isLoading) return null;
+
+  return (
+    <Card className="mt-6">
+      <CardHeader className="pb-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+        <CardTitle className="text-sm flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <History className="h-4 w-4" />
+            Histórico de Disparos ({dispatches.length})
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => { e.stopPropagation(); loadHistory(); }}
+              disabled={isLoading}
+              className="h-7 px-2"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </div>
+        </CardTitle>
+      </CardHeader>
+
+      {expanded && (
+        <CardContent className="pt-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+              <RefreshCw className="h-4 w-4 animate-spin mr-2" /> Carregando histórico...
+            </div>
+          ) : (
+            <ScrollArea className="max-h-[500px]">
+              <div className="space-y-2">
+                {dispatches.map((d) => {
+                  const s = d.stats || { delivered: 0, read: 0, sent: 0, failed: 0, total: 0 };
+                  const successTotal = s.delivered + s.read + s.sent;
+                  const deliveryRate = calcRate(s.delivered + s.read, s.total);
+                  const readRate = calcRate(s.read, s.total);
+
+                  return (
+                    <div
+                      key={d.id}
+                      className="border rounded-lg p-3 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => openDetail(d)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-sm font-medium">{d.template_name}</span>
+                            {getDispatchStatusBadge(d)}
+                            {d.force_resend && (
+                              <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">Reenvio</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {format(new Date(d.started_at), "dd/MM HH:mm", { locale: ptBR })}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {d.total_recipients} dest.
+                            </span>
+                            <span className="truncate max-w-[200px]">
+                              {getAudienceLabel(d.audience_source, d.audience_filters)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 text-xs shrink-0">
+                          <div className="text-center">
+                            <div className="font-bold text-emerald-600">{deliveryRate}</div>
+                            <div className="text-muted-foreground">Entrega</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-bold text-blue-600">{readRate}</div>
+                            <div className="text-muted-foreground">Leitura</div>
+                          </div>
+                          <div className="flex gap-1">
+                            <div className="w-2 h-8 rounded-full bg-muted overflow-hidden flex flex-col-reverse">
+                              <div className="bg-blue-500 transition-all" style={{ height: `${s.total ? (s.read / s.total) * 100 : 0}%` }} />
+                              <div className="bg-emerald-500 transition-all" style={{ height: `${s.total ? (s.delivered / s.total) * 100 : 0}%` }} />
+                              <div className="bg-amber-500 transition-all" style={{ height: `${s.total ? (s.sent / s.total) * 100 : 0}%` }} />
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="sm" className="h-7 px-2">
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          )}
+        </CardContent>
+      )}
+
+      {/* Detail Dialog */}
+      <Dialog open={!!selectedDispatch} onOpenChange={(o) => !o && setSelectedDispatch(null)}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          {selectedDispatch && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Relatório: {selectedDispatch.template_name}
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  <Card className="p-3 text-center">
+                    <div className="text-2xl font-bold">{selectedDispatch.total_recipients}</div>
+                    <div className="text-xs text-muted-foreground">Total</div>
+                  </Card>
+                  <Card className="p-3 text-center">
+                    <div className="text-2xl font-bold text-amber-600">{selectedDispatch.stats?.sent || 0}</div>
+                    <div className="text-xs text-muted-foreground">Enviadas</div>
+                  </Card>
+                  <Card className="p-3 text-center">
+                    <div className="text-2xl font-bold text-emerald-600">{selectedDispatch.stats?.delivered || 0}</div>
+                    <div className="text-xs text-muted-foreground">Entregues</div>
+                  </Card>
+                  <Card className="p-3 text-center">
+                    <div className="text-2xl font-bold text-blue-600">{selectedDispatch.stats?.read || 0}</div>
+                    <div className="text-xs text-muted-foreground">Lidas</div>
+                  </Card>
+                  <Card className="p-3 text-center">
+                    <div className="text-2xl font-bold text-destructive">{selectedDispatch.stats?.failed || 0}</div>
+                    <div className="text-xs text-muted-foreground">Falhas</div>
+                  </Card>
+                </div>
+
+                {/* Rates */}
+                <div className="grid grid-cols-3 gap-2">
+                  <Card className="p-3 text-center bg-emerald-50 dark:bg-emerald-950/30">
+                    <div className="text-lg font-bold text-emerald-600">
+                      {calcRate((selectedDispatch.stats?.delivered || 0) + (selectedDispatch.stats?.read || 0), selectedDispatch.stats?.total || 0)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Taxa de Entrega</div>
+                  </Card>
+                  <Card className="p-3 text-center bg-blue-50 dark:bg-blue-950/30">
+                    <div className="text-lg font-bold text-blue-600">
+                      {calcRate(selectedDispatch.stats?.read || 0, selectedDispatch.stats?.total || 0)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Taxa de Leitura</div>
+                  </Card>
+                  <Card className="p-3 text-center bg-destructive/10">
+                    <div className="text-lg font-bold text-destructive">
+                      {calcRate(selectedDispatch.stats?.failed || 0, selectedDispatch.stats?.total || 0)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Taxa de Falha</div>
+                  </Card>
+                </div>
+
+                {/* Metadata */}
+                <Card className="p-3 space-y-1 text-sm">
+                  <div><strong>Início:</strong> {format(new Date(selectedDispatch.started_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
+                  {selectedDispatch.completed_at && (
+                    <div><strong>Fim:</strong> {format(new Date(selectedDispatch.completed_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
+                  )}
+                  <div><strong>Público:</strong> {getAudienceLabel(selectedDispatch.audience_source, selectedDispatch.audience_filters)}</div>
+                  <div><strong>Reenvio forçado:</strong> {selectedDispatch.force_resend ? 'Sim' : 'Não'}</div>
+                </Card>
+
+                {/* Message Preview */}
+                {selectedDispatch.rendered_message && (
+                  <Card className="p-3">
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Mensagem enviada:</div>
+                    <div className="bg-[hsl(var(--muted))] rounded-lg p-3 text-sm whitespace-pre-wrap">
+                      {selectedDispatch.rendered_message}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Recipients Table */}
+                <div>
+                  <div className="text-sm font-medium mb-2">Destinatários ({recipients.length})</div>
+                  {isLoadingDetail ? (
+                    <div className="text-center py-4 text-muted-foreground text-sm">
+                      <RefreshCw className="h-4 w-4 animate-spin inline mr-2" />Carregando...
+                    </div>
+                  ) : (
+                    <ScrollArea className="max-h-[300px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Telefone</TableHead>
+                            <TableHead className="text-xs">Nome</TableHead>
+                            <TableHead className="text-xs">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {recipients.map((r, i) => {
+                            let formattedPhone = r.phone.replace(/\D/g, '');
+                            if (!formattedPhone.startsWith('55')) formattedPhone = '55' + formattedPhone;
+                            const liveStatus = recipientStats[formattedPhone] || r.status;
+                            return (
+                              <TableRow key={i}>
+                                <TableCell className="text-xs font-mono">{r.phone}</TableCell>
+                                <TableCell className="text-xs">{r.recipient_name || '—'}</TableCell>
+                                <TableCell>{getStatusBadge(liveStatus)}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}

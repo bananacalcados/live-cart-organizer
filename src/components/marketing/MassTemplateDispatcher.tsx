@@ -4,6 +4,7 @@ import {
   ChevronDown, ChevronUp, Phone, MapPin, Crown, FileSpreadsheet,
   AlertTriangle, Eye, Zap, RefreshCw, Image, Paperclip
 } from "lucide-react";
+import { DispatchHistoryList } from "./DispatchHistoryList";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -121,6 +122,7 @@ export function MassTemplateDispatcher() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [forceResend, setForceResend] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
 
   useEffect(() => {
     if (numbers.length === 0) fetchNumbers();
@@ -572,6 +574,48 @@ export function MassTemplateDispatcher() {
     const skipped = allPhones.length - phones.length;
     setSendProgress({ sent: skipped, total: allPhones.length, failed: 0 });
 
+    // Save dispatch history
+    let dispatchId: string | null = null;
+    try {
+      const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
+      const { data: dispatchData } = await supabase
+        .from('dispatch_history')
+        .insert({
+          template_name: selectedTemplate.name,
+          template_language: selectedTemplate.language,
+          whatsapp_number_id: selectedNumber,
+          audience_source: audienceSource,
+          audience_filters: {
+            rfm: rfmFilter, state: stateFilter, city: cityFilter,
+            ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
+          },
+          total_recipients: phones.length,
+          rendered_message: renderedMessage || null,
+          variables_config: variables,
+          force_resend: forceResend,
+          status: 'sending',
+        })
+        .select('id')
+        .single();
+      dispatchId = dispatchData?.id || null;
+
+      // Save recipients in batches
+      if (dispatchId) {
+        const recipientRows = phones.map(p => ({
+          dispatch_id: dispatchId!,
+          phone: p,
+          recipient_name: recipientMap.get(p)?.name || null,
+          status: 'pending',
+        }));
+        for (let i = 0; i < recipientRows.length; i += 100) {
+          await supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 100));
+        }
+      }
+    } catch (err) {
+      console.error('Error saving dispatch history:', err);
+    }
+
+    let finalSent = 0, finalFailed = 0;
     try {
       if (hasDynamicVars) {
         // Per-recipient send with concurrency pool
@@ -614,6 +658,7 @@ export function MassTemplateDispatcher() {
             if (ok) sent++; else failed++;
           }
           setSendProgress({ sent: sent + skipped, total: allPhones.length, failed });
+          finalSent = sent; finalFailed = failed;
         }
       } else {
         // Static vars: use bulk queue
@@ -662,6 +707,7 @@ export function MassTemplateDispatcher() {
             }
           }
           setSendProgress({ sent: sent + skipped, total: allPhones.length, failed });
+          finalSent = sent; finalFailed = failed;
         }
       }
 
@@ -689,8 +735,19 @@ export function MassTemplateDispatcher() {
       console.error(err);
       toast.error("Erro durante o disparo em massa");
     } finally {
+      // Update dispatch history
+      if (dispatchId) {
+        const finalStatus = cancelSendRef.current ? 'cancelled' : 'completed';
+        await supabase.from('dispatch_history').update({
+          status: finalStatus,
+          completed_at: new Date().toISOString(),
+          sent_count: finalSent,
+          failed_count: finalFailed,
+        }).eq('id', dispatchId);
+      }
       setIsSending(false);
       cancelSendRef.current = false;
+      setHistoryKey(k => k + 1);
     }
   };
 
@@ -1178,6 +1235,9 @@ export function MassTemplateDispatcher() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dispatch History */}
+      <DispatchHistoryList key={historyKey} />
     </div>
   );
 }
