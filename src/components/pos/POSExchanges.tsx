@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import {
   RotateCcw, Plus, Search, Package, CreditCard, ArrowLeftRight,
-  Ticket, Check, X, Loader2, ChevronDown, ScanBarcode, AlertTriangle, User
+  Ticket, Check, X, Loader2, ChevronDown, ScanBarcode, AlertTriangle, User, Scale
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { POSStockBalance } from "./POSStockBalance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -542,6 +544,18 @@ export function POSExchanges({ storeId }: Props) {
   );
 
   return (
+    <Tabs defaultValue="trocas" className="h-full flex flex-col">
+      <div className="px-6 pt-4 pb-0">
+        <TabsList className="bg-pos-white/5 border border-pos-orange/20 w-full">
+          <TabsTrigger value="trocas" className="flex-1 gap-2 data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/60">
+            <RotateCcw className="h-4 w-4" /> Trocas
+          </TabsTrigger>
+          <TabsTrigger value="balanco" className="flex-1 gap-2 data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/60">
+            <Scale className="h-4 w-4" /> Balanço
+          </TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent value="trocas" className="flex-1 overflow-hidden mt-0">
     <ScrollArea className="h-full">
       <div className="p-6 space-y-4">
         {/* Header */}
@@ -923,5 +937,10 @@ export function POSExchanges({ storeId }: Props) {
         </Dialog>
       </div>
     </ScrollArea>
+      </TabsContent>
+      <TabsContent value="balanco" className="flex-1 overflow-hidden mt-0">
+        <POSStockBalance storeId={storeId} />
+      </TabsContent>
+    </Tabs>
   );
 }
