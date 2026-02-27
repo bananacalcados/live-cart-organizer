@@ -1,70 +1,70 @@
 
-# Balanço de Estoque no PDV (Aba Trocas)
+# Custo de Captacao + Controle de Consignado
 
-## Resumo
-Adicionar uma seção de "Balanço de Estoque" dentro da aba Trocas do POS, permitindo ajustar o estoque de produtos (entrada ou saída) de forma rápida, sincronizando tanto no banco local quanto no Tiny ERP automaticamente.
+## Parte 1: Campo de Custo na Captacao
 
-## Fluxo do Usuário
-1. Na aba **Trocas**, o vendedor verá dois sub-abas: "Trocas" (atual) e "Balanço de Estoque" (novo)
-2. No Balanço, ele bipa ou busca o produto pelo nome/SKU/código de barras
-3. O sistema exibe o produto com o estoque atual (local)
-4. O vendedor informa a quantidade e a direção: **Entrada** (+) ou **Saída** (-)
-5. Pode adicionar uma observação (ex: "Produto danificado", "Reposição de fornecedor")
-6. Ao confirmar, o sistema:
-   - Consulta o saldo atual no depósito específico da loja no Tiny
-   - Calcula o saldo final absoluto (saldo_atual +/- quantidade)
-   - Envia o balanço (tipo B) com `nome_deposito` para o Tiny
-   - Atualiza o cache local (`pos_products`)
-   - Registra o histórico na tabela `pos_stock_adjustments`
+Adicionar coluna `cost_price` (NUMERIC, default 0) na tabela `product_capture_items` para registrar o preco de custo durante a bipagem.
 
-## Detalhes Técnicos
+### Mudancas:
+- **Migracao**: `ALTER TABLE product_capture_items ADD COLUMN cost_price NUMERIC DEFAULT 0`
+- **ProductCaptureTab.tsx**: Adicionar campo "Custo" no dialog de novo item (ao lado do campo Preco que ja existe) e tambem na listagem inline editavel de cada item
+- **Relatorio de Custo**: Adicionar um botao "Relatorio de Custo" no header da sessao que gera um resumo com:
+  - Lista de todos os produtos agrupados por modelo
+  - Custo unitario x quantidade = custo total por item
+  - Total geral de custo do estoque capturado
+  - Exportavel em formato visual (abre em nova janela para impressao)
 
-### 1. Nova tabela: `pos_stock_adjustments`
-Registra o histórico de todos os ajustes manuais de estoque.
+### Stats adicionais no topo:
+- Adicionar um 4o card: **Custo Total** (soma de cost_price * quantity de todos os itens)
 
+---
+
+## Parte 2: Controle de Consignado (Relatorio de Vendas)
+
+Criar uma nova aba/secao dentro do modulo de Captacao para rastrear vendas dos produtos consignados.
+
+### Abordagem:
+Os SKUs capturados na sessao serao cruzados com a tabela `tiny_synced_orders` (que contem as vendas de TODAS as lojas - Perola, Centro e Shopify). O campo `items` (JSONB) de cada pedido contem os SKUs vendidos.
+
+### Nova Edge Function: `consignment-sales-report`
+- Recebe `session_id`
+- Busca todos os barcodes/SKUs da sessao em `product_capture_items`
+- Consulta `tiny_synced_orders` em todas as lojas, filtrando pedidos com status diferente de 'Cancelado' e 'Em aberto'
+- Para cada pedido, percorre o array `items` buscando matches por SKU
+- Retorna relatorio com:
+  - Produto, SKU, loja de venda, data, quantidade vendida, valor unitario, valor total
+  - Totalizadores por produto e geral
+
+### UI: Botao "Relatorio Consignado" na sessao de captacao
+- Ao clicar, chama a edge function e exibe um dialog/tabela com:
+  - Tabela de vendas encontradas por produto/loja
+  - Total de pares vendidos
+  - Valor total a repassar
+  - Opcao de exportar/imprimir
+
+---
+
+## Detalhes Tecnicos
+
+### Migracao SQL
 ```sql
-CREATE TABLE pos_stock_adjustments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  store_id UUID NOT NULL REFERENCES pos_stores(id),
-  product_id UUID REFERENCES pos_products(id),
-  tiny_id BIGINT NOT NULL,
-  sku TEXT,
-  barcode TEXT,
-  product_name TEXT NOT NULL,
-  direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
-  quantity NUMERIC NOT NULL,
-  previous_stock NUMERIC,
-  new_stock NUMERIC,
-  reason TEXT,
-  seller_id UUID REFERENCES pos_sellers(id),
-  seller_name TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+ALTER TABLE product_capture_items ADD COLUMN cost_price NUMERIC DEFAULT 0;
 ```
-Com RLS habilitado e política permissiva para usuários autenticados.
 
-### 2. Edge Function: `pos-stock-balance`
-Função dedicada que:
-- Recebe `store_id`, `tiny_id`, `quantity`, `direction` ("in"/"out"), `reason`
-- Busca o `tiny_token` e `tiny_deposit_name` da loja
-- Consulta saldo atual no depósito via `produto.obter.estoque.php`
-- Calcula saldo final: `current + qty` (entrada) ou `max(0, current - qty)` (saída)
-- Envia balanço tipo B via `produto.atualizar.estoque.php` com `nome_deposito`
-- Retorna `previous_stock` e `new_stock`
+### Edge Function `consignment-sales-report`
+- Busca itens da sessao
+- Query nas vendas: filtra `tiny_synced_orders` excluindo status cancelados
+- Para cada pedido, faz parse do JSONB `items` e compara SKU
+- Agrupa resultados por produto e por loja
+- Retorna JSON estruturado com totais
 
-Reutiliza a mesma lógica já validada em `pos-exchange-stock-adjust`.
+### Arquivos modificados
+1. `src/components/inventory/ProductCaptureTab.tsx` - campo custo, stats, botoes de relatorio
+2. `supabase/functions/consignment-sales-report/index.ts` - nova edge function
+3. Migracao para adicionar `cost_price`
 
-### 3. Componente: `POSStockBalance.tsx`
-Novo componente renderizado na aba Trocas como sub-aba, contendo:
-- **Busca de produto**: reutiliza `POSTinyProductPicker` (busca por nome, SKU ou bipagem)
-- **Card do produto selecionado** com estoque local exibido
-- **Campos**: Direção (Entrada/Saída via toggle), Quantidade, Motivo (opcional), Vendedor
-- **Botão Confirmar** que chama a edge function e salva no histórico
-- **Lista de ajustes recentes** do dia abaixo do formulário
-
-### 4. Modificação em `POSExchanges.tsx`
-Adicionar tabs internas (usando `Tabs` do Radix) no topo:
-- "Trocas" (conteúdo atual)
-- "Balanço" (novo componente `POSStockBalance`)
-
-A estrutura do componente atual permanece intacta, apenas envolvida em uma tab.
+### Interface do Relatorio Consignado (Dialog)
+- Tabela com colunas: Produto | Loja | Data Venda | Qtd | Valor Unit. | Total
+- Linha de totalizacao por produto
+- Rodape com total geral de pares e valor a repassar
+- Botao "Imprimir" que abre em nova janela formatada
