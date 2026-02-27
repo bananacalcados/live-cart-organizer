@@ -435,7 +435,7 @@ serve(async (req) => {
 
     if (result.success) {
       if (orderSource === "orders") {
-        await supabase
+        const { error: updErr } = await supabase
           .from("orders")
           .update({
             is_paid: true,
@@ -444,8 +444,9 @@ serve(async (req) => {
             notes: `${order?.notes || ""}\n💳 Pago via ${result.gateway} (${result.transactionId})`.trim(),
           })
           .eq("id", params.orderId);
+        if (updErr) console.error("Failed to update orders:", updErr);
       } else {
-        await supabase
+        const { error: updErr } = await supabase
           .from("pos_sales")
           .update({
             status: "paid",
@@ -453,6 +454,8 @@ serve(async (req) => {
             notes: `💳 Pago via ${result.gateway} (${result.transactionId})`,
           })
           .eq("id", params.orderId);
+        if (updErr) console.error("Failed to update pos_sales:", updErr);
+        else console.log(`pos_sales ${params.orderId} updated to paid`);
       }
       console.log(`${orderSource} ${params.orderId} paid via ${result.gateway}`);
     }
