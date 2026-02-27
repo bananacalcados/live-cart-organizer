@@ -1048,10 +1048,51 @@ export default function StoreCheckout() {
             <Card>
               <CardContent className="p-6">
                 {currentStep === 1 && (
-                  <StepIdentification form={customerForm} setForm={setCustomerForm} onNext={() => setCurrentStep(2)} prefilled={!!saleData.customer_name} />
+                  <StepIdentification form={customerForm} setForm={setCustomerForm} onNext={() => {
+                    // Save customer data progressively when advancing to Step 2
+                    if (saleData) {
+                      supabase.from("pos_checkout_attempts").insert({
+                        sale_id: saleData.id,
+                        payment_method: "pending",
+                        status: "in_progress",
+                        amount: saleData.total,
+                        customer_name: customerForm.fullName,
+                        customer_phone: customerForm.whatsapp,
+                        customer_email: customerForm.email,
+                        gateway: "store-checkout",
+                        metadata: { cpf: customerForm.cpf },
+                      } as any).then(() => {});
+                    }
+                    setCurrentStep(2);
+                  }} prefilled={!!saleData.customer_name} />
                 )}
                 {currentStep === 2 && (
-                  <StepDelivery form={customerForm} setForm={setCustomerForm} onNext={() => setCurrentStep(3)} onBack={() => setCurrentStep(1)} />
+                  <StepDelivery form={customerForm} setForm={setCustomerForm} onNext={() => {
+                    // Update checkout attempt with address data when advancing to Step 3
+                    if (saleData) {
+                      supabase.from("pos_checkout_attempts").insert({
+                        sale_id: saleData.id,
+                        payment_method: "pending",
+                        status: "in_progress",
+                        amount: saleData.total,
+                        customer_name: customerForm.fullName,
+                        customer_phone: customerForm.whatsapp,
+                        customer_email: customerForm.email,
+                        gateway: "store-checkout",
+                        metadata: {
+                          cpf: customerForm.cpf,
+                          cep: customerForm.cep,
+                          address: customerForm.address,
+                          address_number: customerForm.addressNumber,
+                          complement: customerForm.complement,
+                          neighborhood: customerForm.neighborhood,
+                          city: customerForm.city,
+                          state: customerForm.state,
+                        },
+                      } as any).then(() => {});
+                    }
+                    setCurrentStep(3);
+                  }} onBack={() => setCurrentStep(1)} />
                 )}
                 {currentStep === 3 && (
                   <div className="space-y-4">
