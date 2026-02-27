@@ -563,7 +563,7 @@ export function POSDailySales({ storeId }: Props) {
   };
 
   // Calculations
-  const completedSales = sales.filter((s) => s.status === "completed" || s.status === "pending_sync");
+  const completedSales = sales.filter((s) => s.status === "completed" || s.status === "pending_sync" || s.status === "online_pending" || s.status === "pending_pickup");
   const totalRevenue = completedSales.reduce((s, sale) => s + (sale.total || 0), 0);
   const totalDiscount = completedSales.reduce((s, sale) => s + (sale.discount || 0), 0);
   const avgTicket = completedSales.length > 0 ? totalRevenue / completedSales.length : 0;
