@@ -1378,6 +1378,104 @@ export type Database = {
         }
         Relationships: []
       }
+      dispatch_history: {
+        Row: {
+          audience_filters: Json | null
+          audience_source: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          failed_count: number | null
+          force_resend: boolean | null
+          id: string
+          rendered_message: string | null
+          sent_count: number | null
+          started_at: string
+          status: string | null
+          template_language: string | null
+          template_name: string
+          total_recipients: number | null
+          variables_config: Json | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          audience_filters?: Json | null
+          audience_source?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number | null
+          force_resend?: boolean | null
+          id?: string
+          rendered_message?: string | null
+          sent_count?: number | null
+          started_at?: string
+          status?: string | null
+          template_language?: string | null
+          template_name: string
+          total_recipients?: number | null
+          variables_config?: Json | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          audience_filters?: Json | null
+          audience_source?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number | null
+          force_resend?: boolean | null
+          id?: string
+          rendered_message?: string | null
+          sent_count?: number | null
+          started_at?: string
+          status?: string | null
+          template_language?: string | null
+          template_name?: string
+          total_recipients?: number | null
+          variables_config?: Json | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
+      dispatch_recipients: {
+        Row: {
+          created_at: string
+          dispatch_id: string
+          id: string
+          message_wamid: string | null
+          phone: string
+          recipient_name: string | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string
+          dispatch_id: string
+          id?: string
+          message_wamid?: string | null
+          phone: string
+          recipient_name?: string | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string
+          dispatch_id?: string
+          id?: string
+          message_wamid?: string | null
+          phone?: string
+          recipient_name?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_recipients_dispatch_id_fkey"
+            columns: ["dispatch_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_history"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_promotions: {
         Row: {
           created_at: string
