@@ -655,6 +655,25 @@ function CardPaymentForm({
         throw new Error(data?.error || "Pagamento recusado.");
       }
     } catch (error) {
+      // On timeout/error, poll backend to check if payment was approved by fallback gateway
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          const { data: freshOrder } = await supabase
+            .from("orders")
+            .select("is_paid, stage")
+            .eq("id", orderId)
+            .maybeSingle();
+          if (freshOrder?.is_paid) {
+            toast.success("Pagamento aprovado!");
+            onPaymentConfirmed({ platform: "appmax", method: "credit_card", customerData: {
+              name: form.fullName, email: form.email, cpf: form.cpf.replace(/\D/g, ""), phone: form.whatsapp.replace(/\D/g, ""),
+              address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
+            }});
+            return;
+          }
+        } catch (_) { /* ignore poll error */ }
+      }
       toast.error(error instanceof Error ? error.message : "Erro ao processar pagamento.");
     } finally {
       setIsProcessing(false);
