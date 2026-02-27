@@ -414,6 +414,14 @@ export function POSExchanges({ storeId }: Props) {
 
       const validNewItems = exchangeType !== "credit" ? newItems.filter(i => i.product_name.trim()) : [];
 
+      // original_sale_id is UUID — only pass valid UUIDs, otherwise null
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const saleIdForDb = uuidRegex.test(selectedSale.id) ? selectedSale.id : null;
+
+      // If original_seller_id is not a valid UUID, set to null
+      const sellerIdForDb = selectedSale.seller_id && uuidRegex.test(selectedSale.seller_id)
+        ? selectedSale.seller_id : null;
+
       const { data: exchangeData, error } = await supabase.from("pos_exchanges").insert({
         store_id: storeId,
         seller_id: selectedSeller || null,
@@ -428,11 +436,11 @@ export function POSExchanges({ storeId }: Props) {
         credit_code: creditCode,
         credit_expires_at: creditExpires,
         return_reason: returnedItems.map(i => i.reason).filter(Boolean).join(", "),
-        notes: notes || null,
+        notes: saleIdForDb ? notes || null : `Ref: ${selectedSale.source}#${selectedSale.id}. ${notes || ""}`.trim(),
         status: "completed",
-        original_sale_id: selectedSale.id,
+        original_sale_id: saleIdForDb,
         original_sale_source: selectedSale.source,
-        original_seller_id: selectedSale.seller_id || null,
+        original_seller_id: sellerIdForDb,
         original_seller_name: selectedSale.seller_name || null,
       } as any).select("id").single();
 
