@@ -576,6 +576,36 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
       toast.success(`Pagamento aprovado via ${(data.gateway || "pagarme").toUpperCase()}!`);
       onPaid();
     } catch (e: any) {
+      // On timeout/error, poll the backend to check if the payment was actually approved
+      // (AppMax fallback may complete after the frontend request times out)
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise(r => setTimeout(r, 3000)); // wait 3s between polls
+        try {
+          const { data: freshSale } = await supabase
+            .from("pos_sales")
+            .select("status, payment_gateway")
+            .eq("id", saleId)
+            .maybeSingle();
+          if (freshSale?.status === "paid" || freshSale?.status === "completed") {
+            console.log(`Payment confirmed via backend poll (attempt ${attempt + 1})`);
+            await supabase.from("pos_checkout_attempts").insert({
+              sale_id: saleId,
+              payment_method: "card",
+              status: "success",
+              amount: totalWithInterest,
+              customer_name: form.fullName,
+              customer_phone: form.whatsapp,
+              customer_email: form.email,
+              gateway: freshSale.payment_gateway || "appmax",
+              metadata: { recovered_after_timeout: true },
+            } as any).then(() => {});
+            toast.success("Pagamento aprovado!");
+            onPaid();
+            return;
+          }
+        } catch (_) { /* ignore poll error */ }
+      }
+
       toast.error(e.message || "Erro no pagamento");
     } finally {
       setProcessing(false);
