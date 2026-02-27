@@ -24,6 +24,7 @@ import { POSSlotMachine } from "./POSSlotMachine";
 import { POSGiftBox } from "./POSGiftBox";
 import { POSCrossSellSuggestions } from "./POSCrossSellSuggestions";
 import { POSOrderVerification } from "./POSOrderVerification";
+import { POSReceiptUpload } from "./POSReceiptUpload";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -110,6 +111,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [cashReceived, setCashReceived] = useState("");
   const [discount, setDiscount] = useState("");
   const [discountType, setDiscountType] = useState<"value" | "percent">("value");
+  const [receiptDone, setReceiptDone] = useState(false);
+  const [currentRegisterId, setCurrentRegisterId] = useState<string | null>(null);
 
   // Cash register gate
   const [hasOpenRegister, setHasOpenRegister] = useState<boolean | null>(null);
@@ -680,6 +683,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             .maybeSingle();
 
           if (openRegister) {
+            setCurrentRegisterId(openRegister.id);
             const updateFields: Record<string, number> = {};
             const classifyPayment = (name: string): string => {
               const lower = name.toLowerCase();
@@ -887,6 +891,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setDiscountType("value");
     setShowWheel(false);
     setShowLoyaltyScreen(false);
+    setReceiptDone(false);
+    setCurrentRegisterId(null);
     setWonPrize(null);
     setWonCouponCode("");
     setEarnedPoints(0);
@@ -1694,6 +1700,51 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   onClose={() => setShowWheel(false)}
                 />
               )}
+
+              {/* Receipt Upload for non-cash payments */}
+              {(() => {
+                const payName = useMultiPayment
+                  ? multiPayments.map(p => p.method_name).join(' + ')
+                  : selectedPaymentName;
+                const isCashOnly = payName.toLowerCase().includes('dinheiro') && !payName.includes('+');
+                const needsReceipt = !isCashOnly && payName.length > 0;
+                if (needsReceipt && !receiptDone && !showLoyaltyScreen) {
+                  if (useMultiPayment && multiPayments.length > 0) {
+                    const nonCash = multiPayments.filter(p => !p.method_name.toLowerCase().includes('dinheiro'));
+                    if (nonCash.length > 0) {
+                      return (
+                        <div className="space-y-3">
+                          {nonCash.map((p, i) => (
+                            <POSReceiptUpload
+                              key={i}
+                              storeId={storeId}
+                              cashRegisterId={currentRegisterId || undefined}
+                              saleId={saleResult?.sale_id}
+                              paymentMethodName={p.method_name}
+                              amount={p.amount}
+                              onDone={() => {
+                                if (i === nonCash.length - 1) setReceiptDone(true);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      );
+                    }
+                  } else {
+                    return (
+                      <POSReceiptUpload
+                        storeId={storeId}
+                        cashRegisterId={currentRegisterId || undefined}
+                        saleId={saleResult?.sale_id}
+                        paymentMethodName={selectedPaymentName}
+                        amount={totalWithDiscount}
+                        onDone={() => setReceiptDone(true)}
+                      />
+                    );
+                  }
+                }
+                return null;
+              })()}
             </div>
           )}
         </div>
