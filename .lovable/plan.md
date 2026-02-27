@@ -1,90 +1,77 @@
 
 
-# Webhooks de Pagamento: Pagar.me e AppMax
+# Separar Pedidos por Status de Pagamento
 
-## Problema
-Quando um pagamento entra em analise de antifraude, o checkout retorna "em analise" ou da timeout. O pedido fica preso em `online_pending` indefinidamente porque nao existe nenhum mecanismo para receber a notificacao de aprovacao/rejeicao posterior.
-
-## Solucao
-Criar duas Edge Functions de webhook (uma para cada gateway) que recebem notificacoes automaticas de mudanca de status e atualizam `orders` ou `pos_sales` conforme necessario.
+## Contexto
+Atualmente, pedidos com status `online_pending` aparecem misturados na lista de vendas e tambem na aba de Envios. O usuario quer:
+1. Na aba **Vendas (Pedidos)**: separar pedidos em colunas visuais -- "Aguardando Pagamento" e "Nao Aprovados"
+2. Na aba **Envios**: mostrar APENAS pedidos pagos (`completed` e `pending_pickup`)
 
 ---
 
-## 1. Edge Function: `pagarme-webhook`
+## Mudancas
 
-Recebe POST da Pagar.me quando o status de um pedido/cobranca muda.
+### 1. POSDailySales.tsx -- Adicionar secoes de status de pagamento
 
-**Fluxo:**
-1. Recebe o payload da Pagar.me (evento `order.paid`, `order.payment_failed`, `charge.paid`, etc.)
-2. Extrai o `order_id` do campo `code` ou `metadata` do pedido Pagar.me (que sera preenchido na criacao)
-3. Busca o pedido em `orders` ou `pos_sales`
-4. Se status = `paid`: atualiza para pago, registra gateway e transaction_id
-5. Se status = `failed`/`canceled`: registra log em `pos_checkout_attempts`
-6. Retorna 200 OK
+**Onde**: Abaixo dos KPIs e acima da lista de vendas
 
-**Seguranca:** Validacao opcional via header de assinatura da Pagar.me (se disponivel).
+- Criar 3 secoes visuais com tabs/filtros:
+  - **Concluidas** (status = `completed`, `pending_sync`) -- comportamento atual
+  - **Aguardando Pagamento** (status = `online_pending`) -- pedidos enviados para checkout mas sem confirmacao de pagamento
+  - **Nao Aprovados** (status = `payment_failed` ou `payment_declined`) -- pedidos recusados pelo gateway
 
-## 2. Edge Function: `appmax-webhook`
+- Adicionar um filtro por status na parte superior da lista de vendas (similar aos filtros de expedição no POSShipments)
+- O calculo de KPIs (faturamento, ticket medio, etc.) continuara considerando apenas vendas `completed`/`pending_sync` para nao inflar os numeros
+- Cada secao tera contagem visual com badge colorida:
+  - Aguardando: badge amarela/laranja com animacao pulse se > 0
+  - Nao Aprovados: badge vermelha
 
-Recebe POST da AppMax quando uma transacao muda de status.
+### 2. POSShipments.tsx -- Filtrar apenas pedidos pagos
 
-**Fluxo:**
-1. Recebe o payload da AppMax (evento de pagamento aprovado/recusado)
-2. Extrai o ID do pedido do campo de metadata ou referencia
-3. Busca em `orders` ou `pos_sales`
-4. Se aprovado: atualiza status para pago
-5. Se recusado: registra log
-6. Retorna 200 OK
+**Onde**: Linha 102, query de fetch
 
-## 3. Vincular ID do pedido ao gateway
+- Remover `online_pending` do filtro `.in('status', [...])` 
+- Manter apenas `completed` e `pending_pickup`
+- Resultado: a aba de envios so mostrara pedidos que ja foram confirmados como pagos
 
-**Alteracao em `pagarme-create-charge`:**
-- No body do pedido enviado a Pagar.me, adicionar o campo `code` com o `orderId` do sistema, para que o webhook consiga identificar de volta qual pedido foi pago.
-- Na AppMax, incluir metadata ou referencia com o `orderId`.
+### 3. Novo status `payment_failed`
 
-## 4. Registro em `pos_checkout_attempts`
-
-Ambos os webhooks registram o resultado na tabela `pos_checkout_attempts` para rastreabilidade no monitor de checkout do PDV.
-
-## 5. Configuracao
-
-- Registrar ambas as funcoes no `supabase/config.toml` com `verify_jwt = false` (sao endpoints publicos chamados pelos gateways)
-- A URL dos webhooks sera:
-  - Pagar.me: `https://tqxhcyuxgqbzqwoidpie.supabase.co/functions/v1/pagarme-webhook`
-  - AppMax: `https://tqxhcyuxgqbzqwoidpie.supabase.co/functions/v1/appmax-webhook`
-- Essas URLs precisarao ser cadastradas nos paineis da Pagar.me e AppMax pelo usuario.
+- O webhook `pagarme-webhook` e `appmax-webhook` ja registram falhas, mas o status do pedido pode precisar ser atualizado para `payment_failed` ou `payment_declined` quando o gateway notifica rejeicao
+- Revisar os webhooks para garantir que pedidos recusados tenham o status atualizado adequadamente (e nao fiquem eternamente em `online_pending`)
 
 ---
 
 ## Detalhes Tecnicos
 
-### pagarme-webhook/index.ts
+### POSDailySales.tsx
+
 ```text
-POST recebe payload Pagar.me
-  -> Extrai event type (order.paid, order.canceled, charge.*)
-  -> Extrai code (= nosso orderId) do payload
-  -> Busca em orders ou pos_sales
-  -> Se paid e nao estava pago: atualiza status + registra log
-  -> Se failed/canceled: registra log
-  -> Retorna 200
+Novo estado:
+  statusFilter: 'all' | 'completed' | 'awaiting_payment' | 'not_approved'
+
+Mapeamento:
+  completed -> status in ['completed', 'pending_sync']
+  awaiting_payment -> status = 'online_pending'
+  not_approved -> status in ['payment_failed', 'payment_declined', 'cancelled']
+
+Tabs visuais (acima da lista de vendas):
+  [Todas] [Concluidas (X)] [Aguardando Pgto (Y)] [Nao Aprovadas (Z)]
+
+KPIs: calculados SOMENTE sobre vendas completed/pending_sync (sem mudanca)
 ```
 
-### appmax-webhook/index.ts
+### POSShipments.tsx
+
 ```text
-POST recebe payload AppMax
-  -> Extrai status e order reference
-  -> Busca em orders ou pos_sales
-  -> Se approved: atualiza status + registra log
-  -> Se declined: registra log
-  -> Retorna 200
+Linha 102 - Mudar de:
+  .in('status', ['online_pending', 'pending_pickup', 'completed'])
+Para:
+  .in('status', ['pending_pickup', 'completed'])
 ```
 
-### Alteracao em pagarme-create-charge/index.ts
-- Adicionar `code: params.orderId` no `orderBody` enviado a Pagar.me (para rastreabilidade no webhook)
-- Adicionar referencia do orderId nos metadados da AppMax
+### Webhooks (pagarme-webhook e appmax-webhook)
 
----
-
-## Proximo passo do usuario
-Apos a implementacao, o usuario precisara cadastrar as URLs de webhook nos paineis administrativos da Pagar.me e da AppMax.
+Garantir que quando o gateway notifica "recusado/cancelado":
+- O status do pedido mude de `online_pending` para `payment_failed`
+- Isso fara o pedido aparecer automaticamente na coluna "Nao Aprovados"
 
