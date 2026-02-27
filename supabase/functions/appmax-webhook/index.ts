@@ -88,6 +88,17 @@ serve(async (req) => {
             .eq("id", ourOrderId);
           if (error) console.error("Error updating pos_sales:", error);
           else { updated = true; console.log(`pos_sales ${ourOrderId} marked as paid via AppMax webhook`); }
+        } else if (isFailed && sale.status === "online_pending") {
+          const { error } = await supabase
+            .from("pos_sales")
+            .update({
+              status: "payment_failed",
+              payment_gateway: "appmax",
+              notes: `🔔 Webhook AppMax: ${status} - ${event || "unknown"}`,
+            })
+            .eq("id", ourOrderId);
+          if (error) console.error("Error updating pos_sales to payment_failed:", error);
+          else { updated = true; console.log(`pos_sales ${ourOrderId} marked as payment_failed via AppMax webhook`); }
         }
       } else {
         console.log(`Order ${ourOrderId} not found in orders or pos_sales`);

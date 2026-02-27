@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import {
   DollarSign, ShoppingCart, Tag, Users, TrendingUp,
   Package, Loader2, RefreshCw, BarChart3, Send, RotateCcw,
-  CalendarIcon, ChevronLeft, ChevronRight, Search, X, Layers
+  CalendarIcon, ChevronLeft, ChevronRight, Search, X, Layers,
+  Clock, AlertTriangle
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -563,7 +564,13 @@ export function POSDailySales({ storeId }: Props) {
   };
 
   // Calculations
-  const completedSales = sales.filter((s) => s.status === "completed" || s.status === "pending_sync" || s.status === "online_pending" || s.status === "pending_pickup");
+  // Status filter for tabs
+  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'awaiting_payment' | 'not_approved'>('all');
+
+  const completedSales = sales.filter((s) => s.status === "completed" || s.status === "pending_sync" || s.status === "pending_pickup" || s.status === "paid");
+  const awaitingPaymentSales = sales.filter((s) => s.status === "online_pending");
+  const notApprovedSales = sales.filter((s) => ["payment_failed", "payment_declined", "cancelled"].includes(s.status));
+
   const totalRevenue = completedSales.reduce((s, sale) => s + (sale.total || 0), 0);
   const totalDiscount = completedSales.reduce((s, sale) => s + (sale.discount || 0), 0);
   const avgTicket = completedSales.length > 0 ? totalRevenue / completedSales.length : 0;
@@ -631,8 +638,17 @@ export function POSDailySales({ storeId }: Props) {
   };
 
   // Local search filter
+  // Determine which sales to show based on status filter
+  const salesForStatusFilter = statusFilter === 'awaiting_payment'
+    ? awaitingPaymentSales
+    : statusFilter === 'not_approved'
+      ? notApprovedSales
+      : statusFilter === 'completed'
+        ? completedSales
+        : sales; // 'all' shows everything
+
   const filteredSales = searchTerm.trim().length > 0
-    ? completedSales.filter(sale => {
+    ? salesForStatusFilter.filter(sale => {
         if (!sale.customer_id) return false;
         const cust = customers.get(sale.customer_id);
         if (!cust) return false;
@@ -641,7 +657,7 @@ export function POSDailySales({ storeId }: Props) {
                (cust.cpf?.includes(term)) ||
                (cust.whatsapp?.includes(term));
       })
-    : completedSales;
+    : salesForStatusFilter;
 
   const displaySales = showGlobalResults ? globalResults : filteredSales;
 
@@ -681,6 +697,16 @@ export function POSDailySales({ storeId }: Props) {
                   Loja
                 </Badge>
               )}
+              {sale.status === 'online_pending' && (
+                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0 animate-pulse">
+                  <Clock className="h-2.5 w-2.5 mr-0.5" />Aguardando Pgto
+                </Badge>
+              )}
+              {(sale.status === 'payment_failed' || sale.status === 'payment_declined' || sale.status === 'cancelled') && (
+                <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">
+                  <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />Não Aprovado
+                </Badge>
+              )}
               {sale.tiny_order_number ? (
                 <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-1.5 py-0">
                   Tiny #{sale.tiny_order_number}
@@ -689,11 +715,11 @@ export function POSDailySales({ storeId }: Props) {
                 <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
                   Pendente Tiny
                 </Badge>
-              ) : (
+              ) : sale.status !== 'online_pending' && sale.status !== 'payment_failed' && sale.status !== 'payment_declined' && sale.status !== 'cancelled' ? (
                 <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">
                   Erro Tiny
                 </Badge>
-              )}
+              ) : null}
               {custName && (
                 <p className="text-xs text-pos-white font-medium truncate">{custName}</p>
               )}
@@ -844,6 +870,39 @@ export function POSDailySales({ storeId }: Props) {
             </Button>
           )}
 
+          {/* Status Filter Tabs */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {([
+              { key: 'all' as const, label: 'Todas', count: sales.length, color: 'bg-pos-white/10 text-pos-white border-pos-white/20' },
+              { key: 'completed' as const, label: 'Concluídas', count: completedSales.length, color: 'bg-green-500/10 text-green-400 border-green-500/20' },
+              { key: 'awaiting_payment' as const, label: 'Aguardando Pgto', count: awaitingPaymentSales.length, color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' },
+              { key: 'not_approved' as const, label: 'Não Aprovadas', count: notApprovedSales.length, color: 'bg-red-500/10 text-red-400 border-red-500/20' },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key)}
+                className={cn(
+                  'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border flex items-center gap-1.5',
+                  statusFilter === tab.key
+                    ? tab.key === 'awaiting_payment' ? 'bg-yellow-500 text-black border-yellow-500'
+                    : tab.key === 'not_approved' ? 'bg-red-500 text-white border-red-500'
+                    : tab.key === 'completed' ? 'bg-green-500 text-black border-green-500'
+                    : 'bg-pos-orange text-pos-black border-pos-orange'
+                    : tab.color
+                )}
+              >
+                {tab.key === 'awaiting_payment' && <Clock className="h-3 w-3" />}
+                {tab.key === 'not_approved' && <AlertTriangle className="h-3 w-3" />}
+                {tab.label}
+                <span className={cn(
+                  'ml-0.5 text-[10px] font-bold',
+                  tab.key === 'awaiting_payment' && tab.count > 0 && statusFilter !== tab.key && 'animate-pulse'
+                )}>
+                  ({tab.count})
+                </span>
+              </button>
+            ))}
+          </div>
           <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={loadData}>
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>

@@ -99,7 +99,7 @@ export function POSShipments({ storeId }: Props) {
         .select('*')
         .eq('store_id', storeId)
         .in('sale_type', ['online', 'pickup'])
-        .in('status', ['online_pending', 'pending_pickup', 'completed'])
+        .in('status', ['pending_pickup', 'completed', 'paid'])
         .order('created_at', { ascending: false })
         .limit(200);
 
