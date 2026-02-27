@@ -1,70 +1,90 @@
 
-# Custo de Captacao + Controle de Consignado
 
-## Parte 1: Campo de Custo na Captacao
+# Webhooks de Pagamento: Pagar.me e AppMax
 
-Adicionar coluna `cost_price` (NUMERIC, default 0) na tabela `product_capture_items` para registrar o preco de custo durante a bipagem.
+## Problema
+Quando um pagamento entra em analise de antifraude, o checkout retorna "em analise" ou da timeout. O pedido fica preso em `online_pending` indefinidamente porque nao existe nenhum mecanismo para receber a notificacao de aprovacao/rejeicao posterior.
 
-### Mudancas:
-- **Migracao**: `ALTER TABLE product_capture_items ADD COLUMN cost_price NUMERIC DEFAULT 0`
-- **ProductCaptureTab.tsx**: Adicionar campo "Custo" no dialog de novo item (ao lado do campo Preco que ja existe) e tambem na listagem inline editavel de cada item
-- **Relatorio de Custo**: Adicionar um botao "Relatorio de Custo" no header da sessao que gera um resumo com:
-  - Lista de todos os produtos agrupados por modelo
-  - Custo unitario x quantidade = custo total por item
-  - Total geral de custo do estoque capturado
-  - Exportavel em formato visual (abre em nova janela para impressao)
-
-### Stats adicionais no topo:
-- Adicionar um 4o card: **Custo Total** (soma de cost_price * quantity de todos os itens)
+## Solucao
+Criar duas Edge Functions de webhook (uma para cada gateway) que recebem notificacoes automaticas de mudanca de status e atualizam `orders` ou `pos_sales` conforme necessario.
 
 ---
 
-## Parte 2: Controle de Consignado (Relatorio de Vendas)
+## 1. Edge Function: `pagarme-webhook`
 
-Criar uma nova aba/secao dentro do modulo de Captacao para rastrear vendas dos produtos consignados.
+Recebe POST da Pagar.me quando o status de um pedido/cobranca muda.
 
-### Abordagem:
-Os SKUs capturados na sessao serao cruzados com a tabela `tiny_synced_orders` (que contem as vendas de TODAS as lojas - Perola, Centro e Shopify). O campo `items` (JSONB) de cada pedido contem os SKUs vendidos.
+**Fluxo:**
+1. Recebe o payload da Pagar.me (evento `order.paid`, `order.payment_failed`, `charge.paid`, etc.)
+2. Extrai o `order_id` do campo `code` ou `metadata` do pedido Pagar.me (que sera preenchido na criacao)
+3. Busca o pedido em `orders` ou `pos_sales`
+4. Se status = `paid`: atualiza para pago, registra gateway e transaction_id
+5. Se status = `failed`/`canceled`: registra log em `pos_checkout_attempts`
+6. Retorna 200 OK
 
-### Nova Edge Function: `consignment-sales-report`
-- Recebe `session_id`
-- Busca todos os barcodes/SKUs da sessao em `product_capture_items`
-- Consulta `tiny_synced_orders` em todas as lojas, filtrando pedidos com status diferente de 'Cancelado' e 'Em aberto'
-- Para cada pedido, percorre o array `items` buscando matches por SKU
-- Retorna relatorio com:
-  - Produto, SKU, loja de venda, data, quantidade vendida, valor unitario, valor total
-  - Totalizadores por produto e geral
+**Seguranca:** Validacao opcional via header de assinatura da Pagar.me (se disponivel).
 
-### UI: Botao "Relatorio Consignado" na sessao de captacao
-- Ao clicar, chama a edge function e exibe um dialog/tabela com:
-  - Tabela de vendas encontradas por produto/loja
-  - Total de pares vendidos
-  - Valor total a repassar
-  - Opcao de exportar/imprimir
+## 2. Edge Function: `appmax-webhook`
+
+Recebe POST da AppMax quando uma transacao muda de status.
+
+**Fluxo:**
+1. Recebe o payload da AppMax (evento de pagamento aprovado/recusado)
+2. Extrai o ID do pedido do campo de metadata ou referencia
+3. Busca em `orders` ou `pos_sales`
+4. Se aprovado: atualiza status para pago
+5. Se recusado: registra log
+6. Retorna 200 OK
+
+## 3. Vincular ID do pedido ao gateway
+
+**Alteracao em `pagarme-create-charge`:**
+- No body do pedido enviado a Pagar.me, adicionar o campo `code` com o `orderId` do sistema, para que o webhook consiga identificar de volta qual pedido foi pago.
+- Na AppMax, incluir metadata ou referencia com o `orderId`.
+
+## 4. Registro em `pos_checkout_attempts`
+
+Ambos os webhooks registram o resultado na tabela `pos_checkout_attempts` para rastreabilidade no monitor de checkout do PDV.
+
+## 5. Configuracao
+
+- Registrar ambas as funcoes no `supabase/config.toml` com `verify_jwt = false` (sao endpoints publicos chamados pelos gateways)
+- A URL dos webhooks sera:
+  - Pagar.me: `https://tqxhcyuxgqbzqwoidpie.supabase.co/functions/v1/pagarme-webhook`
+  - AppMax: `https://tqxhcyuxgqbzqwoidpie.supabase.co/functions/v1/appmax-webhook`
+- Essas URLs precisarao ser cadastradas nos paineis da Pagar.me e AppMax pelo usuario.
 
 ---
 
 ## Detalhes Tecnicos
 
-### Migracao SQL
-```sql
-ALTER TABLE product_capture_items ADD COLUMN cost_price NUMERIC DEFAULT 0;
+### pagarme-webhook/index.ts
+```text
+POST recebe payload Pagar.me
+  -> Extrai event type (order.paid, order.canceled, charge.*)
+  -> Extrai code (= nosso orderId) do payload
+  -> Busca em orders ou pos_sales
+  -> Se paid e nao estava pago: atualiza status + registra log
+  -> Se failed/canceled: registra log
+  -> Retorna 200
 ```
 
-### Edge Function `consignment-sales-report`
-- Busca itens da sessao
-- Query nas vendas: filtra `tiny_synced_orders` excluindo status cancelados
-- Para cada pedido, faz parse do JSONB `items` e compara SKU
-- Agrupa resultados por produto e por loja
-- Retorna JSON estruturado com totais
+### appmax-webhook/index.ts
+```text
+POST recebe payload AppMax
+  -> Extrai status e order reference
+  -> Busca em orders ou pos_sales
+  -> Se approved: atualiza status + registra log
+  -> Se declined: registra log
+  -> Retorna 200
+```
 
-### Arquivos modificados
-1. `src/components/inventory/ProductCaptureTab.tsx` - campo custo, stats, botoes de relatorio
-2. `supabase/functions/consignment-sales-report/index.ts` - nova edge function
-3. Migracao para adicionar `cost_price`
+### Alteracao em pagarme-create-charge/index.ts
+- Adicionar `code: params.orderId` no `orderBody` enviado a Pagar.me (para rastreabilidade no webhook)
+- Adicionar referencia do orderId nos metadados da AppMax
 
-### Interface do Relatorio Consignado (Dialog)
-- Tabela com colunas: Produto | Loja | Data Venda | Qtd | Valor Unit. | Total
-- Linha de totalizacao por produto
-- Rodape com total geral de pares e valor a repassar
-- Botao "Imprimir" que abre em nova janela formatada
+---
+
+## Proximo passo do usuario
+Apos a implementacao, o usuario precisara cadastrar as URLs de webhook nos paineis administrativos da Pagar.me e da AppMax.
+
