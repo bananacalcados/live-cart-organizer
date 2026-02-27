@@ -105,6 +105,7 @@ async function chargePagarme(
   }
 
   const orderBody = {
+    code: params.orderId,
     items,
     customer: {
       name: params.customer.name,
@@ -244,6 +245,7 @@ async function chargeAppmax(
         customer_id: customerId,
         products: orderProducts,
         shipping: 0,
+        custom_reference: params.orderId,
       }),
     });
     const orderData = await orderRes.json();
