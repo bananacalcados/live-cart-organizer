@@ -4373,6 +4373,70 @@ export type Database = {
           },
         ]
       }
+      pos_payment_receipts: {
+        Row: {
+          amount: number
+          cash_register_id: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          payment_method: string
+          receipt_image_url: string
+          sale_id: string | null
+          store_id: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          amount?: number
+          cash_register_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payment_method: string
+          receipt_image_url: string
+          sale_id?: string | null
+          store_id: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          amount?: number
+          cash_register_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string
+          receipt_image_url?: string
+          sale_id?: string | null
+          store_id?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_payment_receipts_cash_register_id_fkey"
+            columns: ["cash_register_id"]
+            isOneToOne: false
+            referencedRelation: "pos_cash_registers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_prizes: {
         Row: {
           created_at: string

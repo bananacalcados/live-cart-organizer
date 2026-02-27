@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { DollarSign, Lock, Unlock, ArrowDown, ArrowUp, Calculator, Clock, Search, Loader2, Receipt } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { DollarSign, Lock, Unlock, ArrowDown, ArrowUp, Calculator, Clock, Search, Loader2, Receipt, Camera, CreditCard, Smartphone, Trash2, Image, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -41,6 +42,17 @@ interface CrediarioSale {
   crediario_due_date: string | null;
 }
 
+interface PaymentReceipt {
+  id: string;
+  payment_method: string;
+  amount: number;
+  receipt_image_url: string;
+  notes: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+  sale_id: string | null;
+}
+
 export function POSCashRegister({ storeId, sellerId }: Props) {
   const [register, setRegister] = useState<CashRegister | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,9 +74,25 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
   const [crediarioPayAmount, setCrediarioPayAmount] = useState("");
   const [receivingCrediario, setReceivingCrediario] = useState(false);
 
+  // Receipt uploads
+  const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
+  const [showUploadReceipt, setShowUploadReceipt] = useState(false);
+  const [receiptMethod, setReceiptMethod] = useState("cartao_credito");
+  const [receiptAmount, setReceiptAmount] = useState("");
+  const [receiptNotes, setReceiptNotes] = useState("");
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const receiptFileRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null);
+
   useEffect(() => {
     loadOpenRegister();
   }, [storeId]);
+
+  useEffect(() => {
+    if (register) loadReceipts();
+  }, [register?.id]);
 
   const loadOpenRegister = async () => {
     try {
@@ -83,6 +111,16 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadReceipts = async () => {
+    if (!register) return;
+    const { data } = await supabase
+      .from('pos_payment_receipts')
+      .select('*')
+      .eq('cash_register_id', register.id)
+      .order('created_at', { ascending: false });
+    setReceipts((data as PaymentReceipt[]) || []);
   };
 
   const handleOpen = async () => {
@@ -123,6 +161,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
       setRegister(null);
       setShowClose(false);
       setClosingBalance("");
+      setReceipts([]);
       toast.success("Caixa fechado!");
     } catch (e) {
       console.error(e);
@@ -152,6 +191,70 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     } catch (e) {
       console.error(e);
       toast.error("Erro ao registrar movimentação");
+    }
+  };
+
+  // Receipt upload
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10MB."); return; }
+    setSelectedFile(file);
+    setSelectedFilePreview(URL.createObjectURL(file));
+  };
+
+  const uploadReceipt = async () => {
+    if (!register || !selectedFile) { toast.error("Selecione uma foto do comprovante"); return; }
+    const amount = parseFloat(receiptAmount) || 0;
+    if (amount <= 0) { toast.error("Informe o valor"); return; }
+
+    setUploadingReceipt(true);
+    try {
+      const ext = selectedFile.name.split('.').pop();
+      const fileName = `${storeId}/${register.id}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('payment-receipts').upload(fileName, selectedFile);
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('payment-receipts').getPublicUrl(fileName);
+
+      const { error } = await supabase.from('pos_payment_receipts').insert({
+        store_id: storeId,
+        cash_register_id: register.id,
+        payment_method: receiptMethod,
+        amount,
+        receipt_image_url: urlData.publicUrl,
+        notes: receiptNotes || null,
+        uploaded_by: sellerId || null,
+      });
+      if (error) throw error;
+
+      toast.success("Comprovante salvo!");
+      setShowUploadReceipt(false);
+      setReceiptAmount("");
+      setReceiptNotes("");
+      setReceiptMethod("cartao_credito");
+      setSelectedFile(null);
+      setSelectedFilePreview(null);
+      loadReceipts();
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Erro ao salvar comprovante: " + (e.message || ""));
+    } finally {
+      setUploadingReceipt(false);
+    }
+  };
+
+  const deleteReceipt = async (receipt: PaymentReceipt) => {
+    if (!confirm("Excluir este comprovante?")) return;
+    try {
+      await supabase.from('pos_payment_receipts').delete().eq('id', receipt.id);
+      // try to delete from storage too
+      const path = receipt.receipt_image_url.split('/payment-receipts/')[1];
+      if (path) await supabase.storage.from('payment-receipts').remove([decodeURIComponent(path)]);
+      toast.success("Comprovante excluído");
+      loadReceipts();
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao excluir");
     }
   };
 
@@ -205,7 +308,6 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     if (amount <= 0) return;
     setReceivingCrediario(true);
     try {
-      // Update pos_sales crediario columns
       const { error } = await supabase
         .from("pos_sales")
         .update({
@@ -217,7 +319,6 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
         .eq("id", selectedCrediario.id);
       if (error) throw error;
 
-      // If cash, add as deposit (reforço) to cash register
       if (crediarioPayMethod === "dinheiro") {
         const currentDeposits = register.deposits || 0;
         const currentCash = register.cash_sales || 0;
@@ -232,7 +333,6 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
       setSelectedCrediario(null);
       setCrediarioPayAmount("");
       setCrediarioPayMethod("pix");
-      // Refresh list
       if (crediarioSearch.trim()) searchCrediario();
       else loadAllPendingCrediarios();
     } catch (e: any) {
@@ -242,6 +342,20 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     }
   };
 
+  const methodLabel = (m: string) => {
+    switch (m) {
+      case 'cartao_credito': return '💳 Cartão Crédito';
+      case 'cartao_debito': return '💳 Cartão Débito';
+      case 'pix': return '📱 PIX';
+      default: return m;
+    }
+  };
+
+  const receiptTotals = receipts.reduce((acc, r) => {
+    acc[r.payment_method] = (acc[r.payment_method] || 0) + r.amount;
+    return acc;
+  }, {} as Record<string, number>);
+
   if (loading) {
     return <div className="flex items-center justify-center h-full text-pos-white/50">Carregando...</div>;
   }
@@ -250,16 +364,12 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     ? (register.opening_balance || 0) + (register.cash_sales || 0) + (register.deposits || 0) - (register.withdrawals || 0)
     : 0;
 
-  const totalSales = register
-    ? (register.cash_sales || 0) + (register.card_sales || 0) + (register.pix_sales || 0) + (register.other_sales || 0)
-    : 0;
-
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-pos-white">Controle de Caixa</h2>
-          <p className="text-sm text-pos-white/50">Abertura, fechamento e movimentações</p>
+          <p className="text-sm text-pos-white/50">Dinheiro físico e comprovantes eletrônicos</p>
         </div>
         {register ? (
           <Badge className="bg-green-500/20 text-green-400 border-green-500/30 gap-1">
@@ -284,83 +394,168 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
           </Button>
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-xs text-pos-white/50">
-            <Clock className="h-3 w-3" />
-            Aberto em: {new Date(register.opened_at).toLocaleString('pt-BR')}
-          </div>
+        <Tabs defaultValue="cash" className="space-y-4">
+          <TabsList className="bg-pos-white/5 border border-pos-orange/20">
+            <TabsTrigger value="cash" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
+              <DollarSign className="h-4 w-4" /> Dinheiro (Espécie)
+            </TabsTrigger>
+            <TabsTrigger value="electronic" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
+              <CreditCard className="h-4 w-4" /> Comprovantes Eletrônicos
+            </TabsTrigger>
+          </TabsList>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Card className="bg-pos-white/5 border-pos-orange/20">
-              <CardContent className="p-4">
-                <p className="text-xs text-pos-white/50">Abertura</p>
-                <p className="text-lg font-bold text-pos-white">R$ {(register.opening_balance || 0).toFixed(2)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-pos-white/5 border-pos-orange/20">
-              <CardContent className="p-4">
-                <p className="text-xs text-pos-white/50">Vendas Total</p>
-                <p className="text-lg font-bold text-pos-orange">R$ {totalSales.toFixed(2)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-pos-white/5 border-pos-orange/20">
-              <CardContent className="p-4">
-                <p className="text-xs text-pos-white/50">Sangrias</p>
-                <p className="text-lg font-bold text-red-400">- R$ {(register.withdrawals || 0).toFixed(2)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-pos-white/5 border-pos-orange/20">
-              <CardContent className="p-4">
-                <p className="text-xs text-pos-white/50">Saldo Esperado</p>
-                <p className="text-lg font-bold text-pos-orange">R$ {expectedBalance.toFixed(2)}</p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* ===== TAB: DINHEIRO ===== */}
+          <TabsContent value="cash" className="space-y-4">
+            <div className="flex items-center gap-2 text-xs text-pos-white/50">
+              <Clock className="h-3 w-3" />
+              Aberto em: {new Date(register.opened_at).toLocaleString('pt-BR')}
+            </div>
 
-          <Separator className="bg-pos-orange/20" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Card className="bg-pos-white/5 border-pos-orange/20">
+                <CardContent className="p-4">
+                  <p className="text-xs text-pos-white/50">Abertura (troco)</p>
+                  <p className="text-lg font-bold text-pos-white">R$ {(register.opening_balance || 0).toFixed(2)}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-pos-white/5 border-green-500/20">
+                <CardContent className="p-4">
+                  <p className="text-xs text-pos-white/50">💵 Vendas em Dinheiro</p>
+                  <p className="text-lg font-bold text-green-400">R$ {(register.cash_sales || 0).toFixed(2)}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-pos-white/5 border-pos-orange/20">
+                <CardContent className="p-4">
+                  <p className="text-xs text-pos-white/50">Sangrias / Reforços</p>
+                  <p className="text-lg font-bold text-pos-white">
+                    <span className="text-red-400">-{(register.withdrawals || 0).toFixed(2)}</span>
+                    {" / "}
+                    <span className="text-green-400">+{(register.deposits || 0).toFixed(2)}</span>
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="bg-pos-white/5 border-pos-orange/30">
+                <CardContent className="p-4">
+                  <p className="text-xs text-pos-white/50">💰 Saldo Esperado em Espécie</p>
+                  <p className="text-lg font-bold text-pos-orange">R$ {expectedBalance.toFixed(2)}</p>
+                </CardContent>
+              </Card>
+            </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Card className="bg-pos-white/5 border-pos-orange/10">
-              <CardContent className="p-3 text-center">
-                <p className="text-[10px] text-pos-white/40">Dinheiro</p>
-                <p className="font-bold text-sm text-pos-white">R$ {(register.cash_sales || 0).toFixed(2)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-pos-white/5 border-pos-orange/10">
-              <CardContent className="p-3 text-center">
-                <p className="text-[10px] text-pos-white/40">Cartão</p>
-                <p className="font-bold text-sm text-pos-white">R$ {(register.card_sales || 0).toFixed(2)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-pos-white/5 border-pos-orange/10">
-              <CardContent className="p-3 text-center">
-                <p className="text-[10px] text-pos-white/40">PIX</p>
-                <p className="font-bold text-sm text-pos-white">R$ {(register.pix_sales || 0).toFixed(2)}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-pos-white/5 border-pos-orange/10">
-              <CardContent className="p-3 text-center">
-                <p className="text-[10px] text-pos-white/40">Outros</p>
-                <p className="font-bold text-sm text-pos-white">R$ {(register.other_sales || 0).toFixed(2)}</p>
-              </CardContent>
-            </Card>
-          </div>
+            <Separator className="bg-pos-orange/20" />
 
-          <div className="flex gap-3">
-            <Button className="flex-1 gap-2 border-2 border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20" variant="outline" onClick={() => setShowMovement('withdraw')}>
-              <ArrowUp className="h-4 w-4" /> Sangria
-            </Button>
-            <Button className="flex-1 gap-2 border-2 border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20" variant="outline" onClick={() => setShowMovement('deposit')}>
-              <ArrowDown className="h-4 w-4" /> Reforço
-            </Button>
-            <Button className="flex-1 gap-2 border-2 border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20" variant="outline" onClick={() => { setShowCrediario(true); loadAllPendingCrediarios(); }}>
-              <Receipt className="h-4 w-4" /> Receber Crediário
-            </Button>
-            <Button className="flex-1 gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => setShowClose(true)}>
-              <Lock className="h-4 w-4" /> Fechar Caixa
-            </Button>
-          </div>
-        </div>
+            {/* Info about other methods (read-only) */}
+            <div className="p-3 rounded-xl bg-pos-white/5 border border-pos-orange/10">
+              <p className="text-[10px] text-pos-white/40 mb-2 uppercase tracking-wider">Totais do dia (apenas informativo — não impacta o caixa)</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
+                  <p className="text-[10px] text-pos-white/40">💳 Cartão</p>
+                  <p className="font-bold text-sm text-pos-white/60">R$ {(register.card_sales || 0).toFixed(2)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-pos-white/40">📱 PIX</p>
+                  <p className="font-bold text-sm text-pos-white/60">R$ {(register.pix_sales || 0).toFixed(2)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-pos-white/40">Outros</p>
+                  <p className="font-bold text-sm text-pos-white/60">R$ {(register.other_sales || 0).toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 flex-wrap">
+              <Button className="flex-1 min-w-[140px] gap-2 border-2 border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20" variant="outline" onClick={() => setShowMovement('withdraw')}>
+                <ArrowUp className="h-4 w-4" /> Sangria
+              </Button>
+              <Button className="flex-1 min-w-[140px] gap-2 border-2 border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20" variant="outline" onClick={() => setShowMovement('deposit')}>
+                <ArrowDown className="h-4 w-4" /> Reforço
+              </Button>
+              <Button className="flex-1 min-w-[140px] gap-2 border-2 border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20" variant="outline" onClick={() => { setShowCrediario(true); loadAllPendingCrediarios(); }}>
+                <Receipt className="h-4 w-4" /> Receber Crediário
+              </Button>
+              <Button className="flex-1 min-w-[140px] gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => setShowClose(true)}>
+                <Lock className="h-4 w-4" /> Fechar Caixa
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* ===== TAB: COMPROVANTES ELETRÔNICOS ===== */}
+          <TabsContent value="electronic" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-pos-white">Comprovantes de Pagamento</h3>
+                <p className="text-xs text-pos-white/40">Suba fotos dos comprovantes de cartão, PIX e débito para conferência</p>
+              </div>
+              <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={() => setShowUploadReceipt(true)}>
+                <Camera className="h-4 w-4" /> Subir Comprovante
+              </Button>
+            </div>
+
+            {/* Summary cards */}
+            <div className="grid grid-cols-3 gap-3">
+              <Card className="bg-pos-white/5 border-blue-500/20">
+                <CardContent className="p-4 text-center">
+                  <p className="text-[10px] text-pos-white/40 mb-1">💳 Crédito</p>
+                  <p className="text-sm font-bold text-pos-white">R$ {(receiptTotals['cartao_credito'] || 0).toFixed(2)}</p>
+                  <p className="text-[9px] text-pos-white/30 mt-0.5">
+                    Sistema: R$ {(register.card_sales || 0).toFixed(2)}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="bg-pos-white/5 border-purple-500/20">
+                <CardContent className="p-4 text-center">
+                  <p className="text-[10px] text-pos-white/40 mb-1">💳 Débito</p>
+                  <p className="text-sm font-bold text-pos-white">R$ {(receiptTotals['cartao_debito'] || 0).toFixed(2)}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-pos-white/5 border-green-500/20">
+                <CardContent className="p-4 text-center">
+                  <p className="text-[10px] text-pos-white/40 mb-1">📱 PIX</p>
+                  <p className="text-sm font-bold text-pos-white">R$ {(receiptTotals['pix'] || 0).toFixed(2)}</p>
+                  <p className="text-[9px] text-pos-white/30 mt-0.5">
+                    Sistema: R$ {(register.pix_sales || 0).toFixed(2)}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Separator className="bg-pos-orange/20" />
+
+            {/* Receipts list */}
+            {receipts.length === 0 ? (
+              <div className="text-center py-10 space-y-2">
+                <div className="h-14 w-14 mx-auto rounded-full bg-pos-white/5 flex items-center justify-center">
+                  <Image className="h-7 w-7 text-pos-white/20" />
+                </div>
+                <p className="text-sm text-pos-white/40">Nenhum comprovante registrado ainda</p>
+                <p className="text-xs text-pos-white/25">Clique em "Subir Comprovante" após cada venda em cartão ou PIX</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {receipts.map(r => (
+                  <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl bg-pos-white/5 border border-pos-orange/10 hover:border-pos-orange/30 transition-colors">
+                    <button onClick={() => setPreviewImage(r.receipt_image_url)} className="h-14 w-14 rounded-lg overflow-hidden bg-pos-white/10 flex-shrink-0 hover:ring-2 ring-pos-orange transition-all">
+                      <img src={r.receipt_image_url} alt="Comprovante" className="h-full w-full object-cover" />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <Badge className="text-[9px] border-0 bg-pos-white/10 text-pos-white/70">{methodLabel(r.payment_method)}</Badge>
+                        <span className="text-xs font-bold text-pos-orange">R$ {r.amount.toFixed(2)}</span>
+                      </div>
+                      <p className="text-[10px] text-pos-white/40">
+                        {new Date(r.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        {r.notes && ` · ${r.notes}`}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:bg-red-500/10" onClick={() => deleteReceipt(r)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       )}
 
       {/* Open Dialog */}
@@ -383,17 +578,18 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
       <Dialog open={showClose} onOpenChange={setShowClose}>
         <DialogContent className="bg-pos-black border-pos-orange/30">
           <DialogHeader>
-            <DialogTitle className="text-pos-white flex items-center gap-2"><Lock className="h-5 w-5 text-pos-orange" /> Fechar Caixa</DialogTitle>
+            <DialogTitle className="text-pos-white flex items-center gap-2"><Lock className="h-5 w-5 text-pos-orange" /> Fechar Caixa (Dinheiro)</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20 space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-pos-white/50">Saldo esperado:</span>
+                <span className="text-pos-white/50">Saldo esperado em espécie:</span>
                 <span className="font-bold text-pos-orange">R$ {expectedBalance.toFixed(2)}</span>
               </div>
+              <p className="text-[10px] text-pos-white/30">Abertura + Vendas em dinheiro + Reforços − Sangrias</p>
             </div>
             <div>
-              <Label className="text-pos-white/70 text-xs">Valor contado no caixa</Label>
+              <Label className="text-pos-white/70 text-xs">Valor contado no caixa (dinheiro)</Label>
               <Input type="number" value={closingBalance} onChange={e => setClosingBalance(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
             </div>
             {closingBalance && (
@@ -406,6 +602,20 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                 </div>
               </div>
             )}
+
+            {/* Electronic summary */}
+            {receipts.length > 0 && (
+              <div className="p-3 rounded-xl bg-pos-white/5 border border-blue-500/20 space-y-1">
+                <p className="text-[10px] text-pos-white/40 uppercase tracking-wider">Comprovantes eletrônicos registrados</p>
+                {Object.entries(receiptTotals).map(([method, total]) => (
+                  <div key={method} className="flex justify-between text-xs">
+                    <span className="text-pos-white/50">{methodLabel(method)}</span>
+                    <span className="text-pos-white font-medium">R$ {total.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-12" onClick={handleClose}>Fechar Caixa</Button>
           </div>
         </DialogContent>
@@ -433,6 +643,70 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
               Confirmar
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload Receipt Dialog */}
+      <Dialog open={showUploadReceipt} onOpenChange={(o) => { setShowUploadReceipt(o); if (!o) { setSelectedFile(null); setSelectedFilePreview(null); } }}>
+        <DialogContent className="bg-pos-black border-pos-orange/30">
+          <DialogHeader>
+            <DialogTitle className="text-pos-white flex items-center gap-2"><Camera className="h-5 w-5 text-pos-orange" /> Subir Comprovante</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-pos-white/70 text-xs">Método de pagamento</Label>
+              <Select value={receiptMethod} onValueChange={setReceiptMethod}>
+                <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cartao_credito">💳 Cartão Crédito</SelectItem>
+                  <SelectItem value="cartao_debito">💳 Cartão Débito</SelectItem>
+                  <SelectItem value="pix">📱 PIX</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-pos-white/70 text-xs">Valor (R$)</Label>
+              <Input type="number" value={receiptAmount} onChange={e => setReceiptAmount(e.target.value)} placeholder="0,00" className="h-10 bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+            </div>
+            <div>
+              <Label className="text-pos-white/70 text-xs">Foto do comprovante</Label>
+              <input ref={receiptFileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+              {selectedFilePreview ? (
+                <div className="relative mt-2">
+                  <img src={selectedFilePreview} alt="Preview" className="w-full max-h-48 object-contain rounded-lg border border-pos-orange/20" />
+                  <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 bg-pos-black/70 text-red-400" onClick={() => { setSelectedFile(null); setSelectedFilePreview(null); }}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" className="w-full mt-1 border-dashed border-2 border-pos-orange/30 bg-pos-white/5 text-pos-white/50 h-20 gap-2" onClick={() => receiptFileRef.current?.click()}>
+                  <Camera className="h-5 w-5" /> Tirar foto ou selecionar imagem
+                </Button>
+              )}
+            </div>
+            <div>
+              <Label className="text-pos-white/70 text-xs">Observação (opcional)</Label>
+              <Input value={receiptNotes} onChange={e => setReceiptNotes(e.target.value)} placeholder="Ex: venda da cliente Maria" className="h-10 bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+            </div>
+            <Button className="w-full bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold h-12 gap-2" disabled={uploadingReceipt || !selectedFile} onClick={uploadReceipt}>
+              {uploadingReceipt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+              Salvar Comprovante
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Preview Dialog */}
+      <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+        <DialogContent className="bg-pos-black border-pos-orange/30 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-pos-white">Comprovante</DialogTitle>
+          </DialogHeader>
+          {previewImage && (
+            <img src={previewImage} alt="Comprovante" className="w-full max-h-[70vh] object-contain rounded-lg" />
+          )}
         </DialogContent>
       </Dialog>
 
