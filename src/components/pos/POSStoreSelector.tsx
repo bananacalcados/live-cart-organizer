@@ -36,6 +36,7 @@ export function POSStoreSelector({ onSelect }: Props) {
         .from('pos_stores')
         .select('id, name, address')
         .eq('is_active', true)
+        .eq('is_simulation', false)
         .order('name');
       if (error) throw error;
       setStores(data || []);

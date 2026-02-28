@@ -941,6 +941,54 @@ export type Database = {
         }
         Relationships: []
       }
+      cost_center_fixed_cost_items: {
+        Row: {
+          amount: number
+          created_at: string
+          fixed_cost_id: string
+          id: string
+          name: string
+          sort_order: number | null
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          fixed_cost_id: string
+          id?: string
+          name: string
+          sort_order?: number | null
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          fixed_cost_id?: string
+          id?: string
+          name?: string
+          sort_order?: number | null
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_center_fixed_cost_items_fixed_cost_id_fkey"
+            columns: ["fixed_cost_id"]
+            isOneToOne: false
+            referencedRelation: "cost_center_fixed_costs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cost_center_fixed_cost_items_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cost_center_fixed_costs: {
         Row: {
           category: string | null

@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Plus, Trash2, Save, Loader2, Building2, Pencil,
   TrendingUp, AlertTriangle, DollarSign, Percent, Target, BarChart3, Copy, Share2,
-  Scissors, Check, X, FlaskConical, Download
+  Scissors, Check, X, FlaskConical, Download, ChevronDown, ChevronRight
 } from "lucide-react";
 import { ProfitSimulator } from "./ProfitSimulator";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,15 @@ interface DraftVariableCost {
   percentage: string;
 }
 
+interface FixedCostItem {
+  id: string;
+  fixed_cost_id: string;
+  store_id: string;
+  name: string;
+  amount: number;
+  sort_order: number;
+}
+
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtPct = (v: number) => `${v.toFixed(2)}%`;
 
@@ -63,6 +72,8 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
   const [fixedCosts, setFixedCosts] = useState<FixedCost[]>([]);
   const [storeFixedCosts, setStoreFixedCosts] = useState<StoreFixedCost[]>([]);
   const [variableCosts, setVariableCosts] = useState<VariableCost[]>([]);
+  const [fixedCostItems, setFixedCostItems] = useState<FixedCostItem[]>([]);
+  const [expandedFixedCosts, setExpandedFixedCosts] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [editingRevenueTarget, setEditingRevenueTarget] = useState(false);
   const [revenueTargetInput, setRevenueTargetInput] = useState("");
@@ -146,16 +157,18 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
 
   const loadData = async () => {
     setLoading(true);
-    const [fcRes, sfcRes, vcRes, fcutsRes, vcutsRes] = await Promise.all([
+    const [fcRes, sfcRes, vcRes, fcutsRes, vcutsRes, fciRes] = await Promise.all([
       supabase.from("cost_center_fixed_costs").select("*").order("sort_order"),
       supabase.from("cost_center_store_fixed_costs").select("*").eq("store_id", selectedStore),
       supabase.from("cost_center_variable_costs").select("*").eq("store_id", selectedStore),
       supabase.from("cost_center_planned_fixed_cuts").select("*").eq("store_id", selectedStore),
       supabase.from("cost_center_planned_variable_cuts").select("*").eq("store_id", selectedStore),
+      supabase.from("cost_center_fixed_cost_items").select("*").eq("store_id", selectedStore).order("sort_order"),
     ]);
     setFixedCosts((fcRes.data || []) as FixedCost[]);
     setStoreFixedCosts((sfcRes.data || []) as StoreFixedCost[]);
     setVariableCosts((vcRes.data || []) as VariableCost[]);
+    setFixedCostItems((fciRes.data || []) as FixedCostItem[]);
     
     // Load saved cuts
     const savedFixedCuts: Record<string, number> = {};
@@ -322,7 +335,73 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
     toast.success("Custo fixo removido!");
   };
 
-  // Variable costs - inline editing
+  // Sub-items for fixed costs
+  const getSubItems = (fixedCostId: string) => fixedCostItems.filter(i => i.fixed_cost_id === fixedCostId);
+
+  const toggleExpandFixed = (fixedCostId: string) => {
+    setExpandedFixedCosts(prev => {
+      const next = new Set(prev);
+      next.has(fixedCostId) ? next.delete(fixedCostId) : next.add(fixedCostId);
+      return next;
+    });
+  };
+
+  const addSubItem = async (fixedCostId: string) => {
+    const { data, error } = await supabase.from("cost_center_fixed_cost_items").insert({
+      fixed_cost_id: fixedCostId,
+      store_id: selectedStore,
+      name: "",
+      amount: 0,
+      sort_order: getSubItems(fixedCostId).length,
+    }).select().single();
+    if (data) {
+      setFixedCostItems(prev => [...prev, data as FixedCostItem]);
+      setExpandedFixedCosts(prev => new Set(prev).add(fixedCostId));
+    }
+  };
+
+  const updateSubItem = async (itemId: string, field: "name" | "amount", value: string | number) => {
+    setFixedCostItems(prev => prev.map(i => i.id === itemId ? { ...i, [field]: value } : i));
+  };
+
+  const saveSubItem = async (item: FixedCostItem) => {
+    await supabase.from("cost_center_fixed_cost_items").update({
+      name: item.name,
+      amount: item.amount,
+    }).eq("id", item.id);
+    // Auto-sum: update parent fixed cost amount
+    const siblings = fixedCostItems.filter(i => i.fixed_cost_id === item.fixed_cost_id);
+    const updated = siblings.map(i => i.id === item.id ? item : i);
+    const total = updated.reduce((s, i) => s + Number(i.amount || 0), 0);
+    // Update parent directly in DB
+    const existing = storeFixedCosts.find(s => s.fixed_cost_id === item.fixed_cost_id);
+    if (existing && !existing.id.startsWith('temp-')) {
+      await supabase.from("cost_center_store_fixed_costs").update({ amount: total }).eq("id", existing.id);
+    } else {
+      await supabase.from("cost_center_store_fixed_costs").upsert({
+        fixed_cost_id: item.fixed_cost_id, store_id: selectedStore, amount: total, is_active: true,
+      }, { onConflict: "id" });
+    }
+    setStoreFixedCosts(prev => prev.map(s => s.fixed_cost_id === item.fixed_cost_id ? { ...s, amount: total } : s));
+    setDirtyFixedAmounts(prev => { const n = new Map(prev); n.delete(item.fixed_cost_id); return n; });
+  };
+
+  const deleteSubItem = async (item: FixedCostItem) => {
+    await supabase.from("cost_center_fixed_cost_items").delete().eq("id", item.id);
+    const remaining = fixedCostItems.filter(i => i.id !== item.id);
+    setFixedCostItems(remaining);
+    // Recalculate parent
+    const siblings = remaining.filter(i => i.fixed_cost_id === item.fixed_cost_id);
+    const total = siblings.reduce((s, i) => s + Number(i.amount || 0), 0);
+    const existing = storeFixedCosts.find(s => s.fixed_cost_id === item.fixed_cost_id);
+    if (existing && !existing.id.startsWith('temp-')) {
+      await supabase.from("cost_center_store_fixed_costs").update({ amount: total }).eq("id", existing.id);
+    }
+    setStoreFixedCosts(prev => prev.map(s => s.fixed_cost_id === item.fixed_cost_id ? { ...s, amount: total } : s));
+    toast.success("Sub-custo removido!");
+  };
+
+
   const startEditingVar = (vc: VariableCost) => {
     setEditingVarId(vc.id);
     setEditingVarDesc(vc.description);
@@ -758,64 +837,140 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
                       const amount = getStoreAmount(fc.id);
                       const cutVal = fixedCutValues[fc.id] || 0;
                       const cutDesc = fixedCutDescriptions[fc.id] || '';
+                      const subItems = getSubItems(fc.id);
+                      const isExpanded = expandedFixedCosts.has(fc.id);
+                      const hasSubItems = subItems.length > 0;
                       return (
-                        <TableRow key={fc.id} className={active ? "" : "opacity-50"}>
-                          <TableCell>
-                            <Checkbox checked={active} onCheckedChange={() => toggleStoreFixedCost(fc.id)} />
-                          </TableCell>
-                          <TableCell className="font-medium text-xs">{fc.name}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{fc.description || "—"}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={amount || ""}
-                              onChange={e => updateStoreAmountLocal(fc.id, parseFloat(e.target.value) || 0)}
-                              onBlur={() => saveFixedAmountOnBlur(fc.id)}
-                              className="h-7 text-xs w-full"
-                              disabled={!active}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={cutVal || ""}
-                              onChange={e => {
-                                const val = parseFloat(e.target.value) || 0;
-                                setFixedCutValues(prev => ({ ...prev, [fc.id]: Math.min(val, amount) }));
-                              }}
-                              onBlur={() => saveFixedCut(fc.id, fixedCutValues[fc.id] || 0)}
-                              placeholder="0"
-                              className="h-7 text-xs w-full"
-                              disabled={!active || amount <= 0}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              value={cutDesc}
-                              onChange={e => setFixedCutDescriptions(prev => ({ ...prev, [fc.id]: e.target.value }))}
-                              onBlur={() => {
-                                if (cutVal > 0) saveFixedCut(fc.id, cutVal, fixedCutDescriptions[fc.id]);
-                              }}
-                              placeholder="Descreva como..."
-                              className="h-7 text-xs w-full"
-                              disabled={!active || amount <= 0}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingFixed(fc)}>
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteFixedCost(fc.id)}>
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                        <React.Fragment key={fc.id}>
+                          <TableRow className={active ? "" : "opacity-50"}>
+                            <TableCell>
+                              <Checkbox checked={active} onCheckedChange={() => toggleStoreFixedCost(fc.id)} />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0"
+                                  onClick={() => toggleExpandFixed(fc.id)}
+                                >
+                                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                </Button>
+                                <span className="font-medium text-xs">{fc.name}</span>
+                                {hasSubItems && (
+                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                                    {subItems.length}
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{fc.description || "—"}</TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={amount || ""}
+                                onChange={e => updateStoreAmountLocal(fc.id, parseFloat(e.target.value) || 0)}
+                                onBlur={() => saveFixedAmountOnBlur(fc.id)}
+                                className="h-7 text-xs w-full"
+                                disabled={!active || hasSubItems}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={cutVal || ""}
+                                onChange={e => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setFixedCutValues(prev => ({ ...prev, [fc.id]: Math.min(val, amount) }));
+                                }}
+                                onBlur={() => saveFixedCut(fc.id, fixedCutValues[fc.id] || 0)}
+                                placeholder="0"
+                                className="h-7 text-xs w-full"
+                                disabled={!active || amount <= 0}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                value={cutDesc}
+                                onChange={e => setFixedCutDescriptions(prev => ({ ...prev, [fc.id]: e.target.value }))}
+                                onBlur={() => {
+                                  if (cutVal > 0) saveFixedCut(fc.id, cutVal, fixedCutDescriptions[fc.id]);
+                                }}
+                                placeholder="Descreva como..."
+                                className="h-7 text-xs w-full"
+                                disabled={!active || amount <= 0}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => addSubItem(fc.id)} title="Adicionar sub-custo">
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingFixed(fc)}>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteFixedCost(fc.id)}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          {/* Sub-items */}
+                          {isExpanded && (
+                            <>
+                              {subItems.map(item => (
+                                <TableRow key={item.id} className="bg-muted/30">
+                                  <TableCell />
+                                  <TableCell colSpan={2} className="pl-10">
+                                    <Input
+                                      value={item.name}
+                                      onChange={e => updateSubItem(item.id, "name", e.target.value)}
+                                      onBlur={() => {
+                                        const cur = fixedCostItems.find(i => i.id === item.id);
+                                        if (cur) saveSubItem(cur);
+                                      }}
+                                      placeholder="Nome do sub-custo (ex: Shopify, Tiny...)"
+                                      className="h-7 text-xs"
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={item.amount || ""}
+                                      onChange={e => updateSubItem(item.id, "amount", parseFloat(e.target.value) || 0)}
+                                      onBlur={() => {
+                                        const cur = fixedCostItems.find(i => i.id === item.id);
+                                        if (cur) saveSubItem({ ...cur, amount: item.amount });
+                                      }}
+                                      placeholder="0"
+                                      className="h-7 text-xs w-full"
+                                    />
+                                  </TableCell>
+                                  <TableCell colSpan={2} />
+                                  <TableCell>
+                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteSubItem(item)}>
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              <TableRow className="bg-muted/20">
+                                <TableCell />
+                                <TableCell colSpan={6}>
+                                  <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 text-muted-foreground" onClick={() => addSubItem(fc.id)}>
+                                    <Plus className="h-3 w-3" /> Adicionar sub-custo
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            </>
+                          )}
+                        </React.Fragment>
                       );
                     })}
+
                   </TableBody>
                 </Table>
                 {categoryCuts > 0 && (

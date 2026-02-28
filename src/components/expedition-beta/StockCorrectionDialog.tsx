@@ -44,6 +44,7 @@ export function StockCorrectionDialog({ open, onClose, sku, productName, variant
         .from('pos_stores')
         .select('id, name')
         .eq('is_active', true)
+        .eq('is_simulation', false)
         .order('name');
 
       const storeOptions: StoreOption[] = (storesData || []).map((s: any) => {

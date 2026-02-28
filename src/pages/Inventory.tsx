@@ -198,7 +198,7 @@ export default function Inventory() {
   // Load stores
   useEffect(() => {
     const loadStores = async () => {
-      const { data } = await supabase.from('pos_stores').select('id, name, tiny_token').eq('is_active', true);
+      const { data } = await supabase.from('pos_stores').select('id, name, tiny_token').eq('is_active', true).eq('is_simulation', false);
       if (data) setStores(data);
       setIsLoadingStores(false);
     };

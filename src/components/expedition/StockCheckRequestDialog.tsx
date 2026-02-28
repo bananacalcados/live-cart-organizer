@@ -62,7 +62,7 @@ export function StockCheckRequestDialog({ open, onClose, sku, productName, varia
     const load = async () => {
       setLoading(true);
       const [{ data: storesData }, { data: requests }] = await Promise.all([
-        supabase.from('pos_stores').select('id, name').eq('is_active', true).order('name'),
+        supabase.from('pos_stores').select('id, name').eq('is_active', true).eq('is_simulation', false).order('name'),
         supabase.from('expedition_stock_requests').select('*').eq('sku', sku).in('status', ['pending', 'confirmed', 'courier_coming']).order('created_at', { ascending: false }),
       ]);
       // Filter out the "Site" store (expedition warehouse)
