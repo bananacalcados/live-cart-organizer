@@ -432,12 +432,23 @@ export function ChatView({
                 </PopoverContent>
               </Popover>
             )}
-            <Input
+            <textarea
               placeholder="Digite uma mensagem..."
               value={newMessage}
               onChange={(e) => onNewMessageChange(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && onSendMessage()}
-              className="flex-1 bg-white dark:bg-[#2a3942]"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  onSendMessage();
+                }
+              }}
+              rows={1}
+              className="flex-1 bg-white dark:bg-[#2a3942] rounded-md border border-input px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+              }}
             />
             {newMessage.trim() ? (
               <Button

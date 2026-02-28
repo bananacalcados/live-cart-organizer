@@ -217,13 +217,25 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => imageInputRef.current?.click()}>
               <Paperclip className="h-4 w-4 text-muted-foreground" />
             </Button>
-            <Input
-              ref={inputRef}
+            <textarea
+              ref={inputRef as any}
               placeholder="Mensagem..."
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              className="flex-1 h-9 bg-white dark:bg-[#2a3942] text-sm"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              rows={1}
+              className="flex-1 bg-white dark:bg-[#2a3942] text-sm rounded-md border border-input px-3 py-2 resize-none min-h-[36px] max-h-[100px] overflow-y-auto"
+              style={{ height: 'auto' }}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = Math.min(target.scrollHeight, 100) + 'px';
+              }}
             />
             {newMessage.trim() ? (
               <Button size="icon" onClick={handleSend} disabled={isSending} className="h-9 w-9 bg-green-600 hover:bg-green-700"><Send className="h-3.5 w-3.5" /></Button>
