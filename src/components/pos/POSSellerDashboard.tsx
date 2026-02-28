@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import { subDays, startOfDay } from 'date-fns';
 
 interface Props {
   storeId: string;
@@ -182,10 +182,10 @@ export function POSSellerDashboard({ storeId }: Props) {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <ShoppingBag className="h-4 w-4 text-emerald-500" />
+                  <ShoppingBag className="h-4 w-4" />
                   <span className="text-xs font-medium">Compras</span>
                 </div>
-                <p className="text-2xl font-bold text-emerald-600">{totals.totalCompras}</p>
+                <p className="text-2xl font-bold">{totals.totalCompras}</p>
               </CardContent>
             </Card>
             <Card>
@@ -200,10 +200,10 @@ export function POSSellerDashboard({ storeId }: Props) {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Star className="h-4 w-4 text-amber-500" />
+                  <Star className="h-4 w-4" />
                   <span className="text-xs font-medium">NPS Médio</span>
                 </div>
-                <p className="text-2xl font-bold text-amber-600">
+                <p className="text-2xl font-bold">
                   {totals.avgNps !== null ? totals.avgNps.toFixed(1) : '—'}
                 </p>
                 {totals.npsCount > 0 && <p className="text-[10px] text-muted-foreground">{totals.npsCount} respostas</p>}
@@ -215,7 +215,7 @@ export function POSSellerDashboard({ storeId }: Props) {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Medal className="h-4 w-4 text-amber-500" />
+                <Medal className="h-4 w-4 text-primary" />
                 Ranking de Vendedores
               </CardTitle>
             </CardHeader>
@@ -232,12 +232,14 @@ export function POSSellerDashboard({ storeId }: Props) {
                   {metrics.map((m, idx) => (
                     <div key={m.sellerId} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
                       {/* Rank */}
-                      <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                        idx === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-                        idx === 1 ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' :
-                        idx === 2 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
+                      <div
+                        className={cn(
+                          "h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 bg-muted text-foreground",
+                          idx === 0 && "bg-primary/10 text-primary",
+                          idx === 1 && "bg-accent text-accent-foreground",
+                          idx === 2 && "bg-secondary text-secondary-foreground"
+                        )}
+                      >
                         {idx + 1}
                       </div>
 
@@ -259,20 +261,23 @@ export function POSSellerDashboard({ storeId }: Props) {
 
                       {/* Reasons breakdown */}
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 gap-0.5 border-emerald-300 text-emerald-600">
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 gap-0.5 border-border text-foreground">
                           <ShoppingBag className="h-2.5 w-2.5" /> {m.finishReasons.compra}
                         </Badge>
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 gap-0.5 border-blue-300 text-blue-600">
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 gap-0.5 border-border text-foreground">
                           <HelpCircle className="h-2.5 w-2.5" /> {m.finishReasons.duvida}
                         </Badge>
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 gap-0.5 border-orange-300 text-orange-600">
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 gap-0.5 border-border text-foreground">
                           <Headphones className="h-2.5 w-2.5" /> {m.finishReasons.suporte}
                         </Badge>
                       </div>
 
                       {/* Conversion rate */}
                       <div className="text-right flex-shrink-0 w-16">
-                        <p className={`text-sm font-bold ${m.conversionRate >= 50 ? 'text-emerald-600' : m.conversionRate >= 25 ? 'text-amber-600' : 'text-destructive'}`}>
+                        <p className={cn(
+                          "text-sm font-bold",
+                          m.conversionRate >= 50 ? "text-primary" : m.conversionRate >= 25 ? "text-foreground" : "text-destructive"
+                        )}>
                           {m.conversionRate.toFixed(0)}%
                         </p>
                         <p className="text-[9px] text-muted-foreground">conversão</p>
@@ -282,7 +287,10 @@ export function POSSellerDashboard({ storeId }: Props) {
                       <div className="text-right flex-shrink-0 w-12">
                         {m.npsAvg !== null ? (
                           <>
-                            <p className={`text-sm font-bold ${m.npsAvg >= 9 ? 'text-emerald-600' : m.npsAvg >= 7 ? 'text-amber-600' : 'text-destructive'}`}>
+                            <p className={cn(
+                              "text-sm font-bold",
+                              m.npsAvg >= 9 ? "text-primary" : m.npsAvg >= 7 ? "text-foreground" : "text-destructive"
+                            )}>
                               {m.npsAvg.toFixed(1)}
                             </p>
                             <p className="text-[9px] text-muted-foreground">NPS ({m.npsCount})</p>

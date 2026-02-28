@@ -163,6 +163,29 @@ serve(async (req) => {
           is_group: isGroup,
           sender_name: senderName,
         });
+
+        // NPS capture (only individual chats)
+        if (!isGroup) {
+          const trimmed = messageText.trim();
+          const score = Number(trimmed);
+          if (!Number.isNaN(score) && score >= 0 && score <= 10) {
+            const { data: openSurvey } = await supabase
+              .from('chat_nps_surveys')
+              .select('id')
+              .eq('phone', phone)
+              .is('responded_at', null)
+              .order('sent_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (openSurvey) {
+              await supabase.from('chat_nps_surveys').update({
+                score,
+                responded_at: new Date().toISOString(),
+              }).eq('id', openSurvey.id);
+            }
+          }
+        }
         
         // Upsert chat_contacts with display_name from sender
         if (senderName && !isGroup) {
