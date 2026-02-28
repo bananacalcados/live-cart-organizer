@@ -871,14 +871,21 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               <Video className="h-5 w-5 text-gray-500" />
             </Button>
 
-            <Input
-              ref={inputRef}
+            <textarea
+              ref={inputRef as any}
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder={selectedMedia ? "Adicionar legenda..." : "Digite uma mensagem"}
-              className="flex-1 bg-white rounded-full border-0 px-4 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="flex-1 bg-white rounded-2xl border-0 px-4 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
               disabled={isSending || isUploading}
+              rows={1}
+              style={{ height: 'auto' }}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+              }}
             />
             {newMessage.trim() || selectedMedia ? (
               <Button
