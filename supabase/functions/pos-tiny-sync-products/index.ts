@@ -132,7 +132,7 @@ serve(async (req) => {
               price: parseFloat(p.preco || '0'),
               barcode: p.gtin || p.codigo || '',
               stock: 0,
-              is_active: p.situacao === 'A',
+              is_active: true, // Import all products; they are from pesquisa which returns active ones
               synced_at: new Date().toISOString(),
             });
           }
