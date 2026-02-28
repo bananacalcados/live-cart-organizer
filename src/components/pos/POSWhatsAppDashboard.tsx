@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { BarChart3, MessageCircle, Clock, TrendingUp, Send, ArrowRight, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { BarChart3, MessageCircle, Clock, TrendingUp, Send, ArrowRight, RefreshCw, Inbox, MessageSquare, CreditCard, PhoneForwarded } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,12 +10,14 @@ import { cn } from '@/lib/utils';
 import { subDays, startOfDay, format, getDay, getHours, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, Cell } from 'recharts';
+import { ConversationStatusFilter } from '@/components/chat/ChatTypes';
+import { useConversationEnrichment } from '@/hooks/useConversationEnrichment';
 
 interface Props {
   storeId: string;
   sellerId: string;
   sellerName: string;
-  onGoToChat: () => void;
+  onGoToChat: (filter?: ConversationStatusFilter) => void;
 }
 
 type Period = '7d' | '30d';
@@ -30,6 +32,8 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
   const [finishedConvos, setFinishedConvos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const { enrichConversations, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
+
   const dateFilter = useMemo(() => {
     const days = period === '7d' ? 7 : 30;
     return startOfDay(subDays(new Date(), days)).toISOString();
@@ -40,9 +44,8 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
     const [msgsRes, assignRes, finishedRes] = await Promise.all([
       supabase
         .from('whatsapp_messages')
-        .select('id, phone, direction, created_at, status')
-        .gte('created_at', dateFilter)
-        .order('created_at', { ascending: true }),
+        .select('id, phone, direction, created_at, status, whatsapp_number_id, is_group')
+        .order('created_at', { ascending: false }),
       supabase
         .from('chat_seller_assignments')
         .select('*')
@@ -62,6 +65,42 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
   };
 
   useEffect(() => { loadData(); }, [dateFilter, sellerId, storeId]);
+
+  // ── Status counters from ALL messages (not period-filtered) ──
+  const statusCounters = useMemo(() => {
+    const phoneMap = new Map<string, { direction: string }[]>();
+    const allPhones = new Set<string>();
+    for (const msg of messages) {
+      allPhones.add(msg.phone);
+      if (!phoneMap.has(msg.phone)) phoneMap.set(msg.phone, []);
+      phoneMap.get(msg.phone)!.push({ direction: msg.direction });
+    }
+
+    let notStarted = 0;
+    let awaitingReply = 0;
+    let awaitingPayment = 0;
+    let followUp = 0;
+
+    for (const phone of allPhones) {
+      if (finishedPhones.has(phone) || archivedPhones.has(phone)) continue;
+      
+      if (awaitingPaymentPhones.has(phone)) {
+        awaitingPayment++;
+        continue;
+      }
+
+      const msgs = phoneMap.get(phone) || [];
+      if (msgs.length === 0) continue;
+      const hasOutgoing = msgs.some(m => m.direction === 'outgoing');
+      const lastMsg = msgs[0]; // sorted desc
+      
+      if (!hasOutgoing && lastMsg.direction === 'incoming') notStarted++;
+      else if (lastMsg.direction === 'incoming') awaitingReply++;
+      else if (lastMsg.direction === 'outgoing') followUp++;
+    }
+
+    return { notStarted, awaitingReply, awaitingPayment, followUp };
+  }, [messages, finishedPhones, archivedPhones, awaitingPaymentPhones]);
 
   // ── KPI metrics ──
   const kpis = useMemo(() => {
@@ -174,7 +213,7 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
           <Button variant="outline" size="sm" className="h-8 gap-1" onClick={loadData}>
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
-          <Button size="sm" className="h-8 gap-1 bg-[#00a884] hover:bg-[#00a884]/90 text-white" onClick={onGoToChat}>
+          <Button size="sm" className="h-8 gap-1 bg-[#00a884] hover:bg-[#00a884]/90 text-white" onClick={() => onGoToChat()}>
             Ir para Chat <ArrowRight className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -186,6 +225,61 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
             <div className="p-12 text-center text-muted-foreground">Carregando métricas...</div>
           ) : (
             <>
+              {/* Clickable Status Counters */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <button
+                  onClick={() => onGoToChat('not_started')}
+                  className="rounded-xl border-0 shadow-sm bg-blue-500/10 hover:bg-blue-500/20 transition-colors p-4 text-left"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-8 w-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                      <Inbox className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Novas Mensagens</span>
+                  </div>
+                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{statusCounters.notStarted}</p>
+                </button>
+
+                <button
+                  onClick={() => onGoToChat('awaiting_reply')}
+                  className="rounded-xl border-0 shadow-sm bg-amber-500/10 hover:bg-amber-500/20 transition-colors p-4 text-left"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-8 w-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+                      <MessageSquare className="h-4 w-4 text-amber-500" />
+                    </div>
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Aguardando Resposta</span>
+                  </div>
+                  <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">{statusCounters.awaitingReply}</p>
+                </button>
+
+                <button
+                  onClick={() => onGoToChat('awaiting_payment')}
+                  className="rounded-xl border-0 shadow-sm bg-violet-500/10 hover:bg-violet-500/20 transition-colors p-4 text-left"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-8 w-8 rounded-full bg-violet-500/20 flex items-center justify-center">
+                      <CreditCard className="h-4 w-4 text-violet-500" />
+                    </div>
+                    <span className="text-xs font-medium text-violet-600 dark:text-violet-400">Aguardando Pagamento</span>
+                  </div>
+                  <p className="text-3xl font-bold text-violet-600 dark:text-violet-400">{statusCounters.awaitingPayment}</p>
+                </button>
+
+                <button
+                  onClick={() => onGoToChat('awaiting_customer')}
+                  className="rounded-xl border-0 shadow-sm bg-orange-500/10 hover:bg-orange-500/20 transition-colors p-4 text-left"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-8 w-8 rounded-full bg-orange-500/20 flex items-center justify-center">
+                      <PhoneForwarded className="h-4 w-4 text-orange-500" />
+                    </div>
+                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Follow Up</span>
+                  </div>
+                  <p className="text-3xl font-bold text-orange-600 dark:text-orange-400">{statusCounters.followUp}</p>
+                </button>
+              </div>
+
               {/* KPI Cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <Card className="border-0 shadow-sm">

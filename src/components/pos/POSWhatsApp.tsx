@@ -635,7 +635,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           storeId={storeId}
           sellerId={selectedSellerId}
           sellerName={selectedSellerName}
-          onGoToChat={() => setShowDashboard(false)}
+          onGoToChat={(filter) => {
+            setShowDashboard(false);
+            if (filter) setStatusFilter(filter);
+          }}
         />
       ) : (
       <>
