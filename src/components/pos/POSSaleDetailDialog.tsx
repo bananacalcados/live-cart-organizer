@@ -98,6 +98,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [editTotalValue, setEditTotalValue] = useState("");
   const [savingTotal, setSavingTotal] = useState(false);
   const [deletingTinyOnly, setDeletingTinyOnly] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [addingProduct, setAddingProduct] = useState(false);
   const [newProductQty, setNewProductQty] = useState("1");
@@ -855,6 +856,33 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                 </div>
               </div>
             </div>
+
+            {/* Mark as Paid */}
+            {!isTinyOnly && sale.status !== 'paid' && sale.status !== 'completed' && (
+              <Button
+                className="w-full gap-2 bg-emerald-500 text-white hover:bg-emerald-600 font-bold h-11 text-sm shadow-md"
+                onClick={async () => {
+                  setMarkingPaid(true);
+                  try {
+                    await supabase
+                      .from('pos_sales')
+                      .update({ status: 'paid', expedition_status: 'pending' } as any)
+                      .eq('id', sale.id);
+                    toast.success('Pedido marcado como pago!');
+                    onDeleted?.();
+                    onClose();
+                  } catch {
+                    toast.error('Erro ao marcar como pago');
+                  } finally {
+                    setMarkingPaid(false);
+                  }
+                }}
+                disabled={markingPaid}
+              >
+                {markingPaid ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Marcar como Pago
+              </Button>
+            )}
 
             {/* Action Buttons */}
             <div className="space-y-2">
