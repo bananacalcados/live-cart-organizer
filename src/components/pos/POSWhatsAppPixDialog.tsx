@@ -43,7 +43,11 @@ export function POSWhatsAppPixDialog({
         if (data?.status === "approved") {
           setPaid(true);
           if (pollingRef.current) clearInterval(pollingRef.current);
-          await supabase.from("pos_sales").update({ status: "completed" } as any).eq("id", saleId);
+          // Mark as paid with expedition_status so it shows in Shipments tab
+          await supabase.from("pos_sales").update({ 
+            status: "paid", 
+            expedition_status: "pending" 
+          } as any).eq("id", saleId);
           // Remove from awaiting payment
           await supabase.from("chat_awaiting_payment").delete().eq("phone", phone);
           // Deactivate followup
