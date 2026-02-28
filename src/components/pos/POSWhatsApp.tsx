@@ -800,6 +800,29 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         onFinish={async (reason) => {
           if (selectedPhone) {
             await finishConversation(selectedPhone, reason, selectedSellerId || undefined);
+            
+            // Auto-send NPS when reason is 'compra'
+            if (reason === 'compra') {
+              const conv = conversations.find(c => c.phone === selectedPhone);
+              supabase.functions.invoke('chat-send-nps', {
+                body: {
+                  phone: selectedPhone,
+                  sellerId: selectedSellerId || null,
+                  storeId,
+                  whatsappNumberId: conv?.whatsapp_number_id || null,
+                },
+              }).then(res => {
+                if (res.data?.success) toast.success('NPS enviado ao cliente');
+              }).catch(() => {});
+            }
+
+            // Deactivate any active followup for this phone
+            supabase.from('chat_payment_followups')
+              .update({ is_active: false, completed_at: new Date().toISOString() } as any)
+              .eq('phone', selectedPhone)
+              .eq('is_active', true)
+              .then(() => {});
+
             setSelectedPhone(null);
             setMessages([]);
             setShowFinishDialog(false);
