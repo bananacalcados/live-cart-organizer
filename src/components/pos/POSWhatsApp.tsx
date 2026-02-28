@@ -450,6 +450,26 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     }
   };
 
+  const handleDeleteMessage = async (msg: any) => {
+    if (!msg.message_id || !selectedPhone) throw new Error('No message_id');
+    const res = await supabase.functions.invoke("zapi-delete-message", {
+      body: { phone: selectedPhone, messageId: msg.message_id, dbMessageId: msg.id },
+    });
+    if (res.error) throw res.error;
+    if (res.data?.error) throw new Error(res.data.error);
+    loadMessages(selectedPhone);
+  };
+
+  const handleEditMessage = async (msg: any, newText: string) => {
+    if (!msg.message_id || !selectedPhone) throw new Error('No message_id');
+    const res = await supabase.functions.invoke("zapi-edit-message", {
+      body: { phone: selectedPhone, messageId: msg.message_id, newMessage: newText, dbMessageId: msg.id },
+    });
+    if (res.error) throw res.error;
+    if (res.data?.error) throw new Error(res.data.error);
+    loadMessages(selectedPhone);
+  };
+
   const handleSaveContactName = async () => {
     if (!selectedPhone) return;
     const name = editNameValue.trim();
@@ -737,6 +757,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               onSendMessage={handleSendMessage}
               onSendAudio={handleSendAudio}
               onSendMedia={handleSendMedia}
+              onDeleteMessage={handleDeleteMessage}
+              onEditMessage={handleEditMessage}
               isSending={isSending}
               customerInfoPanel={customerInfoPanel}
             />

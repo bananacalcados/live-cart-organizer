@@ -10,6 +10,7 @@ export interface Message {
   is_group?: boolean;
   whatsapp_number_id?: string;
   sender_name?: string;
+  message_id?: string;
 }
 
 export interface Conversation {

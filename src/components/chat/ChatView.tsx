@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,6 +17,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Textarea } from "@/components/ui/textarea";
 import { CreateSupportTicketDialog } from "../CreateSupportTicketDialog";
 import { MessageStatusIcon } from "./MessageStatusIcon";
 
@@ -28,6 +35,8 @@ interface ChatViewProps {
   onSendMessage: () => void;
   onSendAudio?: (audioUrl: string) => void;
   onSendMedia?: (mediaUrl: string, mediaType: string, caption?: string) => void;
+  onDeleteMessage?: (msg: Message) => Promise<void>;
+  onEditMessage?: (msg: Message, newText: string) => Promise<void>;
   onBack?: () => void;
   onFinish?: () => void;
   isSending: boolean;
@@ -46,6 +55,8 @@ export function ChatView({
   onSendMessage,
   onSendAudio,
   onSendMedia,
+  onDeleteMessage,
+  onEditMessage,
   onBack,
   onFinish,
   isSending,
@@ -62,6 +73,9 @@ export function ChatView({
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const [contactTags, setContactTags] = useState<string[]>([]);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -328,49 +342,136 @@ export function ChatView({
       {/* Messages */}
       <ScrollArea className="flex-1 bg-[#e5ddd5] dark:bg-[#0b141a]" style={{ minHeight: 0 }}>
         <div className="space-y-2 p-3 w-full max-w-full overflow-hidden">
-          {messages.map((msg) => (
+          {messages.map((msg) => {
+            const isOutgoing = msg.direction === 'outgoing';
+            const canDelete = isOutgoing && msg.message_id && onDeleteMessage && (msg.status === 'sent' || msg.status === 'delivered');
+            const canEdit = isOutgoing && msg.message_id && onEditMessage && msg.media_type === 'text' && (msg.status === 'sent' || msg.status === 'delivered');
+            const isEditing = editingMsgId === msg.id;
+            // Allow actions within 15 min of sending
+            const msgAge = Date.now() - new Date(msg.created_at).getTime();
+            const withinWindow = msgAge < 15 * 60 * 1000;
+
+            return (
             <div
               key={msg.id}
               className={cn(
-                "flex",
-                msg.direction === 'outgoing' ? 'justify-end' : 'justify-start'
+                "flex group",
+                isOutgoing ? 'justify-end' : 'justify-start'
               )}
             >
-              <div
-                className={cn(
-                  "max-w-[85%] sm:max-w-[75%] rounded-lg px-3 py-2 text-sm overflow-hidden",
-                  msg.direction === 'outgoing'
-                    ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-foreground'
-                    : 'bg-white dark:bg-[#202c33] text-foreground'
+              <div className={cn("relative max-w-[85%] sm:max-w-[75%]", isOutgoing && "flex items-start gap-1")}>
+                {/* Dropdown menu for outgoing messages */}
+                {isOutgoing && withinWindow && (canDelete || canEdit) && !isEditing && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 mt-1 shrink-0">
+                        <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-36">
+                      {canEdit && (
+                        <DropdownMenuItem
+                          onClick={() => { setEditingMsgId(msg.id); setEditingText(msg.message || ''); }}
+                          className="gap-2 text-xs"
+                        >
+                          <Pencil className="h-3 w-3" /> Editar
+                        </DropdownMenuItem>
+                      )}
+                      {canDelete && (
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            if (!confirm('Apagar esta mensagem?')) return;
+                            setActionLoading(true);
+                            try {
+                              await onDeleteMessage!(msg);
+                              toast.success('Mensagem apagada!');
+                            } catch {
+                              toast.error('Erro ao apagar mensagem');
+                            } finally {
+                              setActionLoading(false);
+                            }
+                          }}
+                          className="gap-2 text-xs text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" /> Apagar
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
-              >
-                {msg.media_url && msg.media_type?.includes('image') && (
-                  <img src={msg.media_url} alt="" className="max-w-[200px] max-h-[200px] rounded mb-1 object-cover cursor-pointer" onClick={() => window.open(msg.media_url!, '_blank')} />
-                )}
-                {msg.media_url && msg.media_type === 'audio' && (
-                  <audio src={msg.media_url} controls className="w-full mb-1" />
-                )}
-                {msg.media_url && msg.media_type === 'video' && (
-                  <video src={msg.media_url} controls className="max-w-full rounded mb-1" style={{ maxHeight: 200 }} />
-                )}
-                {msg.message && <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{msg.message}</p>}
-                {msg.status === 'failed' && (msg as any).error_message && (
-                  <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
-                    ⚠️ {(msg as any).error_message}
-                  </div>
-                )}
-                {msg.status === 'failed' && !(msg as any).error_message && (
-                  <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
-                    ⚠️ Mensagem não entregue
-                  </div>
-                )}
-                <p className="text-[10px] text-muted-foreground text-right mt-1 flex items-center justify-end gap-0.5">
-                  {formatMessageTime(new Date(msg.created_at))}
-                  {msg.direction === 'outgoing' && <MessageStatusIcon status={msg.status} />}
-                </p>
+                <div
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-sm overflow-hidden",
+                    isOutgoing
+                      ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-foreground'
+                      : 'bg-white dark:bg-[#202c33] text-foreground'
+                  )}
+                >
+                  {msg.media_url && msg.media_type?.includes('image') && (
+                    <img src={msg.media_url} alt="" className="max-w-[200px] max-h-[200px] rounded mb-1 object-cover cursor-pointer" onClick={() => window.open(msg.media_url!, '_blank')} />
+                  )}
+                  {msg.media_url && msg.media_type === 'audio' && (
+                    <audio src={msg.media_url} controls className="w-full mb-1" />
+                  )}
+                  {msg.media_url && msg.media_type === 'video' && (
+                    <video src={msg.media_url} controls className="max-w-full rounded mb-1" style={{ maxHeight: 200 }} />
+                  )}
+                  {isEditing ? (
+                    <div className="space-y-1">
+                      <textarea
+                        value={editingText}
+                        onChange={(e) => setEditingText(e.target.value)}
+                        className="w-full bg-white/80 dark:bg-black/20 rounded border border-input px-2 py-1 text-sm resize-none min-h-[40px]"
+                        autoFocus
+                        rows={2}
+                      />
+                      <div className="flex gap-1 justify-end">
+                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setEditingMsgId(null)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-6 px-2 text-xs bg-[#00a884] hover:bg-[#00a884]/90 text-white"
+                          disabled={actionLoading || !editingText.trim()}
+                          onClick={async () => {
+                            setActionLoading(true);
+                            try {
+                              await onEditMessage!(msg, editingText.trim());
+                              setEditingMsgId(null);
+                              toast.success('Mensagem editada!');
+                            } catch {
+                              toast.error('Erro ao editar mensagem');
+                            } finally {
+                              setActionLoading(false);
+                            }
+                          }}
+                        >
+                          Salvar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    msg.message && <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{msg.message}</p>
+                  )}
+                  {msg.status === 'failed' && (msg as any).error_message && (
+                    <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                      ⚠️ {(msg as any).error_message}
+                    </div>
+                  )}
+                  {msg.status === 'failed' && !(msg as any).error_message && (
+                    <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                      ⚠️ Mensagem não entregue
+                    </div>
+                  )}
+                  <p className="text-[10px] text-muted-foreground text-right mt-1 flex items-center justify-end gap-0.5">
+                    {formatMessageTime(new Date(msg.created_at))}
+                    {isOutgoing && <MessageStatusIcon status={msg.status} />}
+                  </p>
+                </div>
               </div>
             </div>
-          ))}
+            );
+          })}
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
