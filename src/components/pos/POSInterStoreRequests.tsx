@@ -115,7 +115,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
   };
 
   const loadStores = async () => {
-    const { data } = await supabase.from("pos_stores").select("id, name");
+    const { data } = await supabase.from("pos_stores").select("id, name").eq("is_simulation", false);
     setStores(data || []);
   };
 

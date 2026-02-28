@@ -207,7 +207,7 @@ export function POSTeamChat({ storeId }: Props) {
   };
 
   const loadStores = async () => {
-    const { data } = await supabase.from('pos_stores').select('id, name').eq('is_active', true);
+    const { data } = await supabase.from('pos_stores').select('id, name').eq('is_active', true).eq('is_simulation', false);
     if (data) setStores(data.filter(s => s.id !== storeId));
   };
 
