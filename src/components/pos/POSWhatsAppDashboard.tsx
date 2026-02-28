@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { BarChart3, MessageCircle, Clock, TrendingUp, Send, ArrowRight, RefreshCw, Inbox, MessageSquare, CreditCard, PhoneForwarded } from 'lucide-react';
+import { BarChart3, MessageCircle, Clock, TrendingUp, Send, ArrowRight, RefreshCw, Inbox, MessageSquare, CreditCard, PhoneForwarded, UserRoundCog } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,7 @@ interface Props {
   sellerId: string;
   sellerName: string;
   onGoToChat: (filter?: ConversationStatusFilter) => void;
+  onChangeSeller: () => void;
 }
 
 type Period = '7d' | '30d';
@@ -25,7 +26,7 @@ type Period = '7d' | '30d';
 const DAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat }: Props) {
+export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat, onChangeSeller }: Props) {
   const [period, setPeriod] = useState<Period>('7d');
   const [messages, setMessages] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -216,6 +217,10 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
             <h2 className="text-base font-bold">{sellerName}</h2>
             <p className="text-xs text-muted-foreground">Dashboard de Atendimento</p>
           </div>
+          <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs text-muted-foreground hover:text-foreground" onClick={onChangeSeller} title="Trocar vendedora">
+            <UserRoundCog className="h-4 w-4" />
+            <span className="hidden sm:inline">Trocar</span>
+          </Button>
         </div>
         <div className="flex items-center gap-2">
           <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>

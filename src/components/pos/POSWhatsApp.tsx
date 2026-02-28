@@ -639,6 +639,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             setShowDashboard(false);
             if (filter) setStatusFilter(filter);
           }}
+          onChangeSeller={() => {
+            setSelectedSellerId(null);
+            setSelectedSellerName(null);
+            sessionStorage.removeItem('pos_whatsapp_seller_id');
+            sessionStorage.removeItem('pos_whatsapp_seller_name');
+            setShowDashboard(false);
+            setShowSellerGate(true);
+          }}
         />
       ) : (
       <>
