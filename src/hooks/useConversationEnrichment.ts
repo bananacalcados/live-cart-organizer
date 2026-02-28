@@ -12,6 +12,8 @@ interface FinishedConversation {
  */
 export function useConversationEnrichment() {
   const [finishedPhones, setFinishedPhones] = useState<Set<string>>(new Set());
+  const [archivedPhones, setArchivedPhones] = useState<Set<string>>(new Set());
+  const [awaitingPaymentPhones, setAwaitingPaymentPhones] = useState<Set<string>>(new Set());
   const { numbers } = useWhatsAppNumberStore();
 
   const loadFinished = useCallback(async () => {
@@ -21,21 +23,57 @@ export function useConversationEnrichment() {
     }
   }, []);
 
+  const loadArchived = useCallback(async () => {
+    const { data } = await supabase.from('chat_archived_conversations').select('phone');
+    if (data) {
+      setArchivedPhones(new Set((data as any[]).map(d => d.phone)));
+    }
+  }, []);
+
+  const loadAwaitingPayment = useCallback(async () => {
+    const { data } = await supabase.from('chat_awaiting_payment').select('phone');
+    if (data) {
+      setAwaitingPaymentPhones(new Set((data as any[]).map(d => d.phone)));
+    }
+  }, []);
+
   useEffect(() => {
     loadFinished();
+    loadArchived();
+    loadAwaitingPayment();
+
     const channel = supabase
-      .channel('chat-finished-realtime')
+      .channel('chat-enrichment-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_finished_conversations' }, () => loadFinished())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_archived_conversations' }, () => loadArchived())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_awaiting_payment' }, () => loadAwaitingPayment())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [loadFinished]);
+  }, [loadFinished, loadArchived, loadAwaitingPayment]);
 
-  const finishConversation = useCallback(async (phone: string) => {
-    await supabase.from('chat_finished_conversations').upsert({ phone, finished_at: new Date().toISOString() }, { onConflict: 'phone' });
+  const finishConversation = useCallback(async (phone: string, reason?: string, sellerId?: string) => {
+    await supabase.from('chat_finished_conversations').upsert({
+      phone,
+      finished_at: new Date().toISOString(),
+      finish_reason: reason || null,
+      seller_id: sellerId || null,
+    } as any, { onConflict: 'phone' });
   }, []);
 
   const reopenConversation = useCallback(async (phone: string) => {
     await supabase.from('chat_finished_conversations').delete().eq('phone', phone);
+  }, []);
+
+  const archiveConversation = useCallback(async (phone: string, archivedBy?: string) => {
+    await supabase.from('chat_archived_conversations').upsert({
+      phone,
+      archived_at: new Date().toISOString(),
+      archived_by: archivedBy || null,
+    } as any, { onConflict: 'phone' });
+  }, []);
+
+  const unarchiveConversation = useCallback(async (phone: string) => {
+    await supabase.from('chat_archived_conversations').delete().eq('phone', phone);
   }, []);
 
   /**
@@ -75,6 +113,8 @@ export function useConversationEnrichment() {
       const msgs = phoneMessages.get(conv.phone) || [];
       const status = computeStatus(msgs);
       const isFinished = finishedPhones.has(conv.phone);
+      const isArchived = archivedPhones.has(conv.phone);
+      const isAwaitingPayment = awaitingPaymentPhones.has(conv.phone);
       const instanceLabel = getInstanceLabel(conv.whatsapp_number_id);
       const base = conv.phone.replace(/\D/g, '').slice(-8);
       const hasOtherInstances = (phoneBaseMap.get(base)?.length || 0) > 1;
@@ -83,17 +123,23 @@ export function useConversationEnrichment() {
         ...conv,
         conversationStatus: status,
         isFinished,
+        isArchived,
+        isAwaitingPayment,
         instanceLabel,
         hasOtherInstances,
       };
     });
-  }, [computeStatus, finishedPhones, getInstanceLabel]);
+  }, [computeStatus, finishedPhones, archivedPhones, awaitingPaymentPhones, getInstanceLabel]);
 
   return {
     enrichConversations,
     finishConversation,
     reopenConversation,
+    archiveConversation,
+    unarchiveConversation,
     finishedPhones,
+    archivedPhones,
+    awaitingPaymentPhones,
     loadFinished,
   };
 }

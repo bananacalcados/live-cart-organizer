@@ -145,6 +145,14 @@ export function POSWhatsAppCheckoutDialog({
 
       const link = `https://checkout.bananacalcados.com.br/checkout-loja/${storeId}/${sale.id}`;
       setGeneratedLink(link);
+
+      // Add to awaiting payment
+      await supabase.from("chat_awaiting_payment").upsert({
+        phone,
+        sale_id: sale.id,
+        type: 'checkout',
+      } as any, { onConflict: 'phone' });
+
       toast.success("Link gerado!");
     } catch (e: any) {
       toast.error(e.message || "Erro ao gerar link");

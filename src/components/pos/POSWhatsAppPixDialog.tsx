@@ -44,6 +44,8 @@ export function POSWhatsAppPixDialog({
           setPaid(true);
           if (pollingRef.current) clearInterval(pollingRef.current);
           await supabase.from("pos_sales").update({ status: "completed" } as any).eq("id", saleId);
+          // Remove from awaiting payment
+          await supabase.from("chat_awaiting_payment").delete().eq("phone", phone);
           toast.success("PIX confirmado! 🎉");
         }
       } catch {}
@@ -95,6 +97,14 @@ export function POSWhatsAppPixDialog({
       setPixCode(data.qrCode);
       setPixQrBase64(data.qrCodeBase64 || "");
       if (data.paymentId) setPixPaymentId(String(data.paymentId));
+
+      // Add to awaiting payment
+      await supabase.from("chat_awaiting_payment").upsert({
+        phone,
+        sale_id: sale.id,
+        type: 'pix',
+      } as any, { onConflict: 'phone' });
+
       toast.success("PIX gerado!");
     } catch (e: any) {
       toast.error(e.message || "Erro ao gerar PIX");
