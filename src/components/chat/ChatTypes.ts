@@ -34,6 +34,10 @@ export interface Conversation {
   instanceLabel?: string;
   /** Whether this conversation is marked as finished */
   isFinished?: boolean;
+  /** Whether this conversation is archived */
+  isArchived?: boolean;
+  /** Whether this conversation has pending payment */
+  isAwaitingPayment?: boolean;
 }
 
 export type ChatFilter = 'all' | 'contacts' | 'groups';
@@ -42,11 +46,13 @@ export type InstanceFilter = 'all' | 'zapi' | 'meta' | string;
 
 /** 
  * Conversation status filter for the new tabs:
- * - all: all conversations
+ * - all: all conversations (excluding archived)
  * - not_started: customer sent message but we never replied
  * - awaiting_reply: we replied, customer replied back, waiting on us
  * - awaiting_customer: we sent message, customer hasn't replied
+ * - awaiting_payment: link/pix sent, waiting payment
  * - finished: marked as done
+ * - archived: hidden from main list
  */
 export type ConversationStatus = 'not_started' | 'awaiting_reply' | 'awaiting_customer' | 'finished';
-export type ConversationStatusFilter = 'all' | ConversationStatus;
+export type ConversationStatusFilter = 'all' | ConversationStatus | 'awaiting_payment' | 'archived';

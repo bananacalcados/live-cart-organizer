@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,8 @@ import { ptBR } from "date-fns/locale";
 import { CreateSupportTicketDialog } from "@/components/CreateSupportTicketDialog";
 import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
+import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
+import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
 
 interface Props {
   storeId: string;
@@ -68,9 +70,13 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showPix, setShowPix] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
+  const [showSellerGate, setShowSellerGate] = useState(true);
+  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(() => sessionStorage.getItem('pos_whatsapp_seller_id'));
+  const [selectedSellerName, setSelectedSellerName] = useState<string | null>(() => sessionStorage.getItem('pos_whatsapp_seller_name'));
+  const [showFinishDialog, setShowFinishDialog] = useState(false);
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
-  const { enrichConversations, finishConversation } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
 
   // CRM phone lookup for conversation names
@@ -300,7 +306,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     setMessages(data || []);
   };
 
-  const handleSelectConversation = (phone: string) => {
+  const handleSelectConversation = async (phone: string) => {
     setSelectedPhone(phone);
     loadMessages(phone);
     const conv = conversations.find(c => c.phone === phone);
@@ -309,6 +315,15 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       if (conv.whatsapp_number_id) setSelectedNumberId(conv.whatsapp_number_id);
     } else {
       setSendVia("zapi");
+    }
+    // Track seller assignment (opened_at)
+    if (selectedSellerId) {
+      await supabase.from("chat_seller_assignments").upsert({
+        phone,
+        seller_id: selectedSellerId,
+        store_id: storeId,
+        opened_at: new Date().toISOString(),
+      } as any, { onConflict: 'phone' });
     }
   };
 
@@ -344,6 +359,15 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         .update({ is_active: false })
         .eq("phone", selectedPhone)
         .eq("is_active", true);
+
+      // Track seller first reply
+      if (selectedSellerId) {
+        await supabase.from("chat_seller_assignments")
+          .update({ first_reply_at: new Date().toISOString() } as any)
+          .eq("phone", selectedPhone)
+          .eq("seller_id", selectedSellerId)
+          .is("first_reply_at", null);
+      }
 
       loadMessages(selectedPhone);
     } catch (error) {
@@ -533,6 +557,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           )}
           <MessageCircle className="h-5 w-5 text-white" />
           <span className="font-bold text-white">WhatsApp</span>
+          {selectedSellerName && (
+            <Badge className="bg-white/20 text-white border-0 text-[10px]">{selectedSellerName}</Badge>
+          )}
           {totalUnread > 0 && <Badge className="bg-white text-[#008069] border-0 text-xs font-bold">{totalUnread}</Badge>}
         </div>
         <Button
@@ -640,14 +667,32 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-amber-600"
+                  title="Arquivar Conversa"
+                  onClick={async () => {
+                    if (selectedPhone) {
+                      const conv = conversations.find(c => c.phone === selectedPhone);
+                      if (conv?.isArchived) {
+                        await unarchiveConversation(selectedPhone);
+                        toast.success("Conversa desarquivada");
+                      } else {
+                        await archiveConversation(selectedPhone, selectedSellerId || undefined);
+                        toast.success("Conversa arquivada");
+                        setSelectedPhone(null);
+                        setMessages([]);
+                      }
+                    }
+                  }}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">{conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-destructive"
                   title="Finalizar Conversa"
-                  onClick={async () => {
-                    if (selectedPhone) await finishConversation(selectedPhone);
-                    setSelectedPhone(null);
-                    setMessages([]);
-                    toast.success("Conversa finalizada");
-                  }}
+                  onClick={() => setShowFinishDialog(true)}
                 >
                   <PhoneOff className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Finalizar</span>
@@ -730,6 +775,36 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         onOpenChange={setShowNewConversation}
         onConversationCreated={(phone) => {
           handleSelectConversation(phone);
+        }}
+      />
+
+      {/* Seller Gate */}
+      <POSWhatsAppSellerGate
+        storeId={storeId}
+        open={showSellerGate && !selectedSellerId}
+        onSellerSelected={(id, name) => {
+          setSelectedSellerId(id);
+          setSelectedSellerName(name);
+          sessionStorage.setItem('pos_whatsapp_seller_id', id);
+          sessionStorage.setItem('pos_whatsapp_seller_name', name);
+          setShowSellerGate(false);
+          toast.success(`Vendedora: ${name}`);
+        }}
+        onSkip={() => setShowSellerGate(false)}
+      />
+
+      {/* Finish Conversation Dialog */}
+      <POSFinishConversationDialog
+        open={showFinishDialog}
+        onOpenChange={setShowFinishDialog}
+        onFinish={async (reason) => {
+          if (selectedPhone) {
+            await finishConversation(selectedPhone, reason, selectedSellerId || undefined);
+            setSelectedPhone(null);
+            setMessages([]);
+            setShowFinishDialog(false);
+            toast.success("Conversa finalizada");
+          }
         }}
       />
     </div>

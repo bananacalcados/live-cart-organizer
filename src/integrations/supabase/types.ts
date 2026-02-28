@@ -731,6 +731,27 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_archived_conversations: {
+        Row: {
+          archived_at: string
+          archived_by: string | null
+          id: string
+          phone: string
+        }
+        Insert: {
+          archived_at?: string
+          archived_by?: string | null
+          id?: string
+          phone: string
+        }
+        Update: {
+          archived_at?: string
+          archived_by?: string | null
+          id?: string
+          phone?: string
+        }
+        Relationships: []
+      }
       chat_assignments: {
         Row: {
           ai_classification: string | null
@@ -781,6 +802,30 @@ export type Database = {
           },
         ]
       }
+      chat_awaiting_payment: {
+        Row: {
+          created_at: string
+          id: string
+          phone: string
+          sale_id: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          phone: string
+          sale_id?: string | null
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          phone?: string
+          sale_id?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
       chat_contacts: {
         Row: {
           created_at: string
@@ -817,24 +862,30 @@ export type Database = {
       chat_finished_conversations: {
         Row: {
           created_at: string
+          finish_reason: string | null
           finished_at: string
           finished_by: string | null
           id: string
           phone: string
+          seller_id: string | null
         }
         Insert: {
           created_at?: string
+          finish_reason?: string | null
           finished_at?: string
           finished_by?: string | null
           id?: string
           phone: string
+          seller_id?: string | null
         }
         Update: {
           created_at?: string
+          finish_reason?: string | null
           finished_at?: string
           finished_by?: string | null
           id?: string
           phone?: string
+          seller_id?: string | null
         }
         Relationships: []
       }
@@ -938,6 +989,36 @@ export type Database = {
           name?: string
           sort_order?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      chat_seller_assignments: {
+        Row: {
+          assigned_at: string
+          first_reply_at: string | null
+          id: string
+          opened_at: string
+          phone: string
+          seller_id: string | null
+          store_id: string | null
+        }
+        Insert: {
+          assigned_at?: string
+          first_reply_at?: string | null
+          id?: string
+          opened_at?: string
+          phone: string
+          seller_id?: string | null
+          store_id?: string | null
+        }
+        Update: {
+          assigned_at?: string
+          first_reply_at?: string | null
+          id?: string
+          opened_at?: string
+          phone?: string
+          seller_id?: string | null
+          store_id?: string | null
         }
         Relationships: []
       }
