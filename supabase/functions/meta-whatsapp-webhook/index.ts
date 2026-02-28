@@ -236,6 +236,16 @@ serve(async (req) => {
             } else {
               console.log(`Saved incoming message from ${phone} (${senderName || 'unknown'})`);
 
+              // Reopen conversations that were auto-closed by dispatch
+              const { data: finished } = await supabase
+                .from('chat_finished_conversations')
+                .select('id, finish_reason')
+                .eq('phone', phone)
+                .maybeSingle();
+              if (finished && finished.finish_reason === 'disparo_msg') {
+                await supabase.from('chat_finished_conversations').delete().eq('id', finished.id);
+                console.log(`Reopened dispatch-closed conversation for ${phone}`);
+              }
               // NPS capture (only individual chats)
               const trimmed = (messageText || '').trim();
               const score = Number(trimmed);
@@ -389,6 +399,22 @@ serve(async (req) => {
                         message: aiData.reply,
                         whatsappNumberId: aiSession.whatsapp_number_id,
                       }),
+                    });
+
+                    // Save AI outgoing message to DB with message_id for status tracking
+                    let aiMsgId: string | null = null;
+                    try {
+                      const sendData = await sendRes.json();
+                      aiMsgId = sendData?.messageId || null;
+                    } catch (_) {}
+
+                    await supabase.from('whatsapp_messages').insert({
+                      phone,
+                      message: `[IA] ${aiData.reply}`,
+                      direction: 'outgoing',
+                      status: 'sent',
+                      message_id: aiMsgId,
+                      whatsapp_number_id: whatsappNumberDbId || null,
                     });
                     
                     // Update session counter

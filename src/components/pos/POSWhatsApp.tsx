@@ -85,10 +85,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
-  // Load chat contacts + photos
+  // Load chat contacts + photos + group names
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url");
+      const [contactsRes, groupsRes] = await Promise.all([
+        supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url"),
+        supabase.from("whatsapp_groups").select("group_id, name"),
+      ]);
+      const data = contactsRes.data;
       if (data) {
         const nameMap: Record<string, string> = {};
         const photoMap: Record<string, string> = {};
@@ -98,6 +102,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           else if (c.display_name) nameMap[c.phone] = c.display_name;
           if (c.profile_pic_url) photoMap[c.phone] = c.profile_pic_url;
           else phonesWithoutPhotos.push(c.phone);
+        }
+        // Map group names from whatsapp_groups table
+        if (groupsRes.data) {
+          for (const g of groupsRes.data as any[]) {
+            if (g.group_id && g.name) {
+              nameMap[g.group_id] = g.name;
+            }
+          }
         }
         setChatContacts(nameMap);
         setContactPhotos(photoMap);
@@ -333,11 +345,13 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     setIsSending(true);
     setNewMessage("");
     try {
+      let metaMessageId: string | null = null;
       if (sendVia === "meta" && selectedNumberId) {
-        const { error } = await supabase.functions.invoke("meta-whatsapp-send", {
+        const res = await supabase.functions.invoke("meta-whatsapp-send", {
           body: { phone: selectedPhone, message: messageText, whatsapp_number_id: selectedNumberId },
         });
-        if (error) throw error;
+        if (res.error) throw res.error;
+        metaMessageId = res.data?.messageId || null;
       } else {
         const { error } = await supabase.functions.invoke("zapi-send-message", {
           body: { phone: selectedPhone, message: messageText },
@@ -351,6 +365,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         direction: "outgoing",
         status: "sent",
         whatsapp_number_id: sendVia === "meta" ? selectedNumberId : null,
+        message_id: metaMessageId,
       });
 
       // Deactivate any active AI session for this phone so AI doesn't respond while operator is chatting
@@ -382,10 +397,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     if (!selectedPhone) return;
     setIsSending(true);
     try {
+      let audioMsgId: string | null = null;
       if (sendVia === "meta" && selectedNumberId) {
-        await supabase.functions.invoke("meta-whatsapp-send", {
+        const res = await supabase.functions.invoke("meta-whatsapp-send", {
           body: { phone: selectedPhone, message: "[áudio]", whatsapp_number_id: selectedNumberId, media_url: audioUrl, media_type: "audio" },
         });
+        audioMsgId = res.data?.messageId || null;
       } else {
         await supabase.functions.invoke("zapi-send-media", {
           body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio" },
@@ -393,6 +410,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       }
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
+        message_id: audioMsgId,
       });
       loadMessages(selectedPhone);
       toast.success("Áudio enviado!");
@@ -408,10 +426,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     setIsSending(true);
     try {
       const msgText = caption || `[${mediaType}]`;
+      let mediaMsgId: string | null = null;
       if (sendVia === "meta" && selectedNumberId) {
-        await supabase.functions.invoke("meta-whatsapp-send", {
+        const res = await supabase.functions.invoke("meta-whatsapp-send", {
           body: { phone: selectedPhone, message: msgText, whatsapp_number_id: selectedNumberId, media_url: mediaUrl, media_type: mediaType },
         });
+        mediaMsgId = res.data?.messageId || null;
       } else {
         await supabase.functions.invoke("zapi-send-media", {
           body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption },
@@ -419,6 +439,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       }
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
+        message_id: mediaMsgId,
       });
       loadMessages(selectedPhone);
       toast.success("Mídia enviada!");
