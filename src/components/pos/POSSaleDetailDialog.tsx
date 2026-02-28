@@ -11,11 +11,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil, UserPlus, Store, Globe, RotateCcw, Check, X,
+  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil, UserPlus, Store, Globe, RotateCcw, Check, X, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { POSCustomerForm } from "./POSCustomerForm";
+import { POSTinyProductPicker } from "./POSTinyProductPicker";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -97,6 +98,14 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [editTotalValue, setEditTotalValue] = useState("");
   const [savingTotal, setSavingTotal] = useState(false);
   const [deletingTinyOnly, setDeletingTinyOnly] = useState(false);
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [addingProduct, setAddingProduct] = useState(false);
+  const [newProductQty, setNewProductQty] = useState("1");
+  const [currentItems, setCurrentItems] = useState<SaleItem[]>(items);
+
+  useEffect(() => {
+    setCurrentItems(items);
+  }, [items]);
 
   useEffect(() => {
     setCurrentCustomer(customer);
@@ -233,6 +242,55 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       toast.error("Erro ao excluir do Tiny");
     } finally {
       setDeletingTinyOnly(false);
+    }
+  };
+
+  const handleAddProduct = async (product: { product_name: string; sku: string; unit_price: number; size?: string; tiny_id?: number; barcode?: string }) => {
+    if (!product.product_name || !sale) return;
+    setAddingProduct(true);
+    try {
+      const qty = parseInt(newProductQty) || 1;
+      const totalPrice = product.unit_price * qty;
+      
+      await supabase.from('pos_sale_items').insert({
+        sale_id: sale.id,
+        product_name: product.product_name,
+        sku: product.sku || null,
+        barcode: product.barcode || null,
+        unit_price: product.unit_price,
+        quantity: qty,
+        total_price: totalPrice,
+        size: product.size || null,
+        tiny_product_id: product.tiny_id || null,
+      } as any);
+
+      // Update sale total
+      const newTotal = sale.total + totalPrice;
+      const newSubtotal = sale.subtotal + totalPrice;
+      await supabase.from('pos_sales').update({ 
+        total: newTotal, 
+        subtotal: newSubtotal 
+      } as any).eq('id', sale.id);
+
+      // Update local items list
+      setCurrentItems(prev => [...prev, {
+        sale_id: sale.id,
+        product_name: product.product_name,
+        quantity: qty,
+        unit_price: product.unit_price,
+        sku: product.sku || null,
+        barcode: product.barcode || null,
+        size: product.size || null,
+      }]);
+
+      toast.success(`${product.product_name} adicionado ao pedido!`);
+      setShowAddProduct(false);
+      setNewProductQty("1");
+      onDeleted?.(); // refresh parent
+    } catch (e: any) {
+      toast.error("Erro ao adicionar produto: " + e.message);
+    } finally {
+      setAddingProduct(false);
     }
   };
 
@@ -581,11 +639,51 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
 
             {/* Items */}
             <div className="space-y-2">
-              <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
-                <Package className="h-3.5 w-3.5 text-orange-500" /> Itens ({items.length})
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
+                  <Package className="h-3.5 w-3.5 text-orange-500" /> Itens ({currentItems.length})
+                </h4>
+                {!isTinyOnly && storeId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1 border-emerald-300 text-emerald-600 hover:bg-emerald-50"
+                    onClick={() => setShowAddProduct(!showAddProduct)}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Adicionar Produto
+                  </Button>
+                )}
+              </div>
+
+              {/* Add Product Form */}
+              {showAddProduct && storeId && (
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2">
+                  <POSTinyProductPicker
+                    storeId={storeId}
+                    label="Buscar produto para adicionar"
+                    value=""
+                    onSelect={(product) => {
+                      if (product.product_name) handleAddProduct(product);
+                    }}
+                    placeholder="Nome, SKU ou código de barras..."
+                  />
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">Qtd:</span>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={newProductQty}
+                      onChange={(e) => setNewProductQty(e.target.value)}
+                      className="h-7 w-16 text-xs text-center"
+                    />
+                    {addingProduct && <Loader2 className="h-3 w-3 animate-spin text-emerald-600" />}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1.5">
-                {items.map((item, i) => (
+                {currentItems.map((item, i) => (
                   <div key={i} className="p-3 rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
@@ -652,7 +750,9 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                                 .eq('sale_id', item.sale_id)
                                 .eq('product_name', item.product_name)
                                 .eq('unit_price', item.unit_price);
-                              items[i] = { ...items[i], sku: editItemSku };
+                              const updated = [...currentItems];
+                              updated[i] = { ...updated[i], sku: editItemSku };
+                              setCurrentItems(updated);
                               toast.success("SKU atualizado!");
                               setEditingItemIndex(null);
                               onDeleted?.();
