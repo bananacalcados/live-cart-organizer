@@ -118,7 +118,7 @@ export function POSWhatsAppPixDialog({
         sale_id: sale.id,
         type: 'pix',
         next_reminder_at: nextReminder.toISOString(),
-        whatsapp_number_id: null,
+        whatsapp_number_id: sendVia === "meta" ? selectedNumberId : null,
       } as any);
 
       toast.success("PIX gerado!");

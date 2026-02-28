@@ -34,20 +34,33 @@ serve(async (req) => {
     let sent = 0;
 
     for (const fu of followups) {
-      // Check if payment was already made (not in awaiting_payment anymore)
+      // Check if payment was already made
+      let isPaid = false;
+      if (fu.sale_id) {
+        const { data: sale } = await supabase
+          .from('pos_sales')
+          .select('status')
+          .eq('id', fu.sale_id)
+          .maybeSingle();
+        if (sale?.status === 'completed') isPaid = true;
+      }
+
       const { data: awp } = await supabase
         .from('chat_awaiting_payment')
         .select('id')
         .eq('phone', fu.phone)
         .maybeSingle();
 
-      if (!awp) {
-        // Payment was confirmed, deactivate followup
+      if (isPaid || !awp) {
+        // Payment confirmed or no longer awaiting
+        if (awp) {
+          await supabase.from('chat_awaiting_payment').delete().eq('id', awp.id);
+        }
         await supabase.from('chat_payment_followups').update({
           is_active: false,
           completed_at: new Date().toISOString(),
         }).eq('id', fu.id);
-        console.log(`[followup] ${fu.phone} already paid, deactivated`);
+        console.log(`[followup] ${fu.phone} completed (paid=${isPaid}), deactivated`);
         continue;
       }
 

@@ -236,6 +236,27 @@ serve(async (req) => {
             } else {
               console.log(`Saved incoming message from ${phone} (${senderName || 'unknown'})`);
 
+              // NPS capture (only individual chats)
+              const trimmed = (messageText || '').trim();
+              const score = Number(trimmed);
+              if (!Number.isNaN(score) && score >= 0 && score <= 10) {
+                const { data: openSurvey } = await supabase
+                  .from('chat_nps_surveys')
+                  .select('id')
+                  .eq('phone', phone)
+                  .is('responded_at', null)
+                  .order('sent_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+
+                if (openSurvey) {
+                  await supabase.from('chat_nps_surveys').update({
+                    score,
+                    responded_at: new Date().toISOString(),
+                  }).eq('id', openSurvey.id);
+                }
+              }
+
               // Check for pending automation flow continuation (button reply)
               if (msg.type === 'button' || msg.type === 'interactive') {
                 const buttonText = messageText.trim().toLowerCase();
