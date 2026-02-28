@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2 } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,9 @@ import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { CreateSupportTicketDialog } from "@/components/CreateSupportTicketDialog";
+import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
+import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
 
 interface Props {
   storeId: string;
@@ -61,6 +64,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
   const [showCrmPanel, setShowCrmPanel] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [showPix, setShowPix] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
 
@@ -518,108 +523,32 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
   return (
     <div className="h-full flex flex-col bg-[#f0f2f5] dark:bg-[#111b21] min-w-0 overflow-hidden">
-      {/* WhatsApp-style Header */}
+      {/* WhatsApp-style Header - simplified */}
       <div className="flex items-center justify-between px-4 py-3 bg-[#008069] dark:bg-[#202c33] flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          {selectedPhone ? (
-            <>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10" onClick={() => setSelectedPhone(null)}>
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-              <Avatar className="h-9 w-9">
-                {contactPhotos[selectedPhone] ? (
-                  <AvatarImage src={contactPhotos[selectedPhone]} />
-                ) : null}
-                <AvatarFallback className="bg-[#dfe5e7] dark:bg-[#6b7b8a] text-[#54656f] dark:text-white text-xs font-bold">
-                  {selectedConversation?.isGroup ? <Users className="h-4 w-4" /> : getInitials(selectedConversation?.customerName || selectedPhone)}
-                </AvatarFallback>
-              </Avatar>
-              {isEditingName ? (
-                <div className="flex items-center gap-1 flex-1">
-                  <Input
-                    value={editNameValue}
-                    onChange={e => setEditNameValue(e.target.value)}
-                    className="h-7 text-sm bg-white/20 border-white/30 text-white flex-1 placeholder:text-white/50"
-                    autoFocus
-                    onKeyDown={e => { if (e.key === "Enter") handleSaveContactName(); if (e.key === "Escape") setIsEditingName(false); }}
-                  />
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-white" onClick={handleSaveContactName}>
-                    <Check className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-              <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1 min-w-0">
-                    <span className="font-semibold text-white truncate">{selectedConversation?.customerName || selectedPhone}</span>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-white/60 hover:text-white hover:bg-white/10" onClick={() => { setEditNameValue(selectedConversation?.customerName || ""); setIsEditingName(true); }}>
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  {selectedConversation?.customerName && (
-                    <span className="text-[11px] text-white/60 truncate">{selectedPhone}</span>
-                  )}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <MessageCircle className="h-5 w-5 text-white" />
-              <span className="font-bold text-white">WhatsApp</span>
-              {totalUnread > 0 && <Badge className="bg-white text-[#008069] border-0 text-xs font-bold">{totalUnread}</Badge>}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-auto text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
-                onClick={() => setShowNewConversation(true)}
-              >
-                <UserPlus className="h-4 w-4" />
-                <span className="hidden sm:inline">Nova Conversa</span>
-              </Button>
-            </>
+          {selectedPhone && (
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10 md:hidden" onClick={() => setSelectedPhone(null)}>
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
           )}
+          <MessageCircle className="h-5 w-5 text-white" />
+          <span className="font-bold text-white">WhatsApp</span>
+          {totalUnread > 0 && <Badge className="bg-white text-[#008069] border-0 text-xs font-bold">{totalUnread}</Badge>}
         </div>
-        {selectedPhone && (
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
-              onClick={() => setShowCatalog(true)}
-            >
-              <ShoppingBag className="h-4 w-4" />
-              <span className="hidden sm:inline">Catálogo</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
-              onClick={async () => {
-                if (selectedPhone) await finishConversation(selectedPhone);
-                setSelectedPhone(null);
-                setMessages([]);
-                toast.success("Conversa finalizada");
-              }}
-            >
-              <PhoneOff className="h-4 w-4" />
-              Finalizar
-            </Button>
-          </div>
-        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+          onClick={() => setShowNewConversation(true)}
+        >
+          <UserPlus className="h-4 w-4" />
+          <span className="hidden sm:inline">Nova Conversa</span>
+        </Button>
       </div>
 
-      {/* API Selector */}
-      {selectedPhone && (
-        <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] bg-white dark:bg-[#202c33] text-xs flex-shrink-0">
-          <span className="text-muted-foreground">Via:</span>
-          <button onClick={() => setSendVia("zapi")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "zapi" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Z-API</button>
-          <button onClick={() => setSendVia("meta")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "meta" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Meta API</button>
-          {sendVia === "meta" && metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" />}
-        </div>
-      )}
-
-      {/* Content - Split view on desktop, single view on mobile */}
+      {/* Content - Split view */}
       <div className="flex-1 flex overflow-hidden min-w-0">
-        {/* Conversation List - always visible on desktop, hidden when chat open on mobile */}
+        {/* Conversation List */}
         <div className={cn(
           "flex flex-col min-h-0 overflow-hidden border-r border-[#e9edef] dark:border-[#313d45]",
           selectedPhone ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
@@ -654,9 +583,86 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           />
         </div>
 
-        {/* Chat View - takes remaining space on desktop */}
+        {/* Chat View */}
         {selectedPhone ? (
           <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+            {/* Contact Header Bar */}
+            <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
+              <Button variant="ghost" size="icon" className="h-7 w-7 hidden md:flex" onClick={() => setSelectedPhone(null)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Avatar className="h-8 w-8">
+                {contactPhotos[selectedPhone] ? <AvatarImage src={contactPhotos[selectedPhone]} /> : null}
+                <AvatarFallback className="bg-[#dfe5e7] dark:bg-[#6b7b8a] text-[#54656f] dark:text-white text-xs font-bold">
+                  {selectedConversation?.isGroup ? <Users className="h-4 w-4" /> : getInitials(selectedConversation?.customerName || selectedPhone)}
+                </AvatarFallback>
+              </Avatar>
+              {isEditingName ? (
+                <div className="flex items-center gap-1 flex-1 min-w-0">
+                  <Input
+                    value={editNameValue}
+                    onChange={e => setEditNameValue(e.target.value)}
+                    className="h-7 text-sm flex-1"
+                    autoFocus
+                    onKeyDown={e => { if (e.key === "Enter") handleSaveContactName(); if (e.key === "Escape") setIsEditingName(false); }}
+                  />
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleSaveContactName}>
+                    <Check className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="text-sm font-semibold truncate">{selectedConversation?.customerName || selectedPhone}</span>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground" onClick={() => { setEditNameValue(selectedConversation?.customerName || ""); setIsEditingName(true); }}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  {selectedConversation?.customerName && (
+                    <span className="text-[10px] text-muted-foreground truncate">{selectedPhone}</span>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#00a884]" onClick={() => setShowCheckout(true)} title="Gerar Link Checkout">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Checkout</span>
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-emerald-600" onClick={() => setShowPix(true)} title="Gerar PIX">
+                  <QrCode className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">PIX</span>
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => setShowCatalog(true)} title="Catálogo">
+                  <ShoppingBag className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Catálogo</span>
+                </Button>
+                <CreateSupportTicketDialog phone={selectedPhone} customerName={selectedConversation?.customerName} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                  title="Finalizar Conversa"
+                  onClick={async () => {
+                    if (selectedPhone) await finishConversation(selectedPhone);
+                    setSelectedPhone(null);
+                    setMessages([]);
+                    toast.success("Conversa finalizada");
+                  }}
+                >
+                  <PhoneOff className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Finalizar</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* API Selector */}
+            <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] bg-white dark:bg-[#202c33] text-xs flex-shrink-0">
+              <span className="text-muted-foreground">Via:</span>
+              <button onClick={() => setSendVia("zapi")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "zapi" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Z-API</button>
+              <button onClick={() => setSendVia("meta")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "meta" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Meta API</button>
+              {sendVia === "meta" && metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" />}
+            </div>
+
             <ChatView
               messages={messages}
               conversation={selectedConversation}
@@ -665,7 +671,6 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               onSendMessage={handleSendMessage}
               onSendAudio={handleSendAudio}
               onSendMedia={handleSendMedia}
-              onBack={() => setSelectedPhone(null)}
               isSending={isSending}
               customerInfoPanel={customerInfoPanel}
             />
@@ -690,6 +695,32 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           selectedNumberId={selectedNumberId}
           open={showCatalog}
           onOpenChange={setShowCatalog}
+        />
+      )}
+
+      {/* Checkout Dialog */}
+      {selectedPhone && (
+        <POSWhatsAppCheckoutDialog
+          open={showCheckout}
+          onOpenChange={setShowCheckout}
+          storeId={storeId}
+          phone={selectedPhone}
+          customerName={selectedConversation?.customerName}
+          sendVia={sendVia}
+          selectedNumberId={selectedNumberId}
+        />
+      )}
+
+      {/* PIX Dialog */}
+      {selectedPhone && (
+        <POSWhatsAppPixDialog
+          open={showPix}
+          onOpenChange={setShowPix}
+          storeId={storeId}
+          phone={selectedPhone}
+          customerName={selectedConversation?.customerName}
+          sendVia={sendVia}
+          selectedNumberId={selectedNumberId}
         />
       )}
 
