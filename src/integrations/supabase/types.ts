@@ -889,6 +889,96 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_nps_surveys: {
+        Row: {
+          created_at: string
+          feedback: string | null
+          finish_conversation_id: string | null
+          id: string
+          phone: string
+          responded_at: string | null
+          score: number | null
+          seller_id: string | null
+          sent_at: string
+          store_id: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          feedback?: string | null
+          finish_conversation_id?: string | null
+          id?: string
+          phone: string
+          responded_at?: string | null
+          score?: number | null
+          seller_id?: string | null
+          sent_at?: string
+          store_id?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          feedback?: string | null
+          finish_conversation_id?: string | null
+          id?: string
+          phone?: string
+          responded_at?: string | null
+          score?: number | null
+          seller_id?: string | null
+          sent_at?: string
+          store_id?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
+      chat_payment_followups: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          interval_minutes: number
+          is_active: boolean
+          max_reminders: number
+          next_reminder_at: string | null
+          phone: string
+          reminder_count: number
+          sale_id: string | null
+          seller_id: string | null
+          type: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          interval_minutes?: number
+          is_active?: boolean
+          max_reminders?: number
+          next_reminder_at?: string | null
+          phone: string
+          reminder_count?: number
+          sale_id?: string | null
+          seller_id?: string | null
+          type?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          interval_minutes?: number
+          is_active?: boolean
+          max_reminders?: number
+          next_reminder_at?: string | null
+          phone?: string
+          reminder_count?: number
+          sale_id?: string | null
+          seller_id?: string | null
+          type?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       chat_sector_agents: {
         Row: {
           created_at: string
