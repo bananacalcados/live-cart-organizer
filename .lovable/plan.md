@@ -1,145 +1,74 @@
 
-# Fase 1: Arquivados, Aguardando Pagamento, Vendedor e Motivo de Finalização
 
-## Visao Geral
-Implementar 5 funcionalidades interconectadas no WhatsApp do POS:
-1. Aba de conversas **Arquivadas** (ocultas do "Todas")
-2. Aba **Aguardando Pagamento** (auto-movida quando envia link/pix)
-3. **Seletor de Vendedor** ao abrir o WhatsApp
-4. **Atribuicao de conversa** ao vendedor (rastreamento de abertura sem resposta)
-5. **Motivo ao Finalizar** conversa (Suporte, Duvida, Compra)
+# Dashboard WhatsApp - Contadores de Status Clicaveis + Filtro Follow Up
 
----
+## Resumo
 
-## 1. Novas Tabelas (Migracoes)
+Adicionar 4 contadores clicaveis no dashboard do WhatsApp (Novas Mensagens, Aguardando Resposta, Aguardando Pagamento, Follow Up) que ao clicar levam direto para o chat com o filtro correspondente. Tambem adicionar o novo filtro "Follow Up" na lista de conversas.
 
-### `chat_archived_conversations`
-Armazena conversas arquivadas pelo usuario.
-```text
-id UUID PK
-phone TEXT UNIQUE NOT NULL
-archived_at TIMESTAMPTZ DEFAULT now()
-archived_by TEXT (seller_id)
-```
+## O que muda
 
-### `chat_awaiting_payment`
-Conversas com link/pix pendente de pagamento.
-```text
-id UUID PK
-phone TEXT UNIQUE NOT NULL
-sale_id UUID (referencia pos_sales)
-type TEXT ('checkout' | 'pix')
-created_at TIMESTAMPTZ DEFAULT now()
-```
+### 1. Novo status "Follow Up" (awaiting_customer renomeado)
 
-### `chat_seller_assignments`
-Atribuicao de vendedor a conversa + rastreamento de atividade.
-```text
-id UUID PK
-phone TEXT NOT NULL
-seller_id UUID FK pos_sellers
-store_id UUID FK pos_stores
-assigned_at TIMESTAMPTZ DEFAULT now()
-first_reply_at TIMESTAMPTZ (null se abriu mas nao respondeu)
-opened_at TIMESTAMPTZ DEFAULT now()
-```
+O status `awaiting_customer` ja existe e significa exatamente "vendedora respondeu e cliente nao falou mais nada". Vamos usar esse status como base para o filtro "Follow Up" na lista de conversas:
 
-### Alteracao em `chat_finished_conversations`
-Adicionar coluna `finish_reason` TEXT (valores: 'suporte', 'duvida', 'compra') e `seller_id` UUID.
+- **Novas Mensagens** = `not_started` (cliente mandou msg e ninguem respondeu)
+- **Aguardando Resposta** = `awaiting_reply` (vendedora ja conversou, cliente respondeu, mas ninguem viu/respondeu)
+- **Aguardando Pagamento** = `awaiting_payment` (link/pix enviado, sem pagamento)
+- **Follow Up** = `awaiting_customer` (vendedora respondeu, cliente sumiu)
+
+### 2. Dashboard - Contadores clicaveis
+
+No `POSWhatsAppDashboard.tsx`, adicionar uma nova secao acima dos KPIs com 4 cards/botoes grandes e coloridos:
+
+- Cada card mostra o icone, titulo e contagem em tempo real
+- Ao clicar, chama `onGoToChat` passando o filtro correspondente
+- Os dados vem das conversas carregadas no momento (mesma logica do `ConversationList`)
+
+Para isso, o dashboard precisa carregar as conversas e calcular os contadores. A prop `onGoToChat` sera expandida para aceitar um filtro opcional: `onGoToChat(filter?: ConversationStatusFilter)`.
+
+### 3. ConversationList - Novo filtro "Follow Up"
+
+Adicionar "Follow Up" como nova aba nos `STATUS_TABS` da `ConversationList`, mapeando para `awaiting_customer`.
+
+### 4. POSWhatsApp - Conectar o fluxo
+
+Quando o dashboard chamar `onGoToChat('not_started')` por exemplo, o `POSWhatsApp` vai:
+1. Fechar o dashboard (`setShowDashboard(false)`)
+2. Setar o `statusFilter` correspondente
 
 ---
 
-## 2. Arquivados
+## Detalhes Tecnicos
 
-### Logica
-- Adicionar botao "Arquivar" no menu de acoes da conversa (ao lado de Finalizar)
-- Criar nova aba "Arquivados" no `ConversationList` (STATUS_TABS)
-- Conversas arquivadas NAO aparecem na aba "Todas" nem nas outras abas
-- Na aba "Arquivados", botao para desarquivar
+### Arquivos modificados
 
-### Arquivos afetados
-- `src/components/chat/ChatTypes.ts` -- adicionar 'archived' ao ConversationStatusFilter
-- `src/components/chat/ConversationList.tsx` -- nova aba + filtro
-- `src/components/pos/POSWhatsApp.tsx` -- carregar arquivados, botao arquivar
-- `src/hooks/useConversationEnrichment.ts` -- enriquecer com flag `isArchived`
+**`src/components/chat/ChatTypes.ts`**
+- Nenhuma mudanca necessaria - os tipos ja suportam tudo
 
----
+**`src/components/chat/ConversationList.tsx`**
+- Adicionar entrada `{ value: 'awaiting_customer', label: 'Follow Up', shortLabel: 'Follow Up' }` no array `STATUS_TABS` (antes de `awaiting_payment`)
 
-## 3. Aguardando Pagamento
+**`src/components/pos/POSWhatsAppDashboard.tsx`**
+- Mudar prop `onGoToChat` de `() => void` para `(filter?: ConversationStatusFilter) => void`
+- Adicionar carregamento de conversas (query `whatsapp_messages` + `chat_finished_conversations` + `chat_awaiting_payment`) para calcular contagens
+- Usar o hook `useConversationEnrichment` para computar status das conversas
+- Renderizar 4 cards clicaveis no topo: Novas, Aguardando Resposta, Aguardando Pagamento, Follow Up
+- Cada card com cor distinta, icone e contagem
+- Clicar chama `onGoToChat(filtro)`
 
-### Logica
-- Quando o vendedor gera um link de checkout ou PIX pelo chat, inserir registro em `chat_awaiting_payment`
-- Nova aba "Aguard. Pgto" no ConversationList com badge amarela
-- Quando o pagamento for confirmado (webhook ou polling), remover da tabela automaticamente
-- A conversa com pagamento confirmado pisca em verde (ja existe logica similar)
+**`src/components/pos/POSWhatsApp.tsx`**
+- Alterar o handler `onGoToChat` do dashboard para aceitar filtro:
+  ```
+  onGoToChat={(filter) => {
+    setShowDashboard(false);
+    if (filter) setStatusFilter(filter);
+  }}
+  ```
 
-### Arquivos afetados
-- `src/components/pos/POSWhatsAppCheckoutDialog.tsx` -- inserir em chat_awaiting_payment ao gerar link
-- `src/components/pos/POSWhatsAppPixDialog.tsx` -- inserir em chat_awaiting_payment ao gerar pix
-- `src/components/chat/ConversationList.tsx` -- nova aba
-- `src/hooks/useConversationEnrichment.ts` -- enriquecer com flag `isAwaitingPayment`
+### Cores dos contadores
+- Novas Mensagens: azul (blue-500)
+- Aguardando Resposta: amarelo/amber (amber-500)
+- Aguardando Pagamento: roxo/violeta (violet-500)
+- Follow Up: laranja (orange-500)
 
----
-
-## 4. Seletor de Vendedor no WhatsApp
-
-### Logica
-- Ao abrir a aba WhatsApp no POS, exibir um dialog de selecao de vendedor (reutilizando o design do POSSellerGate porem simplificado)
-- O vendedor selecionado fica armazenado em estado local (nao precisa de tabela nova, usa o `storeId` que ja existe + os sellers ja carregados na pagina POS)
-- O nome do vendedor sera incluido como assinatura opcional nas mensagens (ex: "- Vendedora Maria")
-- O vendedor selecionado e salvo em sessionStorage para persistir durante a sessao
-
-### Arquivos afetados
-- `src/components/pos/POSWhatsApp.tsx` -- adicionar state `selectedSellerId`, dialog de selecao, carregar sellers
-- Novo componente: `src/components/pos/POSWhatsAppSellerGate.tsx` -- dialog simplificado de selecao
-
----
-
-## 5. Atribuicao de Conversa ao Vendedor
-
-### Logica
-- Quando o vendedor clica em uma conversa, registrar em `chat_seller_assignments` (opened_at)
-- Quando o vendedor RESPONDE, atualizar `first_reply_at`
-- Se o vendedor abriu mas nao respondeu em X minutos, isso fica registrado como "abriu e nao respondeu"
-- A conversa fica "atrelada" ao vendedor para follow-up
-
-### Arquivos afetados
-- `src/components/pos/POSWhatsApp.tsx` -- em handleSelectConversation, inserir/atualizar assignment; em handleSendMessage, atualizar first_reply_at
-
----
-
-## 6. Motivo ao Finalizar Conversa
-
-### Logica
-- Ao clicar "Finalizar", abrir um dialog com 3 opcoes: Suporte, Duvida, Compra
-- O motivo e salvo em `chat_finished_conversations.finish_reason`
-- O seller_id do vendedor logado tambem e salvo
-- Esses dados serao usados na Fase 2 para calcular taxa de conversao
-
-### Arquivos afetados
-- `src/components/pos/POSWhatsApp.tsx` -- substituir click direto por dialog
-- Novo componente: `src/components/pos/POSFinishConversationDialog.tsx`
-- `src/hooks/useConversationEnrichment.ts` -- passar reason ao finalizar
-
----
-
-## Resumo de Arquivos
-
-| Arquivo | Acao |
-|---------|------|
-| Migracao SQL | Criar 3 tabelas + alterar 1 |
-| `ChatTypes.ts` | Adicionar tipos |
-| `ConversationList.tsx` | 2 novas abas (Arquivados, Aguard. Pgto) |
-| `POSWhatsApp.tsx` | Seller gate, atribuicao, arquivar |
-| `useConversationEnrichment.ts` | Enriquecer com archived + awaiting payment |
-| `POSWhatsAppCheckoutDialog.tsx` | Inserir awaiting payment |
-| `POSWhatsAppPixDialog.tsx` | Inserir awaiting payment |
-| `POSWhatsAppSellerGate.tsx` | Novo - dialog selecao vendedor |
-| `POSFinishConversationDialog.tsx` | Novo - dialog motivo finalizacao |
-
----
-
-## Fase 2 (Proxima iteracao)
-- Follow-up automatico com timer apos envio de link
-- Dashboard de qualidade do vendedor (tempo de resposta, taxa de conversao)
-- Sistema NPS via WhatsApp
