@@ -46,6 +46,11 @@ export function POSWhatsAppPixDialog({
           await supabase.from("pos_sales").update({ status: "completed" } as any).eq("id", saleId);
           // Remove from awaiting payment
           await supabase.from("chat_awaiting_payment").delete().eq("phone", phone);
+          // Deactivate followup
+          await supabase.from("chat_payment_followups")
+            .update({ is_active: false, completed_at: new Date().toISOString() } as any)
+            .eq("phone", phone)
+            .eq("is_active", true);
           toast.success("PIX confirmado! 🎉");
         }
       } catch {}
@@ -104,6 +109,17 @@ export function POSWhatsAppPixDialog({
         sale_id: sale.id,
         type: 'pix',
       } as any, { onConflict: 'phone' });
+
+      // Create follow-up timer (first reminder in 30 min)
+      const nextReminder = new Date();
+      nextReminder.setMinutes(nextReminder.getMinutes() + 30);
+      await supabase.from("chat_payment_followups").insert({
+        phone,
+        sale_id: sale.id,
+        type: 'pix',
+        next_reminder_at: nextReminder.toISOString(),
+        whatsapp_number_id: null,
+      } as any);
 
       toast.success("PIX gerado!");
     } catch (e: any) {

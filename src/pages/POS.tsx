@@ -26,14 +26,14 @@ import { POSPickupOrders } from "@/components/pos/POSPickupOrders";
 import { POSTeamChat } from "@/components/pos/POSTeamChat";
 import { POSSlowMovingProducts } from "@/components/pos/POSSlowMovingProducts";
 import { POSShipments } from "@/components/pos/POSShipments";
-
+import { POSSellerDashboard } from "@/components/pos/POSSellerDashboard";
 import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineSales } from "@/components/pos/POSOnlineSales";
 import { POSCheckoutMonitor } from "@/components/pos/POSCheckoutMonitor";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments";
+type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "seller-dashboard";
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
 const CONFIG_PIN = "1530";
@@ -50,6 +50,7 @@ const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badg
   { id: "requests", label: "Solicitações", icon: ArrowRightLeft, badge: true },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "whatsapp", label: "WhatsApp", icon: Phone },
+  { id: "seller-dashboard", label: "Vendedores", icon: Trophy },
   { id: "checkout", label: "Checkout", icon: CreditCard },
   { id: "slowmoving", label: "Queima", icon: Flame },
   { id: "searches", label: "Procurados", icon: SearchX },
@@ -265,6 +266,7 @@ export default function POS() {
         {section === "chat" && <POSTeamChat storeId={selectedStore} />}
         {section === "slowmoving" && <POSSlowMovingProducts storeId={selectedStore} />}
         {section === "shipments" && <POSShipments storeId={selectedStore} />}
+        {section === "seller-dashboard" && <POSSellerDashboard storeId={selectedStore} />}
       </div>
 
       {/* Config PIN Dialog */}

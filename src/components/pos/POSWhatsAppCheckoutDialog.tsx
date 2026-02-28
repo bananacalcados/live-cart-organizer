@@ -153,6 +153,17 @@ export function POSWhatsAppCheckoutDialog({
         type: 'checkout',
       } as any, { onConflict: 'phone' });
 
+      // Create follow-up timer (first reminder in 30 min)
+      const nextReminder = new Date();
+      nextReminder.setMinutes(nextReminder.getMinutes() + 30);
+      await supabase.from("chat_payment_followups").insert({
+        phone,
+        sale_id: sale.id,
+        type: 'checkout',
+        next_reminder_at: nextReminder.toISOString(),
+        whatsapp_number_id: sendVia === "meta" ? selectedNumberId : null,
+      } as any);
+
       toast.success("Link gerado!");
     } catch (e: any) {
       toast.error(e.message || "Erro ao gerar link");
