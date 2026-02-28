@@ -30,6 +30,7 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
   const [messages, setMessages] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [finishedConvos, setFinishedConvos] = useState<any[]>([]);
+  const [storeNumberIds, setStoreNumberIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   const { enrichConversations, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
@@ -41,7 +42,7 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
 
   const loadData = async () => {
     setLoading(true);
-    const [msgsRes, assignRes, finishedRes] = await Promise.all([
+    const [msgsRes, assignRes, finishedRes, storeNumsRes] = await Promise.all([
       supabase
         .from('whatsapp_messages')
         .select('id, phone, direction, created_at, status, whatsapp_number_id, is_group')
@@ -57,20 +58,36 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
         .select('*')
         .eq('seller_id', sellerId)
         .gte('finished_at', dateFilter),
+      supabase
+        .from('pos_store_whatsapp_numbers')
+        .select('whatsapp_number_id')
+        .eq('store_id', storeId),
     ]);
     setMessages(msgsRes.data || []);
     setAssignments(assignRes.data || []);
     setFinishedConvos(finishedRes.data || []);
+    setStoreNumberIds(new Set((storeNumsRes.data || []).map((r: any) => r.whatsapp_number_id)));
     setLoading(false);
   };
 
   useEffect(() => { loadData(); }, [dateFilter, sellerId, storeId]);
 
-  // ── Status counters from ALL messages (not period-filtered) ──
+  // ── Helper: check if a message belongs to this store's configured instances ──
+  const isStoreMessage = useCallback((msg: any) => {
+    // If store has no configured numbers, show all (backward compat)
+    if (storeNumberIds.size === 0) return true;
+    // Z-API messages have null whatsapp_number_id — always include them
+    if (!msg.whatsapp_number_id) return true;
+    // Meta messages: only include if the number is linked to this store
+    return storeNumberIds.has(msg.whatsapp_number_id);
+  }, [storeNumberIds]);
+
+  // ── Status counters from ALL messages across store instances ──
   const statusCounters = useMemo(() => {
     const phoneMap = new Map<string, { direction: string }[]>();
     const allPhones = new Set<string>();
     for (const msg of messages) {
+      if (!isStoreMessage(msg)) continue;
       allPhones.add(msg.phone);
       if (!phoneMap.has(msg.phone)) phoneMap.set(msg.phone, []);
       phoneMap.get(msg.phone)!.push({ direction: msg.direction });
@@ -100,7 +117,7 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
     }
 
     return { notStarted, awaitingReply, awaitingPayment, followUp };
-  }, [messages, finishedPhones, archivedPhones, awaitingPaymentPhones]);
+  }, [messages, finishedPhones, archivedPhones, awaitingPaymentPhones, isStoreMessage]);
 
   // ── KPI metrics ──
   const kpis = useMemo(() => {
