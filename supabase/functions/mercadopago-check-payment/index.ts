@@ -164,11 +164,12 @@ serve(async (req) => {
           .eq("id", orderId)
           .single();
 
-        if (sale && sale.status !== "paid") {
+        if (sale && sale.status !== "paid" && sale.status !== "completed") {
           await supabase
             .from("pos_sales")
             .update({
               status: "paid",
+              expedition_status: "pending",
               payment_gateway: "mercadopago",
               notes: `💳 Pago via PIX Mercado Pago (${paymentId})`,
             })

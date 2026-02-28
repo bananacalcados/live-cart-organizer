@@ -49,17 +49,24 @@ export function POSTinyProductPicker({ storeId, label = "Produto", value, onSele
     try {
       const isBarcode = /^\d{8,14}$/.test(term);
 
-      // First try local DB (fast, works offline)
-      const { data: localData } = await supabase
-        .from('pos_products')
-        .select('*')
-        .eq('store_id', storeId)
-        .eq('is_active', true)
-        .or(isBarcode
-          ? `barcode.eq.${term},sku.eq.${term}`
-          : `name.ilike.%${term}%,sku.ilike.%${term}%,barcode.ilike.%${term}%`)
-        .order('name')
-        .limit(20);
+      // First try local DB — use unaccent RPC for text search, include ALL products (even zero stock)
+      let localData: any[] | null = null;
+
+      if (isBarcode) {
+        const { data } = await supabase
+          .from('pos_products')
+          .select('*')
+          .eq('store_id', storeId)
+          .or(`barcode.eq.${term},sku.eq.${term}`)
+          .order('name')
+          .limit(20);
+        localData = data;
+      } else {
+        // Use unaccent RPC for accent-insensitive search, no is_active filter
+        const { data } = await supabase
+          .rpc('search_products_unaccent', { search_term: term, p_store_id: storeId }) as any;
+        localData = data;
+      }
 
       if (localData && localData.length > 0) {
         const mapped: TinyProduct[] = localData.map((row: any) => ({
