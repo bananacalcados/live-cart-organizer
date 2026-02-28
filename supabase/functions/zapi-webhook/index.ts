@@ -164,6 +164,19 @@ serve(async (req) => {
           sender_name: senderName,
         });
 
+        // Reopen conversations that were auto-closed by dispatch
+        if (!isGroup) {
+          const { data: finished } = await supabase
+            .from('chat_finished_conversations')
+            .select('id, finish_reason')
+            .eq('phone', phone)
+            .maybeSingle();
+          if (finished && finished.finish_reason === 'disparo_msg') {
+            await supabase.from('chat_finished_conversations').delete().eq('id', finished.id);
+            console.log(`Reopened dispatch-closed conversation for ${phone}`);
+          }
+        }
+
         // NPS capture (only individual chats)
         if (!isGroup) {
           const trimmed = messageText.trim();

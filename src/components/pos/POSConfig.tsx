@@ -1910,6 +1910,94 @@ export function POSConfig({ storeId }: Props) {
         </CardContent>
       </Card>
 
+        {/* Finish Reasons Configuration */}
+        <FinishReasonsConfig />
+
     </ScrollArea>
+  );
+}
+
+// ---- Finish Reasons Config Sub-component ----
+function FinishReasonsConfig() {
+  const [reasons, setReasons] = useState<any[]>([]);
+  const [newLabel, setNewLabel] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const loadReasons = async () => {
+    const { data } = await supabase.from('chat_finish_reasons').select('*').order('sort_order');
+    if (data) setReasons(data);
+  };
+
+  useEffect(() => { loadReasons(); }, []);
+
+  const addReason = async () => {
+    if (!newLabel.trim()) return;
+    setLoading(true);
+    const value = newLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const maxOrder = reasons.reduce((max, r) => Math.max(max, r.sort_order || 0), 0);
+    const { error } = await supabase.from('chat_finish_reasons').insert({
+      value,
+      label: newLabel.trim(),
+      icon: 'circle',
+      color: 'text-muted-foreground border-muted hover:bg-muted/50',
+      sort_order: maxOrder + 1,
+      is_system: false,
+      is_active: true,
+    });
+    if (error) toast.error('Erro ao criar motivo');
+    else { toast.success('Motivo criado!'); setNewLabel(''); loadReasons(); }
+    setLoading(false);
+  };
+
+  const toggleActive = async (id: string, currentActive: boolean) => {
+    await supabase.from('chat_finish_reasons').update({ is_active: !currentActive }).eq('id', id);
+    loadReasons();
+  };
+
+  const deleteReason = async (id: string) => {
+    await supabase.from('chat_finish_reasons').delete().eq('id', id);
+    loadReasons();
+    toast.success('Motivo removido');
+  };
+
+  return (
+    <Card className="bg-pos-black border-pos-white/10">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-pos-orange text-sm flex items-center gap-2">
+          <ListChecks className="h-4 w-4" />
+          Motivos de Fechamento de Conversa
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-2">
+          {reasons.map(r => (
+            <div key={r.id} className="flex items-center justify-between p-2 rounded-lg bg-pos-white/5 border border-pos-white/10">
+              <div className="flex items-center gap-2">
+                <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r.id, r.is_active)} />
+                <span className="text-sm text-pos-white">{r.label}</span>
+                {r.is_system && <Badge variant="outline" className="text-[9px] text-pos-white/50 border-pos-white/20">Sistema</Badge>}
+              </div>
+              {!r.is_system && (
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteReason(r.id)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Nome do novo motivo..."
+            value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange"
+            onKeyDown={e => e.key === 'Enter' && addReason()}
+          />
+          <Button onClick={addReason} disabled={loading || !newLabel.trim()} className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
