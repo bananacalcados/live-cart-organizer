@@ -93,6 +93,10 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [selectedSellerId, setSelectedSellerId] = useState("");
   const [savingSeller, setSavingSeller] = useState(false);
   const [cancelingTiny, setCancelingTiny] = useState(false);
+  const [editingTotal, setEditingTotal] = useState(false);
+  const [editTotalValue, setEditTotalValue] = useState("");
+  const [savingTotal, setSavingTotal] = useState(false);
+  const [deletingTinyOnly, setDeletingTinyOnly] = useState(false);
 
   useEffect(() => {
     setCurrentCustomer(customer);
@@ -186,6 +190,49 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       toast.error("Erro ao cancelar/reenviar");
     } finally {
       setCancelingTiny(false);
+    }
+  };
+
+  const handleSaveTotal = async () => {
+    if (!sale) return;
+    const newTotal = parseFloat(editTotalValue);
+    if (isNaN(newTotal) || newTotal < 0) { toast.error("Valor inválido"); return; }
+    setSavingTotal(true);
+    try {
+      await supabase.from('pos_sales').update({ total: newTotal } as any).eq('id', sale.id);
+      toast.success(`Valor alterado para R$ ${newTotal.toFixed(2)}`);
+      setEditingTotal(false);
+      onDeleted?.();
+    } catch {
+      toast.error("Erro ao alterar valor");
+    } finally {
+      setSavingTotal(false);
+    }
+  };
+
+  const handleDeleteTinyOnly = async () => {
+    if (!sale || !storeId || !sale.tiny_order_id) return;
+    if (!confirm("Excluir este pedido do Tiny ERP? O pedido local será mantido.")) return;
+    setDeletingTinyOnly(true);
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-delete-sale`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+        body: JSON.stringify({ store_id: storeId, sale_id: sale.id, cancel_tiny_only: true }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        await supabase.from('pos_sales').update({ tiny_order_id: null, tiny_order_number: null, status: 'pending_sync' } as any).eq('id', sale.id);
+        toast.success("Pedido excluído do Tiny!");
+        onDeleted?.();
+        onClose();
+      } else {
+        toast.error(data.error || "Erro ao excluir do Tiny");
+      }
+    } catch {
+      toast.error("Erro ao excluir do Tiny");
+    } finally {
+      setDeletingTinyOnly(false);
     }
   };
 
@@ -682,7 +729,29 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                 <Separator className="bg-emerald-200" />
                 <div className="flex justify-between items-center">
                   <span className="text-base font-bold text-gray-900">Total</span>
-                  <span className="text-xl font-black text-emerald-600">R$ {sale.total.toFixed(2)}</span>
+                  <div className="flex items-center gap-1.5">
+                    {editingTotal ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-medium">R$</span>
+                        <Input value={editTotalValue} onChange={(e) => setEditTotalValue(e.target.value)} className="h-8 w-28 text-right font-bold text-base" type="number" step="0.01" autoFocus />
+                        <Button size="sm" className="h-8 w-8 p-0 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={handleSaveTotal} disabled={savingTotal}>
+                          {savingTotal ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setEditingTotal(false)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-xl font-black text-emerald-600">R$ {sale.total.toFixed(2)}</span>
+                        {!isTinyOnly && storeId && (
+                          <button onClick={() => { setEditingTotal(true); setEditTotalValue(sale.total.toFixed(2)); }} className="text-blue-500 hover:text-blue-700">
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -710,6 +779,19 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                 >
                   {cancelingTiny ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                   Cancelar no Tiny e Reenviar
+                </Button>
+              )}
+
+              {/* Delete from Tiny only */}
+              {sale.tiny_order_id && !isTinyOnly && storeId && (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 font-bold h-11 text-sm border-orange-300 text-orange-600 hover:bg-orange-50"
+                  onClick={handleDeleteTinyOnly}
+                  disabled={deletingTinyOnly || cancelingTiny}
+                >
+                  {deletingTinyOnly ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Excluir do Tiny
                 </Button>
               )}
 
