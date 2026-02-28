@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,7 @@ import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
 import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
+import { POSWhatsAppDashboard } from "./POSWhatsAppDashboard";
 
 interface Props {
   storeId: string;
@@ -74,6 +75,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(() => sessionStorage.getItem('pos_whatsapp_seller_id'));
   const [selectedSellerName, setSelectedSellerName] = useState<string | null>(() => sessionStorage.getItem('pos_whatsapp_seller_name'));
   const [showFinishDialog, setShowFinishDialog] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem('pos_whatsapp_seller_id'));
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation } = useConversationEnrichment();
@@ -603,17 +605,40 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           )}
           {totalUnread > 0 && <Badge className="bg-white text-[#008069] border-0 text-xs font-bold">{totalUnread}</Badge>}
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
-          onClick={() => setShowNewConversation(true)}
-        >
-          <UserPlus className="h-4 w-4" />
-          <span className="hidden sm:inline">Nova Conversa</span>
-        </Button>
+        <div className="flex items-center gap-1">
+          {selectedSellerId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+              onClick={() => setShowDashboard(true)}
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+            onClick={() => setShowNewConversation(true)}
+          >
+            <UserPlus className="h-4 w-4" />
+            <span className="hidden sm:inline">Nova Conversa</span>
+          </Button>
+        </div>
       </div>
 
+      {/* Dashboard view */}
+      {showDashboard && selectedSellerId && selectedSellerName ? (
+        <POSWhatsAppDashboard
+          storeId={storeId}
+          sellerId={selectedSellerId}
+          sellerName={selectedSellerName}
+          onGoToChat={() => setShowDashboard(false)}
+        />
+      ) : (
+      <>
       {/* Content - Split view */}
       <div className="flex-1 flex overflow-hidden min-w-0">
         {/* Conversation List */}
@@ -773,6 +798,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Product Catalog Sender */}
       {selectedPhone && (
@@ -831,6 +858,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           sessionStorage.setItem('pos_whatsapp_seller_id', id);
           sessionStorage.setItem('pos_whatsapp_seller_name', name);
           setShowSellerGate(false);
+          setShowDashboard(true);
           toast.success(`Vendedora: ${name}`);
         }}
         onSkip={() => setShowSellerGate(false)}
