@@ -109,14 +109,48 @@ serve(async (req) => {
       }));
 
       if (rows.length > 0) {
+        // First get current participant counts for delta tracking
+        const { data: existingGroups } = await supabase
+          .from('whatsapp_groups')
+          .select('id, group_id, instance_id, participant_count')
+          .eq('instance_id', instanceId);
+
+        const existingMap = new Map(
+          (existingGroups || []).map((g: any) => [`${g.group_id}_${g.instance_id}`, g])
+        );
+
+        // Upsert groups with previous_participant_count
+        const rowsWithPrevious = rows.map((r: any) => {
+          const existing = existingMap.get(`${r.group_id}_${r.instance_id}`);
+          return {
+            ...r,
+            previous_participant_count: existing?.participant_count || 0,
+          };
+        });
+
         const { error } = await supabase
           .from('whatsapp_groups')
-          .upsert(rows, { onConflict: 'group_id,instance_id', ignoreDuplicates: false });
+          .upsert(rowsWithPrevious, { onConflict: 'group_id,instance_id', ignoreDuplicates: false });
 
         if (error) {
           console.error('Error syncing groups to DB:', error);
         } else {
           console.log(`Synced ${rows.length} groups to DB`);
+
+          // Save snapshots for tracking over time
+          const { data: updatedGroups } = await supabase
+            .from('whatsapp_groups')
+            .select('id, participant_count')
+            .eq('instance_id', instanceId);
+
+          if (updatedGroups && updatedGroups.length > 0) {
+            const snapshots = updatedGroups.map((g: any) => ({
+              group_id: g.id,
+              participant_count: g.participant_count,
+            }));
+            await supabase.from('whatsapp_group_snapshots').insert(snapshots);
+            console.log(`Saved ${snapshots.length} snapshots`);
+          }
         }
       }
     }

@@ -6857,6 +6857,35 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_group_snapshots: {
+        Row: {
+          group_id: string
+          id: string
+          participant_count: number
+          recorded_at: string
+        }
+        Insert: {
+          group_id: string
+          id?: string
+          participant_count?: number
+          recorded_at?: string
+        }
+        Update: {
+          group_id?: string
+          id?: string
+          participant_count?: number
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_group_snapshots_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_groups: {
         Row: {
           created_at: string
@@ -6876,6 +6905,7 @@ export type Database = {
           only_admins_send: boolean
           participant_count: number | null
           photo_url: string | null
+          previous_participant_count: number | null
           tags: string[] | null
           updated_at: string
         }
@@ -6897,6 +6927,7 @@ export type Database = {
           only_admins_send?: boolean
           participant_count?: number | null
           photo_url?: string | null
+          previous_participant_count?: number | null
           tags?: string[] | null
           updated_at?: string
         }
@@ -6918,6 +6949,7 @@ export type Database = {
           only_admins_send?: boolean
           participant_count?: number | null
           photo_url?: string | null
+          previous_participant_count?: number | null
           tags?: string[] | null
           updated_at?: string
         }
