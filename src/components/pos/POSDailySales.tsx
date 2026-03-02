@@ -59,6 +59,19 @@ interface SellerStats {
   name: string;
   count: number;
   total: number;
+  totalItems: number;
+  avgItemsPerSale: number;
+  sellerId: string;
+}
+
+interface GoalInfo {
+  id: string;
+  goal_type: string;
+  goal_value: number;
+  seller_id: string | null;
+  goal_category?: string | null;
+  goal_brand?: string | null;
+  prize_label?: string | null;
 }
 
 interface CustomerInfo {
@@ -94,6 +107,7 @@ export function POSDailySales({ storeId }: Props) {
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
   const [customers, setCustomers] = useState<Map<string, CustomerInfo>>(new Map());
+  const [goals, setGoals] = useState<GoalInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [resending, setResending] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -160,7 +174,7 @@ export function POSDailySales({ storeId }: Props) {
     try {
       const { start, end } = getDateRange();
 
-      const [salesRes, sellersRes] = await Promise.all([
+      const [salesRes, sellersRes, goalsRes] = await Promise.all([
         supabase
           .from("pos_sales")
           .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step")
@@ -172,11 +186,17 @@ export function POSDailySales({ storeId }: Props) {
           .from("pos_sellers")
           .select("id, name")
           .eq("store_id", storeId),
+        supabase
+          .from("pos_goals")
+          .select("id, goal_type, goal_value, seller_id, goal_category, goal_brand, prize_label")
+          .eq("store_id", storeId)
+          .eq("is_active", true),
       ]);
 
       const salesData = salesRes.data || [];
       setSales(salesData);
       setSellers(sellersRes.data || []);
+      setGoals((goalsRes.data as GoalInfo[]) || []);
 
       if (salesData.length > 0) {
         const saleIds = salesData.map((s) => s.id);
@@ -591,17 +611,53 @@ export function POSDailySales({ storeId }: Props) {
   const totalItemsSold = kpiItems.reduce((s, item) => s + (item.quantity || 0), 0);
   const avgPricePerItem = totalItemsSold > 0 ? totalRevenue / totalItemsSold : 0;
 
-  // Sales by seller
+  // Sales by seller (with items per sale)
   const sellerStatsMap = new Map<string, SellerStats>();
   for (const sale of completedSales) {
     const sellerId = sale.seller_id || "sem-vendedor";
     const sellerName = sellers.find((s) => s.id === sellerId)?.name || "Sem vendedor";
-    const existing = sellerStatsMap.get(sellerId) || { name: sellerName, count: 0, total: 0 };
+    const existing = sellerStatsMap.get(sellerId) || { name: sellerName, count: 0, total: 0, totalItems: 0, avgItemsPerSale: 0, sellerId };
     existing.count += 1;
     existing.total += sale.total || 0;
+    // Count items for this sale
+    const itemsForSale = saleItems.filter(i => i.sale_id === sale.id).reduce((s, i) => s + (i.quantity || 0), 0);
+    existing.totalItems += itemsForSale;
     sellerStatsMap.set(sellerId, existing);
   }
+  // Calculate avg items per sale
+  for (const [, stats] of sellerStatsMap) {
+    stats.avgItemsPerSale = stats.count > 0 ? stats.totalItems / stats.count : 0;
+  }
   const sellerStats = Array.from(sellerStatsMap.values()).sort((a, b) => b.total - a.total);
+
+  // Goals check per seller
+  const getSellerGoals = (sellerId: string) => {
+    const storeGoals = goals.filter(g => !g.seller_id && (g.goal_type === 'revenue' || g.goal_type === 'avg_ticket' || g.goal_type === 'items_sold'));
+    const individualGoals = goals.filter(g => g.seller_id === sellerId);
+    const sellerStat = sellerStatsMap.get(sellerId);
+    const sellerRevenue = sellerStat?.total || 0;
+    const sellerAvgTicket = sellerStat && sellerStat.count > 0 ? sellerStat.total / sellerStat.count : 0;
+    const sellerAvgItems = sellerStat?.avgItemsPerSale || 0;
+
+    const results: { label: string; current: number; target: number; achieved: boolean; prize?: string | null }[] = [];
+
+    for (const g of storeGoals) {
+      let current = 0;
+      if (g.goal_type === 'revenue') current = totalRevenue;
+      else if (g.goal_type === 'avg_ticket') current = avgTicket;
+      else if (g.goal_type === 'items_sold') current = totalItemsSold > 0 && completedSales.length > 0 ? totalItemsSold / completedSales.length : 0;
+      results.push({ label: `Loja: ${g.goal_type === 'revenue' ? 'Faturamento' : g.goal_type === 'avg_ticket' ? 'Ticket Médio' : 'Itens/Venda'}`, current, target: g.goal_value, achieved: current >= g.goal_value, prize: g.prize_label });
+    }
+
+    for (const g of individualGoals) {
+      let current = 0;
+      if (g.goal_type === 'seller_revenue') current = sellerRevenue;
+      else if (g.goal_type === 'revenue') current = sellerRevenue;
+      results.push({ label: g.prize_label ? `Individual: ${g.prize_label}` : 'Meta Individual', current, target: g.goal_value, achieved: current >= g.goal_value, prize: g.prize_label });
+    }
+
+    return results;
+  };
 
   // Sales by payment method
   const paymentStats = new Map<string, { count: number; total: number }>();
@@ -964,23 +1020,57 @@ export function POSDailySales({ storeId }: Props) {
                 <Users className="h-4 w-4 text-pos-orange" /> Vendas por Vendedor
               </h3>
               <div className="space-y-2">
-                {sellerStats.map((s, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-pos-orange/20 flex items-center justify-center text-xs font-bold text-pos-orange">
-                        {i + 1}º
+                {sellerStats.map((s, i) => {
+                  const sellerGoals = s.sellerId !== "sem-vendedor" ? getSellerGoals(s.sellerId) : [];
+                  return (
+                    <div key={i} className="p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-pos-orange/20 flex items-center justify-center text-xs font-bold text-pos-orange">
+                            {i + 1}º
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm text-pos-white">{s.name}</p>
+                            <p className="text-xs text-pos-white/50">{s.count} venda{s.count > 1 ? "s" : ""} · {s.totalItems} itens</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-sm text-pos-orange">R$ {s.total.toFixed(2)}</p>
+                          <p className="text-[10px] text-pos-white/50">ticket: R$ {(s.total / s.count).toFixed(2)}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-sm text-pos-white">{s.name}</p>
-                        <p className="text-xs text-pos-white/40">{s.count} venda{s.count > 1 ? "s" : ""}</p>
+                      {/* Extra metrics */}
+                      <div className="flex items-center gap-3 text-[10px] text-pos-white/60 pl-11">
+                        <span className="flex items-center gap-1">
+                          <Package className="h-3 w-3" /> Média {s.avgItemsPerSale.toFixed(1)} itens/venda
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Tag className="h-3 w-3" /> Preço médio: R$ {(s.totalItems > 0 ? s.total / s.totalItems : 0).toFixed(2)}
+                        </span>
                       </div>
+                      {/* Goals */}
+                      {sellerGoals.length > 0 && (
+                        <div className="pl-11 space-y-1">
+                          {sellerGoals.map((g, gi) => {
+                            const pct = g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0;
+                            return (
+                              <div key={gi} className="flex items-center gap-2 text-[10px]">
+                                {g.achieved ? (
+                                  <span className="text-green-500 font-bold">✅ {g.label}</span>
+                                ) : (
+                                  <span className="text-yellow-500 font-medium">⏳ {g.label}: {pct.toFixed(0)}%</span>
+                                )}
+                                <span className="text-pos-white/40">
+                                  ({g.label.includes('Itens') ? g.current.toFixed(1) : `R$ ${g.current.toFixed(0)}`} / {g.label.includes('Itens') ? g.target.toFixed(1) : `R$ ${g.target.toFixed(0)}`})
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-sm text-pos-orange">R$ {s.total.toFixed(2)}</p>
-                      <p className="text-[10px] text-pos-white/40">ticket: R$ {(s.total / s.count).toFixed(2)}</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
