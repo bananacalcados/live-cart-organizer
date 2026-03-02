@@ -7,7 +7,7 @@ import { ptBR } from "date-fns/locale";
 import {
   ArrowLeft, Plus, Play, Clock, CheckCircle, XCircle, Loader2,
   Trash2, Users, Send, Link as LinkIcon, Copy, Edit, Calendar as CalendarIcon,
-  Variable, Settings, ChevronLeft, ChevronRight
+  Variable, Settings, ChevronLeft, ChevronRight, Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ScheduledMessageForm, type ScheduledMessageData } from "./ScheduledMessageForm";
 import { CampaignBulkSettings } from "./CampaignBulkSettings";
 
@@ -83,6 +84,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [newVarValue, setNewVarValue] = useState("");
   const [showBulkSettings, setShowBulkSettings] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [allGroups, setAllGroups] = useState<any[]>([]);
+  const [groupSearch, setGroupSearch] = useState("");
 
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
@@ -116,7 +119,12 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setVariables((data || []) as CampaignVariable[]);
   }, [campaignId]);
 
-  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables]);
+  const fetchAllGroups = useCallback(async () => {
+    const { data } = await supabase.from('whatsapp_groups').select('id, group_id, name, photo_url, participant_count, max_participants').order('name');
+    setAllGroups(data || []);
+  }, []);
+
+  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchAllGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchAllGroups]);
 
   // Polling for pending messages
   useEffect(() => {
@@ -262,7 +270,22 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     fetchVariables();
   };
 
-  const groupCount = campaign?.target_groups?.length || 0;
+  const targetGroups: string[] = campaign?.target_groups || [];
+  const groupCount = targetGroups.length;
+
+  const toggleGroupInCampaign = async (groupId: string) => {
+    const current: string[] = campaign?.target_groups || [];
+    const updated = current.includes(groupId)
+      ? current.filter((id: string) => id !== groupId)
+      : [...current, groupId];
+    await supabase.from('group_campaigns').update({ target_groups: updated, total_groups: updated.length }).eq('id', campaignId);
+    setCampaign((prev: any) => prev ? { ...prev, target_groups: updated, total_groups: updated.length } : prev);
+  };
+
+  const filteredAllGroups = allGroups.filter(g => {
+    if (!groupSearch) return true;
+    return g.name?.toLowerCase().includes(groupSearch.toLowerCase());
+  });
 
   // Calendar helpers
   const monthStart = startOfMonth(calendarMonth);
@@ -297,12 +320,40 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
       <ScrollArea className="h-[calc(100vh-300px)]">
         <Tabs defaultValue="messages" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="groups" className="text-xs">Grupos</TabsTrigger>
             <TabsTrigger value="messages" className="text-xs">Mensagens</TabsTrigger>
             <TabsTrigger value="calendar" className="text-xs">Calendário</TabsTrigger>
             <TabsTrigger value="variables" className="text-xs">Variáveis</TabsTrigger>
             <TabsTrigger value="links" className="text-xs">Links</TabsTrigger>
           </TabsList>
+
+          {/* GROUPS TAB */}
+          <TabsContent value="groups" className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
+            </div>
+            <p className="text-xs text-muted-foreground">{groupCount} grupos selecionados</p>
+            <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+              {filteredAllGroups.map(g => (
+                <div key={g.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+                  <Checkbox checked={targetGroups.includes(g.id)} onCheckedChange={() => toggleGroupInCampaign(g.id)} />
+                  {g.photo_url ? (
+                    <img src={g.photo_url} alt="" className="h-8 w-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{g.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{g.participant_count}/{g.max_participants}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
 
           {/* MESSAGES TAB */}
           <TabsContent value="messages" className="space-y-2">
