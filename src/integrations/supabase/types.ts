@@ -2747,22 +2747,81 @@ export type Database = {
           },
         ]
       }
+      group_campaign_scheduled_messages: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          failed_count: number
+          id: string
+          media_url: string | null
+          message_content: string | null
+          message_type: string
+          poll_options: Json | null
+          scheduled_at: string
+          send_speed: string
+          sent_at: string | null
+          sent_count: number
+          status: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          failed_count?: number
+          id?: string
+          media_url?: string | null
+          message_content?: string | null
+          message_type?: string
+          poll_options?: Json | null
+          scheduled_at: string
+          send_speed?: string
+          sent_at?: string | null
+          sent_count?: number
+          status?: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          failed_count?: number
+          id?: string
+          media_url?: string | null
+          message_content?: string | null
+          message_type?: string
+          poll_options?: Json | null
+          scheduled_at?: string
+          send_speed?: string
+          sent_at?: string | null
+          sent_count?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_campaign_scheduled_messages_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "group_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_campaigns: {
         Row: {
           ai_generated_content: string | null
           ai_prompt: string | null
+          campaign_link_slug: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
           error_log: Json | null
           failed_count: number | null
           id: string
+          is_deep_link: boolean
           media_url: string | null
           message_content: string | null
           message_type: string
           name: string
           poll_options: Json | null
           scheduled_at: string | null
+          send_speed: string
           sent_count: number | null
           started_at: string | null
           status: string
@@ -2773,18 +2832,21 @@ export type Database = {
         Insert: {
           ai_generated_content?: string | null
           ai_prompt?: string | null
+          campaign_link_slug?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
           error_log?: Json | null
           failed_count?: number | null
           id?: string
+          is_deep_link?: boolean
           media_url?: string | null
           message_content?: string | null
           message_type?: string
           name: string
           poll_options?: Json | null
           scheduled_at?: string | null
+          send_speed?: string
           sent_count?: number | null
           started_at?: string | null
           status?: string
@@ -2795,18 +2857,21 @@ export type Database = {
         Update: {
           ai_generated_content?: string | null
           ai_prompt?: string | null
+          campaign_link_slug?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
           error_log?: Json | null
           failed_count?: number | null
           id?: string
+          is_deep_link?: boolean
           media_url?: string | null
           message_content?: string | null
           message_type?: string
           name?: string
           poll_options?: Json | null
           scheduled_at?: string | null
+          send_speed?: string
           sent_count?: number | null
           started_at?: string | null
           status?: string
@@ -2815,6 +2880,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      group_redirect_links: {
+        Row: {
+          campaign_id: string
+          click_count: number
+          created_at: string
+          id: string
+          is_active: boolean
+          is_deep_link: boolean
+          redirect_count: number
+          slug: string
+        }
+        Insert: {
+          campaign_id: string
+          click_count?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_deep_link?: boolean
+          redirect_count?: number
+          slug: string
+        }
+        Update: {
+          campaign_id?: string
+          click_count?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_deep_link?: boolean
+          redirect_count?: number
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_redirect_links_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "group_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       internal_cashback: {
         Row: {
@@ -6696,11 +6802,16 @@ export type Database = {
           group_id: string
           id: string
           instance_id: string | null
+          invite_link: string | null
           is_active: boolean | null
           is_admin: boolean | null
+          is_full: boolean
           is_vip: boolean | null
           last_synced_at: string | null
+          max_participants: number
           name: string
+          only_admins_add: boolean
+          only_admins_send: boolean
           participant_count: number | null
           photo_url: string | null
           tags: string[] | null
@@ -6712,11 +6823,16 @@ export type Database = {
           group_id: string
           id?: string
           instance_id?: string | null
+          invite_link?: string | null
           is_active?: boolean | null
           is_admin?: boolean | null
+          is_full?: boolean
           is_vip?: boolean | null
           last_synced_at?: string | null
+          max_participants?: number
           name: string
+          only_admins_add?: boolean
+          only_admins_send?: boolean
           participant_count?: number | null
           photo_url?: string | null
           tags?: string[] | null
@@ -6728,11 +6844,16 @@ export type Database = {
           group_id?: string
           id?: string
           instance_id?: string | null
+          invite_link?: string | null
           is_active?: boolean | null
           is_admin?: boolean | null
+          is_full?: boolean
           is_vip?: boolean | null
           last_synced_at?: string | null
+          max_participants?: number
           name?: string
+          only_admins_add?: boolean
+          only_admins_send?: boolean
           participant_count?: number | null
           photo_url?: string | null
           tags?: string[] | null
