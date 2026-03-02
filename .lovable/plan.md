@@ -1,43 +1,66 @@
 
-# Migrar Expedição Beta de OAuth v3 para Token Fixo v2
+# Adicionar Data do Pedido e Transportadora na Expedição Beta
 
-## Problema
-A Expedição Beta usa a API v3 do Tiny com OAuth, cujo refresh token expira apos ~30 dias de inatividade, exigindo reautenticacao manual. Isso cria uma manutencao recorrente inaceitavel.
-
-## Solucao
-Migrar a funcao `expedition-beta-initial-sync` para usar o token fixo `TINY_ERP_TOKEN` (API v2), que **nunca expira** e ja esta configurado como secret no projeto.
-
-A API v2 do Tiny permite buscar pedidos por status e obter detalhes completos (itens, cliente, endereco), fornecendo os mesmos dados que a v3 fornece hoje.
+## Contexto
+Os pedidos vêm do Tiny (que não tem info de transportadora), mas originam na Shopify (que tem `shipping_lines` com transportadora e serviço). O campo `numero_ecommerce` do Tiny corresponde ao `order_number` da Shopify, permitindo cruzar os dados.
 
 ## Mudancas
 
-### Arquivo: `supabase/functions/expedition-beta-initial-sync/index.ts`
+### 1. Adicionar coluna `shipping_method` na tabela `expedition_beta_orders`
 
-**Remover:**
-- Funcao `getTinyV3Token()` (OAuth + refresh)
-- Todas as chamadas a `TINY_V3_BASE` (`api.tiny.com.br/public-api/v3`)
-- Dependencia de `app_settings.tiny_app_token`
+Nova coluna `shipping_method TEXT` para armazenar a transportadora (ex: "Correios - SEDEX", "JADLOG - .Package").
 
-**Adicionar:**
-- Uso de `TINY_ERP_TOKEN` via `Deno.env.get()`
-- Chamadas a API v2 do Tiny (`https://api.tiny.com.br/api2/pedidos.pesquisa.php` e `pedido.obter.php`)
-- Mesma logica de mapeamento de dados (cliente, itens, status) adaptada para o formato de resposta v2
+### 2. Criar Edge Function `expedition-enrich-shipping`
 
-### Endpoints v2 utilizados
+Uma funcao que:
+- Busca pedidos em `expedition_beta_orders` onde `shipping_method IS NULL` e `shopify_order_id` nao começa com `tiny-`
+- Para cada pedido, consulta a Shopify Admin API: `GET /admin/api/2025-07/orders.json?name={order_number}&fields=id,name,shipping_lines`
+- Extrai `shipping_lines[0].title` (ex: "Correios - SEDEX") e atualiza a coluna `shipping_method`
+- Processa em lotes para respeitar rate limits da Shopify
 
-1. **Pesquisar pedidos**: `POST api2/pedidos.pesquisa.php` com `token`, `formato=json`, `situacao` (Aprovado/Enviado/etc)
-2. **Obter detalhes**: `POST api2/pedido.obter.php` com `token`, `formato=json`, `id`
+### 3. Atualizar `expedition-beta-initial-sync`
 
-### Mapeamento de dados v2 para v3
+Apos a sincronizacao do Tiny, chamar automaticamente a funcao de enriquecimento de shipping para os pedidos recem-importados que possuem `numero_ecommerce` (indicando origem Shopify).
 
-O formato v2 retorna dados em estrutura ligeiramente diferente da v3. A funcao sera adaptada para:
-- Extrair cliente de `pedido.cliente` (v2) em vez do objeto v3
-- Extrair itens de `pedido.itens[].item` (v2) em vez do array v3
-- Mapear situacoes por nome ("Aprovado", "Enviado", "Cancelado") em vez de IDs numericos
-- Manter o mesmo schema de gravacao em `expedition_beta_orders` e `expedition_beta_order_items`
+### 4. Atualizar `shopify-webhook` (pedidos novos)
 
-### Impacto
-- **Zero mudanca no frontend** -- o componente `ExpeditionBeta.tsx` continua chamando a mesma funcao
-- **Zero mudanca no banco** -- as tabelas permanecem identicas
-- **Elimina completamente** a necessidade de reconexao OAuth
-- O token v2 `TINY_ERP_TOKEN` ja esta configurado e funcionando para outras funcoes do sistema
+Quando um pedido chega via webhook da Shopify, ja salvar `shipping_method` direto do payload `shipping_lines[0].title`, evitando a necessidade de consulta posterior.
+
+### 5. Atualizar UI `BetaOrdersList.tsx`
+
+No componente `BetaOrderRow`:
+- Adicionar a **data do pedido** (`shopify_created_at`) formatada em DD/MM/YYYY ao lado do nome do cliente
+- Exibir a **transportadora** como um Badge colorido:
+  - Vermelho/destaque para "SEDEX" e "MOTOTAXISTA" (prioridade alta)
+  - Azul para "PAC" (prioridade normal)
+  - Cinza para outros
+
+### 6. Ordenacao por prioridade na Separacao (`BetaPickingList`)
+
+Na aba de separacao, ordenar pedidos automaticamente priorizando:
+1. SEDEX e MOTOTAXISTA primeiro
+2. Depois PAC e outros
+
+## Fluxo tecnico
+
+```text
+Shopify (pedido com shipping_lines)
+  |
+  v
+Tiny ERP (recebe pedido, perde info de frete)
+  |
+  v
+expedition-beta-initial-sync (puxa do Tiny)
+  |
+  v
+expedition-enrich-shipping (cruza com Shopify via order_number)
+  |
+  v
+expedition_beta_orders.shipping_method = "Correios - SEDEX"
+```
+
+## Impacto
+- Pedidos existentes: preenchidos automaticamente pela funcao de enriquecimento
+- Pedidos novos via webhook: ja vem com shipping_method
+- Pedidos novos via sync Tiny: enriquecidos apos importacao
+- Frontend: mostra data + transportadora com prioridade visual
