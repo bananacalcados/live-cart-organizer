@@ -1,112 +1,107 @@
 
-## Sistema Completo de Gerenciamento de Grupos VIP (estilo SendFlow)
 
-### Visao Geral
+## Melhorias no Sistema de Grupos VIP
 
-Reconstruir o modulo de Grupos VIP para ter funcionalidades equivalentes ao SendFlow, com foco em: campanhas persistentes com multiplas mensagens agendadas, gerenciamento completo de configuracoes dos grupos, sistema de links inteligentes (deep link + redirect quando grupo cheio), e controle de velocidade de envio.
+### Resumo das Funcionalidades
+
+1. **Gerenciamento em massa de grupos dentro da campanha** - Alterar nome, foto, descricao e permissoes de todos os grupos vinculados a campanha de uma vez
+2. **Fotos de perfil dos grupos** - Buscar foto via Z-API durante sincronizacao (ja existe `imgUrl`/`profileThumbnail` mas pode nao estar vindo)
+3. **Upload local de arquivos** - Para audio, video e documentos na criacao de mensagens agendadas
+4. **Calendario de mensagens agendadas** - Visao mensal/semanal por campanha
+5. **Edicao de mensagens pendentes** - Editar mensagens que ainda nao foram enviadas
+6. **Modelos de mensagens** - Templates reutilizaveis salvos no banco
+7. **Variaveis dinamicas nas mensagens** - Ex: `{{link_live}}`, `{{nome_grupo}}`, substituidas no momento do envio
 
 ---
 
 ### 1. Migracao de Banco de Dados
 
-**Novas tabelas:**
+**Nova tabela `group_message_templates`:**
+- `id` (uuid PK)
+- `name` (text) - nome do modelo
+- `message_type` (text) - text/image/video/audio/document/poll
+- `message_content` (text) - conteudo com placeholders de variaveis
+- `media_url` (text, nullable)
+- `poll_options` (jsonb, nullable)
+- `created_at` (timestamptz)
 
-- `group_campaign_scheduled_messages` - Mensagens programadas dentro de uma campanha (cada campanha pode ter N mensagens agendadas em datas/horarios diferentes)
-  - `id`, `campaign_id` (FK), `message_type` (text/image/video/audio/document/poll), `message_content`, `media_url`, `poll_options` (jsonb), `scheduled_at` (timestamptz), `status` (pending/sent/failed/cancelled), `sent_at`, `send_speed` (slow/normal/fast), `created_at`
+**Nova tabela `campaign_variables`:**
+- `id` (uuid PK)
+- `campaign_id` (uuid FK -> group_campaigns)
+- `variable_name` (text) - ex: `link_live`
+- `variable_value` (text) - valor atual
+- `updated_at` (timestamptz)
+- UNIQUE(campaign_id, variable_name)
 
-- `group_redirect_links` - Links inteligentes de campanha que redirecionam para grupo com vagas
-  - `id`, `campaign_id` (FK), `slug` (unique), `is_deep_link` (boolean), `click_count`, `redirect_count`, `is_active`, `created_at`
-
-**Alteracoes em tabelas existentes:**
-
-- `whatsapp_groups`: adicionar `max_participants` (int, default 1000), `is_full` (boolean, default false), `invite_link` (text), `only_admins_send` (boolean), `only_admins_add` (boolean)
-- `group_campaigns`: adicionar `send_speed` (text, default 'normal'), `campaign_link_slug` (text), `is_deep_link` (boolean, default false)
-
----
-
-### 2. Edge Function - Agendador de Mensagens (`zapi-group-scheduled-send`)
-
-Nova edge function que:
-- Recebe `scheduledMessageId`
-- Busca a mensagem agendada e seus grupos-alvo (da campanha pai)
-- Envia para cada grupo respeitando a velocidade configurada (slow=8-15s, normal=3-8s, fast=1-3s)
-- Atualiza status de cada envio
+Isso permite programar mensagens com `{{link_live}}` e atualizar o valor da variavel separadamente. Na hora do envio, o edge function substitui as variaveis pelos valores atuais.
 
 ---
 
-### 3. Edge Function - Configuracoes Avancadas de Grupo (`zapi-group-settings` - expandir)
+### 2. Upload Local de Arquivos
 
-Adicionar acoes ao edge function existente:
-- `set-messages-admins-only` - Somente admins enviam mensagens
-- `set-add-admins-only` - Somente admins adicionam participantes
-- `add-participant` - Adicionar participante por telefone
-- `remove-participant` - Remover participante
-- `promote-admin` / `demote-admin` - Promover/rebaixar admin
+Na `ScheduledMessageForm`, trocar o campo "URL da Midia" por um componente que oferece duas opcoes:
+- **URL externa** (campo de texto como hoje)
+- **Upload do computador** (input type="file" que faz upload para o bucket `marketing-attachments` do storage e obtem a URL publica)
 
----
-
-### 4. Edge Function - Redirect Link (`group-redirect-link`)
-
-Nova edge function (ou rota no frontend) que:
-- Recebe o slug do link
-- Busca a campanha e seus grupos
-- Encontra o primeiro grupo nao-cheio
-- Redireciona para o `invite_link` desse grupo
-- Se `is_deep_link`, gera URL no formato `whatsapp://invite/...` ou `intent://` para Android
+Isso ja funciona com o bucket existente `marketing-attachments` (publico).
 
 ---
 
-### 5. Frontend - Refatoracao Completa do `GroupsVipManager.tsx`
+### 3. Fotos dos Grupos
 
-Reorganizar em 3 abas principais:
+A Z-API retorna `imgUrl` ou `profileThumbnail` nos dados do grupo. O `zapi-list-groups` ja faz `photo_url: g.imgUrl || g.profileThumbnail || null`. Se nao esta vindo, pode ser que a Z-API nao retorne por padrao. Vou adicionar uma chamada separada ao endpoint `profile-picture` da Z-API para cada grupo durante a sincronizacao, ou usar o endpoint `group-metadata` que retorna a foto.
 
-**Aba "Grupos":**
-- Lista de grupos com busca, filtros (Todos / VIP / Cheios / Nao Cheios)
-- Selecao multipla com acoes em massa: Marcar VIP, Marcar Cheio/Nao Cheio, Excluir
-- Card expandivel do grupo com:
-  - Botao alterar foto, descricao, nome (usa `zapi-group-settings`)
-  - Toggle "Somente admins enviam" e "Somente admins adicionam"
-  - Lista de participantes com opcao de add/remover/promover admin
-  - Campo para definir max_participants e invite_link
-- Contagem de participantes e indicador visual de grupo cheio
-
-**Aba "Campanhas":**
-- Lista de campanhas existentes com status (rascunho, ativa, concluida)
-- Ao clicar numa campanha, abre painel de detalhes com:
-  - Grupos vinculados (poder adicionar/remover)
-  - Timeline de mensagens agendadas (lista cronologica)
-  - Botao "Adicionar Mensagem" com formulario:
-    - Tipo (texto, imagem, video, audio, documento, enquete)
-    - Conteudo / URL de midia / opcoes de enquete
-    - Data e horario de envio (DateTimePicker)
-    - Geracao por IA
-    - Velocidade de envio (lento/normal/rapido)
-  - Status de cada mensagem (pendente/enviada/falha) com hora de envio
-  - Botao "Enviar Agora" para disparo imediato de uma mensagem
-- Criacao de nova campanha: nome + selecionar grupos
-
-**Aba "Links":**
-- Criar link de campanha (slug personalizado)
-- Toggle deep link
-- Estatisticas: cliques totais, redirecionamentos
-- Copiar link
-- Preview do link gerado
+Alternativa mais eficiente: ao sincronizar, para grupos sem foto, fazer chamada ao endpoint `profile-picture` da Z-API em batch.
 
 ---
 
-### 6. Componentes Auxiliares
+### 4. Gerenciamento em Massa na Campanha
 
-- `GroupSettingsPanel.tsx` - Painel lateral/dialog para configuracoes do grupo (foto, descricao, permissoes, participantes)
-- `CampaignDetailPanel.tsx` - Painel de detalhes da campanha com timeline de mensagens
-- `ScheduledMessageForm.tsx` - Formulario de criacao de mensagem agendada com DateTimePicker
+Adicionar uma secao no `CampaignDetailPanel` com:
+- Botao "Configurar Grupos" que abre painel com acoes em massa:
+  - Alterar foto de todos os grupos
+  - Alterar descricao de todos
+  - Alterar nome (com sufixo automatico ex: "#1", "#2")
+  - Toggle permissoes (admins enviam / admins adicionam) para todos
+
+Cada acao itera sobre os grupos da campanha e chama `zapi-group-settings` sequencialmente.
 
 ---
 
-### 7. Execucao Automatica de Agendamentos
+### 5. Calendario de Mensagens
 
-Como nao temos cron jobs nativos, a execucao de mensagens agendadas pode funcionar de 2 formas:
-- **Client-side polling**: Quando o usuario esta na aba de campanhas, um `setInterval` verifica a cada 60s se ha mensagens com `scheduled_at <= now()` e status `pending`, e dispara a edge function
-- **Manual**: Botao "Enviar Agora" para disparo imediato
+Adicionar uma aba/secao "Calendario" no `CampaignDetailPanel` usando um grid simples de calendario mensal, mostrando as mensagens agendadas em cada dia. Ao clicar no dia, mostra as mensagens daquela data.
+
+---
+
+### 6. Edicao de Mensagens Pendentes
+
+Na lista de mensagens do `CampaignDetailPanel`, adicionar botao de edicao para mensagens com status `pending`. Ao clicar, abre o `ScheduledMessageForm` pre-preenchido. Ao salvar, faz UPDATE em vez de INSERT.
+
+---
+
+### 7. Modelos de Mensagens
+
+Na `ScheduledMessageForm`:
+- Botao "Usar Modelo" que abre um select/dialog com templates salvos
+- Botao "Salvar como Modelo" que salva a mensagem atual como template reutilizavel
+- Templates ficam na tabela `group_message_templates`
+
+---
+
+### 8. Variaveis Dinamicas
+
+Na `ScheduledMessageForm`:
+- Botoes para inserir variaveis no cursor: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, etc.
+- Preview mostra como ficara a mensagem com os valores atuais
+
+No `CampaignDetailPanel`:
+- Secao "Variaveis" onde o usuario define/atualiza os valores das variaveis da campanha
+- Ex: campo "link_live" = "https://youtube.com/live/abc123"
+
+No `zapi-group-scheduled-send`:
+- Antes de enviar, buscar variaveis da campanha e fazer `replace` no conteudo da mensagem
+- `{{nome_grupo}}` substituido pelo nome real do grupo de destino
 
 ---
 
@@ -114,19 +109,18 @@ Como nao temos cron jobs nativos, a execucao de mensagens agendadas pode funcion
 
 | Arquivo | Acao |
 |---|---|
-| Migracao SQL | Criar `group_campaign_scheduled_messages`, `group_redirect_links`; alterar `whatsapp_groups` e `group_campaigns` |
-| `supabase/functions/zapi-group-settings/index.ts` | Expandir com acoes de permissao e participantes |
-| `supabase/functions/zapi-group-scheduled-send/index.ts` | Nova - envio de mensagem agendada |
-| `supabase/functions/group-redirect-link/index.ts` | Nova - redirect inteligente |
-| `src/components/marketing/GroupsVipManager.tsx` | Refatorar completo com 3 abas e novos paineis |
-| `src/components/marketing/GroupSettingsPanel.tsx` | Novo - configuracoes do grupo |
-| `src/components/marketing/CampaignDetailPanel.tsx` | Novo - detalhes da campanha com mensagens |
-| `src/components/marketing/ScheduledMessageForm.tsx` | Novo - formulario de mensagem agendada |
+| Migracao SQL | Criar `group_message_templates`, `campaign_variables` |
+| `src/components/marketing/ScheduledMessageForm.tsx` | Upload local, variaveis, modelos, modo edicao |
+| `src/components/marketing/CampaignDetailPanel.tsx` | Calendario, edicao, gerenciamento em massa de grupos, secao de variaveis |
+| `supabase/functions/zapi-group-scheduled-send/index.ts` | Substituicao de variaveis antes do envio |
+| `supabase/functions/zapi-list-groups/index.ts` | Buscar fotos de perfil via endpoint `profile-picture` |
+| `src/components/marketing/GroupsVipManager.tsx` | Exibir fotos dos grupos nos cards |
 
 ### Detalhes Tecnicos
 
-- Velocidade de envio: `slow` = delay 8-15s entre grupos, `normal` = 3-8s, `fast` = 1-3s (randomizado)
-- Deep link: formato `https://api.whatsapp.com/send?phone=&text=` para links diretos ou `intent://invite/CODE#Intent;scheme=whatsapp;package=com.whatsapp;end` para Android
-- Enquetes usam endpoint Z-API `send-poll` com opcoes
-- O polling client-side de agendamentos roda apenas quando a pagina esta aberta (similar ao disparador de massa existente)
-- Links de redirect usam uma edge function publica (sem JWT) para permitir acesso externo
+- Upload de arquivos: usa `supabase.storage.from('marketing-attachments').upload()` e `getPublicUrl()`
+- Variaveis suportadas inicialmente: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, `{{horario}}`, variaveis customizadas
+- Calendario: grid CSS simples (7 colunas x 5-6 linhas), sem dependencia externa
+- Edicao de mensagens: reutiliza `ScheduledMessageForm` com prop `editingMessage` para pre-preencher
+- Fotos de grupo: tenta `profile-picture/${groupId}` na Z-API durante sync
+
