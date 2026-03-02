@@ -42,6 +42,17 @@ async function tinyV2Post(token: string, endpoint: string, params: Record<string
   }
 }
 
+// Convert BR date (DD/MM/YYYY) to ISO (YYYY-MM-DD)
+function brDateToISO(dateStr: string | undefined | null): string {
+  if (!dateStr) return new Date().toISOString();
+  // Already ISO format
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
+  // BR format DD/MM/YYYY
+  const match = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+  return new Date().toISOString();
+}
+
 function extractItemsV2(pedido: any): any[] {
   const itens = pedido.itens;
   if (!Array.isArray(itens)) return [];
@@ -181,7 +192,7 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
           shopify_order_id: finalShopifyId,
           shopify_order_name: ecomNum ? `#${ecomNum}` : `T-${orderNum}`,
           shopify_order_number: ecomNum || orderNum,
-          shopify_created_at: pedido.data_pedido || pedido.data_criacao || new Date().toISOString(),
+          shopify_created_at: brDateToISO(pedido.data_pedido || pedido.data_criacao),
           customer_name: customerName,
           customer_email: cliente.email || null,
           customer_phone: cliente.fone || cliente.celular || null,
