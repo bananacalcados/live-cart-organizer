@@ -361,7 +361,7 @@ function StepDelivery({ form, setForm, onNext, onBack }: { form: CustomerFormDat
 }
 
 // ── PIX Payment ─────────────────────────────────────────────────
-function PixPaymentForm({ saleId, amount, form, onPaid }: { saleId: string; amount: number; form: CustomerFormData; onPaid: () => void }) {
+function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: string; storeId: string; amount: number; form: CustomerFormData; onPaid: () => void }) {
   const [generating, setGenerating] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
@@ -406,6 +406,28 @@ function PixPaymentForm({ saleId, amount, form, onPaid }: { saleId: string; amou
   const handleGenerate = async () => {
     setGenerating(true);
     try {
+      // Persist customer data to pos_sales BEFORE generating PIX
+      // This ensures data is available even if the customer closes the page after paying
+      const customerPayload = {
+        customer_name: form.fullName,
+        customer_phone: form.whatsapp.replace(/\D/g, ""),
+        payment_details: {
+          customer_name: form.fullName,
+          customer_phone: form.whatsapp.replace(/\D/g, ""),
+          customer_email: form.email,
+          customer_cpf: form.cpf.replace(/\D/g, ""),
+          customer_cep: form.cep.replace(/\D/g, ""),
+          customer_address: form.address,
+          customer_address_number: form.addressNumber,
+          customer_complement: form.complement,
+          customer_neighborhood: form.neighborhood,
+          customer_city: form.city,
+          customer_state: form.state,
+          description: "PIX Checkout Loja",
+        },
+      };
+      await supabase.from("pos_sales").update(customerPayload as any).eq("id", saleId);
+
       const nameParts = form.fullName.split(" ");
       const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
         body: {
@@ -1215,7 +1237,7 @@ export default function StoreCheckout() {
                         <CardPaymentForm saleId={saleData.id} amount={saleData.total} form={customerForm} installmentConfig={installmentConfig} onPaid={handlePaymentConfirmed} />
                       </TabsContent>
                       <TabsContent value="pix" className="mt-4">
-                        <PixPaymentForm saleId={saleData.id} amount={saleData.total} form={customerForm} onPaid={handlePaymentConfirmed} />
+                        <PixPaymentForm saleId={saleData.id} storeId={saleData.store_id} amount={saleData.total} form={customerForm} onPaid={handlePaymentConfirmed} />
                       </TabsContent>
                     </Tabs>
                     <Button variant="ghost" onClick={() => setCurrentStep(2)} className="w-full text-sm text-muted-foreground">← Voltar para Entrega</Button>

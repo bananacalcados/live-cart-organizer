@@ -160,22 +160,126 @@ serve(async (req) => {
         // Fallback: try pos_sales
         const { data: sale } = await supabase
           .from("pos_sales")
-          .select("status")
+          .select("*, store:pos_stores(name)")
           .eq("id", orderId)
           .single();
 
         if (sale && sale.status !== "paid" && sale.status !== "completed") {
+          // Extract customer data from payment_details (saved by frontend before PIX generation)
+          const pd = (sale.payment_details || {}) as Record<string, any>;
+          const customerName = pd.customer_name || sale.customer_name || "";
+          const customerPhone = (pd.customer_phone || sale.customer_phone || "").replace(/\D/g, "");
+          const customerEmail = pd.customer_email || "";
+          const customerCpf = (pd.customer_cpf || "").replace(/\D/g, "");
+
+          // Upsert pos_customer if we have customer data
+          let customerId: string | null = null;
+          if (customerName || customerPhone) {
+            // Try to find existing customer by CPF or phone
+            if (customerCpf) {
+              const { data: existing } = await supabase
+                .from("pos_customers")
+                .select("id")
+                .eq("cpf", customerCpf)
+                .maybeSingle();
+              if (existing) customerId = existing.id;
+            }
+            if (!customerId && customerPhone) {
+              const { data: existing } = await supabase
+                .from("pos_customers")
+                .select("id")
+                .eq("whatsapp", customerPhone)
+                .maybeSingle();
+              if (existing) customerId = existing.id;
+            }
+
+            const customerPayload: Record<string, unknown> = {
+              name: customerName,
+              cpf: customerCpf || null,
+              email: customerEmail || null,
+              whatsapp: customerPhone || null,
+              address: pd.customer_address || null,
+              address_number: pd.customer_address_number || null,
+              complement: pd.customer_complement || null,
+              neighborhood: pd.customer_neighborhood || null,
+              city: pd.customer_city || null,
+              state: pd.customer_state || null,
+              cep: (pd.customer_cep || "").replace(/\D/g, "") || null,
+            };
+
+            if (customerId) {
+              await supabase.from("pos_customers").update(customerPayload).eq("id", customerId);
+            } else {
+              const { data: newCust } = await supabase
+                .from("pos_customers")
+                .insert(customerPayload)
+                .select("id")
+                .single();
+              customerId = newCust?.id || null;
+            }
+          }
+
+          // Update sale status
           await supabase
             .from("pos_sales")
             .update({
               status: "paid",
               expedition_status: "pending",
               payment_gateway: "mercadopago",
+              customer_id: customerId,
               notes: `💳 Pago via PIX Mercado Pago (${paymentId})`,
             })
             .eq("id", orderId);
 
-          console.log("pos_sales marked as paid:", orderId);
+          console.log("pos_sales marked as paid:", orderId, "customer_id:", customerId);
+
+          // Create Tiny order if we have items and store data
+          try {
+            const { data: items } = await supabase
+              .from("pos_sale_items")
+              .select("*")
+              .eq("sale_id", orderId);
+
+            if (items && items.length > 0) {
+              const storeName = (sale.store as any)?.name || "Loja";
+              await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pos-tiny-create-sale`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                },
+                body: JSON.stringify({
+                  store_id: sale.store_id,
+                  sale_id: orderId,
+                  customer: {
+                    name: customerName || "Cliente PIX",
+                    cpf: customerCpf,
+                    email: customerEmail,
+                    whatsapp: customerPhone,
+                    address: pd.customer_address || "",
+                    addressNumber: pd.customer_address_number || "",
+                    complement: pd.customer_complement || "",
+                    neighborhood: pd.customer_neighborhood || "",
+                    cep: (pd.customer_cep || "").replace(/\D/g, ""),
+                    city: pd.customer_city || "",
+                    state: pd.customer_state || "",
+                  },
+                  items: items.map((it: any) => ({
+                    sku: it.sku || "",
+                    name: it.product_name || "",
+                    variant: it.variant_name || "",
+                    quantity: it.quantity,
+                    price: Number(it.unit_price),
+                  })),
+                  payment_method_name: "PIX Mercado Pago",
+                  notes: `PIX Checkout Loja - ${storeName}`,
+                }),
+              });
+              console.log("Tiny order creation triggered for pos_sale:", orderId);
+            }
+          } catch (tinyErr) {
+            console.error("Tiny order creation failed:", tinyErr);
+          }
         }
       }
     }
