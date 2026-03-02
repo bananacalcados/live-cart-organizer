@@ -228,6 +228,7 @@ async function chargeVindi(
       shipping_type: "Envio",
       shipping_price: params.shippingAmount?.toFixed(2) || "0",
       url_notification: `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=vindi`,
+      order_number: params.orderId,
       free: "Pedido via loja",
     },
     payment: {
