@@ -133,15 +133,15 @@ export function GroupsVipManager() {
 
   const createCampaign = async () => {
     if (!newCampaignName.trim()) { toast.error("Nome obrigatório"); return; }
-    if (selectedGroups.length === 0) { toast.error("Selecione ao menos 1 grupo"); return; }
     setIsCreatingCampaign(true);
     try {
+      const groupsToUse = selectedGroups.length > 0 ? selectedGroups : [];
       const { data, error } = await supabase.from('group_campaigns').insert({
         name: newCampaignName,
-        target_groups: selectedGroups,
-        total_groups: selectedGroups.length,
+        target_groups: groupsToUse,
+        total_groups: groupsToUse.length,
         send_speed: newCampaignSpeed,
-        status: 'draft',
+        status: 'active',
       }).select().single();
       if (error) throw error;
       toast.success("Campanha criada!");
@@ -200,14 +200,6 @@ export function GroupsVipManager() {
             <Button variant="outline" size="sm" onClick={syncGroups} disabled={isSyncing} className="gap-1">
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sincronizar
             </Button>
-            <Button size="sm" onClick={() => setShowCreateCampaign(true)} disabled={selectedGroups.length === 0} className="gap-1">
-              <Send className="h-3.5 w-3.5" />Nova Campanha ({selectedGroups.length})
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Checkbox checked={selectedGroups.length === filteredGroups.length && filteredGroups.length > 0} onCheckedChange={handleSelectAll} />
-            <span className="text-xs text-muted-foreground">Selecionar todos ({filteredGroups.length})</span>
           </div>
 
           {isLoading ? (
@@ -317,7 +309,7 @@ export function GroupsVipManager() {
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground">{selectedGroups.length} grupo(s) selecionado(s)</p>
+            <p className="text-[10px] text-muted-foreground">Você poderá selecionar os grupos dentro da campanha</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateCampaign(false)}>Cancelar</Button>

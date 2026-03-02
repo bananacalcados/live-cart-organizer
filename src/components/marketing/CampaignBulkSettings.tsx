@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Loader2, Image, FileText, Shield, UserPlus, Type
+  ArrowLeft, Loader2, Image, FileText, Shield, UserPlus, Type, Upload
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,13 +22,14 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const [bulkName, setBulkName] = useState("");
   const [bulkDescription, setBulkDescription] = useState("");
   const [bulkPhotoUrl, setBulkPhotoUrl] = useState("");
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [onlyAdminsSend, setOnlyAdminsSend] = useState(false);
   const [onlyAdminsAdd, setOnlyAdminsAdd] = useState(false);
 
   const applyToAllGroups = async (action: string, payload: Record<string, unknown>) => {
     setIsApplying(action);
     try {
-      // Fetch group details
       const { data: groups } = await supabase
         .from('whatsapp_groups')
         .select('id, group_id, name')
@@ -42,23 +43,36 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       for (let i = 0; i < groups.length; i++) {
         const group = groups[i];
         try {
-          const body: Record<string, unknown> = { groupId: group.group_id, ...payload };
-
-          // For name with suffix
-          if (action === 'name' && bulkName) {
-            body.name = `${bulkName} #${i + 1}`;
+          if (action === 'permissions') {
+            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
+              method: 'POST',
+              headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ groupId: group.group_id, action: 'set-messages-admins-only', value: String(onlyAdminsSend) }),
+            });
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
+              method: 'POST',
+              headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ groupId: group.group_id, action: 'set-add-admins-only', value: String(onlyAdminsAdd) }),
+            });
+            const data = await res.json();
+            if (res.ok && data.success) success++;
+            else failed++;
+          } else {
+            const body: Record<string, unknown> = { groupId: group.group_id, ...payload };
+            if (action === 'name' && bulkName) {
+              body.action = 'update-name';
+              body.value = `${bulkName} #${i + 1}`;
+            }
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
+              method: 'POST',
+              headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (res.ok && data.success) success++;
+            else failed++;
           }
-
-          const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
-            method: 'POST',
-            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          });
-          const data = await res.json();
-          if (res.ok && data.success) success++;
-          else failed++;
         } catch { failed++; }
-        // Small delay between calls
         await new Promise(r => setTimeout(r, 1000));
       }
 
@@ -85,7 +99,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
             <Input placeholder="Nome base (ex: VIP Banana)" value={bulkName} onChange={e => setBulkName(e.target.value)} />
             <p className="text-[10px] text-muted-foreground">Cada grupo receberá "#1", "#2"... após o nome</p>
             <Button size="sm" disabled={!bulkName.trim() || isApplying === 'name'} className="gap-1"
-              onClick={() => applyToAllGroups('name', { action: 'rename' })}>
+              onClick={() => applyToAllGroups('name', { action: 'update-name' })}>
               {isApplying === 'name' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
               Aplicar Nome
             </Button>
@@ -98,9 +112,39 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
             <CardTitle className="text-xs flex items-center gap-1"><Image className="h-3.5 w-3.5" /> Alterar Foto</CardTitle>
           </CardHeader>
           <CardContent className="p-3 pt-0 space-y-2">
-            <Input placeholder="URL da imagem" value={bulkPhotoUrl} onChange={e => setBulkPhotoUrl(e.target.value)} />
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setIsUploadingPhoto(true);
+                try {
+                  const ext = file.name.split('.').pop();
+                  const path = `group-photos/${Date.now()}.${ext}`;
+                  const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+                  if (error) throw error;
+                  const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+                  setBulkPhotoUrl(urlData.publicUrl);
+                  toast.success("Foto carregada!");
+                } catch { toast.error("Erro ao fazer upload"); }
+                finally { setIsUploadingPhoto(false); }
+              }}
+            />
+            <div className="flex gap-2">
+              <Input placeholder="URL da imagem" value={bulkPhotoUrl} onChange={e => setBulkPhotoUrl(e.target.value)} className="flex-1" />
+              <Button variant="outline" size="sm" onClick={() => photoInputRef.current?.click()} disabled={isUploadingPhoto} className="gap-1 shrink-0">
+                {isUploadingPhoto ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                Upload
+              </Button>
+            </div>
+            {bulkPhotoUrl && (
+              <img src={bulkPhotoUrl} alt="Preview" className="h-16 w-16 rounded-lg object-cover" />
+            )}
             <Button size="sm" disabled={!bulkPhotoUrl.trim() || isApplying === 'photo'} className="gap-1"
-              onClick={() => applyToAllGroups('photo', { action: 'photo', photoUrl: bulkPhotoUrl })}>
+              onClick={() => applyToAllGroups('photo', { action: 'update-photo', value: bulkPhotoUrl })}>
               {isApplying === 'photo' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Image className="h-3.5 w-3.5" />}
               Aplicar Foto
             </Button>
@@ -115,7 +159,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           <CardContent className="p-3 pt-0 space-y-2">
             <Textarea placeholder="Nova descrição..." value={bulkDescription} onChange={e => setBulkDescription(e.target.value)} rows={2} />
             <Button size="sm" disabled={!bulkDescription.trim() || isApplying === 'description'} className="gap-1"
-              onClick={() => applyToAllGroups('description', { action: 'description', description: bulkDescription })}>
+              onClick={() => applyToAllGroups('description', { action: 'update-description', value: bulkDescription })}>
               {isApplying === 'description' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
               Aplicar Descrição
             </Button>
