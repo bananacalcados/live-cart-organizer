@@ -1,74 +1,54 @@
 
+# Criar Webhook da VINDI/Yapay
 
-# Dashboard WhatsApp - Contadores de Status Clicaveis + Filtro Follow Up
+## Situacao Atual
 
-## Resumo
+A funcao `chargeVindi` dentro de `pagarme-create-charge` ja envia o campo `url_notification` apontando para:
+```
+{SUPABASE_URL}/functions/v1/payment-webhook?gateway=vindi
+```
 
-Adicionar 4 contadores clicaveis no dashboard do WhatsApp (Novas Mensagens, Aguardando Resposta, Aguardando Pagamento, Follow Up) que ao clicar levam direto para o chat com o filtro correspondente. Tambem adicionar o novo filtro "Follow Up" na lista de conversas.
+Porem, a edge function `payment-webhook` **nao existe** neste projeto. Isso significa que quando a VINDI/Yapay envia notificacoes de mudanca de status (aprovacao, cancelamento, etc.), elas sao perdidas.
 
-## O que muda
+## O que sera feito
 
-### 1. Novo status "Follow Up" (awaiting_customer renomeado)
+Criar a edge function `payment-webhook` adaptada para este projeto, que:
 
-O status `awaiting_customer` ja existe e significa exatamente "vendedora respondeu e cliente nao falou mais nada". Vamos usar esse status como base para o filtro "Follow Up" na lista de conversas:
+1. **Recebe notificacoes da VINDI/Yapay** via POST com `?gateway=vindi`
+2. **Consulta a API da Yapay** para validar o status real da transacao (usando `token_transaction` e `VINDI_API_KEY`)
+3. **Atualiza `orders` ou `pos_sales`** conforme o status:
+   - Status 6 (Aprovada) ou 87 (Em Monitoramento) -> marca como pago
+   - Status 7, 13, 14, 88, 89 (Cancelada/Estornada/Rejeitada/Fraude) -> marca como falha
+4. **Registra log em `pos_checkout_attempts`** para rastreabilidade no monitor de checkout
 
-- **Novas Mensagens** = `not_started` (cliente mandou msg e ninguem respondeu)
-- **Aguardando Resposta** = `awaiting_reply` (vendedora ja conversou, cliente respondeu, mas ninguem viu/respondeu)
-- **Aguardando Pagamento** = `awaiting_payment` (link/pix enviado, sem pagamento)
-- **Follow Up** = `awaiting_customer` (vendedora respondeu, cliente sumiu)
-
-### 2. Dashboard - Contadores clicaveis
-
-No `POSWhatsAppDashboard.tsx`, adicionar uma nova secao acima dos KPIs com 4 cards/botoes grandes e coloridos:
-
-- Cada card mostra o icone, titulo e contagem em tempo real
-- Ao clicar, chama `onGoToChat` passando o filtro correspondente
-- Os dados vem das conversas carregadas no momento (mesma logica do `ConversationList`)
-
-Para isso, o dashboard precisa carregar as conversas e calcular os contadores. A prop `onGoToChat` sera expandida para aceitar um filtro opcional: `onGoToChat(filter?: ConversationStatusFilter)`.
-
-### 3. ConversationList - Novo filtro "Follow Up"
-
-Adicionar "Follow Up" como nova aba nos `STATUS_TABS` da `ConversationList`, mapeando para `awaiting_customer`.
-
-### 4. POSWhatsApp - Conectar o fluxo
-
-Quando o dashboard chamar `onGoToChat('not_started')` por exemplo, o `POSWhatsApp` vai:
-1. Fechar o dashboard (`setShowDashboard(false)`)
-2. Setar o `statusFilter` correspondente
-
----
+A funcao tambem suportara os gateways `pagarme` e `appmax` como rota unificada, evitando duplicacao com os webhooks existentes (que continuam funcionando independentemente).
 
 ## Detalhes Tecnicos
 
-### Arquivos modificados
+### Arquivo novo
+- `supabase/functions/payment-webhook/index.ts`
 
-**`src/components/chat/ChatTypes.ts`**
-- Nenhuma mudanca necessaria - os tipos ja suportam tudo
+### Configuracao
+- Adicionar `[functions.payment-webhook]` com `verify_jwt = false` no `config.toml` (automatico pelo deploy)
 
-**`src/components/chat/ConversationList.tsx`**
-- Adicionar entrada `{ value: 'awaiting_customer', label: 'Follow Up', shortLabel: 'Follow Up' }` no array `STATUS_TABS` (antes de `awaiting_payment`)
+### Logica VINDI/Yapay
+A VINDI pode enviar o payload como JSON ou form-urlencoded. A funcao tentara parsear ambos formatos para extrair o `token_transaction` e `status_id`. Em seguida, consulta a API da Yapay para confirmar o status antes de atualizar o banco.
 
-**`src/components/pos/POSWhatsAppDashboard.tsx`**
-- Mudar prop `onGoToChat` de `() => void` para `(filter?: ConversationStatusFilter) => void`
-- Adicionar carregamento de conversas (query `whatsapp_messages` + `chat_finished_conversations` + `chat_awaiting_payment`) para calcular contagens
-- Usar o hook `useConversationEnrichment` para computar status das conversas
-- Renderizar 4 cards clicaveis no topo: Novas, Aguardando Resposta, Aguardando Pagamento, Follow Up
-- Cada card com cor distinta, icone e contagem
-- Clicar chama `onGoToChat(filtro)`
+### Mapeamento de status VINDI/Yapay
+```text
+6  = Aprovada         -> marca como pago
+87 = Em Monitoramento -> marca como pago
+7  = Cancelada        -> marca como falha
+13 = Cancelamento Manual -> marca como falha
+14 = Estornada        -> marca como falha
+88 = Rejeitada        -> marca como falha
+89 = Fraude           -> marca como falha
+```
 
-**`src/components/pos/POSWhatsApp.tsx`**
-- Alterar o handler `onGoToChat` do dashboard para aceitar filtro:
-  ```
-  onGoToChat={(filter) => {
-    setShowDashboard(false);
-    if (filter) setStatusFilter(filter);
-  }}
-  ```
+### Fluxo de atualizacao
+1. Tenta localizar o pedido em `orders` (pelo `token_transaction` nas `notes`)
+2. Se nao encontrar, tenta em `pos_sales`
+3. Atualiza status e registra em `pos_checkout_attempts`
 
-### Cores dos contadores
-- Novas Mensagens: azul (blue-500)
-- Aguardando Resposta: amarelo/amber (amber-500)
-- Aguardando Pagamento: roxo/violeta (violet-500)
-- Follow Up: laranja (orange-500)
-
+### Nenhuma mudanca no banco de dados
+A funcao usa tabelas ja existentes (`orders`, `pos_sales`, `pos_checkout_attempts`).
