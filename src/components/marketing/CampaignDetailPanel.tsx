@@ -7,7 +7,8 @@ import { ptBR } from "date-fns/locale";
 import {
   ArrowLeft, Plus, Play, Clock, CheckCircle, XCircle, Loader2,
   Trash2, Users, Send, Link as LinkIcon, Copy, Edit, Calendar as CalendarIcon,
-  Variable, Settings, ChevronLeft, ChevronRight, Search
+  Variable, Settings, ChevronLeft, ChevronRight, Search,
+  UserPlus, UserMinus, Percent, BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScheduledMessageForm, type ScheduledMessageData } from "./ScheduledMessageForm";
 import { CampaignBulkSettings } from "./CampaignBulkSettings";
+import { CampaignDashboard } from "./CampaignDashboard";
 
 interface CampaignDetailPanelProps {
   campaignId: string;
@@ -319,14 +321,20 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       </div>
 
       <ScrollArea className="h-[calc(100vh-300px)]">
-        <Tabs defaultValue="messages" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="overview" className="text-xs">Visão Geral</TabsTrigger>
             <TabsTrigger value="groups" className="text-xs">Grupos</TabsTrigger>
             <TabsTrigger value="messages" className="text-xs">Mensagens</TabsTrigger>
             <TabsTrigger value="calendar" className="text-xs">Calendário</TabsTrigger>
             <TabsTrigger value="variables" className="text-xs">Variáveis</TabsTrigger>
             <TabsTrigger value="links" className="text-xs">Links</TabsTrigger>
           </TabsList>
+
+          {/* OVERVIEW / DASHBOARD TAB */}
+          <TabsContent value="overview" className="space-y-4">
+            <CampaignDashboard targetGroups={targetGroups} allGroups={allGroups} links={links} messages={messages} campaignId={campaignId} />
+          </TabsContent>
 
           {/* GROUPS TAB */}
           <TabsContent value="groups" className="space-y-3">
