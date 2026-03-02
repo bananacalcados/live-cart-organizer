@@ -1,54 +1,43 @@
 
-# Criar Webhook da VINDI/Yapay
+# Migrar Expedição Beta de OAuth v3 para Token Fixo v2
 
-## Situacao Atual
+## Problema
+A Expedição Beta usa a API v3 do Tiny com OAuth, cujo refresh token expira apos ~30 dias de inatividade, exigindo reautenticacao manual. Isso cria uma manutencao recorrente inaceitavel.
 
-A funcao `chargeVindi` dentro de `pagarme-create-charge` ja envia o campo `url_notification` apontando para:
-```
-{SUPABASE_URL}/functions/v1/payment-webhook?gateway=vindi
-```
+## Solucao
+Migrar a funcao `expedition-beta-initial-sync` para usar o token fixo `TINY_ERP_TOKEN` (API v2), que **nunca expira** e ja esta configurado como secret no projeto.
 
-Porem, a edge function `payment-webhook` **nao existe** neste projeto. Isso significa que quando a VINDI/Yapay envia notificacoes de mudanca de status (aprovacao, cancelamento, etc.), elas sao perdidas.
+A API v2 do Tiny permite buscar pedidos por status e obter detalhes completos (itens, cliente, endereco), fornecendo os mesmos dados que a v3 fornece hoje.
 
-## O que sera feito
+## Mudancas
 
-Criar a edge function `payment-webhook` adaptada para este projeto, que:
+### Arquivo: `supabase/functions/expedition-beta-initial-sync/index.ts`
 
-1. **Recebe notificacoes da VINDI/Yapay** via POST com `?gateway=vindi`
-2. **Consulta a API da Yapay** para validar o status real da transacao (usando `token_transaction` e `VINDI_API_KEY`)
-3. **Atualiza `orders` ou `pos_sales`** conforme o status:
-   - Status 6 (Aprovada) ou 87 (Em Monitoramento) -> marca como pago
-   - Status 7, 13, 14, 88, 89 (Cancelada/Estornada/Rejeitada/Fraude) -> marca como falha
-4. **Registra log em `pos_checkout_attempts`** para rastreabilidade no monitor de checkout
+**Remover:**
+- Funcao `getTinyV3Token()` (OAuth + refresh)
+- Todas as chamadas a `TINY_V3_BASE` (`api.tiny.com.br/public-api/v3`)
+- Dependencia de `app_settings.tiny_app_token`
 
-A funcao tambem suportara os gateways `pagarme` e `appmax` como rota unificada, evitando duplicacao com os webhooks existentes (que continuam funcionando independentemente).
+**Adicionar:**
+- Uso de `TINY_ERP_TOKEN` via `Deno.env.get()`
+- Chamadas a API v2 do Tiny (`https://api.tiny.com.br/api2/pedidos.pesquisa.php` e `pedido.obter.php`)
+- Mesma logica de mapeamento de dados (cliente, itens, status) adaptada para o formato de resposta v2
 
-## Detalhes Tecnicos
+### Endpoints v2 utilizados
 
-### Arquivo novo
-- `supabase/functions/payment-webhook/index.ts`
+1. **Pesquisar pedidos**: `POST api2/pedidos.pesquisa.php` com `token`, `formato=json`, `situacao` (Aprovado/Enviado/etc)
+2. **Obter detalhes**: `POST api2/pedido.obter.php` com `token`, `formato=json`, `id`
 
-### Configuracao
-- Adicionar `[functions.payment-webhook]` com `verify_jwt = false` no `config.toml` (automatico pelo deploy)
+### Mapeamento de dados v2 para v3
 
-### Logica VINDI/Yapay
-A VINDI pode enviar o payload como JSON ou form-urlencoded. A funcao tentara parsear ambos formatos para extrair o `token_transaction` e `status_id`. Em seguida, consulta a API da Yapay para confirmar o status antes de atualizar o banco.
+O formato v2 retorna dados em estrutura ligeiramente diferente da v3. A funcao sera adaptada para:
+- Extrair cliente de `pedido.cliente` (v2) em vez do objeto v3
+- Extrair itens de `pedido.itens[].item` (v2) em vez do array v3
+- Mapear situacoes por nome ("Aprovado", "Enviado", "Cancelado") em vez de IDs numericos
+- Manter o mesmo schema de gravacao em `expedition_beta_orders` e `expedition_beta_order_items`
 
-### Mapeamento de status VINDI/Yapay
-```text
-6  = Aprovada         -> marca como pago
-87 = Em Monitoramento -> marca como pago
-7  = Cancelada        -> marca como falha
-13 = Cancelamento Manual -> marca como falha
-14 = Estornada        -> marca como falha
-88 = Rejeitada        -> marca como falha
-89 = Fraude           -> marca como falha
-```
-
-### Fluxo de atualizacao
-1. Tenta localizar o pedido em `orders` (pelo `token_transaction` nas `notes`)
-2. Se nao encontrar, tenta em `pos_sales`
-3. Atualiza status e registra em `pos_checkout_attempts`
-
-### Nenhuma mudanca no banco de dados
-A funcao usa tabelas ja existentes (`orders`, `pos_sales`, `pos_checkout_attempts`).
+### Impacto
+- **Zero mudanca no frontend** -- o componente `ExpeditionBeta.tsx` continua chamando a mesma funcao
+- **Zero mudanca no banco** -- as tabelas permanecem identicas
+- **Elimina completamente** a necessidade de reconexao OAuth
+- O token v2 `TINY_ERP_TOKEN` ja esta configurado e funcionando para outras funcoes do sistema
