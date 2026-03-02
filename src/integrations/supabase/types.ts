@@ -1888,6 +1888,7 @@ export type Database = {
           notes: string | null
           picking_list_id: string | null
           shipping_address: Json | null
+          shipping_method: string | null
           shopify_created_at: string | null
           shopify_order_id: string
           shopify_order_name: string | null
@@ -1924,6 +1925,7 @@ export type Database = {
           notes?: string | null
           picking_list_id?: string | null
           shipping_address?: Json | null
+          shipping_method?: string | null
           shopify_created_at?: string | null
           shopify_order_id: string
           shopify_order_name?: string | null
@@ -1960,6 +1962,7 @@ export type Database = {
           notes?: string | null
           picking_list_id?: string | null
           shipping_address?: Json | null
+          shipping_method?: string | null
           shopify_created_at?: string | null
           shopify_order_id?: string
           shopify_order_name?: string | null

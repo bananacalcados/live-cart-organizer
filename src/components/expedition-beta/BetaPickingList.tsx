@@ -62,6 +62,15 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
     const term = searchTerm.toLowerCase();
     if (term && !(o.shopify_order_name?.toLowerCase().includes(term) || o.customer_name?.toLowerCase().includes(term))) return false;
     return true;
+  }).sort((a, b) => {
+    // Priority: SEDEX/MOTOTAXISTA first, then PAC, then others
+    const getPriority = (o: any) => {
+      const m = (o.shipping_method || '').toUpperCase();
+      if (m.includes('SEDEX') || m.includes('MOTOTAXISTA')) return 0;
+      if (m.includes('PAC')) return 2;
+      return 1;
+    };
+    return getPriority(a) - getPriority(b);
   });
 
   relevantOrders.forEach(order => {

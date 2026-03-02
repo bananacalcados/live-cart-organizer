@@ -417,10 +417,28 @@ serve(async (req) => {
     console.log("=== PASS 3: Cancelled ===");
     const cancelled = await passCancelled(token, supabase, existingMap, startTime);
 
+    // Auto-enrich shipping info from Shopify
+    let enrichResult = null;
+    try {
+      const enrichUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/expedition-enrich-shipping`;
+      const enrichResp = await fetch(enrichUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      });
+      enrichResult = await enrichResp.json();
+      console.log('Shipping enrichment result:', JSON.stringify(enrichResult));
+    } catch (enrichErr: any) {
+      console.error('Shipping enrichment error (non-blocking):', enrichErr.message);
+    }
+
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`Done in ${elapsed}s: ${cleaned} cleaned, ${synced} synced, ${skipped} skipped, ${dispatched} dispatched, ${cancelled} cancelled`);
 
-    return new Response(JSON.stringify({ success: true, synced, skipped, dispatched, cancelled, cleaned, elapsed }), {
+    return new Response(JSON.stringify({ success: true, synced, skipped, dispatched, cancelled, cleaned, elapsed, enrichResult }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {

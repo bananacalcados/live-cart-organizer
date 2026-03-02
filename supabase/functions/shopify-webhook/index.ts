@@ -77,10 +77,11 @@ serve(async (req) => {
                   total_discount: parseFloat(body.total_discounts || "0"),
                   total_shipping: (body.shipping_lines || []).reduce((s: number, l: any) => s + parseFloat(l.price || "0"), 0),
                   total_weight_grams: body.total_weight || 0,
-                  has_gift: body.note?.toLowerCase().includes("brinde") || body.tags?.toLowerCase().includes("gift") || false,
-                })
-                .select()
-                .single();
+                 has_gift: body.note?.toLowerCase().includes("brinde") || body.tags?.toLowerCase().includes("gift") || false,
+                 shipping_method: (body.shipping_lines || [])[0]?.title || null,
+                 })
+                 .select()
+                 .single();
 
               if (inserted && body.line_items?.length > 0) {
                 const betaItems = body.line_items.map((li: any) => ({
