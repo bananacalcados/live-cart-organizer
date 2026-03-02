@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay } from "date-fns";
+import { cn } from "@/lib/utils";
 import { ptBR } from "date-fns/locale";
 import {
   ArrowLeft, Plus, Play, Clock, CheckCircle, XCircle, Loader2,
-  Trash2, Users, Send, Link as LinkIcon, Copy
+  Trash2, Users, Send, Link as LinkIcon, Copy, Edit, Calendar as CalendarIcon,
+  Variable, Settings, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +17,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScheduledMessageForm, type ScheduledMessageData } from "./ScheduledMessageForm";
+import { CampaignBulkSettings } from "./CampaignBulkSettings";
 
 interface CampaignDetailPanelProps {
   campaignId: string;
@@ -46,6 +50,12 @@ interface RedirectLink {
   is_active: boolean;
 }
 
+interface CampaignVariable {
+  id: string;
+  variable_name: string;
+  variable_value: string;
+}
+
 const STATUS_ICONS: Record<string, React.ReactNode> = {
   pending: <Clock className="h-3.5 w-3.5 text-amber-500" />,
   sending: <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />,
@@ -63,10 +73,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [campaign, setCampaign] = useState<any>(null);
   const [messages, setMessages] = useState<ScheduledMessage[]>([]);
   const [links, setLinks] = useState<RedirectLink[]>([]);
+  const [variables, setVariables] = useState<CampaignVariable[]>([]);
   const [showMessageForm, setShowMessageForm] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<ScheduledMessage | null>(null);
   const [isSending, setIsSending] = useState<string | null>(null);
   const [newSlug, setNewSlug] = useState("");
   const [isCreatingLink, setIsCreatingLink] = useState(false);
+  const [newVarName, setNewVarName] = useState("");
+  const [newVarValue, setNewVarValue] = useState("");
+  const [showBulkSettings, setShowBulkSettings] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
 
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
@@ -91,7 +107,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setLinks((data || []) as RedirectLink[]);
   }, [campaignId]);
 
-  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); }, [fetchCampaign, fetchMessages, fetchLinks]);
+  const fetchVariables = useCallback(async () => {
+    const { data } = await supabase
+      .from('campaign_variables')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .order('variable_name');
+    setVariables((data || []) as CampaignVariable[]);
+  }, [campaignId]);
+
+  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables]);
 
   // Polling for pending messages
   useEffect(() => {
@@ -130,6 +155,26 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
     if (error) throw error;
     toast.success("Mensagem agendada!");
+    fetchMessages();
+  };
+
+  const handleUpdateMessage = async (id: string, data: ScheduledMessageData) => {
+    const [hours, minutes] = data.scheduledTime.split(':').map(Number);
+    const scheduledAt = new Date(data.scheduledAt);
+    scheduledAt.setHours(hours, minutes, 0, 0);
+
+    const { error } = await supabase.from('group_campaign_scheduled_messages').update({
+      message_type: data.messageType,
+      message_content: data.messageContent,
+      media_url: data.mediaUrl || null,
+      poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+      scheduled_at: scheduledAt.toISOString(),
+      send_speed: data.sendSpeed,
+    }).eq('id', id);
+
+    if (error) throw error;
+    toast.success("Mensagem atualizada!");
+    setEditingMessage(null);
     fetchMessages();
   };
 
@@ -194,7 +239,42 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     toast.success("Link copiado!");
   };
 
+  const addVariable = async () => {
+    if (!newVarName.trim()) { toast.error("Nome obrigatório"); return; }
+    const { error } = await supabase.from('campaign_variables').upsert({
+      campaign_id: campaignId,
+      variable_name: newVarName.trim().toLowerCase().replace(/\s+/g, '_'),
+      variable_value: newVarValue,
+    }, { onConflict: 'campaign_id,variable_name' });
+    if (error) { toast.error("Erro ao salvar variável"); return; }
+    toast.success("Variável salva!");
+    setNewVarName(""); setNewVarValue("");
+    fetchVariables();
+  };
+
+  const updateVariable = async (id: string, value: string) => {
+    await supabase.from('campaign_variables').update({ variable_value: value }).eq('id', id);
+    fetchVariables();
+  };
+
+  const deleteVariable = async (id: string) => {
+    await supabase.from('campaign_variables').delete().eq('id', id);
+    fetchVariables();
+  };
+
   const groupCount = campaign?.target_groups?.length || 0;
+
+  // Calendar helpers
+  const monthStart = startOfMonth(calendarMonth);
+  const monthEnd = endOfMonth(calendarMonth);
+  const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const startDayOfWeek = getDay(monthStart); // 0=Sun
+
+  const getMessagesForDay = (day: Date) => messages.filter(m => isSameDay(new Date(m.scheduled_at), day));
+
+  if (showBulkSettings) {
+    return <CampaignBulkSettings campaignId={campaignId} targetGroups={campaign?.target_groups || []} onBack={() => setShowBulkSettings(false)} />;
+  }
 
   return (
     <div className="space-y-4">
@@ -207,18 +287,26 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             <Users className="h-3 w-3" /> {groupCount} grupos
           </p>
         </div>
-        <Button size="sm" onClick={() => setShowMessageForm(true)} className="gap-1">
-          <Plus className="h-3.5 w-3.5" /> Agendar Mensagem
+        <Button variant="outline" size="sm" onClick={() => setShowBulkSettings(true)} className="gap-1">
+          <Settings className="h-3.5 w-3.5" /> Configurar Grupos
+        </Button>
+        <Button size="sm" onClick={() => { setEditingMessage(null); setShowMessageForm(true); }} className="gap-1">
+          <Plus className="h-3.5 w-3.5" /> Agendar
         </Button>
       </div>
 
       <ScrollArea className="h-[calc(100vh-300px)]">
-        <div className="space-y-4">
-          {/* Messages Timeline */}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">
-              MENSAGENS ({messages.length})
-            </p>
+        <Tabs defaultValue="messages" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="messages" className="text-xs">Mensagens</TabsTrigger>
+            <TabsTrigger value="calendar" className="text-xs">Calendário</TabsTrigger>
+            <TabsTrigger value="variables" className="text-xs">Variáveis</TabsTrigger>
+            <TabsTrigger value="links" className="text-xs">Links</TabsTrigger>
+          </TabsList>
+
+          {/* MESSAGES TAB */}
+          <TabsContent value="messages" className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">MENSAGENS ({messages.length})</p>
             {messages.length === 0 ? (
               <Card><CardContent className="py-8 text-center">
                 <Send className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
@@ -251,6 +339,10 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                           {msg.status === 'pending' && (
                             <>
                               <Button variant="outline" size="icon" className="h-7 w-7"
+                                onClick={() => { setEditingMessage(msg); setShowMessageForm(true); }}>
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button variant="outline" size="icon" className="h-7 w-7"
                                 onClick={() => sendMessage(msg.id)} disabled={isSending === msg.id}>
                                 {isSending === msg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
                               </Button>
@@ -273,54 +365,120 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 ))}
               </div>
             )}
-          </div>
+          </TabsContent>
 
-          <Separator />
+          {/* CALENDAR TAB */}
+          <TabsContent value="calendar" className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1))}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <p className="text-sm font-medium">{format(calendarMonth, "MMMM yyyy", { locale: ptBR })}</p>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1))}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-7 gap-px text-center">
+              {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(d => (
+                <div key={d} className="text-[10px] font-medium text-muted-foreground py-1">{d}</div>
+              ))}
+              {Array.from({ length: startDayOfWeek }).map((_, i) => <div key={`empty-${i}`} />)}
+              {days.map(day => {
+                const dayMsgs = getMessagesForDay(day);
+                return (
+                  <div key={day.toISOString()} className={cn(
+                    "min-h-[48px] p-1 border rounded text-[10px]",
+                    isSameDay(day, new Date()) && "bg-primary/10 border-primary/30"
+                  )}>
+                    <p className="font-medium">{day.getDate()}</p>
+                    {dayMsgs.slice(0, 2).map(m => (
+                      <div key={m.id} className={cn("rounded px-0.5 mt-0.5 truncate",
+                        m.status === 'sent' ? 'bg-emerald-500/20' : m.status === 'pending' ? 'bg-amber-500/20' : 'bg-muted'
+                      )}>
+                        {format(new Date(m.scheduled_at), "HH:mm")}
+                      </div>
+                    ))}
+                    {dayMsgs.length > 2 && <p className="text-muted-foreground">+{dayMsgs.length - 2}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          </TabsContent>
 
-          {/* Links */}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">
-              LINKS DE REDIRECIONAMENTO
+          {/* VARIABLES TAB */}
+          <TabsContent value="variables" className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground">VARIÁVEIS DA CAMPANHA</p>
+            <p className="text-[10px] text-muted-foreground">
+              Use <code className="bg-muted px-1 rounded">{`{{nome_variavel}}`}</code> nas mensagens. O valor é substituído na hora do envio.
             </p>
-            <div className="flex gap-2 mb-3">
+            {variables.map(v => (
+              <div key={v.id} className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[10px] shrink-0">{`{{${v.variable_name}}}`}</Badge>
+                <Input className="flex-1 h-8 text-xs" value={v.variable_value}
+                  onChange={e => {
+                    setVariables(prev => prev.map(x => x.id === v.id ? { ...x, variable_value: e.target.value } : x));
+                  }}
+                  onBlur={e => updateVariable(v.id, e.target.value)}
+                  placeholder="Valor da variável..." />
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0"
+                  onClick={() => deleteVariable(v.id)}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+            <Separator />
+            <div className="flex gap-2">
+              <Input className="h-8 text-xs" placeholder="nome_variavel" value={newVarName} onChange={e => setNewVarName(e.target.value)} />
+              <Input className="h-8 text-xs flex-1" placeholder="Valor" value={newVarValue} onChange={e => setNewVarValue(e.target.value)} />
+              <Button size="sm" className="h-8" onClick={addVariable}><Plus className="h-3.5 w-3.5" /></Button>
+            </div>
+          </TabsContent>
+
+          {/* LINKS TAB */}
+          <TabsContent value="links" className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground">LINKS DE REDIRECIONAMENTO</p>
+            <div className="flex gap-2">
               <Input placeholder="slug-do-link" value={newSlug} onChange={e => setNewSlug(e.target.value)} className="flex-1" />
               <Button size="sm" onClick={createLink} disabled={isCreatingLink} className="gap-1">
                 {isCreatingLink ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LinkIcon className="h-3.5 w-3.5" />}
                 Criar
               </Button>
             </div>
-            {links.length > 0 && (
-              <div className="space-y-2">
-                {links.map(link => (
-                  <Card key={link.id}>
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium truncate">/{link.slug}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {link.click_count} cliques · {link.redirect_count} redirecionamentos
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1">
-                            <Label className="text-[10px]">Deep Link</Label>
-                            <Switch checked={link.is_deep_link} onCheckedChange={v => toggleDeepLink(link.id, v)} />
-                          </div>
-                          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => copyLink(link.slug)}>
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </div>
+            {links.map(link => (
+              <Card key={link.id}>
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">/{link.slug}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {link.click_count} cliques · {link.redirect_count} redirecionamentos
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <Label className="text-[10px]">Deep Link</Label>
+                        <Switch checked={link.is_deep_link} onCheckedChange={v => toggleDeepLink(link.id, v)} />
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => copyLink(link.slug)}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </TabsContent>
+        </Tabs>
       </ScrollArea>
 
-      <ScheduledMessageForm open={showMessageForm} onOpenChange={setShowMessageForm} onSubmit={handleAddMessage} />
+      <ScheduledMessageForm
+        open={showMessageForm}
+        onOpenChange={open => { setShowMessageForm(open); if (!open) setEditingMessage(null); }}
+        onSubmit={handleAddMessage}
+        editingMessage={editingMessage}
+        onUpdate={handleUpdateMessage}
+        campaignId={campaignId}
+      />
     </div>
   );
 }

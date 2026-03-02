@@ -662,6 +662,38 @@ export type Database = {
           },
         ]
       }
+      campaign_variables: {
+        Row: {
+          campaign_id: string
+          id: string
+          updated_at: string
+          variable_name: string
+          variable_value: string
+        }
+        Insert: {
+          campaign_id: string
+          id?: string
+          updated_at?: string
+          variable_name: string
+          variable_value?: string
+        }
+        Update: {
+          campaign_id?: string
+          id?: string
+          updated_at?: string
+          variable_name?: string
+          variable_value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_variables_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "group_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_landing_pages: {
         Row: {
           categories: Json
@@ -2878,6 +2910,36 @@ export type Database = {
           target_groups?: string[] | null
           total_groups?: number | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      group_message_templates: {
+        Row: {
+          created_at: string
+          id: string
+          media_url: string | null
+          message_content: string | null
+          message_type: string
+          name: string
+          poll_options: Json | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          media_url?: string | null
+          message_content?: string | null
+          message_type?: string
+          name: string
+          poll_options?: Json | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          media_url?: string | null
+          message_content?: string | null
+          message_type?: string
+          name?: string
+          poll_options?: Json | null
         }
         Relationships: []
       }
