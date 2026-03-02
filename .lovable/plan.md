@@ -1,89 +1,132 @@
 
+## Sistema Completo de Gerenciamento de Grupos VIP (estilo SendFlow)
 
-## Rastreamento Progressivo de Dados do Cliente no Checkout e Unificacao de Pedidos
+### Visao Geral
 
-### Problema Atual
-1. Quando o cliente abre o link do checkout, um pedido `online_pending` e criado sem dados do cliente
-2. Os dados do cliente so sao salvos apos pagamento aprovado, criando um segundo registro
-3. Na aba Pedidos, nao e possivel ver em qual etapa do checkout o cliente parou
-4. Na aba Envios, aparecem pedidos que ainda nao foram pagos
-5. Nao ha botao para apagar envios
+Reconstruir o modulo de Grupos VIP para ter funcionalidades equivalentes ao SendFlow, com foco em: campanhas persistentes com multiplas mensagens agendadas, gerenciamento completo de configuracoes dos grupos, sistema de links inteligentes (deep link + redirect quando grupo cheio), e controle de velocidade de envio.
 
 ---
 
-### Plano de Implementacao
+### 1. Migracao de Banco de Dados
 
-### 1. Migracao de Banco - Adicionar colunas em `pos_sales`
+**Novas tabelas:**
 
-Adicionar 3 novas colunas na tabela `pos_sales`:
-- `customer_name` (text, nullable) - nome do cliente preenchido no checkout
-- `customer_phone` (text, nullable) - telefone do cliente
-- `checkout_step` (smallint, default 0) - etapa atual do cliente no checkout (0=abriu link, 1=preencheu identificacao, 2=preencheu entrega, 3=pagamento)
+- `group_campaign_scheduled_messages` - Mensagens programadas dentro de uma campanha (cada campanha pode ter N mensagens agendadas em datas/horarios diferentes)
+  - `id`, `campaign_id` (FK), `message_type` (text/image/video/audio/document/poll), `message_content`, `media_url`, `poll_options` (jsonb), `scheduled_at` (timestamptz), `status` (pending/sent/failed/cancelled), `sent_at`, `send_speed` (slow/normal/fast), `created_at`
 
----
+- `group_redirect_links` - Links inteligentes de campanha que redirecionam para grupo com vagas
+  - `id`, `campaign_id` (FK), `slug` (unique), `is_deep_link` (boolean), `click_count`, `redirect_count`, `is_active`, `created_at`
 
-### 2. Frontend - Salvar dados a cada etapa do checkout (`StoreCheckout.tsx`)
+**Alteracoes em tabelas existentes:**
 
-**Etapa 1 (Identificacao):** Ao clicar "Ir para Entrega", salvar no `pos_sales`:
-- `customer_name`, `customer_phone` (via `payment_details`)
-- `checkout_step = 1`
-- Atualizar `payment_details` com nome, email, CPF, WhatsApp
-
-**Etapa 2 (Entrega):** Ao clicar "Ir para Pagamento", salvar:
-- `checkout_step = 2`
-- Atualizar `payment_details` com endereco completo (CEP, rua, numero, bairro, cidade, estado)
-- Atualizar `shipping_address` com os dados de endereco
-
-**Etapa 3 (Pagamento):** Ao entrar na tela de pagamento:
-- `checkout_step = 3`
-
-**Ao carregar o checkout:** Marcar `checkout_step = 0` se ainda nao houver valor
-
-Isso garante que, mesmo se o cliente abandonar, os dados preenchidos ja estarao salvos no pedido.
+- `whatsapp_groups`: adicionar `max_participants` (int, default 1000), `is_full` (boolean, default false), `invite_link` (text), `only_admins_send` (boolean), `only_admins_add` (boolean)
+- `group_campaigns`: adicionar `send_speed` (text, default 'normal'), `campaign_link_slug` (text), `is_deep_link` (boolean, default false)
 
 ---
 
-### 3. Unificacao de pedidos - Evitar duplicacao
+### 2. Edge Function - Agendador de Mensagens (`zapi-group-scheduled-send`)
 
-Atualmente, `handlePaymentConfirmed` em `StoreCheckout.tsx` atualiza o status do pedido existente para `completed` e faz upsert do cliente. O problema de duplicacao pode vir do webhook `mercadopago-check-payment` criando outro registro. 
-
-Garantir que:
-- O webhook `mercadopago-check-payment` apenas atualize o `pos_sales` existente (pelo `sale_id` ja passado), sem criar novo
-- No `handlePaymentConfirmed`, nao criar novo pedido - apenas atualizar o existente (ja e assim no codigo atual, confirmar que nao ha duplicacao)
-
----
-
-### 4. Aba Pedidos (`POSDailySales.tsx`) - Mostrar etapa do checkout e nome do cliente
-
-No card de cada pedido `online_pending`:
-- Mostrar o nome do cliente direto do campo `customer_name` da `pos_sales` (sem precisar buscar `pos_customers`)
-- Mostrar badge indicando a etapa: "Etapa 1/3", "Etapa 2/3", "Etapa 3/3" com cores diferentes
-- Para pedidos sem `checkout_step` ou `checkout_step = 0`: "Abriu link"
-
-Atualizar a query de `loadData` e a interface `SaleSummary` para incluir `customer_name` e `checkout_step`.
+Nova edge function que:
+- Recebe `scheduledMessageId`
+- Busca a mensagem agendada e seus grupos-alvo (da campanha pai)
+- Envia para cada grupo respeitando a velocidade configurada (slow=8-15s, normal=3-8s, fast=1-3s)
+- Atualiza status de cada envio
 
 ---
 
-### 5. Aba Envios (`POSShipments.tsx`) - Somente pedidos pagos + botao excluir
+### 3. Edge Function - Configuracoes Avancadas de Grupo (`zapi-group-settings` - expandir)
 
-**Filtro de status:** Alterar a query de `fetchOrders` para filtrar apenas pedidos com status `paid` ou `completed` (remover `pending_pickup` e `online_pending` se nao pagos).
-
-**Botao Excluir:** Adicionar um botao de exclusao dentro do card expandido de cada envio, com confirmacao (Dialog) antes de deletar. A exclusao remove o registro de `pos_sales` e seus `pos_sale_items`.
+Adicionar acoes ao edge function existente:
+- `set-messages-admins-only` - Somente admins enviam mensagens
+- `set-add-admins-only` - Somente admins adicionam participantes
+- `add-participant` - Adicionar participante por telefone
+- `remove-participant` - Remover participante
+- `promote-admin` / `demote-admin` - Promover/rebaixar admin
 
 ---
 
-### Resumo dos Arquivos
+### 4. Edge Function - Redirect Link (`group-redirect-link`)
 
-| Arquivo | Alteracao |
+Nova edge function (ou rota no frontend) que:
+- Recebe o slug do link
+- Busca a campanha e seus grupos
+- Encontra o primeiro grupo nao-cheio
+- Redireciona para o `invite_link` desse grupo
+- Se `is_deep_link`, gera URL no formato `whatsapp://invite/...` ou `intent://` para Android
+
+---
+
+### 5. Frontend - Refatoracao Completa do `GroupsVipManager.tsx`
+
+Reorganizar em 3 abas principais:
+
+**Aba "Grupos":**
+- Lista de grupos com busca, filtros (Todos / VIP / Cheios / Nao Cheios)
+- Selecao multipla com acoes em massa: Marcar VIP, Marcar Cheio/Nao Cheio, Excluir
+- Card expandivel do grupo com:
+  - Botao alterar foto, descricao, nome (usa `zapi-group-settings`)
+  - Toggle "Somente admins enviam" e "Somente admins adicionam"
+  - Lista de participantes com opcao de add/remover/promover admin
+  - Campo para definir max_participants e invite_link
+- Contagem de participantes e indicador visual de grupo cheio
+
+**Aba "Campanhas":**
+- Lista de campanhas existentes com status (rascunho, ativa, concluida)
+- Ao clicar numa campanha, abre painel de detalhes com:
+  - Grupos vinculados (poder adicionar/remover)
+  - Timeline de mensagens agendadas (lista cronologica)
+  - Botao "Adicionar Mensagem" com formulario:
+    - Tipo (texto, imagem, video, audio, documento, enquete)
+    - Conteudo / URL de midia / opcoes de enquete
+    - Data e horario de envio (DateTimePicker)
+    - Geracao por IA
+    - Velocidade de envio (lento/normal/rapido)
+  - Status de cada mensagem (pendente/enviada/falha) com hora de envio
+  - Botao "Enviar Agora" para disparo imediato de uma mensagem
+- Criacao de nova campanha: nome + selecionar grupos
+
+**Aba "Links":**
+- Criar link de campanha (slug personalizado)
+- Toggle deep link
+- Estatisticas: cliques totais, redirecionamentos
+- Copiar link
+- Preview do link gerado
+
+---
+
+### 6. Componentes Auxiliares
+
+- `GroupSettingsPanel.tsx` - Painel lateral/dialog para configuracoes do grupo (foto, descricao, permissoes, participantes)
+- `CampaignDetailPanel.tsx` - Painel de detalhes da campanha com timeline de mensagens
+- `ScheduledMessageForm.tsx` - Formulario de criacao de mensagem agendada com DateTimePicker
+
+---
+
+### 7. Execucao Automatica de Agendamentos
+
+Como nao temos cron jobs nativos, a execucao de mensagens agendadas pode funcionar de 2 formas:
+- **Client-side polling**: Quando o usuario esta na aba de campanhas, um `setInterval` verifica a cada 60s se ha mensagens com `scheduled_at <= now()` e status `pending`, e dispara a edge function
+- **Manual**: Botao "Enviar Agora" para disparo imediato
+
+---
+
+### Resumo de Arquivos
+
+| Arquivo | Acao |
 |---|---|
-| Migracao SQL | Adicionar `customer_name`, `customer_phone`, `checkout_step` em `pos_sales` |
-| `src/pages/StoreCheckout.tsx` | Salvar dados progressivamente a cada etapa via update no `pos_sales` |
-| `src/components/pos/POSDailySales.tsx` | Mostrar `customer_name` e badge de etapa nos pedidos `online_pending` |
-| `src/components/pos/POSShipments.tsx` | Filtrar somente pagos; adicionar botao excluir com confirmacao |
+| Migracao SQL | Criar `group_campaign_scheduled_messages`, `group_redirect_links`; alterar `whatsapp_groups` e `group_campaigns` |
+| `supabase/functions/zapi-group-settings/index.ts` | Expandir com acoes de permissao e participantes |
+| `supabase/functions/zapi-group-scheduled-send/index.ts` | Nova - envio de mensagem agendada |
+| `supabase/functions/group-redirect-link/index.ts` | Nova - redirect inteligente |
+| `src/components/marketing/GroupsVipManager.tsx` | Refatorar completo com 3 abas e novos paineis |
+| `src/components/marketing/GroupSettingsPanel.tsx` | Novo - configuracoes do grupo |
+| `src/components/marketing/CampaignDetailPanel.tsx` | Novo - detalhes da campanha com mensagens |
+| `src/components/marketing/ScheduledMessageForm.tsx` | Novo - formulario de mensagem agendada |
 
 ### Detalhes Tecnicos
 
-- As colunas `customer_name` e `customer_phone` em `pos_sales` sao redundantes com `payment_details`, mas permitem queries diretas e exibicao rapida sem parse de JSON
-- `checkout_step` como `smallint` (0-3) e leve e indexavel
-- A exclusao de envios deleta o `pos_sales` inteiro (e cascade nos items) - sera confirmada via Dialog
-- O salvamento progressivo usa `supabase.from('pos_sales').update(...)` com o `saleId` ja disponivel no checkout
+- Velocidade de envio: `slow` = delay 8-15s entre grupos, `normal` = 3-8s, `fast` = 1-3s (randomizado)
+- Deep link: formato `https://api.whatsapp.com/send?phone=&text=` para links diretos ou `intent://invite/CODE#Intent;scheme=whatsapp;package=com.whatsapp;end` para Android
+- Enquetes usam endpoint Z-API `send-poll` com opcoes
+- O polling client-side de agendamentos roda apenas quando a pagina esta aberta (similar ao disparador de massa existente)
+- Links de redirect usam uma edge function publica (sem JWT) para permitir acesso externo
