@@ -119,28 +119,19 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
   const [stockCheckRequest, setStockCheckRequest] = useState<{ sku: string; name: string; variant: string; qty: number; orderNames: string[]; orderIds: string[] } | null>(null);
   const [stockCorrection, setStockCorrection] = useState<{ sku: string; name: string; variant: string; stores: StockInfo[] } | null>(null);
 
-  // Load stock from local pos_products cache (fast) instead of calling Tiny API
+  // Stable SKU list for dependencies
+  const skuList = sortedItems.map(([, item]) => item.sku).filter(s => s && s.length > 0);
+  const skuKey = skuList.join(',');
+
+  // Load stock from local pos_products cache in batches to avoid URL length limits
   const loadStock = useCallback(async () => {
-    const skus = sortedItems
-      .map(([, item]) => item.sku)
-      .filter(s => s && s.length > 0);
-    
-    if (skus.length === 0) return;
+    if (skuList.length === 0) return;
 
     setLoadingStock(true);
     try {
-      const [{ data: bySku }, { data: byBarcode }] = await Promise.all([
-        supabase
-          .from('pos_products')
-          .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
-          .in('sku', skus),
-        supabase
-          .from('pos_products')
-          .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
-          .in('barcode', skus),
-      ]);
-
+      const BATCH_SIZE = 30; // Keep URLs short
       const allStock: Record<string, StockInfo[]> = {};
+
       const addProduct = (p: any, matchedKey: string) => {
         const storeName = p.pos_stores?.name || 'Desconhecida';
         const depositName = p.pos_stores?.tiny_deposit_name || '';
@@ -150,31 +141,46 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
         }
       };
 
-      (bySku || []).forEach((p: any) => addProduct(p, p.sku));
-      (byBarcode || []).forEach((p: any) => addProduct(p, p.barcode));
+      // Process all batches in parallel
+      const batchPromises: Promise<void>[] = [];
+      for (let i = 0; i < skuList.length; i += BATCH_SIZE) {
+        const batch = skuList.slice(i, i + BATCH_SIZE);
+        batchPromises.push(
+          Promise.all([
+            supabase
+              .from('pos_products')
+              .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
+              .in('sku', batch),
+            supabase
+              .from('pos_products')
+              .select('sku, barcode, stock, store_id, pos_stores:store_id(name, tiny_deposit_name)')
+              .in('barcode', batch),
+          ]).then(([{ data: bySku }, { data: byBarcode }]) => {
+            (bySku || []).forEach((p: any) => addProduct(p, p.sku));
+            (byBarcode || []).forEach((p: any) => addProduct(p, p.barcode));
+          })
+        );
+      }
 
+      await Promise.all(batchPromises);
       setStockData(allStock);
     } catch (err) {
       console.error('Failed to load stock:', err);
     } finally {
       setLoadingStock(false);
     }
-  }, [sortedItems.length]);
+  }, [skuKey]);
 
   // Refresh stock from Tiny API (manual, slower but real-time)
   const handleRefreshStockFromTiny = useCallback(async () => {
-    const skus = sortedItems
-      .map(([, item]) => item.sku)
-      .filter(s => s && s.length > 0);
-    
-    if (skus.length === 0) return;
+    if (skuList.length === 0) return;
 
     setLoadingStock(true);
     toast.info('Buscando estoque em tempo real do Tiny ERP...');
     try {
-      const allStock: Record<string, StockInfo[]> = { ...stockData };
-      for (let i = 0; i < skus.length; i += 10) {
-        const batch = skus.slice(i, i + 10);
+      const allStock: Record<string, StockInfo[]> = {};
+      for (let i = 0; i < skuList.length; i += 10) {
+        const batch = skuList.slice(i, i + 10);
         const { data, error } = await supabase.functions.invoke('expedition-check-stock', {
           body: { skus: batch }
         });
@@ -183,7 +189,7 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
         }
         if (error) console.error('Stock check error:', error);
       }
-      setStockData(allStock);
+      setStockData(prev => ({ ...prev, ...allStock }));
       toast.success('Estoque atualizado em tempo real!');
     } catch (err: any) {
       console.error('Failed to refresh stock:', err);
@@ -191,13 +197,14 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
     } finally {
       setLoadingStock(false);
     }
-  }, [sortedItems.length, stockData]);
+  }, [skuKey]);
 
+  // Auto-load stock when SKUs change
   useEffect(() => {
-    if (sortedItems.length > 0 && Object.keys(stockData).length === 0) {
+    if (skuList.length > 0) {
       loadStock();
     }
-  }, [sortedItems.length]);
+  }, [skuKey]);
 
   // Realtime
   useEffect(() => {
