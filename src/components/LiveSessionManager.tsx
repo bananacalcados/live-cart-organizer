@@ -1082,7 +1082,7 @@ export function LiveSessionManager() {
                           {paymentPlatform && (
                             <Badge variant="secondary" className="text-[10px] gap-1">
                               <Store className="w-3 h-3" />
-                              {paymentPlatform === "pagarme" ? "Pagar.me" : paymentPlatform === "appmax" ? "APPMAX" : paymentPlatform === "mercadopago" ? "Mercado Pago" : paymentPlatform}
+                              {paymentPlatform === "pagarme" ? "Pagar.me" : paymentPlatform === "vindi" ? "VINDI" : paymentPlatform === "appmax" ? "APPMAX" : paymentPlatform === "mercadopago" ? "Mercado Pago" : paymentPlatform}
                             </Badge>
                           )}
                           {paymentMethod && (

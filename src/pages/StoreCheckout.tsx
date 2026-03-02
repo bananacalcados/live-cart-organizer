@@ -573,7 +573,9 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
         transaction_id: data.transactionId || null,
         metadata: { cpf: form.cpf, cep: form.cep, address: form.address, address_number: form.addressNumber, complement: form.complement, neighborhood: form.neighborhood, city: form.city, state: form.state },
       } as any).then(() => {});
-      toast.success(`Pagamento aprovado via ${(data.gateway || "pagarme").toUpperCase()}!`);
+      const gw = data.gateway || "pagarme";
+      const gwLabel = gw === "pagarme" ? "Pagar.me" : gw === "vindi" ? "VINDI" : gw === "appmax" ? "APPMAX" : gw.toUpperCase();
+      toast.success(`Pagamento aprovado via ${gwLabel}!`);
       onPaid();
     } catch (e: any) {
       // On timeout/error, poll the backend to check if the payment was actually approved
