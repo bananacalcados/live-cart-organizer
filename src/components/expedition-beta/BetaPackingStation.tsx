@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, ScanBarcode, Camera, Package, Loader2, PackageCheck, PackageMinus, PackageX, Search, Users, Gift } from 'lucide-react';
+import { CheckCircle2, ScanBarcode, Camera, Package, Loader2, PackageCheck, PackageMinus, PackageX, Search, Users, Gift, Truck } from 'lucide-react';
 
 const Barcode = lazy(() => import('react-barcode'));
 
@@ -65,14 +65,33 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
   const [activeCategory, setActiveCategory] = useState<PackingCategory>('all');
   const [productScanInput, setProductScanInput] = useState('');
   const [isConfirming, setIsConfirming] = useState(false);
+  const [shippingFilter, setShippingFilter] = useState('all');
   const inputRef = useRef<HTMLInputElement>(null);
   const productScanRef = useRef<HTMLInputElement>(null);
 
-  const filtered = orders.filter(o => {
+  const shippingFiltered = orders.filter(o => {
+    if (shippingFilter === 'priority') {
+      const m = (o.shipping_method || '').toUpperCase();
+      return m.includes('SEDEX') || m.includes('MOTOTAXISTA');
+    } else if (shippingFilter === 'no_method') {
+      return !o.shipping_method;
+    } else if (shippingFilter !== 'all') {
+      return o.shipping_method === shippingFilter;
+    }
+    return true;
+  });
+
+  const filtered = shippingFiltered.filter(o => {
     const term = searchTerm.toLowerCase();
     if (term && !(o.shopify_order_name?.toLowerCase().includes(term) || o.customer_name?.toLowerCase().includes(term))) return false;
     return ['approved', 'grouped', 'picked', 'awaiting_stock'].includes(o.expedition_status);
   });
+
+  const shippingMethods = useMemo(() => {
+    const methods = new Set<string>();
+    orders.forEach(o => { if (o.shipping_method) methods.add(o.shipping_method); });
+    return Array.from(methods).sort();
+  }, [orders]);
 
   const customerGroups = useMemo(() => groupOrdersByCustomer(filtered), [filtered]);
 
@@ -215,6 +234,26 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
             </div>
           </CardContent>
         </Card>
+
+        {/* Shipping filter */}
+        <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
+          <Button size="sm" variant={shippingFilter === 'all' ? 'default' : 'outline'} onClick={() => setShippingFilter('all')} className="text-xs shrink-0 gap-1">
+            <Truck className="h-3 w-3" /> Todos
+          </Button>
+          <Button size="sm" variant={shippingFilter === 'priority' ? 'default' : 'outline'} onClick={() => setShippingFilter('priority')} className={`text-xs shrink-0 gap-1 ${shippingFilter === 'priority' ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground' : ''}`}>
+            🚀 Rápidos
+          </Button>
+          {shippingMethods.map(m => (
+            <Button key={m} size="sm" variant={shippingFilter === m ? 'default' : 'outline'} onClick={() => setShippingFilter(m)} className="text-xs shrink-0">
+              {m}
+            </Button>
+          ))}
+          {orders.some(o => !o.shipping_method) && (
+            <Button size="sm" variant={shippingFilter === 'no_method' ? 'default' : 'outline'} onClick={() => setShippingFilter('no_method')} className="text-xs shrink-0">
+              Sem frete
+            </Button>
+          )}
+        </div>
 
         <Tabs value={activeCategory} onValueChange={(v) => setActiveCategory(v as PackingCategory)}>
           <TabsList className="grid w-full grid-cols-4">
