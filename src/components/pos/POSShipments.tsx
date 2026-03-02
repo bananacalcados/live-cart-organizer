@@ -7,11 +7,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import {
   Loader2, Package, CheckCircle2, Clock, Truck, Search,
   ChevronDown, ChevronUp, MapPin, Phone, User, DollarSign,
-  PackageCheck, Send, Eye, RefreshCw
+  PackageCheck, Send, Eye, RefreshCw, Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -90,6 +90,8 @@ export function POSShipments({ storeId }: Props) {
   const [trackingInput, setTrackingInput] = useState('');
   const [shippingNotesInput, setShippingNotesInput] = useState('');
   const [showTrackingDialog, setShowTrackingDialog] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -99,7 +101,7 @@ export function POSShipments({ storeId }: Props) {
         .select('*')
         .eq('store_id', storeId)
         .in('sale_type', ['online', 'pickup'])
-        .in('status', ['pending_pickup', 'completed', 'paid'])
+        .in('status', ['completed', 'paid'])
         .order('created_at', { ascending: false })
         .limit(200);
 
@@ -223,6 +225,22 @@ export function POSShipments({ storeId }: Props) {
       toast.error(e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteShipment = async (id: string) => {
+    setDeleting(true);
+    try {
+      await supabase.from('pos_sale_items').delete().eq('sale_id', id);
+      await supabase.from('pos_sales').delete().eq('id', id);
+      toast.success('Envio excluído com sucesso');
+      setDeleteConfirmId(null);
+      setExpandedId(null);
+      fetchOrders();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao excluir');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -443,6 +461,14 @@ export function POSShipments({ storeId }: Props) {
                             Enviado {order.shipped_at ? new Date(order.shipped_at).toLocaleDateString('pt-BR') : ''}
                           </Badge>
                         )}
+                        <Button
+                          variant="outline"
+                          onClick={() => setDeleteConfirmId(order.id)}
+                          className="gap-1 border-red-300 text-red-600 hover:bg-red-50 text-xs"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Excluir
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -490,6 +516,33 @@ export function POSShipments({ storeId }: Props) {
               Confirmar Despacho
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
+        <DialogContent className="bg-white border-gray-300 text-black max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-4 w-4" /> Excluir Envio
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Tem certeza que deseja excluir este envio? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)} className="border-gray-300 text-gray-700">
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => deleteConfirmId && handleDeleteShipment(deleteConfirmId)}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 text-white gap-1"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Excluir
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

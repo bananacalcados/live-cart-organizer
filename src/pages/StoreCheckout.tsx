@@ -752,7 +752,16 @@ export default function StoreCheckout() {
     if (!storeId || !saleId) { setLoading(false); return; }
     loadSale();
     loadInstallmentConfig();
+    // Mark checkout_step = 0 when the checkout page loads
+    supabase.from("pos_sales").update({ checkout_step: 0 } as any).eq("id", saleId).then(() => {});
   }, [storeId, saleId]);
+
+  // Update checkout_step when currentStep changes to 3
+  useEffect(() => {
+    if (currentStep === 3 && saleId) {
+      supabase.from("pos_sales").update({ checkout_step: 3 } as any).eq("id", saleId).then(() => {});
+    }
+  }, [currentStep, saleId]);
 
   const loadSale = async () => {
     try {
@@ -1176,47 +1185,52 @@ export default function StoreCheckout() {
               <CardContent className="p-6">
                 {currentStep === 1 && (
                   <StepIdentification form={customerForm} setForm={setCustomerForm} onNext={() => {
-                    // Save customer data progressively when advancing to Step 2
+                    // Save customer data progressively to pos_sales when advancing to Step 2
                     if (saleData) {
-                      supabase.from("pos_checkout_attempts").insert({
-                        sale_id: saleData.id,
-                        payment_method: "pending",
-                        status: "in_progress",
-                        amount: saleData.total,
+                      supabase.from("pos_sales").update({
                         customer_name: customerForm.fullName,
-                        customer_phone: customerForm.whatsapp,
-                        customer_email: customerForm.email,
-                        gateway: "store-checkout",
-                        metadata: { cpf: customerForm.cpf },
-                      } as any).then(() => {});
+                        customer_phone: customerForm.whatsapp.replace(/\D/g, ""),
+                        checkout_step: 1,
+                        payment_details: {
+                          customer_name: customerForm.fullName,
+                          customer_phone: customerForm.whatsapp.replace(/\D/g, ""),
+                          customer_email: customerForm.email,
+                          customer_cpf: customerForm.cpf.replace(/\D/g, ""),
+                        },
+                      } as any).eq("id", saleData.id).then(() => {});
                     }
                     setCurrentStep(2);
                   }} prefilled={!!saleData.customer_name} />
                 )}
                 {currentStep === 2 && (
                   <StepDelivery form={customerForm} setForm={setCustomerForm} onNext={() => {
-                    // Update checkout attempt with address data when advancing to Step 3
+                    // Save address data to pos_sales when advancing to Step 3
                     if (saleData) {
-                      supabase.from("pos_checkout_attempts").insert({
-                        sale_id: saleData.id,
-                        payment_method: "pending",
-                        status: "in_progress",
-                        amount: saleData.total,
-                        customer_name: customerForm.fullName,
-                        customer_phone: customerForm.whatsapp,
-                        customer_email: customerForm.email,
-                        gateway: "store-checkout",
-                        metadata: {
-                          cpf: customerForm.cpf,
-                          cep: customerForm.cep,
+                      supabase.from("pos_sales").update({
+                        checkout_step: 2,
+                        payment_details: {
+                          customer_name: customerForm.fullName,
+                          customer_phone: customerForm.whatsapp.replace(/\D/g, ""),
+                          customer_email: customerForm.email,
+                          customer_cpf: customerForm.cpf.replace(/\D/g, ""),
+                          customer_cep: customerForm.cep.replace(/\D/g, ""),
+                          customer_address: customerForm.address,
+                          customer_address_number: customerForm.addressNumber,
+                          customer_complement: customerForm.complement,
+                          customer_neighborhood: customerForm.neighborhood,
+                          customer_city: customerForm.city,
+                          customer_state: customerForm.state,
+                        },
+                        shipping_address: {
+                          cep: customerForm.cep.replace(/\D/g, ""),
                           address: customerForm.address,
-                          address_number: customerForm.addressNumber,
+                          number: customerForm.addressNumber,
                           complement: customerForm.complement,
                           neighborhood: customerForm.neighborhood,
                           city: customerForm.city,
                           state: customerForm.state,
                         },
-                      } as any).then(() => {});
+                      } as any).eq("id", saleData.id).then(() => {});
                     }
                     setCurrentStep(3);
                   }} onBack={() => setCurrentStep(1)} />
