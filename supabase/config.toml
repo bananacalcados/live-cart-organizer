@@ -209,3 +209,6 @@ verify_jwt = false
 
 [functions.appmax-webhook]
 verify_jwt = false
+
+[functions.payment-webhook]
+verify_jwt = false
