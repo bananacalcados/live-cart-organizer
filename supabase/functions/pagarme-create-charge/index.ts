@@ -36,6 +36,7 @@ interface ChargeRequest {
   };
   billingAddress: BillingAddress;
   totalAmountCents: number;
+  shippingAmount?: number;
 }
 
 // ── Pagar.me tokenize + charge ──────────────────────────────────
@@ -185,6 +186,85 @@ async function chargePagarme(
 }
 
 
+// ── VINDI / Yapay Intermediador fallback ────────────────────────
+async function chargeVindi(
+  params: ChargeRequest,
+  products: Array<{ title: string; price: number; quantity: number }>,
+  tokenAccount: string
+): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  const cpf = params.customer.cpf.replace(/\D/g, "");
+  const phone = params.customer.phone.replace(/\D/g, "");
+
+  const body = {
+    token_account: tokenAccount,
+    customer: {
+      name: params.customer.name,
+      cpf,
+      email: params.customer.email,
+      contacts: [
+        { type_contact: "M", number_contact: phone },
+      ],
+      addresses: [
+        {
+          type_address: "B",
+          postal_code: params.billingAddress.zipCode.replace(/\D/g, ""),
+          street: params.billingAddress.street,
+          number: params.billingAddress.number,
+          neighborhood: params.billingAddress.neighborhood || "N/A",
+          city: params.billingAddress.city,
+          state: params.billingAddress.state,
+        },
+      ],
+    },
+    transaction_product: products.map((p, i) => ({
+      description: p.title.substring(0, 255),
+      quantity: String(p.quantity),
+      price_unit: p.price.toFixed(2),
+      code: String(i + 1),
+    })),
+    transaction: {
+      available_payment_methods: "3,4,5,16,18,20,25",
+      customer_ip: "0.0.0.0",
+      shipping_type: "Envio",
+      shipping_price: params.shippingAmount?.toFixed(2) || "0",
+      url_notification: `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=vindi`,
+      free: "Pedido via loja",
+    },
+    payment: {
+      payment_method_id: "3",
+      card_name: params.card.holderName.toUpperCase(),
+      card_number: params.card.number.replace(/\s/g, ""),
+      card_expdate_month: params.card.expMonth.toString().padStart(2, "0"),
+      card_expdate_year: params.card.expYear.toString().length === 2 ? `20${params.card.expYear}` : String(params.card.expYear),
+      card_cvv: params.card.cvv,
+      split: String(params.installments),
+      card_holder_doc: cpf,
+    },
+  };
+
+  const res = await fetch("https://api.intermediador.yapay.com.br/api/v3/transactions/payment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json();
+  console.log("VINDI/Yapay response:", JSON.stringify(data).substring(0, 1500));
+
+  if (data?.message_response?.message === "success") {
+    const tx = data?.data_response?.transaction;
+    const statusId = tx?.status_id;
+    // 4=Aguardando, 6=Aprovada, 24=Aguardando confirmação, 87=Em Monitoramento
+    if (statusId === 6 || statusId === 87) {
+      return { success: true, gateway: "vindi", transactionId: String(tx.token_transaction) };
+    }
+    return { success: false, gateway: "vindi", error: tx?.status_name || "Transação não aprovada" };
+  }
+
+  const errorMsg = data?.message_response?.message || data?.error_response?.general_errors?.[0]?.message || "Erro Yapay/VINDI";
+  return { success: false, gateway: "vindi", error: errorMsg };
+}
+
 // ── APPMAX fallback (3-step API: customer → order → payment) ────
 async function chargeAppmax(
   params: ChargeRequest,
@@ -244,7 +324,7 @@ async function chargeAppmax(
         "access-token": accessToken,
         customer_id: customerId,
         products: orderProducts,
-        shipping: 0,
+        shipping: params.shippingAmount || 0,
         custom_reference: params.orderId,
       }),
     });
@@ -412,27 +492,50 @@ serve(async (req) => {
     };
 
     // Try Pagar.me first
+    const fallbackErrors: string[] = [];
     const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY") || "";
     let result = await chargePagarme(chargeParams, products, pagarmeKey);
 
-    // Fallback chain: Pagar.me -> AppMax
+    // Fallback chain: Pagar.me -> VINDI -> AppMax
     if (!result.success) {
-      const pagarmeError = result.error;
-      console.log(`Pagar.me failed: ${pagarmeError}. Trying APPMAX fallback...`);
+      if (result.error) fallbackErrors.push(`Pagar.me: ${result.error}`);
+      console.log(`[FALLBACK] Pagar.me NAO processou (${result.error}). Tentando VINDI/Yapay...`);
 
-      // Try AppMax
+      const vindiKey = Deno.env.get("VINDI_API_KEY") || "";
+      if (vindiKey) {
+        const vindiResult = await chargeVindi(chargeParams, products, vindiKey);
+        if (vindiResult.success) {
+          console.log(`[FALLBACK] VINDI/Yapay APROVOU (tx: ${vindiResult.transactionId}). Parando fallback.`);
+          result = vindiResult;
+        } else {
+          if (vindiResult.error) fallbackErrors.push(`VINDI: ${vindiResult.error}`);
+          console.log(`[FALLBACK] VINDI/Yapay NAO processou (${vindiResult.error}).`);
+        }
+      } else {
+        console.log("[FALLBACK] VINDI API key not configured. Skipping.");
+      }
+    }
+
+    // PROTEÇÃO: só tenta AppMax se NENHUM gateway anterior capturou o pagamento
+    if (!result.success) {
+      console.log(`[FALLBACK] Nenhum gateway anterior aprovou. Tentando APPMAX...`);
       const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
       if (appmaxToken) {
         const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken);
         if (appmaxResult.success) {
+          console.log(`[FALLBACK] APPMAX APROVOU (tx: ${appmaxResult.transactionId}). Parando fallback.`);
           result = appmaxResult;
+        } else if (appmaxResult.error) {
+          fallbackErrors.push(`APPMAX: ${appmaxResult.error}`);
+          console.log(`[FALLBACK] APPMAX NAO processou (${appmaxResult.error}).`);
         }
+      } else {
+        console.log("[FALLBACK] APPMAX access token not configured. Skipping.");
       }
+    }
 
-      // If all failed, use the most descriptive error
-      if (!result.success) {
-        result.error = pagarmeError || result.error || "Pagamento recusado em todos os gateways";
-      }
+    if (!result.success) {
+      result.error = fallbackErrors[0] || result.error || "Pagamento recusado em todos os gateways";
     }
 
     if (result.success) {

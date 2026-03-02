@@ -646,7 +646,7 @@ function CardPaymentForm({
       if (error) throw new Error(typeof error === 'object' && error.message ? error.message : String(error));
 
       if (data?.success) {
-        toast.success(`Pagamento aprovado via ${data.gateway === 'pagarme' ? 'Pagar.me' : 'APPMAX'}!`);
+        toast.success(`Pagamento aprovado via ${data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
         onPaymentConfirmed({ platform: data.gateway || "pagarme", method: "credit_card", customerData: {
           name: form.fullName, email: form.email, cpf: form.cpf.replace(/\D/g, ""), phone: form.whatsapp.replace(/\D/g, ""),
           address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
