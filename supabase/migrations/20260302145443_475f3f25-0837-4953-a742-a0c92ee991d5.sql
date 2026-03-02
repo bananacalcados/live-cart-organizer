@@ -1,0 +1,1 @@
+ALTER TABLE public.expedition_beta_orders ADD COLUMN shipping_method TEXT;

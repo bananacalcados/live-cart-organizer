@@ -6,7 +6,26 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Trash2, Unlink, Clock, ArrowRight, Gift, Radio, RotateCcw } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Trash2, Unlink, Clock, ArrowRight, Gift, Radio, RotateCcw, Truck } from 'lucide-react';
+
+function ShippingBadge({ method }: { method: string }) {
+  const upper = method.toUpperCase();
+  const isHighPriority = upper.includes('SEDEX') || upper.includes('MOTOTAXISTA');
+  const isPac = upper.includes('PAC');
+  
+  const colorClass = isHighPriority
+    ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800'
+    : isPac
+    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+    : 'bg-gray-100 text-gray-700 dark:bg-gray-800/30 dark:text-gray-400 border-gray-200 dark:border-gray-700';
+
+  return (
+    <Badge variant="outline" className={`text-[10px] gap-1 mt-0.5 ${colorClass}`}>
+      <Truck className="h-3 w-3" />
+      {method}
+    </Badge>
+  );
+}
 
 const Barcode = lazy(() => import('react-barcode'));
 
@@ -369,9 +388,16 @@ function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onTogg
               {order.is_from_live && <Radio className="h-3.5 w-3.5 text-red-500" />}
               {order.ean13_barcode && <Badge variant="outline" className="text-[10px] gap-1">EAN-13 ✓</Badge>}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {order.customer_name} • {items.length} itens • R$ {Number(order.total_price || 0).toFixed(2)}
-            </p>
+             <p className="text-xs text-muted-foreground mt-0.5">
+               {order.customer_name}
+               {order.shopify_created_at && (
+                 <span className="ml-1">• {new Date(order.shopify_created_at).toLocaleDateString('pt-BR')}</span>
+               )}
+               {' '}• {items.length} itens • R$ {Number(order.total_price || 0).toFixed(2)}
+             </p>
+             {order.shipping_method && order.shipping_method !== 'N/A' && (
+               <ShippingBadge method={order.shipping_method} />
+             )}
           </div>
         </div>
         {isExpanded ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
