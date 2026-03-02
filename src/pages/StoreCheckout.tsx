@@ -981,6 +981,8 @@ export default function StoreCheckout() {
     const itemSavings = fullSubtotal - subtotal;
     const totalSavings = itemSavings + saleData.discount_amount;
     const shippingAmount = saleData.shipping_amount || 0;
+    const netProductSubtotal = subtotal - saleData.discount_amount;
+    const totalPaid = netProductSubtotal + shippingAmount;
     const displayName = customerForm.fullName || saleData.customer_name;
     const displayPhone = customerForm.whatsapp || saleData.customer_phone;
     const whatsappLink = displayPhone
@@ -1012,7 +1014,7 @@ export default function StoreCheckout() {
           <Card className="border-green-500/30 bg-green-500/5">
             <CardContent className="py-5 text-center space-y-1">
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Valor pago</p>
-              <p className="text-4xl font-black text-green-600">R$ {saleData.total.toFixed(2)}</p>
+              <p className="text-4xl font-black text-green-600">R$ {totalPaid.toFixed(2)}</p>
               {totalSavings > 0 && (
                 <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs font-semibold">
                   🎁 Você economizou R$ {totalSavings.toFixed(2)}
@@ -1074,7 +1076,7 @@ export default function StoreCheckout() {
                 )}
                 <div className="flex justify-between font-bold text-sm pt-1 border-t">
                   <span>Total</span>
-                  <span className="text-primary">R$ {saleData.total.toFixed(2)}</span>
+                  <span className="text-primary">R$ {totalPaid.toFixed(2)}</span>
                 </div>
               </div>
             </CardContent>
@@ -1248,10 +1250,20 @@ export default function StoreCheckout() {
                         <TabsTrigger value="pix" className="flex items-center gap-2"><QrCode className="h-4 w-4" /> PIX</TabsTrigger>
                       </TabsList>
                       <TabsContent value="card" className="mt-4">
-                        <CardPaymentForm saleId={saleData.id} amount={saleData.total} form={customerForm} installmentConfig={installmentConfig} onPaid={handlePaymentConfirmed} />
+                        {(() => {
+                          const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
+                          const netProduct = subtotal - saleData.discount_amount;
+                          const totalWithShipping = netProduct + (saleData.shipping_amount || 0);
+                          return <CardPaymentForm saleId={saleData.id} amount={totalWithShipping} form={customerForm} installmentConfig={installmentConfig} onPaid={handlePaymentConfirmed} />;
+                        })()}
                       </TabsContent>
                       <TabsContent value="pix" className="mt-4">
-                        <PixPaymentForm saleId={saleData.id} storeId={saleData.store_id} amount={saleData.total} form={customerForm} onPaid={handlePaymentConfirmed} />
+                        {(() => {
+                          const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
+                          const netProduct = subtotal - saleData.discount_amount;
+                          const totalWithShipping = netProduct + (saleData.shipping_amount || 0);
+                          return <PixPaymentForm saleId={saleData.id} storeId={saleData.store_id} amount={totalWithShipping} form={customerForm} onPaid={handlePaymentConfirmed} />;
+                        })()}
                       </TabsContent>
                     </Tabs>
                     <Button variant="ghost" onClick={() => setCurrentStep(2)} className="w-full text-sm text-muted-foreground">← Voltar para Entrega</Button>

@@ -32,6 +32,7 @@ serve(async (req) => {
     let discountType: string | null = null;
     let discountValue: number | null = null;
     let customer: Record<string, unknown> | null = null;
+    let shippingAmount = 0;
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
@@ -70,10 +71,17 @@ serve(async (req) => {
 
       discountType = sale.discount ? "fixed" : null;
       discountValue = sale.discount ? Number(sale.discount) : null;
-      console.log(`Using pos_sales fallback for PIX, sale ${orderId}, ${products.length} items`);
+      
+      // Extract shipping from payment_details
+      const pd = sale.payment_details as Record<string, unknown> | null;
+      if (pd && typeof pd === "object" && pd.shipping_amount) {
+        shippingAmount = Number(pd.shipping_amount) || 0;
+      }
+      
+      console.log(`Using pos_sales fallback for PIX, sale ${orderId}, ${products.length} items, shipping: ${shippingAmount}`);
     }
 
-    // Calculate total with discount
+    // Calculate total with discount + shipping
     const subtotal = products.reduce((sum: number, p) => sum + p.price * p.quantity, 0);
 
     let discountAmount = 0;
@@ -82,7 +90,7 @@ serve(async (req) => {
         ? subtotal * (discountValue / 100)
         : discountValue;
     }
-    const totalAmount = Math.round(Math.max(0, subtotal - discountAmount) * 100) / 100;
+    const totalAmount = Math.round(Math.max(0, subtotal - discountAmount + shippingAmount) * 100) / 100;
 
     // Use payer data from request, or fallback to customer data
     const payerEmail = payer?.email || 
