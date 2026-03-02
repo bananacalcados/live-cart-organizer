@@ -1,66 +1,85 @@
 
-# Adicionar Data do Pedido e Transportadora na Expedição Beta
 
-## Contexto
-Os pedidos vêm do Tiny (que não tem info de transportadora), mas originam na Shopify (que tem `shipping_lines` com transportadora e serviço). O campo `numero_ecommerce` do Tiny corresponde ao `order_number` da Shopify, permitindo cruzar os dados.
+## Protecao contra Pagamentos Duplicados no Checkout
 
-## Mudancas
+### Problema
+Clientes clicam no botao "Pagar" multiplas vezes durante o processamento, gerando cobranças duplicadas nos gateways (Pagar.me, VINDI, AppMax). Isso causa aprovacoes seguidas de cancelamentos.
 
-### 1. Adicionar coluna `shipping_method` na tabela `expedition_beta_orders`
+### Solucao em 3 camadas
 
-Nova coluna `shipping_method TEXT` para armazenar a transportadora (ex: "Correios - SEDEX", "JADLOG - .Package").
+---
 
-### 2. Criar Edge Function `expedition-enrich-shipping`
+### 1. Frontend - Bloqueio visual e de estado (ambos checkouts)
 
-Uma funcao que:
-- Busca pedidos em `expedition_beta_orders` onde `shipping_method IS NULL` e `shopify_order_id` nao começa com `tiny-`
-- Para cada pedido, consulta a Shopify Admin API: `GET /admin/api/2025-07/orders.json?name={order_number}&fields=id,name,shipping_lines`
-- Extrai `shipping_lines[0].title` (ex: "Correios - SEDEX") e atualiza a coluna `shipping_method`
-- Processa em lotes para respeitar rate limits da Shopify
+**Arquivos:** `src/pages/TransparentCheckout.tsx` e `src/pages/StoreCheckout.tsx`
 
-### 3. Atualizar `expedition-beta-initial-sync`
+Nos dois componentes `CardPaymentForm`:
 
-Apos a sincronizacao do Tiny, chamar automaticamente a funcao de enriquecimento de shipping para os pedidos recem-importados que possuem `numero_ecommerce` (indicando origem Shopify).
+- Adicionar estado `paymentAttemptId` (gerado ao clicar em Pagar) para rastrear a tentativa atual
+- Substituir o botao "Pagar" por um estado visual de processamento persistente:
+  - Quando `isProcessing = true`: exibir um card amarelo/laranja com animacao de loading e texto "Seu pagamento esta sendo processado pela operadora do cartao. Aguarde, nao feche esta pagina."
+  - Desabilitar TODOS os campos do formulario (numero, nome, validade, CVV, parcelas)
+  - Esconder o botao "Pagar" completamente e substituir pelo card de status
+- Usar `useRef` para controle de concorrencia (`processingRef.current`) alem do estado React, pois o ref atualiza sincronamente e evita race conditions de cliques rapidos
+- Salvar `paymentAttemptId` em `sessionStorage` com chave `checkout_payment_{orderId}` para persistir entre refreshes da pagina
+- Ao montar o componente, checar se existe uma tentativa em andamento no `sessionStorage` e, se sim, entrar direto no modo "aguardando" com polling no backend
 
-### 4. Atualizar `shopify-webhook` (pedidos novos)
+**Fluxo pos-processamento:**
+- Se aprovado: exibir tela de sucesso (ja existente)
+- Se recusado em todos os gateways: exibir mensagem "A operadora do seu cartao nao aprovou a compra. Revise os dados ou tente com outro cartao." e liberar o formulario novamente para nova tentativa
+- Ao liberar, limpar o `sessionStorage` para permitir novo envio
 
-Quando um pedido chega via webhook da Shopify, ja salvar `shipping_method` direto do payload `shipping_lines[0].title`, evitando a necessidade de consulta posterior.
+---
 
-### 5. Atualizar UI `BetaOrdersList.tsx`
+### 2. Backend - Idempotencia no Edge Function
 
-No componente `BetaOrderRow`:
-- Adicionar a **data do pedido** (`shopify_created_at`) formatada em DD/MM/YYYY ao lado do nome do cliente
-- Exibir a **transportadora** como um Badge colorido:
-  - Vermelho/destaque para "SEDEX" e "MOTOTAXISTA" (prioridade alta)
-  - Azul para "PAC" (prioridade normal)
-  - Cinza para outros
+**Arquivo:** `supabase/functions/pagarme-create-charge/index.ts`
 
-### 6. Ordenacao por prioridade na Separacao (`BetaPickingList`)
+- No inicio do handler (apos validar campos), verificar se o pedido ja foi pago consultando a tabela correspondente (`orders.is_paid` ou `pos_sales.status = 'paid'`). Se sim, retornar `{ success: true, already_paid: true }` sem cobrar novamente. (Essa verificacao parcialmente ja existe, mas precisa retornar de forma limpa.)
+- Aceitar um campo opcional `paymentAttemptId` no body da requisicao
+- Antes de iniciar a cascata de gateways, verificar em `pos_checkout_attempts` se ja existe uma tentativa com esse `paymentAttemptId` com status `processing`. Se sim, retornar `{ success: false, error: "Pagamento ja em processamento. Aguarde." }`
+- Inserir um registro em `pos_checkout_attempts` com status `processing` no inicio da execucao, e atualizar para `success` ou `failed` ao final
+- Isso garante que mesmo se o cliente fizer refresh e o frontend enviar outra requisicao, o backend rejeita duplicatas
 
-Na aba de separacao, ordenar pedidos automaticamente priorizando:
-1. SEDEX e MOTOTAXISTA primeiro
-2. Depois PAC e outros
+---
 
-## Fluxo tecnico
+### 3. Feedback visual detalhado durante processamento
+
+**Nos dois checkouts (`TransparentCheckout` e `StoreCheckout`):**
+
+Substituir o simples "Processando..." por um componente `PaymentProcessingOverlay` inline que mostra:
 
 ```text
-Shopify (pedido com shipping_lines)
-  |
-  v
-Tiny ERP (recebe pedido, perde info de frete)
-  |
-  v
-expedition-beta-initial-sync (puxa do Tiny)
-  |
-  v
-expedition-enrich-shipping (cruza com Shopify via order_number)
-  |
-  v
-expedition_beta_orders.shipping_method = "Correios - SEDEX"
++------------------------------------------+
+|  [animacao loading]                       |
+|                                           |
+|  Processando seu pagamento...             |
+|  Estamos verificando com a operadora      |
+|  do seu cartao de credito.                |
+|                                           |
+|  Nao feche esta pagina.                   |
+|  Isso pode levar alguns segundos.         |
++------------------------------------------+
 ```
 
-## Impacto
-- Pedidos existentes: preenchidos automaticamente pela funcao de enriquecimento
-- Pedidos novos via webhook: ja vem com shipping_method
-- Pedidos novos via sync Tiny: enriquecidos apos importacao
-- Frontend: mostra data + transportadora com prioridade visual
+- O overlay substitui todo o formulario de cartao enquanto o pagamento esta em andamento
+- Nao ha botao clicavel durante esse estado
+- Se o pedido ja estiver pago (refresh), mostra direto a tela de sucesso
+
+---
+
+### Resumo das alteracoes
+
+| Arquivo | Alteracao |
+|---|---|
+| `src/pages/TransparentCheckout.tsx` | Adicionar `processingRef`, `sessionStorage` lock, overlay de processamento, mensagem de erro amigavel, bloqueio de re-envio |
+| `src/pages/StoreCheckout.tsx` | Mesmas protecoes do TransparentCheckout |
+| `supabase/functions/pagarme-create-charge/index.ts` | Idempotencia via `paymentAttemptId`, registro de status `processing` em `pos_checkout_attempts`, rejeicao de duplicatas |
+
+### Detalhes tecnicos
+
+- O `paymentAttemptId` sera um UUID gerado no frontend via `crypto.randomUUID()`
+- A coluna `transaction_id` em `pos_checkout_attempts` sera reutilizada para armazenar o `paymentAttemptId` no registro de status `processing`
+- Nao e necessaria migracao de banco — os campos existentes (`status`, `transaction_id`, `metadata`) sao suficientes
+- O polling pos-timeout que ja existe sera mantido, mas agora so executa se nao houver um resultado definitivo
+
