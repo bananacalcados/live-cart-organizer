@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, Loader2, ScanBarcode, Camera, X, Search, Hand, Package, RefreshCw, Store, MapPin, Wrench } from 'lucide-react';
+import { CheckCircle2, Loader2, ScanBarcode, Camera, X, Search, Hand, Package, RefreshCw, Store, MapPin, Wrench, Printer } from 'lucide-react';
 import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarcodeScanner';
 import { StockCheckRequestDialog } from '@/components/expedition/StockCheckRequestDialog';
 import { StockCorrectionDialog } from '@/components/expedition-beta/StockCorrectionDialog';
@@ -285,6 +285,43 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
       )
     : sortedItems;
 
+  const handlePrintPickingList = useCallback(() => {
+    const pendingItems = sortedItems.filter(([, item]) => item.pickedQty < item.totalQty);
+    const itemsToPrint = pendingItems.length > 0 ? pendingItems : sortedItems;
+    const isPendingOnly = pendingItems.length > 0 && pendingItems.length < sortedItems.length;
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    const rows = itemsToPrint.map(([, item], i) => {
+      const stockStr = (stockData[item.sku] || []).map(s => `${s.depositName || s.storeName}: ${s.stock}`).join(' | ');
+      return `<tr>
+        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center">${i + 1}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc">${item.name}${item.variant ? ` (${item.variant})` : ''}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;font-family:monospace">${item.sku || '-'}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center;font-weight:bold">${item.totalQty - item.pickedQty}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center">${item.totalQty}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;font-size:10px">${item.orders.join(', ')}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;font-size:10px">${stockStr || '-'}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;width:60px"></td>
+      </tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head><title>Lista de Separação</title>
+      <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}
+      table{border-collapse:collapse;width:100%}
+      th{background:#f0f0f0;padding:6px 8px;border:1px solid #ccc;text-align:left;font-size:11px}
+      @media print{body{margin:10px}}</style></head><body>
+      <h2 style="margin:0 0 4px">Lista de Separação${isPendingOnly ? ' (Pendentes)' : ''}</h2>
+      <p style="margin:0 0 12px;color:#666">${dateStr} — ${itemsToPrint.length} itens, ${itemsToPrint.reduce((s,[,it]) => s + (it.totalQty - it.pickedQty), 0)} unidades pendentes</p>
+      <table><thead><tr>
+        <th>#</th><th>Produto</th><th>SKU</th><th>Pendente</th><th>Total</th><th>Pedidos</th><th>Estoque</th><th>✓</th>
+      </tr></thead><tbody>${rows}</tbody></table></body></html>`;
+
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); w.print(); }
+  }, [sortedItems, stockData]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -292,6 +329,10 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
           {showChecking ? 'Conferência' : 'Lista de Separação'}
         </h2>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handlePrintPickingList} className="gap-1 text-xs">
+            <Printer className="h-3 w-3" />
+            <span className="hidden sm:inline">Imprimir</span>
+          </Button>
           <Button variant="ghost" size="sm" onClick={loadStock} disabled={loadingStock} className="gap-1 text-xs">
             {loadingStock ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
             Estoque
