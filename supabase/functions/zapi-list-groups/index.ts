@@ -23,7 +23,7 @@ serve(async (req) => {
       );
     }
 
-    const { syncToDb } = await req.json().catch(() => ({ syncToDb: false }));
+    const { syncToDb, filterGroupIds } = await req.json().catch(() => ({ syncToDb: false, filterGroupIds: null }));
 
     // Fetch all groups from Z-API with pagination
     let allGroups: any[] = [];
@@ -61,7 +61,17 @@ serve(async (req) => {
     }
 
     // Filter only groups (isGroup === true)
-    const groupsOnly = allGroups.filter((g: any) => g.isGroup);
+    let groupsOnly = allGroups.filter((g: any) => g.isGroup);
+
+    // If filterGroupIds provided, only process those groups (for campaign-scoped refresh)
+    if (filterGroupIds && Array.isArray(filterGroupIds) && filterGroupIds.length > 0) {
+      const filterSet = new Set(filterGroupIds);
+      groupsOnly = groupsOnly.filter((g: any) => {
+        const gId = g.phone || g.id;
+        return filterSet.has(gId);
+      });
+      console.log(`Filtered to ${groupsOnly.length} campaign groups out of ${allGroups.length} total`);
+    }
 
     // Fetch metadata (participant count + photo) for each group using light-group-metadata
     console.log(`Fetching metadata for ${groupsOnly.length} groups...`);

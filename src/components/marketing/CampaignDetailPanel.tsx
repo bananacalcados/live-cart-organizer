@@ -333,7 +333,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
           {/* OVERVIEW / DASHBOARD TAB */}
           <TabsContent value="overview" className="space-y-4">
-            <CampaignDashboard targetGroups={targetGroups} allGroups={allGroups} links={links} messages={messages} campaignId={campaignId} />
+            <CampaignDashboard targetGroups={targetGroups} allGroups={allGroups} links={links} messages={messages} campaignId={campaignId} onRefreshGroups={fetchAllGroups} />
           </TabsContent>
 
           {/* GROUPS TAB */}

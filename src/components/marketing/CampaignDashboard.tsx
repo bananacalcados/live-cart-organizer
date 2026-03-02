@@ -13,6 +13,7 @@ interface CampaignDashboardProps {
   links: any[];
   messages: any[];
   campaignId: string;
+  onRefreshGroups?: () => Promise<void>;
 }
 
 interface KpiCardProps {
@@ -35,7 +36,7 @@ function KpiCard({ icon, value, label }: KpiCardProps) {
   );
 }
 
-export function CampaignDashboard({ targetGroups, allGroups, links, messages, campaignId }: CampaignDashboardProps) {
+export function CampaignDashboard({ targetGroups, allGroups, links, messages, campaignId, onRefreshGroups }: CampaignDashboardProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [snapshots, setSnapshots] = useState<any[]>([]);
 
@@ -108,12 +109,17 @@ export function CampaignDashboard({ targetGroups, allGroups, links, messages, ca
   const refreshData = async () => {
     setIsRefreshing(true);
     try {
+      // Get WhatsApp group_ids for campaign groups only
+      const campaignGroupIds = campaignGroups.map(g => g.group_id);
+      
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
         method: 'POST',
         headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ syncToDb: true }),
+        body: JSON.stringify({ syncToDb: true, filterGroupIds: campaignGroupIds }),
       });
       await res.json();
+      // Re-fetch groups from DB to get updated participant_count
+      if (onRefreshGroups) await onRefreshGroups();
       await fetchSnapshots();
     } catch { /* ignore */ }
     finally { setIsRefreshing(false); }
