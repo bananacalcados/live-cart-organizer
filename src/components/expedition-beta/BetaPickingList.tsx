@@ -42,6 +42,7 @@ interface StockInfo {
 
 export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }: Props) {
   const [barcodeInput, setBarcodeInput] = useState('');
+  const [shippingFilter, setShippingFilter] = useState<string>('all');
   const [pendingConfirm, setPendingConfirm] = useState<{
     key: string; name: string; variant: string; sku: string;
     itemId: string; orderName: string; isRecheck: boolean; isManual: boolean;
@@ -58,12 +59,24 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
 
   const allItems = new Map<string, ItemEntry>();
 
+  // Extract unique shipping methods for filter
+  const shippingMethods = Array.from(new Set(
+    orders.map(o => o.shipping_method).filter(Boolean)
+  )).sort();
+
   const relevantOrders = orders.filter(o => {
     const term = searchTerm.toLowerCase();
     if (term && !(o.shopify_order_name?.toLowerCase().includes(term) || o.customer_name?.toLowerCase().includes(term))) return false;
+    if (shippingFilter === 'priority') {
+      const m = (o.shipping_method || '').toUpperCase();
+      if (!m.includes('SEDEX') && !m.includes('MOTOTAXISTA')) return false;
+    } else if (shippingFilter === 'no_method') {
+      if (o.shipping_method) return false;
+    } else if (shippingFilter !== 'all') {
+      if (o.shipping_method !== shippingFilter) return false;
+    }
     return true;
   }).sort((a, b) => {
-    // Priority: SEDEX/MOTOTAXISTA first, then PAC, then others
     const getPriority = (o: any) => {
       const m = (o.shipping_method || '').toUpperCase();
       if (m.includes('SEDEX') || m.includes('MOTOTAXISTA')) return 0;
@@ -343,6 +356,45 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
           </Button>
           <Badge variant="outline" className="text-sm">{totalPicked}/{totalItems} conferidos</Badge>
         </div>
+      </div>
+
+      {/* Shipping filter */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+        <button
+          onClick={() => setShippingFilter('all')}
+          className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+            shippingFilter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+          }`}
+        >
+          Todos
+        </button>
+        <button
+          onClick={() => setShippingFilter('priority')}
+          className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+            shippingFilter === 'priority' ? 'bg-destructive text-destructive-foreground' : 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+          }`}
+        >
+          🚀 Rápidos (SEDEX / Moto)
+        </button>
+        {shippingMethods.map(method => (
+          <button
+            key={method}
+            onClick={() => setShippingFilter(method)}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+              shippingFilter === method ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+            }`}
+          >
+            {method}
+          </button>
+        ))}
+        <button
+          onClick={() => setShippingFilter('no_method')}
+          className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+            shippingFilter === 'no_method' ? 'bg-muted-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+          }`}
+        >
+          Sem info
+        </button>
       </div>
 
       {showChecking && (
