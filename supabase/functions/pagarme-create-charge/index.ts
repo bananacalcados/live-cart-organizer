@@ -400,6 +400,27 @@ serve(async (req) => {
       throw new Error("Missing required fields: orderId, card, customer, totalAmountCents");
     }
 
+    const paymentAttemptId = rawParams.paymentAttemptId || null;
+
+    // ── Idempotency: check if this attemptId is already processing ──
+    if (paymentAttemptId) {
+      const { data: existingAttempt } = await createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      ).from("pos_checkout_attempts")
+        .select("status")
+        .eq("transaction_id", paymentAttemptId)
+        .eq("status", "processing")
+        .maybeSingle();
+
+      if (existingAttempt) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Pagamento já em processamento. Aguarde.", already_processing: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Build billingAddress from customer.address if not provided directly
     if (!rawParams.billingAddress && rawParams.customer?.address) {
       const addr = rawParams.customer.address;
@@ -447,7 +468,10 @@ serve(async (req) => {
 
     if (order) {
       if (order.is_paid) {
-        throw new Error("Este pedido já foi pago.");
+        return new Response(
+          JSON.stringify({ success: true, already_paid: true, gateway: "cached" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
       isPaid = order.is_paid;
       products = order.products as Array<{ title: string; price: number; quantity: number }>;
@@ -464,8 +488,11 @@ serve(async (req) => {
         throw new Error(`Order not found in orders or pos_sales: ${orderError?.message || saleError?.message || "not found"}`);
       }
 
-      if (sale.status === "paid") {
-        throw new Error("Esta venda já foi paga.");
+      if (sale.status === "paid" || sale.status === "completed") {
+        return new Response(
+          JSON.stringify({ success: true, already_paid: true, gateway: "cached" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       // Fetch sale items
@@ -491,6 +518,20 @@ serve(async (req) => {
       ...params,
       totalAmountCents: totalCents,
     };
+
+    // ── Insert "processing" record for idempotency ──
+    if (paymentAttemptId) {
+      await supabase.from("pos_checkout_attempts").insert({
+        sale_id: params.orderId,
+        payment_method: "card",
+        status: "processing",
+        amount: totalCents / 100,
+        customer_name: params.customer.name,
+        customer_phone: params.customer.phone,
+        customer_email: params.customer.email,
+        transaction_id: paymentAttemptId,
+      } as any).then(() => {});
+    }
 
     // Try Pagar.me first
     const fallbackErrors: string[] = [];
@@ -537,6 +578,15 @@ serve(async (req) => {
 
     if (!result.success) {
       result.error = fallbackErrors[0] || result.error || "Pagamento recusado em todos os gateways";
+    }
+
+    // ── Update processing record with final status ──
+    if (paymentAttemptId) {
+      await supabase.from("pos_checkout_attempts")
+        .update({ status: result.success ? "success" : "failed", gateway: result.gateway || null, error_message: result.error || null } as any)
+        .eq("transaction_id", paymentAttemptId)
+        .eq("status", "processing")
+        .then(() => {});
     }
 
     if (result.success) {

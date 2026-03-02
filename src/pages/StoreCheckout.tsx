@@ -490,6 +490,53 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
   const [cvv, setCvv] = useState("");
   const [installments, setInstallments] = useState("1");
   const [processing, setProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const processingRef = useRef(false);
+  const attemptIdRef = useRef<string | null>(null);
+
+  // Restore processing state from sessionStorage on mount
+  useEffect(() => {
+    const stored = sessionStorage.getItem(`checkout_payment_${saleId}`);
+    if (stored) {
+      attemptIdRef.current = stored;
+      setProcessing(true);
+      processingRef.current = true;
+      pollPaymentResult(stored);
+    }
+  }, [saleId]);
+
+  const pollPaymentResult = async (attemptId: string) => {
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        const { data: freshSale } = await supabase.from("pos_sales").select("status, payment_gateway").eq("id", saleId).maybeSingle();
+        if (freshSale?.status === "paid" || freshSale?.status === "completed") {
+          sessionStorage.removeItem(`checkout_payment_${saleId}`);
+          toast.success("Pagamento aprovado!");
+          onPaid();
+          return;
+        }
+        const { data: attempt } = await supabase.from("pos_checkout_attempts").select("status, error_message").eq("transaction_id", attemptId).maybeSingle();
+        if (attempt && attempt.status === "failed") {
+          sessionStorage.removeItem(`checkout_payment_${saleId}`);
+          setPaymentError((attempt as any).error_message || "A operadora do seu cartão não aprovou a compra. Revise os dados ou tente com outro cartão.");
+          setProcessing(false);
+          processingRef.current = false;
+          return;
+        }
+        if (attempt && attempt.status === "success") {
+          sessionStorage.removeItem(`checkout_payment_${saleId}`);
+          toast.success("Pagamento aprovado!");
+          onPaid();
+          return;
+        }
+      } catch {}
+    }
+    sessionStorage.removeItem(`checkout_payment_${saleId}`);
+    setPaymentError("Tempo esgotado. Verifique se o pagamento foi aprovado ou tente novamente.");
+    setProcessing(false);
+    processingRef.current = false;
+  };
 
   const installmentOptions = [];
   for (let i = 1; i <= installmentConfig.max_installments; i++) {
@@ -504,11 +551,21 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
   const { totalWithInterest } = calculateInstallmentAmount(amount, selectedInstallments, installmentConfig);
 
   const handleSubmit = async () => {
+    if (processingRef.current) return;
+
     if (!cardNumber.trim() || !cardName.trim() || !expiry.trim() || !cvv.trim()) {
       toast.error("Preencha todos os dados do cartão");
       return;
     }
+
+    processingRef.current = true;
     setProcessing(true);
+    setPaymentError(null);
+
+    const attemptId = crypto.randomUUID();
+    attemptIdRef.current = attemptId;
+    sessionStorage.setItem(`checkout_payment_${saleId}`, attemptId);
+
     try {
       const customerData = {
         name: form.fullName,
@@ -522,6 +579,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
       const { data, error } = await supabase.functions.invoke("pagarme-create-charge", {
         body: {
           orderId: saleId,
+          paymentAttemptId: attemptId,
           totalAmountCents: totalCents,
           customer: customerData,
           card: {
@@ -544,78 +602,93 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
         },
       });
       console.log("Payment response:", JSON.stringify({ data, error }));
+
+      if (data?.already_paid) {
+        sessionStorage.removeItem(`checkout_payment_${saleId}`);
+        toast.success("Pagamento já confirmado!");
+        onPaid();
+        return;
+      }
+
+      if (data?.already_processing) {
+        pollPaymentResult(attemptId);
+        return;
+      }
+
       if (error || !data?.success || !data?.transactionId) {
         const errMsg = data?.error || (error && typeof error === "object" && "message" in error ? String((error as any).message) : null) || "Erro no pagamento";
-        // Log failed attempt
         await supabase.from("pos_checkout_attempts").insert({
-          sale_id: saleId,
-          payment_method: "card",
-          status: "failed",
-          error_message: errMsg,
-          amount: totalWithInterest,
-          customer_name: form.fullName,
-          customer_phone: form.whatsapp,
-          customer_email: form.email,
-          gateway: data?.gateway || "pagarme",
+          sale_id: saleId, payment_method: "card", status: "failed", error_message: errMsg,
+          amount: totalWithInterest, customer_name: form.fullName, customer_phone: form.whatsapp,
+          customer_email: form.email, gateway: data?.gateway || "pagarme",
         } as any).then(() => {});
         throw new Error(errMsg);
       }
       // Log success
       await supabase.from("pos_checkout_attempts").insert({
-        sale_id: saleId,
-        payment_method: "card",
-        status: "success",
-        amount: totalWithInterest,
-        customer_name: form.fullName,
-        customer_phone: form.whatsapp,
-        customer_email: form.email,
-        gateway: data.gateway || "pagarme",
-        transaction_id: data.transactionId || null,
+        sale_id: saleId, payment_method: "card", status: "success", amount: totalWithInterest,
+        customer_name: form.fullName, customer_phone: form.whatsapp, customer_email: form.email,
+        gateway: data.gateway || "pagarme", transaction_id: data.transactionId || null,
         metadata: { cpf: form.cpf, cep: form.cep, address: form.address, address_number: form.addressNumber, complement: form.complement, neighborhood: form.neighborhood, city: form.city, state: form.state },
       } as any).then(() => {});
+      sessionStorage.removeItem(`checkout_payment_${saleId}`);
       const gw = data.gateway || "pagarme";
       const gwLabel = gw === "pagarme" ? "Pagar.me" : gw === "vindi" ? "VINDI" : gw === "appmax" ? "APPMAX" : gw.toUpperCase();
       toast.success(`Pagamento aprovado via ${gwLabel}!`);
       onPaid();
     } catch (e: any) {
-      // On timeout/error, poll the backend to check if the payment was actually approved
-      // (AppMax fallback may complete after the frontend request times out)
+      // On timeout/error, poll backend
       for (let attempt = 0; attempt < 3; attempt++) {
-        await new Promise(r => setTimeout(r, 3000)); // wait 3s between polls
+        await new Promise(r => setTimeout(r, 3000));
         try {
-          const { data: freshSale } = await supabase
-            .from("pos_sales")
-            .select("status, payment_gateway")
-            .eq("id", saleId)
-            .maybeSingle();
+          const { data: freshSale } = await supabase.from("pos_sales").select("status, payment_gateway").eq("id", saleId).maybeSingle();
           if (freshSale?.status === "paid" || freshSale?.status === "completed") {
-            console.log(`Payment confirmed via backend poll (attempt ${attempt + 1})`);
-            await supabase.from("pos_checkout_attempts").insert({
-              sale_id: saleId,
-              payment_method: "card",
-              status: "success",
-              amount: totalWithInterest,
-              customer_name: form.fullName,
-              customer_phone: form.whatsapp,
-              customer_email: form.email,
-              gateway: freshSale.payment_gateway || "appmax",
-              metadata: { recovered_after_timeout: true },
-            } as any).then(() => {});
+            sessionStorage.removeItem(`checkout_payment_${saleId}`);
             toast.success("Pagamento aprovado!");
             onPaid();
             return;
           }
-        } catch (_) { /* ignore poll error */ }
+        } catch (_) {}
       }
-
-      toast.error(e.message || "Erro no pagamento");
-    } finally {
+      sessionStorage.removeItem(`checkout_payment_${saleId}`);
+      setPaymentError(e.message || "Erro no pagamento");
       setProcessing(false);
+      processingRef.current = false;
     }
   };
 
+  // ── Processing overlay ──
+  if (processing) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-6 text-center space-y-3">
+          <Loader2 className="h-10 w-10 animate-spin text-amber-500 mx-auto" />
+          <h3 className="font-bold text-lg text-amber-800 dark:text-amber-300">Processando seu pagamento...</h3>
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            Estamos verificando com a operadora do seu cartão de crédito.
+          </p>
+          <p className="text-xs text-amber-600 dark:text-amber-500 font-medium">
+            ⚠️ Não feche esta página. Isso pode levar alguns segundos.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {paymentError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 space-y-2">
+          <div className="flex items-start gap-2">
+            <XCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Pagamento não aprovado</p>
+              <p className="text-xs text-destructive/80 mt-1">{paymentError}</p>
+              <p className="text-xs text-muted-foreground mt-2">Revise os dados ou tente com outro cartão.</p>
+            </div>
+          </div>
+        </div>
+      )}
       <div><Label className="text-sm">Número do Cartão</Label><Input value={cardNumber} onChange={e => setCardNumber(formatCardNumber(e.target.value))} placeholder="0000 0000 0000 0000" maxLength={19} /></div>
       <div><Label className="text-sm">Nome no Cartão</Label><Input value={cardName} onChange={e => setCardName(e.target.value.toUpperCase())} placeholder="NOME COMO NO CARTÃO" /></div>
       <div className="grid grid-cols-2 gap-3">
@@ -631,7 +704,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
         </Select>
       </div>
       <Button onClick={handleSubmit} disabled={processing} className="w-full h-14 text-lg font-semibold" size="lg">
-        {processing ? <><Loader2 className="h-5 w-5 animate-spin mr-2" />Processando...</> : <><Lock className="h-5 w-5 mr-2" />Pagar R$ {totalWithInterest.toFixed(2)}</>}
+        <Lock className="h-5 w-5 mr-2" />Pagar R$ {totalWithInterest.toFixed(2)}
       </Button>
     </div>
   );

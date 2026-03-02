@@ -581,6 +581,60 @@ function CardPaymentForm({
   const [cvv, setCvv] = useState("");
   const [installments, setInstallments] = useState("1");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const processingRef = useRef(false);
+  const attemptIdRef = useRef<string | null>(null);
+
+  // Restore processing state from sessionStorage on mount
+  useEffect(() => {
+    const stored = sessionStorage.getItem(`checkout_payment_${orderId}`);
+    if (stored) {
+      attemptIdRef.current = stored;
+      setIsProcessing(true);
+      processingRef.current = true;
+      // Poll backend to check if this attempt resolved
+      pollPaymentResult(stored);
+    }
+  }, [orderId]);
+
+  const pollPaymentResult = async (attemptId: string) => {
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        // Check if order is now paid
+        const { data: freshOrder } = await supabase.from("orders").select("is_paid").eq("id", orderId).maybeSingle();
+        if (freshOrder?.is_paid) {
+          sessionStorage.removeItem(`checkout_payment_${orderId}`);
+          onPaymentConfirmed({ platform: "gateway", method: "credit_card", customerData: buildCustomerData() });
+          return;
+        }
+        // Check if attempt finished (failed)
+        const { data: attempt } = await supabase.from("pos_checkout_attempts").select("status, error_message").eq("transaction_id", attemptId).maybeSingle();
+        if (attempt && attempt.status === "failed") {
+          sessionStorage.removeItem(`checkout_payment_${orderId}`);
+          setPaymentError((attempt as any).error_message || "A operadora do seu cartão não aprovou a compra. Revise os dados ou tente com outro cartão.");
+          setIsProcessing(false);
+          processingRef.current = false;
+          return;
+        }
+        if (attempt && attempt.status === "success") {
+          sessionStorage.removeItem(`checkout_payment_${orderId}`);
+          onPaymentConfirmed({ platform: "gateway", method: "credit_card", customerData: buildCustomerData() });
+          return;
+        }
+      } catch {}
+    }
+    // Timeout — release form
+    sessionStorage.removeItem(`checkout_payment_${orderId}`);
+    setPaymentError("Tempo esgotado. Verifique se o pagamento foi aprovado ou tente novamente.");
+    setIsProcessing(false);
+    processingRef.current = false;
+  };
+
+  const buildCustomerData = () => ({
+    name: form.fullName, email: form.email, cpf: form.cpf.replace(/\D/g, ""), phone: form.whatsapp.replace(/\D/g, ""),
+    address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
+  });
 
   const installmentOptions = [];
   for (let i = 1; i <= installmentConfig.max_installments; i++) {
@@ -595,6 +649,9 @@ function CardPaymentForm({
   const { totalWithInterest } = calculateInstallmentAmount(amount, selectedInstallments, installmentConfig);
 
   const handleSubmit = async () => {
+    // Prevent double-click with ref (synchronous check)
+    if (processingRef.current) return;
+
     if (!cardNumber.trim() || !cardName.trim() || !expiry.trim() || !cvv.trim()) {
       toast.error("Preencha todos os dados do cartão");
       return;
@@ -609,13 +666,23 @@ function CardPaymentForm({
       return;
     }
 
+    // Lock immediately
+    processingRef.current = true;
     setIsProcessing(true);
+    setPaymentError(null);
+
+    // Generate attempt ID and persist to sessionStorage
+    const attemptId = crypto.randomUUID();
+    attemptIdRef.current = attemptId;
+    sessionStorage.setItem(`checkout_payment_${orderId}`, attemptId);
+
     trackPixelEvent("AddPaymentInfo", { content_category: "credit_card" });
     try {
       const totalCents = Math.round(totalWithInterest * 100);
       const { data, error } = await supabase.functions.invoke("pagarme-create-charge", {
         body: {
           orderId,
+          paymentAttemptId: attemptId,
           card: {
             number: cardNumber.replace(/\s/g, ""),
             holderName: cardName.trim(),
@@ -645,12 +712,23 @@ function CardPaymentForm({
 
       if (error) throw new Error(typeof error === 'object' && error.message ? error.message : String(error));
 
+      if (data?.already_paid) {
+        sessionStorage.removeItem(`checkout_payment_${orderId}`);
+        toast.success("Pagamento já confirmado!");
+        onPaymentConfirmed({ platform: "cached", method: "credit_card", customerData: buildCustomerData() });
+        return;
+      }
+
+      if (data?.already_processing) {
+        // Another request is already running — poll for result
+        pollPaymentResult(attemptId);
+        return;
+      }
+
       if (data?.success) {
+        sessionStorage.removeItem(`checkout_payment_${orderId}`);
         toast.success(`Pagamento aprovado via ${data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
-        onPaymentConfirmed({ platform: data.gateway || "pagarme", method: "credit_card", customerData: {
-          name: form.fullName, email: form.email, cpf: form.cpf.replace(/\D/g, ""), phone: form.whatsapp.replace(/\D/g, ""),
-          address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
-        }});
+        onPaymentConfirmed({ platform: data.gateway || "pagarme", method: "credit_card", customerData: buildCustomerData() });
       } else {
         throw new Error(data?.error || "Pagamento recusado.");
       }
@@ -665,23 +743,56 @@ function CardPaymentForm({
             .eq("id", orderId)
             .maybeSingle();
           if (freshOrder?.is_paid) {
+            sessionStorage.removeItem(`checkout_payment_${orderId}`);
             toast.success("Pagamento aprovado!");
-            onPaymentConfirmed({ platform: "appmax", method: "credit_card", customerData: {
-              name: form.fullName, email: form.email, cpf: form.cpf.replace(/\D/g, ""), phone: form.whatsapp.replace(/\D/g, ""),
-              address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
-            }});
+            onPaymentConfirmed({ platform: "appmax", method: "credit_card", customerData: buildCustomerData() });
             return;
           }
         } catch (_) { /* ignore poll error */ }
       }
-      toast.error(error instanceof Error ? error.message : "Erro ao processar pagamento.");
-    } finally {
+      // All gateways declined — show friendly error and release form
+      sessionStorage.removeItem(`checkout_payment_${orderId}`);
+      const errMsg = error instanceof Error ? error.message : "Erro ao processar pagamento.";
+      setPaymentError(errMsg);
       setIsProcessing(false);
+      processingRef.current = false;
     }
   };
 
+  // ── Processing overlay ──
+  if (isProcessing) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-6 text-center space-y-3">
+          <Loader2 className="h-10 w-10 animate-spin text-amber-500 mx-auto" />
+          <h3 className="font-bold text-lg text-amber-800 dark:text-amber-300">Processando seu pagamento...</h3>
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            Estamos verificando com a operadora do seu cartão de crédito.
+          </p>
+          <p className="text-xs text-amber-600 dark:text-amber-500 font-medium">
+            ⚠️ Não feche esta página. Isso pode levar alguns segundos.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {/* Error message from previous attempt */}
+      {paymentError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 space-y-2">
+          <div className="flex items-start gap-2">
+            <XCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Pagamento não aprovado</p>
+              <p className="text-xs text-destructive/80 mt-1">{paymentError}</p>
+              <p className="text-xs text-muted-foreground mt-2">Revise os dados ou tente com outro cartão.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         <div>
           <Label className="text-sm">Nome no cartão *</Label>
@@ -716,7 +827,7 @@ function CardPaymentForm({
       </div>
 
       <Button onClick={handleSubmit} disabled={isProcessing} className="w-full h-14 text-lg font-semibold" size="lg">
-        {isProcessing ? <><Loader2 className="h-5 w-5 animate-spin mr-2" />Processando...</> : <><Lock className="h-5 w-5 mr-2" />Pagar R$ {totalWithInterest.toFixed(2)}</>}
+        <Lock className="h-5 w-5 mr-2" />Pagar R$ {totalWithInterest.toFixed(2)}
       </Button>
     </div>
   );
