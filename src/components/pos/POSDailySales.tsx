@@ -573,10 +573,22 @@ export function POSDailySales({ storeId }: Props) {
   const awaitingPaymentSales = sales.filter((s) => s.status === "online_pending");
   const notApprovedSales = sales.filter((s) => ["payment_failed", "payment_declined", "cancelled"].includes(s.status));
 
-  const totalRevenue = completedSales.reduce((s, sale) => s + (sale.total || 0), 0);
-  const totalDiscount = completedSales.reduce((s, sale) => s + (sale.discount || 0), 0);
-  const avgTicket = completedSales.length > 0 ? totalRevenue / completedSales.length : 0;
-  const totalItemsSold = saleItems.reduce((s, item) => s + (item.quantity || 0), 0);
+  // KPI data source based on active filter
+  const kpiSales = statusFilter === 'awaiting_payment'
+    ? awaitingPaymentSales
+    : statusFilter === 'not_approved'
+      ? notApprovedSales
+      : statusFilter === 'completed'
+        ? completedSales
+        : sales; // 'all'
+
+  const kpiSaleIds = new Set(kpiSales.map(s => s.id));
+  const kpiItems = saleItems.filter(i => kpiSaleIds.has(i.sale_id));
+
+  const totalRevenue = kpiSales.reduce((s, sale) => s + (sale.total || 0), 0);
+  const totalDiscount = kpiSales.reduce((s, sale) => s + (sale.discount || 0), 0);
+  const avgTicket = kpiSales.length > 0 ? totalRevenue / kpiSales.length : 0;
+  const totalItemsSold = kpiItems.reduce((s, item) => s + (item.quantity || 0), 0);
   const avgPricePerItem = totalItemsSold > 0 ? totalRevenue / totalItemsSold : 0;
 
   // Sales by seller
@@ -891,10 +903,10 @@ export function POSDailySales({ storeId }: Props) {
           {/* Status Filter Tabs */}
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {([
-              { key: 'all' as const, label: 'Todas', count: sales.length, color: 'bg-pos-white/10 text-pos-white border-pos-white/20' },
-              { key: 'completed' as const, label: 'Concluídas', count: completedSales.length, color: 'bg-green-500/10 text-green-400 border-green-500/20' },
-              { key: 'awaiting_payment' as const, label: 'Aguardando Pgto', count: awaitingPaymentSales.length, color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' },
-              { key: 'not_approved' as const, label: 'Não Aprovadas', count: notApprovedSales.length, color: 'bg-red-500/10 text-red-400 border-red-500/20' },
+              { key: 'all' as const, label: 'Todas', count: sales.length, color: 'bg-pos-white/10 text-pos-white border-pos-white/30' },
+              { key: 'completed' as const, label: 'Concluídas', count: completedSales.length, color: 'bg-green-500/15 text-green-500 border-green-500/30' },
+              { key: 'awaiting_payment' as const, label: 'Aguardando Pgto', count: awaitingPaymentSales.length, color: 'bg-yellow-500/15 text-yellow-500 border-yellow-500/30' },
+              { key: 'not_approved' as const, label: 'Não Aprovadas', count: notApprovedSales.length, color: 'bg-red-500/15 text-red-500 border-red-500/30' },
             ]).map(tab => (
               <button
                 key={tab.key}
@@ -931,11 +943,11 @@ export function POSDailySales({ storeId }: Props) {
         <div className="p-4 space-y-6">
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <KPICard icon={DollarSign} label="Faturamento" value={`R$ ${totalRevenue.toFixed(2)}`} color="text-green-400" />
-            <KPICard icon={ShoppingCart} label="Vendas" value={String(completedSales.length)} color="text-pos-orange" />
-            <KPICard icon={TrendingUp} label="Ticket Médio" value={`R$ ${avgTicket.toFixed(2)}`} color="text-blue-400" />
-            <KPICard icon={Package} label="Itens Vendidos" value={String(totalItemsSold)} color="text-purple-400" />
-            <KPICard icon={Tag} label="Preço Médio/Item" value={`R$ ${avgPricePerItem.toFixed(2)}`} color="text-yellow-400" />
+            <KPICard icon={DollarSign} label="Faturamento" value={`R$ ${totalRevenue.toFixed(2)}`} color="text-green-500" />
+            <KPICard icon={ShoppingCart} label="Vendas" value={String(kpiSales.length)} color="text-orange-500" />
+            <KPICard icon={TrendingUp} label="Ticket Médio" value={`R$ ${avgTicket.toFixed(2)}`} color="text-blue-500" />
+            <KPICard icon={Package} label="Itens Vendidos" value={String(totalItemsSold)} color="text-purple-500" />
+            <KPICard icon={Tag} label="Preço Médio/Item" value={`R$ ${avgPricePerItem.toFixed(2)}`} color="text-yellow-500" />
           </div>
 
           {totalDiscount > 0 && (
@@ -1183,7 +1195,7 @@ function KPICard({ icon: Icon, label, value, color }: { icon: typeof DollarSign;
     <div className="rounded-xl border border-pos-orange/10 bg-pos-white/5 p-4 space-y-2">
       <div className="flex items-center gap-2">
         <Icon className={`h-4 w-4 ${color}`} />
-        <span className="text-[10px] uppercase tracking-wider text-pos-white/50 font-medium">{label}</span>
+        <span className="text-[10px] uppercase tracking-wider text-pos-white/70 font-semibold">{label}</span>
       </div>
       <p className={`text-xl font-bold ${color}`}>{value}</p>
     </div>
