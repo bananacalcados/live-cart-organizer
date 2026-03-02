@@ -41,6 +41,8 @@ interface SaleSummary {
   tiny_order_id: string | null;
   customer_id: string | null;
   sale_type: string | null;
+  customer_name?: string | null;
+  checkout_step?: number | null;
 }
 
 interface TinyOnlyOrder {
@@ -161,7 +163,7 @@ export function POSDailySales({ storeId }: Props) {
       const [salesRes, sellersRes] = await Promise.all([
         supabase
           .from("pos_sales")
-          .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type")
+          .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step")
           .eq("store_id", storeId)
           .gte("created_at", start.toISOString())
           .lte("created_at", end.toISOString())
@@ -672,7 +674,8 @@ export function POSDailySales({ storeId }: Props) {
   const renderSaleCard = (sale: SaleSummary, itemsSource: SaleItem[] = saleItems, customerSource: Map<string, CustomerInfo> = customers) => {
     const sellerName = sellers.find((s) => s.id === sale.seller_id)?.name;
     const time = new Date(sale.created_at);
-    const custName = sale.customer_id ? customerSource.get(sale.customer_id)?.name : null;
+    const custName = sale.customer_name || (sale.customer_id ? customerSource.get(sale.customer_id)?.name : null);
+    const checkoutStep = sale.checkout_step;
     const summary = getItemsSummary(sale.id, itemsSource);
     const showFullDate = showGlobalResults || periodMode !== "day";
 
@@ -698,9 +701,24 @@ export function POSDailySales({ storeId }: Props) {
                 </Badge>
               )}
               {sale.status === 'online_pending' && (
-                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0 animate-pulse">
-                  <Clock className="h-2.5 w-2.5 mr-0.5" />Aguardando Pgto
-                </Badge>
+                <>
+                  <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0 animate-pulse">
+                    <Clock className="h-2.5 w-2.5 mr-0.5" />Aguardando Pgto
+                  </Badge>
+                  {checkoutStep != null && checkoutStep > 0 ? (
+                    <Badge className={`text-[10px] px-1.5 py-0 ${
+                      checkoutStep === 1 ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                      checkoutStep === 2 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' :
+                      'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                    }`}>
+                      Etapa {checkoutStep}/3
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30 text-[10px] px-1.5 py-0">
+                      Abriu link
+                    </Badge>
+                  )}
+                </>
               )}
               {(sale.status === 'payment_failed' || sale.status === 'payment_declined' || sale.status === 'cancelled') && (
                 <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">

@@ -5265,6 +5265,7 @@ export type Database = {
       pos_sales: {
         Row: {
           cash_register_id: string | null
+          checkout_step: number | null
           created_at: string
           crediario_due_date: string | null
           crediario_paid_amount: number | null
@@ -5272,6 +5273,8 @@ export type Database = {
           crediario_paid_method: string | null
           crediario_status: string | null
           customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
           discount: number
           expedition_status: string
           id: string
@@ -5305,6 +5308,7 @@ export type Database = {
         }
         Insert: {
           cash_register_id?: string | null
+          checkout_step?: number | null
           created_at?: string
           crediario_due_date?: string | null
           crediario_paid_amount?: number | null
@@ -5312,6 +5316,8 @@ export type Database = {
           crediario_paid_method?: string | null
           crediario_status?: string | null
           customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
           discount?: number
           expedition_status?: string
           id?: string
@@ -5345,6 +5351,7 @@ export type Database = {
         }
         Update: {
           cash_register_id?: string | null
+          checkout_step?: number | null
           created_at?: string
           crediario_due_date?: string | null
           crediario_paid_amount?: number | null
@@ -5352,6 +5359,8 @@ export type Database = {
           crediario_paid_method?: string | null
           crediario_status?: string | null
           customer_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
           discount?: number
           expedition_status?: string
           id?: string
