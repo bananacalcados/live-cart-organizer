@@ -145,6 +145,9 @@ export function POSSellerPrivatePanel({ open, onClose, storeId, period, periodSt
               <p className="text-xs text-pos-white/40 mt-1">
                 {sellerData?.salesCount || 0} vendas · Ticket médio: R$ {sellerData && sellerData.salesCount > 0 ? (sellerData.totalSales / sellerData.salesCount).toFixed(2) : "0.00"}
               </p>
+              <p className="text-xs text-pos-white/40">
+                {sellerData?.totalItems || 0} itens · Média {sellerData && sellerData.salesCount > 0 ? (sellerData.totalItems / sellerData.salesCount).toFixed(1) : "0.0"} itens/venda · Preço médio: R$ {sellerData && sellerData.totalItems > 0 ? (sellerData.totalSales / sellerData.totalItems).toFixed(2) : "0.00"}
+              </p>
             </div>
 
             {/* Goal & Achievement */}
