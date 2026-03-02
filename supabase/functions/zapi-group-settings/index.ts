@@ -6,9 +6,12 @@ const corsHeaders = {
 };
 
 interface GroupSettingsRequest {
-  action: 'update-photo' | 'update-description' | 'update-name' | 'get-participants';
+  action: 'update-photo' | 'update-description' | 'update-name' | 'get-participants' |
+          'set-messages-admins-only' | 'set-add-admins-only' |
+          'add-participant' | 'remove-participant' | 'promote-admin' | 'demote-admin';
   groupId: string;
-  value?: string; // URL for photo, text for description/name
+  value?: string;
+  phone?: string;
 }
 
 serve(async (req) => {
@@ -28,7 +31,7 @@ serve(async (req) => {
       );
     }
 
-    const { action, groupId, value }: GroupSettingsRequest = await req.json();
+    const { action, groupId, value, phone }: GroupSettingsRequest = await req.json();
     const baseUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}`;
 
     let endpoint: string;
@@ -51,6 +54,30 @@ serve(async (req) => {
       case 'get-participants':
         endpoint = `${baseUrl}/group-participants/${groupId}`;
         method = 'GET';
+        break;
+      case 'set-messages-admins-only':
+        endpoint = `${baseUrl}/update-group-settings`;
+        body = { groupId, settings: { sendMessages: value === 'true' ? 'admins' : 'all' } };
+        break;
+      case 'set-add-admins-only':
+        endpoint = `${baseUrl}/update-group-settings`;
+        body = { groupId, settings: { editGroup: value === 'true' ? 'admins' : 'all' } };
+        break;
+      case 'add-participant':
+        endpoint = `${baseUrl}/add-participant`;
+        body = { groupId, phone };
+        break;
+      case 'remove-participant':
+        endpoint = `${baseUrl}/remove-participant`;
+        body = { groupId, phone };
+        break;
+      case 'promote-admin':
+        endpoint = `${baseUrl}/promote-participant`;
+        body = { groupId, phone };
+        break;
+      case 'demote-admin':
+        endpoint = `${baseUrl}/demote-participant`;
+        body = { groupId, phone };
         break;
       default:
         return new Response(
