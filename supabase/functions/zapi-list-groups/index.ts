@@ -63,31 +63,38 @@ serve(async (req) => {
     // Filter only groups (isGroup === true)
     const groupsOnly = allGroups.filter((g: any) => g.isGroup);
 
-    // Fetch profile pictures for groups without photo
-    const groupsNeedingPhoto = groupsOnly.filter((g: any) => !g.imgUrl && !g.profileThumbnail);
+    // Fetch metadata (participant count + photo) for each group using light-group-metadata
+    console.log(`Fetching metadata for ${groupsOnly.length} groups...`);
     
-    if (groupsNeedingPhoto.length > 0) {
-      console.log(`Fetching profile pictures for ${groupsNeedingPhoto.length} groups...`);
-      
-      for (const group of groupsNeedingPhoto) {
-        try {
-          const groupPhone = group.phone || group.id;
-          const ppUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/profile-picture/${groupPhone}`;
-          const ppRes = await fetch(ppUrl, {
-            headers: { 'Client-Token': clientToken },
-          });
-          
-          if (ppRes.ok) {
-            const ppData = await ppRes.json();
-            if (ppData?.link || ppData?.imgUrl || ppData?.profilePictureUrl) {
-              group.imgUrl = ppData.link || ppData.imgUrl || ppData.profilePictureUrl;
+    for (const group of groupsOnly) {
+      try {
+        const groupPhone = group.phone || group.id;
+        const metaUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/light-group-metadata/${groupPhone}`;
+        const metaRes = await fetch(metaUrl, {
+          headers: { 'Client-Token': clientToken },
+        });
+        
+        if (metaRes.ok) {
+          const metaData = await metaRes.json();
+          // Get participant count from metadata
+          if (metaData?.participants) {
+            group._participantCount = metaData.participants.length;
+          } else if (metaData?.participantsCount) {
+            group._participantCount = metaData.participantsCount;
+          }
+          // Get photo if missing
+          if (!group.imgUrl && !group.profileThumbnail) {
+            if (metaData?.profilePictureUrl || metaData?.imgUrl) {
+              group.imgUrl = metaData.profilePictureUrl || metaData.imgUrl;
             }
           }
-          // Small delay to avoid rate limiting
-          await new Promise(r => setTimeout(r, 200));
-        } catch (err) {
-          console.error(`Error fetching profile pic for ${group.name}:`, err);
+        } else {
+          await metaRes.text(); // consume body
         }
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 300));
+      } catch (err) {
+        console.error(`Error fetching metadata for ${group.name}:`, err);
       }
     }
 
@@ -102,7 +109,7 @@ serve(async (req) => {
         name: g.name || 'Sem nome',
         description: g.description || null,
         photo_url: g.imgUrl || g.profileThumbnail || null,
-        participant_count: g.participants?.length || g.size || 0,
+        participant_count: g._participantCount || g.participants?.length || g.size || 0,
         is_admin: g.isAdmin || false,
         instance_id: instanceId,
         last_synced_at: new Date().toISOString(),
