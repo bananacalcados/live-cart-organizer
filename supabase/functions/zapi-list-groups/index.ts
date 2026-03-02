@@ -63,6 +63,34 @@ serve(async (req) => {
     // Filter only groups (isGroup === true)
     const groupsOnly = allGroups.filter((g: any) => g.isGroup);
 
+    // Fetch profile pictures for groups without photo
+    const groupsNeedingPhoto = groupsOnly.filter((g: any) => !g.imgUrl && !g.profileThumbnail);
+    
+    if (groupsNeedingPhoto.length > 0) {
+      console.log(`Fetching profile pictures for ${groupsNeedingPhoto.length} groups...`);
+      
+      for (const group of groupsNeedingPhoto) {
+        try {
+          const groupPhone = group.phone || group.id;
+          const ppUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/profile-picture/${groupPhone}`;
+          const ppRes = await fetch(ppUrl, {
+            headers: { 'Client-Token': clientToken },
+          });
+          
+          if (ppRes.ok) {
+            const ppData = await ppRes.json();
+            if (ppData?.link || ppData?.imgUrl || ppData?.profilePictureUrl) {
+              group.imgUrl = ppData.link || ppData.imgUrl || ppData.profilePictureUrl;
+            }
+          }
+          // Small delay to avoid rate limiting
+          await new Promise(r => setTimeout(r, 200));
+        } catch (err) {
+          console.error(`Error fetching profile pic for ${group.name}:`, err);
+        }
+      }
+    }
+
     // If syncToDb, upsert to whatsapp_groups table
     if (syncToDb) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

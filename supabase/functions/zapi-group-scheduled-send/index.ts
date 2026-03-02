@@ -34,7 +34,7 @@ serve(async (req) => {
     // Fetch scheduled message
     const { data: msg, error: msgErr } = await supabase
       .from('group_campaign_scheduled_messages')
-      .select('*, group_campaigns!inner(target_groups, send_speed)')
+      .select('*, group_campaigns!inner(id, target_groups, send_speed)')
       .eq('id', scheduledMessageId)
       .single();
 
@@ -58,9 +58,28 @@ serve(async (req) => {
       .eq('id', scheduledMessageId);
 
     const campaign = msg.group_campaigns;
+    const campaignId = campaign.id;
     const targetGroupIds = campaign.target_groups || [];
     const speed = msg.send_speed || campaign.send_speed || 'normal';
     const [minDelay, maxDelay] = SPEED_DELAYS[speed] || SPEED_DELAYS.normal;
+
+    // Fetch campaign variables for substitution
+    const { data: varsData } = await supabase
+      .from('campaign_variables')
+      .select('variable_name, variable_value')
+      .eq('campaign_id', campaignId);
+
+    const campaignVars: Record<string, string> = {};
+    if (varsData) {
+      for (const v of varsData) {
+        campaignVars[v.variable_name] = v.variable_value;
+      }
+    }
+
+    // Add built-in variables
+    const now = new Date();
+    campaignVars['data_hoje'] = now.toLocaleDateString('pt-BR');
+    campaignVars['horario'] = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     // Fetch groups
     const { data: groups } = await supabase
@@ -78,6 +97,18 @@ serve(async (req) => {
       );
     }
 
+    // Helper to replace variables in text
+    const replaceVars = (text: string, groupName: string): string => {
+      let result = text;
+      // Replace campaign variables
+      for (const [key, value] of Object.entries(campaignVars)) {
+        result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+      }
+      // Replace group-specific variables
+      result = result.replace(/\{\{nome_grupo\}\}/g, groupName);
+      return result;
+    };
+
     let sentCount = 0;
     let failedCount = 0;
 
@@ -88,20 +119,22 @@ serve(async (req) => {
           groupId: group.group_id,
         };
 
+        // Apply variable substitution to message content
+        const messageContent = msg.message_content ? replaceVars(msg.message_content, group.name) : '';
+
         if (msg.message_type === 'poll' && msg.poll_options) {
-          // Use Z-API poll endpoint
           endpoint = 'zapi-send-group-message';
           body.type = 'poll';
           body.pollOptions = msg.poll_options;
-          body.message = msg.message_content || '';
+          body.message = messageContent;
         } else if (msg.message_type !== 'text' && msg.media_url) {
           body.type = msg.message_type;
           body.mediaUrl = msg.media_url;
-          body.caption = msg.message_content || '';
-          body.message = msg.message_content || '';
+          body.caption = messageContent;
+          body.message = messageContent;
         } else {
           body.type = 'text';
-          body.message = msg.message_content || '';
+          body.message = messageContent;
         }
 
         const sendRes = await fetch(`${supabaseUrl}/functions/v1/${endpoint}`, {
