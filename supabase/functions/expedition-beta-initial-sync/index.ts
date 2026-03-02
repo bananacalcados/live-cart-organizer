@@ -6,97 +6,46 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const TINY_V3_BASE = 'https://api.tiny.com.br/public-api/v3';
+const TINY_V2_BASE = 'https://api.tiny.com.br/api2';
 
-async function getTinyV3Token(supabase: any): Promise<string | null> {
-  const { data } = await supabase
-    .from('app_settings')
-    .select('value')
-    .eq('key', 'tiny_app_token')
-    .single();
-
-  if (!data?.value?.access_token) return null;
-  const tokenData = data.value as any;
-
-  const connectedAt = new Date(tokenData.connected_at || tokenData.refreshed_at || 0).getTime();
-  const expiresIn = (tokenData.expires_in || 300) * 1000;
-
-  if (Date.now() - connectedAt > expiresIn - 30000) {
-    console.log('Tiny v3 token expired, refreshing...');
-    try {
-      const refreshRes = await fetch('https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: tokenData.refresh_token,
-          client_id: Deno.env.get('TINY_APP_CLIENT_ID')!,
-          client_secret: Deno.env.get('TINY_APP_CLIENT_SECRET')!,
-        }).toString(),
-      });
-
-      if (!refreshRes.ok) {
-        console.error('Token refresh failed:', await refreshRes.text());
-        return null;
-      }
-
-      const newTokens = await refreshRes.json();
-      await supabase.from('app_settings').upsert({
-        key: 'tiny_app_token',
-        value: {
-          access_token: newTokens.access_token,
-          refresh_token: newTokens.refresh_token || tokenData.refresh_token,
-          id_token: newTokens.id_token,
-          expires_in: newTokens.expires_in,
-          token_type: newTokens.token_type,
-          refreshed_at: new Date().toISOString(),
-          connected_at: tokenData.connected_at,
-        },
-      }, { onConflict: 'key' });
-
-      return newTokens.access_token;
-    } catch (e) {
-      console.error('Token refresh error:', e);
-      return null;
-    }
-  }
-
-  return tokenData.access_token;
-}
-
-async function tinyV3Get(token: string, path: string, params?: Record<string, string>, maxRetries = 3): Promise<any> {
-  const url = new URL(`${TINY_V3_BASE}${path}`);
-  if (params) {
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, v);
-    }
-  }
+async function tinyV2Post(token: string, endpoint: string, params: Record<string, string>, maxRetries = 3): Promise<any> {
+  const url = `${TINY_V2_BASE}/${endpoint}`;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const resp = await fetch(url.toString(), {
-      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+    const body = new URLSearchParams({ token, formato: 'json', ...params });
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
     });
     if (resp.status === 429) {
       if (attempt < maxRetries) {
         const wait = Math.min(2000 * Math.pow(2, attempt), 10000);
-        console.log(`429 on ${path}, retry ${attempt + 1} in ${wait}ms`);
+        console.log(`429 on ${endpoint}, retry ${attempt + 1} in ${wait}ms`);
         await new Promise(r => setTimeout(r, wait));
         continue;
       }
     }
     if (!resp.ok) {
       const errText = await resp.text();
-      throw new Error(`Tiny v3 ${path} failed (${resp.status}): ${errText.substring(0, 300)}`);
+      throw new Error(`Tiny v2 ${endpoint} failed (${resp.status}): ${errText.substring(0, 300)}`);
     }
-    return resp.json();
+    const json = await resp.json();
+    if (json.retorno?.status === 'Erro') {
+      const errMsg = json.retorno?.erros?.[0]?.erro || JSON.stringify(json.retorno?.erros);
+      // "página não existe" means we've gone past the last page - return empty
+      if (typeof errMsg === 'string' && errMsg.toLowerCase().includes('gina')) {
+        return { pedidos: [] };
+      }
+      throw new Error(`Tiny v2 ${endpoint} error: ${errMsg}`);
+    }
+    return json.retorno;
   }
 }
 
-function extractItems(order: any): any[] {
-  const candidates = [order.itens, order.items, order.produtos];
-  for (const c of candidates) {
-    if (Array.isArray(c) && c.length > 0) return c;
-  }
-  return [];
+function extractItemsV2(pedido: any): any[] {
+  const itens = pedido.itens;
+  if (!Array.isArray(itens)) return [];
+  return itens.map((i: any) => i.item).filter(Boolean);
 }
 
 // Pre-load all existing tiny_order_ids to avoid per-order DB lookups
@@ -118,10 +67,8 @@ async function loadExistingOrders(supabase: any): Promise<Map<string, { id: stri
     if (data.length < PAGE) break;
   }
 
-  // Batch check which orders have items
   const orderIds = Array.from(map.values()).map((v: any) => v.id);
   if (orderIds.length > 0) {
-    // Get distinct expedition_order_ids that have items
     const { data: withItems } = await supabase
       .from('expedition_beta_order_items')
       .select('expedition_order_id')
@@ -137,7 +84,7 @@ async function loadExistingOrders(supabase: any): Promise<Map<string, { id: stri
   return map;
 }
 
-// === PASS 1: Import approved orders (situacao=3) ===
+// === PASS 1: Import approved orders (situacao=Aprovado) ===
 async function passApproved(token: string, supabase: any, existingMap: Map<string, any>, startTime: number) {
   let synced = 0, skipped = 0, page = 1, hasMore = true;
 
@@ -145,20 +92,20 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
     if (Date.now() - startTime > 40000) { console.log('Pass1 timeout'); break; }
 
     console.log(`[Pass1-Approved] page ${page}`);
-    const data = await tinyV3Get(token, '/pedidos', { pagina: String(page), limite: '100', situacao: '3' });
-    const orders = data.itens || data.items || [];
-    if (orders.length === 0) { hasMore = false; break; }
+    const data = await tinyV2Post(token, 'pedidos.pesquisa.php', { situacao: 'Aprovado', pagina: String(page) });
+    const pedidos = data.pedidos || [];
+    if (pedidos.length === 0) { hasMore = false; break; }
 
-    // Collect new orders that need detail fetch
     const needDetail: any[] = [];
     const existingNeedBackfill: any[] = [];
 
-    for (const item of orders) {
+    for (const wrapper of pedidos) {
+      const item = wrapper.pedido;
+      if (!item) continue;
       const tinyId = String(item.id);
       const existing = existingMap.get(tinyId);
 
       if (existing) {
-        // Only need detail if missing items
         if (!existing.has_items) {
           existingNeedBackfill.push({ item, existing });
         }
@@ -168,7 +115,6 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
       }
     }
 
-    // Fetch details only for orders that actually need it (new + backfill)
     const allNeedingDetail = [
       ...needDetail.map(item => ({ item, existing: null, isNew: true })),
       ...existingNeedBackfill.map(({ item, existing }) => ({ item, existing, isNew: false })),
@@ -178,23 +124,24 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
       if (Date.now() - startTime > 40000) break;
       const tinyId = String(item.id);
 
-      let order: any;
+      let pedido: any;
       try {
-        await new Promise(r => setTimeout(r, 200));
-        order = await tinyV3Get(token, `/pedidos/${tinyId}`);
+        await new Promise(r => setTimeout(r, 300));
+        const detail = await tinyV2Post(token, 'pedido.obter.php', { id: tinyId });
+        pedido = detail.pedido;
+        if (!pedido) { console.error(`No pedido in detail for ${tinyId}`); continue; }
       } catch (fetchErr: any) {
         console.error(`Detail fail ${tinyId}: ${fetchErr.message}`);
-        if (isNew) continue; // Skip new orders without detail
         continue;
       }
 
-      // Check if detail shows dispatched
-      const detailSituacao = order.situacao ?? item.situacao;
-      if ([5, 6].includes(detailSituacao)) {
+      // Check if detail shows dispatched/cancelled
+      const situacao = pedido.situacao || '';
+      if (['Enviado', 'Entregue'].includes(situacao)) {
         if (existing && existing.expedition_status !== 'dispatched') {
           await supabase.from('expedition_beta_orders').update({
             expedition_status: 'dispatched',
-            tracking_code: order.codigoRastreamento || order.codigoRastreio || existing.tracking_code,
+            tracking_code: pedido.codigo_rastreamento || existing.tracking_code,
           }).eq('id', existing.id);
           synced++;
         }
@@ -203,19 +150,17 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
 
       if (!isNew && existing) {
         // Backfill items
-        const rawItems = extractItems(order);
+        const rawItems = extractItemsV2(pedido);
         if (rawItems.length > 0) {
-          const itemsToInsert = rawItems.map((li: any) => {
-            const prod = li.produto || li;
-            return {
-              expedition_order_id: existing.id,
-              product_name: prod.descricao || prod.nome || prod.description || 'Produto',
-              variant_name: null, sku: prod.sku || prod.codigo || null,
-              quantity: parseFloat(li.quantidade || li.quantity || 1),
-              unit_price: parseFloat(li.valorUnitario || li.valor || 0),
-              weight_grams: 0,
-            };
-          });
+          const itemsToInsert = rawItems.map((prod: any) => ({
+            expedition_order_id: existing.id,
+            product_name: prod.descricao || prod.nome || 'Produto',
+            variant_name: null,
+            sku: prod.codigo || null,
+            quantity: parseFloat(prod.quantidade || 1),
+            unit_price: parseFloat(prod.valor_unitario || 0),
+            weight_grams: 0,
+          }));
           await supabase.from('expedition_beta_order_items').insert(itemsToInsert);
           console.log(`Backfilled ${itemsToInsert.length} items for ${tinyId}`);
           synced++;
@@ -224,58 +169,62 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
       }
 
       // Insert new order
-      const ecomNum = item.ecommerce?.numeroPedidoEcommerce || '';
-      const orderNum = String(order.numeroPedido || item.numeroPedido || '');
-      const ecom = order.ecommerce?.numeroPedidoEcommerce || ecomNum;
-      const finalShopifyId = ecom ? String(ecom) : `tiny-${tinyId}`;
-      const cliente = order.cliente || {};
-      const endereco = cliente.endereco || {};
+      const ecomNum = pedido.numero_ecommerce || '';
+      const orderNum = String(pedido.numero || '');
+      const finalShopifyId = ecomNum ? String(ecomNum) : `tiny-${tinyId}`;
+      const cliente = pedido.cliente || {};
       const customerName = cliente.nome || cliente.fantasia || "Cliente Tiny";
 
       const { data: inserted, error: insertError } = await supabase
         .from("expedition_beta_orders")
         .insert({
           shopify_order_id: finalShopifyId,
-          shopify_order_name: ecom ? `#${ecom}` : `T-${orderNum}`,
-          shopify_order_number: ecom || orderNum,
-          shopify_created_at: order.data || order.dataCriacao || item.dataCriacao || new Date().toISOString(),
+          shopify_order_name: ecomNum ? `#${ecomNum}` : `T-${orderNum}`,
+          shopify_order_number: ecomNum || orderNum,
+          shopify_created_at: pedido.data_pedido || pedido.data_criacao || new Date().toISOString(),
           customer_name: customerName,
           customer_email: cliente.email || null,
-          customer_phone: cliente.telefone || cliente.celular || null,
-          customer_cpf: cliente.cpfCnpj || null,
-          shipping_address: endereco.endereco ? {
-            address1: endereco.endereco || '', address2: endereco.complemento || '',
-            city: endereco.cidade || '', province: endereco.uf || '', zip: endereco.cep || '',
-            country: 'Brazil', name: customerName, number: endereco.numero || '',
-            neighborhood: endereco.bairro || '', phone: cliente.telefone || cliente.celular || ''
-          } : (order.enderecoEntrega || null),
-          financial_status: 'paid', fulfillment_status: 'unfulfilled',
+          customer_phone: cliente.fone || cliente.celular || null,
+          customer_cpf: cliente.cpf_cnpj || null,
+          shipping_address: pedido.endereco_entrega ? {
+            address1: pedido.endereco_entrega.endereco || '',
+            address2: pedido.endereco_entrega.complemento || '',
+            city: pedido.endereco_entrega.cidade || '',
+            province: pedido.endereco_entrega.uf || '',
+            zip: pedido.endereco_entrega.cep || '',
+            country: 'Brazil',
+            name: customerName,
+            number: pedido.endereco_entrega.numero || '',
+            neighborhood: pedido.endereco_entrega.bairro || '',
+            phone: cliente.fone || cliente.celular || ''
+          } : null,
+          financial_status: 'paid',
+          fulfillment_status: 'unfulfilled',
           expedition_status: 'approved',
-          subtotal_price: parseFloat(order.valorTotalProdutos || item.valor || 0),
-          total_price: parseFloat(order.valorTotalPedido || item.valor || 0),
-          total_discount: parseFloat(order.valorDesconto || 0),
-          total_shipping: parseFloat(order.valorFrete || 0),
+          subtotal_price: parseFloat(pedido.totalProdutos || pedido.total_produtos || 0),
+          total_price: parseFloat(pedido.totalPedido || pedido.total_pedido || 0),
+          total_discount: parseFloat(pedido.desconto || 0),
+          total_shipping: parseFloat(pedido.frete || 0),
           total_weight_grams: 0,
-          has_gift: (order.observacoes || '').toLowerCase().includes("brinde"),
-          notes: order.observacoes || null,
-          tiny_order_id: tinyId, tiny_order_number: orderNum
+          has_gift: (pedido.obs || pedido.observacoes || '').toLowerCase().includes("brinde"),
+          notes: pedido.obs || pedido.observacoes || null,
+          tiny_order_id: tinyId,
+          tiny_order_number: orderNum
         }).select().single();
 
       if (insertError) { console.error(`Insert error ${tinyId}:`, insertError.message); continue; }
 
-      const rawItems = extractItems(order);
+      const rawItems = extractItemsV2(pedido);
       if (rawItems.length > 0 && inserted) {
-        const itemsToInsert = rawItems.map((li: any) => {
-          const prod = li.produto || li;
-          return {
-            expedition_order_id: inserted.id,
-            product_name: prod.descricao || prod.nome || prod.description || 'Produto',
-            variant_name: null, sku: prod.sku || prod.codigo || null,
-            quantity: parseFloat(li.quantidade || li.quantity || 1),
-            unit_price: parseFloat(li.valorUnitario || li.valor || 0),
-            weight_grams: 0
-          };
-        });
+        const itemsToInsert = rawItems.map((prod: any) => ({
+          expedition_order_id: inserted.id,
+          product_name: prod.descricao || prod.nome || 'Produto',
+          variant_name: null,
+          sku: prod.codigo || null,
+          quantity: parseFloat(prod.quantidade || 1),
+          unit_price: parseFloat(prod.valor_unitario || 0),
+          weight_grams: 0
+        }));
         await supabase.from("expedition_beta_order_items").insert(itemsToInsert);
       }
 
@@ -290,24 +239,24 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
   return { synced, skipped };
 }
 
-// === PASS 2: Update dispatched orders (situacao=5,6) - NO detail fetch needed ===
+// === PASS 2: Update dispatched orders (Enviado/Entregue) ===
 async function passDispatched(token: string, supabase: any, existingMap: Map<string, any>, startTime: number) {
   let updated = 0;
 
-  for (const sit of ['5', '6']) {
+  for (const sit of ['Enviado', 'Entregue']) {
     let page = 1, hasMore = true;
     while (hasMore) {
       if (Date.now() - startTime > 50000) { console.log('Pass2 timeout'); return updated; }
 
       console.log(`[Pass2-Dispatched] sit=${sit} p${page}`);
-      const data = await tinyV3Get(token, '/pedidos', { pagina: String(page), limite: '100', situacao: sit });
-      const orders = data.itens || data.items || [];
-      if (orders.length === 0) { hasMore = false; break; }
+      const data = await tinyV2Post(token, 'pedidos.pesquisa.php', { situacao: sit, pagina: String(page) });
+      const pedidos = data.pedidos || [];
+      if (pedidos.length === 0) { hasMore = false; break; }
 
-      // Batch: collect updates
-      const updates: { id: string; tracking_code?: string }[] = [];
-
-      for (const item of orders) {
+      const updates: { id: string }[] = [];
+      for (const wrapper of pedidos) {
+        const item = wrapper.pedido;
+        if (!item) continue;
         const tinyId = String(item.id);
         const existing = existingMap.get(tinyId);
 
@@ -317,7 +266,6 @@ async function passDispatched(token: string, supabase: any, existingMap: Map<str
         }
       }
 
-      // Batch update all at once
       if (updates.length > 0) {
         const ids = updates.map(u => u.id);
         await supabase.from('expedition_beta_orders')
@@ -335,7 +283,7 @@ async function passDispatched(token: string, supabase: any, existingMap: Map<str
   return updated;
 }
 
-// === PASS 3: Update cancelled orders (situacao=9) - NO detail fetch ===
+// === PASS 3: Update cancelled orders (Cancelado) ===
 async function passCancelled(token: string, supabase: any, existingMap: Map<string, any>, startTime: number) {
   let updated = 0;
   let page = 1, hasMore = true;
@@ -344,12 +292,14 @@ async function passCancelled(token: string, supabase: any, existingMap: Map<stri
     if (Date.now() - startTime > 55000) { console.log('Pass3 timeout'); return updated; }
 
     console.log(`[Pass3-Cancelled] p${page}`);
-    const data = await tinyV3Get(token, '/pedidos', { pagina: String(page), limite: '100', situacao: '9' });
-    const orders = data.itens || data.items || [];
-    if (orders.length === 0) { hasMore = false; break; }
+    const data = await tinyV2Post(token, 'pedidos.pesquisa.php', { situacao: 'Cancelado', pagina: String(page) });
+    const pedidos = data.pedidos || [];
+    if (pedidos.length === 0) { hasMore = false; break; }
 
     const ids: string[] = [];
-    for (const item of orders) {
+    for (const wrapper of pedidos) {
+      const item = wrapper.pedido;
+      if (!item) continue;
       const tinyId = String(item.id);
       const existing = existingMap.get(tinyId);
       if (existing && existing.expedition_status !== 'cancelled') {
@@ -373,22 +323,24 @@ async function passCancelled(token: string, supabase: any, existingMap: Map<stri
   return updated;
 }
 
-// === PASS 0: Cleanup (inverted logic) - fetch approved from Tiny, delete locals not in that set ===
+// === PASS 0: Cleanup - fetch approved from Tiny, delete locals not in that set ===
 async function passCleanup(token: string, supabase: any, startTime: number, timeoutMs = 30000) {
-  // Step 1: Fetch ALL approved (situacao=3) tiny_order_ids from Tiny
   const tinyApprovedIds = new Set<string>();
   let page = 1, hasMore = true;
 
   while (hasMore) {
     if (Date.now() - startTime > timeoutMs) { console.log('Cleanup fetch timeout'); break; }
     try {
-      const data = await tinyV3Get(token, '/pedidos', { pagina: String(page), limite: '100', situacao: '3' });
-      const orders = data.itens || data.items || [];
-      if (orders.length === 0) { hasMore = false; break; }
-      for (const item of orders) tinyApprovedIds.add(String(item.id));
-      console.log(`[Cleanup] Tiny approved page ${page}: ${orders.length} orders`);
+      const data = await tinyV2Post(token, 'pedidos.pesquisa.php', { situacao: 'Aprovado', pagina: String(page) });
+      const pedidos = data.pedidos || [];
+      if (pedidos.length === 0) { hasMore = false; break; }
+      for (const wrapper of pedidos) {
+        const item = wrapper.pedido;
+        if (item) tinyApprovedIds.add(String(item.id));
+      }
+      console.log(`[Cleanup] Tiny approved page ${page}: ${pedidos.length} orders`);
       page++;
-      if (page > 10 || orders.length < 100) hasMore = false;
+      if (page > 10 || pedidos.length < 20) hasMore = false;
     } catch (err: any) {
       console.error(`Cleanup fetch page ${page} error: ${err.message}`);
       hasMore = false;
@@ -397,7 +349,6 @@ async function passCleanup(token: string, supabase: any, startTime: number, time
 
   console.log(`[Cleanup] Total approved in Tiny: ${tinyApprovedIds.size}`);
 
-  // Step 2: Get all local approved orders
   const { data: localApproved } = await supabase
     .from('expedition_beta_orders')
     .select('id, tiny_order_id')
@@ -406,7 +357,6 @@ async function passCleanup(token: string, supabase: any, startTime: number, time
 
   if (!localApproved || localApproved.length === 0) return 0;
 
-  // Step 3: Find locals NOT in Tiny's approved set → delete them
   const toDelete = localApproved.filter((o: any) => !tinyApprovedIds.has(String(o.tiny_order_id)));
 
   if (toDelete.length === 0) {
@@ -418,7 +368,6 @@ async function passCleanup(token: string, supabase: any, startTime: number, time
   const deleteTinyIds = toDelete.map((o: any) => o.tiny_order_id);
   console.log(`[Cleanup] Deleting ${toDelete.length} stale orders: ${deleteTinyIds.join(', ')}`);
 
-  // Delete items first (FK), then orders
   await supabase.from('expedition_beta_order_items').delete().in('expedition_order_id', deleteIds);
   await supabase.from('expedition_beta_orders').delete().in('id', deleteIds);
 
@@ -436,18 +385,16 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const token = await getTinyV3Token(supabase);
-    if (!token) throw new Error("Token OAuth do Tiny indisponível.");
+    const token = Deno.env.get("TINY_ERP_TOKEN");
+    if (!token) throw new Error("TINY_ERP_TOKEN não configurado.");
 
     const startTime = Date.now();
 
-    // Pre-load all existing orders in memory (avoids per-order DB queries)
     console.log("Loading existing orders...");
     const existingMap = await loadExistingOrders(supabase);
     console.log(`Loaded ${existingMap.size} existing orders in ${Date.now() - startTime}ms`);
 
-    // Run cleanup FIRST - inverted logic: delete locals not in Tiny's approved list
-    console.log("=== PASS 0: Cleanup (inverted logic) ===");
+    console.log("=== PASS 0: Cleanup ===");
     const cleaned = await passCleanup(token, supabase, startTime, 30000);
 
     console.log("=== PASS 1: Approved ===");
