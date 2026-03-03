@@ -4,8 +4,11 @@ import { toast } from "sonner";
 import {
   Plus, Trash2, GripVertical, Eye, Copy, ExternalLink, Link,
   Phone, MapPin, ShoppingBag, Globe, Instagram, Mail, ChevronUp,
-  ChevronDown, Image, Type, Minus, BarChart3, MousePointer, Users, Loader2
+  ChevronDown, Image, Type, Minus, BarChart3, MousePointer, Users, Loader2,
+  Search, Check
 } from "lucide-react";
+import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -88,6 +91,14 @@ const BUTTON_STYLES = [
   { value: 'rounded', label: 'Arredondado' },
 ];
 
+interface CatalogProduct {
+  id: string;
+  title: string;
+  image: string;
+  price: string;
+  handle: string;
+}
+
 export function LinkPageManager() {
   const [pages, setPages] = useState<LinkPage[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -97,6 +108,14 @@ export function LinkPageManager() {
   const [saving, setSaving] = useState(false);
   const [analytics, setAnalytics] = useState<any[]>([]);
   const [analyticsPageId, setAnalyticsPageId] = useState<string | null>(null);
+
+  // Catalog product picker state
+  const [catalogPickerOpen, setCatalogPickerOpen] = useState(false);
+  const [catalogPickerItemId, setCatalogPickerItemId] = useState<string | null>(null);
+  const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
+  const [shopifySearch, setShopifySearch] = useState("");
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [selectedCatalogProducts, setSelectedCatalogProducts] = useState<CatalogProduct[]>([]);
 
   // New page form
   const [newPageOpen, setNewPageOpen] = useState(false);
