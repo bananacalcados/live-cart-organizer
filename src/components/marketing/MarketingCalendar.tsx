@@ -455,6 +455,58 @@ export function MarketingCalendar() {
         </Card>
       )}
 
+      {/* Campaign Rules - Persistent */}
+      {savedRules && !isEditingRules && (
+        <Card className="border-2 border-red-500/40 bg-red-500/10 shadow-lg shadow-red-500/5">
+          <CardContent className="py-4 px-5">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-red-500" />
+                <h3 className="font-bold text-sm text-red-500 uppercase tracking-wide">⚠️ Regras Obrigatórias de Campanha</h3>
+              </div>
+              <Button size="sm" variant="ghost" className="gap-1 text-xs h-7" onClick={() => setIsEditingRules(true)}>
+                <Edit3 className="h-3 w-3" />Editar
+              </Button>
+            </div>
+            <RichTextPreview content={savedRules} />
+          </CardContent>
+        </Card>
+      )}
+
+      {isEditingRules && (
+        <Card className="border-red-500/30 bg-card">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-red-500" />
+                <h3 className="text-sm font-semibold">Regras Obrigatórias de Campanha</h3>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => { setCampaignRules(savedRules); setIsEditingRules(false); }}>
+                  Cancelar
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={saveRules} disabled={isSavingRules}>
+                  {isSavingRules ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                  Salvar Regras
+                </Button>
+              </div>
+            </div>
+            <RichTextEditor
+              value={campaignRules}
+              onChange={setCampaignRules}
+              placeholder="Escreva aqui as regras obrigatórias que devem ser seguidas em TODAS as campanhas, independente do mês..."
+              minRows={5}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {!savedRules && !isEditingRules && (
+        <Button variant="outline" size="sm" className="gap-1 border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => setIsEditingRules(true)}>
+          <ShieldAlert className="h-3.5 w-3.5" />Definir Regras Obrigatórias de Campanha
+        </Button>
+      )}
+
       {/* Monthly Goals Summary */}
       {monthGoal && goalsList.length > 0 && (
         <Card className="border-primary/20 bg-primary/5">
