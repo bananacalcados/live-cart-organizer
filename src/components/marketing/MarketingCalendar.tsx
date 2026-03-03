@@ -306,15 +306,15 @@ export function MarketingCalendar() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={prevMonth}><ChevronLeft className="h-4 w-4" /></Button>
-          <h2 className="text-xl font-bold min-w-[200px] text-center">{MONTHS[month]} {year}</h2>
-          <Button variant="outline" size="icon" onClick={nextMonth}><ChevronRight className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" onClick={prevMonth} className="border-white/20 text-white hover:bg-white/10"><ChevronLeft className="h-4 w-4" /></Button>
+          <h2 className="text-xl font-bold min-w-[200px] text-center text-white">{MONTHS[month]} {year}</h2>
+          <Button variant="outline" size="icon" onClick={nextMonth} className="border-white/20 text-white hover:bg-white/10"><ChevronRight className="h-4 w-4" /></Button>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-1" onClick={() => setGoalDialogOpen(true)}>
+          <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setGoalDialogOpen(true)}>
             <Target className="h-3.5 w-3.5" />Metas do Mês
           </Button>
-          <Button variant="outline" size="sm" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
+          <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
         </div>
       </div>
 
@@ -335,10 +335,10 @@ export function MarketingCalendar() {
       )}
 
       {/* Calendar Grid */}
-      <div className="border rounded-lg overflow-hidden">
-        <div className="grid grid-cols-7 bg-muted/50">
+      <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'hsl(48 95% 50% / 0.3)' }}>
+        <div className="grid grid-cols-7" style={{ background: 'hsl(48 95% 50%)' }}>
           {WEEKDAYS.map(w => (
-            <div key={w} className="py-2 text-center text-xs font-medium text-muted-foreground border-b">{w}</div>
+            <div key={w} className="py-2 text-center text-xs font-semibold border-b" style={{ color: 'hsl(0 0% 5%)', borderColor: 'hsl(48 85% 40% / 0.3)' }}>{w}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
@@ -347,19 +347,23 @@ export function MarketingCalendar() {
             return (
               <div
                 key={idx}
-                className={`min-h-[100px] border-b border-r p-1 ${
-                  day ? 'bg-background hover:bg-muted/30 cursor-pointer' : 'bg-muted/20'
-                } ${isToday(day || 0) ? 'ring-2 ring-primary ring-inset' : ''}`}
+                className={`min-h-[100px] border-b border-r p-1 cursor-pointer ${
+                  isToday(day || 0) ? 'ring-2 ring-primary ring-inset' : ''
+                }`}
+                style={{
+                  background: day ? 'hsl(48 100% 85%)' : 'hsl(48 50% 92%)',
+                  borderColor: 'hsl(48 80% 70% / 0.4)',
+                }}
                 onClick={() => day && openDayDetail(getDateStr(day))}
               >
                 {day && (
                   <>
                     <div className="flex items-center justify-between">
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                        isToday(day) ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
-                      }`}>{day}</span>
+                        isToday(day) ? 'bg-primary text-primary-foreground' : ''
+                      }`} style={{ color: isToday(day) ? undefined : 'hsl(0 0% 15%)' }}>{day}</span>
                       {dayEntries.length > 0 && (
-                        <span className="text-[10px] text-muted-foreground">{dayEntries.length}</span>
+                        <span className="text-[10px]" style={{ color: 'hsl(0 0% 35%)' }}>{dayEntries.length}</span>
                       )}
                     </div>
                     <div className="mt-1 space-y-0.5">
@@ -388,7 +392,7 @@ export function MarketingCalendar() {
       </div>
 
       {/* Inline Month Notes (below calendar) */}
-      <Card>
+      <Card className="bg-card border-white/10">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold flex items-center gap-2">

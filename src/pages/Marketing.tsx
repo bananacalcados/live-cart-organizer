@@ -610,38 +610,38 @@ export default function Marketing() {
   // ─── Render ──────────────────────────────
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="min-h-screen dark" style={{ background: 'hsl(0 0% 6%)', colorScheme: 'dark' }}>
+      <header className="sticky top-0 z-50 w-full border-b" style={{ borderColor: 'hsl(0 0% 15%)', background: 'hsla(0, 0%, 6%, 0.95)', backdropFilter: 'blur(8px)' }}>
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Megaphone className="h-4 w-4" />
             </div>
-            <h1 className="text-lg font-bold">Marketing 360°</h1>
+            <h1 className="text-lg font-bold" style={{ color: 'hsl(48 95% 55%)' }}>Marketing 360°</h1>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1">← Início</Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/chat')}>Chat</Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1 text-white hover:text-white hover:bg-white/10">← Início</Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/chat')} className="text-white hover:text-white hover:bg-white/10">Chat</Button>
           </div>
         </div>
       </header>
 
       <div className="container py-4 space-y-4">
         <Tabs defaultValue="calendar">
-          <TabsList>
-            <TabsTrigger value="calendar" className="gap-1"><Calendar className="h-3.5 w-3.5" />Calendário</TabsTrigger>
-            <TabsTrigger value="campaigns" className="gap-1"><Target className="h-3.5 w-3.5" />Campanhas 360°</TabsTrigger>
-            <TabsTrigger value="customers" className="gap-1"><Users className="h-3.5 w-3.5" />Clientes RFM</TabsTrigger>
-            <TabsTrigger value="templates" className="gap-1"><Megaphone className="h-3.5 w-3.5" />Templates Meta</TabsTrigger>
-            <TabsTrigger value="disparos" className="gap-1"><Send className="h-3.5 w-3.5" />Disparos</TabsTrigger>
-            <TabsTrigger value="automations" className="gap-1"><Zap className="h-3.5 w-3.5" />Automações</TabsTrigger>
-            <TabsTrigger value="sectors" className="gap-1"><Store className="h-3.5 w-3.5" />Setores</TabsTrigger>
-            <TabsTrigger value="landing_pages" className="gap-1"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
-            <TabsTrigger value="leads" className="gap-1"><FileSpreadsheet className="h-3.5 w-3.5" />Leads</TabsTrigger>
-            <TabsTrigger value="groups_vip" className="gap-1"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
-            <TabsTrigger value="prizes" className="gap-1"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
-            <TabsTrigger value="live_commerce" className="gap-1"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
+          <TabsList className="bg-white/10 border border-white/10">
+            <TabsTrigger value="calendar" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Calendar className="h-3.5 w-3.5" />Calendário</TabsTrigger>
+            <TabsTrigger value="campaigns" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Target className="h-3.5 w-3.5" />Campanhas 360°</TabsTrigger>
+            <TabsTrigger value="customers" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Users className="h-3.5 w-3.5" />Clientes RFM</TabsTrigger>
+            <TabsTrigger value="templates" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Megaphone className="h-3.5 w-3.5" />Templates Meta</TabsTrigger>
+            <TabsTrigger value="disparos" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Send className="h-3.5 w-3.5" />Disparos</TabsTrigger>
+            <TabsTrigger value="automations" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Zap className="h-3.5 w-3.5" />Automações</TabsTrigger>
+            <TabsTrigger value="sectors" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Store className="h-3.5 w-3.5" />Setores</TabsTrigger>
+            <TabsTrigger value="landing_pages" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
+            <TabsTrigger value="leads" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><FileSpreadsheet className="h-3.5 w-3.5" />Leads</TabsTrigger>
+            <TabsTrigger value="groups_vip" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
+            <TabsTrigger value="prizes" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
+            <TabsTrigger value="live_commerce" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
           </TabsList>
 
           {/* ── CAMPANHAS ── */}

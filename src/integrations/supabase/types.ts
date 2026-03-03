@@ -3698,6 +3698,7 @@ export type Database = {
           id: string
           media_type: string | null
           media_url: string | null
+          text_color: string | null
           title: string
           updated_at: string
         }
@@ -3710,6 +3711,7 @@ export type Database = {
           id?: string
           media_type?: string | null
           media_url?: string | null
+          text_color?: string | null
           title?: string
           updated_at?: string
         }
@@ -3722,6 +3724,7 @@ export type Database = {
           id?: string
           media_type?: string | null
           media_url?: string | null
+          text_color?: string | null
           title?: string
           updated_at?: string
         }
