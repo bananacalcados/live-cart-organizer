@@ -39,6 +39,7 @@ import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispa
 import { PrizeManager } from "@/components/marketing/PrizeManager";
 import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLandingPageCreator";
 import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
+import { LinkPageManager } from "@/components/marketing/LinkPageManager";
 
 // ─── Types ──────────────────────────────────────
 
@@ -654,6 +655,7 @@ export default function Marketing() {
             <TabsTrigger value="groups_vip" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
             <TabsTrigger value="prizes" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
             <TabsTrigger value="live_commerce" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
+            <TabsTrigger value="link_pages" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Link className="h-3.5 w-3.5" />Link Pages</TabsTrigger>
           </TabsList>
 
           {/* ── CAMPANHAS ── */}
@@ -1031,6 +1033,11 @@ export default function Marketing() {
           {/* ── LIVE COMMERCE ── */}
           <TabsContent value="live_commerce" className="space-y-4">
             <LiveSessionManager />
+          </TabsContent>
+
+          {/* ── LINK PAGES ── */}
+          <TabsContent value="link_pages" className="space-y-4">
+            <LinkPageManager />
           </TabsContent>
 
           {/* ── CALENDÁRIO ── */}

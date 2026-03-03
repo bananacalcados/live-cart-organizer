@@ -78,7 +78,9 @@ serve(async (req) => {
     const mode = body.mode || 'from_api';
 
     if (mode === 'calculate_rfm') {
-      console.log('Calculating RFM scores...');
+      console.log('Calculating RFM scores from all sources...');
+
+      // 1. Aggregate from zoppy_sales (Shopify/Zoppy)
       const { data: salesData, error: salesError } = await supabase
         .from('zoppy_sales')
         .select('customer_phone, customer_name, customer_email, total, zoppy_created_at, customer_data')
@@ -91,6 +93,7 @@ serve(async (req) => {
         phone: string; orders: number; totalSpent: number;
         lastPurchase: string; firstPurchase: string;
         name: string; email: string; customerData: any;
+        zoppyId: string | null;
       }>();
 
       for (const sale of salesData || []) {
@@ -109,8 +112,52 @@ serve(async (req) => {
             firstPurchase: sale.zoppy_created_at || new Date().toISOString(),
             name: sale.customer_name || '', email: sale.customer_email || '',
             customerData: sale.customer_data,
+            zoppyId: null,
           });
         }
+      }
+
+      // 2. Also include customers from zoppy_customers (POS, Shopify sync) that have purchases but no sales in zoppy_sales
+      let allZoppyCustomers: any[] = [];
+      let zcFrom = 0;
+      const zcBatch = 1000;
+      while (true) {
+        const { data: zcData, error: zcErr } = await supabase
+          .from('zoppy_customers')
+          .select('zoppy_id, first_name, last_name, phone, email, total_orders, total_spent, last_purchase_at, first_purchase_at, city, state, gender, region_type, ddd')
+          .gt('total_orders', 0)
+          .range(zcFrom, zcFrom + zcBatch - 1);
+        if (zcErr) { console.error('zoppy_customers fetch error:', zcErr); break; }
+        if (!zcData || zcData.length === 0) break;
+        allZoppyCustomers = allZoppyCustomers.concat(zcData);
+        if (zcData.length < zcBatch) break;
+        zcFrom += zcBatch;
+      }
+
+      console.log(`Found ${customerMap.size} customers from sales, ${allZoppyCustomers.length} from zoppy_customers`);
+
+      // Merge POS/Shopify customers that aren't already in the sales map
+      for (const zc of allZoppyCustomers) {
+        if (!zc.phone && !zc.email) continue;
+        const key = zc.phone || zc.email;
+        // Check if already tracked by phone
+        if (zc.phone && customerMap.has(zc.phone)) {
+          // Update zoppyId so we preserve the existing record
+          customerMap.get(zc.phone)!.zoppyId = zc.zoppy_id;
+          continue;
+        }
+        // New customer from POS/Shopify sync
+        customerMap.set(key, {
+          phone: zc.phone || '',
+          orders: zc.total_orders || 0,
+          totalSpent: zc.total_spent || 0,
+          lastPurchase: zc.last_purchase_at || new Date().toISOString(),
+          firstPurchase: zc.first_purchase_at || new Date().toISOString(),
+          name: `${zc.first_name || ''} ${zc.last_name || ''}`.trim(),
+          email: zc.email || '',
+          customerData: { city: zc.city, state: zc.state, gender: zc.gender },
+          zoppyId: zc.zoppy_id,
+        });
       }
 
       const customers = Array.from(customerMap.values());
@@ -145,15 +192,18 @@ serve(async (req) => {
         const addr = cd.address || {};
         const { regionType, ddd } = classifyRegion(customer.phone, addr.address1, addr.city, addr.state);
 
+        // Use existing zoppy_id if customer came from POS/Shopify sync, otherwise generate from phone
+        const zoppyId = customer.zoppyId || cd.id || `phone_${customer.phone}`;
+
         upsertBatch.push({
-          zoppy_id: cd.id || `phone_${customer.phone}`,
+          zoppy_id: zoppyId,
           external_id: cd.externalId || null,
           first_name: cd.firstName || customer.name?.split(' ')[0] || null,
           last_name: cd.lastName || customer.name?.split(' ').slice(1).join(' ') || null,
           phone: customer.phone, email: customer.email || cd.email || null,
           gender: cd.gender || null, birth_date: cd.birthDate || null,
           address1: addr.address1 || null, address2: addr.address2 || null,
-          city: addr.city || null, state: addr.state || null,
+          city: cd.city || addr.city || null, state: cd.state || addr.state || null,
           postcode: addr.postcode || null, country: addr.country || null,
           zoppy_position: cd.position || null,
           rfm_recency_score: rScore, rfm_frequency_score: fScore,
