@@ -287,6 +287,62 @@ export function LinkPageManager() {
     toast.success("Link copiado!");
   };
 
+  // ─── Catalog Product Picker ───
+  const openCatalogPicker = async (itemId: string) => {
+    setCatalogPickerItemId(itemId);
+    const item = items.find(i => i.id === itemId);
+    const existing = (item?.style_config?.products || []) as CatalogProduct[];
+    setSelectedCatalogProducts(existing);
+    setCatalogPickerOpen(true);
+    if (shopifyProducts.length === 0) {
+      setLoadingProducts(true);
+      try {
+        const products = await fetchProducts(250);
+        setShopifyProducts(products);
+      } catch { toast.error("Erro ao carregar produtos da Shopify"); }
+      setLoadingProducts(false);
+    }
+  };
+
+  const searchShopifyProducts = async () => {
+    setLoadingProducts(true);
+    try {
+      const products = await fetchProducts(250, shopifySearch || undefined);
+      setShopifyProducts(products);
+    } catch { toast.error("Erro ao buscar produtos"); }
+    setLoadingProducts(false);
+  };
+
+  const toggleCatalogProduct = (product: ShopifyProduct) => {
+    const node = product.node;
+    const id = node.id;
+    const exists = selectedCatalogProducts.find(p => p.id === id);
+    if (exists) {
+      setSelectedCatalogProducts(prev => prev.filter(p => p.id !== id));
+    } else {
+      setSelectedCatalogProducts(prev => [...prev, {
+        id: node.id,
+        title: node.title,
+        image: node.images?.edges?.[0]?.node?.url || '',
+        price: node.priceRange?.minVariantPrice?.amount || '0',
+        handle: node.handle,
+      }]);
+    }
+  };
+
+  const saveCatalogProducts = async () => {
+    if (!catalogPickerItemId) return;
+    const item = items.find(i => i.id === catalogPickerItemId);
+    const newConfig = { ...(item?.style_config || {}), products: selectedCatalogProducts };
+    await updateItem(catalogPickerItemId, { style_config: newConfig });
+    setCatalogPickerOpen(false);
+    toast.success(`${selectedCatalogProducts.length} produtos selecionados`);
+  };
+
+  const filteredShopifyProducts = shopifyProducts.filter(p =>
+    !shopifySearch || p.node.title.toLowerCase().includes(shopifySearch.toLowerCase())
+  );
+
   const previewUrl = selectedPage ? `${window.location.origin}/l/${selectedPage.slug}` : '';
 
   // ─── List View ───
