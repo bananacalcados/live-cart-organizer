@@ -5452,6 +5452,7 @@ export type Database = {
           nfce_number: string | null
           nfce_pdf_url: string | null
           notes: string | null
+          paid_at: string | null
           payment_details: Json | null
           payment_gateway: string | null
           payment_link: string | null
@@ -5495,6 +5496,7 @@ export type Database = {
           nfce_number?: string | null
           nfce_pdf_url?: string | null
           notes?: string | null
+          paid_at?: string | null
           payment_details?: Json | null
           payment_gateway?: string | null
           payment_link?: string | null
@@ -5538,6 +5540,7 @@ export type Database = {
           nfce_number?: string | null
           nfce_pdf_url?: string | null
           notes?: string | null
+          paid_at?: string | null
           payment_details?: Json | null
           payment_gateway?: string | null
           payment_link?: string | null

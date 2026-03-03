@@ -866,7 +866,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   try {
                     await supabase
                       .from('pos_sales')
-                      .update({ status: 'paid', expedition_status: 'pending' } as any)
+                      .update({ status: 'paid', paid_at: new Date().toISOString(), expedition_status: 'pending' } as any)
                       .eq('id', sale.id);
                     toast.success('Pedido marcado como pago!');
                     onDeleted?.();

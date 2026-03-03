@@ -224,6 +224,7 @@ serve(async (req) => {
             .from("pos_sales")
             .update({
               status: "paid",
+              paid_at: new Date().toISOString(),
               expedition_status: "pending",
               payment_gateway: "mercadopago",
               customer_id: customerId,

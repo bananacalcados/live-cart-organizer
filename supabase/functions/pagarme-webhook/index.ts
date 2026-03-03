@@ -88,6 +88,7 @@ serve(async (req) => {
             .from("pos_sales")
             .update({
               status: "paid",
+              paid_at: new Date().toISOString(),
               payment_gateway: "pagarme",
               notes: `🔔 Webhook Pagar.me: pago (${transactionId})`,
             })
