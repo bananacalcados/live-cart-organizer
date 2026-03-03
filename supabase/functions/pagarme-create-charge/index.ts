@@ -255,8 +255,8 @@ async function chargeVindi(
   if (data?.message_response?.message === "success") {
     const tx = data?.data_response?.transaction;
     const statusId = tx?.status_id;
-    // 4=Aguardando, 6=Aprovada, 24=Aguardando confirmação, 87=Em Monitoramento
-    if (statusId === 6 || statusId === 87) {
+    // 6=Aprovada — only accept explicitly approved
+    if (statusId === 6) {
       return { success: true, gateway: "vindi", transactionId: String(tx.token_transaction) };
     }
     return { success: false, gateway: "vindi", error: tx?.status_name || "Transação não aprovada" };
