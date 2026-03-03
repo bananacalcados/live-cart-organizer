@@ -75,12 +75,36 @@ export default function ExpeditionBeta() {
     setOpenSupportCount(count || 0);
   }, []);
 
+  const invokeSyncWithTimeout = async () => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expedition-beta-initial-sync`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e: any) {
+      clearTimeout(timeout);
+      if (e.name === 'AbortError') throw new Error('Timeout: sincronização demorou mais de 2 minutos');
+      throw e;
+    }
+  };
+
   // Auto-sync from Tiny on mount
   useEffect(() => {
     const autoSync = async () => {
       try {
-        const { data, error } = await supabase.functions.invoke('expedition-beta-initial-sync');
-        if (error) console.error('Auto-sync error:', error);
+        const data = await invokeSyncWithTimeout();
         if (data?.success && data.synced > 0) {
           toast.success(`${data.synced} pedidos importados do Tiny!`);
         }
@@ -112,8 +136,7 @@ export default function ExpeditionBeta() {
   const handleInitialSync = async () => {
     setIsInitialSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('expedition-beta-initial-sync');
-      if (error) throw error;
+      const data = await invokeSyncWithTimeout();
       if (data?.success) {
         toast.success(`${data.synced} pedidos importados!`, {
           description: data.skipped > 0 ? `${data.skipped} já existiam` : undefined,
@@ -133,8 +156,7 @@ export default function ExpeditionBeta() {
   const handleResyncItems = async () => {
     setIsInitialSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('expedition-beta-initial-sync');
-      if (error) throw error;
+      const data = await invokeSyncWithTimeout();
       const total = (data?.synced || 0) + (data?.dispatched || 0) + (data?.cancelled || 0);
       toast.success(`Resincronização concluída!`, {
         description: total > 0 ? `${total} pedidos atualizados` : 'Nenhuma atualização necessária',
