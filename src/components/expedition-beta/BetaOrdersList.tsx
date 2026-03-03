@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Trash2, Unlink, Clock, ArrowRight, Gift, Radio, RotateCcw, Truck } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Trash2, Unlink, Clock, ArrowRight, Gift, Radio, RotateCcw, Truck, Timer } from 'lucide-react';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 function ShippingBadge({ method }: { method: string }) {
   const upper = method.toUpperCase();
@@ -54,11 +55,14 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelado',
 };
 
-type StatusFilter = 'todos' | 'nao_despachados' | 'approved' | 'grouped' | 'awaiting_stock' | 'picking' | 'picked' | 'packing' | 'packed' | 'dispatched' | 'cancelled';
+type StatusFilter = 'todos' | 'nao_despachados' | 'atrasados' | 'approved' | 'grouped' | 'awaiting_stock' | 'picking' | 'picked' | 'packing' | 'packed' | 'dispatched' | 'cancelled';
+
+const DELAY_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48h
 
 const STATUS_TABS: { key: StatusFilter; label: string; color: string }[] = [
   { key: 'todos', label: 'Todos', color: 'text-foreground' },
   { key: 'nao_despachados', label: 'Não despachados', color: 'text-orange-500' },
+  { key: 'atrasados', label: '⚠️ Atrasados', color: 'text-red-500' },
   { key: 'approved', label: 'Aprovado', color: 'text-green-500' },
   { key: 'grouped', label: 'Agrupado', color: 'text-blue-500' },
   { key: 'awaiting_stock', label: 'Aguardando', color: 'text-amber-500' },
@@ -280,15 +284,31 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
     );
   }
 
+  // Delayed orders detection
+  const now = Date.now();
+  const delayedOrders = filtered.filter(o => {
+    if (o.expedition_status === 'dispatched' || o.expedition_status === 'cancelled') return false;
+    const created = new Date(o.shopify_created_at).getTime();
+    return (now - created) > DELAY_THRESHOLD_MS;
+  });
+
+  const oldestDelayDays = delayedOrders.length > 0
+    ? Math.max(...delayedOrders.map(o => Math.floor((now - new Date(o.shopify_created_at).getTime()) / (1000 * 60 * 60 * 24))))
+    : 0;
+
   // Apply status filter
   const statusFiltered = filtered.filter(o => {
     if (statusFilter === 'todos') return true;
     if (statusFilter === 'nao_despachados') return o.expedition_status !== 'dispatched' && o.expedition_status !== 'cancelled';
+    if (statusFilter === 'atrasados') {
+      if (o.expedition_status === 'dispatched' || o.expedition_status === 'cancelled') return false;
+      return (now - new Date(o.shopify_created_at).getTime()) > DELAY_THRESHOLD_MS;
+    }
     return o.expedition_status === statusFilter;
   });
 
   // Count per status
-  const statusCounts: Record<string, number> = { todos: filtered.length, nao_despachados: 0 };
+  const statusCounts: Record<string, number> = { todos: filtered.length, nao_despachados: 0, atrasados: delayedOrders.length };
   filtered.forEach(o => {
     const s = o.expedition_status || 'approved';
     statusCounts[s] = (statusCounts[s] || 0) + 1;
@@ -297,6 +317,19 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
 
   return (
     <div className="space-y-4">
+      {/* Delayed orders alert */}
+      {delayedOrders.length > 0 && statusFilter !== 'atrasados' && (
+        <Alert variant="destructive" className="cursor-pointer" onClick={() => setStatusFilter('atrasados')}>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle className="flex items-center gap-2">
+            {delayedOrders.length} pedido{delayedOrders.length > 1 ? 's' : ''} atrasado{delayedOrders.length > 1 ? 's' : ''}
+          </AlertTitle>
+          <AlertDescription>
+            Há pedidos não despachados há mais de 48h. O mais antigo está há {oldestDelayDays} dia{oldestDelayDays > 1 ? 's' : ''}. Clique para ver.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Status filter tabs like Tiny */}
       <div className="flex flex-wrap gap-1 border-b border-border pb-2">
         {STATUS_TABS.map(tab => {
