@@ -131,6 +131,18 @@ const CHANNEL_ICONS: Record<string, typeof Send> = {
 export default function Marketing() {
   const navigate = useNavigate();
 
+  // Force dark mode on this page
+  useEffect(() => {
+    const root = document.documentElement;
+    const prevTheme = root.classList.contains('dark') ? 'dark' : 'light';
+    root.classList.remove('light');
+    root.classList.add('dark');
+    return () => {
+      root.classList.remove('dark');
+      root.classList.add(prevTheme);
+    };
+  }, []);
+
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [landingPages, setLandingPages] = useState<any[]>([]);
@@ -610,7 +622,7 @@ export default function Marketing() {
   // ─── Render ──────────────────────────────
 
   return (
-    <div className="min-h-screen dark" style={{ background: 'hsl(0 0% 6%)', colorScheme: 'dark' }}>
+    <div className="min-h-screen dark" style={{ background: 'hsl(0 0% 6%)', colorScheme: 'dark', color: 'hsl(45 10% 95%)' }}>
       <header className="sticky top-0 z-50 w-full border-b" style={{ borderColor: 'hsl(0 0% 15%)', background: 'hsla(0, 0%, 6%, 0.95)', backdropFilter: 'blur(8px)' }}>
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
