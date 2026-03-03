@@ -360,10 +360,10 @@ export function MarketingCalendar() {
                   <>
                     <div className="flex items-center justify-between">
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                        isToday(day) ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
-                      }`}>{day}</span>
+                        isToday(day) ? 'bg-primary text-primary-foreground' : ''
+                      }`} style={{ color: isToday(day) ? undefined : 'hsl(0 0% 15%)' }}>{day}</span>
                       {dayEntries.length > 0 && (
-                        <span className="text-[10px] text-muted-foreground">{dayEntries.length}</span>
+                        <span className="text-[10px]" style={{ color: 'hsl(0 0% 35%)' }}>{dayEntries.length}</span>
                       )}
                     </div>
                     <div className="mt-1 space-y-0.5">
