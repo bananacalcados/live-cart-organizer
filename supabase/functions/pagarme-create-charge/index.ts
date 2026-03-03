@@ -250,7 +250,8 @@ async function chargeVindi(
   });
 
   const data = await res.json();
-  console.log("VINDI/Yapay response:", JSON.stringify(data).substring(0, 1500));
+  console.log("VINDI/Yapay HTTP status:", res.status);
+  console.log("VINDI/Yapay full response:", JSON.stringify(data).substring(0, 2000));
 
   if (data?.message_response?.message === "success") {
     const tx = data?.data_response?.transaction;
