@@ -131,6 +131,18 @@ const CHANNEL_ICONS: Record<string, typeof Send> = {
 export default function Marketing() {
   const navigate = useNavigate();
 
+  // Force dark mode on this page
+  useEffect(() => {
+    const root = document.documentElement;
+    const prevTheme = root.classList.contains('dark') ? 'dark' : 'light';
+    root.classList.remove('light');
+    root.classList.add('dark');
+    return () => {
+      root.classList.remove('dark');
+      root.classList.add(prevTheme);
+    };
+  }, []);
+
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [landingPages, setLandingPages] = useState<any[]>([]);
