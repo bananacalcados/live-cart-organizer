@@ -1004,6 +1004,11 @@ export default function Marketing() {
             <LiveSessionManager />
           </TabsContent>
 
+          {/* ── CALENDÁRIO ── */}
+          <TabsContent value="calendar" className="space-y-4">
+            <MarketingCalendar />
+          </TabsContent>
+
           {/* Lead WhatsApp Chat Dialog */}
           <LeadWhatsAppDialog
             open={!!leadChatPhone}
