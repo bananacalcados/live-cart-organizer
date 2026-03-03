@@ -38,6 +38,7 @@ import { LiveSessionManager } from "@/components/LiveSessionManager";
 import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispatcher";
 import { PrizeManager } from "@/components/marketing/PrizeManager";
 import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLandingPageCreator";
+import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
 
 // ─── Types ──────────────────────────────────────
 
@@ -626,6 +627,7 @@ export default function Marketing() {
             <TabsTrigger value="groups_vip" className="gap-1"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
             <TabsTrigger value="prizes" className="gap-1"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
             <TabsTrigger value="live_commerce" className="gap-1"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
+            <TabsTrigger value="calendar" className="gap-1"><Calendar className="h-3.5 w-3.5" />Calendário</TabsTrigger>
           </TabsList>
 
           {/* ── CAMPANHAS ── */}
@@ -1000,6 +1002,11 @@ export default function Marketing() {
           {/* ── LIVE COMMERCE ── */}
           <TabsContent value="live_commerce" className="space-y-4">
             <LiveSessionManager />
+          </TabsContent>
+
+          {/* ── CALENDÁRIO ── */}
+          <TabsContent value="calendar" className="space-y-4">
+            <MarketingCalendar />
           </TabsContent>
 
           {/* Lead WhatsApp Chat Dialog */}
