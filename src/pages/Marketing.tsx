@@ -614,8 +614,9 @@ export default function Marketing() {
       </header>
 
       <div className="container py-4 space-y-4">
-        <Tabs defaultValue="campaigns">
+        <Tabs defaultValue="calendar">
           <TabsList>
+            <TabsTrigger value="calendar" className="gap-1"><Calendar className="h-3.5 w-3.5" />Calendário</TabsTrigger>
             <TabsTrigger value="campaigns" className="gap-1"><Target className="h-3.5 w-3.5" />Campanhas 360°</TabsTrigger>
             <TabsTrigger value="customers" className="gap-1"><Users className="h-3.5 w-3.5" />Clientes RFM</TabsTrigger>
             <TabsTrigger value="templates" className="gap-1"><Megaphone className="h-3.5 w-3.5" />Templates Meta</TabsTrigger>
@@ -627,7 +628,6 @@ export default function Marketing() {
             <TabsTrigger value="groups_vip" className="gap-1"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
             <TabsTrigger value="prizes" className="gap-1"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
             <TabsTrigger value="live_commerce" className="gap-1"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
-            <TabsTrigger value="calendar" className="gap-1"><Calendar className="h-3.5 w-3.5" />Calendário</TabsTrigger>
           </TabsList>
 
           {/* ── CAMPANHAS ── */}
