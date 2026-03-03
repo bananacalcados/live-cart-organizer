@@ -422,6 +422,12 @@ function TicketCard({
           </Badge>
         </div>
 
+        {ticket.description && (
+          <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2 whitespace-pre-wrap break-words">
+            {ticket.description}
+          </div>
+        )}
+
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
           {ticket.assigned_to && <span>👤 {ticket.assigned_to}</span>}
           {ticket.customer_phone && <span className="flex items-center gap-0.5"><Phone className="h-2.5 w-2.5" /> {ticket.customer_phone}</span>}
