@@ -57,11 +57,18 @@ async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: s
       tiny_id: it.tiny_product_id || null,
     }));
 
+    // Build payment method label from payment_details
+    const installments = pd.installments || 1;
+    const paymentMethodLabel = pd.payment_method === "credit_card"
+      ? (installments > 1 ? `Cartão de Crédito ${installments}x` : "Cartão de Crédito")
+      : pd.payment_method === "pix" ? "PIX" : undefined;
+
     const tinyPayload = {
       store_id: sale.store_id,
       sale_id: saleId,
       customer: tinyCustomer,
       items: tinyItems,
+      payment_method_name: paymentMethodLabel,
       notes: "Checkout online - webhook AppMax",
     };
 

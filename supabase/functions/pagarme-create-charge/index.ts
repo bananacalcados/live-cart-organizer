@@ -555,6 +555,8 @@ serve(async (req) => {
           address_city: addr.city || "",
           address_state: addr.state || "",
           address_cep: (addr.zipCode || "").replace(/\D/g, ""),
+          payment_method: "credit_card",
+          installments: params.installments || 1,
         };
 
         // Update pos_sales with customer info BEFORE charging
@@ -700,6 +702,9 @@ serve(async (req) => {
             status: "paid",
             paid_at: new Date().toISOString(),
             payment_gateway: result.gateway,
+            payment_method: params.installments > 1
+              ? `Cartão de Crédito ${params.installments}x`
+              : "Cartão de Crédito",
             notes: `💳 Pago via ${result.gateway} (${result.transactionId})`,
           })
           .eq("id", params.orderId);
@@ -740,11 +745,16 @@ serve(async (req) => {
                 cep: (addr.zipCode || "").replace(/\D/g, ""),
               };
 
+              const paymentMethodLabel = params.installments > 1
+                ? `Cartão de Crédito ${params.installments}x`
+                : "Cartão de Crédito";
+
               const tinyPayload = {
                 store_id: resolvedStoreId,
                 sale_id: params.orderId,
                 customer: tinyCustomer,
                 items: tinyItems,
+                payment_method_name: paymentMethodLabel,
                 notes: `Checkout online - ${result.gateway}`,
               };
 
