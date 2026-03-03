@@ -175,13 +175,25 @@ export function POSDailySales({ storeId }: Props) {
     try {
       const { start, end } = getDateRange();
 
-      const [salesRes, sellersRes, goalsRes] = await Promise.all([
+      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step";
+      
+      // Query 1: Sales created in date range (pending, online_pending, failed, etc.)
+      // Query 2: Sales PAID in date range (paid/completed) — appear on payment date
+      const [createdRes, paidRes, sellersRes, goalsRes] = await Promise.all([
         supabase
           .from("pos_sales")
-          .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step")
+          .select(selectFields)
           .eq("store_id", storeId)
           .gte("created_at", start.toISOString())
           .lte("created_at", end.toISOString())
+          .not("status", "in", '("paid","completed","pending_sync","pending_pickup")')
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("pos_sales")
+          .select(selectFields)
+          .eq("store_id", storeId)
+          .in("status", ["paid", "completed", "pending_sync", "pending_pickup"])
+          .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`)
           .order("created_at", { ascending: false }),
         supabase
           .from("pos_sellers")
