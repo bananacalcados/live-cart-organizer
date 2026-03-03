@@ -432,6 +432,22 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, editingMess
             <Label className="text-xs">{messageType === 'poll' ? 'Pergunta da Enquete' : 'Texto da Mensagem'}</Label>
             <Textarea ref={textareaRef} value={messageContent} onChange={e => setMessageContent(e.target.value)} rows={4}
               placeholder={messageType === 'poll' ? 'Qual sua preferência?' : 'Texto da mensagem...'} />
+            <div className="flex items-center gap-1 mt-1">
+              <EmojiPickerButton onEmojiSelect={insertEmoji} className="h-8 w-8" />
+              {!isRecording ? (
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={startRecording}
+                  title="Gravar áudio">
+                  <Mic className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-destructive font-medium animate-pulse">● {formatRecTime(recordingTime)}</span>
+                  <Button type="button" variant="destructive" size="icon" className="h-8 w-8" onClick={stopRecording}>
+                    <Square className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Date & Time */}
