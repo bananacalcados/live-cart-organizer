@@ -610,7 +610,7 @@ export default function Marketing() {
   // ─── Render ──────────────────────────────
 
   return (
-    <div className="min-h-screen dark" style={{ background: 'hsl(0 0% 6%)', colorScheme: 'dark' }}>
+    <div className="min-h-screen dark" style={{ background: 'hsl(0 0% 6%)', colorScheme: 'dark', color: 'hsl(45 10% 95%)' }}>
       <header className="sticky top-0 z-50 w-full border-b" style={{ borderColor: 'hsl(0 0% 15%)', background: 'hsla(0, 0%, 6%, 0.95)', backdropFilter: 'blur(8px)' }}>
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
