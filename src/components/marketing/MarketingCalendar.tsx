@@ -335,10 +335,10 @@ export function MarketingCalendar() {
       )}
 
       {/* Calendar Grid */}
-      <div className="border rounded-lg overflow-hidden">
-        <div className="grid grid-cols-7 bg-muted/50">
+      <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'hsl(48 95% 50% / 0.3)' }}>
+        <div className="grid grid-cols-7" style={{ background: 'hsl(48 95% 50%)' }}>
           {WEEKDAYS.map(w => (
-            <div key={w} className="py-2 text-center text-xs font-medium text-muted-foreground border-b">{w}</div>
+            <div key={w} className="py-2 text-center text-xs font-semibold border-b" style={{ color: 'hsl(0 0% 5%)', borderColor: 'hsl(48 85% 40% / 0.3)' }}>{w}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
@@ -347,9 +347,13 @@ export function MarketingCalendar() {
             return (
               <div
                 key={idx}
-                className={`min-h-[100px] border-b border-r p-1 ${
-                  day ? 'bg-background hover:bg-muted/30 cursor-pointer' : 'bg-muted/20'
-                } ${isToday(day || 0) ? 'ring-2 ring-primary ring-inset' : ''}`}
+                className={`min-h-[100px] border-b border-r p-1 cursor-pointer ${
+                  isToday(day || 0) ? 'ring-2 ring-primary ring-inset' : ''
+                }`}
+                style={{
+                  background: day ? 'hsl(48 100% 85%)' : 'hsl(48 50% 92%)',
+                  borderColor: 'hsl(48 80% 70% / 0.4)',
+                }}
                 onClick={() => day && openDayDetail(getDateStr(day))}
               >
                 {day && (
