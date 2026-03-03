@@ -3688,6 +3688,78 @@ export type Database = {
         }
         Relationships: []
       }
+      marketing_calendar_entries: {
+        Row: {
+          color: string | null
+          content: string | null
+          created_at: string
+          entry_date: string
+          entry_type: string
+          id: string
+          media_type: string | null
+          media_url: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          content?: string | null
+          created_at?: string
+          entry_date: string
+          entry_type?: string
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          content?: string | null
+          created_at?: string
+          entry_date?: string
+          entry_type?: string
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      marketing_calendar_goals: {
+        Row: {
+          actions: string | null
+          created_at: string
+          goals: Json | null
+          id: string
+          month: number
+          notes: string | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          actions?: string | null
+          created_at?: string
+          goals?: Json | null
+          id?: string
+          month: number
+          notes?: string | null
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          actions?: string | null
+          created_at?: string
+          goals?: Json | null
+          id?: string
+          month?: number
+          notes?: string | null
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       marketing_campaigns: {
         Row: {
           actual_cost: number | null
