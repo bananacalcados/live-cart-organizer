@@ -672,6 +672,26 @@ export function LinkPageManager() {
                         if (item.item_type === 'divider') return <hr key={item.id} className="border-white/20" />;
                         if (item.item_type === 'header') return <p key={item.id} className="text-xs font-semibold text-white/70 uppercase tracking-wider text-center mt-4">{item.label}</p>;
 
+                        // Catalog: render as product grid
+                        if (item.item_type === 'catalog' && (item.style_config?.products || []).length > 0) {
+                          const products = item.style_config.products as CatalogProduct[];
+                          return (
+                            <div key={item.id} className="rounded-xl overflow-hidden" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+                              <div className="grid grid-cols-3 gap-0.5 p-1">
+                                {products.slice(0, 6).map((p: CatalogProduct) => (
+                                  <div key={p.id} className="aspect-square overflow-hidden rounded-sm">
+                                    {p.image && <img src={p.image} alt={p.title} className="w-full h-full object-cover" />}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="text-center py-2">
+                                <p className="text-white font-semibold text-sm">{item.label}</p>
+                                <p className="text-white/50 text-xs">{products.length} products</p>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         const Icon = ITEM_TYPES.find(t => t.value === item.item_type)?.icon || Link;
                         const style = themeConfig.buttonStyle || 'filled';
                         const btnColor = themeConfig.buttonColor || '#ffffff';
