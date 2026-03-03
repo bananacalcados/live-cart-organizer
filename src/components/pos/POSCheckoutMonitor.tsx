@@ -37,6 +37,7 @@ export function POSCheckoutMonitor({ storeId }: Props) {
       let query = supabase
         .from("pos_checkout_attempts")
         .select("*")
+        .eq("store_id", storeId)
         .order("created_at", { ascending: false })
         .limit(100);
 
