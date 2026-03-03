@@ -627,6 +627,7 @@ export default function Marketing() {
             <TabsTrigger value="groups_vip" className="gap-1"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
             <TabsTrigger value="prizes" className="gap-1"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
             <TabsTrigger value="live_commerce" className="gap-1"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
+            <TabsTrigger value="calendar" className="gap-1"><CalendarIcon className="h-3.5 w-3.5" />Calendário</TabsTrigger>
           </TabsList>
 
           {/* ── CAMPANHAS ── */}
