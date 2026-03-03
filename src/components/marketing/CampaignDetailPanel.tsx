@@ -621,6 +621,26 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         onUpdate={handleUpdateMessage}
         campaignId={campaignId}
       />
+
+      {/* CREATE GROUP DIALOG */}
+      <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Criar Novo Grupo WhatsApp</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              O grupo será criado automaticamente no WhatsApp e adicionado a esta campanha como VIP.
+            </p>
+            <Input placeholder="Nome do grupo (ex: VIP Banana #11)" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateGroup(false)}>Cancelar</Button>
+            <Button onClick={createGroupForCampaign} disabled={isCreatingGroup} className="gap-1">
+              {isCreatingGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Criar Grupo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
