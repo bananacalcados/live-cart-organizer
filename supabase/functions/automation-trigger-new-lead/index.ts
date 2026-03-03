@@ -16,13 +16,34 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { phone, name, campaignTag } = await req.json();
+    const { phone, name, email, campaignTag, recoveryUrl, cartSummary, totalAmount } = await req.json();
 
     if (!phone) {
       return new Response(
         JSON.stringify({ error: 'phone is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Persist lead to lp_leads for visibility in Marketing module
+    try {
+      const metadata: Record<string, unknown> = {};
+      if (recoveryUrl) metadata.recoveryUrl = recoveryUrl;
+      if (cartSummary) metadata.cartSummary = cartSummary;
+      if (totalAmount) metadata.totalAmount = totalAmount;
+
+      await supabase.from('lp_leads').insert({
+        phone: phone.replace(/\D/g, ''),
+        name: name || null,
+        email: email || null,
+        campaign_tag: campaignTag || 'lead-externo',
+        source: recoveryUrl ? 'abandoned_cart' : 'external_lead',
+        converted: false,
+        metadata: Object.keys(metadata).length > 0 ? metadata : null,
+      });
+      console.log(`Lead persisted to lp_leads: ${phone}, tag: ${campaignTag || 'lead-externo'}`);
+    } catch (leadErr) {
+      console.warn('Failed to persist lead (may be duplicate):', leadErr);
     }
 
     // Find active flows with trigger_type = 'new_lead'
