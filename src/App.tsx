@@ -32,6 +32,7 @@ const BananaLandingGV = lazy(() => import("./pages/BananaLandingGV"));
 const LiveCommerce = lazy(() => import("./pages/LiveCommerce"));
 const DoseTriplaCatalog = lazy(() => import("./pages/DoseTriplaCatalog"));
 const StoreCheckout = lazy(() => import("./pages/StoreCheckout"));
+const LinkPageView = lazy(() => import("./pages/LinkPageView"));
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,7 @@ const App = () => (
               <Route path="/live" element={<LiveCommerce />} />
               <Route path="/dose-tripla" element={<DoseTriplaCatalog />} />
               <Route path="/catalogo/:slug" element={<DoseTriplaCatalog />} />
+              <Route path="/l/:slug" element={<LinkPageView />} />
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
