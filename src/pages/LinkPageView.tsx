@@ -5,6 +5,8 @@ import {
   Link, Phone, MapPin, ShoppingBag, Globe, Instagram, Mail, Type, Minus
 } from "lucide-react";
 
+const SHOPIFY_STORE_DOMAIN = 'ftx2e2-np.myshopify.com';
+
 const ITEM_ICONS: Record<string, typeof Link> = {
   link: Link, whatsapp: Phone, address: MapPin, catalog: ShoppingBag,
   website: Globe, instagram: Instagram, email: Mail, header: Type, divider: Minus,
@@ -151,21 +153,55 @@ export default function LinkPageView() {
               return (
                 <div
                   key={item.id}
-                  className="rounded-xl overflow-hidden cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.97]"
+                  className="rounded-xl overflow-hidden transition-all duration-200"
                   style={{ backgroundColor: 'rgba(0,0,0,0.35)' }}
-                  onClick={() => handleClick(item)}
                 >
                   <div className="grid grid-cols-3 gap-0.5 p-1">
                     {products.slice(0, 6).map(p => (
-                      <div key={p.id} className="aspect-square overflow-hidden rounded-sm">
+                      <a
+                        key={p.id}
+                        href={`https://${SHOPIFY_STORE_DOMAIN}/products/${p.handle}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="aspect-square overflow-hidden rounded-sm cursor-pointer transition-all duration-200 hover:scale-105 hover:opacity-90 relative group"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClick(item);
+                        }}
+                      >
                         {p.image && <img src={p.image} alt={p.title} className="w-full h-full object-cover" loading="lazy" />}
-                      </div>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-end opacity-0 group-hover:opacity-100">
+                          <p className="text-white text-[9px] font-medium p-1 leading-tight truncate w-full">{p.title}</p>
+                        </div>
+                      </a>
                     ))}
                   </div>
-                  <div className="text-center py-3">
+                  {products.length > 6 && (
+                    <div className="grid grid-cols-3 gap-0.5 px-1 pb-1">
+                      {products.slice(6, 9).map(p => (
+                        <a
+                          key={p.id}
+                          href={`https://${SHOPIFY_STORE_DOMAIN}/products/${p.handle}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="aspect-square overflow-hidden rounded-sm cursor-pointer transition-all duration-200 hover:scale-105 relative group"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClick(item);
+                          }}
+                        >
+                          {p.image && <img src={p.image} alt={p.title} className="w-full h-full object-cover" loading="lazy" />}
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-end opacity-0 group-hover:opacity-100">
+                            <p className="text-white text-[9px] font-medium p-1 leading-tight truncate w-full">{p.title}</p>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-center py-3 cursor-pointer" onClick={() => handleClick(item)}>
                     <p className="text-white font-semibold text-sm">{item.label}</p>
                     {item.description && <p className="text-white/50 text-xs mt-0.5">{item.description}</p>}
-                    <p className="text-white/40 text-xs mt-0.5">{products.length} products</p>
+                    <p className="text-white/40 text-xs mt-0.5">{products.length} produtos</p>
                   </div>
                 </div>
               );

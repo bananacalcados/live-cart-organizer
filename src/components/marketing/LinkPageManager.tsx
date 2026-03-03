@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Plus, Trash2, GripVertical, Eye, Copy, ExternalLink, Link,
   Phone, MapPin, ShoppingBag, Globe, Instagram, Mail, ChevronUp,
   ChevronDown, Image, Type, Minus, BarChart3, MousePointer, Users, Loader2,
-  Search, Check
+  Search, Check, Upload
 } from "lucide-react";
 import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -112,16 +112,18 @@ export function LinkPageManager() {
   // Catalog product picker state
   const [catalogPickerOpen, setCatalogPickerOpen] = useState(false);
   const [catalogPickerItemId, setCatalogPickerItemId] = useState<string | null>(null);
-  const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
-  const [shopifySearch, setShopifySearch] = useState("");
-  const [loadingProducts, setLoadingProducts] = useState(false);
-  const [selectedCatalogProducts, setSelectedCatalogProducts] = useState<CatalogProduct[]>([]);
-
-  // New page form
-  const [newPageOpen, setNewPageOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newSlug, setNewSlug] = useState("");
-  const [newStoreId, setNewStoreId] = useState<string>("");
+   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
+   const [shopifySearch, setShopifySearch] = useState("");
+   const [loadingProducts, setLoadingProducts] = useState(false);
+   const [selectedCatalogProducts, setSelectedCatalogProducts] = useState<CatalogProduct[]>([]);
+   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+   const avatarInputRef = useRef<HTMLInputElement>(null);
+ 
+   // New page form
+   const [newPageOpen, setNewPageOpen] = useState(false);
+   const [newTitle, setNewTitle] = useState("");
+   const [newSlug, setNewSlug] = useState("");
+   const [newStoreId, setNewStoreId] = useState<string>("");
 
   const fetchPages = useCallback(async () => {
     setLoading(true);
