@@ -573,23 +573,31 @@ export function LinkPageManager() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm text-white">Links e Botões ({items.length})</CardTitle>
-                <Select onValueChange={v => addItem(v)}>
-                  <SelectTrigger className="w-40 h-8">
-                    <SelectValue placeholder="+ Adicionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ITEM_TYPES.map(t => (
-                      <SelectItem key={t.value} value={t.value}>
-                        <span className="flex items-center gap-2"><t.icon className="h-3.5 w-3.5" />{t.label}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button size="sm" className="gap-1 h-8"><Plus className="h-3.5 w-3.5" />Adicionar</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-xs">
+                    <DialogHeader><DialogTitle>Adicionar Botão</DialogTitle></DialogHeader>
+                    <div className="grid grid-cols-2 gap-2">
+                      {ITEM_TYPES.map(t => (
+                        <Button
+                          key={t.value}
+                          variant="outline"
+                          className="gap-2 justify-start h-10"
+                          onClick={() => { addItem(t.value); }}
+                        >
+                          <t.icon className="h-4 w-4" />{t.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="max-h-[500px]">
-                <div className="space-y-2">
+              <ScrollArea className="h-[500px]">
+                <div className="space-y-2 pr-3">
                   {items.map((item, idx) => (
                     <div key={item.id} className="border rounded-lg p-3 space-y-2 bg-card">
                       <div className="flex items-center justify-between">
@@ -640,7 +648,7 @@ export function LinkPageManager() {
                     </div>
                   ))}
                   {items.length === 0 && (
-                    <p className="text-center text-sm text-muted-foreground py-6">Adicione links usando o botão acima</p>
+                    <p className="text-center text-sm text-muted-foreground py-6">Clique em "Adicionar" para criar links e botões</p>
                   )}
                 </div>
               </ScrollArea>
