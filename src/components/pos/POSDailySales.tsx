@@ -206,7 +206,11 @@ export function POSDailySales({ storeId }: Props) {
           .eq("is_active", true),
       ]);
 
-      const salesData = salesRes.data || [];
+      // Merge both queries, dedup by id
+      const mergedMap = new Map<string, SaleSummary>();
+      for (const s of (createdRes.data || [])) mergedMap.set(s.id, s as SaleSummary);
+      for (const s of (paidRes.data || [])) mergedMap.set(s.id, s as SaleSummary);
+      const salesData = Array.from(mergedMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setSales(salesData);
       setSellers(sellersRes.data || []);
       setGoals((goalsRes.data as GoalInfo[]) || []);
