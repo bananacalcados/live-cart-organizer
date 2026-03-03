@@ -289,6 +289,24 @@ export function LinkPageManager() {
     toast.success("Link copiado!");
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedPage) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error("Máximo 5MB"); return; }
+    setUploadingAvatar(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `link-pages/${selectedPage.id}-avatar-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+      await updatePage({ avatar_url: data.publicUrl });
+      toast.success("Avatar atualizado!");
+    } catch { toast.error("Erro ao fazer upload"); }
+    setUploadingAvatar(false);
+    e.target.value = '';
+  };
+
   // ─── Catalog Product Picker ───
   const openCatalogPicker = async (itemId: string) => {
     setCatalogPickerItemId(itemId);
