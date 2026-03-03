@@ -404,9 +404,25 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
           {/* GROUPS TAB */}
           <TabsContent value="groups" className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
+            {allGroupsFull && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span className="text-xs">Todos os grupos desta campanha estão cheios!</span>
+                  <Button size="sm" variant="outline" className="gap-1 ml-2 shrink-0" onClick={() => setShowCreateGroup(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Criar Novo Grupo
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
+              </div>
+              <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={() => setShowCreateGroup(true)}>
+                <Plus className="h-3.5 w-3.5" /> Criar Grupo
+              </Button>
             </div>
             <p className="text-xs text-muted-foreground">{groupCount} grupos selecionados</p>
             <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
