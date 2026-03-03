@@ -38,6 +38,7 @@ import { LiveSessionManager } from "@/components/LiveSessionManager";
 import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispatcher";
 import { PrizeManager } from "@/components/marketing/PrizeManager";
 import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLandingPageCreator";
+import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
 
 // ─── Types ──────────────────────────────────────
 
