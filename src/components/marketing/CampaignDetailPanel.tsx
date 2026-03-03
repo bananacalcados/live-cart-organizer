@@ -168,6 +168,26 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     fetchMessages();
   };
 
+  const handleSendNow = async (data: ScheduledMessageData) => {
+    // Create the message with current time and immediately send it
+    const now = new Date();
+    const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+      campaign_id: campaignId,
+      message_type: data.messageType,
+      message_content: data.messageContent,
+      media_url: data.mediaUrl || null,
+      poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+      scheduled_at: now.toISOString(),
+      send_speed: data.sendSpeed,
+    }).select().single();
+
+    if (error) throw error;
+
+    // Immediately trigger sending
+    await sendMessage(inserted.id);
+    fetchMessages();
+  };
+
   const handleUpdateMessage = async (id: string, data: ScheduledMessageData) => {
     const [hours, minutes] = data.scheduledTime.split(':').map(Number);
     const scheduledAt = new Date(data.scheduledAt);
@@ -534,6 +554,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         open={showMessageForm}
         onOpenChange={open => { setShowMessageForm(open); if (!open) setEditingMessage(null); }}
         onSubmit={handleAddMessage}
+        onSendNow={handleSendNow}
         editingMessage={editingMessage}
         onUpdate={handleUpdateMessage}
         campaignId={campaignId}
