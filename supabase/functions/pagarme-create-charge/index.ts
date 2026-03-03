@@ -534,6 +534,82 @@ serve(async (req) => {
       resolvedStoreId = saleForStore?.store_id || null;
     }
 
+    // ── PERSIST CUSTOMER DATA BEFORE CHARGE ──
+    if (orderSource === "pos_sales" && params.customer) {
+      try {
+        const custPhone = params.customer.phone?.replace(/\D/g, "") || "";
+        const custCpf = params.customer.cpf?.replace(/\D/g, "") || "";
+        const custEmail = params.customer.email || "";
+        const custName = params.customer.name || "";
+        const addr = params.billingAddress || {} as any;
+
+        // Build payment_details JSON with all customer data
+        const paymentDetails = {
+          customer_name: custName,
+          customer_cpf: custCpf,
+          customer_email: custEmail,
+          customer_phone: custPhone,
+          address_street: addr.street || "",
+          address_number: addr.number || "",
+          address_neighborhood: addr.neighborhood || "",
+          address_city: addr.city || "",
+          address_state: addr.state || "",
+          address_cep: (addr.zipCode || "").replace(/\D/g, ""),
+        };
+
+        // Update pos_sales with customer info BEFORE charging
+        await supabase
+          .from("pos_sales")
+          .update({
+            customer_name: custName,
+            customer_phone: custPhone,
+            payment_details: paymentDetails,
+          } as any)
+          .eq("id", params.orderId);
+
+        // Upsert pos_customers
+        if (custPhone || custCpf) {
+          const customerData: any = {
+            name: custName,
+            email: custEmail || null,
+            cpf: custCpf || null,
+            whatsapp: custPhone || null,
+            address: addr.street || null,
+            address_number: addr.number || null,
+            neighborhood: addr.neighborhood || null,
+            city: addr.city || null,
+            state: addr.state || null,
+            cep: (addr.zipCode || "").replace(/\D/g, "") || null,
+          };
+          if (resolvedStoreId) customerData.store_id = resolvedStoreId;
+
+          // Try upsert by phone
+          if (custPhone.length >= 10) {
+            const { data: existingCust } = await supabase
+              .from("pos_customers")
+              .select("id")
+              .eq("whatsapp", custPhone)
+              .maybeSingle();
+
+            if (existingCust) {
+              await supabase.from("pos_customers").update(customerData).eq("id", existingCust.id);
+              // Link customer to sale
+              await supabase.from("pos_sales").update({ customer_id: existingCust.id } as any).eq("id", params.orderId);
+            } else {
+              const { data: newCust } = await supabase.from("pos_customers").insert(customerData).select("id").maybeSingle();
+              if (newCust) {
+                await supabase.from("pos_sales").update({ customer_id: newCust.id } as any).eq("id", params.orderId);
+              }
+            }
+          }
+        }
+
+        console.log(`Customer data persisted for sale ${params.orderId} BEFORE charge`);
+      } catch (custErr) {
+        console.error("Error persisting customer data (non-blocking):", custErr);
+      }
+    }
+
     // ── Insert "processing" record for idempotency ──
     if (paymentAttemptId) {
       await supabase.from("pos_checkout_attempts").insert({
@@ -629,6 +705,69 @@ serve(async (req) => {
           .eq("id", params.orderId);
         if (updErr) console.error("Failed to update pos_sales:", updErr);
         else console.log(`pos_sales ${params.orderId} updated to paid`);
+
+        // ── AUTO-CREATE TINY ORDER ──
+        if (resolvedStoreId) {
+          try {
+            console.log(`[AUTO-TINY] Creating Tiny order for sale ${params.orderId}...`);
+            const { data: saleItems } = await supabase
+              .from("pos_sale_items")
+              .select("*")
+              .eq("sale_id", params.orderId);
+
+            if (saleItems && saleItems.length > 0) {
+              const tinyItems = saleItems.map((it: any) => ({
+                sku: it.sku || "",
+                name: it.product_name,
+                variant: it.variant_name || null,
+                quantity: it.quantity,
+                price: Number(it.unit_price),
+                barcode: it.barcode || null,
+                tiny_id: it.tiny_product_id || null,
+              }));
+
+              const addr = params.billingAddress || {} as any;
+              const tinyCustomer: any = {
+                name: params.customer.name,
+                cpf: params.customer.cpf,
+                email: params.customer.email,
+                whatsapp: params.customer.phone,
+                address: addr.street || "",
+                addressNumber: addr.number || "",
+                neighborhood: addr.neighborhood || "",
+                city: addr.city || "",
+                state: addr.state || "",
+                cep: (addr.zipCode || "").replace(/\D/g, ""),
+              };
+
+              const tinyPayload = {
+                store_id: resolvedStoreId,
+                sale_id: params.orderId,
+                customer: tinyCustomer,
+                items: tinyItems,
+                notes: `Checkout online - ${result.gateway}`,
+              };
+
+              const tinyRes = await fetch(
+                `${supabaseUrl}/functions/v1/pos-tiny-create-sale`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${supabaseKey}`,
+                  },
+                  body: JSON.stringify(tinyPayload),
+                }
+              );
+              const tinyData = await tinyRes.json();
+              console.log(`[AUTO-TINY] Result:`, JSON.stringify(tinyData).substring(0, 500));
+            } else {
+              console.log(`[AUTO-TINY] No sale items found for ${params.orderId}`);
+            }
+          } catch (tinyErr) {
+            console.error(`[AUTO-TINY] Error (non-blocking):`, tinyErr);
+          }
+        }
       }
       console.log(`${orderSource} ${params.orderId} paid via ${result.gateway}`);
     }
