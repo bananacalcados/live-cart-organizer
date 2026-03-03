@@ -2,14 +2,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-  ChevronLeft, ChevronRight, Plus, X, Trash2, Edit2, Save,
-  Image, Mic, Video, FileText, Loader2, Target, Calendar as CalendarIcon
+  ChevronLeft, ChevronRight, Plus, X, Trash2, Save,
+  FileText, Loader2, Target, Calendar as CalendarIcon, Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -17,6 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { RichTextEditor, RichTextPreview } from "./RichTextEditor";
 
 const MONTHS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -59,7 +59,7 @@ export function MarketingCalendar() {
 
   // Dialog states
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
-  const [goalDialogOpen, setGoalDialogOpen] = useState(false);
+  const [dayDetailOpen, setDayDetailOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingEntry, setEditingEntry] = useState<CalendarEntry | null>(null);
 
@@ -72,8 +72,12 @@ export function MarketingCalendar() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Month notes (inline, below calendar)
+  const [monthNotes, setMonthNotes] = useState("");
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+
   // Goal form
-  const [goalText, setGoalText] = useState("");
+  const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [goalActions, setGoalActions] = useState("");
   const [goalNotes, setGoalNotes] = useState("");
   const [goalsList, setGoalsList] = useState<string[]>([]);
@@ -108,11 +112,13 @@ export function MarketingCalendar() {
         setGoalsList(goals.map((g: any) => typeof g === 'string' ? g : g.text || ''));
         setGoalActions(goalsRes.data.actions || '');
         setGoalNotes(goalsRes.data.notes || '');
+        setMonthNotes(goalsRes.data.notes || '');
       } else {
         setMonthGoal(null);
         setGoalsList([]);
         setGoalActions('');
         setGoalNotes('');
+        setMonthNotes('');
       }
     } catch (err) {
       console.error(err);
@@ -134,14 +140,19 @@ export function MarketingCalendar() {
   const getDateStr = (day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   const getEntriesForDay = (day: number) => entries.filter(e => e.entry_date === getDateStr(day));
 
-  const prevMonth = () => {
-    if (month === 0) { setYear(y => y - 1); setMonth(11); }
-    else setMonth(m => m - 1);
+  const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
+  const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
+
+  const today = new Date();
+  const isToday = (day: number) => day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+
+  // Day detail
+  const openDayDetail = (date: string) => {
+    setSelectedDate(date);
+    setDayDetailOpen(true);
   };
-  const nextMonth = () => {
-    if (month === 11) { setYear(y => y + 1); setMonth(0); }
-    else setMonth(m => m + 1);
-  };
+
+  const selectedDateEntries = selectedDate ? entries.filter(e => e.entry_date === selectedDate) : [];
 
   // Entry CRUD
   const openNewEntry = (date: string) => {
@@ -170,7 +181,6 @@ export function MarketingCalendar() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 16 * 1024 * 1024) { toast.error("Máximo 16MB"); return; }
-
     setIsUploading(true);
     try {
       const ext = file.name.split('.').pop();
@@ -179,12 +189,10 @@ export function MarketingCalendar() {
       if (error) throw error;
       const { data } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
       setEntryMediaUrl(data.publicUrl);
-
       if (file.type.startsWith('image/')) setEntryType('image');
       else if (file.type.startsWith('audio/')) setEntryType('audio');
       else if (file.type.startsWith('video/')) setEntryType('video');
       else setEntryType('document');
-
       toast.success("Arquivo enviado!");
     } catch { toast.error("Erro no upload"); }
     finally { setIsUploading(false); e.target.value = ''; }
@@ -204,15 +212,12 @@ export function MarketingCalendar() {
         media_type: entryType !== 'text' ? entryType : null,
         color: entryColor,
       };
-
       if (editingEntry) {
-        const { error } = await supabase.from('marketing_calendar_entries')
-          .update(payload).eq('id', editingEntry.id);
+        const { error } = await supabase.from('marketing_calendar_entries').update(payload).eq('id', editingEntry.id);
         if (error) throw error;
         toast.success("Entrada atualizada");
       } else {
-        const { error } = await supabase.from('marketing_calendar_entries')
-          .insert(payload);
+        const { error } = await supabase.from('marketing_calendar_entries').insert(payload);
         if (error) throw error;
         toast.success("Entrada criada");
       }
@@ -230,24 +235,31 @@ export function MarketingCalendar() {
     } catch { toast.error("Erro ao excluir"); }
   };
 
+  // Toggle task checkbox in entry content
+  const toggleEntryTask = async (entry: CalendarEntry, lineIndex: number) => {
+    const lines = entry.content.split('\n');
+    const line = lines[lineIndex];
+    if (line.trimStart().startsWith('[x] ')) {
+      lines[lineIndex] = line.replace('[x] ', '[ ] ');
+    } else if (line.trimStart().startsWith('[ ] ')) {
+      lines[lineIndex] = line.replace('[ ] ', '[x] ');
+    }
+    const newContent = lines.join('\n');
+    try {
+      await supabase.from('marketing_calendar_entries').update({ content: newContent }).eq('id', entry.id);
+      setEntries(prev => prev.map(e => e.id === entry.id ? { ...e, content: newContent } : e));
+    } catch { /* silent */ }
+  };
+
   // Goals CRUD
   const saveGoals = async () => {
     try {
-      const payload = {
-        year,
-        month: month + 1,
-        goals: goalsList,
-        actions: goalActions,
-        notes: goalNotes,
-      };
-
+      const payload = { year, month: month + 1, goals: goalsList, actions: goalActions, notes: goalNotes };
       if (monthGoal) {
-        const { error } = await supabase.from('marketing_calendar_goals')
-          .update(payload).eq('id', monthGoal.id);
+        const { error } = await supabase.from('marketing_calendar_goals').update(payload).eq('id', monthGoal.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('marketing_calendar_goals')
-          .insert(payload);
+        const { error } = await supabase.from('marketing_calendar_goals').insert(payload);
         if (error) throw error;
       }
       toast.success("Metas salvas!");
@@ -256,18 +268,38 @@ export function MarketingCalendar() {
     } catch { toast.error("Erro ao salvar metas"); }
   };
 
-  const addGoal = () => {
-    if (!newGoal.trim()) return;
-    setGoalsList(prev => [...prev, newGoal.trim()]);
-    setNewGoal("");
+  const addGoal = () => { if (!newGoal.trim()) return; setGoalsList(prev => [...prev, newGoal.trim()]); setNewGoal(""); };
+  const removeGoal = (i: number) => setGoalsList(prev => prev.filter((_, idx) => idx !== i));
+
+  // Month notes save (inline below calendar)
+  const saveMonthNotes = async () => {
+    setIsSavingNotes(true);
+    try {
+      const payload = { year, month: month + 1, goals: goalsList, actions: goalActions, notes: monthNotes };
+      if (monthGoal) {
+        const { error } = await supabase.from('marketing_calendar_goals').update({ notes: monthNotes }).eq('id', monthGoal.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('marketing_calendar_goals').insert(payload);
+        if (error) throw error;
+      }
+      toast.success("Notas do mês salvas!");
+      fetchData();
+    } catch { toast.error("Erro ao salvar notas"); }
+    finally { setIsSavingNotes(false); }
   };
 
-  const removeGoal = (index: number) => {
-    setGoalsList(prev => prev.filter((_, i) => i !== index));
+  // Toggle task in month notes
+  const toggleMonthNoteTask = (lineIndex: number) => {
+    const lines = monthNotes.split('\n');
+    const line = lines[lineIndex];
+    if (line.trimStart().startsWith('[x] ')) {
+      lines[lineIndex] = line.replace('[x] ', '[ ] ');
+    } else if (line.trimStart().startsWith('[ ] ')) {
+      lines[lineIndex] = line.replace('[ ] ', '[x] ');
+    }
+    setMonthNotes(lines.join('\n'));
   };
-
-  const today = new Date();
-  const isToday = (day: number) => day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
 
   return (
     <div className="space-y-4">
@@ -282,9 +314,7 @@ export function MarketingCalendar() {
           <Button variant="outline" size="sm" className="gap-1" onClick={() => setGoalDialogOpen(true)}>
             <Target className="h-3.5 w-3.5" />Metas do Mês
           </Button>
-          <Button variant="outline" size="sm" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>
-            Hoje
-          </Button>
+          <Button variant="outline" size="sm" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
         </div>
       </div>
 
@@ -297,9 +327,7 @@ export function MarketingCalendar() {
               <span className="text-sm font-semibold">Metas de {MONTHS[month]}</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {goalsList.map((g, i) => (
-                <Badge key={i} variant="secondary" className="text-xs">{g}</Badge>
-              ))}
+              {goalsList.map((g, i) => <Badge key={i} variant="secondary" className="text-xs">{g}</Badge>)}
             </div>
             {goalActions && <p className="text-xs text-muted-foreground mt-2">📋 {goalActions}</p>}
           </CardContent>
@@ -308,14 +336,11 @@ export function MarketingCalendar() {
 
       {/* Calendar Grid */}
       <div className="border rounded-lg overflow-hidden">
-        {/* Weekday headers */}
         <div className="grid grid-cols-7 bg-muted/50">
           {WEEKDAYS.map(w => (
             <div key={w} className="py-2 text-center text-xs font-medium text-muted-foreground border-b">{w}</div>
           ))}
         </div>
-
-        {/* Days grid */}
         <div className="grid grid-cols-7">
           {calendarDays.map((day, idx) => {
             const dayEntries = day ? getEntriesForDay(day) : [];
@@ -325,28 +350,23 @@ export function MarketingCalendar() {
                 className={`min-h-[100px] border-b border-r p-1 ${
                   day ? 'bg-background hover:bg-muted/30 cursor-pointer' : 'bg-muted/20'
                 } ${isToday(day || 0) ? 'ring-2 ring-primary ring-inset' : ''}`}
-                onClick={() => day && openNewEntry(getDateStr(day))}
+                onClick={() => day && openDayDetail(getDateStr(day))}
               >
                 {day && (
                   <>
                     <div className="flex items-center justify-between">
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
                         isToday(day) ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
-                      }`}>
-                        {day}
-                      </span>
+                      }`}>{day}</span>
                       {dayEntries.length > 0 && (
                         <span className="text-[10px] text-muted-foreground">{dayEntries.length}</span>
                       )}
                     </div>
                     <div className="mt-1 space-y-0.5">
                       {dayEntries.slice(0, 3).map(e => (
-                        <div
-                          key={e.id}
-                          className="text-[10px] leading-tight px-1 py-0.5 rounded truncate cursor-pointer hover:opacity-80"
-                          style={{ backgroundColor: e.color + '20', color: e.color, borderLeft: `2px solid ${e.color}` }}
-                          onClick={(ev) => { ev.stopPropagation(); openEditEntry(e); }}
-                        >
+                        <div key={e.id}
+                          className="text-[10px] leading-tight px-1 py-0.5 rounded truncate"
+                          style={{ backgroundColor: e.color + '20', color: e.color, borderLeft: `2px solid ${e.color}` }}>
                           {e.entry_type !== 'text' && (
                             <span className="mr-0.5">
                               {e.entry_type === 'image' ? '📷' : e.entry_type === 'audio' ? '🎵' : e.entry_type === 'video' ? '🎥' : '📎'}
@@ -367,38 +387,131 @@ export function MarketingCalendar() {
         </div>
       </div>
 
-      {/* Entry Dialog */}
+      {/* Inline Month Notes (below calendar) */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              📋 Informações Gerais — {MONTHS[month]} {year}
+            </h3>
+            <Button size="sm" variant="outline" className="gap-1" onClick={saveMonthNotes} disabled={isSavingNotes}>
+              {isSavingNotes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              Salvar
+            </Button>
+          </div>
+          <RichTextEditor
+            value={monthNotes}
+            onChange={setMonthNotes}
+            placeholder="Escreva informações gerais do mês, tarefas, planejamento..."
+            minRows={6}
+          />
+          {monthNotes && (
+            <div className="border-t pt-3">
+              <p className="text-xs text-muted-foreground mb-1">Pré-visualização:</p>
+              <RichTextPreview content={monthNotes} onToggleTask={(i) => { toggleMonthNoteTask(i); }} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Day Detail Dialog */}
+      <Dialog open={dayDetailOpen} onOpenChange={setDayDetailOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>{selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+              <Button size="sm" className="gap-1" onClick={() => { setDayDetailOpen(false); openNewEntry(selectedDate!); }}>
+                <Plus className="h-3.5 w-3.5" /> Adicionar
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+          {selectedDateEntries.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">Nenhuma entrada neste dia</p>
+              <Button size="sm" className="mt-3 gap-1" onClick={() => { setDayDetailOpen(false); openNewEntry(selectedDate!); }}>
+                <Plus className="h-3.5 w-3.5" /> Criar primeira entrada
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {selectedDateEntries.map(entry => (
+                <Card key={entry.id} className="overflow-hidden" style={{ borderLeftColor: entry.color, borderLeftWidth: '3px' }}>
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        {entry.title && <h4 className="font-semibold text-sm">{entry.title}</h4>}
+                        {entry.entry_type !== 'text' && (
+                          <Badge variant="outline" className="text-[10px] mb-1">
+                            {entry.entry_type === 'image' ? '📷 Imagem' : entry.entry_type === 'audio' ? '🎵 Áudio' : entry.entry_type === 'video' ? '🎥 Vídeo' : '📎 Documento'}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setDayDetailOpen(false); openEditEntry(entry); }}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteEntry(entry.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    {entry.content && (
+                      <RichTextPreview content={entry.content} onToggleTask={(lineIdx) => toggleEntryTask(entry, lineIdx)} />
+                    )}
+                    {entry.media_url && (
+                      <div className="mt-2">
+                        {entry.entry_type === 'image' ? (
+                          <img src={entry.media_url} alt="" className="max-h-40 rounded object-cover" />
+                        ) : entry.entry_type === 'audio' ? (
+                          <audio src={entry.media_url} controls className="w-full" />
+                        ) : entry.entry_type === 'video' ? (
+                          <video src={entry.media_url} controls className="max-h-40 rounded" />
+                        ) : (
+                          <a href={entry.media_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline flex items-center gap-1">
+                            <FileText className="h-4 w-4" /> Ver documento
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+              <Button variant="outline" className="w-full gap-1" onClick={() => { setDayDetailOpen(false); openNewEntry(selectedDate!); }}>
+                <Plus className="h-3.5 w-3.5" /> Adicionar mais uma entrada
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Entry Create/Edit Dialog */}
       <Dialog open={entryDialogOpen} onOpenChange={setEntryDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingEntry ? 'Editar Entrada' : 'Nova Entrada'} — {selectedDate && new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <Input
-              placeholder="Título"
-              value={entryTitle}
-              onChange={e => setEntryTitle(e.target.value)}
-            />
-            <Textarea
-              placeholder="Conteúdo / Descrição..."
-              value={entryContent}
-              onChange={e => setEntryContent(e.target.value)}
-              rows={3}
-            />
+            <Input placeholder="Título" value={entryTitle} onChange={e => setEntryTitle(e.target.value)} />
+
+            {/* Rich text content */}
+            <div>
+              <label className="text-sm font-medium mb-1 block">Conteúdo</label>
+              <RichTextEditor
+                value={entryContent}
+                onChange={setEntryContent}
+                placeholder="Descreva a ação, tarefa ou evento..."
+                minRows={4}
+              />
+            </div>
 
             {/* Media upload */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Anexo (foto, áudio, vídeo, documento)</label>
               <div className="flex gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx"
-                  className="hidden"
-                  onChange={handleFileUpload}
-                />
+                <input ref={fileInputRef} type="file" accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={handleFileUpload} />
                 <Button type="button" variant="outline" size="sm" className="gap-1"
                   onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
                   {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
@@ -419,35 +532,16 @@ export function MarketingCalendar() {
                   ) : entryType === 'video' ? (
                     <video src={entryMediaUrl} controls className="max-h-32 rounded" />
                   ) : (
-                    <a href={entryMediaUrl} target="_blank" rel="noopener noreferrer"
-                      className="text-sm text-primary underline flex items-center gap-1">
+                    <a href={entryMediaUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline flex items-center gap-1">
                       <FileText className="h-4 w-4" /> Ver documento
                     </a>
                   )}
                 </div>
               )}
-
-              {/* Or paste URL */}
               {!entryMediaUrl && (
                 <div className="flex gap-2 items-center">
                   <span className="text-xs text-muted-foreground">ou</span>
-                  <Input
-                    placeholder="Cole a URL da mídia"
-                    value={entryMediaUrl}
-                    onChange={e => setEntryMediaUrl(e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                  {entryMediaUrl && (
-                    <Select value={entryType} onValueChange={setEntryType}>
-                      <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="image">Imagem</SelectItem>
-                        <SelectItem value="audio">Áudio</SelectItem>
-                        <SelectItem value="video">Vídeo</SelectItem>
-                        <SelectItem value="document">Documento</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
+                  <Input placeholder="Cole a URL da mídia" value={entryMediaUrl} onChange={e => setEntryMediaUrl(e.target.value)} className="h-8 text-xs" />
                 </div>
               )}
             </div>
@@ -457,11 +551,8 @@ export function MarketingCalendar() {
               <label className="text-sm font-medium">Cor</label>
               <div className="flex gap-2">
                 {ENTRY_COLORS.map(c => (
-                  <button
-                    key={c}
-                    className={`h-6 w-6 rounded-full border-2 transition-transform ${
-                      entryColor === c ? 'border-foreground scale-125' : 'border-transparent'
-                    }`}
+                  <button key={c}
+                    className={`h-6 w-6 rounded-full border-2 transition-transform ${entryColor === c ? 'border-foreground scale-125' : 'border-transparent'}`}
                     style={{ backgroundColor: c }}
                     onClick={() => setEntryColor(c)}
                   />
@@ -477,9 +568,7 @@ export function MarketingCalendar() {
               )}
               <div className="flex gap-2 ml-auto">
                 <Button variant="outline" onClick={() => setEntryDialogOpen(false)}>Cancelar</Button>
-                <Button onClick={saveEntry} className="gap-1">
-                  <Save className="h-3.5 w-3.5" />Salvar
-                </Button>
+                <Button onClick={saveEntry} className="gap-1"><Save className="h-3.5 w-3.5" />Salvar</Button>
               </div>
             </div>
           </div>
@@ -497,12 +586,7 @@ export function MarketingCalendar() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Metas</label>
                 <div className="flex gap-2">
-                  <Input
-                    placeholder="Adicionar meta..."
-                    value={newGoal}
-                    onChange={e => setNewGoal(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addGoal()}
-                  />
+                  <Input placeholder="Adicionar meta..." value={newGoal} onChange={e => setNewGoal(e.target.value)} onKeyDown={e => e.key === 'Enter' && addGoal()} />
                   <Button size="sm" onClick={addGoal}><Plus className="h-4 w-4" /></Button>
                 </div>
                 <div className="space-y-1">
@@ -510,39 +594,18 @@ export function MarketingCalendar() {
                     <div key={i} className="flex items-center gap-2 bg-muted/50 rounded px-2 py-1">
                       <Target className="h-3 w-3 text-primary shrink-0" />
                       <span className="text-sm flex-1">{g}</span>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeGoal(i)}>
-                        <X className="h-3 w-3" />
-                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeGoal(i)}><X className="h-3 w-3" /></Button>
                     </div>
                   ))}
                 </div>
               </div>
-
               <div className="space-y-1">
                 <label className="text-sm font-medium">Ações planejadas</label>
-                <Textarea
-                  placeholder="Descreva as ações do mês..."
-                  value={goalActions}
-                  onChange={e => setGoalActions(e.target.value)}
-                  rows={3}
-                />
+                <RichTextEditor value={goalActions} onChange={setGoalActions} placeholder="Descreva as ações do mês..." minRows={3} />
               </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Notas / Observações</label>
-                <Textarea
-                  placeholder="Anotações extras..."
-                  value={goalNotes}
-                  onChange={e => setGoalNotes(e.target.value)}
-                  rows={2}
-                />
-              </div>
-
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setGoalDialogOpen(false)}>Cancelar</Button>
-                <Button onClick={saveGoals} className="gap-1">
-                  <Save className="h-3.5 w-3.5" />Salvar Metas
-                </Button>
+                <Button onClick={saveGoals} className="gap-1"><Save className="h-3.5 w-3.5" />Salvar Metas</Button>
               </div>
             </div>
           </ScrollArea>
