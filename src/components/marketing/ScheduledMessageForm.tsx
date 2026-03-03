@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, Sparkles, Loader2, Play, Upload, Link as LinkIcon, Variable, Save, FileText } from "lucide-react";
+import { CalendarIcon, Sparkles, Loader2, Play, Upload, Link as LinkIcon, Variable, Save, FileText, Mic, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 
 export interface ScheduledMessageData {
   messageType: string;
@@ -78,6 +79,11 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, editingMess
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load editing message data
   useEffect(() => {
@@ -152,6 +158,71 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, editingMess
     setShowTemplates(false);
     toast.success("Modelo carregado!");
   };
+
+  // Audio recording
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (blob.size === 0) return;
+
+        setIsUploading(true);
+        try {
+          const path = `group-messages/audio-${Date.now()}.webm`;
+          const { error } = await supabase.storage.from('marketing-attachments').upload(path, blob);
+          if (error) throw error;
+          const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+          setMediaUrl(urlData.publicUrl);
+          setMessageType('audio');
+          toast.success("Áudio gravado e enviado!");
+        } catch { toast.error("Erro ao enviar áudio"); }
+        finally { setIsUploading(false); }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordingIntervalRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+    } catch {
+      toast.error("Permissão de microfone negada");
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+  }, []);
+
+  const insertEmoji = (emoji: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) { setMessageContent(prev => prev + emoji); return; }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = messageContent;
+    setMessageContent(text.substring(0, start) + emoji + text.substring(end));
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + emoji.length, start + emoji.length);
+    }, 0);
+  };
+
+  const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   const saveAsTemplate = async () => {
     if (!templateName.trim()) { toast.error("Nome obrigatório"); return; }
@@ -361,6 +432,22 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, editingMess
             <Label className="text-xs">{messageType === 'poll' ? 'Pergunta da Enquete' : 'Texto da Mensagem'}</Label>
             <Textarea ref={textareaRef} value={messageContent} onChange={e => setMessageContent(e.target.value)} rows={4}
               placeholder={messageType === 'poll' ? 'Qual sua preferência?' : 'Texto da mensagem...'} />
+            <div className="flex items-center gap-1 mt-1">
+              <EmojiPickerButton onEmojiSelect={insertEmoji} className="h-8 w-8" />
+              {!isRecording ? (
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={startRecording}
+                  title="Gravar áudio">
+                  <Mic className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-destructive font-medium animate-pulse">● {formatRecTime(recordingTime)}</span>
+                  <Button type="button" variant="destructive" size="icon" className="h-8 w-8" onClick={stopRecording}>
+                    <Square className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Date & Time */}
