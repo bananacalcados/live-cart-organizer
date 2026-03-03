@@ -362,12 +362,45 @@ export function MarketingCalendar() {
           <Button variant="outline" size="icon" onClick={nextMonth} className="border-white/20 text-white hover:bg-white/10"><ChevronRight className="h-4 w-4" /></Button>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setCalcOpen(!calcOpen)}>
+            <Calculator className="h-3.5 w-3.5" />Calculadora
+          </Button>
           <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setGoalDialogOpen(true)}>
             <Target className="h-3.5 w-3.5" />Metas do Mês
           </Button>
           <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
         </div>
       </div>
+
+      {/* Calculator Widget */}
+      {calcOpen && (
+        <Card className="bg-card border-white/10 max-w-xs">
+          <CardContent className="p-3 space-y-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold flex items-center gap-1"><Calculator className="h-3.5 w-3.5" /> Calculadora</span>
+              <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setCalcOpen(false)}><X className="h-3 w-3" /></Button>
+            </div>
+            <div className="bg-black/30 rounded px-3 py-2 text-right text-lg font-mono text-white min-h-[36px]">
+              {calcOp && <span className="text-xs text-muted-foreground mr-2">{calcPrev} {calcOp}</span>}
+              {calcDisplay}
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {['C', '⌫', '/', '*', '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '=', '0', '.'].map((k) => (
+                <Button
+                  key={k}
+                  variant={['/', '*', '-', '+', '='].includes(k) ? 'default' : 'outline'}
+                  size="sm"
+                  className={`text-sm font-medium ${k === '0' ? 'col-span-2' : k === '=' ? 'row-span-2' : ''}`}
+                  onClick={() => handleCalcKey(k)}
+                >
+                  {k}
+                </Button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground text-center">Use o teclado para digitar</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Monthly Goals Summary */}
       {monthGoal && goalsList.length > 0 && (
