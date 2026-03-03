@@ -1035,6 +1035,11 @@ export default function Marketing() {
             <LiveSessionManager />
           </TabsContent>
 
+          {/* ── LINK PAGES ── */}
+          <TabsContent value="link_pages" className="space-y-4">
+            <LinkPageManager />
+          </TabsContent>
+
           {/* ── CALENDÁRIO ── */}
           <TabsContent value="calendar" className="space-y-4">
             <MarketingCalendar />
