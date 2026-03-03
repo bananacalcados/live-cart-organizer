@@ -192,15 +192,18 @@ serve(async (req) => {
         const addr = cd.address || {};
         const { regionType, ddd } = classifyRegion(customer.phone, addr.address1, addr.city, addr.state);
 
+        // Use existing zoppy_id if customer came from POS/Shopify sync, otherwise generate from phone
+        const zoppyId = customer.zoppyId || cd.id || `phone_${customer.phone}`;
+
         upsertBatch.push({
-          zoppy_id: cd.id || `phone_${customer.phone}`,
+          zoppy_id: zoppyId,
           external_id: cd.externalId || null,
           first_name: cd.firstName || customer.name?.split(' ')[0] || null,
           last_name: cd.lastName || customer.name?.split(' ').slice(1).join(' ') || null,
           phone: customer.phone, email: customer.email || cd.email || null,
           gender: cd.gender || null, birth_date: cd.birthDate || null,
           address1: addr.address1 || null, address2: addr.address2 || null,
-          city: addr.city || null, state: addr.state || null,
+          city: cd.city || addr.city || null, state: cd.state || addr.state || null,
           postcode: addr.postcode || null, country: addr.country || null,
           zoppy_position: cd.position || null,
           rfm_recency_score: rScore, rfm_frequency_score: fScore,
