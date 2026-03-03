@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, Sparkles, Loader2, Play, Upload, Link as LinkIcon, Variable, Save, FileText, Mic, Square } from "lucide-react";
+import { CalendarIcon, Sparkles, Loader2, Play, Upload, Link as LinkIcon, Variable, Save, FileText, Mic, Square, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
