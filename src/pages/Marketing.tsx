@@ -287,6 +287,20 @@ export default function Marketing() {
     finally { setIsSyncing(false); }
   };
 
+  const handleSyncPosShopify = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-pos-shopify-to-rfm`, {
+        method: 'POST', headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'all' }),
+      });
+      const data = await res.json();
+      if (data.success) { toast.success(data.message); fetchCustomers(); }
+      else toast.error(data.error || "Erro ao sincronizar POS/Shopify");
+    } catch { toast.error("Erro ao sincronizar POS/Shopify"); }
+    finally { setIsSyncing(false); }
+  };
+
   const handleRfmExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -725,6 +739,9 @@ export default function Marketing() {
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleSyncSales} disabled={isSyncing} className="gap-1">
                   <Download className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sync Vendas
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleSyncPosShopify} disabled={isSyncing} className="gap-1">
+                  <Store className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sync POS + Shopify
                 </Button>
               </div>
             </div>
