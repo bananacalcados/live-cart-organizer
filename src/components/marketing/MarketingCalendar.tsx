@@ -188,6 +188,52 @@ export function MarketingCalendar() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Campaign Rules - persistent across months
+  const fetchRules = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'campaign_rules')
+        .maybeSingle();
+      if (data?.value) {
+        const val = typeof data.value === 'string' ? data.value : (data.value as any)?.content || '';
+        setCampaignRules(val);
+        setSavedRules(val);
+      }
+    } catch (err) { console.error(err); }
+  }, []);
+
+  useEffect(() => { fetchRules(); }, [fetchRules]);
+
+  const saveRules = async () => {
+    setIsSavingRules(true);
+    try {
+      const { data: existing } = await supabase
+        .from('app_settings')
+        .select('id')
+        .eq('key', 'campaign_rules')
+        .maybeSingle();
+      
+      if (existing) {
+        const { error } = await supabase
+          .from('app_settings')
+          .update({ value: { content: campaignRules } as any })
+          .eq('key', 'campaign_rules');
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('app_settings')
+          .insert({ key: 'campaign_rules', value: { content: campaignRules } as any });
+        if (error) throw error;
+      }
+      setSavedRules(campaignRules);
+      setIsEditingRules(false);
+      toast.success("Regras salvas!");
+    } catch { toast.error("Erro ao salvar regras"); }
+    finally { setIsSavingRules(false); }
+  };
+
   // Calendar grid
   const firstDayOfMonth = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
