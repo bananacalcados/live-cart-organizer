@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   ChevronLeft, ChevronRight, Plus, X, Trash2, Save,
   FileText, Loader2, Target, Calendar as CalendarIcon, Eye, Calculator,
-  ShieldAlert, Edit3
+  ShieldAlert, Edit3, Repeat, RotateCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RichTextEditor, RichTextPreview } from "./RichTextEditor";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const MONTHS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -25,6 +26,7 @@ const MONTHS = [
 ];
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const WEEKDAY_NAMES = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
 const ENTRY_COLORS = [
   "#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"
@@ -41,6 +43,19 @@ interface CalendarEntry {
   color: string;
 }
 
+interface RecurringAction {
+  id: string;
+  title: string;
+  content: string;
+  color: string;
+  recurrence_type: string;
+  recurrence_config: any;
+  start_date: string;
+  end_date: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
 interface MonthGoal {
   id: string;
   year: number;
@@ -50,6 +65,52 @@ interface MonthGoal {
   notes: string;
 }
 
+// Helper: check if a recurring action falls on a given date
+function recurringMatchesDate(action: RecurringAction, dateStr: string): boolean {
+  const date = new Date(dateStr + 'T12:00:00');
+  const startDate = new Date(action.start_date + 'T12:00:00');
+  if (date < startDate) return false;
+  if (action.end_date) {
+    const endDate = new Date(action.end_date + 'T12:00:00');
+    if (date > endDate) return false;
+  }
+
+  const config = action.recurrence_config || {};
+  const dayOfWeek = date.getDay();
+  const dayOfMonth = date.getDate();
+  const monthOfYear = date.getMonth() + 1;
+
+  switch (action.recurrence_type) {
+    case 'daily':
+      return true;
+    case 'weekly':
+      return dayOfWeek === (config.day_of_week ?? 0);
+    case 'biweekly': {
+      if (dayOfWeek !== (config.day_of_week ?? 0)) return false;
+      const diffMs = date.getTime() - startDate.getTime();
+      const diffWeeks = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+      return diffWeeks % 2 === 0;
+    }
+    case 'monthly':
+      return dayOfMonth === (config.day_of_month ?? 1);
+    case 'yearly':
+      return monthOfYear === (config.month ?? 1) && dayOfMonth === (config.day ?? 1);
+    case 'specific_weekdays':
+      return (config.days || []).includes(dayOfWeek);
+    default:
+      return false;
+  }
+}
+
+const RECURRENCE_LABELS: Record<string, string> = {
+  daily: 'Diária',
+  weekly: 'Semanal',
+  biweekly: 'Quinzenal',
+  monthly: 'Mensal',
+  yearly: 'Anual',
+  specific_weekdays: 'Dias específicos da semana',
+};
+
 export function MarketingCalendar() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -57,6 +118,23 @@ export function MarketingCalendar() {
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [monthGoal, setMonthGoal] = useState<MonthGoal | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Recurring actions
+  const [recurringActions, setRecurringActions] = useState<RecurringAction[]>([]);
+  const [recurringDialogOpen, setRecurringDialogOpen] = useState(false);
+  const [recurringListOpen, setRecurringListOpen] = useState(false);
+  const [editingRecurring, setEditingRecurring] = useState<RecurringAction | null>(null);
+  const [recTitle, setRecTitle] = useState("");
+  const [recContent, setRecContent] = useState("");
+  const [recColor, setRecColor] = useState("#8b5cf6");
+  const [recType, setRecType] = useState("daily");
+  const [recDayOfWeek, setRecDayOfWeek] = useState(1);
+  const [recDayOfMonth, setRecDayOfMonth] = useState(1);
+  const [recYearMonth, setRecYearMonth] = useState(1);
+  const [recYearDay, setRecYearDay] = useState(1);
+  const [recSpecificDays, setRecSpecificDays] = useState<number[]>([]);
+  const [recStartDate, setRecStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [recEndDate, setRecEndDate] = useState("");
 
   // Dialog states
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
@@ -148,7 +226,7 @@ export function MarketingCalendar() {
       const endDay = new Date(year, month + 1, 0).getDate();
       const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
 
-      const [entriesRes, goalsRes] = await Promise.all([
+      const [entriesRes, goalsRes, recurringRes] = await Promise.all([
         supabase.from('marketing_calendar_entries')
           .select('*')
           .gte('entry_date', startDate)
@@ -158,11 +236,24 @@ export function MarketingCalendar() {
           .select('*')
           .eq('year', year)
           .eq('month', month + 1)
-          .maybeSingle()
+          .maybeSingle(),
+        supabase.from('marketing_recurring_actions')
+          .select('*')
+          .eq('is_active', true)
+          .lte('start_date', endDate)
+          .order('created_at', { ascending: true })
       ]);
 
       if (entriesRes.error) throw entriesRes.error;
       setEntries(entriesRes.data || []);
+
+      if (recurringRes.data) {
+        // Filter out actions that ended before this month
+        const filtered = (recurringRes.data as RecurringAction[]).filter(a => !a.end_date || a.end_date >= startDate);
+        setRecurringActions(filtered);
+      } else {
+        setRecurringActions([]);
+      }
 
       if (goalsRes.data) {
         setMonthGoal(goalsRes.data as MonthGoal);
@@ -243,6 +334,12 @@ export function MarketingCalendar() {
 
   const getDateStr = (day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   const getEntriesForDay = (day: number) => entries.filter(e => e.entry_date === getDateStr(day));
+  
+  // Get recurring actions for a specific day
+  const getRecurringForDay = (day: number) => {
+    const dateStr = getDateStr(day);
+    return recurringActions.filter(a => recurringMatchesDate(a, dateStr));
+  };
 
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
@@ -257,6 +354,7 @@ export function MarketingCalendar() {
   };
 
   const selectedDateEntries = selectedDate ? entries.filter(e => e.entry_date === selectedDate) : [];
+  const selectedDateRecurring = selectedDate ? recurringActions.filter(a => recurringMatchesDate(a, selectedDate)) : [];
 
   // Entry CRUD
   const openNewEntry = (date: string) => {
@@ -405,6 +503,92 @@ export function MarketingCalendar() {
     setMonthNotes(lines.join('\n'));
   };
 
+  // ========== Recurring Actions CRUD ==========
+  const openNewRecurring = () => {
+    setEditingRecurring(null);
+    setRecTitle("");
+    setRecContent("");
+    setRecColor("#8b5cf6");
+    setRecType("daily");
+    setRecDayOfWeek(1);
+    setRecDayOfMonth(1);
+    setRecYearMonth(1);
+    setRecYearDay(1);
+    setRecSpecificDays([]);
+    setRecStartDate(new Date().toISOString().split('T')[0]);
+    setRecEndDate("");
+    setRecurringDialogOpen(true);
+  };
+
+  const openEditRecurring = (action: RecurringAction) => {
+    setEditingRecurring(action);
+    setRecTitle(action.title);
+    setRecContent(action.content || "");
+    setRecColor(action.color);
+    setRecType(action.recurrence_type);
+    const cfg = action.recurrence_config || {};
+    setRecDayOfWeek(cfg.day_of_week ?? 1);
+    setRecDayOfMonth(cfg.day_of_month ?? 1);
+    setRecYearMonth(cfg.month ?? 1);
+    setRecYearDay(cfg.day ?? 1);
+    setRecSpecificDays(cfg.days || []);
+    setRecStartDate(action.start_date);
+    setRecEndDate(action.end_date || "");
+    setRecurringDialogOpen(true);
+  };
+
+  const buildRecurrenceConfig = () => {
+    switch (recType) {
+      case 'daily': return {};
+      case 'weekly': return { day_of_week: recDayOfWeek };
+      case 'biweekly': return { day_of_week: recDayOfWeek, start_date: recStartDate };
+      case 'monthly': return { day_of_month: recDayOfMonth };
+      case 'yearly': return { month: recYearMonth, day: recYearDay };
+      case 'specific_weekdays': return { days: recSpecificDays };
+      default: return {};
+    }
+  };
+
+  const saveRecurring = async () => {
+    if (!recTitle.trim()) { toast.error("Preencha o título"); return; }
+    try {
+      const payload = {
+        title: recTitle,
+        content: recContent,
+        color: recColor,
+        recurrence_type: recType,
+        recurrence_config: buildRecurrenceConfig(),
+        start_date: recStartDate,
+        end_date: recEndDate || null,
+        is_active: true,
+      };
+      if (editingRecurring) {
+        const { error } = await supabase.from('marketing_recurring_actions').update(payload).eq('id', editingRecurring.id);
+        if (error) throw error;
+        toast.success("Ação recorrente atualizada!");
+      } else {
+        const { error } = await supabase.from('marketing_recurring_actions').insert(payload);
+        if (error) throw error;
+        toast.success("Ação recorrente criada!");
+      }
+      setRecurringDialogOpen(false);
+      fetchData();
+    } catch { toast.error("Erro ao salvar ação recorrente"); }
+  };
+
+  const deleteRecurring = async (id: string) => {
+    try {
+      const { error } = await supabase.from('marketing_recurring_actions').delete().eq('id', id);
+      if (error) throw error;
+      toast.success("Ação recorrente removida!");
+      fetchData();
+    } catch { toast.error("Erro ao remover"); }
+  };
+
+  const toggleSpecificDay = (day: number) => {
+    setRecSpecificDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -414,9 +598,12 @@ export function MarketingCalendar() {
           <h2 className="text-xl font-bold min-w-[200px] text-center text-white">{MONTHS[month]} {year}</h2>
           <Button variant="outline" size="icon" onClick={nextMonth} className="border-white/20 text-white hover:bg-white/10"><ChevronRight className="h-4 w-4" /></Button>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setCalcOpen(!calcOpen)}>
             <Calculator className="h-3.5 w-3.5" />Calculadora
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1 border-purple-400/40 text-purple-300 hover:bg-purple-500/10" onClick={() => setRecurringListOpen(true)}>
+            <Repeat className="h-3.5 w-3.5" />Ações Recorrentes
           </Button>
           <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setGoalDialogOpen(true)}>
             <Target className="h-3.5 w-3.5" />Metas do Mês
@@ -533,6 +720,8 @@ export function MarketingCalendar() {
         <div className="grid grid-cols-7">
           {calendarDays.map((day, idx) => {
             const dayEntries = day ? getEntriesForDay(day) : [];
+            const dayRecurring = day ? getRecurringForDay(day) : [];
+            const allItems = [...dayEntries.map(e => ({ type: 'entry' as const, ...e })), ...dayRecurring.map(r => ({ type: 'recurring' as const, ...r }))];
             return (
               <div
                 key={idx}
@@ -551,25 +740,26 @@ export function MarketingCalendar() {
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
                         isToday(day) ? 'bg-primary text-primary-foreground' : ''
                       }`} style={{ color: isToday(day) ? undefined : 'hsl(0 0% 15%)' }}>{day}</span>
-                      {dayEntries.length > 0 && (
-                        <span className="text-[10px]" style={{ color: 'hsl(0 0% 35%)' }}>{dayEntries.length}</span>
+                      {allItems.length > 0 && (
+                        <span className="text-[10px]" style={{ color: 'hsl(0 0% 35%)' }}>{allItems.length}</span>
                       )}
                     </div>
                     <div className="mt-1 space-y-0.5">
-                      {dayEntries.slice(0, 3).map(e => (
-                        <div key={e.id}
-                          className="text-[10px] leading-tight px-1 py-0.5 rounded truncate"
-                          style={{ backgroundColor: e.color + '20', color: e.color, borderLeft: `2px solid ${e.color}` }}>
-                          {e.entry_type !== 'text' && (
+                      {allItems.slice(0, 3).map((item, i) => (
+                        <div key={item.id + '-' + i}
+                          className="text-[10px] leading-tight px-1 py-0.5 rounded truncate flex items-center gap-0.5"
+                          style={{ backgroundColor: item.color + '20', color: item.color, borderLeft: `2px solid ${item.color}` }}>
+                          {item.type === 'recurring' && <RotateCcw className="h-2 w-2 shrink-0" />}
+                          {item.type === 'entry' && (item as any).entry_type !== 'text' && (
                             <span className="mr-0.5">
-                              {e.entry_type === 'image' ? '📷' : e.entry_type === 'audio' ? '🎵' : e.entry_type === 'video' ? '🎥' : '📎'}
+                              {(item as any).entry_type === 'image' ? '📷' : (item as any).entry_type === 'audio' ? '🎵' : (item as any).entry_type === 'video' ? '🎥' : '📎'}
                             </span>
                           )}
-                          {e.title || e.content?.substring(0, 20) || 'Sem título'}
+                          {item.title || (item as any).content?.substring(0, 20) || 'Sem título'}
                         </div>
                       ))}
-                      {dayEntries.length > 3 && (
-                        <span className="text-[10px] text-muted-foreground px-1">+{dayEntries.length - 3} mais</span>
+                      {allItems.length > 3 && (
+                        <span className="text-[10px] text-muted-foreground px-1">+{allItems.length - 3} mais</span>
                       )}
                     </div>
                   </>
@@ -618,7 +808,31 @@ export function MarketingCalendar() {
               </Button>
             </DialogTitle>
           </DialogHeader>
-          {selectedDateEntries.length === 0 ? (
+
+          {/* Recurring actions for this day */}
+          {selectedDateRecurring.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-purple-400 flex items-center gap-1"><Repeat className="h-3 w-3" /> Ações Recorrentes</p>
+              {selectedDateRecurring.map(action => (
+                <Card key={action.id} className="overflow-hidden border-purple-500/20" style={{ borderLeftColor: action.color, borderLeftWidth: '3px' }}>
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2">
+                      <RotateCcw className="h-3.5 w-3.5 shrink-0" style={{ color: action.color }} />
+                      <span className="font-semibold text-sm flex-1">{action.title}</span>
+                      <Badge variant="outline" className="text-[10px]">{RECURRENCE_LABELS[action.recurrence_type]}</Badge>
+                    </div>
+                    {action.content && (
+                      <div className="mt-1">
+                        <RichTextPreview content={action.content} />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {selectedDateEntries.length === 0 && selectedDateRecurring.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-40" />
               <p className="text-sm">Nenhuma entrada neste dia</p>
@@ -802,6 +1016,227 @@ export function MarketingCalendar() {
               </div>
             </div>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Recurring Actions List Dialog */}
+      <Dialog open={recurringListOpen} onOpenChange={setRecurringListOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2"><Repeat className="h-4 w-4" /> Ações Recorrentes</span>
+              <Button size="sm" className="gap-1" onClick={() => { setRecurringListOpen(false); openNewRecurring(); }}>
+                <Plus className="h-3.5 w-3.5" /> Nova
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            {recurringActions.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Repeat className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">Nenhuma ação recorrente criada</p>
+                <p className="text-xs mt-1">Crie ações que se repetem automaticamente no calendário</p>
+                <Button size="sm" className="mt-3 gap-1" onClick={() => { setRecurringListOpen(false); openNewRecurring(); }}>
+                  <Plus className="h-3.5 w-3.5" /> Criar primeira ação
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2 pr-2">
+                {recurringActions.map(action => (
+                  <Card key={action.id} className="overflow-hidden" style={{ borderLeftColor: action.color, borderLeftWidth: '3px' }}>
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                            <RotateCcw className="h-3 w-3 shrink-0" style={{ color: action.color }} />
+                            {action.title}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-[10px]">{RECURRENCE_LABELS[action.recurrence_type]}</Badge>
+                            <span className="text-[10px] text-muted-foreground">
+                              A partir de {new Date(action.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                              {action.end_date && ` até ${new Date(action.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
+                            </span>
+                          </div>
+                          {action.content && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{action.content.replace(/\*\*/g, '').substring(0, 80)}</p>}
+                        </div>
+                        <div className="flex gap-1 ml-2">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setRecurringListOpen(false); openEditRecurring(action); }}>
+                            <Edit3 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteRecurring(action.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Recurring Action Create/Edit Dialog */}
+      <Dialog open={recurringDialogOpen} onOpenChange={setRecurringDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Repeat className="h-4 w-4" />
+              {editingRecurring ? 'Editar Ação Recorrente' : 'Nova Ação Recorrente'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input placeholder="Título da ação" value={recTitle} onChange={e => setRecTitle(e.target.value)} />
+
+            <div>
+              <label className="text-sm font-medium mb-1 block">Descrição / Conteúdo</label>
+              <RichTextEditor
+                value={recContent}
+                onChange={setRecContent}
+                placeholder="Descreva a ação recorrente..."
+                minRows={3}
+              />
+            </div>
+
+            {/* Recurrence Type */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Frequência</label>
+              <Select value={recType} onValueChange={setRecType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Diária</SelectItem>
+                  <SelectItem value="weekly">Semanal</SelectItem>
+                  <SelectItem value="biweekly">Quinzenal</SelectItem>
+                  <SelectItem value="monthly">Mensal</SelectItem>
+                  <SelectItem value="yearly">Anual</SelectItem>
+                  <SelectItem value="specific_weekdays">Dias específicos da semana</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Recurrence config */}
+            {(recType === 'weekly' || recType === 'biweekly') && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Dia da semana</label>
+                <Select value={String(recDayOfWeek)} onValueChange={v => setRecDayOfWeek(Number(v))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WEEKDAY_NAMES.map((name, i) => (
+                      <SelectItem key={i} value={String(i)}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {recType === 'monthly' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Dia do mês</label>
+                <Select value={String(recDayOfMonth)} onValueChange={v => setRecDayOfMonth(Number(v))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 31 }, (_, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>Dia {i + 1}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {recType === 'yearly' && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Mês</label>
+                  <Select value={String(recYearMonth)} onValueChange={v => setRecYearMonth(Number(v))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((name, i) => (
+                        <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Dia</label>
+                  <Select value={String(recYearDay)} onValueChange={v => setRecYearDay(Number(v))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <SelectItem key={i + 1} value={String(i + 1)}>Dia {i + 1}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {recType === 'specific_weekdays' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Selecione os dias</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {WEEKDAY_NAMES.map((name, i) => (
+                    <label key={i} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={recSpecificDays.includes(i)}
+                        onCheckedChange={() => toggleSpecificDay(i)}
+                      />
+                      {name.substring(0, 3)}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Date range */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Data início</label>
+                <Input type="date" value={recStartDate} onChange={e => setRecStartDate(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Data fim (opcional)</label>
+                <Input type="date" value={recEndDate} onChange={e => setRecEndDate(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Color */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Cor</label>
+              <div className="flex gap-2">
+                {ENTRY_COLORS.map(c => (
+                  <button key={c}
+                    className={`h-6 w-6 rounded-full border-2 transition-transform ${recColor === c ? 'border-foreground scale-125' : 'border-transparent'}`}
+                    style={{ backgroundColor: c }}
+                    onClick={() => setRecColor(c)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-between">
+              {editingRecurring && (
+                <Button variant="destructive" size="sm" onClick={() => { deleteRecurring(editingRecurring.id); setRecurringDialogOpen(false); }}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />Excluir
+                </Button>
+              )}
+              <div className="flex gap-2 ml-auto">
+                <Button variant="outline" onClick={() => setRecurringDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={saveRecurring} className="gap-1"><Save className="h-3.5 w-3.5" />Salvar</Button>
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
