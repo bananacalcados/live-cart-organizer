@@ -528,8 +528,14 @@ export function LinkPageManager() {
                 <Input value={selectedPage.subtitle || ''} onChange={e => updatePage({ subtitle: e.target.value })} placeholder="Uma frase de impacto..." />
               </div>
               <div>
-                <Label className="text-white">Avatar URL</Label>
-                <Input value={selectedPage.avatar_url || ''} onChange={e => updatePage({ avatar_url: e.target.value })} placeholder="https://..." />
+                <Label className="text-white">Avatar</Label>
+                <div className="flex gap-2 items-center">
+                  <Input value={selectedPage.avatar_url || ''} onChange={e => updatePage({ avatar_url: e.target.value })} placeholder="https://..." className="flex-1" />
+                  <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                  <Button variant="outline" size="icon" className="h-9 w-9 flex-shrink-0" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
+                    {uploadingAvatar ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label className="text-white">Meta Pixel ID</Label>
