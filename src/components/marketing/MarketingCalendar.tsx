@@ -306,15 +306,15 @@ export function MarketingCalendar() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={prevMonth}><ChevronLeft className="h-4 w-4" /></Button>
-          <h2 className="text-xl font-bold min-w-[200px] text-center">{MONTHS[month]} {year}</h2>
-          <Button variant="outline" size="icon" onClick={nextMonth}><ChevronRight className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" onClick={prevMonth} className="border-white/20 text-white hover:bg-white/10"><ChevronLeft className="h-4 w-4" /></Button>
+          <h2 className="text-xl font-bold min-w-[200px] text-center text-white">{MONTHS[month]} {year}</h2>
+          <Button variant="outline" size="icon" onClick={nextMonth} className="border-white/20 text-white hover:bg-white/10"><ChevronRight className="h-4 w-4" /></Button>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-1" onClick={() => setGoalDialogOpen(true)}>
+          <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setGoalDialogOpen(true)}>
             <Target className="h-3.5 w-3.5" />Metas do Mês
           </Button>
-          <Button variant="outline" size="sm" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
+          <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
         </div>
       </div>
 
@@ -392,7 +392,7 @@ export function MarketingCalendar() {
       </div>
 
       {/* Inline Month Notes (below calendar) */}
-      <Card>
+      <Card className="bg-card border-white/10">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold flex items-center gap-2">
