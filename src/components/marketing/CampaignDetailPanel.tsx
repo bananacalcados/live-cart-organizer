@@ -8,7 +8,7 @@ import {
   ArrowLeft, Plus, Play, Clock, CheckCircle, XCircle, Loader2,
   Trash2, Users, Send, Link as LinkIcon, Copy, Edit, Calendar as CalendarIcon,
   Variable, Settings, ChevronLeft, ChevronRight, Search,
-  UserPlus, UserMinus, Percent, BarChart3
+  UserPlus, UserMinus, Percent, BarChart3, AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScheduledMessageForm, type ScheduledMessageData } from "./ScheduledMessageForm";
 import { CampaignBulkSettings } from "./CampaignBulkSettings";
 import { CampaignDashboard } from "./CampaignDashboard";
