@@ -31,6 +31,7 @@ interface Props {
 interface SaleSummary {
   id: string;
   created_at: string;
+  paid_at?: string | null;
   subtotal: number;
   discount: number;
   total: number;
