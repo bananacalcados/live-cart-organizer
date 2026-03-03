@@ -1,126 +1,60 @@
 
 
-## Melhorias no Sistema de Grupos VIP
+## Diagnóstico do Problema
 
-### Resumo das Funcionalidades
+Existem **duas falhas críticas** no fluxo de pagamento online:
 
-1. **Gerenciamento em massa de grupos dentro da campanha** - Alterar nome, foto, descricao e permissoes de todos os grupos vinculados a campanha de uma vez
-2. **Fotos de perfil dos grupos** - Buscar foto via Z-API durante sincronizacao (ja existe `imgUrl`/`profileThumbnail` mas pode nao estar vindo)
-3. **Upload local de arquivos** - Para audio, video e documentos na criacao de mensagens agendadas
-4. **Calendario de mensagens agendadas** - Visao mensal/semanal por campanha
-5. **Edicao de mensagens pendentes** - Editar mensagens que ainda nao foram enviadas
-6. **Modelos de mensagens** - Templates reutilizaveis salvos no banco
-7. **Variaveis dinamicas nas mensagens** - Ex: `{{link_live}}`, `{{nome_grupo}}`, substituidas no momento do envio
+### Problema 1: Dados do cliente não são salvos pelo backend
+Quando o pagamento por **cartão** é aprovado, a edge function `pagarme-create-charge` marca o pedido como `paid` mas **NÃO salva** os dados do cliente (nome, CPF, email, endereço) na tabela `pos_sales` nem cria registro em `pos_customers`. Esses dados só são salvos pelo frontend em `handlePaymentConfirmed` — que depende do navegador da cliente estar aberto.
 
----
+O mesmo acontece nos webhooks (`pagarme-webhook`, `appmax-webhook`, `payment-webhook`): apenas atualizam o status para `paid`, sem salvar dados do cliente nem criar pedido no Tiny.
 
-### 1. Migracao de Banco de Dados
+**Apenas o fluxo de PIX** (`mercadopago-check-payment`) faz isso corretamente — porque já foi corrigido anteriormente.
 
-**Nova tabela `group_message_templates`:**
-- `id` (uuid PK)
-- `name` (text) - nome do modelo
-- `message_type` (text) - text/image/video/audio/document/poll
-- `message_content` (text) - conteudo com placeholders de variaveis
-- `media_url` (text, nullable)
-- `poll_options` (jsonb, nullable)
-- `created_at` (timestamptz)
-
-**Nova tabela `campaign_variables`:**
-- `id` (uuid PK)
-- `campaign_id` (uuid FK -> group_campaigns)
-- `variable_name` (text) - ex: `link_live`
-- `variable_value` (text) - valor atual
-- `updated_at` (timestamptz)
-- UNIQUE(campaign_id, variable_name)
-
-Isso permite programar mensagens com `{{link_live}}` e atualizar o valor da variavel separadamente. Na hora do envio, o edge function substitui as variaveis pelos valores atuais.
+### Problema 2: Pedido no Tiny não é criado pelo backend
+A criação do pedido no Tiny ERP depende exclusivamente do frontend (`handlePaymentConfirmed`). Se a cliente fecha o navegador após pagar, o Tiny nunca recebe o pedido.
 
 ---
 
-### 2. Upload Local de Arquivos
+## Plano de Correção
 
-Na `ScheduledMessageForm`, trocar o campo "URL da Midia" por um componente que oferece duas opcoes:
-- **URL externa** (campo de texto como hoje)
-- **Upload do computador** (input type="file" que faz upload para o bucket `marketing-attachments` do storage e obtem a URL publica)
+### 1. Salvar dados do cliente ANTES do pagamento no `pagarme-create-charge`
+Quando a edge function recebe a requisição de cobrança para `pos_sales`, ela já possui todos os dados do cliente no payload (`customer`). Vamos:
+- Fazer upsert em `pos_customers` (por CPF ou telefone)
+- Salvar `customer_name`, `customer_phone` e `payment_details` (com todos os dados) em `pos_sales` **antes de tentar cobrar**
+- Vincular `customer_id` ao pedido
 
-Isso ja funciona com o bucket existente `marketing-attachments` (publico).
+Isso garante que mesmo se o pagamento falhar ou o cliente fechar o navegador, os dados já estarão salvos.
 
----
+### 2. Criar pedido no Tiny automaticamente após aprovação no `pagarme-create-charge`
+Após o pagamento ser aprovado com sucesso (em qualquer gateway da cascata), a edge function vai:
+- Buscar os itens em `pos_sale_items`
+- Chamar `pos-tiny-create-sale` com os dados do cliente e itens
+- Isso elimina a dependência do frontend
 
-### 3. Fotos dos Grupos
+### 3. Adicionar criação de Tiny nos webhooks de contingência
+Para os webhooks `pagarme-webhook`, `appmax-webhook` e `payment-webhook` (VINDI), quando o status mudar para `paid`:
+- Buscar `payment_details` da `pos_sales` para recuperar dados do cliente
+- Chamar `pos-tiny-create-sale` automaticamente
+- Isso cobre o cenário onde o pagamento é assíncrono (ex: pré-autorização AppMax)
 
-A Z-API retorna `imgUrl` ou `profileThumbnail` nos dados do grupo. O `zapi-list-groups` ja faz `photo_url: g.imgUrl || g.profileThumbnail || null`. Se nao esta vindo, pode ser que a Z-API nao retorne por padrao. Vou adicionar uma chamada separada ao endpoint `profile-picture` da Z-API para cada grupo durante a sincronizacao, ou usar o endpoint `group-metadata` que retorna a foto.
+### Arquivos a editar
 
-Alternativa mais eficiente: ao sincronizar, para grupos sem foto, fazer chamada ao endpoint `profile-picture` da Z-API em batch.
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/pagarme-create-charge/index.ts` | Salvar dados do cliente em `pos_sales`/`pos_customers` antes da cobrança + criar Tiny após aprovação |
+| `supabase/functions/pagarme-webhook/index.ts` | Após marcar como `paid`, buscar dados e criar Tiny |
+| `supabase/functions/appmax-webhook/index.ts` | Após marcar como `paid`, buscar dados e criar Tiny |
+| `supabase/functions/payment-webhook/index.ts` | Após marcar VINDI como `paid`, buscar dados e criar Tiny |
 
----
+### Lógica reutilizável (inline em cada função)
 
-### 4. Gerenciamento em Massa na Campanha
+```text
+1. Buscar pos_sales com payment_details e store
+2. Extrair customer_name, cpf, email, phone, endereço de payment_details
+3. Buscar pos_sale_items
+4. Chamar pos-tiny-create-sale via fetch interno
+```
 
-Adicionar uma secao no `CampaignDetailPanel` com:
-- Botao "Configurar Grupos" que abre painel com acoes em massa:
-  - Alterar foto de todos os grupos
-  - Alterar descricao de todos
-  - Alterar nome (com sufixo automatico ex: "#1", "#2")
-  - Toggle permissoes (admins enviam / admins adicionam) para todos
-
-Cada acao itera sobre os grupos da campanha e chama `zapi-group-settings` sequencialmente.
-
----
-
-### 5. Calendario de Mensagens
-
-Adicionar uma aba/secao "Calendario" no `CampaignDetailPanel` usando um grid simples de calendario mensal, mostrando as mensagens agendadas em cada dia. Ao clicar no dia, mostra as mensagens daquela data.
-
----
-
-### 6. Edicao de Mensagens Pendentes
-
-Na lista de mensagens do `CampaignDetailPanel`, adicionar botao de edicao para mensagens com status `pending`. Ao clicar, abre o `ScheduledMessageForm` pre-preenchido. Ao salvar, faz UPDATE em vez de INSERT.
-
----
-
-### 7. Modelos de Mensagens
-
-Na `ScheduledMessageForm`:
-- Botao "Usar Modelo" que abre um select/dialog com templates salvos
-- Botao "Salvar como Modelo" que salva a mensagem atual como template reutilizavel
-- Templates ficam na tabela `group_message_templates`
-
----
-
-### 8. Variaveis Dinamicas
-
-Na `ScheduledMessageForm`:
-- Botoes para inserir variaveis no cursor: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, etc.
-- Preview mostra como ficara a mensagem com os valores atuais
-
-No `CampaignDetailPanel`:
-- Secao "Variaveis" onde o usuario define/atualiza os valores das variaveis da campanha
-- Ex: campo "link_live" = "https://youtube.com/live/abc123"
-
-No `zapi-group-scheduled-send`:
-- Antes de enviar, buscar variaveis da campanha e fazer `replace` no conteudo da mensagem
-- `{{nome_grupo}}` substituido pelo nome real do grupo de destino
-
----
-
-### Resumo de Arquivos
-
-| Arquivo | Acao |
-|---|---|
-| Migracao SQL | Criar `group_message_templates`, `campaign_variables` |
-| `src/components/marketing/ScheduledMessageForm.tsx` | Upload local, variaveis, modelos, modo edicao |
-| `src/components/marketing/CampaignDetailPanel.tsx` | Calendario, edicao, gerenciamento em massa de grupos, secao de variaveis |
-| `supabase/functions/zapi-group-scheduled-send/index.ts` | Substituicao de variaveis antes do envio |
-| `supabase/functions/zapi-list-groups/index.ts` | Buscar fotos de perfil via endpoint `profile-picture` |
-| `src/components/marketing/GroupsVipManager.tsx` | Exibir fotos dos grupos nos cards |
-
-### Detalhes Tecnicos
-
-- Upload de arquivos: usa `supabase.storage.from('marketing-attachments').upload()` e `getPublicUrl()`
-- Variaveis suportadas inicialmente: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, `{{horario}}`, variaveis customizadas
-- Calendario: grid CSS simples (7 colunas x 5-6 linhas), sem dependencia externa
-- Edicao de mensagens: reutiliza `ScheduledMessageForm` com prop `editingMessage` para pre-preencher
-- Fotos de grupo: tenta `profile-picture/${groupId}` na Z-API durante sync
+Isso resolve permanentemente o problema: **pagamento aprovado = dados salvos + pedido no Tiny**, independentemente do navegador do cliente.
 
