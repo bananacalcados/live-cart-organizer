@@ -369,7 +369,9 @@ async function chargeAppmax(
     console.log("APPMAX payment response:", JSON.stringify(payData).substring(0, 500));
 
     const appmaxStatus = payData.data?.status;
-    if (payData.success && (appmaxStatus === "approved" || appmaxStatus === "paid")) {
+    const appmaxText = payData.text || payData.message || "";
+    const isPreAuth = appmaxText.toLowerCase().includes("pre autorização realizada com sucesso") || appmaxText.toLowerCase().includes("pré autorização realizada com sucesso");
+    if (payData.success && (appmaxStatus === "approved" || appmaxStatus === "paid" || appmaxStatus === "pre_authorized" || isPreAuth)) {
       return {
         success: true,
         gateway: "appmax",
