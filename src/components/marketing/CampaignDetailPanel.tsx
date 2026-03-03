@@ -90,6 +90,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [allGroups, setAllGroups] = useState<any[]>([]);
   const [groupSearch, setGroupSearch] = useState("");
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
