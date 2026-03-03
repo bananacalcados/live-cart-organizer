@@ -145,6 +145,32 @@ export default function LinkPageView() {
               <p key={item.id} className="text-xs font-semibold text-white/60 uppercase tracking-widest text-center mt-6 mb-2">{item.label}</p>
             );
 
+            // Catalog: render as product image grid
+            if (item.item_type === 'catalog' && (item.style_config?.products || []).length > 0) {
+              const products = item.style_config.products as Array<{id: string; title: string; image: string; price: string; handle: string}>;
+              return (
+                <div
+                  key={item.id}
+                  className="rounded-xl overflow-hidden cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.97]"
+                  style={{ backgroundColor: 'rgba(0,0,0,0.35)' }}
+                  onClick={() => handleClick(item)}
+                >
+                  <div className="grid grid-cols-3 gap-0.5 p-1">
+                    {products.slice(0, 6).map(p => (
+                      <div key={p.id} className="aspect-square overflow-hidden rounded-sm">
+                        {p.image && <img src={p.image} alt={p.title} className="w-full h-full object-cover" loading="lazy" />}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-center py-3">
+                    <p className="text-white font-semibold text-sm">{item.label}</p>
+                    {item.description && <p className="text-white/50 text-xs mt-0.5">{item.description}</p>}
+                    <p className="text-white/40 text-xs mt-0.5">{products.length} products</p>
+                  </div>
+                </div>
+              );
+            }
+
             const Icon = ITEM_ICONS[item.item_type] || Link;
             let className = 'w-full py-4 px-5 rounded-xl flex items-center gap-4 cursor-pointer transition-all duration-200 hover:scale-[1.03] hover:shadow-xl active:scale-[0.97]';
             let style: React.CSSProperties = {};

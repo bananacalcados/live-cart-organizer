@@ -4,8 +4,11 @@ import { toast } from "sonner";
 import {
   Plus, Trash2, GripVertical, Eye, Copy, ExternalLink, Link,
   Phone, MapPin, ShoppingBag, Globe, Instagram, Mail, ChevronUp,
-  ChevronDown, Image, Type, Minus, BarChart3, MousePointer, Users, Loader2
+  ChevronDown, Image, Type, Minus, BarChart3, MousePointer, Users, Loader2,
+  Search, Check
 } from "lucide-react";
+import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -88,6 +91,14 @@ const BUTTON_STYLES = [
   { value: 'rounded', label: 'Arredondado' },
 ];
 
+interface CatalogProduct {
+  id: string;
+  title: string;
+  image: string;
+  price: string;
+  handle: string;
+}
+
 export function LinkPageManager() {
   const [pages, setPages] = useState<LinkPage[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -97,6 +108,14 @@ export function LinkPageManager() {
   const [saving, setSaving] = useState(false);
   const [analytics, setAnalytics] = useState<any[]>([]);
   const [analyticsPageId, setAnalyticsPageId] = useState<string | null>(null);
+
+  // Catalog product picker state
+  const [catalogPickerOpen, setCatalogPickerOpen] = useState(false);
+  const [catalogPickerItemId, setCatalogPickerItemId] = useState<string | null>(null);
+  const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
+  const [shopifySearch, setShopifySearch] = useState("");
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [selectedCatalogProducts, setSelectedCatalogProducts] = useState<CatalogProduct[]>([]);
 
   // New page form
   const [newPageOpen, setNewPageOpen] = useState(false);
@@ -267,6 +286,62 @@ export function LinkPageManager() {
     navigator.clipboard.writeText(url);
     toast.success("Link copiado!");
   };
+
+  // ─── Catalog Product Picker ───
+  const openCatalogPicker = async (itemId: string) => {
+    setCatalogPickerItemId(itemId);
+    const item = items.find(i => i.id === itemId);
+    const existing = (item?.style_config?.products || []) as CatalogProduct[];
+    setSelectedCatalogProducts(existing);
+    setCatalogPickerOpen(true);
+    if (shopifyProducts.length === 0) {
+      setLoadingProducts(true);
+      try {
+        const products = await fetchProducts(250);
+        setShopifyProducts(products);
+      } catch { toast.error("Erro ao carregar produtos da Shopify"); }
+      setLoadingProducts(false);
+    }
+  };
+
+  const searchShopifyProducts = async () => {
+    setLoadingProducts(true);
+    try {
+      const products = await fetchProducts(250, shopifySearch || undefined);
+      setShopifyProducts(products);
+    } catch { toast.error("Erro ao buscar produtos"); }
+    setLoadingProducts(false);
+  };
+
+  const toggleCatalogProduct = (product: ShopifyProduct) => {
+    const node = product.node;
+    const id = node.id;
+    const exists = selectedCatalogProducts.find(p => p.id === id);
+    if (exists) {
+      setSelectedCatalogProducts(prev => prev.filter(p => p.id !== id));
+    } else {
+      setSelectedCatalogProducts(prev => [...prev, {
+        id: node.id,
+        title: node.title,
+        image: node.images?.edges?.[0]?.node?.url || '',
+        price: node.priceRange?.minVariantPrice?.amount || '0',
+        handle: node.handle,
+      }]);
+    }
+  };
+
+  const saveCatalogProducts = async () => {
+    if (!catalogPickerItemId) return;
+    const item = items.find(i => i.id === catalogPickerItemId);
+    const newConfig = { ...(item?.style_config || {}), products: selectedCatalogProducts };
+    await updateItem(catalogPickerItemId, { style_config: newConfig });
+    setCatalogPickerOpen(false);
+    toast.success(`${selectedCatalogProducts.length} produtos selecionados`);
+  };
+
+  const filteredShopifyProducts = shopifyProducts.filter(p =>
+    !shopifySearch || p.node.title.toLowerCase().includes(shopifySearch.toLowerCase())
+  );
 
   const previewUrl = selectedPage ? `${window.location.origin}/l/${selectedPage.slug}` : '';
 
@@ -504,11 +579,33 @@ export function LinkPageManager() {
                         </div>
                       </div>
                       <Input value={item.label} onChange={e => updateItem(item.id, { label: e.target.value })} placeholder="Label" className="h-8 text-sm" />
-                      {item.item_type !== 'header' && item.item_type !== 'divider' && (
+                      {item.item_type !== 'header' && item.item_type !== 'divider' && item.item_type !== 'catalog' && (
                         <Input value={item.url || ''} onChange={e => updateItem(item.id, { url: e.target.value })} placeholder="URL" className="h-8 text-sm" />
                       )}
                       {item.item_type !== 'header' && item.item_type !== 'divider' && (
                         <Input value={item.description || ''} onChange={e => updateItem(item.id, { description: e.target.value })} placeholder="Descrição (opcional)" className="h-8 text-sm" />
+                      )}
+                      {item.item_type === 'catalog' && (
+                        <div className="space-y-2">
+                          <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => openCatalogPicker(item.id)}>
+                            <ShoppingBag className="h-3.5 w-3.5" />
+                            Selecionar Produtos ({(item.style_config?.products || []).length})
+                          </Button>
+                          {(item.style_config?.products || []).length > 0 && (
+                            <div className="grid grid-cols-4 gap-1">
+                              {(item.style_config.products as CatalogProduct[]).slice(0, 8).map((p: CatalogProduct) => (
+                                <div key={p.id} className="aspect-square rounded overflow-hidden bg-muted">
+                                  {p.image && <img src={p.image} alt={p.title} className="w-full h-full object-cover" />}
+                                </div>
+                              ))}
+                              {(item.style_config.products as CatalogProduct[]).length > 8 && (
+                                <div className="aspect-square rounded bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                                  +{(item.style_config.products as CatalogProduct[]).length - 8}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
                       <div className="flex items-center gap-2">
                         <Switch checked={item.is_active} onCheckedChange={v => updateItem(item.id, { is_active: v })} />
@@ -575,6 +672,26 @@ export function LinkPageManager() {
                         if (item.item_type === 'divider') return <hr key={item.id} className="border-white/20" />;
                         if (item.item_type === 'header') return <p key={item.id} className="text-xs font-semibold text-white/70 uppercase tracking-wider text-center mt-4">{item.label}</p>;
 
+                        // Catalog: render as product grid
+                        if (item.item_type === 'catalog' && (item.style_config?.products || []).length > 0) {
+                          const products = item.style_config.products as CatalogProduct[];
+                          return (
+                            <div key={item.id} className="rounded-xl overflow-hidden" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+                              <div className="grid grid-cols-3 gap-0.5 p-1">
+                                {products.slice(0, 6).map((p: CatalogProduct) => (
+                                  <div key={p.id} className="aspect-square overflow-hidden rounded-sm">
+                                    {p.image && <img src={p.image} alt={p.title} className="w-full h-full object-cover" />}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="text-center py-2">
+                                <p className="text-white font-semibold text-sm">{item.label}</p>
+                                <p className="text-white/50 text-xs">{products.length} products</p>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         const Icon = ITEM_TYPES.find(t => t.value === item.item_type)?.icon || Link;
                         const style = themeConfig.buttonStyle || 'filled';
                         const btnColor = themeConfig.buttonColor || '#ffffff';
@@ -614,6 +731,70 @@ export function LinkPageManager() {
           </Card>
         </div>
       </div>
+
+      {/* Catalog Product Picker Dialog */}
+      <Dialog open={catalogPickerOpen} onOpenChange={setCatalogPickerOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle>Selecionar Produtos do Catálogo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Buscar produtos..."
+                value={shopifySearch}
+                onChange={e => setShopifySearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && searchShopifyProducts()}
+                className="flex-1"
+              />
+              <Button size="sm" onClick={searchShopifyProducts} disabled={loadingProducts}>
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {selectedCatalogProducts.length} produto(s) selecionado(s)
+            </p>
+            <ScrollArea className="h-[400px]">
+              {loadingProducts ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {filteredShopifyProducts.map(product => {
+                    const node = product.node;
+                    const isSelected = selectedCatalogProducts.some(p => p.id === node.id);
+                    const imageUrl = node.images?.edges?.[0]?.node?.url || '';
+                    const price = parseFloat(node.priceRange?.minVariantPrice?.amount || '0');
+                    return (
+                      <div
+                        key={node.id}
+                        className={`border rounded-lg p-2 cursor-pointer transition-all ${isSelected ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'hover:border-muted-foreground/50'}`}
+                        onClick={() => toggleCatalogProduct(product)}
+                      >
+                        <div className="flex gap-2">
+                          <div className="w-16 h-16 rounded overflow-hidden bg-muted flex-shrink-0">
+                            {imageUrl && <img src={imageUrl} alt={node.title} className="w-full h-full object-cover" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{node.title}</p>
+                            <p className="text-xs text-muted-foreground">R$ {price.toFixed(2)}</p>
+                            {isSelected && <Check className="h-4 w-4 text-primary mt-1" />}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCatalogPickerOpen(false)}>Cancelar</Button>
+              <Button onClick={saveCatalogProducts}>
+                Salvar ({selectedCatalogProducts.length} produtos)
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
