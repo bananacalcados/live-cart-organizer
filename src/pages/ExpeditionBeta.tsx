@@ -75,34 +75,42 @@ export default function ExpeditionBeta() {
     setOpenSupportCount(count || 0);
   }, []);
 
-  const invokeSyncWithTimeout = async () => {
+  const invokeSyncWithTimeout = async (retries = 2): Promise<any> => {
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expedition-beta-initial-sync`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (e: any) {
-      clearTimeout(timeout);
-      if (e.name === 'AbortError') throw new Error('Timeout: sincronização demorou mais de 2 minutos');
-      throw e;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (e: any) {
+        clearTimeout(timeout);
+        if (e.name === 'AbortError') throw new Error('Timeout: sincronização demorou mais de 2 minutos');
+        if (attempt < retries) {
+          console.warn(`Sync attempt ${attempt + 1} failed, retrying in 2s...`, e.message);
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
+        }
+        throw e;
+      }
     }
   };
 
   // Auto-sync from Tiny on mount
   useEffect(() => {
     const autoSync = async () => {
+      setIsInitialSyncing(true);
       try {
         const data = await invokeSyncWithTimeout();
         if (data?.success && data.synced > 0) {
@@ -110,6 +118,8 @@ export default function ExpeditionBeta() {
         }
       } catch (e) {
         console.error('Auto-sync failed:', e);
+      } finally {
+        setIsInitialSyncing(false);
       }
       fetchOrders();
     };
