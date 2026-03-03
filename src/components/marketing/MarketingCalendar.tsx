@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   ChevronLeft, ChevronRight, Plus, X, Trash2, Save,
-  FileText, Loader2, Target, Calendar as CalendarIcon, Eye, Calculator
+  FileText, Loader2, Target, Calendar as CalendarIcon, Eye, Calculator,
+  ShieldAlert, Edit3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +76,12 @@ export function MarketingCalendar() {
   // Month notes (inline, below calendar)
   const [monthNotes, setMonthNotes] = useState("");
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+
+  // Campaign Rules (persistent, stored in app_settings)
+  const [campaignRules, setCampaignRules] = useState("");
+  const [savedRules, setSavedRules] = useState("");
+  const [isEditingRules, setIsEditingRules] = useState(false);
+  const [isSavingRules, setIsSavingRules] = useState(false);
 
   // Calculator
   const [calcOpen, setCalcOpen] = useState(false);
@@ -180,6 +187,52 @@ export function MarketingCalendar() {
   }, [year, month]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Campaign Rules - persistent across months
+  const fetchRules = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'campaign_rules')
+        .maybeSingle();
+      if (data?.value) {
+        const val = typeof data.value === 'string' ? data.value : (data.value as any)?.content || '';
+        setCampaignRules(val);
+        setSavedRules(val);
+      }
+    } catch (err) { console.error(err); }
+  }, []);
+
+  useEffect(() => { fetchRules(); }, [fetchRules]);
+
+  const saveRules = async () => {
+    setIsSavingRules(true);
+    try {
+      const { data: existing } = await supabase
+        .from('app_settings')
+        .select('id')
+        .eq('key', 'campaign_rules')
+        .maybeSingle();
+      
+      if (existing) {
+        const { error } = await supabase
+          .from('app_settings')
+          .update({ value: { content: campaignRules } as any })
+          .eq('key', 'campaign_rules');
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('app_settings')
+          .insert({ key: 'campaign_rules', value: { content: campaignRules } as any });
+        if (error) throw error;
+      }
+      setSavedRules(campaignRules);
+      setIsEditingRules(false);
+      toast.success("Regras salvas!");
+    } catch { toast.error("Erro ao salvar regras"); }
+    finally { setIsSavingRules(false); }
+  };
 
   // Calendar grid
   const firstDayOfMonth = new Date(year, month, 1).getDay();
@@ -400,6 +453,58 @@ export function MarketingCalendar() {
             <p className="text-[10px] text-muted-foreground text-center">Use o teclado para digitar</p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Campaign Rules - Persistent */}
+      {savedRules && !isEditingRules && (
+        <Card className="border-2 border-red-500/40 bg-red-500/10 shadow-lg shadow-red-500/5">
+          <CardContent className="py-4 px-5">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-red-500" />
+                <h3 className="font-bold text-sm text-red-500 uppercase tracking-wide">⚠️ Regras Obrigatórias de Campanha</h3>
+              </div>
+              <Button size="sm" variant="ghost" className="gap-1 text-xs h-7" onClick={() => setIsEditingRules(true)}>
+                <Edit3 className="h-3 w-3" />Editar
+              </Button>
+            </div>
+            <RichTextPreview content={savedRules} />
+          </CardContent>
+        </Card>
+      )}
+
+      {isEditingRules && (
+        <Card className="border-red-500/30 bg-card">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-red-500" />
+                <h3 className="text-sm font-semibold">Regras Obrigatórias de Campanha</h3>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => { setCampaignRules(savedRules); setIsEditingRules(false); }}>
+                  Cancelar
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={saveRules} disabled={isSavingRules}>
+                  {isSavingRules ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                  Salvar Regras
+                </Button>
+              </div>
+            </div>
+            <RichTextEditor
+              value={campaignRules}
+              onChange={setCampaignRules}
+              placeholder="Escreva aqui as regras obrigatórias que devem ser seguidas em TODAS as campanhas, independente do mês..."
+              minRows={5}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {!savedRules && !isEditingRules && (
+        <Button variant="outline" size="sm" className="gap-1 border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => setIsEditingRules(true)}>
+          <ShieldAlert className="h-3.5 w-3.5" />Definir Regras Obrigatórias de Campanha
+        </Button>
       )}
 
       {/* Monthly Goals Summary */}

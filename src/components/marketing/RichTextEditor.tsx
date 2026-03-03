@@ -1,8 +1,15 @@
 import { useState, useRef, useCallback } from "react";
-import { Bold, Italic, Heading1, Heading2, Heading3, List, CheckSquare, Smile } from "lucide-react";
+import { Bold, Italic, Heading1, Heading2, Heading3, List, CheckSquare, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+
+const TEXT_COLORS = [
+  "#ffffff", "#ef4444", "#f59e0b", "#22c55e", "#3b82f6", "#8b5cf6",
+  "#ec4899", "#06b6d4", "#f97316", "#a3e635", "#facc15", "#fb923c",
+  "#000000", "#6b7280", "#d1d5db", "#fbbf24",
+];
 
 interface RichTextEditorProps {
   value: string;
@@ -15,7 +22,7 @@ interface RichTextEditorProps {
 /**
  * A simple rich-text-like editor that stores markdown-style content.
  * Supports: headings (#, ##, ###), bold (**), italic (*), bullet lists (-), task checkboxes ([ ] / [x]).
- * Renders a live preview below the textarea.
+ * Color syntax: {color:#hex}text{/color}
  */
 export function RichTextEditor({ value, onChange, placeholder = "Escreva aqui...", minRows = 4, className }: RichTextEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -54,7 +61,6 @@ export function RichTextEditor({ value, onChange, placeholder = "Escreva aqui...
     const ta = textareaRef.current;
     if (!ta) return;
     const start = ta.selectionStart;
-    // Find line start
     const lineStart = value.lastIndexOf('\n', start - 1) + 1;
     const before = value.substring(0, lineStart);
     const after = value.substring(lineStart);
@@ -73,6 +79,23 @@ export function RichTextEditor({ value, onChange, placeholder = "Escreva aqui...
     onChange(newText);
     setTimeout(() => { ta.focus(); ta.setSelectionRange(start + emoji.length, start + emoji.length); }, 0);
   }, [value, onChange]);
+
+  const applyColor = useCallback((color: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = value.substring(start, end);
+    const prefix = `{color:${color}}`;
+    const suffix = `{/color}`;
+    if (selected) {
+      const newText = value.substring(0, start) + prefix + selected + suffix + value.substring(end);
+      onChange(newText);
+      setTimeout(() => { ta.focus(); }, 0);
+    } else {
+      insertAtCursor(prefix, suffix);
+    }
+  }, [value, onChange, insertAtCursor]);
 
   return (
     <div className={cn("space-y-1", className)}>
@@ -108,6 +131,27 @@ export function RichTextEditor({ value, onChange, placeholder = "Escreva aqui...
           onClick={() => insertNewLine("[ ] ")}>
           <CheckSquare className="h-3.5 w-3.5" />
         </Button>
+        <div className="w-px h-5 bg-border mx-0.5" />
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Cor do texto">
+              <Palette className="h-3.5 w-3.5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-2" align="start">
+            <p className="text-xs font-medium mb-1.5">Cor do texto</p>
+            <div className="grid grid-cols-8 gap-1">
+              {TEXT_COLORS.map(c => (
+                <button
+                  key={c}
+                  className="h-6 w-6 rounded-full border border-border hover:scale-110 transition-transform"
+                  style={{ backgroundColor: c }}
+                  onClick={() => applyColor(c)}
+                />
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
         <div className="w-px h-5 bg-border mx-0.5" />
         <EmojiPickerButton onEmojiSelect={insertEmoji} className="h-7 w-7" />
       </div>
@@ -169,29 +213,41 @@ export function RichTextPreview({ content, onToggleTask, className }: { content:
 }
 
 function renderInline(text: string): React.ReactNode {
-  // Simple bold/italic parser
   const parts: React.ReactNode[] = [];
   let remaining = text;
   let key = 0;
 
   while (remaining.length > 0) {
+    // Color syntax: {color:#hex}text{/color}
+    const colorMatch = remaining.match(/\{color:(#[0-9a-fA-F]{3,6})\}(.+?)\{\/color\}/);
     // Bold
     const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
     // Italic
     const italicMatch = remaining.match(/\*(.+?)\*/);
 
-    const match = boldMatch && (!italicMatch || (boldMatch.index ?? 999) <= (italicMatch.index ?? 999)) ? boldMatch : italicMatch;
+    // Find earliest match
+    const matches = [
+      colorMatch ? { type: 'color', match: colorMatch, index: colorMatch.index ?? 999 } : null,
+      boldMatch ? { type: 'bold', match: boldMatch, index: boldMatch.index ?? 999 } : null,
+      italicMatch ? { type: 'italic', match: italicMatch, index: italicMatch.index ?? 999 } : null,
+    ].filter(Boolean).sort((a, b) => a!.index - b!.index);
 
-    if (match && match.index !== undefined) {
-      if (match.index > 0) {
-        parts.push(<span key={key++}>{remaining.substring(0, match.index)}</span>);
+    const first = matches[0];
+
+    if (first && first.match && first.match.index !== undefined) {
+      if (first.match.index > 0) {
+        parts.push(<span key={key++}>{remaining.substring(0, first.match.index)}</span>);
       }
-      if (match[0].startsWith('**')) {
-        parts.push(<strong key={key++}>{match[1]}</strong>);
+      if (first.type === 'color') {
+        const color = first.match[1];
+        const innerText = first.match[2];
+        parts.push(<span key={key++} style={{ color }}>{renderInline(innerText)}</span>);
+      } else if (first.type === 'bold') {
+        parts.push(<strong key={key++}>{first.match[1]}</strong>);
       } else {
-        parts.push(<em key={key++}>{match[1]}</em>);
+        parts.push(<em key={key++}>{first.match[1]}</em>);
       }
-      remaining = remaining.substring(match.index + match[0].length);
+      remaining = remaining.substring(first.match.index + first.match[0].length);
     } else {
       parts.push(<span key={key++}>{remaining}</span>);
       break;
