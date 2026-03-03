@@ -234,6 +234,20 @@ serve(async (req) => {
 
           console.log("pos_sales marked as paid:", orderId, "customer_id:", customerId);
 
+          // Log checkout attempt for PIX success
+          await supabase.from("pos_checkout_attempts").insert({
+            sale_id: orderId,
+            store_id: sale.store_id,
+            payment_method: "pix",
+            status: "success",
+            amount: sale.total ? Number(sale.total) : null,
+            customer_name: customerName || null,
+            customer_phone: customerPhone || null,
+            customer_email: customerEmail || null,
+            gateway: "mercadopago",
+            transaction_id: String(paymentId),
+          } as any).then(() => {});
+
           // Create Tiny order if we have items and store data
           try {
             const { data: items } = await supabase
