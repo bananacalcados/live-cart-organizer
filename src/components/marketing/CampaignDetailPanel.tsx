@@ -300,6 +300,47 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const targetGroups: string[] = campaign?.target_groups || [];
   const groupCount = targetGroups.length;
 
+  // Check if all campaign groups are full
+  const campaignGroups = allGroups.filter(g => targetGroups.includes(g.id));
+  const allGroupsFull = campaignGroups.length > 0 && campaignGroups.every(g => g.participant_count >= (g.max_participants || 1024));
+
+  const createGroupForCampaign = async () => {
+    if (!newGroupName.trim()) { toast.error("Nome do grupo obrigatório"); return; }
+    setIsCreatingGroup(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
+        method: 'POST',
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim() }),
+      });
+      const result = await res.json();
+      if (result.success && result.groupId) {
+        // Add new group to DB and to campaign
+        const { data: newGroup } = await supabase.from('whatsapp_groups').insert({
+          group_id: result.groupId,
+          name: newGroupName.trim(),
+          is_vip: true,
+          is_active: true,
+          participant_count: 1,
+          max_participants: 1024,
+        }).select().single();
+
+        if (newGroup) {
+          const updated = [...targetGroups, newGroup.id];
+          await supabase.from('group_campaigns').update({ target_groups: updated, total_groups: updated.length }).eq('id', campaignId);
+          setCampaign((prev: any) => prev ? { ...prev, target_groups: updated, total_groups: updated.length } : prev);
+          fetchAllGroups();
+        }
+        toast.success(`Grupo "${newGroupName}" criado e adicionado à campanha!`);
+        setShowCreateGroup(false);
+        setNewGroupName("");
+      } else {
+        toast.error(result.error || "Erro ao criar grupo");
+      }
+    } catch { toast.error("Erro ao criar grupo"); }
+    finally { setIsCreatingGroup(false); }
+  };
+
   const toggleGroupInCampaign = async (groupId: string) => {
     const current: string[] = campaign?.target_groups || [];
     const updated = current.includes(groupId)
