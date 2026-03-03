@@ -41,15 +41,15 @@ serve(async (req) => {
     switch (action) {
       case 'update-photo':
         endpoint = `${baseUrl}/update-group-photo`;
-        body = { groupId, imageUrl: value };
+        body = { groupId, groupPhoto: value };
         break;
       case 'update-description':
         endpoint = `${baseUrl}/update-group-description`;
-        body = { groupId, description: value };
+        body = { groupId, groupDescription: value };
         break;
       case 'update-name':
         endpoint = `${baseUrl}/update-group-name`;
-        body = { groupId, name: value };
+        body = { groupId, groupName: value };
         break;
       case 'get-participants':
         endpoint = `${baseUrl}/group-participants/${groupId}`;
