@@ -4152,6 +4152,48 @@ export type Database = {
           },
         ]
       }
+      marketing_recurring_actions: {
+        Row: {
+          color: string | null
+          content: string | null
+          created_at: string
+          end_date: string | null
+          id: string
+          is_active: boolean
+          recurrence_config: Json | null
+          recurrence_type: string
+          start_date: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          content?: string | null
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          recurrence_config?: Json | null
+          recurrence_type: string
+          start_date?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          content?: string | null
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
+          recurrence_config?: Json | null
+          recurrence_type?: string
+          start_date?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       marketing_send_logs: {
         Row: {
           campaign_id: string
