@@ -6,10 +6,11 @@ const corsHeaders = {
 };
 
 interface GroupSettingsRequest {
-  action: 'update-photo' | 'update-description' | 'update-name' | 'get-participants' |
+  action: 'create' | 'update-photo' | 'update-description' | 'update-name' | 'get-participants' |
           'set-messages-admins-only' | 'set-add-admins-only' |
           'add-participant' | 'remove-participant' | 'promote-admin' | 'demote-admin';
-  groupId: string;
+  groupId?: string;
+  groupName?: string;
   value?: string;
   phone?: string;
 }
@@ -31,7 +32,7 @@ serve(async (req) => {
       );
     }
 
-    const { action, groupId, value, phone }: GroupSettingsRequest = await req.json();
+    const { action, groupId, groupName, value, phone }: GroupSettingsRequest = await req.json();
     const baseUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}`;
 
     let endpoint: string;
@@ -39,6 +40,10 @@ serve(async (req) => {
     let body: Record<string, unknown> = {};
 
     switch (action) {
+      case 'create':
+        endpoint = `${baseUrl}/create-group`;
+        body = { groupName: groupName || value || 'Novo Grupo' };
+        break;
       case 'update-photo':
         endpoint = `${baseUrl}/update-group-photo`;
         body = { groupId, groupPhoto: value };
