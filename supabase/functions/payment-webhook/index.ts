@@ -104,8 +104,7 @@ serve(async (req) => {
     console.log(`payment-webhook received for gateway: ${gateway}`);
 
     if (gateway === "vindi") {
-      return await handleVindi(req, supabase);
-    }
+      return await handleVindi(req, supabase, supabaseUrl, supabaseKey);
 
     // For pagarme/appmax, just acknowledge — they have dedicated webhooks
     console.log(`Gateway "${gateway}" has its own webhook. Acknowledging.`);
@@ -321,7 +320,9 @@ async function updateSale(
   isPaid: boolean,
   isFailed: boolean,
   tokenTransaction: string,
-  statusId: number
+  statusId: number,
+  supabaseUrl: string,
+  supabaseKey: string
 ): Promise<boolean> {
   if (isPaid && sale.status !== "paid" && sale.status !== "completed") {
     const { error } = await supabase
@@ -335,6 +336,8 @@ async function updateSale(
       .eq("id", saleId);
     if (error) { console.error("Error updating pos_sales:", error); return false; }
     console.log(`pos_sales ${saleId} marked as paid via VINDI webhook`);
+    // Auto-create Tiny order
+    await autoCreateTinyOrder(supabase, saleId, supabaseUrl, supabaseKey);
     return true;
   } else if (isFailed && sale.status === "online_pending") {
     const { error } = await supabase
