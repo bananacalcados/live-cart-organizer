@@ -224,7 +224,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
 
       if (sale) {
         orderSource = "pos_sales";
-        updated = await updateSale(supabase, sale, ourOrderId, isPaid, isFailed, tokenTransaction, statusId);
+        updated = await updateSale(supabase, sale, ourOrderId, isPaid, isFailed, tokenTransaction, statusId, supabaseUrl, supabaseKey);
       }
     }
   }
@@ -255,7 +255,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
         const sale = sales[0];
         ourOrderId = sale.id;
         orderSource = "pos_sales";
-        updated = await updateSale(supabase, sale, ourOrderId!, isPaid, isFailed, tokenTransaction, statusId);
+        updated = await updateSale(supabase, sale, ourOrderId!, isPaid, isFailed, tokenTransaction, statusId, supabaseUrl, supabaseKey);
       }
     }
   }
