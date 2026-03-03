@@ -251,6 +251,7 @@ async function updateSale(
       .from("pos_sales")
       .update({
         status: "paid",
+        paid_at: new Date().toISOString(),
         payment_gateway: "vindi",
         notes: `🔔 Webhook VINDI: aprovado (${tokenTransaction})`,
       })
