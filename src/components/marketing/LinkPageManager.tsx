@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Plus, Trash2, GripVertical, Eye, Copy, ExternalLink, Link,
   Phone, MapPin, ShoppingBag, Globe, Instagram, Mail, ChevronUp,
   ChevronDown, Image, Type, Minus, BarChart3, MousePointer, Users, Loader2,
-  Search, Check
+  Search, Check, Upload
 } from "lucide-react";
 import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -112,16 +112,18 @@ export function LinkPageManager() {
   // Catalog product picker state
   const [catalogPickerOpen, setCatalogPickerOpen] = useState(false);
   const [catalogPickerItemId, setCatalogPickerItemId] = useState<string | null>(null);
-  const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
-  const [shopifySearch, setShopifySearch] = useState("");
-  const [loadingProducts, setLoadingProducts] = useState(false);
-  const [selectedCatalogProducts, setSelectedCatalogProducts] = useState<CatalogProduct[]>([]);
-
-  // New page form
-  const [newPageOpen, setNewPageOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newSlug, setNewSlug] = useState("");
-  const [newStoreId, setNewStoreId] = useState<string>("");
+   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
+   const [shopifySearch, setShopifySearch] = useState("");
+   const [loadingProducts, setLoadingProducts] = useState(false);
+   const [selectedCatalogProducts, setSelectedCatalogProducts] = useState<CatalogProduct[]>([]);
+   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+   const avatarInputRef = useRef<HTMLInputElement>(null);
+ 
+   // New page form
+   const [newPageOpen, setNewPageOpen] = useState(false);
+   const [newTitle, setNewTitle] = useState("");
+   const [newSlug, setNewSlug] = useState("");
+   const [newStoreId, setNewStoreId] = useState<string>("");
 
   const fetchPages = useCallback(async () => {
     setLoading(true);
@@ -285,6 +287,24 @@ export function LinkPageManager() {
     const url = `${window.location.origin}/l/${slug}`;
     navigator.clipboard.writeText(url);
     toast.success("Link copiado!");
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedPage) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error("Máximo 5MB"); return; }
+    setUploadingAvatar(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `link-pages/${selectedPage.id}-avatar-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+      await updatePage({ avatar_url: data.publicUrl });
+      toast.success("Avatar atualizado!");
+    } catch { toast.error("Erro ao fazer upload"); }
+    setUploadingAvatar(false);
+    e.target.value = '';
   };
 
   // ─── Catalog Product Picker ───
@@ -508,8 +528,14 @@ export function LinkPageManager() {
                 <Input value={selectedPage.subtitle || ''} onChange={e => updatePage({ subtitle: e.target.value })} placeholder="Uma frase de impacto..." />
               </div>
               <div>
-                <Label className="text-white">Avatar URL</Label>
-                <Input value={selectedPage.avatar_url || ''} onChange={e => updatePage({ avatar_url: e.target.value })} placeholder="https://..." />
+                <Label className="text-white">Avatar</Label>
+                <div className="flex gap-2 items-center">
+                  <Input value={selectedPage.avatar_url || ''} onChange={e => updatePage({ avatar_url: e.target.value })} placeholder="https://..." className="flex-1" />
+                  <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                  <Button variant="outline" size="icon" className="h-9 w-9 flex-shrink-0" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
+                    {uploadingAvatar ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label className="text-white">Meta Pixel ID</Label>
@@ -547,23 +573,31 @@ export function LinkPageManager() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm text-white">Links e Botões ({items.length})</CardTitle>
-                <Select onValueChange={v => addItem(v)}>
-                  <SelectTrigger className="w-40 h-8">
-                    <SelectValue placeholder="+ Adicionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ITEM_TYPES.map(t => (
-                      <SelectItem key={t.value} value={t.value}>
-                        <span className="flex items-center gap-2"><t.icon className="h-3.5 w-3.5" />{t.label}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button size="sm" className="gap-1 h-8"><Plus className="h-3.5 w-3.5" />Adicionar</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-xs">
+                    <DialogHeader><DialogTitle>Adicionar Botão</DialogTitle></DialogHeader>
+                    <div className="grid grid-cols-2 gap-2">
+                      {ITEM_TYPES.map(t => (
+                        <Button
+                          key={t.value}
+                          variant="outline"
+                          className="gap-2 justify-start h-10"
+                          onClick={() => { addItem(t.value); }}
+                        >
+                          <t.icon className="h-4 w-4" />{t.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="max-h-[500px]">
-                <div className="space-y-2">
+              <ScrollArea className="h-[500px]">
+                <div className="space-y-2 pr-3">
                   {items.map((item, idx) => (
                     <div key={item.id} className="border rounded-lg p-3 space-y-2 bg-card">
                       <div className="flex items-center justify-between">
@@ -614,7 +648,7 @@ export function LinkPageManager() {
                     </div>
                   ))}
                   {items.length === 0 && (
-                    <p className="text-center text-sm text-muted-foreground py-6">Adicione links usando o botão acima</p>
+                    <p className="text-center text-sm text-muted-foreground py-6">Clique em "Adicionar" para criar links e botões</p>
                   )}
                 </div>
               </ScrollArea>
