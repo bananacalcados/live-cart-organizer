@@ -368,7 +368,8 @@ async function chargeAppmax(
     const payData = await payRes.json();
     console.log("APPMAX payment response:", JSON.stringify(payData).substring(0, 500));
 
-    if (payData.success && (payData.data?.status === "approved" || payData.data?.status === "paid" || payData.data?.id)) {
+    const appmaxStatus = payData.data?.status;
+    if (payData.success && (appmaxStatus === "approved" || appmaxStatus === "paid")) {
       return {
         success: true,
         gateway: "appmax",
