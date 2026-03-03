@@ -8,7 +8,7 @@ import {
   ArrowLeft, Plus, Play, Clock, CheckCircle, XCircle, Loader2,
   Trash2, Users, Send, Link as LinkIcon, Copy, Edit, Calendar as CalendarIcon,
   Variable, Settings, ChevronLeft, ChevronRight, Search,
-  UserPlus, UserMinus, Percent, BarChart3
+  UserPlus, UserMinus, Percent, BarChart3, AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScheduledMessageForm, type ScheduledMessageData } from "./ScheduledMessageForm";
 import { CampaignBulkSettings } from "./CampaignBulkSettings";
 import { CampaignDashboard } from "./CampaignDashboard";
@@ -88,6 +90,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [allGroups, setAllGroups] = useState<any[]>([]);
   const [groupSearch, setGroupSearch] = useState("");
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
@@ -165,6 +170,26 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
     if (error) throw error;
     toast.success("Mensagem agendada!");
+    fetchMessages();
+  };
+
+  const handleSendNow = async (data: ScheduledMessageData) => {
+    // Create the message with current time and immediately send it
+    const now = new Date();
+    const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+      campaign_id: campaignId,
+      message_type: data.messageType,
+      message_content: data.messageContent,
+      media_url: data.mediaUrl || null,
+      poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+      scheduled_at: now.toISOString(),
+      send_speed: data.sendSpeed,
+    }).select().single();
+
+    if (error) throw error;
+
+    // Immediately trigger sending
+    await sendMessage(inserted.id);
     fetchMessages();
   };
 
@@ -275,6 +300,47 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const targetGroups: string[] = campaign?.target_groups || [];
   const groupCount = targetGroups.length;
 
+  // Check if all campaign groups are full
+  const campaignGroups = allGroups.filter(g => targetGroups.includes(g.id));
+  const allGroupsFull = campaignGroups.length > 0 && campaignGroups.every(g => g.participant_count >= (g.max_participants || 1024));
+
+  const createGroupForCampaign = async () => {
+    if (!newGroupName.trim()) { toast.error("Nome do grupo obrigatório"); return; }
+    setIsCreatingGroup(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
+        method: 'POST',
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim() }),
+      });
+      const result = await res.json();
+      if (result.success && result.groupId) {
+        // Add new group to DB and to campaign
+        const { data: newGroup } = await supabase.from('whatsapp_groups').insert({
+          group_id: result.groupId,
+          name: newGroupName.trim(),
+          is_vip: true,
+          is_active: true,
+          participant_count: 1,
+          max_participants: 1024,
+        }).select().single();
+
+        if (newGroup) {
+          const updated = [...targetGroups, newGroup.id];
+          await supabase.from('group_campaigns').update({ target_groups: updated, total_groups: updated.length }).eq('id', campaignId);
+          setCampaign((prev: any) => prev ? { ...prev, target_groups: updated, total_groups: updated.length } : prev);
+          fetchAllGroups();
+        }
+        toast.success(`Grupo "${newGroupName}" criado e adicionado à campanha!`);
+        setShowCreateGroup(false);
+        setNewGroupName("");
+      } else {
+        toast.error(result.error || "Erro ao criar grupo");
+      }
+    } catch { toast.error("Erro ao criar grupo"); }
+    finally { setIsCreatingGroup(false); }
+  };
+
   const toggleGroupInCampaign = async (groupId: string) => {
     const current: string[] = campaign?.target_groups || [];
     const updated = current.includes(groupId)
@@ -338,9 +404,25 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
           {/* GROUPS TAB */}
           <TabsContent value="groups" className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
+            {allGroupsFull && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span className="text-xs">Todos os grupos desta campanha estão cheios!</span>
+                  <Button size="sm" variant="outline" className="gap-1 ml-2 shrink-0" onClick={() => setShowCreateGroup(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Criar Novo Grupo
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
+              </div>
+              <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={() => setShowCreateGroup(true)}>
+                <Plus className="h-3.5 w-3.5" /> Criar Grupo
+              </Button>
             </div>
             <p className="text-xs text-muted-foreground">{groupCount} grupos selecionados</p>
             <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
@@ -534,10 +616,31 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         open={showMessageForm}
         onOpenChange={open => { setShowMessageForm(open); if (!open) setEditingMessage(null); }}
         onSubmit={handleAddMessage}
+        onSendNow={handleSendNow}
         editingMessage={editingMessage}
         onUpdate={handleUpdateMessage}
         campaignId={campaignId}
       />
+
+      {/* CREATE GROUP DIALOG */}
+      <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Criar Novo Grupo WhatsApp</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              O grupo será criado automaticamente no WhatsApp e adicionado a esta campanha como VIP.
+            </p>
+            <Input placeholder="Nome do grupo (ex: VIP Banana #11)" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateGroup(false)}>Cancelar</Button>
+            <Button onClick={createGroupForCampaign} disabled={isCreatingGroup} className="gap-1">
+              {isCreatingGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Criar Grupo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -78,151 +78,95 @@ serve(async (req) => {
     const mode = body.mode || 'from_api';
 
     if (mode === 'calculate_rfm') {
-      console.log('Calculating RFM scores from all sources...');
+      console.log('Calculating RFM scores directly from zoppy_customers...');
 
-      // 1. Aggregate from zoppy_sales (Shopify/Zoppy)
-      const { data: salesData, error: salesError } = await supabase
-        .from('zoppy_sales')
-        .select('customer_phone, customer_name, customer_email, total, zoppy_created_at, customer_data')
-        .not('customer_phone', 'is', null)
-        .order('zoppy_created_at', { ascending: false });
-
-      if (salesError) throw salesError;
-
-      const customerMap = new Map<string, {
-        phone: string; orders: number; totalSpent: number;
-        lastPurchase: string; firstPurchase: string;
-        name: string; email: string; customerData: any;
-        zoppyId: string | null;
-      }>();
-
-      for (const sale of salesData || []) {
-        const phone = sale.customer_phone;
-        if (!phone) continue;
-        const existing = customerMap.get(phone);
-        if (existing) {
-          existing.orders += 1;
-          existing.totalSpent += (sale.total || 0);
-          if (sale.zoppy_created_at > existing.lastPurchase) existing.lastPurchase = sale.zoppy_created_at;
-          if (sale.zoppy_created_at < existing.firstPurchase) existing.firstPurchase = sale.zoppy_created_at;
-        } else {
-          customerMap.set(phone, {
-            phone, orders: 1, totalSpent: sale.total || 0,
-            lastPurchase: sale.zoppy_created_at || new Date().toISOString(),
-            firstPurchase: sale.zoppy_created_at || new Date().toISOString(),
-            name: sale.customer_name || '', email: sale.customer_email || '',
-            customerData: sale.customer_data,
-            zoppyId: null,
-          });
-        }
-      }
-
-      // 2. Also include customers from zoppy_customers (POS, Shopify sync) that have purchases but no sales in zoppy_sales
-      let allZoppyCustomers: any[] = [];
-      let zcFrom = 0;
-      const zcBatch = 1000;
+      // Fetch all customers with purchases directly from zoppy_customers (already aggregated)
+      // Process in batches to avoid CPU timeout
+      let allCustomers: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
       while (true) {
-        const { data: zcData, error: zcErr } = await supabase
+        const { data, error } = await supabase
           .from('zoppy_customers')
-          .select('zoppy_id, first_name, last_name, phone, email, total_orders, total_spent, last_purchase_at, first_purchase_at, city, state, gender, region_type, ddd')
+          .select('zoppy_id, first_name, last_name, phone, email, total_orders, total_spent, last_purchase_at, first_purchase_at, city, state, gender, address1, ddd, region_type')
           .gt('total_orders', 0)
-          .range(zcFrom, zcFrom + zcBatch - 1);
-        if (zcErr) { console.error('zoppy_customers fetch error:', zcErr); break; }
-        if (!zcData || zcData.length === 0) break;
-        allZoppyCustomers = allZoppyCustomers.concat(zcData);
-        if (zcData.length < zcBatch) break;
-        zcFrom += zcBatch;
+          .range(from, from + batchSize - 1);
+        if (error) { console.error('Fetch error:', error); throw error; }
+        if (!data || data.length === 0) break;
+        allCustomers = allCustomers.concat(data);
+        if (data.length < batchSize) break;
+        from += batchSize;
       }
 
-      console.log(`Found ${customerMap.size} customers from sales, ${allZoppyCustomers.length} from zoppy_customers`);
+      console.log(`Found ${allCustomers.length} customers with purchases`);
 
-      // Merge POS/Shopify customers that aren't already in the sales map
-      for (const zc of allZoppyCustomers) {
-        if (!zc.phone && !zc.email) continue;
-        const key = zc.phone || zc.email;
-        // Check if already tracked by phone
-        if (zc.phone && customerMap.has(zc.phone)) {
-          // Update zoppyId so we preserve the existing record
-          customerMap.get(zc.phone)!.zoppyId = zc.zoppy_id;
-          continue;
-        }
-        // New customer from POS/Shopify sync
-        customerMap.set(key, {
-          phone: zc.phone || '',
-          orders: zc.total_orders || 0,
-          totalSpent: zc.total_spent || 0,
-          lastPurchase: zc.last_purchase_at || new Date().toISOString(),
-          firstPurchase: zc.first_purchase_at || new Date().toISOString(),
-          name: `${zc.first_name || ''} ${zc.last_name || ''}`.trim(),
-          email: zc.email || '',
-          customerData: { city: zc.city, state: zc.state, gender: zc.gender },
-          zoppyId: zc.zoppy_id,
-        });
-      }
-
-      const customers = Array.from(customerMap.values());
-      if (customers.length === 0) {
+      if (allCustomers.length === 0) {
         return new Response(JSON.stringify({ success: true, message: 'No customers found', count: 0 }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       const now = new Date();
-      const recencies = customers.map(c => (now.getTime() - new Date(c.lastPurchase).getTime()) / (1000 * 60 * 60 * 24)).sort((a, b) => a - b);
-      const frequencies = customers.map(c => c.orders).sort((a, b) => a - b);
-      const monetaries = customers.map(c => c.totalSpent).sort((a, b) => a - b);
+
+      // Pre-compute sorted arrays for quintile calculation
+      const recencies: number[] = [];
+      const frequencies: number[] = [];
+      const monetaries: number[] = [];
+      for (const c of allCustomers) {
+        recencies.push((now.getTime() - new Date(c.last_purchase_at || now).getTime()) / (1000 * 60 * 60 * 24));
+        frequencies.push(c.total_orders || 0);
+        monetaries.push(c.total_spent || 0);
+      }
+      recencies.sort((a, b) => a - b);
+      frequencies.sort((a, b) => a - b);
+      monetaries.sort((a, b) => a - b);
+
+      // Use binary search for quintile instead of findIndex (O(log n) vs O(n))
+      function binarySearchInsert(arr: number[], val: number): number {
+        let lo = 0, hi = arr.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (arr[mid] < val) lo = mid + 1;
+          else hi = mid;
+        }
+        return lo;
+      }
 
       function getQuintile(value: number, sortedValues: number[], inverse = false): number {
-        const idx = sortedValues.findIndex(v => v >= value);
-        const position = idx === -1 ? sortedValues.length : idx;
+        const position = binarySearchInsert(sortedValues, value);
         const percentile = position / sortedValues.length;
         const score = Math.ceil(percentile * 5);
         const clamped = Math.max(1, Math.min(5, score));
         return inverse ? (6 - clamped) : clamped;
       }
 
-      const upsertBatch = [];
-      for (const customer of customers) {
-        const recencyDays = (now.getTime() - new Date(customer.lastPurchase).getTime()) / (1000 * 60 * 60 * 24);
-        const rScore = getQuintile(recencyDays, recencies, true);
-        const fScore = getQuintile(customer.orders, frequencies);
-        const mScore = getQuintile(customer.totalSpent, monetaries);
-        const totalScore = rScore + fScore + mScore;
-        const segment = getRfmSegment(rScore, fScore, mScore);
-        const cd = customer.customerData || {};
-        const addr = cd.address || {};
-        const { regionType, ddd } = classifyRegion(customer.phone, addr.address1, addr.city, addr.state);
-
-        // Use existing zoppy_id if customer came from POS/Shopify sync, otherwise generate from phone
-        const zoppyId = customer.zoppyId || cd.id || `phone_${customer.phone}`;
-
-        upsertBatch.push({
-          zoppy_id: zoppyId,
-          external_id: cd.externalId || null,
-          first_name: cd.firstName || customer.name?.split(' ')[0] || null,
-          last_name: cd.lastName || customer.name?.split(' ').slice(1).join(' ') || null,
-          phone: customer.phone, email: customer.email || cd.email || null,
-          gender: cd.gender || null, birth_date: cd.birthDate || null,
-          address1: addr.address1 || null, address2: addr.address2 || null,
-          city: cd.city || addr.city || null, state: cd.state || addr.state || null,
-          postcode: addr.postcode || null, country: addr.country || null,
-          zoppy_position: cd.position || null,
-          rfm_recency_score: rScore, rfm_frequency_score: fScore,
-          rfm_monetary_score: mScore, rfm_total_score: totalScore,
-          rfm_segment: segment, rfm_calculated_at: now.toISOString(),
-          region_type: regionType, ddd,
-          total_orders: customer.orders, total_spent: customer.totalSpent,
-          last_purchase_at: customer.lastPurchase, first_purchase_at: customer.firstPurchase,
-          avg_ticket: customer.orders > 0 ? +(customer.totalSpent / customer.orders).toFixed(2) : 0,
-          zoppy_created_at: cd.createdAt || null, zoppy_updated_at: cd.updatedAt || null,
-        });
-      }
-
+      // Process and upsert in chunks
       let upserted = 0;
-      for (let i = 0; i < upsertBatch.length; i += 100) {
-        const chunk = upsertBatch.slice(i, i + 100);
-        const { error } = await supabase.from('zoppy_customers').upsert(chunk, { onConflict: 'zoppy_id' });
+      const CHUNK = 200;
+      for (let i = 0; i < allCustomers.length; i += CHUNK) {
+        const chunk = allCustomers.slice(i, i + CHUNK);
+        const upsertBatch = chunk.map(c => {
+          const recencyDays = (now.getTime() - new Date(c.last_purchase_at || now).getTime()) / (1000 * 60 * 60 * 24);
+          const rScore = getQuintile(recencyDays, recencies, true);
+          const fScore = getQuintile(c.total_orders || 0, frequencies);
+          const mScore = getQuintile(c.total_spent || 0, monetaries);
+          const totalScore = rScore + fScore + mScore;
+          const segment = getRfmSegment(rScore, fScore, mScore);
+
+          return {
+            zoppy_id: c.zoppy_id,
+            rfm_recency_score: rScore,
+            rfm_frequency_score: fScore,
+            rfm_monetary_score: mScore,
+            rfm_total_score: totalScore,
+            rfm_segment: segment,
+            rfm_calculated_at: now.toISOString(),
+            avg_ticket: c.total_orders > 0 ? +((c.total_spent || 0) / c.total_orders).toFixed(2) : 0,
+          };
+        });
+
+        const { error } = await supabase.from('zoppy_customers').upsert(upsertBatch, { onConflict: 'zoppy_id' });
         if (error) { console.error('Upsert error:', error); throw error; }
-        upserted += chunk.length;
+        upserted += upsertBatch.length;
       }
 
       return new Response(JSON.stringify({ success: true, count: upserted, message: `RFM calculado para ${upserted} clientes` }),
@@ -306,7 +250,6 @@ serve(async (req) => {
             zoppy_position: c.position || null,
             region_type: regionType,
             ddd,
-            // Cashback/coupon data
             coupon_code: coupon?.code || null,
             coupon_amount: coupon?.amount || null,
             coupon_type: coupon?.type || null,
