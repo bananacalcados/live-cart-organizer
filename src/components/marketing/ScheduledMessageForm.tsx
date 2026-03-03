@@ -48,6 +48,7 @@ interface ScheduledMessageFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: ScheduledMessageData) => Promise<void>;
+  onSendNow?: (data: ScheduledMessageData) => Promise<void>;
   editingMessage?: EditingMessage | null;
   onUpdate?: (id: string, data: ScheduledMessageData) => Promise<void>;
   campaignId?: string;
@@ -60,7 +61,7 @@ const VARIABLES = [
   { name: "horario", label: "Horário Atual" },
 ];
 
-export function ScheduledMessageForm({ open, onOpenChange, onSubmit, editingMessage, onUpdate, campaignId }: ScheduledMessageFormProps) {
+export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, editingMessage, onUpdate, campaignId }: ScheduledMessageFormProps) {
   const [messageType, setMessageType] = useState("text");
   const [messageContent, setMessageContent] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
@@ -486,8 +487,29 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, editingMess
             </Select>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          {!editingMessage && onSendNow && (
+            <Button variant="secondary" onClick={async () => {
+              if (!messageContent.trim() && messageType === 'text') { toast.error("Mensagem obrigatória"); return; }
+              if (messageType === 'poll' && pollOptions.filter(o => o.trim()).length < 2) { toast.error("Enquete precisa de ao menos 2 opções"); return; }
+              setIsSaving(true);
+              try {
+                const data: ScheduledMessageData = {
+                  messageType, messageContent, mediaUrl,
+                  pollOptions: pollOptions.filter(o => o.trim()),
+                  scheduledAt: new Date(), scheduledTime: format(new Date(), 'HH:mm'), sendSpeed,
+                };
+                await onSendNow(data);
+                resetForm();
+                onOpenChange(false);
+              } catch { toast.error("Erro ao enviar"); }
+              finally { setIsSaving(false); }
+            }} disabled={isSaving} className="gap-1">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Enviar Agora
+            </Button>
+          )}
           <Button onClick={handleSubmit} disabled={isSaving} className="gap-1">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             {editingMessage ? "Salvar" : "Agendar"}
