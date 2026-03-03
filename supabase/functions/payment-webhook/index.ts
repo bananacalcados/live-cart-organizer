@@ -10,15 +10,92 @@ const corsHeaders = {
 const VINDI_PAID_STATUSES = [6, 87]; // 6=Aprovada, 87=Em Monitoramento
 const VINDI_FAILED_STATUSES = [7, 13, 14, 88, 89]; // Cancelada, Cancel.Manual, Estornada, Rejeitada, Fraude
 
+async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: string, supabaseKey: string) {
+  try {
+    const { data: sale } = await supabase
+      .from("pos_sales")
+      .select("store_id, customer_name, customer_phone, payment_details, tiny_order_id")
+      .eq("id", saleId)
+      .maybeSingle();
+
+    if (!sale || !sale.store_id) {
+      console.log(`[AUTO-TINY] No store_id for sale ${saleId}, skipping`);
+      return;
+    }
+    if (sale.tiny_order_id) {
+      console.log(`[AUTO-TINY] Sale ${saleId} already has tiny_order_id=${sale.tiny_order_id}, skipping`);
+      return;
+    }
+
+    const { data: saleItems } = await supabase
+      .from("pos_sale_items")
+      .select("*")
+      .eq("sale_id", saleId);
+
+    if (!saleItems || saleItems.length === 0) {
+      console.log(`[AUTO-TINY] No items for sale ${saleId}, skipping`);
+      return;
+    }
+
+    const pd = sale.payment_details || {};
+    const tinyCustomer: any = {
+      name: pd.customer_name || sale.customer_name || "Consumidor Final",
+      cpf: pd.customer_cpf || "",
+      email: pd.customer_email || "",
+      whatsapp: pd.customer_phone || sale.customer_phone || "",
+      address: pd.address_street || "",
+      addressNumber: pd.address_number || "",
+      neighborhood: pd.address_neighborhood || "",
+      city: pd.address_city || "",
+      state: pd.address_state || "",
+      cep: pd.address_cep || "",
+    };
+
+    const tinyItems = saleItems.map((it: any) => ({
+      sku: it.sku || "",
+      name: it.product_name,
+      variant: it.variant_name || null,
+      quantity: it.quantity,
+      price: Number(it.unit_price),
+      barcode: it.barcode || null,
+      tiny_id: it.tiny_product_id || null,
+    }));
+
+    const tinyPayload = {
+      store_id: sale.store_id,
+      sale_id: saleId,
+      customer: tinyCustomer,
+      items: tinyItems,
+      notes: "Checkout online - webhook VINDI",
+    };
+
+    console.log(`[AUTO-TINY] Creating Tiny order for sale ${saleId}...`);
+    const tinyRes = await fetch(
+      `${supabaseUrl}/functions/v1/pos-tiny-create-sale`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify(tinyPayload),
+      }
+    );
+    const tinyData = await tinyRes.json();
+    console.log(`[AUTO-TINY] Result:`, JSON.stringify(tinyData).substring(0, 500));
+  } catch (err) {
+    console.error(`[AUTO-TINY] Error (non-blocking):`, err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
   const url = new URL(req.url);
   const gateway = url.searchParams.get("gateway") || "unknown";
@@ -45,7 +122,7 @@ serve(async (req) => {
   }
 });
 
-async function handleVindi(req: Request, supabase: any) {
+async function handleVindi(req: Request, supabase: any, supabaseUrl: string, supabaseKey: string) {
   // Yapay can send JSON or form-urlencoded
   let tokenTransaction: string | null = null;
   let statusId: number | null = null;
