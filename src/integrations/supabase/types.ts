@@ -3333,6 +3333,190 @@ export type Database = {
           },
         ]
       }
+      link_page_items: {
+        Row: {
+          clicks: number
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          item_type: string
+          label: string
+          page_id: string
+          sort_order: number
+          style_config: Json
+          thumbnail_url: string | null
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          clicks?: number
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          item_type?: string
+          label: string
+          page_id: string
+          sort_order?: number
+          style_config?: Json
+          thumbnail_url?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          clicks?: number
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          item_type?: string
+          label?: string
+          page_id?: string
+          sort_order?: number
+          style_config?: Json
+          thumbnail_url?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_page_items_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "link_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      link_page_visits: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          ip_hash: string | null
+          item_id: string | null
+          page_id: string
+          referrer: string | null
+          user_agent: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          ip_hash?: string | null
+          item_id?: string | null
+          page_id: string
+          referrer?: string | null
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          ip_hash?: string | null
+          item_id?: string | null
+          page_id?: string
+          referrer?: string | null
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_page_visits_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "link_page_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "link_page_visits_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "link_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      link_pages: {
+        Row: {
+          avatar_url: string | null
+          background_type: string
+          background_value: string
+          created_at: string
+          id: string
+          is_active: boolean
+          meta_pixel_id: string | null
+          slug: string
+          store_id: string | null
+          subtitle: string | null
+          theme_config: Json
+          title: string
+          total_clicks: number
+          total_views: number
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          background_type?: string
+          background_value?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          meta_pixel_id?: string | null
+          slug: string
+          store_id?: string | null
+          subtitle?: string | null
+          theme_config?: Json
+          title: string
+          total_clicks?: number
+          total_views?: number
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          background_type?: string
+          background_value?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          meta_pixel_id?: string | null
+          slug?: string
+          store_id?: string | null
+          subtitle?: string | null
+          theme_config?: Json
+          title?: string
+          total_clicks?: number
+          total_views?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_pages_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_chat_messages: {
         Row: {
           created_at: string
