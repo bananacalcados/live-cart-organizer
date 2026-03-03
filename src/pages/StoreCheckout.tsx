@@ -384,6 +384,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
           // Log PIX success
           await supabase.from("pos_checkout_attempts").insert({
             sale_id: saleId,
+            store_id: storeId,
             payment_method: "pix",
             status: "success",
             amount,

@@ -34,10 +34,11 @@ export function POSCheckoutMonitor({ storeId }: Props) {
   const loadAttempts = async () => {
     setLoading(true);
     try {
+      // Filter by store_id OR null store_id (legacy records), using the sale's store
       let query = supabase
         .from("pos_checkout_attempts")
         .select("*")
-        .eq("store_id", storeId)
+        .or(`store_id.eq.${storeId},store_id.is.null`)
         .order("created_at", { ascending: false })
         .limit(100);
 

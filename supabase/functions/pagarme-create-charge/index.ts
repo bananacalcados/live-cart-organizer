@@ -523,10 +523,22 @@ serve(async (req) => {
       totalAmountCents: totalCents,
     };
 
+    // ── Resolve store_id from pos_sales if applicable ──
+    let resolvedStoreId: string | null = null;
+    if (orderSource === "pos_sales") {
+      const { data: saleForStore } = await supabase
+        .from("pos_sales")
+        .select("store_id")
+        .eq("id", params.orderId)
+        .maybeSingle();
+      resolvedStoreId = saleForStore?.store_id || null;
+    }
+
     // ── Insert "processing" record for idempotency ──
     if (paymentAttemptId) {
       await supabase.from("pos_checkout_attempts").insert({
         sale_id: params.orderId,
+        store_id: resolvedStoreId,
         payment_method: "card",
         status: "processing",
         amount: totalCents / 100,
