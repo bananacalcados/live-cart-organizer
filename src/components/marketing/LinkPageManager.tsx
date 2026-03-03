@@ -579,11 +579,33 @@ export function LinkPageManager() {
                         </div>
                       </div>
                       <Input value={item.label} onChange={e => updateItem(item.id, { label: e.target.value })} placeholder="Label" className="h-8 text-sm" />
-                      {item.item_type !== 'header' && item.item_type !== 'divider' && (
+                      {item.item_type !== 'header' && item.item_type !== 'divider' && item.item_type !== 'catalog' && (
                         <Input value={item.url || ''} onChange={e => updateItem(item.id, { url: e.target.value })} placeholder="URL" className="h-8 text-sm" />
                       )}
                       {item.item_type !== 'header' && item.item_type !== 'divider' && (
                         <Input value={item.description || ''} onChange={e => updateItem(item.id, { description: e.target.value })} placeholder="Descrição (opcional)" className="h-8 text-sm" />
+                      )}
+                      {item.item_type === 'catalog' && (
+                        <div className="space-y-2">
+                          <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => openCatalogPicker(item.id)}>
+                            <ShoppingBag className="h-3.5 w-3.5" />
+                            Selecionar Produtos ({(item.style_config?.products || []).length})
+                          </Button>
+                          {(item.style_config?.products || []).length > 0 && (
+                            <div className="grid grid-cols-4 gap-1">
+                              {(item.style_config.products as CatalogProduct[]).slice(0, 8).map((p: CatalogProduct) => (
+                                <div key={p.id} className="aspect-square rounded overflow-hidden bg-muted">
+                                  {p.image && <img src={p.image} alt={p.title} className="w-full h-full object-cover" />}
+                                </div>
+                              ))}
+                              {(item.style_config.products as CatalogProduct[]).length > 8 && (
+                                <div className="aspect-square rounded bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                                  +{(item.style_config.products as CatalogProduct[]).length - 8}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
                       <div className="flex items-center gap-2">
                         <Switch checked={item.is_active} onCheckedChange={v => updateItem(item.id, { is_active: v })} />
