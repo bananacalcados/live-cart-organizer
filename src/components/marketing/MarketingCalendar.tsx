@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   ChevronLeft, ChevronRight, Plus, X, Trash2, Save,
-  FileText, Loader2, Target, Calendar as CalendarIcon, Eye, Calculator
+  FileText, Loader2, Target, Calendar as CalendarIcon, Eye, Calculator,
+  ShieldAlert, Edit3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
