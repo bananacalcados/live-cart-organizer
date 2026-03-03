@@ -731,6 +731,70 @@ export function LinkPageManager() {
           </Card>
         </div>
       </div>
+
+      {/* Catalog Product Picker Dialog */}
+      <Dialog open={catalogPickerOpen} onOpenChange={setCatalogPickerOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle>Selecionar Produtos do Catálogo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Buscar produtos..."
+                value={shopifySearch}
+                onChange={e => setShopifySearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && searchShopifyProducts()}
+                className="flex-1"
+              />
+              <Button size="sm" onClick={searchShopifyProducts} disabled={loadingProducts}>
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {selectedCatalogProducts.length} produto(s) selecionado(s)
+            </p>
+            <ScrollArea className="h-[400px]">
+              {loadingProducts ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {filteredShopifyProducts.map(product => {
+                    const node = product.node;
+                    const isSelected = selectedCatalogProducts.some(p => p.id === node.id);
+                    const imageUrl = node.images?.edges?.[0]?.node?.url || '';
+                    const price = parseFloat(node.priceRange?.minVariantPrice?.amount || '0');
+                    return (
+                      <div
+                        key={node.id}
+                        className={`border rounded-lg p-2 cursor-pointer transition-all ${isSelected ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'hover:border-muted-foreground/50'}`}
+                        onClick={() => toggleCatalogProduct(product)}
+                      >
+                        <div className="flex gap-2">
+                          <div className="w-16 h-16 rounded overflow-hidden bg-muted flex-shrink-0">
+                            {imageUrl && <img src={imageUrl} alt={node.title} className="w-full h-full object-cover" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{node.title}</p>
+                            <p className="text-xs text-muted-foreground">R$ {price.toFixed(2)}</p>
+                            {isSelected && <Check className="h-4 w-4 text-primary mt-1" />}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCatalogPickerOpen(false)}>Cancelar</Button>
+              <Button onClick={saveCatalogProducts}>
+                Salvar ({selectedCatalogProducts.length} produtos)
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
