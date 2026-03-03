@@ -76,6 +76,57 @@ export function MarketingCalendar() {
   const [monthNotes, setMonthNotes] = useState("");
   const [isSavingNotes, setIsSavingNotes] = useState(false);
 
+  // Calculator
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [calcDisplay, setCalcDisplay] = useState("0");
+  const [calcPrev, setCalcPrev] = useState<number | null>(null);
+  const [calcOp, setCalcOp] = useState<string | null>(null);
+  const [calcReset, setCalcReset] = useState(false);
+
+  const handleCalcKey = useCallback((key: string) => {
+    if (key >= '0' && key <= '9' || key === '.') {
+      setCalcDisplay(prev => {
+        if (calcReset || prev === '0') { setCalcReset(false); return key === '.' ? '0.' : key; }
+        if (key === '.' && prev.includes('.')) return prev;
+        return prev + key;
+      });
+    } else if (['+', '-', '*', '/'].includes(key)) {
+      setCalcPrev(parseFloat(calcDisplay));
+      setCalcOp(key);
+      setCalcReset(true);
+    } else if (key === '=' || key === 'Enter') {
+      if (calcPrev !== null && calcOp) {
+        const cur = parseFloat(calcDisplay);
+        let result = 0;
+        if (calcOp === '+') result = calcPrev + cur;
+        else if (calcOp === '-') result = calcPrev - cur;
+        else if (calcOp === '*') result = calcPrev * cur;
+        else if (calcOp === '/') result = cur !== 0 ? calcPrev / cur : 0;
+        setCalcDisplay(String(parseFloat(result.toFixed(8))));
+        setCalcPrev(null);
+        setCalcOp(null);
+        setCalcReset(true);
+      }
+    } else if (key === 'C') {
+      setCalcDisplay('0'); setCalcPrev(null); setCalcOp(null); setCalcReset(false);
+    } else if (key === '⌫' || key === 'Backspace') {
+      setCalcDisplay(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
+    }
+  }, [calcDisplay, calcPrev, calcOp, calcReset]);
+
+  useEffect(() => {
+    if (!calcOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9' || e.key === '.') handleCalcKey(e.key);
+      else if (['+', '-', '*', '/'].includes(e.key)) handleCalcKey(e.key);
+      else if (e.key === 'Enter' || e.key === '=') { e.preventDefault(); handleCalcKey('='); }
+      else if (e.key === 'Backspace') handleCalcKey('Backspace');
+      else if (e.key === 'Escape') handleCalcKey('C');
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [calcOpen, handleCalcKey]);
+
   // Goal form
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [goalActions, setGoalActions] = useState("");
