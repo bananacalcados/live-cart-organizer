@@ -77,6 +77,12 @@ export function MarketingCalendar() {
   const [monthNotes, setMonthNotes] = useState("");
   const [isSavingNotes, setIsSavingNotes] = useState(false);
 
+  // Campaign Rules (persistent, stored in app_settings)
+  const [campaignRules, setCampaignRules] = useState("");
+  const [savedRules, setSavedRules] = useState("");
+  const [isEditingRules, setIsEditingRules] = useState(false);
+  const [isSavingRules, setIsSavingRules] = useState(false);
+
   // Calculator
   const [calcOpen, setCalcOpen] = useState(false);
   const [calcDisplay, setCalcDisplay] = useState("0");
