@@ -75,7 +75,6 @@ async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: s
       tiny_id: it.tiny_product_id || null,
     }));
 
-    // Build payment method label from payment_details
     const installments = pd.installments || 1;
     const paymentMethodLabel = pd.payment_method === "credit_card"
       ? (installments > 1 ? `Cartão de Crédito ${installments}x` : "Cartão de Crédito")
@@ -111,12 +110,38 @@ async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: s
 
 /**
  * Busca o pedido interno usando múltiplas estratégias:
- * 1. Por notes contendo o appmax ID
- * 2. Por telefone do cliente (via tabela customers) — pedidos não pagos mais recentes
- * 3. Por pos_sales com telefone
+ * 1. Por appmax_order_id (campo de vínculo direto)
+ * 2. Por notes contendo o appmax ID (legado)
+ * 3. Por telefone do cliente (via tabela customers) — pedidos não pagos mais recentes
+ * 4. Por pos_sales com telefone
  */
 async function findOrder(supabase: any, appmaxId: string | number, telephone: string | null) {
-  // Strategy 1: Search orders by appmax reference in notes
+  // Strategy 1: Search by appmax_order_id (gateway link field)
+  if (appmaxId) {
+    const { data: orderByGateway } = await supabase
+      .from("orders")
+      .select("id, is_paid, notes, stage")
+      .eq("appmax_order_id", String(appmaxId))
+      .maybeSingle();
+
+    if (orderByGateway) {
+      console.log(`[appmax] Found order ${orderByGateway.id} via appmax_order_id`);
+      return { source: "orders", record: orderByGateway };
+    }
+
+    const { data: saleByGateway } = await supabase
+      .from("pos_sales")
+      .select("id, status, notes")
+      .eq("appmax_order_id", String(appmaxId))
+      .maybeSingle();
+
+    if (saleByGateway) {
+      console.log(`[appmax] Found pos_sale ${saleByGateway.id} via appmax_order_id`);
+      return { source: "pos_sales", record: saleByGateway };
+    }
+  }
+
+  // Strategy 2 (fallback): Search orders by appmax reference in notes
   if (appmaxId) {
     const searchTerm = `appmax`;
     const { data: orders } = await supabase
@@ -130,7 +155,6 @@ async function findOrder(supabase: any, appmaxId: string | number, telephone: st
       return { source: "orders", record: orders[0] };
     }
 
-    // Also check pos_sales
     const { data: sales } = await supabase
       .from("pos_sales")
       .select("id, status, notes")
@@ -143,11 +167,10 @@ async function findOrder(supabase: any, appmaxId: string | number, telephone: st
     }
   }
 
-  // Strategy 2: Search by customer phone (orders table via customers.whatsapp)
+  // Strategy 3: Search by customer phone (orders table via customers.whatsapp)
   if (telephone) {
     const phoneSuffix = telephone.replace(/\D/g, "").slice(-8);
     if (phoneSuffix.length >= 8) {
-      // Find customer by phone suffix
       const { data: customers } = await supabase
         .from("customers")
         .select("id")
@@ -169,7 +192,6 @@ async function findOrder(supabase: any, appmaxId: string | number, telephone: st
         }
       }
 
-      // Also check pos_sales by phone
       const { data: sales } = await supabase
         .from("pos_sales")
         .select("id, status, notes")
@@ -253,6 +275,13 @@ serve(async (req) => {
     console.log(`AppMax: Found order ${ourOrderId} in ${source}`);
 
     if (source === "orders") {
+      // Guard: already paid
+      if (isPaid && record.is_paid === true) {
+        console.log(`[appmax] Pedido ${ourOrderId} já confirmado — ignorando.`);
+        return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       if (isPaid && !record.is_paid) {
         const { error } = await supabase
           .from("orders")
@@ -280,6 +309,13 @@ serve(async (req) => {
         else { updated = true; console.log(`orders ${ourOrderId} payment REVERTED via AppMax webhook (status ${status})`); }
       }
     } else if (source === "pos_sales") {
+      // Guard: already paid
+      if (isPaid && (record.status === "paid" || record.status === "completed")) {
+        console.log(`[appmax] pos_sale ${ourOrderId} já confirmado — ignorando.`);
+        return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       if (isPaid && record.status !== "paid" && record.status !== "completed") {
         const { error } = await supabase
           .from("pos_sales")

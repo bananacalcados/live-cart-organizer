@@ -61,7 +61,6 @@ async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: s
       tiny_id: it.tiny_product_id || null,
     }));
 
-    // Build payment method label from payment_details
     const installments = pd.installments || 1;
     const paymentMethodLabel = pd.payment_method === "credit_card"
       ? (installments > 1 ? `Cartão de Crédito ${installments}x` : "Cartão de Crédito")
@@ -120,7 +119,6 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("payment-webhook error:", error);
-    // Always return 200 to avoid retries from gateway
     return new Response(
       JSON.stringify({ ok: true, error: error.message }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -148,7 +146,6 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
       tokenTransaction = rawPayload.token_transaction || rawPayload.transaction?.token_transaction;
       statusId = Number(rawPayload.status_id || rawPayload.transaction?.status_id) || null;
     } catch {
-      // Try form-urlencoded fallback
       const params = new URLSearchParams(body);
       tokenTransaction = params.get("token_transaction");
       statusId = Number(params.get("status_id")) || null;
@@ -212,67 +209,89 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
     });
   }
 
-  // Find order by token_transaction in notes (stored as "💳 Pago via vindi (TOKEN)")
-  // or by order_number in the VINDI payload
   const orderNumber = rawPayload.order_number || rawPayload.transaction?.order_number;
   let ourOrderId: string | null = orderNumber || null;
   let orderSource: string | null = null;
   let updated = false;
+  let order: any = null;
+  let sale: any = null;
 
-  // Strategy 1: Use order_number (our orderId) directly
-  if (ourOrderId) {
-    const { data: order } = await supabase
+  // Strategy 1: Search by vindi_transaction_id (gateway link field)
+  {
+    const { data: orderByGateway } = await supabase
+      .from("orders")
+      .select("id, is_paid, notes")
+      .eq("vindi_transaction_id", String(tokenTransaction))
+      .maybeSingle();
+
+    if (orderByGateway) {
+      order = orderByGateway;
+      ourOrderId = order.id;
+      orderSource = "orders";
+      console.log(`[vindi] Found order ${order.id} via vindi_transaction_id`);
+    } else {
+      const { data: saleByGateway } = await supabase
+        .from("pos_sales")
+        .select("id, status, notes")
+        .eq("vindi_transaction_id", String(tokenTransaction))
+        .maybeSingle();
+
+      if (saleByGateway) {
+        sale = saleByGateway;
+        ourOrderId = sale.id;
+        orderSource = "pos_sales";
+        console.log(`[vindi] Found pos_sale ${sale.id} via vindi_transaction_id`);
+      }
+    }
+  }
+
+  // Strategy 2 (fallback): Use order_number (our orderId) directly
+  if (!orderSource && ourOrderId) {
+    const { data: orderById } = await supabase
       .from("orders")
       .select("id, is_paid, notes")
       .eq("id", ourOrderId)
       .maybeSingle();
 
-    if (order) {
+    if (orderById) {
+      order = orderById;
       orderSource = "orders";
-      updated = await updateOrder(supabase, order, ourOrderId, isPaid, isFailed, tokenTransaction, statusId);
+      console.log(`[vindi] Found order ${order.id} via internal id`);
     } else {
-      const { data: sale } = await supabase
+      const { data: saleById } = await supabase
         .from("pos_sales")
-        .select("id, status")
+        .select("id, status, notes")
         .eq("id", ourOrderId)
         .maybeSingle();
 
-      if (sale) {
+      if (saleById) {
+        sale = saleById;
         orderSource = "pos_sales";
-        updated = await updateSale(supabase, sale, ourOrderId, isPaid, isFailed, tokenTransaction, statusId, supabaseUrl, supabaseKey);
+        console.log(`[vindi] Found pos_sale ${sale.id} via internal id`);
       }
     }
   }
 
-  // Strategy 2: Search by token_transaction in notes
-  if (!orderSource) {
-    const searchTerm = `vindi (${tokenTransaction})`;
+  // NOTE: Removed old ILIKE notes fallback — replaced by vindi_transaction_id search above
 
-    const { data: orders } = await supabase
-      .from("orders")
-      .select("id, is_paid, notes")
-      .ilike("notes", `%${searchTerm}%`)
-      .limit(1);
-
-    if (orders?.length) {
-      const order = orders[0];
-      ourOrderId = order.id;
-      orderSource = "orders";
-      updated = await updateOrder(supabase, order, ourOrderId!, isPaid, isFailed, tokenTransaction, statusId);
-    } else {
-      const { data: sales } = await supabase
-        .from("pos_sales")
-        .select("id, status, notes")
-        .ilike("notes", `%${searchTerm}%`)
-        .limit(1);
-
-      if (sales?.length) {
-        const sale = sales[0];
-        ourOrderId = sale.id;
-        orderSource = "pos_sales";
-        updated = await updateSale(supabase, sale, ourOrderId!, isPaid, isFailed, tokenTransaction, statusId, supabaseUrl, supabaseKey);
-      }
+  if (orderSource === "orders" && order) {
+    // Guard: already paid
+    if (isPaid && order.is_paid === true) {
+      console.log(`[vindi] Pedido ${order.id} já confirmado — ignorando.`);
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+    updated = await updateOrder(supabase, order, order.id, isPaid, isFailed, tokenTransaction, statusId);
+  } else if (orderSource === "pos_sales" && sale) {
+    // Guard: already paid
+    if (isPaid && (sale.status === "paid" || sale.status === "completed")) {
+      console.log(`[vindi] pos_sale ${sale.id} já confirmado — ignorando.`);
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    updated = await updateSale(supabase, sale, sale.id, isPaid, isFailed, tokenTransaction, statusId, supabaseUrl, supabaseKey);
   }
 
   if (!orderSource) {
@@ -280,13 +299,14 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   }
 
   // Log to pos_checkout_attempts
-  if (ourOrderId) {
+  const resolvedId = ourOrderId || tokenTransaction;
+  if (resolvedId) {
     const logStatus = isPaid ? "success" : "error";
     const statusLabel = isPaid ? "aprovado" : `status ${statusId}`;
     const logMessage = `Webhook VINDI: ${statusLabel} (token: ${tokenTransaction})`;
 
     await supabase.from("pos_checkout_attempts").insert({
-      sale_id: ourOrderId,
+      sale_id: resolvedId,
       payment_method: "credit_card",
       status: logStatus,
       error_message: logMessage,
