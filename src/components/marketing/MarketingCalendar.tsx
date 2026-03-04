@@ -35,6 +35,7 @@ const ENTRY_COLORS = [
 interface CalendarEntry {
   id: string;
   entry_date: string;
+  end_date: string | null;
   title: string;
   content: string;
   entry_type: string;
