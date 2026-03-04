@@ -2875,6 +2875,8 @@ export type Database = {
           sent_count: number | null
           started_at: string | null
           status: string
+          strategy_content: string | null
+          strategy_prompt: string | null
           target_groups: string[] | null
           total_groups: number | null
           updated_at: string
@@ -2900,6 +2902,8 @@ export type Database = {
           sent_count?: number | null
           started_at?: string | null
           status?: string
+          strategy_content?: string | null
+          strategy_prompt?: string | null
           target_groups?: string[] | null
           total_groups?: number | null
           updated_at?: string
@@ -2925,6 +2929,8 @@ export type Database = {
           sent_count?: number | null
           started_at?: string | null
           status?: string
+          strategy_content?: string | null
+          strategy_prompt?: string | null
           target_groups?: string[] | null
           total_groups?: number | null
           updated_at?: string
@@ -7244,6 +7250,33 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      vip_group_strategies: {
+        Row: {
+          created_at: string
+          id: string
+          month_year: string
+          strategy_content: string | null
+          strategy_prompt: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month_year: string
+          strategy_content?: string | null
+          strategy_prompt?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month_year?: string
+          strategy_content?: string | null
+          strategy_prompt?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
