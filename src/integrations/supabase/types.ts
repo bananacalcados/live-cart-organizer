@@ -4426,6 +4426,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          appmax_order_id: string | null
           cart_link: string | null
           checkout_started_at: string | null
           checkout_token: string | null
@@ -4443,15 +4444,19 @@ export type Database = {
           is_paid: boolean
           last_customer_message_at: string | null
           last_sent_message_at: string | null
+          mercadopago_payment_id: string | null
           notes: string | null
+          pagarme_order_id: string | null
           paid_at: string | null
           paid_externally: boolean | null
           pos_sale_id: string | null
           products: Json
           stage: string
           updated_at: string
+          vindi_transaction_id: string | null
         }
         Insert: {
+          appmax_order_id?: string | null
           cart_link?: string | null
           checkout_started_at?: string | null
           checkout_token?: string | null
@@ -4469,15 +4474,19 @@ export type Database = {
           is_paid?: boolean
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
+          mercadopago_payment_id?: string | null
           notes?: string | null
+          pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
           pos_sale_id?: string | null
           products?: Json
           stage?: string
           updated_at?: string
+          vindi_transaction_id?: string | null
         }
         Update: {
+          appmax_order_id?: string | null
           cart_link?: string | null
           checkout_started_at?: string | null
           checkout_token?: string | null
@@ -4495,13 +4504,16 @@ export type Database = {
           is_paid?: boolean
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
+          mercadopago_payment_id?: string | null
           notes?: string | null
+          pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
           pos_sale_id?: string | null
           products?: Json
           stage?: string
           updated_at?: string
+          vindi_transaction_id?: string | null
         }
         Relationships: [
           {
@@ -5825,6 +5837,7 @@ export type Database = {
       }
       pos_sales: {
         Row: {
+          appmax_order_id: string | null
           cash_register_id: string | null
           checkout_step: number | null
           created_at: string
@@ -5841,10 +5854,12 @@ export type Database = {
           id: string
           invoice_number: string | null
           invoice_pdf_url: string | null
+          mercadopago_payment_id: string | null
           nfce_key: string | null
           nfce_number: string | null
           nfce_pdf_url: string | null
           notes: string | null
+          pagarme_order_id: string | null
           paid_at: string | null
           payment_details: Json | null
           payment_gateway: string | null
@@ -5867,8 +5882,10 @@ export type Database = {
           total: number
           tracking_code: string | null
           updated_at: string
+          vindi_transaction_id: string | null
         }
         Insert: {
+          appmax_order_id?: string | null
           cash_register_id?: string | null
           checkout_step?: number | null
           created_at?: string
@@ -5885,10 +5902,12 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
+          mercadopago_payment_id?: string | null
           nfce_key?: string | null
           nfce_number?: string | null
           nfce_pdf_url?: string | null
           notes?: string | null
+          pagarme_order_id?: string | null
           paid_at?: string | null
           payment_details?: Json | null
           payment_gateway?: string | null
@@ -5911,8 +5930,10 @@ export type Database = {
           total?: number
           tracking_code?: string | null
           updated_at?: string
+          vindi_transaction_id?: string | null
         }
         Update: {
+          appmax_order_id?: string | null
           cash_register_id?: string | null
           checkout_step?: number | null
           created_at?: string
@@ -5929,10 +5950,12 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
+          mercadopago_payment_id?: string | null
           nfce_key?: string | null
           nfce_number?: string | null
           nfce_pdf_url?: string | null
           notes?: string | null
+          pagarme_order_id?: string | null
           paid_at?: string | null
           payment_details?: Json | null
           payment_gateway?: string | null
@@ -5955,6 +5978,7 @@ export type Database = {
           total?: number
           tracking_code?: string | null
           updated_at?: string
+          vindi_transaction_id?: string | null
         }
         Relationships: [
           {

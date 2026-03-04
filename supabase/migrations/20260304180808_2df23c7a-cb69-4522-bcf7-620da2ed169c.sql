@@ -1,0 +1,3 @@
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS pagarme_order_id TEXT, ADD COLUMN IF NOT EXISTS vindi_transaction_id TEXT, ADD COLUMN IF NOT EXISTS appmax_order_id TEXT, ADD COLUMN IF NOT EXISTS mercadopago_payment_id TEXT;
+
+ALTER TABLE public.pos_sales ADD COLUMN IF NOT EXISTS pagarme_order_id TEXT, ADD COLUMN IF NOT EXISTS vindi_transaction_id TEXT, ADD COLUMN IF NOT EXISTS appmax_order_id TEXT, ADD COLUMN IF NOT EXISTS mercadopago_payment_id TEXT;
