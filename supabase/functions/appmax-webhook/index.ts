@@ -261,10 +261,11 @@ serve(async (req) => {
             paid_at: new Date().toISOString(),
             stage: "paid",
             notes: `${record.notes || ""}\n🔔 Webhook AppMax: pago (${transactionId})`.trim(),
+            appmax_order_id: String(appmaxOrderId),
           })
           .eq("id", ourOrderId);
         if (error) console.error("Error updating orders:", error);
-        else { updated = true; console.log(`orders ${ourOrderId} marked as paid via AppMax webhook`); }
+        else { updated = true; console.log(`orders ${ourOrderId} marked as paid via AppMax webhook`); console.log(`[appmax] Vinculado appmax_order_id=${appmaxOrderId} ao pedido ${ourOrderId}`); }
       } else if (isFailed && record.is_paid) {
         // Reverter pagamento se já estava pago e veio status de falha
         const { error } = await supabase
@@ -287,7 +288,8 @@ serve(async (req) => {
             paid_at: new Date().toISOString(),
             payment_gateway: "appmax",
             notes: `🔔 Webhook AppMax: pago (${transactionId})`,
-          })
+            appmax_order_id: String(appmaxOrderId),
+          } as any)
           .eq("id", ourOrderId);
         if (error) console.error("Error updating pos_sales:", error);
         else {
