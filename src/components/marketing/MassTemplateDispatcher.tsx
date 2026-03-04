@@ -116,13 +116,62 @@ export function MassTemplateDispatcher() {
   // Sending
   const [isSending, setIsSending] = useState(false);
   const [sendProgress, setSendProgress] = useState({ sent: 0, total: 0, failed: 0 });
-  const cancelSendRef = useRef(false);
+  const [activeDispatchId, setActiveDispatchId] = useState<string | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [testPhone, setTestPhone] = useState("");
   const [isTesting, setIsTesting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [forceResend, setForceResend] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+
+  // Check for active dispatches on mount (resume monitoring)
+  useEffect(() => {
+    const checkActiveDispatch = async () => {
+      const { data } = await supabase
+        .from('dispatch_history')
+        .select('id, total_recipients, sent_count, failed_count, status')
+        .eq('status', 'sending')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) {
+        setActiveDispatchId(data.id);
+        setIsSending(true);
+        setSendProgress({ sent: data.sent_count || 0, total: data.total_recipients || 0, failed: data.failed_count || 0 });
+        startPolling(data.id);
+      }
+    };
+    checkActiveDispatch();
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, []);
+
+  const startPolling = (dispatchId: string) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(async () => {
+      const { data } = await supabase
+        .from('dispatch_history')
+        .select('sent_count, failed_count, total_recipients, status')
+        .eq('id', dispatchId)
+        .single();
+      if (!data) return;
+      setSendProgress({
+        sent: data.sent_count || 0,
+        total: data.total_recipients || 0,
+        failed: data.failed_count || 0,
+      });
+      if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'failed') {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        pollingRef.current = null;
+        setIsSending(false);
+        setActiveDispatchId(null);
+        setHistoryKey(k => k + 1);
+        if (data.status === 'completed') toast.success("✅ Disparo concluído em background!");
+        else if (data.status === 'cancelled') toast.info("Disparo cancelado");
+        else toast.error("Disparo falhou");
+      }
+    }, 3000);
+  };
 
   useEffect(() => {
     if (numbers.length === 0) fetchNumbers();
