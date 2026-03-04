@@ -218,3 +218,6 @@ verify_jwt = false
 
 [functions.group-redirect-link]
 verify_jwt = false
+
+[functions.dispatch-mass-send]
+verify_jwt = false

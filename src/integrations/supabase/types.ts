@@ -1674,11 +1674,15 @@ export type Database = {
           created_by: string | null
           failed_count: number | null
           force_resend: boolean | null
+          has_dynamic_vars: boolean | null
+          header_media_url: string | null
           id: string
+          processing_batch: boolean | null
           rendered_message: string | null
           sent_count: number | null
           started_at: string
           status: string | null
+          template_components: Json | null
           template_language: string | null
           template_name: string
           total_recipients: number | null
@@ -1693,11 +1697,15 @@ export type Database = {
           created_by?: string | null
           failed_count?: number | null
           force_resend?: boolean | null
+          has_dynamic_vars?: boolean | null
+          header_media_url?: string | null
           id?: string
+          processing_batch?: boolean | null
           rendered_message?: string | null
           sent_count?: number | null
           started_at?: string
           status?: string | null
+          template_components?: Json | null
           template_language?: string | null
           template_name: string
           total_recipients?: number | null
@@ -1712,11 +1720,15 @@ export type Database = {
           created_by?: string | null
           failed_count?: number | null
           force_resend?: boolean | null
+          has_dynamic_vars?: boolean | null
+          header_media_url?: string | null
           id?: string
+          processing_batch?: boolean | null
           rendered_message?: string | null
           sent_count?: number | null
           started_at?: string
           status?: string | null
+          template_components?: Json | null
           template_language?: string | null
           template_name?: string
           total_recipients?: number | null

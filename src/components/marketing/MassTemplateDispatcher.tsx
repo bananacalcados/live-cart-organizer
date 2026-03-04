@@ -116,13 +116,62 @@ export function MassTemplateDispatcher() {
   // Sending
   const [isSending, setIsSending] = useState(false);
   const [sendProgress, setSendProgress] = useState({ sent: 0, total: 0, failed: 0 });
-  const cancelSendRef = useRef(false);
+  const [activeDispatchId, setActiveDispatchId] = useState<string | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [testPhone, setTestPhone] = useState("");
   const [isTesting, setIsTesting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [forceResend, setForceResend] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+
+  // Check for active dispatches on mount (resume monitoring)
+  useEffect(() => {
+    const checkActiveDispatch = async () => {
+      const { data } = await supabase
+        .from('dispatch_history')
+        .select('id, total_recipients, sent_count, failed_count, status')
+        .eq('status', 'sending')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) {
+        setActiveDispatchId(data.id);
+        setIsSending(true);
+        setSendProgress({ sent: data.sent_count || 0, total: data.total_recipients || 0, failed: data.failed_count || 0 });
+        startPolling(data.id);
+      }
+    };
+    checkActiveDispatch();
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, []);
+
+  const startPolling = (dispatchId: string) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(async () => {
+      const { data } = await supabase
+        .from('dispatch_history')
+        .select('sent_count, failed_count, total_recipients, status')
+        .eq('id', dispatchId)
+        .single();
+      if (!data) return;
+      setSendProgress({
+        sent: data.sent_count || 0,
+        total: data.total_recipients || 0,
+        failed: data.failed_count || 0,
+      });
+      if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'failed') {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        pollingRef.current = null;
+        setIsSending(false);
+        setActiveDispatchId(null);
+        setHistoryKey(k => k + 1);
+        if (data.status === 'completed') toast.success("✅ Disparo concluído em background!");
+        else if (data.status === 'cancelled') toast.info("Disparo cancelado");
+        else toast.error("Disparo falhou");
+      }
+    }, 3000);
+  };
 
   useEffect(() => {
     if (numbers.length === 0) fetchNumbers();
@@ -531,7 +580,7 @@ export function MassTemplateDispatcher() {
     return alreadySent;
   };
 
-  // Mass send
+  // Mass send — background via Edge Function
   const handleMassSend = async () => {
     setConfirmOpen(false);
     if (!selectedTemplate || !selectedNumber) return;
@@ -543,7 +592,6 @@ export function MassTemplateDispatcher() {
     }
 
     setIsSending(true);
-    cancelSendRef.current = false;
 
     // Resume: skip phones that already received this template today (unless force resend)
     let phones = allPhones;
@@ -571,10 +619,9 @@ export function MassTemplateDispatcher() {
       toast.info("⚠️ Forçando reenvio para TODOS os selecionados...");
     }
 
-    const skipped = allPhones.length - phones.length;
-    setSendProgress({ sent: skipped, total: allPhones.length, failed: 0 });
+    setSendProgress({ sent: 0, total: phones.length, failed: 0 });
 
-    // Save dispatch history
+    // Save dispatch history with template components for the Edge Function
     let dispatchId: string | null = null;
     try {
       const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
@@ -588,12 +635,15 @@ export function MassTemplateDispatcher() {
           audience_filters: {
             rfm: rfmFilter, state: stateFilter, city: cityFilter,
             ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
-          },
+          } as any,
           total_recipients: phones.length,
           rendered_message: renderedMessage || null,
-          variables_config: variables,
+          variables_config: variables as any,
           force_resend: forceResend,
           status: 'sending',
+          template_components: selectedTemplate.components as any,
+          has_dynamic_vars: hasDynamicVars,
+          header_media_url: headerMediaUrl || null,
         })
         .select('id')
         .single();
@@ -613,142 +663,47 @@ export function MassTemplateDispatcher() {
       }
     } catch (err) {
       console.error('Error saving dispatch history:', err);
+      toast.error("Erro ao salvar histórico de disparo");
+      setIsSending(false);
+      return;
     }
 
-    let finalSent = 0, finalFailed = 0;
+    if (!dispatchId) {
+      toast.error("Erro ao criar disparo");
+      setIsSending(false);
+      return;
+    }
+
+    // Trigger background Edge Function
     try {
-      if (hasDynamicVars) {
-        // Per-recipient send with concurrency pool
-        let sent = 0, failed = 0;
-        const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
-        const CONCURRENCY = 50;
+      setActiveDispatchId(dispatchId);
+      startPolling(dispatchId);
 
-        for (let i = 0; i < phones.length; i += CONCURRENCY) {
-          if (cancelSendRef.current) break;
-          const batch = phones.slice(i, i + CONCURRENCY);
-          const promises = batch.map(async (phone) => {
-            if (cancelSendRef.current) return false;
-            const recipient = recipientMap.get(phone);
-            const components = buildComponentsForRecipient(recipient);
-            const rendered = recipient ? buildRenderedForRecipient(recipient) : renderedMessage;
-            try {
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 30000);
-              const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
-                method: 'POST',
-                headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-                signal: controller.signal,
-                body: JSON.stringify({
-                  phone,
-                  templateName: selectedTemplate!.name,
-                  language: selectedTemplate!.language,
-                  whatsappNumberId: selectedNumber,
-                  components: components.length > 0 ? components : undefined,
-                  renderedMessage: rendered,
-                }),
-              });
-              clearTimeout(timeout);
-              const data = await res.json();
-              return data.success;
-            } catch { return false; }
-          });
-
-          const results = await Promise.all(promises);
-          for (const ok of results) {
-            if (ok) sent++; else failed++;
-          }
-          setSendProgress({ sent: sent + skipped, total: allPhones.length, failed });
-          finalSent = sent; finalFailed = failed;
-        }
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dispatch-mass-send`, {
+        method: 'POST',
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dispatchId }),
+      });
+      const data = await res.json();
+      if (!data.success && data.error) {
+        toast.error(`Erro ao iniciar disparo: ${data.error}`);
       } else {
-        // Static vars: use bulk queue
-        const components = buildComponentsForRecipient();
-        const queueItems = phones.map(phone => ({
-          phone,
-          template_name: selectedTemplate.name,
-          template_language: selectedTemplate.language,
-          template_params: components.length > 0 ? components : null,
-          status: 'pending',
-          max_attempts: 3,
-        }));
-
-        const allIds: string[] = [];
-        for (let i = 0; i < queueItems.length; i += 100) {
-          const batch = queueItems.slice(i, i + 100);
-          const { data, error } = await supabase
-            .from('meta_message_queue')
-            .insert(batch)
-            .select('id');
-          if (error) throw error;
-          allIds.push(...(data || []).map((d: any) => d.id));
-        }
-
-        let sent = 0, failed = 0;
-        for (let i = 0; i < allIds.length; i += 50) {
-          if (cancelSendRef.current) break;
-          const batchIds = allIds.slice(i, i + 50);
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 30000);
-          const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
-            method: 'POST',
-            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-              queueIds: batchIds,
-              whatsappNumberId: selectedNumber,
-            }),
-          });
-          clearTimeout(timeout);
-          const data = await res.json();
-          if (data.results) {
-            for (const r of data.results) {
-              if (r.success) sent++;
-              else failed++;
-            }
-          }
-          setSendProgress({ sent: sent + skipped, total: allPhones.length, failed });
-          finalSent = sent; finalFailed = failed;
-        }
-      }
-
-      // Update sent messages to show rendered body (for static vars only)
-      if (!hasDynamicVars && renderedMessage) {
-        const phoneList = phones.map(p => {
-          let fp = p.replace(/\D/g, '');
-          if (!fp.startsWith('55')) fp = '55' + fp;
-          return fp;
-        });
-        await supabase
-          .from('whatsapp_messages')
-          .update({ message: renderedMessage })
-          .eq('message', `[Template: ${selectedTemplate.name}]`)
-          .in('phone', phoneList)
-          .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());
-      }
-
-      if (cancelSendRef.current) {
-        toast.info("Disparo cancelado pelo usuário");
-      } else {
-        toast.success("Disparo concluído!");
+        toast.success("🚀 Disparo iniciado em background! Você pode fechar esta aba.");
       }
     } catch (err) {
-      console.error(err);
-      toast.error("Erro durante o disparo em massa");
-    } finally {
-      // Update dispatch history
-      if (dispatchId) {
-        const finalStatus = cancelSendRef.current ? 'cancelled' : 'completed';
-        await supabase.from('dispatch_history').update({
-          status: finalStatus,
-          completed_at: new Date().toISOString(),
-          sent_count: finalSent,
-          failed_count: finalFailed,
-        }).eq('id', dispatchId);
-      }
-      setIsSending(false);
-      cancelSendRef.current = false;
-      setHistoryKey(k => k + 1);
+      console.error('Error triggering dispatch:', err);
+      toast.error("Erro ao iniciar disparo em background");
     }
+  };
+
+  // Cancel dispatch
+  const handleCancelDispatch = async () => {
+    if (!activeDispatchId) return;
+    await supabase.from('dispatch_history').update({ status: 'cancelled' }).eq('id', activeDispatchId);
+    toast.info("Solicitação de cancelamento enviada...");
   };
 
   const selectedCount = selectedPhones.size;
@@ -1184,10 +1139,13 @@ export function MassTemplateDispatcher() {
                   variant="destructive"
                   size="sm"
                   className="w-full mt-1"
-                  onClick={() => { cancelSendRef.current = true; }}
+                  onClick={handleCancelDispatch}
                 >
                   ✋ Cancelar Disparo
                 </Button>
+                <p className="text-[10px] text-muted-foreground text-center mt-1">
+                  💡 Você pode fechar esta aba — o disparo continua em background
+                </p>
               </div>
             )}
           </CardContent>
