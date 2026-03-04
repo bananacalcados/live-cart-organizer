@@ -176,6 +176,17 @@ serve(async (req) => {
 
     const pixData = mpPayment.point_of_interaction?.transaction_data;
 
+    // Save mercadopago_payment_id to orders or pos_sales
+    const mpId = String(mpPayment.id);
+    const { data: orderCheck } = await supabase.from("orders").select("id").eq("id", orderId).maybeSingle();
+    if (orderCheck) {
+      await supabase.from("orders").update({ mercadopago_payment_id: mpId }).eq("id", orderId);
+      console.log(`[mercadopago] Vinculado mercadopago_payment_id=${mpId} ao pedido ${orderId}`);
+    } else {
+      await supabase.from("pos_sales").update({ mercadopago_payment_id: mpId } as any).eq("id", orderId);
+      console.log(`[mercadopago] Vinculado mercadopago_payment_id=${mpId} ao pedido ${orderId}`);
+    }
+
     return new Response(
       JSON.stringify({
         paymentId: mpPayment.id,

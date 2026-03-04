@@ -319,10 +319,12 @@ async function updateOrder(
         paid_at: new Date().toISOString(),
         stage: "paid",
         notes: `${order.notes || ""}\n🔔 Webhook VINDI: aprovado (${tokenTransaction})`.trim(),
+        vindi_transaction_id: String(tokenTransaction),
       })
       .eq("id", orderId);
     if (error) { console.error("Error updating orders:", error); return false; }
     console.log(`orders ${orderId} marked as paid via VINDI webhook`);
+    console.log(`[vindi] Vinculado vindi_transaction_id=${tokenTransaction} ao pedido ${orderId}`);
     return true;
   }
   // Reverter pagamento se já estava pago e veio status de falha (ex: antifraude reprovou)
@@ -361,10 +363,12 @@ async function updateSale(
         paid_at: new Date().toISOString(),
         payment_gateway: "vindi",
         notes: `🔔 Webhook VINDI: aprovado (${tokenTransaction})`,
-      })
+        vindi_transaction_id: String(tokenTransaction),
+      } as any)
       .eq("id", saleId);
     if (error) { console.error("Error updating pos_sales:", error); return false; }
     console.log(`pos_sales ${saleId} marked as paid via VINDI webhook`);
+    console.log(`[vindi] Vinculado vindi_transaction_id=${tokenTransaction} ao pedido ${saleId}`);
     // Auto-create Tiny order
     await autoCreateTinyOrder(supabase, saleId, supabaseUrl, supabaseKey);
     return true;

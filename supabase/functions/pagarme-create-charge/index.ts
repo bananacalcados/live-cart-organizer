@@ -684,6 +684,16 @@ serve(async (req) => {
     }
 
     if (result.success) {
+      // Build gateway-specific column update
+      const gatewayIdField: Record<string, string> = {};
+      if (result.gateway === "pagarme") {
+        gatewayIdField.pagarme_order_id = String(result.transactionId);
+      } else if (result.gateway === "vindi") {
+        gatewayIdField.vindi_transaction_id = String(result.transactionId);
+      } else if (result.gateway === "appmax") {
+        gatewayIdField.appmax_order_id = String(result.transactionId);
+      }
+
       if (orderSource === "orders") {
         const { error: updErr } = await supabase
           .from("orders")
@@ -692,9 +702,14 @@ serve(async (req) => {
             paid_at: new Date().toISOString(),
             stage: "paid",
             notes: `${order?.notes || ""}\n💳 Pago via ${result.gateway} (${result.transactionId})`.trim(),
+            ...gatewayIdField,
           })
           .eq("id", params.orderId);
         if (updErr) console.error("Failed to update orders:", updErr);
+        else if (Object.keys(gatewayIdField).length) {
+          const [field, val] = Object.entries(gatewayIdField)[0];
+          console.log(`[${result.gateway}] Vinculado ${field}=${val} ao pedido ${params.orderId}`);
+        }
       } else {
         const { error: updErr } = await supabase
           .from("pos_sales")
@@ -706,9 +721,14 @@ serve(async (req) => {
               ? `Cartão de Crédito ${params.installments}x`
               : "Cartão de Crédito",
             notes: `💳 Pago via ${result.gateway} (${result.transactionId})`,
+            ...gatewayIdField,
           })
           .eq("id", params.orderId);
         if (updErr) console.error("Failed to update pos_sales:", updErr);
+        else if (Object.keys(gatewayIdField).length) {
+          const [field, val] = Object.entries(gatewayIdField)[0];
+          console.log(`[${result.gateway}] Vinculado ${field}=${val} ao pedido ${params.orderId}`);
+        }
         else console.log(`pos_sales ${params.orderId} updated to paid`);
 
         // ── AUTO-CREATE TINY ORDER ──
