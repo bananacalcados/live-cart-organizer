@@ -16,12 +16,14 @@ import { toast } from "sonner";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 
 export interface ScheduledMessageData {
   messageType: string;
   messageContent: string;
   mediaUrl: string;
   pollOptions: string[];
+  pollMaxOptions: number;
   scheduledAt: Date;
   scheduledTime: string;
   sendSpeed: string;
@@ -69,6 +71,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaMode, setMediaMode] = useState<"url" | "upload" | "shopify">("url");
   const [pollOptions, setPollOptions] = useState(["", ""]);
+  const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
   const [scheduledTime, setScheduledTime] = useState("12:00");
   const [sendSpeed, setSendSpeed] = useState("normal");
@@ -350,6 +353,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       const data: ScheduledMessageData = {
         messageType, messageContent, mediaUrl,
         pollOptions: pollOptions.filter(o => o.trim()),
+        pollMaxOptions: pollAllowMultiple ? 0 : 1,
         scheduledAt: scheduledDate, scheduledTime, sendSpeed,
       };
       if (editingMessage && onUpdate) {
@@ -513,6 +517,10 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                   + Opção
                 </Button>
               )}
+              <div className="flex items-center justify-between pt-2 border-t">
+                <Label className="text-xs">Permitir várias respostas</Label>
+                <Switch checked={pollAllowMultiple} onCheckedChange={setPollAllowMultiple} />
+              </div>
             </div>
           )}
 
@@ -640,6 +648,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                 const data: ScheduledMessageData = {
                   messageType, messageContent, mediaUrl,
                   pollOptions: pollOptions.filter(o => o.trim()),
+                  pollMaxOptions: pollAllowMultiple ? 0 : 1,
                   scheduledAt: new Date(), scheduledTime: format(new Date(), 'HH:mm'), sendSpeed,
                 };
                 await onSendNow(data);

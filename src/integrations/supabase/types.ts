@@ -2803,6 +2803,7 @@ export type Database = {
           media_url: string | null
           message_content: string | null
           message_type: string
+          poll_max_options: number | null
           poll_options: Json | null
           scheduled_at: string
           send_speed: string
@@ -2818,6 +2819,7 @@ export type Database = {
           media_url?: string | null
           message_content?: string | null
           message_type?: string
+          poll_max_options?: number | null
           poll_options?: Json | null
           scheduled_at: string
           send_speed?: string
@@ -2833,6 +2835,7 @@ export type Database = {
           media_url?: string | null
           message_content?: string | null
           message_type?: string
+          poll_max_options?: number | null
           poll_options?: Json | null
           scheduled_at?: string
           send_speed?: string
@@ -2872,6 +2875,8 @@ export type Database = {
           sent_count: number | null
           started_at: string | null
           status: string
+          strategy_content: string | null
+          strategy_prompt: string | null
           target_groups: string[] | null
           total_groups: number | null
           updated_at: string
@@ -2897,6 +2902,8 @@ export type Database = {
           sent_count?: number | null
           started_at?: string | null
           status?: string
+          strategy_content?: string | null
+          strategy_prompt?: string | null
           target_groups?: string[] | null
           total_groups?: number | null
           updated_at?: string
@@ -2922,6 +2929,8 @@ export type Database = {
           sent_count?: number | null
           started_at?: string | null
           status?: string
+          strategy_content?: string | null
+          strategy_prompt?: string | null
           target_groups?: string[] | null
           total_groups?: number | null
           updated_at?: string
@@ -7241,6 +7250,33 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      vip_group_strategies: {
+        Row: {
+          created_at: string
+          id: string
+          month_year: string
+          strategy_content: string | null
+          strategy_prompt: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month_year: string
+          strategy_content?: string | null
+          strategy_prompt?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month_year?: string
+          strategy_content?: string | null
+          strategy_prompt?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Users, RefreshCw, Send, Plus, Search, Star, Loader2,
-  Settings, CheckCircle, XCircle, Crown, Link as LinkIcon
+  Settings, CheckCircle, XCircle, Crown, Link as LinkIcon, BookOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { GroupSettingsPanel } from "./GroupSettingsPanel";
 import { CampaignDetailPanel } from "./CampaignDetailPanel";
+import { VipStrategyPanel } from "./VipStrategyPanel";
 
 interface WhatsAppGroup {
   id: string;
@@ -178,6 +179,7 @@ export function GroupsVipManager() {
       <Tabs defaultValue="campaigns">
         <TabsList>
           <TabsTrigger value="campaigns" className="gap-1"><Send className="h-3.5 w-3.5" />Campanhas</TabsTrigger>
+          <TabsTrigger value="strategy" className="gap-1"><BookOpen className="h-3.5 w-3.5" />Estratégia</TabsTrigger>
           <TabsTrigger value="groups" className="gap-1"><Users className="h-3.5 w-3.5" />Grupos</TabsTrigger>
         </TabsList>
 
@@ -244,6 +246,11 @@ export function GroupsVipManager() {
               </div>
             </ScrollArea>
           )}
+        </TabsContent>
+
+        {/* STRATEGY TAB */}
+        <TabsContent value="strategy">
+          <VipStrategyPanel />
         </TabsContent>
 
         {/* CAMPAIGNS TAB */}

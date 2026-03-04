@@ -25,6 +25,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScheduledMessageForm, type ScheduledMessageData } from "./ScheduledMessageForm";
 import { CampaignBulkSettings } from "./CampaignBulkSettings";
 import { CampaignDashboard } from "./CampaignDashboard";
+import { VipStrategyPanel } from "./VipStrategyPanel";
 
 interface CampaignDetailPanelProps {
   campaignId: string;
@@ -164,6 +165,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       message_content: data.messageContent,
       media_url: data.mediaUrl || null,
       poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+      poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
     });
@@ -182,6 +184,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       message_content: data.messageContent,
       media_url: data.mediaUrl || null,
       poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+      poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
       scheduled_at: now.toISOString(),
       send_speed: data.sendSpeed,
     }).select().single();
@@ -203,6 +206,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       message_content: data.messageContent,
       media_url: data.mediaUrl || null,
       poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+      poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
     }).eq('id', id);
@@ -388,8 +392,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
       <ScrollArea className="h-[calc(100vh-300px)]">
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview" className="text-xs">Visão Geral</TabsTrigger>
+            <TabsTrigger value="strategy" className="text-xs">Estratégia</TabsTrigger>
             <TabsTrigger value="groups" className="text-xs">Grupos</TabsTrigger>
             <TabsTrigger value="messages" className="text-xs">Mensagens</TabsTrigger>
             <TabsTrigger value="calendar" className="text-xs">Calendário</TabsTrigger>
@@ -400,6 +405,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           {/* OVERVIEW / DASHBOARD TAB */}
           <TabsContent value="overview" className="space-y-4">
             <CampaignDashboard targetGroups={targetGroups} allGroups={allGroups} links={links} messages={messages} campaignId={campaignId} onRefreshGroups={fetchAllGroups} />
+          </TabsContent>
+
+          {/* STRATEGY TAB */}
+          <TabsContent value="strategy" className="space-y-4">
+            <VipStrategyPanel campaignId={campaignId} campaignName={campaign?.name} />
           </TabsContent>
 
           {/* GROUPS TAB */}
