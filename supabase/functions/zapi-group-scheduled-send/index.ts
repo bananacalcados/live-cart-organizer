@@ -45,11 +45,25 @@ serve(async (req) => {
       );
     }
 
+    // Allow retrying messages stuck in 'sending' for more than 2 minutes
     if (msg.status !== 'pending') {
-      return new Response(
-        JSON.stringify({ error: 'Message already processed', status: msg.status }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (msg.status === 'sending') {
+        const updatedAt = new Date(msg.updated_at || msg.created_at);
+        const minutesAgo = (Date.now() - updatedAt.getTime()) / 60000;
+        if (minutesAgo < 2) {
+          return new Response(
+            JSON.stringify({ error: 'Message is currently being sent, please wait', status: msg.status }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        // Reset to allow retry
+        console.log(`Retrying stuck message ${scheduledMessageId} (stuck for ${minutesAgo.toFixed(1)} min)`);
+      } else {
+        return new Response(
+          JSON.stringify({ error: 'Message already processed', status: msg.status }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Mark as sending

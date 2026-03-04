@@ -382,7 +382,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           <Settings className="h-3.5 w-3.5" /> Configurar Grupos
         </Button>
         <Button size="sm" onClick={() => { setEditingMessage(null); setShowMessageForm(true); }} className="gap-1">
-          <Plus className="h-3.5 w-3.5" /> Agendar
+          <Plus className="h-3.5 w-3.5" /> Enviar Mensagem
         </Button>
       </div>
 
