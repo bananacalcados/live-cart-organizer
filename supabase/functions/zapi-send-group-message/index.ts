@@ -94,7 +94,14 @@ serve(async (req) => {
       body: JSON.stringify(body),
     });
 
-    const data = await res.json();
+    const rawText = await res.text();
+    let data: any;
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      console.error('Z-API raw response (not JSON):', rawText);
+      data = { raw: rawText };
+    }
 
     if (!res.ok) {
       console.error('Z-API send group error:', data);
