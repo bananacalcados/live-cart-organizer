@@ -27,6 +27,7 @@ import { BankReconciliation } from "@/components/management/BankReconciliation";
 import { StrategyManager } from "@/components/management/StrategyManager";
 import { MarginFormation } from "@/components/management/MarginFormation";
 import { CrmDuplicates } from "@/components/management/CrmDuplicates";
+import { InvestmentsDashboard } from "@/components/management/InvestmentsDashboard";
 
 interface TinySyncedOrder {
   id: string;
