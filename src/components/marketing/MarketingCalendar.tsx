@@ -149,6 +149,7 @@ export function MarketingCalendar() {
   const [entryType, setEntryType] = useState("text");
   const [entryColor, setEntryColor] = useState("#3b82f6");
   const [entryMediaUrl, setEntryMediaUrl] = useState("");
+  const [entryEndDate, setEntryEndDate] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -230,8 +231,7 @@ export function MarketingCalendar() {
       const [entriesRes, goalsRes, recurringRes] = await Promise.all([
         supabase.from('marketing_calendar_entries')
           .select('*')
-          .gte('entry_date', startDate)
-          .lte('entry_date', endDate)
+          .or(`and(entry_date.gte.${startDate},entry_date.lte.${endDate}),and(end_date.gte.${startDate},entry_date.lte.${endDate})`)
           .order('created_at', { ascending: true }),
         supabase.from('marketing_calendar_goals')
           .select('*')
@@ -334,7 +334,15 @@ export function MarketingCalendar() {
   for (let d = 1; d <= daysInMonth; d++) calendarDays.push(d);
 
   const getDateStr = (day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  const getEntriesForDay = (day: number) => entries.filter(e => e.entry_date === getDateStr(day));
+  const getEntriesForDay = (day: number) => {
+    const dateStr = getDateStr(day);
+    return entries.filter(e => {
+      if (e.end_date) {
+        return e.entry_date <= dateStr && e.end_date >= dateStr;
+      }
+      return e.entry_date === dateStr;
+    });
+  };
   
   // Get recurring actions for a specific day
   const getRecurringForDay = (day: number) => {
@@ -354,7 +362,12 @@ export function MarketingCalendar() {
     setDayDetailOpen(true);
   };
 
-  const selectedDateEntries = selectedDate ? entries.filter(e => e.entry_date === selectedDate) : [];
+  const selectedDateEntries = selectedDate ? entries.filter(e => {
+    if (e.end_date) {
+      return e.entry_date <= selectedDate && e.end_date >= selectedDate;
+    }
+    return e.entry_date === selectedDate;
+  }) : [];
   const selectedDateRecurring = selectedDate ? recurringActions.filter(a => recurringMatchesDate(a, selectedDate)) : [];
 
   // Entry CRUD
@@ -366,6 +379,7 @@ export function MarketingCalendar() {
     setEntryType("text");
     setEntryColor("#3b82f6");
     setEntryMediaUrl("");
+    setEntryEndDate("");
     setEntryDialogOpen(true);
   };
 
@@ -377,6 +391,7 @@ export function MarketingCalendar() {
     setEntryType(entry.entry_type);
     setEntryColor(entry.color);
     setEntryMediaUrl(entry.media_url || "");
+    setEntryEndDate(entry.end_date || "");
     setEntryDialogOpen(true);
   };
 
@@ -408,6 +423,7 @@ export function MarketingCalendar() {
     try {
       const payload = {
         entry_date: selectedDate!,
+        end_date: entryEndDate || null,
         title: entryTitle,
         content: entryContent,
         entry_type: entryType,
