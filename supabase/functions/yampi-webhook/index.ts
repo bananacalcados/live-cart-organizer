@@ -89,14 +89,16 @@ serve(async (req) => {
             .or(`whatsapp.ilike.%${normalizedPhone}%`);
 
           if (!customerError && customers && customers.length > 0) {
-            // Find recent unpaid orders for these customers
+            // Find recent unpaid orders for these customers (last 48h only)
             const customerIds = customers.map((c) => c.id);
+            const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
             
             const { data: orders, error: ordersError } = await supabase
               .from("orders")
               .select("*")
               .in("customer_id", customerIds)
               .eq("is_paid", false)
+              .gte("created_at", cutoff)
               .order("created_at", { ascending: false })
               .limit(1);
 
@@ -114,10 +116,10 @@ serve(async (req) => {
 
               if (!updateError) {
                 console.log("Order matched by phone and marked as paid:", order.id);
-              }
+            } else {
+              console.error(`[yampi-webhook] Nenhum pedido recente encontrado para telefone ${normalizedPhone}. Payload: ${JSON.stringify(body).substring(0, 300)}`);
             }
           }
-        }
       }
     } else if (eventType === "order_cancelled" || eventType === "order_refunded") {
       // Handle cancellation/refund if needed
