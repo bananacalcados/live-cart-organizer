@@ -164,6 +164,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       message_content: data.messageContent,
       media_url: data.mediaUrl || null,
       poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+      poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
     });
@@ -182,6 +183,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       message_content: data.messageContent,
       media_url: data.mediaUrl || null,
       poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+      poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
       scheduled_at: now.toISOString(),
       send_speed: data.sendSpeed,
     }).select().single();
@@ -203,6 +205,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       message_content: data.messageContent,
       media_url: data.mediaUrl || null,
       poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+      poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
     }).eq('id', id);
