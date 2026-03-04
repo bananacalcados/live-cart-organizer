@@ -1670,6 +1670,7 @@ export type Database = {
           audience_filters: Json | null
           audience_source: string | null
           completed_at: string | null
+          cost_per_message: number | null
           created_at: string
           created_by: string | null
           failed_count: number | null
@@ -1693,6 +1694,7 @@ export type Database = {
           audience_filters?: Json | null
           audience_source?: string | null
           completed_at?: string | null
+          cost_per_message?: number | null
           created_at?: string
           created_by?: string | null
           failed_count?: number | null
@@ -1716,6 +1718,7 @@ export type Database = {
           audience_filters?: Json | null
           audience_source?: string | null
           completed_at?: string | null
+          cost_per_message?: number | null
           created_at?: string
           created_by?: string | null
           failed_count?: number | null
@@ -4295,6 +4298,74 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      meta_ad_accounts: {
+        Row: {
+          account_id: string
+          account_name: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+        }
+        Insert: {
+          account_id: string
+          account_name?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+        }
+        Update: {
+          account_id?: string
+          account_name?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+        }
+        Relationships: []
+      }
+      meta_ad_spend_daily: {
+        Row: {
+          account_id: string
+          clicks: number | null
+          cpc: number | null
+          cpm: number | null
+          created_at: string | null
+          date: string
+          id: string
+          impressions: number | null
+          spend: number | null
+        }
+        Insert: {
+          account_id: string
+          clicks?: number | null
+          cpc?: number | null
+          cpm?: number | null
+          created_at?: string | null
+          date: string
+          id?: string
+          impressions?: number | null
+          spend?: number | null
+        }
+        Update: {
+          account_id?: string
+          clicks?: number | null
+          cpc?: number | null
+          cpm?: number | null
+          created_at?: string | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          spend?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ad_spend_daily_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_ad_accounts"
+            referencedColumns: ["account_id"]
+          },
+        ]
       }
       meta_message_queue: {
         Row: {

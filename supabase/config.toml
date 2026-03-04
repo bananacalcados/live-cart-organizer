@@ -221,3 +221,6 @@ verify_jwt = false
 
 [functions.dispatch-mass-send]
 verify_jwt = false
+
+[functions.meta-ads-sync-spend]
+verify_jwt = false

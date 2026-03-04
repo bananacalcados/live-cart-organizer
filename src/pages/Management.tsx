@@ -27,6 +27,7 @@ import { BankReconciliation } from "@/components/management/BankReconciliation";
 import { StrategyManager } from "@/components/management/StrategyManager";
 import { MarginFormation } from "@/components/management/MarginFormation";
 import { CrmDuplicates } from "@/components/management/CrmDuplicates";
+import { InvestmentsDashboard } from "@/components/management/InvestmentsDashboard";
 
 interface TinySyncedOrder {
   id: string;
@@ -1050,6 +1051,10 @@ export default function Management() {
                   <Users className="h-3.5 w-3.5" />
                   CRM Duplicados
                 </TabsTrigger>
+                <TabsTrigger value="investments" className="gap-1">
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  Investimentos
+                </TabsTrigger>
               </TabsList>
 
               {/* Overview */}
@@ -1255,6 +1260,11 @@ export default function Management() {
               {/* CRM Duplicados */}
               <TabsContent value="crm_duplicates" className="space-y-4">
                 <CrmDuplicates />
+              </TabsContent>
+
+              {/* Investimentos */}
+              <TabsContent value="investments" className="space-y-4">
+                <InvestmentsDashboard />
               </TabsContent>
             </Tabs>
           </>
