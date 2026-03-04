@@ -59,11 +59,12 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      const reqPollMax = (reqBody as any).pollMaxOptions;
       endpoint = `${baseUrl}/send-poll`;
       body = {
         phone: groupId,
         message: message || 'Enquete',
-        pollMaxOptions: 1,
+        pollMaxOptions: reqPollMax === 0 ? pollOptions.length : (reqPollMax || 1),
         poll: pollOptions.map((opt: string) => ({ name: opt })),
       };
     } else if (type === 'image' && mediaUrl) {
