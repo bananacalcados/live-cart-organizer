@@ -116,10 +116,10 @@ serve(async (req) => {
 
               if (!updateError) {
                 console.log("Order matched by phone and marked as paid:", order.id);
-              }
+            } else {
+              console.error(`[yampi-webhook] Nenhum pedido recente encontrado para telefone ${normalizedPhone}. Payload: ${JSON.stringify(body).substring(0, 300)}`);
             }
           }
-        }
       }
     } else if (eventType === "order_cancelled" || eventType === "order_refunded") {
       // Handle cancellation/refund if needed
