@@ -52,7 +52,6 @@ serve(async (req) => {
       endpoint = `${baseUrl}/send-text`;
       body = { phone: groupId, message: message || '' };
     } else if (type === 'poll') {
-      // Z-API poll endpoint
       const pollOptions = (reqBody as any).pollOptions;
       if (!pollOptions || !Array.isArray(pollOptions) || pollOptions.length < 2) {
         return new Response(
@@ -63,11 +62,9 @@ serve(async (req) => {
       endpoint = `${baseUrl}/send-poll`;
       body = {
         phone: groupId,
-        poll: {
-          name: message || 'Enquete',
-          options: pollOptions,
-          selectableOptionsCount: 1,
-        },
+        message: message || 'Enquete',
+        pollMaxOptions: 1,
+        poll: pollOptions.map((opt: string) => ({ name: opt })),
       };
     } else if (type === 'image' && mediaUrl) {
       endpoint = `${baseUrl}/send-image`;
@@ -97,7 +94,14 @@ serve(async (req) => {
       body: JSON.stringify(body),
     });
 
-    const data = await res.json();
+    const rawText = await res.text();
+    let data: any;
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      console.error('Z-API raw response (not JSON):', rawText);
+      data = { raw: rawText };
+    }
 
     if (!res.ok) {
       console.error('Z-API send group error:', data);
