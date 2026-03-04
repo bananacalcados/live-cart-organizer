@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 
 export interface ScheduledMessageData {
   messageType: string;
@@ -647,6 +648,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                 const data: ScheduledMessageData = {
                   messageType, messageContent, mediaUrl,
                   pollOptions: pollOptions.filter(o => o.trim()),
+                  pollMaxOptions: pollAllowMultiple ? 0 : 1,
                   scheduledAt: new Date(), scheduledTime: format(new Date(), 'HH:mm'), sendSpeed,
                 };
                 await onSendNow(data);
