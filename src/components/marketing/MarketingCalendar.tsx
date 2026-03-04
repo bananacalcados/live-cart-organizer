@@ -920,6 +920,19 @@ export function MarketingCalendar() {
           <div className="space-y-4">
             <Input placeholder="Título" value={entryTitle} onChange={e => setEntryTitle(e.target.value)} />
 
+            {/* Multi-day: end date */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Data início</label>
+                <Input type="date" value={selectedDate || ''} onChange={e => setSelectedDate(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Data fim (opcional)</label>
+                <Input type="date" value={entryEndDate} onChange={e => setEntryEndDate(e.target.value)} min={selectedDate || undefined} />
+                <p className="text-[10px] text-muted-foreground">Para eventos de vários dias</p>
+              </div>
+            </div>
+
             {/* Rich text content */}
             <div>
               <label className="text-sm font-medium mb-1 block">Conteúdo</label>
