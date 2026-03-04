@@ -176,10 +176,12 @@ export function GroupsVipManager() {
 
   return (
     <div className="space-y-4">
+      {/* Strategy element above campaigns */}
+      <VipStrategyPanel />
+
       <Tabs defaultValue="campaigns">
         <TabsList>
           <TabsTrigger value="campaigns" className="gap-1"><Send className="h-3.5 w-3.5" />Campanhas</TabsTrigger>
-          <TabsTrigger value="strategy" className="gap-1"><BookOpen className="h-3.5 w-3.5" />Estratégia</TabsTrigger>
           <TabsTrigger value="groups" className="gap-1"><Users className="h-3.5 w-3.5" />Grupos</TabsTrigger>
         </TabsList>
 
@@ -246,11 +248,6 @@ export function GroupsVipManager() {
               </div>
             </ScrollArea>
           )}
-        </TabsContent>
-
-        {/* STRATEGY TAB */}
-        <TabsContent value="strategy">
-          <VipStrategyPanel />
         </TabsContent>
 
         {/* CAMPAIGNS TAB */}

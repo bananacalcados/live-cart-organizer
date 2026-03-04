@@ -391,10 +391,10 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       </div>
 
       <ScrollArea className="h-[calc(100vh-300px)]">
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs defaultValue="strategy" className="space-y-4">
           <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="overview" className="text-xs">Visão Geral</TabsTrigger>
             <TabsTrigger value="strategy" className="text-xs">Estratégia</TabsTrigger>
+            <TabsTrigger value="overview" className="text-xs">Visão Geral</TabsTrigger>
             <TabsTrigger value="groups" className="text-xs">Grupos</TabsTrigger>
             <TabsTrigger value="messages" className="text-xs">Mensagens</TabsTrigger>
             <TabsTrigger value="calendar" className="text-xs">Calendário</TabsTrigger>

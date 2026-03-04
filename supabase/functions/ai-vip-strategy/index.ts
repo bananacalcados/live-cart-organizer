@@ -18,7 +18,7 @@ serve(async (req) => {
       });
     }
 
-    const { prompt, type, campaignName, monthYear } = await req.json();
+    const { prompt, type, campaignName, monthYear, messageCount, periodStart, periodEnd } = await req.json();
 
     if (!prompt) {
       return new Response(JSON.stringify({ error: 'prompt is required' }), {
@@ -26,38 +26,55 @@ serve(async (req) => {
       });
     }
 
+    const msgCount = messageCount || 10;
+    const periodInfo = periodStart && periodEnd
+      ? `Período: de ${periodStart} até ${periodEnd}`
+      : `Mês/Ano de referência: ${monthYear || 'atual'}`;
+
+    const commonInstructions = `
+Quantidade de mensagens solicitada: ${msgCount}
+${periodInfo}
+
+REGRAS OBRIGATÓRIAS PARA O ROTEIRO:
+1. Gere EXATAMENTE ${msgCount} mensagens distribuídas ao longo do período
+2. Para CADA mensagem, especifique:
+   - 📅 **Data e horário sugerido** de envio
+   - 📝 **Tipo**: texto, enquete, imagem, vídeo ou áudio
+   - ✉️ **Mensagem pronta** para copiar e enviar (com emojis)
+   - 🎨 **Se for imagem**: descreva DETALHADAMENTE a ideia da imagem (composição, cores, elementos, texto na arte) para que o designer possa produzir
+   - 🎬 **Se for vídeo**: descreva o roteiro do vídeo (duração sugerida, cenas, texto/legenda)
+   - 🎙️ **Se for áudio**: escreva o roteiro do áudio (tom de voz, o que falar)
+   - 📊 **Se for enquete**: escreva a pergunta e as opções de resposta, indique se permite múltiplas respostas
+3. Varie os tipos de conteúdo (não envie só texto!)
+4. Inclua no mínimo: 2 enquetes, 2 sugestões de imagem, 1 vídeo e 1 áudio
+5. No final, adicione uma seção "🎯 GUIA DE PRODUÇÃO DE CONTEÚDO" explicando como produzir cada tipo de material
+
+Responda em português brasileiro, com emojis. Seja específico, prático e ACIONÁVEL.`;
+
     let systemPrompt = '';
     if (type === 'general') {
       systemPrompt = `Você é um estrategista de marketing especializado em grupos VIP de WhatsApp para uma marca de moda feminina chamada Banana Brasil.
 
-O usuário vai descrever a estratégia geral do mês para os grupos VIP. Gere um documento completo de estratégia contendo:
+O usuário vai descrever a estratégia geral do mês para os grupos VIP. Gere um ROTEIRO COMPLETO de mensagens contendo:
 
-1. **Objetivo do Mês** - Qual o foco principal
-2. **Tom de Comunicação** - Como as mensagens devem soar
-3. **Frequência de Envio** - Quantas mensagens por dia/semana
-4. **Tipos de Conteúdo** - Mix ideal (texto, enquetes, fotos, vídeos, áudios)
-5. **Temas Semanais** - Sugestão de temas para cada semana do mês
-6. **Horários Recomendados** - Melhores horários para envio
-7. **Dicas de Engajamento** - Estratégias para manter o grupo ativo
+1. **Resumo da Estratégia** - Objetivo, tom de comunicação, público
+2. **Cronograma de Mensagens** - Todas as ${msgCount} mensagens detalhadas
 
-Mês/Ano de referência: ${monthYear || 'atual'}
-
-Responda em português brasileiro, com emojis para facilitar a leitura. Seja específico e prático.`;
+${commonInstructions}`;
     } else {
       systemPrompt = `Você é um estrategista de marketing especializado em campanhas para grupos VIP de WhatsApp de uma marca de moda feminina chamada Banana Brasil.
 
 Nome da campanha: ${campaignName || 'Campanha'}
 
-O usuário vai descrever o objetivo da campanha. Gere um plano detalhado contendo:
+O usuário vai descrever o objetivo da campanha. Gere um ROTEIRO COMPLETO de mensagens contendo:
 
 1. **Objetivo da Campanha** - O que queremos alcançar
-2. **Cronograma de Mensagens** - Dia a dia com horários sugeridos
-3. **Roteiro de Mensagens** - Exemplos prontos para cada dia (texto, enquetes, mídias)
+2. **Tom de Comunicação** - Como as mensagens devem soar
+3. **Cronograma de Mensagens** - Todas as ${msgCount} mensagens detalhadas com data, horário e conteúdo
 4. **Gatilhos de Urgência** - Como criar senso de urgência
 5. **Métricas de Sucesso** - Como medir o resultado
 
-Cada mensagem sugerida deve ser prática e pronta para copiar/enviar.
-Responda em português brasileiro, com emojis. Seja específico e acionável.`;
+${commonInstructions}`;
     }
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
