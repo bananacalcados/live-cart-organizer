@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // VINDI/Yapay status mapping
-const VINDI_PAID_STATUSES = [6, 87]; // 6=Aprovada, 87=Em Monitoramento
+const VINDI_PAID_STATUSES = [6]; // Somente "Aprovada" é pagamento confirmado
 const VINDI_FAILED_STATUSES = [7, 13, 14, 88, 89]; // Cancelada, Cancel.Manual, Estornada, Rejeitada, Fraude
 
 async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: string, supabaseKey: string) {
@@ -197,6 +197,14 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   const isPaid = VINDI_PAID_STATUSES.includes(statusId);
   const isFailed = VINDI_FAILED_STATUSES.includes(statusId);
 
+  // Status 87 = "Em Monitoramento" (análise antifraude) — apenas logar, sem atualizar banco
+  if (statusId === 87) {
+    console.log(`VINDI: pedido em monitoramento (análise antifraude). Aguardando resultado. token=${tokenTransaction}`);
+    return new Response(JSON.stringify({ ok: true, skipped: true, reason: "under_review" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   if (!isPaid && !isFailed) {
     console.log(`VINDI status_id ${statusId} not actionable, skipping.`);
     return new Response(JSON.stringify({ ok: true, skipped: true }), {
@@ -317,6 +325,20 @@ async function updateOrder(
     console.log(`orders ${orderId} marked as paid via VINDI webhook`);
     return true;
   }
+  // Reverter pagamento se já estava pago e veio status de falha (ex: antifraude reprovou)
+  if (isFailed && order.is_paid) {
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        is_paid: false,
+        stage: "awaiting_payment",
+        notes: `${order.notes || ""}\n⚠️ Pagamento revertido: reprovado pela Yapay (status ${statusId})`.trim(),
+      })
+      .eq("id", orderId);
+    if (error) { console.error("Error reverting orders:", error); return false; }
+    console.log(`orders ${orderId} payment REVERTED via VINDI webhook (status ${statusId})`);
+    return true;
+  }
   return false;
 }
 
@@ -346,7 +368,7 @@ async function updateSale(
     // Auto-create Tiny order
     await autoCreateTinyOrder(supabase, saleId, supabaseUrl, supabaseKey);
     return true;
-  } else if (isFailed && sale.status === "online_pending") {
+  } else if (isFailed && (sale.status === "online_pending" || sale.status === "paid" || sale.status === "completed")) {
     const { error } = await supabase
       .from("pos_sales")
       .update({
