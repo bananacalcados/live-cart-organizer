@@ -767,7 +767,8 @@ export function MarketingCalendar() {
                           className="text-[10px] leading-tight px-1 py-0.5 rounded truncate flex items-center gap-0.5"
                           style={{ backgroundColor: item.color + '20', color: item.color, borderLeft: `2px solid ${item.color}` }}>
                           {item.type === 'recurring' && <RotateCcw className="h-2 w-2 shrink-0" />}
-                          {item.type === 'entry' && (item as any).entry_type !== 'text' && (
+                          {item.type === 'entry' && (item as any).end_date && <span className="mr-0.5">📅</span>}
+                          {item.type === 'entry' && !(item as any).end_date && (item as any).entry_type !== 'text' && (
                             <span className="mr-0.5">
                               {(item as any).entry_type === 'image' ? '📷' : (item as any).entry_type === 'audio' ? '🎵' : (item as any).entry_type === 'video' ? '🎥' : '📎'}
                             </span>
