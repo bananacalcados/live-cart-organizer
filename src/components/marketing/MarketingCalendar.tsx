@@ -865,6 +865,11 @@ export function MarketingCalendar() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         {entry.title && <h4 className="font-semibold text-sm">{entry.title}</h4>}
+                        {entry.end_date && (
+                          <Badge variant="outline" className="text-[10px] mb-1 gap-1">
+                            📅 {new Date(entry.entry_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} — {new Date(entry.end_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                          </Badge>
+                        )}
                         {entry.entry_type !== 'text' && (
                           <Badge variant="outline" className="text-[10px] mb-1">
                             {entry.entry_type === 'image' ? '📷 Imagem' : entry.entry_type === 'audio' ? '🎵 Áudio' : entry.entry_type === 'video' ? '🎥 Vídeo' : '📎 Documento'}
