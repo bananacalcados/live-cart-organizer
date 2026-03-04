@@ -34,7 +34,8 @@ serve(async (req) => {
       );
     }
 
-    const { groupId, message, type = 'text', mediaUrl, caption, campaignId, groupDbId }: SendGroupRequest = await req.json();
+    const reqBody = await req.json();
+    const { groupId, message, type = 'text', mediaUrl, caption, campaignId, groupDbId }: SendGroupRequest = reqBody;
 
     if (!groupId) {
       return new Response(
@@ -50,6 +51,24 @@ serve(async (req) => {
     if (type === 'text') {
       endpoint = `${baseUrl}/send-text`;
       body = { phone: groupId, message: message || '' };
+    } else if (type === 'poll') {
+      // Z-API poll endpoint
+      const pollOptions = (reqBody as any).pollOptions;
+      if (!pollOptions || !Array.isArray(pollOptions) || pollOptions.length < 2) {
+        return new Response(
+          JSON.stringify({ error: 'Poll requires at least 2 options' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      endpoint = `${baseUrl}/send-poll`;
+      body = {
+        phone: groupId,
+        poll: {
+          name: message || 'Enquete',
+          options: pollOptions,
+          selectableOptionsCount: 1,
+        },
+      };
     } else if (type === 'image' && mediaUrl) {
       endpoint = `${baseUrl}/send-image`;
       body = { phone: groupId, image: mediaUrl, caption: caption || message || '' };

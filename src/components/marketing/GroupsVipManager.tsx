@@ -175,10 +175,10 @@ export function GroupsVipManager() {
 
   return (
     <div className="space-y-4">
-      <Tabs defaultValue="groups">
+      <Tabs defaultValue="campaigns">
         <TabsList>
-          <TabsTrigger value="groups" className="gap-1"><Users className="h-3.5 w-3.5" />Grupos</TabsTrigger>
           <TabsTrigger value="campaigns" className="gap-1"><Send className="h-3.5 w-3.5" />Campanhas</TabsTrigger>
+          <TabsTrigger value="groups" className="gap-1"><Users className="h-3.5 w-3.5" />Grupos</TabsTrigger>
         </TabsList>
 
         {/* GROUPS TAB */}
