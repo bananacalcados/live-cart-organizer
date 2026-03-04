@@ -35,6 +35,7 @@ const ENTRY_COLORS = [
 interface CalendarEntry {
   id: string;
   entry_date: string;
+  end_date: string | null;
   title: string;
   content: string;
   entry_type: string;
@@ -148,6 +149,7 @@ export function MarketingCalendar() {
   const [entryType, setEntryType] = useState("text");
   const [entryColor, setEntryColor] = useState("#3b82f6");
   const [entryMediaUrl, setEntryMediaUrl] = useState("");
+  const [entryEndDate, setEntryEndDate] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -229,8 +231,7 @@ export function MarketingCalendar() {
       const [entriesRes, goalsRes, recurringRes] = await Promise.all([
         supabase.from('marketing_calendar_entries')
           .select('*')
-          .gte('entry_date', startDate)
-          .lte('entry_date', endDate)
+          .or(`and(entry_date.gte.${startDate},entry_date.lte.${endDate}),and(end_date.gte.${startDate},entry_date.lte.${endDate})`)
           .order('created_at', { ascending: true }),
         supabase.from('marketing_calendar_goals')
           .select('*')
@@ -333,7 +334,15 @@ export function MarketingCalendar() {
   for (let d = 1; d <= daysInMonth; d++) calendarDays.push(d);
 
   const getDateStr = (day: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  const getEntriesForDay = (day: number) => entries.filter(e => e.entry_date === getDateStr(day));
+  const getEntriesForDay = (day: number) => {
+    const dateStr = getDateStr(day);
+    return entries.filter(e => {
+      if (e.end_date) {
+        return e.entry_date <= dateStr && e.end_date >= dateStr;
+      }
+      return e.entry_date === dateStr;
+    });
+  };
   
   // Get recurring actions for a specific day
   const getRecurringForDay = (day: number) => {
@@ -353,7 +362,12 @@ export function MarketingCalendar() {
     setDayDetailOpen(true);
   };
 
-  const selectedDateEntries = selectedDate ? entries.filter(e => e.entry_date === selectedDate) : [];
+  const selectedDateEntries = selectedDate ? entries.filter(e => {
+    if (e.end_date) {
+      return e.entry_date <= selectedDate && e.end_date >= selectedDate;
+    }
+    return e.entry_date === selectedDate;
+  }) : [];
   const selectedDateRecurring = selectedDate ? recurringActions.filter(a => recurringMatchesDate(a, selectedDate)) : [];
 
   // Entry CRUD
@@ -365,6 +379,7 @@ export function MarketingCalendar() {
     setEntryType("text");
     setEntryColor("#3b82f6");
     setEntryMediaUrl("");
+    setEntryEndDate("");
     setEntryDialogOpen(true);
   };
 
@@ -376,6 +391,7 @@ export function MarketingCalendar() {
     setEntryType(entry.entry_type);
     setEntryColor(entry.color);
     setEntryMediaUrl(entry.media_url || "");
+    setEntryEndDate(entry.end_date || "");
     setEntryDialogOpen(true);
   };
 
@@ -407,6 +423,7 @@ export function MarketingCalendar() {
     try {
       const payload = {
         entry_date: selectedDate!,
+        end_date: entryEndDate || null,
         title: entryTitle,
         content: entryContent,
         entry_type: entryType,
@@ -750,7 +767,8 @@ export function MarketingCalendar() {
                           className="text-[10px] leading-tight px-1 py-0.5 rounded truncate flex items-center gap-0.5"
                           style={{ backgroundColor: item.color + '20', color: item.color, borderLeft: `2px solid ${item.color}` }}>
                           {item.type === 'recurring' && <RotateCcw className="h-2 w-2 shrink-0" />}
-                          {item.type === 'entry' && (item as any).entry_type !== 'text' && (
+                          {item.type === 'entry' && (item as any).end_date && <span className="mr-0.5">📅</span>}
+                          {item.type === 'entry' && !(item as any).end_date && (item as any).entry_type !== 'text' && (
                             <span className="mr-0.5">
                               {(item as any).entry_type === 'image' ? '📷' : (item as any).entry_type === 'audio' ? '🎵' : (item as any).entry_type === 'video' ? '🎥' : '📎'}
                             </span>
@@ -848,6 +866,11 @@ export function MarketingCalendar() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         {entry.title && <h4 className="font-semibold text-sm">{entry.title}</h4>}
+                        {entry.end_date && (
+                          <Badge variant="outline" className="text-[10px] mb-1 gap-1">
+                            📅 {new Date(entry.entry_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} — {new Date(entry.end_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                          </Badge>
+                        )}
                         {entry.entry_type !== 'text' && (
                           <Badge variant="outline" className="text-[10px] mb-1">
                             {entry.entry_type === 'image' ? '📷 Imagem' : entry.entry_type === 'audio' ? '🎵 Áudio' : entry.entry_type === 'video' ? '🎥 Vídeo' : '📎 Documento'}
@@ -902,6 +925,19 @@ export function MarketingCalendar() {
           </DialogHeader>
           <div className="space-y-4">
             <Input placeholder="Título" value={entryTitle} onChange={e => setEntryTitle(e.target.value)} />
+
+            {/* Multi-day: end date */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Data início</label>
+                <Input type="date" value={selectedDate || ''} onChange={e => setSelectedDate(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Data fim (opcional)</label>
+                <Input type="date" value={entryEndDate} onChange={e => setEntryEndDate(e.target.value)} min={selectedDate || undefined} />
+                <p className="text-[10px] text-muted-foreground">Para eventos de vários dias</p>
+              </div>
+            </div>
 
             {/* Rich text content */}
             <div>

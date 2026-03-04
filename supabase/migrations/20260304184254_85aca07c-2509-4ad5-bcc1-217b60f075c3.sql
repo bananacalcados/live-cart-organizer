@@ -1,0 +1,1 @@
+ALTER TABLE public.marketing_calendar_entries ADD COLUMN end_date date DEFAULT NULL;

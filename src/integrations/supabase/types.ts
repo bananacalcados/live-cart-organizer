@@ -3901,6 +3901,7 @@ export type Database = {
           color: string | null
           content: string | null
           created_at: string
+          end_date: string | null
           entry_date: string
           entry_type: string
           id: string
@@ -3914,6 +3915,7 @@ export type Database = {
           color?: string | null
           content?: string | null
           created_at?: string
+          end_date?: string | null
           entry_date: string
           entry_type?: string
           id?: string
@@ -3927,6 +3929,7 @@ export type Database = {
           color?: string | null
           content?: string | null
           created_at?: string
+          end_date?: string | null
           entry_date?: string
           entry_type?: string
           id?: string
