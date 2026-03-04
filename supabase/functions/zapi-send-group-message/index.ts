@@ -9,7 +9,7 @@ const corsHeaders = {
 interface SendGroupRequest {
   groupId: string; // e.g. "120363058412332916@g.us"
   message?: string;
-  type?: 'text' | 'image' | 'video' | 'audio' | 'document';
+  type?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'poll';
   mediaUrl?: string;
   caption?: string;
   // For campaign bulk sends

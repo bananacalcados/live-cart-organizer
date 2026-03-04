@@ -68,7 +68,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const [messageContent, setMessageContent] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaMode, setMediaMode] = useState<"url" | "upload" | "shopify">("url");
-  const [pollOptions, setPollOptions] = useState(["", "", ""]);
+  const [pollOptions, setPollOptions] = useState(["", ""]);
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
   const [scheduledTime, setScheduledTime] = useState("12:00");
   const [sendSpeed, setSendSpeed] = useState("normal");
@@ -106,7 +106,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       setMediaUrl(editingMessage.media_url || "");
       setSendSpeed(editingMessage.send_speed || "normal");
       if (editingMessage.poll_options) {
-        setPollOptions(Array.isArray(editingMessage.poll_options) ? editingMessage.poll_options : ["", "", ""]);
+        setPollOptions(Array.isArray(editingMessage.poll_options) ? editingMessage.poll_options : ["", ""]);
       }
       const d = new Date(editingMessage.scheduled_at);
       setScheduledDate(d);
@@ -128,7 +128,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
 
   const resetForm = () => {
     setMessageContent(""); setMediaUrl(""); setAiPrompt("");
-    setPollOptions(["", "", ""]); setMessageType("text");
+    setPollOptions(["", ""]); setMessageType("text");
     setMediaMode("url"); setTemplateName("");
     setAudioPreviewUrl(null); setIsPlayingPreview(false);
   };
@@ -168,7 +168,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     setMessageType(t.message_type);
     setMessageContent(t.message_content || "");
     setMediaUrl(t.media_url || "");
-    if (t.poll_options) setPollOptions(Array.isArray(t.poll_options) ? t.poll_options : ["", "", ""]);
+    if (t.poll_options) setPollOptions(Array.isArray(t.poll_options) ? t.poll_options : ["", ""]);
     setShowTemplates(false);
     toast.success("Modelo carregado!");
   };
@@ -493,12 +493,20 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             <div className="space-y-2">
               <Label className="text-xs">Opções da Enquete</Label>
               {pollOptions.map((opt, i) => (
-                <Input key={i} placeholder={`Opção ${i + 1}`} value={opt}
-                  onChange={e => {
-                    const next = [...pollOptions];
-                    next[i] = e.target.value;
-                    setPollOptions(next);
-                  }} />
+                <div key={i} className="flex items-center gap-1">
+                  <Input placeholder={`Opção ${i + 1}`} value={opt}
+                    onChange={e => {
+                      const next = [...pollOptions];
+                      next[i] = e.target.value;
+                      setPollOptions(next);
+                    }} />
+                  {pollOptions.length > 2 && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                      onClick={() => setPollOptions(pollOptions.filter((_, idx) => idx !== i))}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  )}
+                </div>
               ))}
               {pollOptions.length < 6 && (
                 <Button variant="outline" size="sm" onClick={() => setPollOptions([...pollOptions, ""])}>
