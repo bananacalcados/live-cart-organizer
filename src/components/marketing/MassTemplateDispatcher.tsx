@@ -1139,10 +1139,13 @@ export function MassTemplateDispatcher() {
                   variant="destructive"
                   size="sm"
                   className="w-full mt-1"
-                  onClick={() => { cancelSendRef.current = true; }}
+                  onClick={handleCancelDispatch}
                 >
                   ✋ Cancelar Disparo
                 </Button>
+                <p className="text-[10px] text-muted-foreground text-center mt-1">
+                  💡 Você pode fechar esta aba — o disparo continua em background
+                </p>
               </div>
             )}
           </CardContent>
