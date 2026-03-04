@@ -2803,6 +2803,7 @@ export type Database = {
           media_url: string | null
           message_content: string | null
           message_type: string
+          poll_max_options: number | null
           poll_options: Json | null
           scheduled_at: string
           send_speed: string
@@ -2818,6 +2819,7 @@ export type Database = {
           media_url?: string | null
           message_content?: string | null
           message_type?: string
+          poll_max_options?: number | null
           poll_options?: Json | null
           scheduled_at: string
           send_speed?: string
@@ -2833,6 +2835,7 @@ export type Database = {
           media_url?: string | null
           message_content?: string | null
           message_type?: string
+          poll_max_options?: number | null
           poll_options?: Json | null
           scheduled_at?: string
           send_speed?: string

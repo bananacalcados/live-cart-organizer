@@ -1,0 +1,1 @@
+ALTER TABLE public.group_campaign_scheduled_messages ADD COLUMN IF NOT EXISTS poll_max_options integer DEFAULT 1;
