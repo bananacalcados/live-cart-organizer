@@ -141,6 +141,7 @@ serve(async (req) => {
           body.type = 'poll';
           body.pollOptions = msg.poll_options;
           body.message = messageContent;
+          body.pollMaxOptions = msg.poll_max_options ?? 1;
         } else if (msg.message_type !== 'text' && msg.media_url) {
           body.type = msg.message_type;
           body.mediaUrl = msg.media_url;
