@@ -52,7 +52,6 @@ serve(async (req) => {
       endpoint = `${baseUrl}/send-text`;
       body = { phone: groupId, message: message || '' };
     } else if (type === 'poll') {
-      // Z-API poll endpoint
       const pollOptions = (reqBody as any).pollOptions;
       if (!pollOptions || !Array.isArray(pollOptions) || pollOptions.length < 2) {
         return new Response(
@@ -63,11 +62,9 @@ serve(async (req) => {
       endpoint = `${baseUrl}/send-poll`;
       body = {
         phone: groupId,
-        poll: {
-          name: message || 'Enquete',
-          options: pollOptions,
-          selectableOptionsCount: 1,
-        },
+        message: message || 'Enquete',
+        pollMaxOptions: 1,
+        poll: pollOptions.map((opt: string) => ({ name: opt })),
       };
     } else if (type === 'image' && mediaUrl) {
       endpoint = `${baseUrl}/send-image`;
