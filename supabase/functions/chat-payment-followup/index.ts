@@ -42,7 +42,33 @@ serve(async (req) => {
           .select('status')
           .eq('id', fu.sale_id)
           .maybeSingle();
-        if (sale?.status === 'completed') isPaid = true;
+        if (sale?.status === 'completed' || sale?.status === 'paid') isPaid = true;
+      }
+
+      // Verificar também na tabela orders (pedidos de live) via customers.whatsapp
+      if (!isPaid && fu.phone) {
+        const phoneSuffix = fu.phone.replace(/\D/g, '').slice(-8);
+        if (phoneSuffix.length >= 8) {
+          const { data: customers } = await supabase
+            .from('customers')
+            .select('id')
+            .ilike('whatsapp', `%${phoneSuffix}`)
+            .limit(5);
+
+          if (customers?.length) {
+            const customerIds = customers.map((c: any) => c.id);
+            const { data: liveOrder } = await supabase
+              .from('orders')
+              .select('id, is_paid')
+              .in('customer_id', customerIds)
+              .eq('is_paid', true)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (liveOrder?.is_paid) isPaid = true;
+          }
+        }
       }
 
       const { data: awp } = await supabase

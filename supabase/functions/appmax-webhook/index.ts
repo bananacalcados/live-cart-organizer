@@ -6,6 +6,24 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Status da Appmax em português
+const APPMAX_PAID_STATUSES = ["aprovado", "integrado"];
+const APPMAX_AUTHORIZED_STATUSES = ["autorizado"]; // análise em andamento, NÃO marcar como pago
+const APPMAX_FAILED_STATUSES = ["cancelado", "estornado"];
+
+// Eventos que NÃO devem acionar atualização de pagamento
+const IGNORED_EVENTS = [
+  "OrderAuthorized",
+  "OrderBilletCreated",
+  "OrderBilletOverdue",
+  "OrderPendingIntegration",
+  "CustomerCreated",
+  "CustomerInterested",
+];
+
+// Eventos que confirmam pagamento
+const PAID_EVENTS = ["OrderApproved", "OrderPaid", "OrderIntegrated"];
+
 async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: string, supabaseKey: string) {
   try {
     const { data: sale } = await supabase
@@ -91,6 +109,84 @@ async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: s
   }
 }
 
+/**
+ * Busca o pedido interno usando múltiplas estratégias:
+ * 1. Por notes contendo o appmax ID
+ * 2. Por telefone do cliente (via tabela customers) — pedidos não pagos mais recentes
+ * 3. Por pos_sales com telefone
+ */
+async function findOrder(supabase: any, appmaxId: string | number, telephone: string | null) {
+  // Strategy 1: Search orders by appmax reference in notes
+  if (appmaxId) {
+    const searchTerm = `appmax`;
+    const { data: orders } = await supabase
+      .from("orders")
+      .select("id, is_paid, notes")
+      .ilike("notes", `%${searchTerm}%`)
+      .ilike("notes", `%${appmaxId}%`)
+      .limit(1);
+
+    if (orders?.length) {
+      return { source: "orders", record: orders[0] };
+    }
+
+    // Also check pos_sales
+    const { data: sales } = await supabase
+      .from("pos_sales")
+      .select("id, status, notes")
+      .ilike("notes", `%${searchTerm}%`)
+      .ilike("notes", `%${appmaxId}%`)
+      .limit(1);
+
+    if (sales?.length) {
+      return { source: "pos_sales", record: sales[0] };
+    }
+  }
+
+  // Strategy 2: Search by customer phone (orders table via customers.whatsapp)
+  if (telephone) {
+    const phoneSuffix = telephone.replace(/\D/g, "").slice(-8);
+    if (phoneSuffix.length >= 8) {
+      // Find customer by phone suffix
+      const { data: customers } = await supabase
+        .from("customers")
+        .select("id")
+        .ilike("whatsapp", `%${phoneSuffix}`)
+        .limit(5);
+
+      if (customers?.length) {
+        const customerIds = customers.map((c: any) => c.id);
+        const { data: orders } = await supabase
+          .from("orders")
+          .select("id, is_paid, notes")
+          .in("customer_id", customerIds)
+          .eq("is_paid", false)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (orders?.length) {
+          return { source: "orders", record: orders[0] };
+        }
+      }
+
+      // Also check pos_sales by phone
+      const { data: sales } = await supabase
+        .from("pos_sales")
+        .select("id, status, notes")
+        .ilike("customer_phone", `%${phoneSuffix}`)
+        .not("status", "in", '("paid","completed")')
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (sales?.length) {
+        return { source: "pos_sales", record: sales[0] };
+      }
+    }
+  }
+
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -107,87 +203,110 @@ serve(async (req) => {
     const event = payload.event || payload.type;
     const data = payload.data || payload;
     const appmaxOrderId = data.order_id || data.id;
-    const status = data.status;
-
-    const ourOrderId = data.metadata?.our_order_id || data.custom_reference || data.external_reference;
+    const status = (data.status || "").toLowerCase();
+    const telephone = data.telephone || data.phone || null;
     const transactionId = data.transaction_id || data.id || appmaxOrderId;
 
-    console.log(`AppMax Event: ${event}, Status: ${status}, OurOrderId: ${ourOrderId}, AppmaxOrderId: ${appmaxOrderId}`);
+    console.log(`AppMax Event: ${event}, Status: ${status}, AppmaxOrderId: ${appmaxOrderId}, Phone: ${telephone}`);
 
-    if (!ourOrderId) {
-      console.log("No internal order reference found in AppMax payload. Skipping.");
-      return new Response(JSON.stringify({ ok: true, skipped: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // Ignorar eventos que não devem acionar pagamento
+    if (IGNORED_EVENTS.includes(event)) {
+      console.log(`AppMax: Event ${event} is ignored (non-payment event).`);
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: `ignored_event_${event}` }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const isPaid = status === "approved" || status === "paid" || event === "payment.approved";
-    const isFailed = status === "declined" || status === "canceled" || status === "refunded" || event === "payment.declined";
+    // Status "autorizado" = análise em andamento, não marcar como pago
+    if (APPMAX_AUTHORIZED_STATUSES.includes(status)) {
+      console.log(`AppMax: pedido em status "${status}" (análise). Aguardando confirmação.`);
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "under_review" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Determinar se é pagamento confirmado ou falha
+    const isPaid = APPMAX_PAID_STATUSES.includes(status) || PAID_EVENTS.includes(event);
+    const isFailed = APPMAX_FAILED_STATUSES.includes(status);
 
     if (!isPaid && !isFailed) {
       console.log(`AppMax status "${status}" / event "${event}" not actionable, skipping.`);
-      return new Response(JSON.stringify({ ok: true, skipped: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ ok: true, skipped: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const { data: order } = await supabase
-      .from("orders")
-      .select("id, is_paid, notes")
-      .eq("id", ourOrderId)
-      .maybeSingle();
+    // Buscar pedido usando múltiplas estratégias
+    const found = await findOrder(supabase, appmaxOrderId, telephone);
 
+    if (!found) {
+      console.error("AppMax: pedido não encontrado para o evento", JSON.stringify(payload));
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "order_not_found" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { source, record } = found;
+    const ourOrderId = record.id;
     let updated = false;
 
-    if (order) {
-      if (isPaid && !order.is_paid) {
+    console.log(`AppMax: Found order ${ourOrderId} in ${source}`);
+
+    if (source === "orders") {
+      if (isPaid && !record.is_paid) {
         const { error } = await supabase
           .from("orders")
           .update({
             is_paid: true,
             paid_at: new Date().toISOString(),
             stage: "paid",
-            notes: `${order.notes || ""}\n🔔 Webhook AppMax: pago (${transactionId})`.trim(),
+            notes: `${record.notes || ""}\n🔔 Webhook AppMax: pago (${transactionId})`.trim(),
           })
           .eq("id", ourOrderId);
         if (error) console.error("Error updating orders:", error);
         else { updated = true; console.log(`orders ${ourOrderId} marked as paid via AppMax webhook`); }
+      } else if (isFailed && record.is_paid) {
+        // Reverter pagamento se já estava pago e veio status de falha
+        const { error } = await supabase
+          .from("orders")
+          .update({
+            is_paid: false,
+            stage: "awaiting_payment",
+            notes: `${record.notes || ""}\n⚠️ Pagamento revertido: reprovado pela Appmax (status ${status})`.trim(),
+          })
+          .eq("id", ourOrderId);
+        if (error) console.error("Error reverting orders:", error);
+        else { updated = true; console.log(`orders ${ourOrderId} payment REVERTED via AppMax webhook (status ${status})`); }
       }
-    } else {
-      const { data: sale } = await supabase
-        .from("pos_sales")
-        .select("id, status")
-        .eq("id", ourOrderId)
-        .maybeSingle();
-
-      if (sale) {
-        if (isPaid && sale.status !== "paid" && sale.status !== "completed") {
-          const { error } = await supabase
-            .from("pos_sales")
-            .update({
-              status: "paid",
-              paid_at: new Date().toISOString(),
-              payment_gateway: "appmax",
-              notes: `🔔 Webhook AppMax: pago (${transactionId})`,
-            })
-            .eq("id", ourOrderId);
-          if (error) console.error("Error updating pos_sales:", error);
-          else {
-            updated = true;
-            console.log(`pos_sales ${ourOrderId} marked as paid via AppMax webhook`);
-            // Auto-create Tiny order
-            await autoCreateTinyOrder(supabase, ourOrderId, supabaseUrl, supabaseKey);
-          }
-        } else if (isFailed && sale.status === "online_pending") {
-          const { error } = await supabase
-            .from("pos_sales")
-            .update({
-              status: "payment_failed",
-              payment_gateway: "appmax",
-              notes: `🔔 Webhook AppMax: ${status} - ${event || "unknown"}`,
-            })
-            .eq("id", ourOrderId);
-          if (error) console.error("Error updating pos_sales to payment_failed:", error);
-          else { updated = true; console.log(`pos_sales ${ourOrderId} marked as payment_failed via AppMax webhook`); }
+    } else if (source === "pos_sales") {
+      if (isPaid && record.status !== "paid" && record.status !== "completed") {
+        const { error } = await supabase
+          .from("pos_sales")
+          .update({
+            status: "paid",
+            paid_at: new Date().toISOString(),
+            payment_gateway: "appmax",
+            notes: `🔔 Webhook AppMax: pago (${transactionId})`,
+          })
+          .eq("id", ourOrderId);
+        if (error) console.error("Error updating pos_sales:", error);
+        else {
+          updated = true;
+          console.log(`pos_sales ${ourOrderId} marked as paid via AppMax webhook`);
+          // Auto-create Tiny order
+          await autoCreateTinyOrder(supabase, ourOrderId, supabaseUrl, supabaseKey);
         }
-      } else {
-        console.log(`Order ${ourOrderId} not found in orders or pos_sales`);
+      } else if (isFailed && (record.status === "online_pending" || record.status === "paid" || record.status === "completed")) {
+        const { error } = await supabase
+          .from("pos_sales")
+          .update({
+            status: "payment_failed",
+            payment_gateway: "appmax",
+            notes: `🔔 Webhook AppMax: ${status} - ${event || "unknown"}`,
+          })
+          .eq("id", ourOrderId);
+        if (error) console.error("Error updating pos_sales to payment_failed:", error);
+        else { updated = true; console.log(`pos_sales ${ourOrderId} marked as payment_failed via AppMax webhook`); }
       }
     }
 
@@ -208,7 +327,7 @@ serve(async (req) => {
     });
 
     return new Response(
-      JSON.stringify({ ok: true, updated }),
+      JSON.stringify({ ok: true, updated, order_id: ourOrderId }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
