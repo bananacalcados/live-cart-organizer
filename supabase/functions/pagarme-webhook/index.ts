@@ -132,15 +132,73 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, skipped: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { data: order } = await supabase
+    // Strategy 1: Search by pagarme_order_id (gateway link field)
+    let order: any = null;
+    let sale: any = null;
+    let orderSource: string | null = null;
+
+    const { data: orderByGateway } = await supabase
       .from("orders")
       .select("id, is_paid, notes")
-      .eq("id", ourOrderId)
+      .eq("pagarme_order_id", String(ourOrderId))
       .maybeSingle();
 
-    let updated = false;
+    if (orderByGateway) {
+      order = orderByGateway;
+      orderSource = "orders";
+      console.log(`[pagarme] Found order ${order.id} via pagarme_order_id`);
+    } else {
+      const { data: saleByGateway } = await supabase
+        .from("pos_sales")
+        .select("id, status")
+        .eq("pagarme_order_id", String(ourOrderId))
+        .maybeSingle();
 
-    if (order) {
+      if (saleByGateway) {
+        sale = saleByGateway;
+        orderSource = "pos_sales";
+        console.log(`[pagarme] Found pos_sale ${sale.id} via pagarme_order_id`);
+      }
+    }
+
+    // Strategy 2 (fallback): Search by internal id
+    if (!orderSource) {
+      const { data: orderById } = await supabase
+        .from("orders")
+        .select("id, is_paid, notes")
+        .eq("id", ourOrderId)
+        .maybeSingle();
+
+      if (orderById) {
+        order = orderById;
+        orderSource = "orders";
+        console.log(`[pagarme] Found order ${order.id} via internal id`);
+      } else {
+        const { data: saleById } = await supabase
+          .from("pos_sales")
+          .select("id, status")
+          .eq("id", ourOrderId)
+          .maybeSingle();
+
+        if (saleById) {
+          sale = saleById;
+          orderSource = "pos_sales";
+          console.log(`[pagarme] Found pos_sale ${sale.id} via internal id`);
+        }
+      }
+    }
+
+    let updated = false;
+    const resolvedOrderId = order?.id || sale?.id || ourOrderId;
+
+    if (orderSource === "orders" && order) {
+      // Guard: already paid
+      if (isPaid && order.is_paid === true) {
+        console.log(`[pagarme] Pedido ${order.id} já confirmado — ignorando.`);
+        return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       if (isPaid && !order.is_paid) {
         const { error } = await supabase
           .from("orders")
@@ -148,52 +206,52 @@ serve(async (req) => {
             is_paid: true,
             paid_at: new Date().toISOString(),
             stage: "paid",
+            pagarme_order_id: String(ourOrderId),
             notes: `${order.notes || ""}\n🔔 Webhook Pagar.me: pago (${transactionId})`.trim(),
           })
-          .eq("id", ourOrderId);
+          .eq("id", order.id);
         if (error) console.error("Error updating orders:", error);
-        else { updated = true; console.log(`orders ${ourOrderId} marked as paid via webhook`); }
+        else { updated = true; console.log(`orders ${order.id} marked as paid via webhook`); }
+      }
+    } else if (orderSource === "pos_sales" && sale) {
+      // Guard: already paid
+      if (isPaid && (sale.status === "paid" || sale.status === "completed")) {
+        console.log(`[pagarme] pos_sale ${sale.id} já confirmado — ignorando.`);
+        return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (isPaid && sale.status !== "paid" && sale.status !== "completed") {
+        const { error } = await supabase
+          .from("pos_sales")
+          .update({
+            status: "paid",
+            paid_at: new Date().toISOString(),
+            payment_gateway: "pagarme",
+            pagarme_order_id: String(ourOrderId),
+            notes: `🔔 Webhook Pagar.me: pago (${transactionId})`,
+          })
+          .eq("id", sale.id);
+        if (error) console.error("Error updating pos_sales:", error);
+        else {
+          updated = true;
+          console.log(`pos_sales ${sale.id} marked as paid via webhook`);
+          await autoCreateTinyOrder(supabase, sale.id, supabaseUrl, supabaseKey);
+        }
+      } else if (isFailed && sale.status === "online_pending") {
+        const { error } = await supabase
+          .from("pos_sales")
+          .update({
+            status: "payment_failed",
+            payment_gateway: "pagarme",
+            notes: `🔔 Webhook Pagar.me: ${status} (${chargeObj?.last_transaction?.acquirer_message || eventType})`,
+          })
+          .eq("id", sale.id);
+        if (error) console.error("Error updating pos_sales to payment_failed:", error);
+        else { updated = true; console.log(`pos_sales ${sale.id} marked as payment_failed via webhook`); }
       }
     } else {
-      const { data: sale } = await supabase
-        .from("pos_sales")
-        .select("id, status")
-        .eq("id", ourOrderId)
-        .maybeSingle();
-
-      if (sale) {
-        if (isPaid && sale.status !== "paid" && sale.status !== "completed") {
-          const { error } = await supabase
-            .from("pos_sales")
-            .update({
-              status: "paid",
-              paid_at: new Date().toISOString(),
-              payment_gateway: "pagarme",
-              notes: `🔔 Webhook Pagar.me: pago (${transactionId})`,
-            })
-            .eq("id", ourOrderId);
-          if (error) console.error("Error updating pos_sales:", error);
-          else {
-            updated = true;
-            console.log(`pos_sales ${ourOrderId} marked as paid via webhook`);
-            // Auto-create Tiny order
-            await autoCreateTinyOrder(supabase, ourOrderId, supabaseUrl, supabaseKey);
-          }
-        } else if (isFailed && sale.status === "online_pending") {
-          const { error } = await supabase
-            .from("pos_sales")
-            .update({
-              status: "payment_failed",
-              payment_gateway: "pagarme",
-              notes: `🔔 Webhook Pagar.me: ${status} (${chargeObj?.last_transaction?.acquirer_message || eventType})`,
-            })
-            .eq("id", ourOrderId);
-          if (error) console.error("Error updating pos_sales to payment_failed:", error);
-          else { updated = true; console.log(`pos_sales ${ourOrderId} marked as payment_failed via webhook`); }
-        }
-      } else {
-        console.log(`Order ${ourOrderId} not found in orders or pos_sales`);
-      }
+      console.log(`Order ${ourOrderId} not found in orders or pos_sales`);
     }
 
     // Log to pos_checkout_attempts
@@ -203,7 +261,7 @@ serve(async (req) => {
       : `Webhook: pagamento ${status} - ${chargeObj?.last_transaction?.acquirer_message || eventType}`;
 
     await supabase.from("pos_checkout_attempts").insert({
-      sale_id: ourOrderId,
+      sale_id: resolvedOrderId,
       payment_method: "credit_card",
       status: logStatus,
       error_message: logMessage,
