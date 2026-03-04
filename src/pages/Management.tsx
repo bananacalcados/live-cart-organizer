@@ -1261,6 +1261,11 @@ export default function Management() {
               <TabsContent value="crm_duplicates" className="space-y-4">
                 <CrmDuplicates />
               </TabsContent>
+
+              {/* Investimentos */}
+              <TabsContent value="investments" className="space-y-4">
+                <InvestmentsDashboard />
+              </TabsContent>
             </Tabs>
           </>
         )}
