@@ -297,7 +297,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editingMessage ? "Editar Mensagem" : "Agendar Mensagem"}</DialogTitle>
+          <DialogTitle>{editingMessage ? "Editar Mensagem" : "Enviar Mensagem"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {/* Templates buttons */}
@@ -512,7 +512,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
           )}
           <Button onClick={handleSubmit} disabled={isSaving} className="gap-1">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            {editingMessage ? "Salvar" : "Agendar"}
+            {editingMessage ? "Salvar" : "Enviar Mensagem"}
           </Button>
         </DialogFooter>
       </DialogContent>
