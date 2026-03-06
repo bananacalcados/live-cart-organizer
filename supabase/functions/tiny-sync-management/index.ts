@@ -59,10 +59,11 @@ serve(async (req) => {
 
     // Build deposit-to-store mapping: maps Tiny "deposito" names to correct store IDs
     const { data: allStoresForMapping } = await supabase
-      .from('pos_stores').select('id, name').eq('is_active', true);
+      .from('pos_stores').select('id, name, tiny_token').eq('is_active', true);
     const depositToStoreId: Record<string, string> = {};
+    // Primeiro passe: lojas SEM token (prioridade baixa)
     for (const s of (allStoresForMapping || [])) {
-      // Map by common patterns: "Perola" -> Loja Perola, "Centro" -> Loja Centro, "Site" -> Tiny Shopify
+      if (s.tiny_token) continue;
       const nameLower = s.name.toLowerCase();
       if (nameLower.includes('shopify') || nameLower.includes('site') || nameLower.includes('online') || nameLower.includes('ecommerce')) {
         depositToStoreId['Site'] = s.id;
@@ -70,7 +71,20 @@ serve(async (req) => {
         depositToStoreId['E-commerce'] = s.id;
         depositToStoreId['Ecommerce'] = s.id;
       }
-      // Also map the store name itself (e.g. "Perola" -> Loja Perola id, "Centro" -> Loja Centro id)
+      const shortName = s.name.replace(/^Loja\s+/i, '').trim();
+      depositToStoreId[shortName] = s.id;
+      depositToStoreId[s.name] = s.id;
+    }
+    // Segundo passe: lojas COM token (prioridade alta — sobrescrevem)
+    for (const s of (allStoresForMapping || [])) {
+      if (!s.tiny_token) continue;
+      const nameLower = s.name.toLowerCase();
+      if (nameLower.includes('shopify') || nameLower.includes('site') || nameLower.includes('online') || nameLower.includes('ecommerce')) {
+        depositToStoreId['Site'] = s.id;
+        depositToStoreId['site'] = s.id;
+        depositToStoreId['E-commerce'] = s.id;
+        depositToStoreId['Ecommerce'] = s.id;
+      }
       const shortName = s.name.replace(/^Loja\s+/i, '').trim();
       depositToStoreId[shortName] = s.id;
       depositToStoreId[s.name] = s.id;
