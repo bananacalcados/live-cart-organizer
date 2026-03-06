@@ -904,7 +904,7 @@ export default function Management() {
     filteredTinyOrders.forEach(s => {
       const day = s.order_date ? format(new Date(s.order_date + 'T12:00:00'), "dd/MM") : "??";
       const cur = map.get(day) || { lojas: 0, shopify: 0 };
-      if (s.store_id === shopifyStoreId) {
+      if (onlineStoreIds.includes(s.store_id)) {
         cur.shopify += Number(s.total);
       } else {
         cur.lojas += Number(s.total);
@@ -912,7 +912,7 @@ export default function Management() {
       map.set(day, cur);
     });
     return [...map.entries()].map(([date, v]) => ({ date, ...v, total: v.lojas + v.shopify })).sort((a, b) => a.date.localeCompare(b.date));
-  }, [filteredTinyOrders, shopifyStoreId]);
+  }, [filteredTinyOrders, onlineStoreIds]);
 
   // Store comparison
   const storeComparison = useMemo(() => {
