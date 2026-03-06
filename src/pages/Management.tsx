@@ -848,11 +848,24 @@ export default function Management() {
   const tinyItemsSold = allTinyItems.reduce((s, v) => s + (v.quantity || 0), 0);
   const tinyDiscount = filteredTinyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
 
-  const SHOPIFY_STORE_NAME = 'Tiny Shopify';
-  const shopifyStoreId = stores.find(s => s.name === SHOPIFY_STORE_NAME)?.id;
+  const onlineStoreIds = useMemo(() =>
+    stores
+      .filter(s => {
+        const n = s.name.toLowerCase();
+        return n.includes('shopify') || n.includes('site') || n.includes('online') || n.includes('ecommerce');
+      })
+      .map(s => s.id),
+    [stores]
+  );
 
-  const filteredPhysicalOrders = useMemo(() => filteredTinyOrders.filter(o => o.store_id !== shopifyStoreId), [filteredTinyOrders, shopifyStoreId]);
-  const filteredShopifyOrders = useMemo(() => filteredTinyOrders.filter(o => o.store_id === shopifyStoreId), [filteredTinyOrders, shopifyStoreId]);
+  const filteredPhysicalOrders = useMemo(() =>
+    filteredTinyOrders.filter(o => !onlineStoreIds.includes(o.store_id)),
+    [filteredTinyOrders, onlineStoreIds]
+  );
+  const filteredShopifyOrders = useMemo(() =>
+    filteredTinyOrders.filter(o => onlineStoreIds.includes(o.store_id)),
+    [filteredTinyOrders, onlineStoreIds]
+  );
 
   const physicalRevenue = filteredPhysicalOrders.reduce((s, v) => s + Number(v.total || 0), 0);
   const shopifyRevenue = filteredShopifyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
