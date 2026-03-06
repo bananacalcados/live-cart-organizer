@@ -848,11 +848,24 @@ export default function Management() {
   const tinyItemsSold = allTinyItems.reduce((s, v) => s + (v.quantity || 0), 0);
   const tinyDiscount = filteredTinyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
 
-  const SHOPIFY_STORE_NAME = 'Tiny Shopify';
-  const shopifyStoreId = stores.find(s => s.name === SHOPIFY_STORE_NAME)?.id;
+  const onlineStoreIds = useMemo(() =>
+    stores
+      .filter(s => {
+        const n = s.name.toLowerCase();
+        return n.includes('shopify') || n.includes('site') || n.includes('online') || n.includes('ecommerce');
+      })
+      .map(s => s.id),
+    [stores]
+  );
 
-  const filteredPhysicalOrders = useMemo(() => filteredTinyOrders.filter(o => o.store_id !== shopifyStoreId), [filteredTinyOrders, shopifyStoreId]);
-  const filteredShopifyOrders = useMemo(() => filteredTinyOrders.filter(o => o.store_id === shopifyStoreId), [filteredTinyOrders, shopifyStoreId]);
+  const filteredPhysicalOrders = useMemo(() =>
+    filteredTinyOrders.filter(o => !onlineStoreIds.includes(o.store_id)),
+    [filteredTinyOrders, onlineStoreIds]
+  );
+  const filteredShopifyOrders = useMemo(() =>
+    filteredTinyOrders.filter(o => onlineStoreIds.includes(o.store_id)),
+    [filteredTinyOrders, onlineStoreIds]
+  );
 
   const physicalRevenue = filteredPhysicalOrders.reduce((s, v) => s + Number(v.total || 0), 0);
   const shopifyRevenue = filteredShopifyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
@@ -891,7 +904,7 @@ export default function Management() {
     filteredTinyOrders.forEach(s => {
       const day = s.order_date ? format(new Date(s.order_date + 'T12:00:00'), "dd/MM") : "??";
       const cur = map.get(day) || { lojas: 0, shopify: 0 };
-      if (s.store_id === shopifyStoreId) {
+      if (onlineStoreIds.includes(s.store_id)) {
         cur.shopify += Number(s.total);
       } else {
         cur.lojas += Number(s.total);
@@ -899,7 +912,7 @@ export default function Management() {
       map.set(day, cur);
     });
     return [...map.entries()].map(([date, v]) => ({ date, ...v, total: v.lojas + v.shopify })).sort((a, b) => a.date.localeCompare(b.date));
-  }, [filteredTinyOrders, shopifyStoreId]);
+  }, [filteredTinyOrders, onlineStoreIds]);
 
   // Store comparison
   const storeComparison = useMemo(() => {
