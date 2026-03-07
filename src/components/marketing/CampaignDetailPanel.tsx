@@ -332,6 +332,12 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     fetchVariables();
   };
 
+  const deleteLink = async (id: string) => {
+    await supabase.from('group_redirect_links').delete().eq('id', id);
+    toast.success("Link excluído");
+    fetchLinks();
+  };
+
   const targetGroups: string[] = campaign?.target_groups || [];
   const groupCount = targetGroups.length;
 
