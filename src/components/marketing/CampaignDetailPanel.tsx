@@ -134,25 +134,13 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
   useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchAllGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchAllGroups]);
 
-  // Polling for pending messages
+  // Auto-refresh messages list to reflect server-side cron dispatches
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const { data: pendingMsgs } = await supabase
-        .from('group_campaign_scheduled_messages')
-        .select('id, scheduled_at')
-        .eq('campaign_id', campaignId)
-        .eq('status', 'pending')
-        .lte('scheduled_at', new Date().toISOString());
-
-      if (pendingMsgs && pendingMsgs.length > 0) {
-        for (const msg of pendingMsgs) {
-          await sendMessage(msg.id, true);
-        }
-        fetchMessages();
-      }
-    }, 60000);
+    const interval = setInterval(() => {
+      fetchMessages();
+    }, 30000);
     return () => clearInterval(interval);
-  }, [campaignId]);
+  }, [fetchMessages]);
 
   const handleAddMessage = async (data: ScheduledMessageData) => {
     const [hours, minutes] = data.scheduledTime.split(':').map(Number);
