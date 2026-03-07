@@ -94,6 +94,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [newGroupPhone, setNewGroupPhone] = useState("");
 
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
@@ -330,18 +331,22 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
   const createGroupForCampaign = async () => {
     if (!newGroupName.trim()) { toast.error("Nome do grupo obrigatório"); return; }
+    const phoneClean = newGroupPhone.replace(/\D/g, '');
+    if (phoneClean.length < 10) { toast.error("Informe pelo menos 1 participante com número válido"); return; }
     setIsCreatingGroup(true);
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
         method: 'POST',
         headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim() }),
+        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim(), phones: [phoneClean] }),
       });
       const result = await res.json();
-      if (result.success && result.groupId) {
+      const newGroupId = result.groupId || result.data?.phone || result.data?.groupId;
+      
+      if (result.success && newGroupId) {
         // Add new group to DB and to campaign
         const { data: newGroup } = await supabase.from('whatsapp_groups').insert({
-          group_id: result.groupId,
+          group_id: newGroupId,
           name: newGroupName.trim(),
           is_vip: true,
           is_active: true,
@@ -358,8 +363,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         toast.success(`Grupo "${newGroupName}" criado e adicionado à campanha!`);
         setShowCreateGroup(false);
         setNewGroupName("");
+        setNewGroupPhone("");
       } else {
-        toast.error(result.error || "Erro ao criar grupo");
+        const errMsg = result.data?.message || result.error || "Erro ao criar grupo";
+        console.error("Create group response:", JSON.stringify(result));
+        toast.error(errMsg);
       }
     } catch { toast.error("Erro ao criar grupo"); }
     finally { setIsCreatingGroup(false); }
@@ -658,9 +666,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           <DialogHeader><DialogTitle>Criar Novo Grupo WhatsApp</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
-              O grupo será criado automaticamente no WhatsApp e adicionado a esta campanha como VIP.
+              O grupo será criado automaticamente no WhatsApp e adicionado a esta campanha como VIP. Você (número conectado) será o admin.
             </p>
             <Input placeholder="Nome do grupo (ex: VIP Banana #11)" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} />
+            <div>
+              <Input placeholder="Nº de 1 participante inicial (ex: 5533999999999)" value={newGroupPhone} onChange={e => setNewGroupPhone(e.target.value)} />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                O WhatsApp exige pelo menos 1 participante além do admin. Pode remover depois.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateGroup(false)}>Cancelar</Button>
