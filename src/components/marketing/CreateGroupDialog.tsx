@@ -87,14 +87,15 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
       );
       const data = await res.json();
 
-      if (!data.success) {
-        toast.error("Erro ao criar grupo: " + (data.error || ""));
+      if (!data.success || (data.data && data.data.success === false)) {
+        toast.error("Erro ao criar grupo: " + (data.data?.message || data.error || "Verifique se adicionou pelo menos 1 participante"));
         return;
       }
 
       const newGroupId = data.groupId || data.data?.phone || data.data?.groupId;
       if (!newGroupId) {
-        toast.error("Grupo criado mas ID não retornado");
+        toast.error("Grupo criado mas ID não retornado. Sincronize os grupos para ver.");
+        setStep("customize");
         return;
       }
 
