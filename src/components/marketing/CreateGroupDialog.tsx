@@ -182,6 +182,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
     setDescription("");
     setPinnedMessage("");
     setBrandContext("");
+    setInitialPhones("");
     setCreatedGroupId(null);
     setStep("create");
     onOpenChange(false);
