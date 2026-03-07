@@ -40,7 +40,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const loadSettings = useCallback(async () => {
     const { data } = await supabase
       .from('group_campaigns')
-      .select('group_name_template, group_photo_url, group_description, group_only_admins_send, group_only_admins_add, group_admin_phones, group_pin_message_id, group_pin_duration')
+      .select('group_name_template, group_photo_url, group_description, group_only_admins_send, group_only_admins_add, group_admin_phones, group_pin_message_text, group_pin_duration')
       .eq('id', campaignId)
       .single();
 
