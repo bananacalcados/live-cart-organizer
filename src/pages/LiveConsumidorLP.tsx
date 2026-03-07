@@ -89,12 +89,18 @@ export default function LiveConsumidorLP() {
       source: 'landing_page',
     }).then(() => {});
 
-    // Fire push permission in background (don't await - don't block redirect)
-    requestPushPermission().catch(() => {});
+    // Store info for push request after group redirect
+    try {
+      sessionStorage.setItem('push_pending', JSON.stringify({
+        name: name.trim(),
+        phone: phone.trim(),
+        campaign: CAMPAIGN_TAG,
+      }));
+    } catch {}
 
     setSubmitted(true);
-    // Redirect faster
-    setTimeout(() => { window.location.href = VIP_REDIRECT; }, 800);
+    // Redirect immediately
+    setTimeout(() => { window.location.href = VIP_REDIRECT; }, 600);
   };
 
   const CD = ({ v, l }: { v: number; l: string }) => (
