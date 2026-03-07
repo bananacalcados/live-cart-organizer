@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { GroupSettingsPanel } from "./GroupSettingsPanel";
 import { CampaignDetailPanel } from "./CampaignDetailPanel";
 import { VipStrategyPanel } from "./VipStrategyPanel";
+import { CreateGroupDialog } from "./CreateGroupDialog";
 
 interface WhatsAppGroup {
   id: string;
@@ -74,6 +75,7 @@ export function GroupsVipManager() {
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [settingsGroup, setSettingsGroup] = useState<WhatsAppGroup | null>(null);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
 
   const fetchGroups = useCallback(async () => {
     setIsLoading(true);
@@ -204,6 +206,9 @@ export function GroupsVipManager() {
             <Button variant="outline" size="sm" onClick={syncGroups} disabled={isSyncing} className="gap-1">
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sincronizar
             </Button>
+            <Button size="sm" onClick={() => setShowCreateGroup(true)} className="gap-1">
+              <Plus className="h-3.5 w-3.5" />Criar Grupo
+            </Button>
           </div>
 
           {isLoading ? (
@@ -331,6 +336,13 @@ export function GroupsVipManager() {
           onOpenChange={open => { if (!open) setSettingsGroup(null); }}
           onUpdate={() => { fetchGroups(); setSettingsGroup(null); }} />
       )}
+
+      {/* CREATE GROUP */}
+      <CreateGroupDialog
+        open={showCreateGroup}
+        onOpenChange={setShowCreateGroup}
+        onCreated={() => { syncGroups(); }}
+      />
     </div>
   );
 }
