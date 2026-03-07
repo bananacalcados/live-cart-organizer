@@ -153,6 +153,11 @@ export default function VipGroupRedirectPage() {
             <p style={{ opacity: .85, margin: '.5rem 0 1rem', fontSize: '.9rem' }}>
               Este link não foi encontrado ou expirou.
             </p>
+            {import.meta.env.DEV && errorDetail && (
+              <p style={{ fontSize: '.75rem', opacity: .6, marginTop: '.5rem', wordBreak: 'break-all' }}>
+                Debug: {errorDetail}
+              </p>
+            )}
           </>
         )}
       </div>
