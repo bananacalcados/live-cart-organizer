@@ -2801,6 +2801,7 @@ export type Database = {
           failed_count: number
           id: string
           media_url: string | null
+          mention_all: boolean
           message_content: string | null
           message_type: string
           poll_max_options: number | null
@@ -2817,6 +2818,7 @@ export type Database = {
           failed_count?: number
           id?: string
           media_url?: string | null
+          mention_all?: boolean
           message_content?: string | null
           message_type?: string
           poll_max_options?: number | null
@@ -2833,6 +2835,7 @@ export type Database = {
           failed_count?: number
           id?: string
           media_url?: string | null
+          mention_all?: boolean
           message_content?: string | null
           message_type?: string
           poll_max_options?: number | null
