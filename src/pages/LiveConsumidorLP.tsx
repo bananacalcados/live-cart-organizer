@@ -30,33 +30,46 @@ export default function LiveConsumidorLP() {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [pushSubscription, setPushSubscription] = useState<any>(null);
+  const [showPushBanner, setShowPushBanner] = useState(false);
+  const [pushDismissed, setPushDismissed] = useState(false);
 
-  // Request push permission on page load (before form fill)
+  // Check if push is available and not yet granted
   useEffect(() => {
-    const initPush = async () => {
-      try {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-        const registration = await navigator.serviceWorker.register('/push-sw.js');
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const res = await fetch(`${supabaseUrl}/functions/v1/push-notifications?action=vapid-public-key`, {
-          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
-        });
-        const { publicKey } = await res.json();
-        if (!publicKey) return;
-        const padding = '='.repeat((4 - publicKey.length % 4) % 4);
-        const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawKey = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: rawKey,
-        });
-        setPushSubscription(subscription.toJSON());
-      } catch (err) {
-        console.log('Push permission denied or unavailable:', err);
-      }
-    };
-    initPush();
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (Notification.permission === 'granted' || Notification.permission === 'denied') return;
+    // Show custom banner after short delay
+    const t = setTimeout(() => setShowPushBanner(true), 1500);
+    return () => clearTimeout(t);
   }, []);
+
+  const handleAcceptPush = async () => {
+    setShowPushBanner(false);
+    setPushDismissed(true);
+    try {
+      const registration = await navigator.serviceWorker.register('/push-sw.js');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/push-notifications?action=vapid-public-key`, {
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+      });
+      const { publicKey } = await res.json();
+      if (!publicKey) return;
+      const padding = '='.repeat((4 - publicKey.length % 4) % 4);
+      const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawKey = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: rawKey,
+      });
+      setPushSubscription(subscription.toJSON());
+    } catch (err) {
+      console.log('Push permission denied or unavailable:', err);
+    }
+  };
+
+  const handleDismissPush = () => {
+    setShowPushBanner(false);
+    setPushDismissed(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +135,58 @@ export default function LiveConsumidorLP() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       color: '#fff',
     }}>
+      {/* Push notification custom banner */}
+      {showPushBanner && !pushDismissed && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0,
+          zIndex: 9999,
+          padding: '12px 16px',
+          background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
+          borderBottom: '2px solid #d4a054',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          animation: 'slideDown 0.4s ease-out',
+        }}>
+          <span style={{ fontSize: 28 }}>🎁</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#d4a054' }}>
+              Aceite as notificações e concorra a sorteios durante a live! 🎉
+            </p>
+          </div>
+          <button
+            onClick={handleAcceptPush}
+            style={{
+              background: '#0d6e3a',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              padding: '8px 16px',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Ativar 🔔
+          </button>
+          <button
+            onClick={handleDismissPush}
+            style={{
+              background: 'transparent',
+              color: 'rgba(255,255,255,0.5)',
+              border: 'none',
+              fontSize: 18,
+              cursor: 'pointer',
+              padding: '4px 8px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      <style>{`@keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }`}</style>
       {/* Full-screen background image */}
       <img
         src="/images/live-hero.webp"
