@@ -181,8 +181,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in redirect:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Erro</title>
+      <style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#075e54;color:white;text-align:center}.container{padding:2rem}a{color:#25D366;text-decoration:underline}</style>
+      </head><body><div class="container"><h2>❌ Ocorreu um erro</h2><p>Não foi possível processar o redirecionamento. Tente novamente.</p><p><a href="javascript:location.reload()">Tentar novamente</a></p></div></body></html>`,
+      { status: 500, headers: { 'Content-Type': 'text/html' } }
     );
   }
 });
