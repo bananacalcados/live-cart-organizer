@@ -181,9 +181,9 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in redirect:', error);
     return new Response(
-      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Erro</title>
-      <style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#075e54;color:white;text-align:center}.container{padding:2rem}a{color:#25D366;text-decoration:underline}</style>
-      </head><body><div class="container"><h2>❌ Ocorreu um erro</h2><p>Não foi possível processar o redirecionamento. Tente novamente.</p><p><a href="javascript:location.reload()">Tentar novamente</a></p></div></body></html>`,
+      `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Erro</title>
+      <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;background:#075e54;color:white;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}.card{background:rgba(0,0,0,.25);border-radius:16px;padding:2rem;text-align:center;max-width:360px;width:100%}h2{font-size:1.1rem;margin-bottom:.75rem}p{font-size:.9rem;opacity:.85;margin-bottom:1.2rem;line-height:1.5}.btn{display:inline-block;background:#25D366;color:white;text-decoration:none;padding:.75rem 1.5rem;border-radius:50px;font-weight:600;font-size:.95rem;cursor:pointer;border:none;width:100%;max-width:260px}</style>
+      </head><body><div class="card"><h2>⚠️ Erro temporário</h2><p>Não foi possível processar o link agora. Tente novamente em instantes.</p><button class="btn" onclick="location.reload()">Tentar novamente</button></div></body></html>`,
       { status: 500, headers: { 'Content-Type': 'text/html' } }
     );
   }
