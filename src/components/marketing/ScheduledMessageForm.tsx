@@ -549,13 +549,16 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                         className="w-16 h-16 object-cover rounded shrink-0" />
                       <div className="flex-1 space-y-1">
                         <p className="text-[10px] text-muted-foreground">Foto {i + 1}</p>
-                        <Input placeholder="Legenda desta foto..." value={item.caption}
-                          onChange={e => {
-                            const next = [...mediaItems];
-                            next[i] = { ...next[i], caption: e.target.value };
-                            setMediaItems(next);
-                          }}
-                          className="h-7 text-xs" />
+                        <div className="flex items-center gap-1">
+                          <Input placeholder="Legenda desta foto..." value={item.caption}
+                            onChange={e => {
+                              const next = [...mediaItems];
+                              next[i] = { ...next[i], caption: e.target.value };
+                              setMediaItems(next);
+                            }}
+                            className="h-7 text-xs flex-1" />
+                          <EmojiPickerButton onEmojiSelect={(emoji) => insertEmojiInCaption(emoji, i)} className="h-7 w-7 shrink-0" />
+                        </div>
                       </div>
                       <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
                         onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}>
