@@ -333,28 +333,63 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const campaignGroups = allGroups.filter(g => targetGroups.includes(g.id));
   const allGroupsFull = campaignGroups.length > 0 && campaignGroups.every(g => g.participant_count >= (g.max_participants || 1024));
 
+  const loadZapiContacts = async () => {
+    if (zapiContactsLoaded) return;
+    setZapiContactsLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-get-contacts`, {
+        method: 'POST',
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.success && data.contacts) {
+        setZapiContacts(data.contacts);
+        setZapiContactsLoaded(true);
+      }
+    } catch { /* ignore */ }
+    finally { setZapiContactsLoading(false); }
+  };
+
+  useEffect(() => {
+    if (showCreateGroup && !zapiContactsLoaded) loadZapiContacts();
+  }, [showCreateGroup]);
+
+  const filteredZapiContacts = useMemo(() => {
+    if (!contactSearchQuery.trim()) return zapiContacts.slice(0, 50);
+    const q = contactSearchQuery.toLowerCase();
+    return zapiContacts.filter(c => c.name.toLowerCase().includes(q) || c.short.toLowerCase().includes(q) || c.phone.includes(q)).slice(0, 50);
+  }, [zapiContacts, contactSearchQuery]);
+
+  const toggleGroupContact = (contact: { phone: string; name: string; short: string }) => {
+    setSelectedGroupContacts(prev => {
+      const exists = prev.find(c => c.phone === contact.phone);
+      if (exists) return prev.filter(c => c.phone !== contact.phone);
+      return [...prev, contact];
+    });
+  };
+
   const createGroupForCampaign = async () => {
     if (!newGroupName.trim()) { toast.error("Nome do grupo obrigatório"); return; }
-    const phoneClean = newGroupPhone.replace(/\D/g, '');
-    if (phoneClean.length < 10) { toast.error("Informe pelo menos 1 participante com número válido"); return; }
+    if (selectedGroupContacts.length === 0) { toast.error("Selecione pelo menos 1 participante"); return; }
     setIsCreatingGroup(true);
     try {
+      const phones = selectedGroupContacts.map(c => c.phone);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
         method: 'POST',
         headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim(), phones: [phoneClean] }),
+        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim(), phones }),
       });
       const result = await res.json();
       const newGroupId = result.groupId || result.data?.phone || result.data?.groupId;
       
       if (result.success && newGroupId) {
-        // Add new group to DB and to campaign
         const { data: newGroup } = await supabase.from('whatsapp_groups').insert({
           group_id: newGroupId,
           name: newGroupName.trim(),
           is_vip: true,
           is_active: true,
-          participant_count: 1,
+          participant_count: selectedGroupContacts.length,
           max_participants: 1024,
         }).select().single();
 
@@ -367,7 +402,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         toast.success(`Grupo "${newGroupName}" criado e adicionado à campanha!`);
         setShowCreateGroup(false);
         setNewGroupName("");
-        setNewGroupPhone("");
+        setSelectedGroupContacts([]);
+        setContactSearchQuery("");
       } else {
         const errMsg = result.data?.message || result.error || "Erro ao criar grupo";
         console.error("Create group response:", JSON.stringify(result));
