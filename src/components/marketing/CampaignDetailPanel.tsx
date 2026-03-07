@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay } from "date-fns";
@@ -94,7 +94,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
-  const [newGroupPhone, setNewGroupPhone] = useState("");
+  const [zapiContacts, setZapiContacts] = useState<{ phone: string; name: string; short: string }[]>([]);
+  const [zapiContactsLoading, setZapiContactsLoading] = useState(false);
+  const [zapiContactsLoaded, setZapiContactsLoaded] = useState(false);
+  const [selectedGroupContacts, setSelectedGroupContacts] = useState<{ phone: string; name: string; short: string }[]>([]);
+  const [contactSearchQuery, setContactSearchQuery] = useState("");
 
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
@@ -329,28 +333,63 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const campaignGroups = allGroups.filter(g => targetGroups.includes(g.id));
   const allGroupsFull = campaignGroups.length > 0 && campaignGroups.every(g => g.participant_count >= (g.max_participants || 1024));
 
+  const loadZapiContacts = async () => {
+    if (zapiContactsLoaded) return;
+    setZapiContactsLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-get-contacts`, {
+        method: 'POST',
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.success && data.contacts) {
+        setZapiContacts(data.contacts);
+        setZapiContactsLoaded(true);
+      }
+    } catch { /* ignore */ }
+    finally { setZapiContactsLoading(false); }
+  };
+
+  useEffect(() => {
+    if (showCreateGroup && !zapiContactsLoaded) loadZapiContacts();
+  }, [showCreateGroup]);
+
+  const filteredZapiContacts = useMemo(() => {
+    if (!contactSearchQuery.trim()) return zapiContacts.slice(0, 50);
+    const q = contactSearchQuery.toLowerCase();
+    return zapiContacts.filter(c => c.name.toLowerCase().includes(q) || c.short.toLowerCase().includes(q) || c.phone.includes(q)).slice(0, 50);
+  }, [zapiContacts, contactSearchQuery]);
+
+  const toggleGroupContact = (contact: { phone: string; name: string; short: string }) => {
+    setSelectedGroupContacts(prev => {
+      const exists = prev.find(c => c.phone === contact.phone);
+      if (exists) return prev.filter(c => c.phone !== contact.phone);
+      return [...prev, contact];
+    });
+  };
+
   const createGroupForCampaign = async () => {
     if (!newGroupName.trim()) { toast.error("Nome do grupo obrigatório"); return; }
-    const phoneClean = newGroupPhone.replace(/\D/g, '');
-    if (phoneClean.length < 10) { toast.error("Informe pelo menos 1 participante com número válido"); return; }
+    if (selectedGroupContacts.length === 0) { toast.error("Selecione pelo menos 1 participante"); return; }
     setIsCreatingGroup(true);
     try {
+      const phones = selectedGroupContacts.map(c => c.phone);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
         method: 'POST',
         headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim(), phones: [phoneClean] }),
+        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim(), phones }),
       });
       const result = await res.json();
       const newGroupId = result.groupId || result.data?.phone || result.data?.groupId;
       
       if (result.success && newGroupId) {
-        // Add new group to DB and to campaign
         const { data: newGroup } = await supabase.from('whatsapp_groups').insert({
           group_id: newGroupId,
           name: newGroupName.trim(),
           is_vip: true,
           is_active: true,
-          participant_count: 1,
+          participant_count: selectedGroupContacts.length,
           max_participants: 1024,
         }).select().single();
 
@@ -363,7 +402,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         toast.success(`Grupo "${newGroupName}" criado e adicionado à campanha!`);
         setShowCreateGroup(false);
         setNewGroupName("");
-        setNewGroupPhone("");
+        setSelectedGroupContacts([]);
+        setContactSearchQuery("");
       } else {
         const errMsg = result.data?.message || result.error || "Erro ao criar grupo";
         console.error("Create group response:", JSON.stringify(result));
@@ -662,17 +702,83 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
       {/* CREATE GROUP DIALOG */}
       <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Criar Novo Grupo WhatsApp</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
               O grupo será criado automaticamente no WhatsApp e adicionado a esta campanha como VIP. Você (número conectado) será o admin.
             </p>
             <Input placeholder="Nome do grupo (ex: VIP Banana #11)" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} />
-            <div>
-              <Input placeholder="Nº de 1 participante inicial (ex: 5533999999999)" value={newGroupPhone} onChange={e => setNewGroupPhone(e.target.value)} />
-              <p className="text-[10px] text-muted-foreground mt-1">
-                O WhatsApp exige pelo menos 1 participante além do admin. Pode remover depois.
+            
+            {/* Contact picker */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium flex items-center gap-1">
+                <Users className="h-3.5 w-3.5" /> Participantes iniciais *
+              </Label>
+
+              {selectedGroupContacts.length > 0 && (
+                <div className="flex flex-wrap gap-1 p-2 rounded-md border bg-muted/30">
+                  {selectedGroupContacts.map(c => (
+                    <Badge key={c.phone} variant="secondary" className="gap-1 text-xs pr-1">
+                      {c.short || c.name}
+                      <button onClick={() => toggleGroupContact(c)} className="ml-0.5 hover:text-destructive">
+                        <XCircle className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar contato por nome ou número..."
+                  value={contactSearchQuery}
+                  onChange={(e) => setContactSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              <ScrollArea className="h-[180px] rounded-md border">
+                {zapiContactsLoading ? (
+                  <div className="flex items-center justify-center h-full p-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground">Carregando contatos...</span>
+                  </div>
+                ) : filteredZapiContacts.length === 0 ? (
+                  <div className="flex items-center justify-center h-full p-4">
+                    <span className="text-sm text-muted-foreground">
+                      {contactSearchQuery ? "Nenhum contato encontrado" : "Nenhum contato salvo"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-1">
+                    {filteredZapiContacts.map(c => {
+                      const isSelected = selectedGroupContacts.some(sc => sc.phone === c.phone);
+                      return (
+                        <button
+                          key={c.phone}
+                          onClick={() => toggleGroupContact(c)}
+                          className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between hover:bg-accent transition-colors ${
+                            isSelected ? 'bg-primary/10 border border-primary/30' : ''
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{c.short || c.name}</p>
+                            <p className="text-xs text-muted-foreground">{c.phone}</p>
+                          </div>
+                          {isSelected && (
+                            <Badge variant="default" className="text-[10px] flex-shrink-0">✓</Badge>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+
+              <p className="text-[10px] text-muted-foreground">
+                {zapiContacts.length} contatos · {selectedGroupContacts.length} selecionado(s)
               </p>
             </div>
           </div>
