@@ -66,6 +66,7 @@ const App = () => (
               <Route path="/dose-tripla" element={<DoseTriplaCatalog />} />
               <Route path="/catalogo/:slug" element={<DoseTriplaCatalog />} />
               <Route path="/l/:slug" element={<LinkPageView />} />
+              <Route path="/vip/:slug" element={<VipGroupRedirectPage />} />
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
@@ -81,8 +82,7 @@ const App = () => (
               <Route path="/management" element={<ProtectedRoute requiredModule="management"><Management /></ProtectedRoute>} />
               <Route path="/admin" element={<ProtectedRoute requiredModule="admin"><Admin /></ProtectedRoute>} />
 
-              {/* VIP redirect — catch-all slug MUST be just before "*" */}
-              <Route path="/:slug" element={<VipGroupRedirectPage />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
