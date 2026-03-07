@@ -828,7 +828,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
               try {
                 const data: ScheduledMessageData = {
                   messageType, messageContent, mediaUrl,
-                  mediaItems: messageType === 'image' ? mediaItems : [],
+                  mediaItems: multiMediaTypes.includes(messageType) ? mediaItems : [],
                   pollOptions: pollOptions.filter(o => o.trim()),
                   pollMaxOptions: pollAllowMultiple ? 0 : 1,
                   scheduledAt: new Date(), scheduledTime: format(new Date(), 'HH:mm'), sendSpeed,
