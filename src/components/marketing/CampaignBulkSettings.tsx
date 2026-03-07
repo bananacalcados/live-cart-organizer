@@ -1,8 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Loader2, Image, FileText, Shield, UserPlus, Type, Upload, Pin, Crown, Users
+  ArrowLeft, Loader2, Image, FileText, Shield, Type, Upload, Pin, Crown, Save, CheckCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface CampaignBulkSettingsProps {
   campaignId: string;
@@ -20,14 +20,10 @@ interface CampaignBulkSettingsProps {
   onBack: () => void;
 }
 
-interface Participant {
-  phone: string;
-  name?: string;
-  isAdmin?: boolean;
-}
-
 export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: CampaignBulkSettingsProps) {
   const [isApplying, setIsApplying] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [bulkName, setBulkName] = useState("");
   const [bulkDescription, setBulkDescription] = useState("");
   const [bulkPhotoUrl, setBulkPhotoUrl] = useState("");
@@ -38,8 +34,51 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const [pinMessageId, setPinMessageId] = useState("");
   const [pinDuration, setPinDuration] = useState("7_days");
   const [promotePhone, setPromotePhone] = useState("");
-  const [groupParticipants, setGroupParticipants] = useState<Record<string, Participant[]>>({});
-  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
+  const [adminPhones, setAdminPhones] = useState<string[]>([]);
+
+  // Load saved settings from campaign
+  const loadSettings = useCallback(async () => {
+    const { data } = await supabase
+      .from('group_campaigns')
+      .select('group_name_template, group_photo_url, group_description, group_only_admins_send, group_only_admins_add, group_admin_phones, group_pin_message_id, group_pin_duration')
+      .eq('id', campaignId)
+      .single();
+
+    if (data) {
+      setBulkName((data as any).group_name_template || "");
+      setBulkPhotoUrl((data as any).group_photo_url || "");
+      setBulkDescription((data as any).group_description || "");
+      setOnlyAdminsSend((data as any).group_only_admins_send || false);
+      setOnlyAdminsAdd((data as any).group_only_admins_add || false);
+      setAdminPhones((data as any).group_admin_phones || []);
+      setPinMessageId((data as any).group_pin_message_id || "");
+      setPinDuration((data as any).group_pin_duration || "7_days");
+    }
+    setIsLoaded(true);
+  }, [campaignId]);
+
+  useEffect(() => { loadSettings(); }, [loadSettings]);
+
+  // Save all settings to campaign
+  const saveSettings = async () => {
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('group_campaigns').update({
+        group_name_template: bulkName || null,
+        group_photo_url: bulkPhotoUrl || null,
+        group_description: bulkDescription || null,
+        group_only_admins_send: onlyAdminsSend,
+        group_only_admins_add: onlyAdminsAdd,
+        group_admin_phones: adminPhones,
+        group_pin_message_id: pinMessageId || null,
+        group_pin_duration: pinDuration,
+      } as any).eq('id', campaignId);
+
+      if (error) throw error;
+      toast.success("Configurações salvas! Novos grupos herdarão essas configurações.");
+    } catch { toast.error("Erro ao salvar configurações"); }
+    finally { setIsSaving(false); }
+  };
 
   const applyToAllGroups = async (action: string, payload: Record<string, unknown>) => {
     setIsApplying(action);
@@ -124,10 +163,27 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
         await new Promise(r => setTimeout(r, 1000));
       }
 
+      // Save this phone to admin list if not already there
+      if (!adminPhones.includes(cleanPhone)) {
+        const newAdmins = [...adminPhones, cleanPhone];
+        setAdminPhones(newAdmins);
+        await supabase.from('group_campaigns').update({
+          group_admin_phones: newAdmins,
+        } as any).eq('id', campaignId);
+      }
+
       toast.success(`Admin promovido: ${success}/${groups.length} grupos${failed > 0 ? ` (${failed} falharam)` : ''}`);
       setPromotePhone("");
     } catch { toast.error("Erro ao promover admin"); }
     finally { setIsApplying(null); }
+  };
+
+  const handleRemoveAdmin = (phone: string) => {
+    const newAdmins = adminPhones.filter(p => p !== phone);
+    setAdminPhones(newAdmins);
+    supabase.from('group_campaigns').update({
+      group_admin_phones: newAdmins,
+    } as any).eq('id', campaignId);
   };
 
   const handlePinInAllGroups = async () => {
@@ -159,10 +215,11 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       }
 
       toast.success(`Mensagem fixada: ${success}/${groups.length} grupos${failed > 0 ? ` (${failed} falharam)` : ''}`);
-      setPinMessageId("");
     } catch { toast.error("Erro ao fixar mensagem"); }
     finally { setIsApplying(null); }
   };
+
+  if (!isLoaded) return null;
 
   return (
     <div className="space-y-4">
@@ -171,6 +228,13 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
         <h3 className="text-sm font-semibold">Configurar Grupos em Massa</h3>
         <span className="text-xs text-muted-foreground">({targetGroups.length} grupos)</span>
       </div>
+
+      <Alert className="border-primary/30 bg-primary/5">
+        <CheckCircle className="h-4 w-4 text-primary" />
+        <AlertDescription className="text-xs">
+          As configurações são <strong>salvas automaticamente</strong> na campanha. Novos grupos criados automaticamente herdarão nome, foto, descrição, permissões e admins.
+        </AlertDescription>
+      </Alert>
 
       <div className="space-y-3">
         {/* Rename */}
@@ -181,11 +245,13 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           <CardContent className="p-3 pt-0 space-y-2">
             <Input placeholder="Nome base (ex: VIP Banana)" value={bulkName} onChange={e => setBulkName(e.target.value)} />
             <p className="text-[10px] text-muted-foreground">Cada grupo receberá "#1", "#2"... após o nome</p>
-            <Button size="sm" disabled={!bulkName.trim() || isApplying === 'name'} className="gap-1"
-              onClick={() => applyToAllGroups('name', { action: 'update-name' })}>
-              {isApplying === 'name' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
-              Aplicar Nome
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={!bulkName.trim() || isApplying === 'name'} className="gap-1"
+                onClick={() => applyToAllGroups('name', { action: 'update-name' })}>
+                {isApplying === 'name' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
+                Aplicar Nome
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -301,18 +367,39 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
         {/* Promote Admin */}
         <Card>
           <CardHeader className="p-3 pb-2">
-            <CardTitle className="text-xs flex items-center gap-1"><Crown className="h-3.5 w-3.5" /> Promover Admin em Todos os Grupos</CardTitle>
+            <CardTitle className="text-xs flex items-center gap-1"><Crown className="h-3.5 w-3.5" /> Admins dos Grupos</CardTitle>
           </CardHeader>
           <CardContent className="p-3 pt-0 space-y-2">
-            <Input placeholder="Número do telefone (ex: 5511999999999)" value={promotePhone} onChange={e => setPromotePhone(e.target.value)} />
-            <p className="text-[10px] text-muted-foreground">O número será promovido a admin em todos os grupos da campanha (precisa ser participante)</p>
-            <Button size="sm" disabled={!promotePhone.trim() || isApplying === 'promote'} className="gap-1"
-              onClick={handlePromoteInAllGroups}>
-              {isApplying === 'promote' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Crown className="h-3.5 w-3.5" />}
-              Promover Admin
-            </Button>
+            {adminPhones.length > 0 && (
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Admins salvos (serão adicionados em novos grupos):</Label>
+                <div className="flex flex-wrap gap-1">
+                  {adminPhones.map(phone => (
+                    <Badge key={phone} variant="secondary" className="text-[10px] gap-1 cursor-pointer hover:bg-destructive/20"
+                      onClick={() => handleRemoveAdmin(phone)}>
+                      {phone} ✕
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input placeholder="Número (ex: 5511999999999)" value={promotePhone} onChange={e => setPromotePhone(e.target.value)} className="flex-1" />
+              <Button size="sm" disabled={!promotePhone.trim() || isApplying === 'promote'} className="gap-1"
+                onClick={handlePromoteInAllGroups}>
+                {isApplying === 'promote' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Crown className="h-3.5 w-3.5" />}
+                Promover
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">Promove o número a admin em todos os grupos e salva para futuros grupos</p>
           </CardContent>
         </Card>
+
+        {/* Save All */}
+        <Button onClick={saveSettings} disabled={isSaving} className="w-full gap-2">
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Salvar Configurações da Campanha
+        </Button>
       </div>
     </div>
   );
