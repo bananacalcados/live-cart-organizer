@@ -360,11 +360,14 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
 
   const selectShopifyProduct = (product: ShopifyProduct, imageUrl: string) => {
     if (shopifySendMode === 'photo_only') {
-      setMessageType('image');
-      setMediaUrl(imageUrl);
-      setMediaMode('shopify');
+      if (messageType === 'image' && mediaItems.length < 10) {
+        setMediaItems(prev => [...prev, { url: imageUrl, caption: '' }]);
+      } else {
+        setMessageType('image');
+        setMediaItems([{ url: imageUrl, caption: '' }]);
+      }
       setShowShopifyPicker(false);
-      toast.success("Foto do produto selecionada!");
+      toast.success("Foto do produto adicionada!");
     } else {
       // Send product link
       const handle = product.node.handle;
