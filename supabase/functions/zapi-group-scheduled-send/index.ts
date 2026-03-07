@@ -131,6 +131,7 @@ serve(async (req) => {
         let endpoint = 'zapi-send-group-message';
         const body: Record<string, unknown> = {
           groupId: group.group_id,
+          mentionAll: msg.mention_all || false,
         };
 
         // Apply variable substitution to message content

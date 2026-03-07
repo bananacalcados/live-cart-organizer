@@ -33,6 +33,7 @@ export interface ScheduledMessageData {
   scheduledAt: Date;
   scheduledTime: string;
   sendSpeed: string;
+  mentionAll: boolean;
 }
 
 interface EditingMessage {
@@ -82,6 +83,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
   const [scheduledTime, setScheduledTime] = useState("12:00");
   const [sendSpeed, setSendSpeed] = useState("normal");
+  const [mentionAll, setMentionAll] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -142,7 +144,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     setPollOptions(["", ""]); setMessageType("text");
     setMediaMode("url"); setTemplateName("");
     setAudioPreviewUrl(null); setIsPlayingPreview(false);
-    setMediaItems([]);
+    setMediaItems([]); setMentionAll(false);
   };
 
   const insertVariable = (varName: string) => {
@@ -431,6 +433,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
         pollOptions: pollOptions.filter(o => o.trim()),
         pollMaxOptions: pollAllowMultiple ? 0 : 1,
         scheduledAt: scheduledDate, scheduledTime, sendSpeed,
+        mentionAll,
       };
       if (editingMessage && onUpdate) {
         await onUpdate(editingMessage.id, data);
@@ -817,6 +820,15 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
               </SelectContent>
             </Select>
           </div>
+
+          {/* Mention All */}
+          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+            <div>
+              <Label className="text-xs font-medium">📢 Marcar todos os participantes</Label>
+              <p className="text-[10px] text-muted-foreground">Todos receberão notificação da mensagem</p>
+            </div>
+            <Switch checked={mentionAll} onCheckedChange={setMentionAll} />
+          </div>
         </div>
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
@@ -832,6 +844,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                   pollOptions: pollOptions.filter(o => o.trim()),
                   pollMaxOptions: pollAllowMultiple ? 0 : 1,
                   scheduledAt: new Date(), scheduledTime: format(new Date(), 'HH:mm'), sendSpeed,
+                  mentionAll,
                 };
                 await onSendNow(data);
                 resetForm();

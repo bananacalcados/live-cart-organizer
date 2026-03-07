@@ -165,6 +165,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           media_url: item.url,
           scheduled_at: itemTime.toISOString(),
           send_speed: data.sendSpeed,
+          mention_all: data.mentionAll,
         });
         if (error) throw error;
       }
@@ -179,6 +180,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
         scheduled_at: scheduledAt.toISOString(),
         send_speed: data.sendSpeed,
+        mention_all: data.mentionAll,
       });
       if (error) throw error;
       toast.success("Mensagem agendada!");
@@ -200,6 +202,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           media_url: item.url,
           scheduled_at: now.toISOString(),
           send_speed: data.sendSpeed,
+          mention_all: data.mentionAll,
         }).select().single();
         if (error) throw error;
         await sendMessage(inserted.id);
@@ -214,6 +217,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
         scheduled_at: now.toISOString(),
         send_speed: data.sendSpeed,
+        mention_all: data.mentionAll,
       }).select().single();
       if (error) throw error;
       await sendMessage(inserted.id);
@@ -234,6 +238,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
+      mention_all: data.mentionAll,
     }).eq('id', id);
 
     if (error) throw error;

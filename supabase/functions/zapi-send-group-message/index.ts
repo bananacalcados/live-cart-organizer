@@ -12,6 +12,7 @@ interface SendGroupRequest {
   type?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'poll';
   mediaUrl?: string;
   caption?: string;
+  mentionAll?: boolean;
   // For campaign bulk sends
   campaignId?: string;
   groupDbId?: string; // UUID from whatsapp_groups table
@@ -35,7 +36,7 @@ serve(async (req) => {
     }
 
     const reqBody = await req.json();
-    const { groupId, message, type = 'text', mediaUrl, caption, campaignId, groupDbId }: SendGroupRequest = reqBody;
+    const { groupId, message, type = 'text', mediaUrl, caption, campaignId, groupDbId, mentionAll }: SendGroupRequest = reqBody;
 
     if (!groupId) {
       return new Response(
@@ -48,9 +49,31 @@ serve(async (req) => {
     let endpoint: string;
     let body: Record<string, unknown>;
 
+    // If mentionAll, fetch participants first
+    let mentionedPhones: string[] = [];
+    if (mentionAll) {
+      try {
+        const partRes = await fetch(`${baseUrl}/group-participants/${groupId}`, {
+          method: 'GET',
+          headers: { 'Client-Token': clientToken, 'Content-Type': 'application/json' },
+        });
+        const partData = await partRes.json();
+        const participants = Array.isArray(partData) ? partData : (partData.participants || []);
+        mentionedPhones = participants.map((p: any) => {
+          const phone = p.phone || (p.id ? p.id.replace('@c.us', '') : '');
+          return phone;
+        }).filter(Boolean);
+        console.log(`Mention all: ${mentionedPhones.length} participants`);
+      } catch (e) {
+        console.error('Error fetching participants for mention:', e);
+      }
+    }
     if (type === 'text') {
       endpoint = `${baseUrl}/send-text`;
       body = { phone: groupId, message: message || '' };
+      if (mentionedPhones.length > 0) {
+        body.mentioned = mentionedPhones;
+      }
     } else if (type === 'poll') {
       const pollOptions = (reqBody as any).pollOptions;
       if (!pollOptions || !Array.isArray(pollOptions) || pollOptions.length < 2) {
@@ -70,9 +93,15 @@ serve(async (req) => {
     } else if (type === 'image' && mediaUrl) {
       endpoint = `${baseUrl}/send-image`;
       body = { phone: groupId, image: mediaUrl, caption: caption || message || '' };
+      if (mentionedPhones.length > 0) {
+        body.mentioned = mentionedPhones;
+      }
     } else if (type === 'video' && mediaUrl) {
       endpoint = `${baseUrl}/send-video`;
       body = { phone: groupId, video: mediaUrl, caption: caption || message || '' };
+      if (mentionedPhones.length > 0) {
+        body.mentioned = mentionedPhones;
+      }
     } else if (type === 'audio' && mediaUrl) {
       endpoint = `${baseUrl}/send-audio`;
       body = { phone: groupId, audio: mediaUrl };
