@@ -5,7 +5,7 @@ import { CheckCircle2 } from "lucide-react";
 const VIP_REDIRECT = '/vip/liveconsumidor';
 const CAMPAIGN_TAG = 'live-consumidor-mar26';
 
-const LIVE_DATE = new Date('2026-03-14T19:00:00-03:00');
+const LIVE_DATE = new Date('2026-03-14T15:00:00-03:00');
 
 function useCountdown(target: Date) {
   const [now, setNow] = useState(Date.now());
@@ -108,12 +108,12 @@ export default function LiveConsumidorLP() {
             fontSize: 10, fontWeight: 700,
             padding: '3px 10px', borderRadius: 50,
             letterSpacing: 1.2, textTransform: 'uppercase',
-            marginBottom: 8,
+            marginBottom: 6,
           }}>
-            {isLive ? '🔴 AO VIVO' : '📅 14 e 15 de Março'}
+            {isLive ? '🔴 AO VIVO AGORA' : '📅 14 e 15 de Março • 15h'}
           </div>
           <h1 style={{
-            fontSize: 22, fontWeight: 800, lineHeight: 1.15, margin: 0,
+            fontSize: 21, fontWeight: 800, lineHeight: 1.15, margin: '0 0 4px',
             textShadow: '0 2px 12px rgba(0,0,0,0.5)',
           }}>
             Live Shopping<br />Dia do Consumidor
@@ -133,10 +133,10 @@ export default function LiveConsumidorLP() {
           gap: 6, marginBottom: 14,
         }}>
           {[
-            { emoji: '🏷️', text: 'Até 20% OFF' },
-            { emoji: '🚚', text: 'Frete R$19,99' },
+            { emoji: '🦶', text: 'Ortopédicos originais' },
+            { emoji: '💰', text: 'De R$99 a R$299' },
+            { emoji: '🚚', text: 'Frete R$19,99 Brasil' },
             { emoji: '🎁', text: 'Sorteios ao vivo' },
-            { emoji: '🔄', text: '7 dias troca' },
           ].map((b, i) => (
             <div key={i} style={{
               background: 'rgba(255,255,255,0.08)',
