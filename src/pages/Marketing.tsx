@@ -1077,7 +1077,11 @@ export default function Marketing() {
             <LinkPageManager />
           </TabsContent>
 
-          {/* ── CALENDÁRIO ── */}
+          {/* ── PUSH NOTIFICATIONS ── */}
+          <TabsContent value="push_notifications" className="space-y-4">
+            <PushNotificationPanel />
+          </TabsContent>
+
           <TabsContent value="calendar" className="space-y-4">
             <MarketingCalendar />
           </TabsContent>
