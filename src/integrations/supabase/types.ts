@@ -2866,6 +2866,14 @@ export type Database = {
           created_by: string | null
           error_log: Json | null
           failed_count: number | null
+          group_admin_phones: string[] | null
+          group_description: string | null
+          group_name_template: string | null
+          group_only_admins_add: boolean
+          group_only_admins_send: boolean
+          group_photo_url: string | null
+          group_pin_duration: string | null
+          group_pin_message_id: string | null
           id: string
           is_deep_link: boolean
           media_url: string | null
@@ -2893,6 +2901,14 @@ export type Database = {
           created_by?: string | null
           error_log?: Json | null
           failed_count?: number | null
+          group_admin_phones?: string[] | null
+          group_description?: string | null
+          group_name_template?: string | null
+          group_only_admins_add?: boolean
+          group_only_admins_send?: boolean
+          group_photo_url?: string | null
+          group_pin_duration?: string | null
+          group_pin_message_id?: string | null
           id?: string
           is_deep_link?: boolean
           media_url?: string | null
@@ -2920,6 +2936,14 @@ export type Database = {
           created_by?: string | null
           error_log?: Json | null
           failed_count?: number | null
+          group_admin_phones?: string[] | null
+          group_description?: string | null
+          group_name_template?: string | null
+          group_only_admins_add?: boolean
+          group_only_admins_send?: boolean
+          group_photo_url?: string | null
+          group_pin_duration?: string | null
+          group_pin_message_id?: string | null
           id?: string
           is_deep_link?: boolean
           media_url?: string | null
