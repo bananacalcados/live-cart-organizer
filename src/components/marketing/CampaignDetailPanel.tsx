@@ -335,13 +335,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
         method: 'POST',
         headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim() }),
+        body: JSON.stringify({ action: 'create', groupName: newGroupName.trim(), phones: [] }),
       });
       const result = await res.json();
-      if (result.success && result.groupId) {
+      const newGroupId = result.groupId || result.data?.phone || result.data?.groupId;
+      
+      if (result.success && newGroupId) {
         // Add new group to DB and to campaign
         const { data: newGroup } = await supabase.from('whatsapp_groups').insert({
-          group_id: result.groupId,
+          group_id: newGroupId,
           name: newGroupName.trim(),
           is_vip: true,
           is_active: true,
@@ -359,7 +361,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         setShowCreateGroup(false);
         setNewGroupName("");
       } else {
-        toast.error(result.error || "Erro ao criar grupo");
+        const errMsg = result.data?.message || result.error || "Erro ao criar grupo";
+        console.error("Create group response:", JSON.stringify(result));
+        toast.error(errMsg);
       }
     } catch { toast.error("Erro ao criar grupo"); }
     finally { setIsCreatingGroup(false); }
