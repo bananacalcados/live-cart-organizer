@@ -8,12 +8,15 @@ const corsHeaders = {
 interface GroupSettingsRequest {
   action: 'create' | 'update-photo' | 'update-description' | 'update-name' | 'get-participants' |
           'set-messages-admins-only' | 'set-add-admins-only' |
-          'add-participant' | 'remove-participant' | 'promote-admin' | 'demote-admin';
+          'add-participant' | 'remove-participant' | 'promote-admin' | 'demote-admin' |
+          'pin-message';
   groupId?: string;
   groupName?: string;
   value?: string;
   phone?: string;
   phones?: string[];
+  messageId?: string;
+  pinDuration?: string;
 }
 
 serve(async (req) => {
@@ -33,7 +36,7 @@ serve(async (req) => {
       );
     }
 
-    const { action, groupId, groupName, value, phone, phones }: GroupSettingsRequest = await req.json();
+    const { action, groupId, groupName, value, phone, phones, messageId, pinDuration }: GroupSettingsRequest = await req.json();
     const baseUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}`;
 
     // Normalize Brazilian phone numbers: ensure 13 digits (55 + DD + 9 + 8 digits)
@@ -107,6 +110,10 @@ serve(async (req) => {
       case 'demote-admin':
         endpoint = `${baseUrl}/demote-participant`;
         body = { groupId, phone };
+        break;
+      case 'pin-message':
+        endpoint = `${baseUrl}/send-pin-message`;
+        body = { phone: groupId, messageId, messageAction: 'pin', pinMessageDuration: pinDuration || '7_days' };
         break;
       default:
         return new Response(
