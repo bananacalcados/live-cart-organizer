@@ -718,6 +718,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                       <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => copyLink(link.slug)}>
                         <Copy className="h-3 w-3" />
                       </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteLink(link.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
