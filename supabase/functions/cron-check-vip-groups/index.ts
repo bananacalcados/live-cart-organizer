@@ -1,97 +1,94 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const PROACTIVE_THRESHOLD = 950;  // criar standby quando algum grupo atingir este número
+const STANDBY_MAX_COUNT = 50;     // grupos com menos que isso são considerados "standby"
 
-/**
- * Cron job: checks all active campaigns for groups nearing capacity (>= 900 participants).
- * If all groups in a campaign are >= 900, proactively creates a new one.
- */
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get all active campaigns
+    // Buscar todas as campanhas ativas que têm grupos
     const { data: campaigns } = await supabase
       .from('group_campaigns')
       .select('id, name, target_groups')
-      .eq('is_active', true);
+      .not('target_groups', 'eq', '{}');
 
     if (!campaigns || campaigns.length === 0) {
-      console.log('No active campaigns');
-      return new Response(JSON.stringify({ success: true, checked: 0 }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      return new Response(JSON.stringify({ success: true, message: 'Nenhuma campanha ativa' }), {
+        headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    let created = 0;
-    const standbyThreshold = 950; // Create standby group when any group reaches 950
+    const results = [];
 
     for (const campaign of campaigns) {
       const targetGroupIds: string[] = campaign.target_groups || [];
       if (targetGroupIds.length === 0) continue;
 
-      // Check groups status
+      // Buscar todos os grupos desta campanha
       const { data: groups } = await supabase
         .from('whatsapp_groups')
-        .select('id, participant_count, max_participants, is_full')
+        .select('id, name, participant_count, max_participants, is_full')
         .in('id', targetGroupIds);
 
       if (!groups || groups.length === 0) continue;
 
-      // Proactive: if any group has >= 950 participants, check if there's a standby (low-count) group ready
-      const hasGroupNearFull = groups.some(g =>
-        !g.is_full && (g.participant_count || 0) >= standbyThreshold
+      // Verificar se já existe um grupo standby (poucos participantes)
+      const standbyGroups = groups.filter(g => g.participant_count < STANDBY_MAX_COUNT);
+      const hasStandby = standbyGroups.length > 0;
+
+      // Verificar se algum grupo atingiu o threshold proativo
+      const nearFullGroups = groups.filter(g => 
+        !g.is_full && g.participant_count >= PROACTIVE_THRESHOLD
       );
-      const hasStandbyGroup = groups.some(g =>
-        !g.is_full && (g.participant_count || 0) < standbyThreshold
-      );
+      const hasNearFullGroup = nearFullGroups.length > 0;
 
-      // Only create if there's a group nearing capacity but no standby exists
-      if (!hasGroupNearFull || hasStandbyGroup) continue;
-
-      console.log(`Campaign "${campaign.name}" has a group near ${standbyThreshold} with no standby. Creating proactive standby group...`);
-
-      // Call auto-create
-      try {
-        const res = await fetch(`${supabaseUrl}/functions/v1/auto-create-vip-group`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${serviceKey}`,
-          },
-          body: JSON.stringify({ campaign_id: campaign.id }),
-        });
-        const result = await res.json();
-        if (result.success && !result.skipped) {
-          console.log(`Auto-created group for campaign "${campaign.name}": ${result.group?.name}`);
-          created++;
+      if (hasNearFullGroup && !hasStandby) {
+        // Criar novo grupo standby proativamente
+        console.log(`Campanha "${campaign.name}": grupo próximo de ${PROACTIVE_THRESHOLD}, criando standby...`);
+        
+        try {
+          const autoCreateRes = await fetch(`${supabaseUrl}/functions/v1/auto-create-vip-group`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({ campaign_id: campaign.id }),
+          });
+          const result = await autoCreateRes.json();
+          results.push({
+            campaign: campaign.name,
+            action: 'created_standby',
+            success: result.success,
+            group: result.group?.name || null,
+          });
+        } catch (e) {
+          console.error(`Erro ao criar standby para campanha ${campaign.name}:`, e);
+          results.push({ campaign: campaign.name, action: 'error', error: String(e) });
         }
-      } catch (e) {
-        console.error(`Failed to auto-create for campaign ${campaign.id}:`, e);
+      } else {
+        results.push({
+          campaign: campaign.name,
+          action: 'no_action_needed',
+          reason: hasStandby 
+            ? `standby já existe (${standbyGroups[0].name})` 
+            : 'nenhum grupo próximo do limite',
+        });
       }
     }
 
-    console.log(`Cron check complete. Campaigns checked: ${campaigns.length}, Groups created: ${created}`);
+    return new Response(JSON.stringify({ success: true, results }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
 
-    return new Response(
-      JSON.stringify({ success: true, checked: campaigns.length, created }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
   } catch (error) {
-    console.error('Error in cron check:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error('Erro no cron:', error);
+    return new Response(JSON.stringify({ error: String(error) }), {
+      status: 500, headers: { 'Content-Type': 'application/json' }
+    });
   }
 });
