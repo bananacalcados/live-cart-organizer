@@ -5,7 +5,7 @@ export default function VipGroupRedirectPage() {
   const { slug } = useParams<{ slug: string }>();
   const [status, setStatus] = useState<'loading' | 'redirecting' | 'inapp' | 'nogroup' | 'error'>('loading');
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(10);
+  const [countdown, setCountdown] = useState(5);
   const [errorDetail, setErrorDetail] = useState<string>('');
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -46,12 +46,12 @@ export default function VipGroupRedirectPage() {
 
         setStatus('redirecting');
 
+        // Instant redirect — no delays
         if (isAndroid) {
           const intentUrl = `intent://chat.whatsapp.com/${invitePath}#Intent;scheme=https;package=com.whatsapp;S.browser_fallback_url=${encodeURIComponent(waRegular)};end`;
           window.location.href = intentUrl;
-          setTimeout(() => { window.location.href = waRegular; }, 800);
         } else {
-          setTimeout(() => { window.location.href = waRegular; }, 400);
+          window.location.href = waRegular;
         }
       })
       .catch(err => {
@@ -110,7 +110,7 @@ export default function VipGroupRedirectPage() {
 
         {status === 'inapp' && (
           <>
-            <div style={{ background: 'rgba(255,180,0,.15)', border: '1px solid rgba(255,180,0,.4)', borderRadius: 10, padding: '1rem', marginBottom: '1rem', textAlign: 'left' }}>
+            <div style={{ background: 'rgba(255,180,0,.15)', border: '1px solid rgba(255,180,0,.4)', borderRadius: 10, padding: '1rem', marginBottom: '1rem', textAlign: 'left' as const }}>
               <strong>📱 Abra no navegador</strong>
               <ol style={{ paddingLeft: '1.2rem', marginTop: '.5rem' }}>
                 <li style={{ fontSize: '.85rem', marginBottom: '.35rem' }}>Toque nos <strong>3 pontos</strong> (⋮) no canto superior direito</li>
@@ -154,7 +154,7 @@ export default function VipGroupRedirectPage() {
               Este link não foi encontrado ou expirou.
             </p>
             {import.meta.env.DEV && errorDetail && (
-              <p style={{ fontSize: '.75rem', opacity: .6, marginTop: '.5rem', wordBreak: 'break-all' }}>
+              <p style={{ fontSize: '.75rem', opacity: .6, marginTop: '.5rem', wordBreak: 'break-all' as const }}>
                 Debug: {errorDetail}
               </p>
             )}
