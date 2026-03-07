@@ -230,3 +230,9 @@ verify_jwt = false
 
 [functions.zapi-get-contacts]
 verify_jwt = false
+
+[functions.auto-create-vip-group]
+verify_jwt = false
+
+[functions.cron-check-vip-groups]
+verify_jwt = false

@@ -59,6 +59,34 @@ serve(async (req) => {
       .order('participant_count', { ascending: true });
 
     if (!groups || groups.length === 0) {
+      // All groups full — try auto-creating a new one
+      console.log('All groups full for campaign, attempting auto-create...');
+      try {
+        const autoCreateRes = await fetch(`${supabaseUrl}/functions/v1/auto-create-vip-group`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({ campaign_id: link.campaign_id }),
+        });
+        const autoResult = await autoCreateRes.json();
+
+        if (autoResult.success && autoResult.group?.invite_link) {
+          console.log('Auto-created group:', autoResult.group.name);
+          const redirectUrl = autoResult.group.invite_link;
+          const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2;url=${redirectUrl}">
+<title>Redirecionando...</title>
+<style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#075e54;color:white}.container{text-align:center}.spinner{border:3px solid rgba(255,255,255,0.3);border-top:3px solid white;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 16px}@keyframes spin{to{transform:rotate(360deg)}}a{color:white}</style>
+</head><body><div class="container"><div class="spinner"></div><h2>Entrando no grupo...</h2><p>Você será redirecionado automaticamente.</p><p><a href="${redirectUrl}">Clique aqui se não for redirecionado</a></p></div>
+<script>window.location.href="${redirectUrl}";</script></body></html>`;
+          return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html' } });
+        }
+      } catch (e) {
+        console.error('Auto-create failed:', e);
+      }
+
       return new Response('<html><body><h1>Todos os grupos estão cheios</h1><p>Tente novamente mais tarde.</p></body></html>', {
         status: 200,
         headers: { 'Content-Type': 'text/html' },
