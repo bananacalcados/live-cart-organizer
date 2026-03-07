@@ -763,31 +763,34 @@ export default function Marketing() {
                     <SelectItem value="unknown">❓ Indefinido</SelectItem>
                   </SelectContent>
                 </Select>
-              <Select value={dddFilter} onValueChange={setDddFilter}>
-                <SelectTrigger className="w-[120px] h-9"><Phone className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos DDDs</SelectItem>
-                  {uniqueDdds.map(ddd => (<SelectItem key={ddd} value={ddd!}>DDD {ddd}</SelectItem>))}
-                </SelectContent>
-              </Select>
-              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-[140px] h-9" placeholder="De" title="Compras a partir de" />
-              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[140px] h-9" placeholder="Até" title="Compras até" />
-              <Input type="number" value={ticketMin} onChange={e => setTicketMin(e.target.value)} className="w-[120px] h-9" placeholder="Ticket mín" title="Ticket médio mínimo" />
-              <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="w-[120px] h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
-              <div className="flex gap-1 ml-auto">
-                <Button variant="outline" size="sm" className="gap-1 relative overflow-hidden">
-                  <Upload className="h-3.5 w-3.5" />Upload Excel
+                <Select value={dddFilter} onValueChange={setDddFilter}>
+                  <SelectTrigger className="h-9"><Phone className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos DDDs</SelectItem>
+                    {uniqueDdds.map(ddd => (<SelectItem key={ddd} value={ddd!}>DDD {ddd}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 sm:flex gap-2">
+                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9" placeholder="De" title="Compras a partir de" />
+                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9" placeholder="Até" title="Compras até" />
+                <Input type="number" value={ticketMin} onChange={e => setTicketMin(e.target.value)} className="h-9" placeholder="Ticket mín" title="Ticket médio mínimo" />
+                <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
+              </div>
+              <div className="flex flex-wrap gap-1 w-full sm:w-auto sm:ml-auto">
+                <Button variant="outline" size="sm" className="gap-1 relative overflow-hidden text-xs">
+                  <Upload className="h-3.5 w-3.5" /><span className="hidden sm:inline">Upload </span>Excel
                   <input ref={rfmFileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleRfmExcelUpload}
                     className="absolute inset-0 opacity-0 cursor-pointer" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSyncRfm} disabled={isSyncing} className="gap-1">
-                  <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Recalcular RFM
+                <Button variant="outline" size="sm" onClick={handleSyncRfm} disabled={isSyncing} className="gap-1 text-xs">
+                  <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">Recalcular </span>RFM
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSyncSales} disabled={isSyncing} className="gap-1">
-                  <Download className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sync Vendas
+                <Button variant="outline" size="sm" onClick={handleSyncSales} disabled={isSyncing} className="gap-1 text-xs">
+                  <Download className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">Sync </span>Vendas
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSyncPosShopify} disabled={isSyncing} className="gap-1">
-                  <Store className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sync POS + Shopify
+                <Button variant="outline" size="sm" onClick={handleSyncPosShopify} disabled={isSyncing} className="gap-1 text-xs">
+                  <Store className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">Sync </span>POS
                 </Button>
               </div>
             </div>
