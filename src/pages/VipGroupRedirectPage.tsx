@@ -53,6 +53,17 @@ export default function VipGroupRedirectPage() {
         } else {
           window.location.href = waRegular;
         }
+
+        // After redirect fired, request push permission (user returns to this tab later)
+        setTimeout(() => {
+          try {
+            const pendingRaw = sessionStorage.getItem('push_pending');
+            if (!pendingRaw) return;
+            const pending = JSON.parse(pendingRaw);
+            sessionStorage.removeItem('push_pending');
+            requestPushAfterRedirect(pending.name, pending.phone, pending.campaign);
+          } catch {}
+        }, 2000);
       })
       .catch(err => {
         const msg = err?.message || String(err);
