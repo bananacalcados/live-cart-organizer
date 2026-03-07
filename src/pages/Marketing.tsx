@@ -729,11 +729,11 @@ export default function Marketing() {
 
           {/* ── CLIENTES RFM ── */}
           <TabsContent value="customers" className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Card><CardContent className="pt-4 pb-3 px-4"><p className="text-xs text-muted-foreground">Total Clientes</p><p className="text-2xl font-bold">{customers.length}</p></CardContent></Card>
-              <Card><CardContent className="pt-4 pb-3 px-4"><p className="text-xs text-muted-foreground">Faturamento Total</p><p className="text-2xl font-bold">{formatCurrency(totalRevenue)}</p></CardContent></Card>
-              <Card><CardContent className="pt-4 pb-3 px-4"><p className="text-xs text-muted-foreground">🏪 Loja Física</p><p className="text-2xl font-bold">{regionCounts['local'] || 0}</p></CardContent></Card>
-              <Card><CardContent className="pt-4 pb-3 px-4"><p className="text-xs text-muted-foreground">🌐 Online</p><p className="text-2xl font-bold">{regionCounts['online'] || 0}</p></CardContent></Card>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
+              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">Total Clientes</p><p className="text-lg sm:text-2xl font-bold">{customers.length}</p></CardContent></Card>
+              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">Faturamento</p><p className="text-lg sm:text-2xl font-bold truncate">{formatCurrency(totalRevenue)}</p></CardContent></Card>
+              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">🏪 Loja Física</p><p className="text-lg sm:text-2xl font-bold">{regionCounts['local'] || 0}</p></CardContent></Card>
+              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">🌐 Online</p><p className="text-lg sm:text-2xl font-bold">{regionCounts['online'] || 0}</p></CardContent></Card>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -748,20 +748,21 @@ export default function Marketing() {
               })}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
+              <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Buscar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9" />
               </div>
-              <Select value={regionFilter} onValueChange={setRegionFilter}>
-                <SelectTrigger className="w-[160px] h-9"><MapPin className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas Regiões</SelectItem>
-                  <SelectItem value="local">🏪 Loja Física</SelectItem>
-                  <SelectItem value="online">🌐 Online</SelectItem>
-                  <SelectItem value="unknown">❓ Indefinido</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-2 sm:flex gap-2">
+                <Select value={regionFilter} onValueChange={setRegionFilter}>
+                  <SelectTrigger className="h-9"><MapPin className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas Regiões</SelectItem>
+                    <SelectItem value="local">🏪 Loja Física</SelectItem>
+                    <SelectItem value="online">🌐 Online</SelectItem>
+                    <SelectItem value="unknown">❓ Indefinido</SelectItem>
+                  </SelectContent>
+                </Select>
               <Select value={dddFilter} onValueChange={setDddFilter}>
                 <SelectTrigger className="w-[120px] h-9"><Phone className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
                 <SelectContent>
