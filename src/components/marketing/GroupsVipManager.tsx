@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { GroupSettingsPanel } from "./GroupSettingsPanel";
 import { CampaignDetailPanel } from "./CampaignDetailPanel";
 import { VipStrategyPanel } from "./VipStrategyPanel";
+import { CreateGroupDialog } from "./CreateGroupDialog";
 
 interface WhatsAppGroup {
   id: string;
