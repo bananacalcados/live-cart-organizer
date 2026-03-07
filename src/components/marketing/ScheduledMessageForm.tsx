@@ -382,6 +382,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const handleSubmit = async () => {
     if (!scheduledDate) { toast.error("Selecione uma data"); return; }
     if (!messageContent.trim() && messageType === 'text') { toast.error("Mensagem obrigatória"); return; }
+    if (messageType === 'image' && mediaItems.length === 0 && !mediaUrl) { toast.error("Adicione pelo menos 1 foto"); return; }
     if (messageType === 'poll' && pollOptions.filter(o => o.trim()).length < 2) {
       toast.error("Enquete precisa de ao menos 2 opções"); return;
     }
