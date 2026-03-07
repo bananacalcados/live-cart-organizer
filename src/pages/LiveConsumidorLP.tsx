@@ -30,33 +30,46 @@ export default function LiveConsumidorLP() {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [pushSubscription, setPushSubscription] = useState<any>(null);
+  const [showPushBanner, setShowPushBanner] = useState(false);
+  const [pushDismissed, setPushDismissed] = useState(false);
 
-  // Request push permission on page load (before form fill)
+  // Check if push is available and not yet granted
   useEffect(() => {
-    const initPush = async () => {
-      try {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-        const registration = await navigator.serviceWorker.register('/push-sw.js');
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const res = await fetch(`${supabaseUrl}/functions/v1/push-notifications?action=vapid-public-key`, {
-          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
-        });
-        const { publicKey } = await res.json();
-        if (!publicKey) return;
-        const padding = '='.repeat((4 - publicKey.length % 4) % 4);
-        const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawKey = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: rawKey,
-        });
-        setPushSubscription(subscription.toJSON());
-      } catch (err) {
-        console.log('Push permission denied or unavailable:', err);
-      }
-    };
-    initPush();
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (Notification.permission === 'granted' || Notification.permission === 'denied') return;
+    // Show custom banner after short delay
+    const t = setTimeout(() => setShowPushBanner(true), 1500);
+    return () => clearTimeout(t);
   }, []);
+
+  const handleAcceptPush = async () => {
+    setShowPushBanner(false);
+    setPushDismissed(true);
+    try {
+      const registration = await navigator.serviceWorker.register('/push-sw.js');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/push-notifications?action=vapid-public-key`, {
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+      });
+      const { publicKey } = await res.json();
+      if (!publicKey) return;
+      const padding = '='.repeat((4 - publicKey.length % 4) % 4);
+      const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawKey = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: rawKey,
+      });
+      setPushSubscription(subscription.toJSON());
+    } catch (err) {
+      console.log('Push permission denied or unavailable:', err);
+    }
+  };
+
+  const handleDismissPush = () => {
+    setShowPushBanner(false);
+    setPushDismissed(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
