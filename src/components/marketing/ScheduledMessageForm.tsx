@@ -379,10 +379,46 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     }
   };
 
+  const multiMediaTypes = ['image', 'video', 'document'];
+
+  const handleMultiMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const remaining = 10 - mediaItems.length;
+    if (files.length > remaining) {
+      toast.error(`Máximo ${remaining} arquivo(s) restante(s) (limite: 10)`);
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const newItems: MediaItem[] = [];
+      for (const file of Array.from(files)) {
+        if (file.size > 16 * 1024 * 1024) { toast.error(`${file.name} muito grande (max 16MB)`); continue; }
+        const ext = file.name.split('.').pop();
+        const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+        if (error) { toast.error(`Erro no upload de ${file.name}`); continue; }
+        const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+        newItems.push({ url: urlData.publicUrl, caption: '' });
+      }
+      setMediaItems(prev => [...prev, ...newItems]);
+      if (newItems.length > 0) toast.success(`${newItems.length} arquivo(s) enviado(s)!`);
+    } catch { toast.error("Erro no upload"); }
+    finally { setIsUploading(false); if (e.target) e.target.value = ''; }
+  };
+
+  const insertEmojiInCaption = (emoji: string, index: number) => {
+    setMediaItems(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], caption: (next[index].caption || '') + emoji };
+      return next;
+    });
+  };
+
   const handleSubmit = async () => {
     if (!scheduledDate) { toast.error("Selecione uma data"); return; }
     if (!messageContent.trim() && messageType === 'text') { toast.error("Mensagem obrigatória"); return; }
-    if (messageType === 'image' && mediaItems.length === 0 && !mediaUrl) { toast.error("Adicione pelo menos 1 foto"); return; }
+    if (multiMediaTypes.includes(messageType) && mediaItems.length === 0 && !mediaUrl) { toast.error("Adicione pelo menos 1 arquivo"); return; }
     if (messageType === 'poll' && pollOptions.filter(o => o.trim()).length < 2) {
       toast.error("Enquete precisa de ao menos 2 opções"); return;
     }
@@ -391,7 +427,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     try {
       const data: ScheduledMessageData = {
         messageType, messageContent, mediaUrl,
-        mediaItems: messageType === 'image' ? mediaItems : [],
+        mediaItems: multiMediaTypes.includes(messageType) ? mediaItems : [],
         pollOptions: pollOptions.filter(o => o.trim()),
         pollMaxOptions: pollAllowMultiple ? 0 : 1,
         scheduledAt: scheduledDate, scheduledTime, sendSpeed,
@@ -513,13 +549,16 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                         className="w-16 h-16 object-cover rounded shrink-0" />
                       <div className="flex-1 space-y-1">
                         <p className="text-[10px] text-muted-foreground">Foto {i + 1}</p>
-                        <Input placeholder="Legenda desta foto..." value={item.caption}
-                          onChange={e => {
-                            const next = [...mediaItems];
-                            next[i] = { ...next[i], caption: e.target.value };
-                            setMediaItems(next);
-                          }}
-                          className="h-7 text-xs" />
+                        <div className="flex items-center gap-1">
+                          <Input placeholder="Legenda desta foto..." value={item.caption}
+                            onChange={e => {
+                              const next = [...mediaItems];
+                              next[i] = { ...next[i], caption: e.target.value };
+                              setMediaItems(next);
+                            }}
+                            className="h-7 text-xs flex-1" />
+                          <EmojiPickerButton onEmojiSelect={(emoji) => insertEmojiInCaption(emoji, i)} className="h-7 w-7 shrink-0" />
+                        </div>
                       </div>
                       <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
                         onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}>
@@ -532,8 +571,72 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             </div>
           )}
 
-          {/* Media URL, Upload or Shopify for non-image media types */}
-          {messageType !== 'text' && messageType !== 'poll' && messageType !== 'image' && (
+          {/* Multi-file upload for video and document types */}
+          {(messageType === 'video' || messageType === 'document') && (
+            <div className="space-y-2">
+              <Label className="text-xs">{messageType === 'video' ? 'Vídeos' : 'Documentos'} ({mediaItems.length}/10)</Label>
+              <div className="flex gap-2 mb-2 flex-wrap">
+                <Button variant="outline" size="sm" className="gap-1"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading || mediaItems.length >= 10}>
+                  {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  Upload {messageType === 'video' ? 'Vídeos' : 'Documentos'}
+                </Button>
+              </div>
+              <input ref={fileInputRef} type="file" accept={acceptTypes[messageType] || "*/*"} multiple
+                onChange={(e) => handleMultiMediaUpload(e, messageType)} className="hidden" />
+
+              {/* URL manual add */}
+              <div className="flex gap-2">
+                <Input placeholder="Ou cole URL do arquivo..." value={mediaUrl}
+                  onChange={e => setMediaUrl(e.target.value)} className="flex-1" />
+                <Button variant="outline" size="sm" disabled={!mediaUrl.trim() || mediaItems.length >= 10}
+                  onClick={() => {
+                    setMediaItems(prev => [...prev, { url: mediaUrl, caption: '' }]);
+                    setMediaUrl('');
+                  }}>
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+
+              {/* Media items list with captions and emoji */}
+              {mediaItems.length > 0 && (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {mediaItems.map((item, i) => (
+                    <div key={i} className="flex gap-2 items-start border rounded-lg p-2">
+                      <div className="w-16 h-16 bg-muted rounded shrink-0 flex items-center justify-center">
+                        {messageType === 'video' ? (
+                          <video src={item.url} className="w-full h-full object-cover rounded" />
+                        ) : (
+                          <FileText className="h-6 w-6 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-[10px] text-muted-foreground">{messageType === 'video' ? 'Vídeo' : 'Documento'} {i + 1}</p>
+                        <div className="flex items-center gap-1">
+                          <Input placeholder="Legenda deste arquivo..." value={item.caption}
+                            onChange={e => {
+                              const next = [...mediaItems];
+                              next[i] = { ...next[i], caption: e.target.value };
+                              setMediaItems(next);
+                            }}
+                            className="h-7 text-xs flex-1" />
+                          <EmojiPickerButton onEmojiSelect={(emoji) => insertEmojiInCaption(emoji, i)} className="h-7 w-7 shrink-0" />
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                        onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Single-file audio media (kept as-is since audio has recording flow) */}
+          {messageType === 'audio' && (
             <div className="space-y-2">
               <Label className="text-xs">Mídia</Label>
               <div className="flex gap-2 mb-2 flex-wrap">
@@ -550,7 +653,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                 <Input placeholder="https://..." value={mediaUrl} onChange={e => setMediaUrl(e.target.value)} />
               ) : (
                 <div>
-                  <input ref={fileInputRef} type="file" accept={acceptTypes[messageType] || "*/*"}
+                  <input ref={fileInputRef} type="file" accept="audio/*"
                     onChange={handleFileUpload} className="hidden" />
                   <Button variant="outline" className="w-full gap-1" onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}>
@@ -725,7 +828,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
               try {
                 const data: ScheduledMessageData = {
                   messageType, messageContent, mediaUrl,
-                  mediaItems: messageType === 'image' ? mediaItems : [],
+                  mediaItems: multiMediaTypes.includes(messageType) ? mediaItems : [],
                   pollOptions: pollOptions.filter(o => o.trim()),
                   pollMaxOptions: pollAllowMultiple ? 0 : 1,
                   scheduledAt: new Date(), scheduledTime: format(new Date(), 'HH:mm'), sendSpeed,

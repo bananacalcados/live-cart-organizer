@@ -147,14 +147,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     const scheduledAt = new Date(data.scheduledAt);
     scheduledAt.setHours(hours, minutes, 0, 0);
 
-    // Multi-photo: create one message per photo
-    if (data.messageType === 'image' && data.mediaItems && data.mediaItems.length > 0) {
+    // Multi-file: create one message per item (image, video, document)
+    const multiMediaTypes = ['image', 'video', 'document'];
+    if (multiMediaTypes.includes(data.messageType) && data.mediaItems && data.mediaItems.length > 0) {
       for (let i = 0; i < data.mediaItems.length; i++) {
         const item = data.mediaItems[i];
-        const itemTime = new Date(scheduledAt.getTime() + i * 5000); // 5s offset between photos
+        const itemTime = new Date(scheduledAt.getTime() + i * 5000); // 5s offset
         const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
           campaign_id: campaignId,
-          message_type: 'image',
+          message_type: data.messageType,
           message_content: item.caption || null,
           media_url: item.url,
           scheduled_at: itemTime.toISOString(),
@@ -162,7 +163,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         });
         if (error) throw error;
       }
-      toast.success(`${data.mediaItems.length} foto(s) agendada(s)!`);
+      toast.success(`${data.mediaItems.length} arquivo(s) agendado(s)!`);
     } else {
       const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
         campaign_id: campaignId,
@@ -183,12 +184,13 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const handleSendNow = async (data: ScheduledMessageData) => {
     const now = new Date();
 
-    if (data.messageType === 'image' && data.mediaItems && data.mediaItems.length > 0) {
+    const multiMediaTypes = ['image', 'video', 'document'];
+    if (multiMediaTypes.includes(data.messageType) && data.mediaItems && data.mediaItems.length > 0) {
       for (let i = 0; i < data.mediaItems.length; i++) {
         const item = data.mediaItems[i];
         const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
           campaign_id: campaignId,
-          message_type: 'image',
+          message_type: data.messageType,
           message_content: item.caption || null,
           media_url: item.url,
           scheduled_at: now.toISOString(),
