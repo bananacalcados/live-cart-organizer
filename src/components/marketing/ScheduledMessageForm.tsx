@@ -18,10 +18,16 @@ import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 
+export interface MediaItem {
+  url: string;
+  caption: string;
+}
+
 export interface ScheduledMessageData {
   messageType: string;
   messageContent: string;
   mediaUrl: string;
+  mediaItems: MediaItem[];
   pollOptions: string[];
   pollMaxOptions: number;
   scheduledAt: Date;
@@ -70,6 +76,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const [messageContent, setMessageContent] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaMode, setMediaMode] = useState<"url" | "upload" | "shopify">("url");
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
@@ -85,6 +92,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const multiFileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
