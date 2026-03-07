@@ -34,13 +34,13 @@ serve(async (req) => {
     }
 
     let created = 0;
-    const threshold = 900; // Create new group when all groups have >= 900 participants
+    const standbyThreshold = 950; // Create standby group when any group reaches 950
 
     for (const campaign of campaigns) {
       const targetGroupIds: string[] = campaign.target_groups || [];
       if (targetGroupIds.length === 0) continue;
 
-      // Check if all groups are near full
+      // Check groups status
       const { data: groups } = await supabase
         .from('whatsapp_groups')
         .select('id, participant_count, max_participants, is_full')
@@ -48,13 +48,18 @@ serve(async (req) => {
 
       if (!groups || groups.length === 0) continue;
 
-      const allNearFull = groups.every(g =>
-        g.is_full || (g.participant_count || 0) >= threshold
+      // Proactive: if any group has >= 950 participants, check if there's a standby (low-count) group ready
+      const hasGroupNearFull = groups.some(g =>
+        !g.is_full && (g.participant_count || 0) >= standbyThreshold
+      );
+      const hasStandbyGroup = groups.some(g =>
+        !g.is_full && (g.participant_count || 0) < standbyThreshold
       );
 
-      if (!allNearFull) continue;
+      // Only create if there's a group nearing capacity but no standby exists
+      if (!hasGroupNearFull || hasStandbyGroup) continue;
 
-      console.log(`Campaign "${campaign.name}" has all groups near full (>=${threshold}). Auto-creating...`);
+      console.log(`Campaign "${campaign.name}" has a group near ${standbyThreshold} with no standby. Creating proactive standby group...`);
 
       // Call auto-create
       try {
