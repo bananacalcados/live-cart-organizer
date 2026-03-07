@@ -332,6 +332,12 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     fetchVariables();
   };
 
+  const deleteLink = async (id: string) => {
+    await supabase.from('group_redirect_links').delete().eq('id', id);
+    toast.success("Link excluído");
+    fetchLinks();
+  };
+
   const targetGroups: string[] = campaign?.target_groups || [];
   const groupCount = targetGroups.length;
 
@@ -717,6 +723,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                       </div>
                       <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => copyLink(link.slug)}>
                         <Copy className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteLink(link.id)}>
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
