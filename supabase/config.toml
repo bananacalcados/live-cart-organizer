@@ -227,3 +227,6 @@ verify_jwt = false
 
 [functions.ai-group-content]
 verify_jwt = false
+
+[functions.zapi-get-contacts]
+verify_jwt = false

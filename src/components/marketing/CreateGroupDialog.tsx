@@ -1,16 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import {
-  Plus, Loader2, Sparkles, Image, FileText, Pin, Copy
+  Plus, Loader2, Sparkles, Image, FileText, Pin, Copy, Search, X, Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+
+interface ZapiContact {
+  phone: string;
+  name: string;
+  short: string;
+}
 
 interface CreateGroupDialogProps {
   open: boolean;
@@ -23,11 +31,70 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
   const [description, setDescription] = useState("");
   const [pinnedMessage, setPinnedMessage] = useState("");
   const [brandContext, setBrandContext] = useState("");
-  const [initialPhones, setInitialPhones] = useState("");
+  const [selectedContacts, setSelectedContacts] = useState<ZapiContact[]>([]);
+  const [contactSearch, setContactSearch] = useState("");
+  const [contacts, setContacts] = useState<ZapiContact[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactsLoaded, setContactsLoaded] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [createdGroupId, setCreatedGroupId] = useState<string | null>(null);
   const [step, setStep] = useState<"create" | "customize">("create");
+
+  // Load contacts when dialog opens
+  useEffect(() => {
+    if (open && !contactsLoaded) {
+      loadContacts();
+    }
+  }, [open]);
+
+  const loadContacts = async () => {
+    setContactsLoading(true);
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-get-contacts`,
+        {
+          method: "POST",
+          headers: {
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        }
+      );
+      const data = await res.json();
+      if (data.success && data.contacts) {
+        setContacts(data.contacts);
+        setContactsLoaded(true);
+      } else {
+        toast.error("Erro ao carregar contatos");
+      }
+    } catch {
+      toast.error("Erro ao carregar contatos do WhatsApp");
+    } finally {
+      setContactsLoading(false);
+    }
+  };
+
+  const filteredContacts = useMemo(() => {
+    if (!contactSearch.trim()) return contacts.slice(0, 50);
+    const q = contactSearch.toLowerCase();
+    return contacts
+      .filter(c => c.name.toLowerCase().includes(q) || c.short.toLowerCase().includes(q) || c.phone.includes(q))
+      .slice(0, 50);
+  }, [contacts, contactSearch]);
+
+  const toggleContact = (contact: ZapiContact) => {
+    setSelectedContacts(prev => {
+      const exists = prev.find(c => c.phone === contact.phone);
+      if (exists) return prev.filter(c => c.phone !== contact.phone);
+      return [...prev, contact];
+    });
+  };
+
+  const removeSelected = (phone: string) => {
+    setSelectedContacts(prev => prev.filter(c => c.phone !== phone));
+  };
 
   const generateAiContent = async (type: "description" | "pinned_message" | "photo_prompt") => {
     if (!groupName.trim()) {
@@ -67,9 +134,14 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
       toast.error("Nome do grupo é obrigatório");
       return;
     }
+    if (selectedContacts.length === 0) {
+      toast.error("Selecione pelo menos 1 participante");
+      return;
+    }
     setIsCreating(true);
     try {
-      // Step 1: Create group via Z-API
+      const phones = selectedContacts.map(c => c.phone);
+
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`,
         {
@@ -78,17 +150,13 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ 
-            action: "create", 
-            groupName,
-            phones: initialPhones.split(/[,;\n\s]+/).map(p => p.replace(/\D/g, '')).filter(p => p.length >= 10),
-          }),
+          body: JSON.stringify({ action: "create", groupName, phones }),
         }
       );
       const data = await res.json();
 
       if (!data.success || (data.data && data.data.success === false)) {
-        toast.error("Erro ao criar grupo: " + (data.data?.message || data.error || "Verifique se adicionou pelo menos 1 participante"));
+        toast.error("Erro ao criar grupo: " + (data.data?.message || data.error || "Erro desconhecido"));
         return;
       }
 
@@ -102,7 +170,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
       setCreatedGroupId(newGroupId);
       toast.success("Grupo criado com sucesso!");
 
-      // Step 2: Set description if filled
+      // Set description if filled
       if (description.trim()) {
         await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`,
@@ -121,7 +189,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
         );
       }
 
-      // Step 3: Set admins-only messages
+      // Set admins-only messages
       await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`,
         {
@@ -182,7 +250,8 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
     setDescription("");
     setPinnedMessage("");
     setBrandContext("");
-    setInitialPhones("");
+    setSelectedContacts([]);
+    setContactSearch("");
     setCreatedGroupId(null);
     setStep("create");
     onOpenChange(false);
@@ -226,17 +295,78 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
               />
             </div>
 
-            {/* Initial participants */}
+            {/* Contact picker */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Participantes iniciais *</Label>
-              <Textarea
-                placeholder={"Cole os números (um por linha ou separados por vírgula)\nEx: 5533999999999, 5533988888888"}
-                value={initialPhones}
-                onChange={(e) => setInitialPhones(e.target.value)}
-                rows={3}
-              />
+              <Label className="text-xs font-medium flex items-center gap-1">
+                <Users className="h-3.5 w-3.5" /> Participantes iniciais *
+              </Label>
+
+              {/* Selected contacts badges */}
+              {selectedContacts.length > 0 && (
+                <div className="flex flex-wrap gap-1 p-2 rounded-md border bg-muted/30">
+                  {selectedContacts.map(c => (
+                    <Badge key={c.phone} variant="secondary" className="gap-1 text-xs pr-1">
+                      {c.short || c.name}
+                      <button onClick={() => removeSelected(c.phone)} className="ml-0.5 hover:text-destructive">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar contato por nome ou número..."
+                  value={contactSearch}
+                  onChange={(e) => setContactSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              {/* Contact list */}
+              <ScrollArea className="h-[180px] rounded-md border">
+                {contactsLoading ? (
+                  <div className="flex items-center justify-center h-full p-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground">Carregando contatos...</span>
+                  </div>
+                ) : filteredContacts.length === 0 ? (
+                  <div className="flex items-center justify-center h-full p-4">
+                    <span className="text-sm text-muted-foreground">
+                      {contactSearch ? "Nenhum contato encontrado" : "Nenhum contato salvo"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-1">
+                    {filteredContacts.map(c => {
+                      const isSelected = selectedContacts.some(sc => sc.phone === c.phone);
+                      return (
+                        <button
+                          key={c.phone}
+                          onClick={() => toggleContact(c)}
+                          className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between hover:bg-accent transition-colors ${
+                            isSelected ? 'bg-primary/10 border border-primary/30' : ''
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{c.short || c.name}</p>
+                            <p className="text-xs text-muted-foreground">{c.phone}</p>
+                          </div>
+                          {isSelected && (
+                            <Badge variant="default" className="text-[10px] flex-shrink-0">✓</Badge>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+
               <p className="text-[10px] text-muted-foreground">
-                É obrigatório pelo menos 1 participante para criar o grupo. Use o formato com DDI+DDD+número.
+                {contacts.length} contatos carregados · {selectedContacts.length} selecionado(s)
               </p>
             </div>
 
