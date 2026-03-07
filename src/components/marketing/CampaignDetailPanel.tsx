@@ -184,12 +184,13 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const handleSendNow = async (data: ScheduledMessageData) => {
     const now = new Date();
 
-    if (data.messageType === 'image' && data.mediaItems && data.mediaItems.length > 0) {
+    const multiMediaTypes = ['image', 'video', 'document'];
+    if (multiMediaTypes.includes(data.messageType) && data.mediaItems && data.mediaItems.length > 0) {
       for (let i = 0; i < data.mediaItems.length; i++) {
         const item = data.mediaItems[i];
         const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
           campaign_id: campaignId,
-          message_type: 'image',
+          message_type: data.messageType,
           message_content: item.caption || null,
           media_url: item.url,
           scheduled_at: now.toISOString(),
