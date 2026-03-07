@@ -554,6 +554,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                     <p className="text-xs font-medium truncate">{g.name}</p>
                     <p className="text-[10px] text-muted-foreground">{g.participant_count}/{g.max_participants}</p>
                   </div>
+                  {targetGroups.includes(g.id) && getGroupStatusBadge(g)}
                 </div>
               ))}
             </div>
