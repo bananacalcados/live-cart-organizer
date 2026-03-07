@@ -664,6 +664,7 @@ export default function Marketing() {
                 <SelectItem value="prizes">🎁 Prêmios</SelectItem>
                 <SelectItem value="live_commerce">🌐 Live Commerce</SelectItem>
                 <SelectItem value="link_pages">🔗 Link Pages</SelectItem>
+                <SelectItem value="push_notifications">🔔 Push Notifications</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -685,6 +686,7 @@ export default function Marketing() {
                 <TabsTrigger value="prizes" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
                 <TabsTrigger value="live_commerce" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
                 <TabsTrigger value="link_pages" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Link className="h-3.5 w-3.5" />Link Pages</TabsTrigger>
+                <TabsTrigger value="push_notifications" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Bell className="h-3.5 w-3.5" />Push</TabsTrigger>
               </TabsList>
             </ScrollArea>
           </div>
