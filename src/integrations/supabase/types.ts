@@ -6675,6 +6675,78 @@ export type Database = {
         }
         Relationships: []
       }
+      push_notification_log: {
+        Row: {
+          body: string | null
+          click_url: string | null
+          created_at: string
+          failed_count: number | null
+          id: string
+          image_url: string | null
+          sent_by: string | null
+          sent_count: number | null
+          title: string
+        }
+        Insert: {
+          body?: string | null
+          click_url?: string | null
+          created_at?: string
+          failed_count?: number | null
+          id?: string
+          image_url?: string | null
+          sent_by?: string | null
+          sent_count?: number | null
+          title: string
+        }
+        Update: {
+          body?: string | null
+          click_url?: string | null
+          created_at?: string
+          failed_count?: number | null
+          id?: string
+          image_url?: string | null
+          sent_by?: string | null
+          sent_count?: number | null
+          title?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          campaign_tag: string | null
+          created_at: string
+          endpoint: string
+          id: string
+          keys_auth: string
+          keys_p256dh: string
+          lead_name: string | null
+          lead_phone: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          campaign_tag?: string | null
+          created_at?: string
+          endpoint: string
+          id?: string
+          keys_auth: string
+          keys_p256dh: string
+          lead_name?: string | null
+          lead_phone?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          campaign_tag?: string | null
+          created_at?: string
+          endpoint?: string
+          id?: string
+          keys_auth?: string
+          keys_p256dh?: string
+          lead_name?: string | null
+          lead_phone?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       shopify_yampi_mapping: {
         Row: {
           created_at: string
