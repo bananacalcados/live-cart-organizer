@@ -1,6 +1,31 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
+const requestPushAfterRedirect = async (leadName: string, leadPhone: string, campaignTag: string) => {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    const registration = await navigator.serviceWorker.register('/push-sw.js');
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const res = await fetch(`${supabaseUrl}/functions/v1/push-notifications?action=vapid-public-key`, {
+      headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+    });
+    const { publicKey } = await res.json();
+    if (!publicKey) return;
+    const padding = '='.repeat((4 - publicKey.length % 4) % 4);
+    const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawKey = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: rawKey });
+    const subJson = subscription.toJSON();
+    fetch(`${supabaseUrl}/functions/v1/push-notifications?action=subscribe`, {
+      method: 'POST',
+      headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys, campaign_tag: campaignTag, lead_name: leadName, lead_phone: leadPhone }),
+    });
+  } catch (err) {
+    console.log('Push permission denied or unavailable:', err);
+  }
+};
+
 export default function VipGroupRedirectPage() {
   const { slug } = useParams<{ slug: string }>();
   const [status, setStatus] = useState<'loading' | 'redirecting' | 'inapp' | 'nogroup' | 'error'>('loading');
