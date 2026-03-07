@@ -42,7 +42,10 @@ serve(async (req) => {
     switch (action) {
       case 'create':
         endpoint = `${baseUrl}/create-group`;
-        body = { groupName: groupName || value || 'Novo Grupo' };
+        body = { 
+          groupName: groupName || value || 'Novo Grupo',
+          phones: (await req.clone().json()).phones || [],
+        };
         break;
       case 'update-photo':
         endpoint = `${baseUrl}/update-group-photo`;
