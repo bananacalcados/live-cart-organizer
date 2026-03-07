@@ -2996,6 +2996,8 @@ export type Database = {
       }
       group_redirect_links: {
         Row: {
+          cached_at: string | null
+          cached_invite_url: string | null
           campaign_id: string
           click_count: number
           created_at: string
@@ -3006,6 +3008,8 @@ export type Database = {
           slug: string
         }
         Insert: {
+          cached_at?: string | null
+          cached_invite_url?: string | null
           campaign_id: string
           click_count?: number
           created_at?: string
@@ -3016,6 +3020,8 @@ export type Database = {
           slug: string
         }
         Update: {
+          cached_at?: string | null
+          cached_invite_url?: string | null
           campaign_id?: string
           click_count?: number
           created_at?: string
