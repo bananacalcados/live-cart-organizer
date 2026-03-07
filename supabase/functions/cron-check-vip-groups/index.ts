@@ -59,7 +59,7 @@ serve(async (req) => {
       // Only create if there's a group nearing capacity but no standby exists
       if (!hasGroupNearFull || hasStandbyGroup) continue;
 
-      console.log(`Campaign "${campaign.name}" has all groups near full (>=${threshold}). Auto-creating...`);
+      console.log(`Campaign "${campaign.name}" has a group near ${standbyThreshold} with no standby. Creating proactive standby group...`);
 
       // Call auto-create
       try {
