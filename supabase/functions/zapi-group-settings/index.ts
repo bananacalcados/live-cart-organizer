@@ -33,7 +33,7 @@ serve(async (req) => {
       );
     }
 
-    const { action, groupId, groupName, value, phone }: GroupSettingsRequest = await req.json();
+    const { action, groupId, groupName, value, phone, phones }: GroupSettingsRequest = await req.json();
     const baseUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}`;
 
     let endpoint: string;
@@ -45,7 +45,7 @@ serve(async (req) => {
         endpoint = `${baseUrl}/create-group`;
         body = { 
           groupName: groupName || value || 'Novo Grupo',
-          phones: (await req.clone().json()).phones || [],
+          phones: phones || [],
         };
         break;
       case 'update-photo':
