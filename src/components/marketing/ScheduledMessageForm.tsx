@@ -468,8 +468,68 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             </Select>
           </div>
 
-          {/* Media URL, Upload or Shopify */}
-          {messageType !== 'text' && messageType !== 'poll' && (
+          {/* Multi-photo upload for image type */}
+          {messageType === 'image' && (
+            <div className="space-y-2">
+              <Label className="text-xs">Fotos ({mediaItems.length}/10)</Label>
+              <div className="flex gap-2 mb-2 flex-wrap">
+                <Button variant="outline" size="sm" className="gap-1"
+                  onClick={() => multiFileInputRef.current?.click()}
+                  disabled={isUploading || mediaItems.length >= 10}>
+                  {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  Upload Fotos
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1" onClick={openShopifyPicker}
+                  disabled={mediaItems.length >= 10}>
+                  <ShoppingBag className="h-3.5 w-3.5" /> Shopify
+                </Button>
+              </div>
+              <input ref={multiFileInputRef} type="file" accept="image/*" multiple
+                onChange={handleMultiFileUpload} className="hidden" />
+
+              {/* URL manual add */}
+              <div className="flex gap-2">
+                <Input placeholder="Ou cole URL da imagem..." value={mediaUrl}
+                  onChange={e => setMediaUrl(e.target.value)} className="flex-1" />
+                <Button variant="outline" size="sm" disabled={!mediaUrl.trim() || mediaItems.length >= 10}
+                  onClick={() => {
+                    setMediaItems(prev => [...prev, { url: mediaUrl, caption: '' }]);
+                    setMediaUrl('');
+                  }}>
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+
+              {/* Media items list with captions */}
+              {mediaItems.length > 0 && (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {mediaItems.map((item, i) => (
+                    <div key={i} className="flex gap-2 items-start border rounded-lg p-2">
+                      <img src={item.url} alt={`Foto ${i + 1}`}
+                        className="w-16 h-16 object-cover rounded shrink-0" />
+                      <div className="flex-1 space-y-1">
+                        <p className="text-[10px] text-muted-foreground">Foto {i + 1}</p>
+                        <Input placeholder="Legenda desta foto..." value={item.caption}
+                          onChange={e => {
+                            const next = [...mediaItems];
+                            next[i] = { ...next[i], caption: e.target.value };
+                            setMediaItems(next);
+                          }}
+                          className="h-7 text-xs" />
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                        onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Media URL, Upload or Shopify for non-image media types */}
+          {messageType !== 'text' && messageType !== 'poll' && messageType !== 'image' && (
             <div className="space-y-2">
               <Label className="text-xs">Mídia</Label>
               <div className="flex gap-2 mb-2 flex-wrap">
@@ -481,31 +541,9 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                   onClick={() => setMediaMode("upload")}>
                   <Upload className="h-3.5 w-3.5" /> Upload
                 </Button>
-                {(messageType === 'image' || messageType === 'text') && (
-                  <Button variant={mediaMode === "shopify" ? "default" : "outline"} size="sm" className="gap-1"
-                    onClick={openShopifyPicker}>
-                    <ShoppingBag className="h-3.5 w-3.5" /> Shopify
-                  </Button>
-                )}
               </div>
               {mediaMode === "url" ? (
                 <Input placeholder="https://..." value={mediaUrl} onChange={e => setMediaUrl(e.target.value)} />
-              ) : mediaMode === "shopify" ? (
-                <div className="space-y-2">
-                  {mediaUrl && (
-                    <div className="relative">
-                      <img src={mediaUrl} alt="Produto" className="w-full h-32 object-contain rounded-lg border" />
-                      <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6"
-                        onClick={() => { setMediaUrl(""); setMediaMode("url"); }}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  )}
-                  <Button variant="outline" className="w-full gap-1" onClick={openShopifyPicker}>
-                    <ShoppingBag className="h-4 w-4" />
-                    {mediaUrl ? "Trocar produto" : "Selecionar produto da Shopify"}
-                  </Button>
-                </div>
               ) : (
                 <div>
                   <input ref={fileInputRef} type="file" accept={acceptTypes[messageType] || "*/*"}
