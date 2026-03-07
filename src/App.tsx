@@ -33,6 +33,7 @@ const LiveCommerce = lazy(() => import("./pages/LiveCommerce"));
 const DoseTriplaCatalog = lazy(() => import("./pages/DoseTriplaCatalog"));
 const StoreCheckout = lazy(() => import("./pages/StoreCheckout"));
 const LinkPageView = lazy(() => import("./pages/LinkPageView"));
+const VipRedirect = lazy(() => import("./pages/VipRedirect"));
 
 const queryClient = new QueryClient();
 
@@ -65,6 +66,7 @@ const App = () => (
               <Route path="/dose-tripla" element={<DoseTriplaCatalog />} />
               <Route path="/catalogo/:slug" element={<DoseTriplaCatalog />} />
               <Route path="/l/:slug" element={<LinkPageView />} />
+              <Route path="/:slug" element={<VipRedirect />} />
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
