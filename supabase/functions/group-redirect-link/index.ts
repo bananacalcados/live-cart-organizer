@@ -72,8 +72,8 @@ serve(async (req) => {
         const apiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invitation-link/${groupId}`;
         console.log(`Fetching invite link from: ${apiUrl}`);
         const res = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Client-Token': clientToken, 'Content-Type': 'application/json' },
+          method: 'GET',
+          headers: { 'Client-Token': clientToken },
         });
         const data = await res.json();
         console.log('Z-API invite link response:', JSON.stringify(data));
