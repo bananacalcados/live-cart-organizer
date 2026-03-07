@@ -141,9 +141,11 @@ serve(async (req) => {
 
     if (!redirectUrl) {
       return new Response(
-        `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Grupo</title>
-        <style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#075e54;color:white;text-align:center}.container{padding:2rem}a{color:#25D366;text-decoration:underline}</style>
-        </head><body><div class="container"><h2>⏳ Grupo sendo preparado</h2><p>O grupo está sendo configurado. Tente novamente em alguns instantes.</p><p><a href="${url.toString()}">Tentar novamente</a></p></div></body></html>`,
+        `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preparando grupo...</title>
+        <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;background:#075e54;color:white;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}.card{background:rgba(0,0,0,.25);border-radius:16px;padding:2rem;text-align:center;max-width:360px;width:100%}.spinner{border:3px solid rgba(255,255,255,.3);border-top:3px solid white;border-radius:50%;width:44px;height:44px;animation:spin .9s linear infinite;margin:0 auto 1.2rem}@keyframes spin{to{transform:rotate(360deg)}}h2{font-size:1.15rem;margin-bottom:.5rem}p{font-size:.9rem;opacity:.85;margin-bottom:1rem;line-height:1.5}.btn{display:inline-block;background:#25D366;color:white;text-decoration:none;padding:.75rem 1.5rem;border-radius:50px;font-weight:600;font-size:.95rem;cursor:pointer;border:none;width:100%;max-width:260px}#cd{font-weight:bold}</style>
+        </head><body><div class="card"><div class="spinner"></div><h2>⏳ Preparando seu grupo VIP</h2><p>Estamos configurando um grupo exclusivo. Redirecionando em <span id="cd">10</span>s...</p><button class="btn" onclick="location.reload()">Tentar agora</button></div>
+        <script>let t=10;const c=document.getElementById('cd');const i=setInterval(()=>{t--;c.textContent=t;if(t<=0){clearInterval(i);location.reload();}},1000);</script>
+        </body></html>`,
         { status: 200, headers: { 'Content-Type': 'text/html' } }
       );
     }
