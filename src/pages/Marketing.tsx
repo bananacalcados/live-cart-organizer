@@ -691,14 +691,14 @@ export default function Marketing() {
 
           {/* ── CAMPANHAS ── */}
           <TabsContent value="campaigns" className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">{campaigns.length} campanhas</p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setUploadDialogOpen(true)} className="gap-1">
-                  <Upload className="h-3.5 w-3.5" />Upload Excel
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Button variant="outline" size="sm" onClick={() => setUploadDialogOpen(true)} className="gap-1 flex-1 sm:flex-initial text-xs">
+                  <Upload className="h-3.5 w-3.5" />Excel
                 </Button>
-                <Button size="sm" onClick={() => navigate('/marketing/new')} className="gap-1">
-                  <Plus className="h-3.5 w-3.5" />Nova Campanha 360°
+                <Button size="sm" onClick={() => navigate('/marketing/new')} className="gap-1 flex-1 sm:flex-initial text-xs">
+                  <Plus className="h-3.5 w-3.5" />Nova Campanha
                 </Button>
               </div>
             </div>
