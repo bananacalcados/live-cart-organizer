@@ -507,6 +507,25 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                   <Button size="sm" variant="outline" className="gap-1 ml-2 shrink-0" onClick={() => setShowCreateGroup(true)}>
                     <Plus className="h-3.5 w-3.5" /> Criar Novo Grupo
                   </Button>
+               </AlertDescription>
+              </Alert>
+            )}
+            {hasNearFullGroup && hasStandbyGroup && (
+              <Alert className="border-emerald-500/50 bg-emerald-500/10">
+                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                <AlertDescription className="text-xs text-emerald-700 dark:text-emerald-400">
+                  ✅ Grupo standby pronto para receber novos membros
+                </AlertDescription>
+              </Alert>
+            )}
+            {hasNearFullGroup && !hasStandbyGroup && !allGroupsFull && (
+              <Alert className="border-amber-500/50 bg-amber-500/10">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span className="text-xs text-amber-700 dark:text-amber-400">Grupo próximo do limite! Crie um grupo standby.</span>
+                  <Button size="sm" variant="outline" className="gap-1 ml-2 shrink-0" onClick={() => setShowCreateGroup(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Criar Standby
+                  </Button>
                 </AlertDescription>
               </Alert>
             )}
