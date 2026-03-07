@@ -23,6 +23,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
   const [description, setDescription] = useState("");
   const [pinnedMessage, setPinnedMessage] = useState("");
   const [brandContext, setBrandContext] = useState("");
+  const [initialPhones, setInitialPhones] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [createdGroupId, setCreatedGroupId] = useState<string | null>(null);
@@ -77,7 +78,11 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ action: "create", groupName }),
+          body: JSON.stringify({ 
+            action: "create", 
+            groupName,
+            phones: initialPhones.split(/[,;\n\s]+/).map(p => p.replace(/\D/g, '')).filter(p => p.length >= 10),
+          }),
         }
       );
       const data = await res.json();
