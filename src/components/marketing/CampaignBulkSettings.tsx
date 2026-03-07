@@ -31,7 +31,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [onlyAdminsSend, setOnlyAdminsSend] = useState(false);
   const [onlyAdminsAdd, setOnlyAdminsAdd] = useState(false);
-  const [pinMessageId, setPinMessageId] = useState("");
+  const [pinMessageText, setPinMessageText] = useState("");
   const [pinDuration, setPinDuration] = useState("7_days");
   const [promotePhone, setPromotePhone] = useState("");
   const [adminPhones, setAdminPhones] = useState<string[]>([]);
@@ -51,7 +51,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       setOnlyAdminsSend((data as any).group_only_admins_send || false);
       setOnlyAdminsAdd((data as any).group_only_admins_add || false);
       setAdminPhones((data as any).group_admin_phones || []);
-      setPinMessageId((data as any).group_pin_message_id || "");
+      setPinMessageText((data as any).group_pin_message_text || "");
       setPinDuration((data as any).group_pin_duration || "7_days");
     }
     setIsLoaded(true);
@@ -70,7 +70,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
         group_only_admins_send: onlyAdminsSend,
         group_only_admins_add: onlyAdminsAdd,
         group_admin_phones: adminPhones,
-        group_pin_message_id: pinMessageId || null,
+        group_pin_message_text: pinMessageText || null,
         group_pin_duration: pinDuration,
       } as any).eq('id', campaignId);
 
@@ -187,7 +187,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   };
 
   const handlePinInAllGroups = async () => {
-    if (!pinMessageId.trim()) return;
+    if (!pinMessageText.trim()) return;
     setIsApplying('pin');
     try {
       const { data: groups } = await supabase
@@ -202,16 +202,31 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
 
       for (const group of groups) {
         try {
-          const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
+          // Step 1: Send the message to the group
+          const sendRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-send-group-message`, {
             method: 'POST',
             headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'pin-message', groupId: group.group_id, messageId: pinMessageId, pinDuration }),
+            body: JSON.stringify({ groupId: group.group_id, message: pinMessageText, type: 'text' }),
           });
-          const data = await res.json();
-          if (res.ok && data.success) success++;
+          const sendData = await sendRes.json();
+          const messageId = sendData?.data?.messageId || sendData?.data?.zapiMessageId;
+
+          if (!sendRes.ok || !messageId) { failed++; continue; }
+
+          // Wait a moment for message to be delivered
+          await new Promise(r => setTimeout(r, 2000));
+
+          // Step 2: Pin the sent message
+          const pinRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
+            method: 'POST',
+            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'pin-message', groupId: group.group_id, messageId, pinDuration }),
+          });
+          const pinData = await pinRes.json();
+          if (pinRes.ok && pinData.success) success++;
           else failed++;
         } catch { failed++; }
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 1500));
       }
 
       toast.success(`Mensagem fixada: ${success}/${groups.length} grupos${failed > 0 ? ` (${failed} falharam)` : ''}`);
@@ -321,8 +336,8 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
             <CardTitle className="text-xs flex items-center gap-1"><Pin className="h-3.5 w-3.5" /> Fixar Mensagem (Destaque)</CardTitle>
           </CardHeader>
           <CardContent className="p-3 pt-0 space-y-2">
-            <Input placeholder="ID da mensagem (messageId)" value={pinMessageId} onChange={e => setPinMessageId(e.target.value)} />
-            <p className="text-[10px] text-muted-foreground">Cole o ID da mensagem que deseja fixar. Obtenha enviando uma mensagem primeiro.</p>
+            <Textarea placeholder="Digite a mensagem que será enviada e fixada em todos os grupos..." value={pinMessageText} onChange={e => setPinMessageText(e.target.value)} rows={3} />
+            <p className="text-[10px] text-muted-foreground">A mensagem será enviada e automaticamente fixada (destacada) em todos os grupos.</p>
             <div>
               <Label className="text-xs">Duração do destaque</Label>
               <Select value={pinDuration} onValueChange={setPinDuration}>
@@ -334,7 +349,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
                 </SelectContent>
               </Select>
             </div>
-            <Button size="sm" disabled={!pinMessageId.trim() || isApplying === 'pin'} className="gap-1"
+            <Button size="sm" disabled={!pinMessageText.trim() || isApplying === 'pin'} className="gap-1"
               onClick={handlePinInAllGroups}>
               {isApplying === 'pin' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pin className="h-3.5 w-3.5" />}
               Fixar em Todos os Grupos

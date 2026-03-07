@@ -2873,7 +2873,7 @@ export type Database = {
           group_only_admins_send: boolean
           group_photo_url: string | null
           group_pin_duration: string | null
-          group_pin_message_id: string | null
+          group_pin_message_text: string | null
           id: string
           is_deep_link: boolean
           media_url: string | null
@@ -2908,7 +2908,7 @@ export type Database = {
           group_only_admins_send?: boolean
           group_photo_url?: string | null
           group_pin_duration?: string | null
-          group_pin_message_id?: string | null
+          group_pin_message_text?: string | null
           id?: string
           is_deep_link?: boolean
           media_url?: string | null
@@ -2943,7 +2943,7 @@ export type Database = {
           group_only_admins_send?: boolean
           group_photo_url?: string | null
           group_pin_duration?: string | null
-          group_pin_message_id?: string | null
+          group_pin_message_text?: string | null
           id?: string
           is_deep_link?: boolean
           media_url?: string | null
