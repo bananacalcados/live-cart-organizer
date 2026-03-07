@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Loader2, Image, FileText, Shield, UserPlus, Type, Upload
+  ArrowLeft, Loader2, Image, FileText, Shield, UserPlus, Type, Upload, Pin, Crown, Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface CampaignBulkSettingsProps {
   campaignId: string;
   targetGroups: string[];
   onBack: () => void;
+}
+
+interface Participant {
+  phone: string;
+  name?: string;
+  isAdmin?: boolean;
 }
 
 export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: CampaignBulkSettingsProps) {
@@ -26,6 +35,11 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [onlyAdminsSend, setOnlyAdminsSend] = useState(false);
   const [onlyAdminsAdd, setOnlyAdminsAdd] = useState(false);
+  const [pinMessageId, setPinMessageId] = useState("");
+  const [pinDuration, setPinDuration] = useState("7_days");
+  const [promotePhone, setPromotePhone] = useState("");
+  const [groupParticipants, setGroupParticipants] = useState<Record<string, Participant[]>>({});
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
 
   const applyToAllGroups = async (action: string, payload: Record<string, unknown>) => {
     setIsApplying(action);
@@ -78,6 +92,75 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
 
       toast.success(`Aplicado: ${success}/${groups.length} grupos${failed > 0 ? ` (${failed} falharam)` : ''}`);
     } catch { toast.error("Erro ao aplicar configurações"); }
+    finally { setIsApplying(null); }
+  };
+
+  const handlePromoteInAllGroups = async () => {
+    if (!promotePhone.trim()) return;
+    const cleanPhone = promotePhone.replace(/\D/g, '');
+    setIsApplying('promote');
+    try {
+      const { data: groups } = await supabase
+        .from('whatsapp_groups')
+        .select('id, group_id, name')
+        .in('id', targetGroups);
+
+      if (!groups || groups.length === 0) { toast.error("Nenhum grupo encontrado"); return; }
+
+      let success = 0;
+      let failed = 0;
+
+      for (const group of groups) {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
+            method: 'POST',
+            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'promote-admin', groupId: group.group_id, phone: cleanPhone }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success) success++;
+          else failed++;
+        } catch { failed++; }
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      toast.success(`Admin promovido: ${success}/${groups.length} grupos${failed > 0 ? ` (${failed} falharam)` : ''}`);
+      setPromotePhone("");
+    } catch { toast.error("Erro ao promover admin"); }
+    finally { setIsApplying(null); }
+  };
+
+  const handlePinInAllGroups = async () => {
+    if (!pinMessageId.trim()) return;
+    setIsApplying('pin');
+    try {
+      const { data: groups } = await supabase
+        .from('whatsapp_groups')
+        .select('id, group_id, name')
+        .in('id', targetGroups);
+
+      if (!groups || groups.length === 0) { toast.error("Nenhum grupo encontrado"); return; }
+
+      let success = 0;
+      let failed = 0;
+
+      for (const group of groups) {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
+            method: 'POST',
+            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'pin-message', groupId: group.group_id, messageId: pinMessageId, pinDuration }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success) success++;
+          else failed++;
+        } catch { failed++; }
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      toast.success(`Mensagem fixada: ${success}/${groups.length} grupos${failed > 0 ? ` (${failed} falharam)` : ''}`);
+      setPinMessageId("");
+    } catch { toast.error("Erro ao fixar mensagem"); }
     finally { setIsApplying(null); }
   };
 
@@ -166,6 +249,33 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           </CardContent>
         </Card>
 
+        {/* Pin Message */}
+        <Card>
+          <CardHeader className="p-3 pb-2">
+            <CardTitle className="text-xs flex items-center gap-1"><Pin className="h-3.5 w-3.5" /> Fixar Mensagem (Destaque)</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 space-y-2">
+            <Input placeholder="ID da mensagem (messageId)" value={pinMessageId} onChange={e => setPinMessageId(e.target.value)} />
+            <p className="text-[10px] text-muted-foreground">Cole o ID da mensagem que deseja fixar. Obtenha enviando uma mensagem primeiro.</p>
+            <div>
+              <Label className="text-xs">Duração do destaque</Label>
+              <Select value={pinDuration} onValueChange={setPinDuration}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="24_hours">24 horas</SelectItem>
+                  <SelectItem value="7_days">7 dias</SelectItem>
+                  <SelectItem value="30_days">30 dias</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button size="sm" disabled={!pinMessageId.trim() || isApplying === 'pin'} className="gap-1"
+              onClick={handlePinInAllGroups}>
+              {isApplying === 'pin' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pin className="h-3.5 w-3.5" />}
+              Fixar em Todos os Grupos
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* Permissions */}
         <Card>
           <CardHeader className="p-3 pb-2">
@@ -184,6 +294,22 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
               onClick={() => applyToAllGroups('permissions', { action: 'permissions', onlyAdminsSend, onlyAdminsAdd })}>
               {isApplying === 'permissions' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}
               Aplicar Permissões
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Promote Admin */}
+        <Card>
+          <CardHeader className="p-3 pb-2">
+            <CardTitle className="text-xs flex items-center gap-1"><Crown className="h-3.5 w-3.5" /> Promover Admin em Todos os Grupos</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 space-y-2">
+            <Input placeholder="Número do telefone (ex: 5511999999999)" value={promotePhone} onChange={e => setPromotePhone(e.target.value)} />
+            <p className="text-[10px] text-muted-foreground">O número será promovido a admin em todos os grupos da campanha (precisa ser participante)</p>
+            <Button size="sm" disabled={!promotePhone.trim() || isApplying === 'promote'} className="gap-1"
+              onClick={handlePromoteInAllGroups}>
+              {isApplying === 'promote' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Crown className="h-3.5 w-3.5" />}
+              Promover Admin
             </Button>
           </CardContent>
         </Card>
