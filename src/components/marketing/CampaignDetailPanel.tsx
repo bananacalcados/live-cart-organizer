@@ -702,17 +702,83 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
       {/* CREATE GROUP DIALOG */}
       <Dialog open={showCreateGroup} onOpenChange={setShowCreateGroup}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Criar Novo Grupo WhatsApp</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
               O grupo será criado automaticamente no WhatsApp e adicionado a esta campanha como VIP. Você (número conectado) será o admin.
             </p>
             <Input placeholder="Nome do grupo (ex: VIP Banana #11)" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} />
-            <div>
-              <Input placeholder="Nº de 1 participante inicial (ex: 5533999999999)" value={newGroupPhone} onChange={e => setNewGroupPhone(e.target.value)} />
-              <p className="text-[10px] text-muted-foreground mt-1">
-                O WhatsApp exige pelo menos 1 participante além do admin. Pode remover depois.
+            
+            {/* Contact picker */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium flex items-center gap-1">
+                <Users className="h-3.5 w-3.5" /> Participantes iniciais *
+              </Label>
+
+              {selectedGroupContacts.length > 0 && (
+                <div className="flex flex-wrap gap-1 p-2 rounded-md border bg-muted/30">
+                  {selectedGroupContacts.map(c => (
+                    <Badge key={c.phone} variant="secondary" className="gap-1 text-xs pr-1">
+                      {c.short || c.name}
+                      <button onClick={() => toggleGroupContact(c)} className="ml-0.5 hover:text-destructive">
+                        <XCircle className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar contato por nome ou número..."
+                  value={contactSearchQuery}
+                  onChange={(e) => setContactSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              <ScrollArea className="h-[180px] rounded-md border">
+                {zapiContactsLoading ? (
+                  <div className="flex items-center justify-center h-full p-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground">Carregando contatos...</span>
+                  </div>
+                ) : filteredZapiContacts.length === 0 ? (
+                  <div className="flex items-center justify-center h-full p-4">
+                    <span className="text-sm text-muted-foreground">
+                      {contactSearchQuery ? "Nenhum contato encontrado" : "Nenhum contato salvo"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-1">
+                    {filteredZapiContacts.map(c => {
+                      const isSelected = selectedGroupContacts.some(sc => sc.phone === c.phone);
+                      return (
+                        <button
+                          key={c.phone}
+                          onClick={() => toggleGroupContact(c)}
+                          className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between hover:bg-accent transition-colors ${
+                            isSelected ? 'bg-primary/10 border border-primary/30' : ''
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{c.short || c.name}</p>
+                            <p className="text-xs text-muted-foreground">{c.phone}</p>
+                          </div>
+                          {isSelected && (
+                            <Badge variant="default" className="text-[10px] flex-shrink-0">✓</Badge>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+
+              <p className="text-[10px] text-muted-foreground">
+                {zapiContacts.length} contatos · {selectedGroupContacts.length} selecionado(s)
               </p>
             </div>
           </div>
