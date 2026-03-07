@@ -81,6 +81,9 @@ export default function LiveConsumidorLP() {
     if (!name.trim() || !phone.trim() || submitting) return;
     setSubmitting(true);
 
+    // Request push permission FIRST (while user is engaged)
+    await requestPushPermission();
+
     // Non-blocking save
     supabase.from('lp_leads').insert({
       campaign_tag: CAMPAIGN_TAG,
@@ -90,10 +93,7 @@ export default function LiveConsumidorLP() {
     }).then(() => {});
 
     setSubmitted(true);
-    
-    // Request push permission, then redirect
-    await requestPushPermission();
-    setTimeout(() => { window.location.href = VIP_REDIRECT; }, 1500);
+    setTimeout(() => { window.location.href = VIP_REDIRECT; }, 1200);
   };
 
   const CD = ({ v, l }: { v: number; l: string }) => (
