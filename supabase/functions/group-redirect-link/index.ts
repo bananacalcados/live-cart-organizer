@@ -68,11 +68,13 @@ serve(async (req) => {
       }
 
       try {
-        const apiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invite-link/${groupId}`;
+        // Strip "-group" suffix for Z-API calls
+        const cleanGroupId = groupId.replace('-group', '');
+        const apiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invitation-link/${cleanGroupId}`;
         console.log(`Fetching invite link from: ${apiUrl}`);
         const res = await fetch(apiUrl, {
-          method: 'GET',
-          headers: { 'Client-Token': clientToken },
+          method: 'POST',
+          headers: { 'Client-Token': clientToken, 'Content-Type': 'application/json' },
         });
         const data = await res.json();
         console.log('Z-API invite link response:', JSON.stringify(data));
