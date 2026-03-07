@@ -6,11 +6,12 @@ export default function VipGroupRedirectPage() {
   const [status, setStatus] = useState<'loading' | 'redirecting' | 'inapp' | 'nogroup' | 'error'>('loading');
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(10);
+  const [errorDetail, setErrorDetail] = useState<string>('');
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
   useEffect(() => {
-    if (!slug) { setStatus('error'); return; }
+    if (!slug) { setStatus('error'); setErrorDetail('slug is undefined'); return; }
 
     const ua = navigator.userAgent || '';
     const isInstagram = /Instagram/i.test(ua);
@@ -18,8 +19,16 @@ export default function VipGroupRedirectPage() {
     const isAndroid = /Android/i.test(ua);
     const isInApp = isInstagram || isFacebook;
 
-    fetch(`${supabaseUrl}/functions/v1/group-redirect-link?slug=${slug}&mode=api`)
-      .then(r => r.json())
+    fetch(`${supabaseUrl}/functions/v1/group-redirect-link?slug=${slug}&mode=api`, {
+      headers: {
+        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        'Content-Type': 'application/json',
+      }
+    })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => {
         if (!data.invite_url) {
           setStatus('nogroup');
@@ -45,7 +54,12 @@ export default function VipGroupRedirectPage() {
           setTimeout(() => { window.location.href = waRegular; }, 400);
         }
       })
-      .catch(() => setStatus('error'));
+      .catch(err => {
+        const msg = err?.message || String(err);
+        console.error('[VipRedirect] Erro ao buscar grupo:', msg);
+        setErrorDetail(msg);
+        setStatus('error');
+      });
   }, [slug]);
 
   // Auto-retry countdown for nogroup
