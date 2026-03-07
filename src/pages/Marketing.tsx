@@ -144,6 +144,7 @@ export default function Marketing() {
     };
   }, []);
 
+  const [activeTab, setActiveTab] = useState("calendar");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [landingPages, setLandingPages] = useState<any[]>([]);
@@ -630,44 +631,74 @@ export default function Marketing() {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Megaphone className="h-4 w-4" />
             </div>
-            <h1 className="text-lg font-bold" style={{ color: 'hsl(48 95% 55%)' }}>Marketing 360°</h1>
+            <h1 className="text-lg font-bold hidden sm:block" style={{ color: 'hsl(48 95% 55%)' }}>Marketing 360°</h1>
+            <h1 className="text-sm font-bold sm:hidden" style={{ color: 'hsl(48 95% 55%)' }}>Mkt 360°</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1 text-white hover:text-white hover:bg-white/10">← Início</Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/chat')} className="text-white hover:text-white hover:bg-white/10">Chat</Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1 text-white hover:text-white hover:bg-white/10 text-xs sm:text-sm px-2 sm:px-3">← Início</Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/chat')} className="text-white hover:text-white hover:bg-white/10 text-xs sm:text-sm px-2 sm:px-3 hidden sm:inline-flex">Chat</Button>
           </div>
         </div>
       </header>
 
-      <div className="container py-4 space-y-4">
-        <Tabs defaultValue="calendar">
-          <TabsList className="bg-white/10 border border-white/10">
-            <TabsTrigger value="calendar" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Calendar className="h-3.5 w-3.5" />Calendário</TabsTrigger>
-            <TabsTrigger value="campaigns" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Target className="h-3.5 w-3.5" />Campanhas 360°</TabsTrigger>
-            <TabsTrigger value="customers" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Users className="h-3.5 w-3.5" />Clientes RFM</TabsTrigger>
-            <TabsTrigger value="templates" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Megaphone className="h-3.5 w-3.5" />Templates Meta</TabsTrigger>
-            <TabsTrigger value="disparos" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Send className="h-3.5 w-3.5" />Disparos</TabsTrigger>
-            <TabsTrigger value="automations" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Zap className="h-3.5 w-3.5" />Automações</TabsTrigger>
-            <TabsTrigger value="sectors" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Store className="h-3.5 w-3.5" />Setores</TabsTrigger>
-            <TabsTrigger value="landing_pages" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
-            <TabsTrigger value="leads" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><FileSpreadsheet className="h-3.5 w-3.5" />Leads</TabsTrigger>
-            <TabsTrigger value="groups_vip" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
-            <TabsTrigger value="prizes" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
-            <TabsTrigger value="live_commerce" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
-            <TabsTrigger value="link_pages" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Link className="h-3.5 w-3.5" />Link Pages</TabsTrigger>
-          </TabsList>
+      <div className="container px-2 sm:px-4 py-4 space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          {/* Mobile: Select dropdown */}
+          <div className="md:hidden">
+            <Select value={activeTab} onValueChange={setActiveTab}>
+              <SelectTrigger className="w-full bg-white/10 border-white/10 text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="calendar">📅 Calendário</SelectItem>
+                <SelectItem value="campaigns">🎯 Campanhas 360°</SelectItem>
+                <SelectItem value="customers">👥 Clientes RFM</SelectItem>
+                <SelectItem value="templates">📢 Templates Meta</SelectItem>
+                <SelectItem value="disparos">📨 Disparos</SelectItem>
+                <SelectItem value="automations">⚡ Automações</SelectItem>
+                <SelectItem value="sectors">🏪 Setores</SelectItem>
+                <SelectItem value="landing_pages">🔗 Landing Pages</SelectItem>
+                <SelectItem value="leads">📋 Leads</SelectItem>
+                <SelectItem value="groups_vip">👑 Grupos VIP</SelectItem>
+                <SelectItem value="prizes">🎁 Prêmios</SelectItem>
+                <SelectItem value="live_commerce">🌐 Live Commerce</SelectItem>
+                <SelectItem value="link_pages">🔗 Link Pages</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Desktop: Scrollable TabsList */}
+          <div className="hidden md:block">
+            <ScrollArea className="w-full" type="scroll">
+              <TabsList className="bg-white/10 border border-white/10 w-max">
+                <TabsTrigger value="calendar" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Calendar className="h-3.5 w-3.5" />Calendário</TabsTrigger>
+                <TabsTrigger value="campaigns" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Target className="h-3.5 w-3.5" />Campanhas 360°</TabsTrigger>
+                <TabsTrigger value="customers" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Users className="h-3.5 w-3.5" />Clientes RFM</TabsTrigger>
+                <TabsTrigger value="templates" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Megaphone className="h-3.5 w-3.5" />Templates Meta</TabsTrigger>
+                <TabsTrigger value="disparos" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Send className="h-3.5 w-3.5" />Disparos</TabsTrigger>
+                <TabsTrigger value="automations" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Zap className="h-3.5 w-3.5" />Automações</TabsTrigger>
+                <TabsTrigger value="sectors" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Store className="h-3.5 w-3.5" />Setores</TabsTrigger>
+                <TabsTrigger value="landing_pages" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
+                <TabsTrigger value="leads" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><FileSpreadsheet className="h-3.5 w-3.5" />Leads</TabsTrigger>
+                <TabsTrigger value="groups_vip" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
+                <TabsTrigger value="prizes" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
+                <TabsTrigger value="live_commerce" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
+                <TabsTrigger value="link_pages" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Link className="h-3.5 w-3.5" />Link Pages</TabsTrigger>
+              </TabsList>
+            </ScrollArea>
+          </div>
 
           {/* ── CAMPANHAS ── */}
           <TabsContent value="campaigns" className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">{campaigns.length} campanhas</p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setUploadDialogOpen(true)} className="gap-1">
-                  <Upload className="h-3.5 w-3.5" />Upload Excel
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Button variant="outline" size="sm" onClick={() => setUploadDialogOpen(true)} className="gap-1 flex-1 sm:flex-initial text-xs">
+                  <Upload className="h-3.5 w-3.5" />Excel
                 </Button>
-                <Button size="sm" onClick={() => navigate('/marketing/new')} className="gap-1">
-                  <Plus className="h-3.5 w-3.5" />Nova Campanha 360°
+                <Button size="sm" onClick={() => navigate('/marketing/new')} className="gap-1 flex-1 sm:flex-initial text-xs">
+                  <Plus className="h-3.5 w-3.5" />Nova Campanha
                 </Button>
               </div>
             </div>
@@ -698,11 +729,11 @@ export default function Marketing() {
 
           {/* ── CLIENTES RFM ── */}
           <TabsContent value="customers" className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Card><CardContent className="pt-4 pb-3 px-4"><p className="text-xs text-muted-foreground">Total Clientes</p><p className="text-2xl font-bold">{customers.length}</p></CardContent></Card>
-              <Card><CardContent className="pt-4 pb-3 px-4"><p className="text-xs text-muted-foreground">Faturamento Total</p><p className="text-2xl font-bold">{formatCurrency(totalRevenue)}</p></CardContent></Card>
-              <Card><CardContent className="pt-4 pb-3 px-4"><p className="text-xs text-muted-foreground">🏪 Loja Física</p><p className="text-2xl font-bold">{regionCounts['local'] || 0}</p></CardContent></Card>
-              <Card><CardContent className="pt-4 pb-3 px-4"><p className="text-xs text-muted-foreground">🌐 Online</p><p className="text-2xl font-bold">{regionCounts['online'] || 0}</p></CardContent></Card>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
+              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">Total Clientes</p><p className="text-lg sm:text-2xl font-bold">{customers.length}</p></CardContent></Card>
+              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">Faturamento</p><p className="text-lg sm:text-2xl font-bold truncate">{formatCurrency(totalRevenue)}</p></CardContent></Card>
+              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">🏪 Loja Física</p><p className="text-lg sm:text-2xl font-bold">{regionCounts['local'] || 0}</p></CardContent></Card>
+              <Card><CardContent className="pt-3 pb-2 px-3 sm:pt-4 sm:pb-3 sm:px-4"><p className="text-[10px] sm:text-xs text-muted-foreground">🌐 Online</p><p className="text-lg sm:text-2xl font-bold">{regionCounts['online'] || 0}</p></CardContent></Card>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -717,45 +748,49 @@ export default function Marketing() {
               })}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
+              <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Buscar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-9" />
               </div>
-              <Select value={regionFilter} onValueChange={setRegionFilter}>
-                <SelectTrigger className="w-[160px] h-9"><MapPin className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas Regiões</SelectItem>
-                  <SelectItem value="local">🏪 Loja Física</SelectItem>
-                  <SelectItem value="online">🌐 Online</SelectItem>
-                  <SelectItem value="unknown">❓ Indefinido</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={dddFilter} onValueChange={setDddFilter}>
-                <SelectTrigger className="w-[120px] h-9"><Phone className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos DDDs</SelectItem>
-                  {uniqueDdds.map(ddd => (<SelectItem key={ddd} value={ddd!}>DDD {ddd}</SelectItem>))}
-                </SelectContent>
-              </Select>
-              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-[140px] h-9" placeholder="De" title="Compras a partir de" />
-              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[140px] h-9" placeholder="Até" title="Compras até" />
-              <Input type="number" value={ticketMin} onChange={e => setTicketMin(e.target.value)} className="w-[120px] h-9" placeholder="Ticket mín" title="Ticket médio mínimo" />
-              <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="w-[120px] h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
-              <div className="flex gap-1 ml-auto">
-                <Button variant="outline" size="sm" className="gap-1 relative overflow-hidden">
-                  <Upload className="h-3.5 w-3.5" />Upload Excel
+              <div className="grid grid-cols-2 sm:flex gap-2">
+                <Select value={regionFilter} onValueChange={setRegionFilter}>
+                  <SelectTrigger className="h-9"><MapPin className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas Regiões</SelectItem>
+                    <SelectItem value="local">🏪 Loja Física</SelectItem>
+                    <SelectItem value="online">🌐 Online</SelectItem>
+                    <SelectItem value="unknown">❓ Indefinido</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={dddFilter} onValueChange={setDddFilter}>
+                  <SelectTrigger className="h-9"><Phone className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos DDDs</SelectItem>
+                    {uniqueDdds.map(ddd => (<SelectItem key={ddd} value={ddd!}>DDD {ddd}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 sm:flex gap-2">
+                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9" placeholder="De" title="Compras a partir de" />
+                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9" placeholder="Até" title="Compras até" />
+                <Input type="number" value={ticketMin} onChange={e => setTicketMin(e.target.value)} className="h-9" placeholder="Ticket mín" title="Ticket médio mínimo" />
+                <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
+              </div>
+              <div className="flex flex-wrap gap-1 w-full sm:w-auto sm:ml-auto">
+                <Button variant="outline" size="sm" className="gap-1 relative overflow-hidden text-xs">
+                  <Upload className="h-3.5 w-3.5" /><span className="hidden sm:inline">Upload </span>Excel
                   <input ref={rfmFileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleRfmExcelUpload}
                     className="absolute inset-0 opacity-0 cursor-pointer" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSyncRfm} disabled={isSyncing} className="gap-1">
-                  <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Recalcular RFM
+                <Button variant="outline" size="sm" onClick={handleSyncRfm} disabled={isSyncing} className="gap-1 text-xs">
+                  <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">Recalcular </span>RFM
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSyncSales} disabled={isSyncing} className="gap-1">
-                  <Download className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sync Vendas
+                <Button variant="outline" size="sm" onClick={handleSyncSales} disabled={isSyncing} className="gap-1 text-xs">
+                  <Download className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">Sync </span>Vendas
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSyncPosShopify} disabled={isSyncing} className="gap-1">
-                  <Store className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sync POS + Shopify
+                <Button variant="outline" size="sm" onClick={handleSyncPosShopify} disabled={isSyncing} className="gap-1 text-xs">
+                  <Store className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">Sync </span>POS
                 </Button>
               </div>
             </div>
