@@ -23,6 +23,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
   const [description, setDescription] = useState("");
   const [pinnedMessage, setPinnedMessage] = useState("");
   const [brandContext, setBrandContext] = useState("");
+  const [initialPhones, setInitialPhones] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [createdGroupId, setCreatedGroupId] = useState<string | null>(null);
@@ -77,19 +78,24 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ action: "create", groupName }),
+          body: JSON.stringify({ 
+            action: "create", 
+            groupName,
+            phones: initialPhones.split(/[,;\n\s]+/).map(p => p.replace(/\D/g, '')).filter(p => p.length >= 10),
+          }),
         }
       );
       const data = await res.json();
 
-      if (!data.success) {
-        toast.error("Erro ao criar grupo: " + (data.error || ""));
+      if (!data.success || (data.data && data.data.success === false)) {
+        toast.error("Erro ao criar grupo: " + (data.data?.message || data.error || "Verifique se adicionou pelo menos 1 participante"));
         return;
       }
 
       const newGroupId = data.groupId || data.data?.phone || data.data?.groupId;
       if (!newGroupId) {
-        toast.error("Grupo criado mas ID não retornado");
+        toast.error("Grupo criado mas ID não retornado. Sincronize os grupos para ver.");
+        setStep("customize");
         return;
       }
 
@@ -176,6 +182,7 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
     setDescription("");
     setPinnedMessage("");
     setBrandContext("");
+    setInitialPhones("");
     setCreatedGroupId(null);
     setStep("create");
     onOpenChange(false);
@@ -217,6 +224,20 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
                 value={brandContext}
                 onChange={(e) => setBrandContext(e.target.value)}
               />
+            </div>
+
+            {/* Initial participants */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Participantes iniciais *</Label>
+              <Textarea
+                placeholder={"Cole os números (um por linha ou separados por vírgula)\nEx: 5533999999999, 5533988888888"}
+                value={initialPhones}
+                onChange={(e) => setInitialPhones(e.target.value)}
+                rows={3}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                É obrigatório pelo menos 1 participante para criar o grupo. Use o formato com DDI+DDD+número.
+              </p>
             </div>
 
             <Separator />

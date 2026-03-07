@@ -13,6 +13,7 @@ interface GroupSettingsRequest {
   groupName?: string;
   value?: string;
   phone?: string;
+  phones?: string[];
 }
 
 serve(async (req) => {
@@ -32,7 +33,7 @@ serve(async (req) => {
       );
     }
 
-    const { action, groupId, groupName, value, phone }: GroupSettingsRequest = await req.json();
+    const { action, groupId, groupName, value, phone, phones }: GroupSettingsRequest = await req.json();
     const baseUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}`;
 
     let endpoint: string;
@@ -42,7 +43,11 @@ serve(async (req) => {
     switch (action) {
       case 'create':
         endpoint = `${baseUrl}/create-group`;
-        body = { groupName: groupName || value || 'Novo Grupo' };
+        body = { 
+          autoInvite: true,
+          groupName: groupName || value || 'Novo Grupo',
+          phones: phones || [],
+        };
         break;
       case 'update-photo':
         endpoint = `${baseUrl}/update-group-photo`;
