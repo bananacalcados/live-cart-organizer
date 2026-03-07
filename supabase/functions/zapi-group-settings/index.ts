@@ -44,6 +44,7 @@ serve(async (req) => {
       case 'create':
         endpoint = `${baseUrl}/create-group`;
         body = { 
+          autoInvite: true,
           groupName: groupName || value || 'Novo Grupo',
           phones: phones || [],
         };
