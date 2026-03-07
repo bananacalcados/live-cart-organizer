@@ -379,10 +379,46 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     }
   };
 
+  const multiMediaTypes = ['image', 'video', 'document'];
+
+  const handleMultiMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const remaining = 10 - mediaItems.length;
+    if (files.length > remaining) {
+      toast.error(`Máximo ${remaining} arquivo(s) restante(s) (limite: 10)`);
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const newItems: MediaItem[] = [];
+      for (const file of Array.from(files)) {
+        if (file.size > 16 * 1024 * 1024) { toast.error(`${file.name} muito grande (max 16MB)`); continue; }
+        const ext = file.name.split('.').pop();
+        const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+        if (error) { toast.error(`Erro no upload de ${file.name}`); continue; }
+        const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+        newItems.push({ url: urlData.publicUrl, caption: '' });
+      }
+      setMediaItems(prev => [...prev, ...newItems]);
+      if (newItems.length > 0) toast.success(`${newItems.length} arquivo(s) enviado(s)!`);
+    } catch { toast.error("Erro no upload"); }
+    finally { setIsUploading(false); if (e.target) e.target.value = ''; }
+  };
+
+  const insertEmojiInCaption = (emoji: string, index: number) => {
+    setMediaItems(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], caption: (next[index].caption || '') + emoji };
+      return next;
+    });
+  };
+
   const handleSubmit = async () => {
     if (!scheduledDate) { toast.error("Selecione uma data"); return; }
     if (!messageContent.trim() && messageType === 'text') { toast.error("Mensagem obrigatória"); return; }
-    if (messageType === 'image' && mediaItems.length === 0 && !mediaUrl) { toast.error("Adicione pelo menos 1 foto"); return; }
+    if (multiMediaTypes.includes(messageType) && mediaItems.length === 0 && !mediaUrl) { toast.error("Adicione pelo menos 1 arquivo"); return; }
     if (messageType === 'poll' && pollOptions.filter(o => o.trim()).length < 2) {
       toast.error("Enquete precisa de ao menos 2 opções"); return;
     }
@@ -391,7 +427,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     try {
       const data: ScheduledMessageData = {
         messageType, messageContent, mediaUrl,
-        mediaItems: messageType === 'image' ? mediaItems : [],
+        mediaItems: multiMediaTypes.includes(messageType) ? mediaItems : [],
         pollOptions: pollOptions.filter(o => o.trim()),
         pollMaxOptions: pollAllowMultiple ? 0 : 1,
         scheduledAt: scheduledDate, scheduledTime, sendSpeed,
