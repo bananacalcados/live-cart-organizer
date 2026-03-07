@@ -38,9 +38,10 @@ serve(async (req) => {
       );
     }
 
-    // Format phone number (remove non-digits and ensure country code)
+    // Format phone number - don't modify group IDs (they start with "120" or contain "-" or "@")
     let formattedPhone = phone.replace(/\D/g, '');
-    if (!formattedPhone.startsWith('55')) {
+    const isGroup = phone.includes('@') || phone.includes('-') || formattedPhone.startsWith('120');
+    if (!isGroup && !formattedPhone.startsWith('55')) {
       formattedPhone = '55' + formattedPhone;
     }
 
