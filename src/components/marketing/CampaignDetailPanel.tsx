@@ -181,23 +181,36 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   };
 
   const handleSendNow = async (data: ScheduledMessageData) => {
-    // Create the message with current time and immediately send it
     const now = new Date();
-    const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
-      campaign_id: campaignId,
-      message_type: data.messageType,
-      message_content: data.messageContent,
-      media_url: data.mediaUrl || null,
-      poll_options: data.messageType === 'poll' ? data.pollOptions : null,
-      poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
-      scheduled_at: now.toISOString(),
-      send_speed: data.sendSpeed,
-    }).select().single();
 
-    if (error) throw error;
-
-    // Immediately trigger sending
-    await sendMessage(inserted.id);
+    if (data.messageType === 'image' && data.mediaItems && data.mediaItems.length > 0) {
+      for (let i = 0; i < data.mediaItems.length; i++) {
+        const item = data.mediaItems[i];
+        const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+          campaign_id: campaignId,
+          message_type: 'image',
+          message_content: item.caption || null,
+          media_url: item.url,
+          scheduled_at: now.toISOString(),
+          send_speed: data.sendSpeed,
+        }).select().single();
+        if (error) throw error;
+        await sendMessage(inserted.id);
+      }
+    } else {
+      const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+        campaign_id: campaignId,
+        message_type: data.messageType,
+        message_content: data.messageContent,
+        media_url: data.mediaUrl || null,
+        poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+        poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
+        scheduled_at: now.toISOString(),
+        send_speed: data.sendSpeed,
+      }).select().single();
+      if (error) throw error;
+      await sendMessage(inserted.id);
+    }
     fetchMessages();
   };
 
