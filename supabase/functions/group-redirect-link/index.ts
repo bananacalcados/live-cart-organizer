@@ -70,7 +70,7 @@ serve(async (req) => {
       try {
         // Strip "-group" suffix for Z-API calls
         const cleanGroupId = groupId.replace('-group', '');
-        const apiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invitation-link/${cleanGroupId}`;
+        const apiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invite-link/${cleanGroupId}`;
         console.log(`Fetching invite link from: ${apiUrl}`);
         const res = await fetch(apiUrl, {
           method: 'GET',
