@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 
 const VipRedirect = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -10,14 +9,6 @@ const VipRedirect = () => {
   const fetchRedirect = async () => {
     if (!slug) return;
     try {
-      const { data, error } = await supabase.functions.invoke("group-redirect-link", {
-        body: null,
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      // supabase.functions.invoke doesn't support query params natively,
-      // so we use fetch directly
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const res = await fetch(
         `https://${projectId}.supabase.co/functions/v1/group-redirect-link?slug=${encodeURIComponent(slug)}&mode=api`
