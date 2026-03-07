@@ -335,9 +335,20 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const targetGroups: string[] = campaign?.target_groups || [];
   const groupCount = targetGroups.length;
 
-  // Check if all campaign groups are full
+  // Check campaign groups status
   const campaignGroups = allGroups.filter(g => targetGroups.includes(g.id));
   const allGroupsFull = campaignGroups.length > 0 && campaignGroups.every(g => g.participant_count >= (g.max_participants || 1024));
+  const hasNearFullGroup = campaignGroups.some(g => (g.participant_count || 0) >= 950 && !(g.participant_count >= (g.max_participants || 1024)));
+  const hasStandbyGroup = campaignGroups.some(g => (g.participant_count || 0) < 50);
+
+  const getGroupStatusBadge = (g: any) => {
+    const count = g.participant_count || 0;
+    const isFull = count >= (g.max_participants || 1024);
+    if (isFull) return <Badge variant="destructive" className="text-[10px] shrink-0">🔴 Cheio</Badge>;
+    if (count >= 950) return <Badge className="text-[10px] bg-amber-500 hover:bg-amber-600 text-white shrink-0">⚠️ Quase cheio</Badge>;
+    if (count < 50) return <Badge className="text-[10px] bg-blue-500 hover:bg-blue-600 text-white shrink-0">🔵 Standby</Badge>;
+    return <Badge className="text-[10px] bg-emerald-500 hover:bg-emerald-600 text-white shrink-0">🟢 Disponível</Badge>;
+  };
 
   const loadZapiContacts = async () => {
     if (zapiContactsLoaded) return;
@@ -496,6 +507,25 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                   <Button size="sm" variant="outline" className="gap-1 ml-2 shrink-0" onClick={() => setShowCreateGroup(true)}>
                     <Plus className="h-3.5 w-3.5" /> Criar Novo Grupo
                   </Button>
+               </AlertDescription>
+              </Alert>
+            )}
+            {hasNearFullGroup && hasStandbyGroup && (
+              <Alert className="border-emerald-500/50 bg-emerald-500/10">
+                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                <AlertDescription className="text-xs text-emerald-700 dark:text-emerald-400">
+                  ✅ Grupo standby pronto para receber novos membros
+                </AlertDescription>
+              </Alert>
+            )}
+            {hasNearFullGroup && !hasStandbyGroup && !allGroupsFull && (
+              <Alert className="border-amber-500/50 bg-amber-500/10">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span className="text-xs text-amber-700 dark:text-amber-400">Grupo próximo do limite! Crie um grupo standby.</span>
+                  <Button size="sm" variant="outline" className="gap-1 ml-2 shrink-0" onClick={() => setShowCreateGroup(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Criar Standby
+                  </Button>
                 </AlertDescription>
               </Alert>
             )}
@@ -524,6 +554,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                     <p className="text-xs font-medium truncate">{g.name}</p>
                     <p className="text-[10px] text-muted-foreground">{g.participant_count}/{g.max_participants}</p>
                   </div>
+                  {targetGroups.includes(g.id) && getGroupStatusBadge(g)}
                 </div>
               ))}
             </div>
