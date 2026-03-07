@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay } from "date-fns";
@@ -94,7 +94,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
-  const [newGroupPhone, setNewGroupPhone] = useState("");
+  const [zapiContacts, setZapiContacts] = useState<{ phone: string; name: string; short: string }[]>([]);
+  const [zapiContactsLoading, setZapiContactsLoading] = useState(false);
+  const [zapiContactsLoaded, setZapiContactsLoaded] = useState(false);
+  const [selectedGroupContacts, setSelectedGroupContacts] = useState<{ phone: string; name: string; short: string }[]>([]);
+  const [contactSearchQuery, setContactSearchQuery] = useState("");
 
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
