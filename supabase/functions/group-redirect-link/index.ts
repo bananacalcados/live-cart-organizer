@@ -18,6 +18,8 @@ serve(async (req) => {
 
     const url = new URL(req.url);
     const slug = url.searchParams.get('slug') || '';
+    const mode = url.searchParams.get('mode');
+    const isApiMode = mode === 'api';
 
     if (!slug) {
       return new Response(
@@ -35,6 +37,12 @@ serve(async (req) => {
       .single();
 
     if (linkErr || !link) {
+      if (isApiMode) {
+        return new Response(
+          JSON.stringify({ invite_url: null, error: 'link_not_found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       return new Response('<html><body><h1>Link não encontrado</h1></body></html>', {
         status: 404,
         headers: { 'Content-Type': 'text/html' },
@@ -139,6 +147,13 @@ serve(async (req) => {
       }
     }
 
+    if (!redirectUrl && isApiMode) {
+      return new Response(
+        JSON.stringify({ invite_url: null, error: 'no_group_available' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (!redirectUrl) {
       return new Response(
         `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preparando grupo...</title>
@@ -168,6 +183,13 @@ serve(async (req) => {
     await supabase.from('group_redirect_links')
       .update({ redirect_count: (link.redirect_count || 0) + 1 })
       .eq('id', link.id);
+
+    if (isApiMode) {
+      return new Response(
+        JSON.stringify({ invite_url: redirectUrl }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2;url=${redirectUrl}">

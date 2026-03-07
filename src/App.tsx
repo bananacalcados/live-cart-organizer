@@ -33,6 +33,7 @@ const LiveCommerce = lazy(() => import("./pages/LiveCommerce"));
 const DoseTriplaCatalog = lazy(() => import("./pages/DoseTriplaCatalog"));
 const StoreCheckout = lazy(() => import("./pages/StoreCheckout"));
 const LinkPageView = lazy(() => import("./pages/LinkPageView"));
+const VipRedirect = lazy(() => import("./pages/VipRedirect"));
 
 const queryClient = new QueryClient();
 
@@ -79,6 +80,9 @@ const App = () => (
               <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><Inventory /></ProtectedRoute>} />
               <Route path="/management" element={<ProtectedRoute requiredModule="management"><Management /></ProtectedRoute>} />
               <Route path="/admin" element={<ProtectedRoute requiredModule="admin"><Admin /></ProtectedRoute>} />
+
+              {/* VIP redirect — catch-all slug MUST be just before "*" */}
+              <Route path="/:slug" element={<VipRedirect />} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
