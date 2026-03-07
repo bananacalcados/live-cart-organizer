@@ -147,40 +147,70 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     const scheduledAt = new Date(data.scheduledAt);
     scheduledAt.setHours(hours, minutes, 0, 0);
 
-    const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
-      campaign_id: campaignId,
-      message_type: data.messageType,
-      message_content: data.messageContent,
-      media_url: data.mediaUrl || null,
-      poll_options: data.messageType === 'poll' ? data.pollOptions : null,
-      poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
-      scheduled_at: scheduledAt.toISOString(),
-      send_speed: data.sendSpeed,
-    });
-
-    if (error) throw error;
-    toast.success("Mensagem agendada!");
+    // Multi-photo: create one message per photo
+    if (data.messageType === 'image' && data.mediaItems && data.mediaItems.length > 0) {
+      for (let i = 0; i < data.mediaItems.length; i++) {
+        const item = data.mediaItems[i];
+        const itemTime = new Date(scheduledAt.getTime() + i * 5000); // 5s offset between photos
+        const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+          campaign_id: campaignId,
+          message_type: 'image',
+          message_content: item.caption || null,
+          media_url: item.url,
+          scheduled_at: itemTime.toISOString(),
+          send_speed: data.sendSpeed,
+        });
+        if (error) throw error;
+      }
+      toast.success(`${data.mediaItems.length} foto(s) agendada(s)!`);
+    } else {
+      const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+        campaign_id: campaignId,
+        message_type: data.messageType,
+        message_content: data.messageContent,
+        media_url: data.mediaUrl || null,
+        poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+        poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
+        scheduled_at: scheduledAt.toISOString(),
+        send_speed: data.sendSpeed,
+      });
+      if (error) throw error;
+      toast.success("Mensagem agendada!");
+    }
     fetchMessages();
   };
 
   const handleSendNow = async (data: ScheduledMessageData) => {
-    // Create the message with current time and immediately send it
     const now = new Date();
-    const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
-      campaign_id: campaignId,
-      message_type: data.messageType,
-      message_content: data.messageContent,
-      media_url: data.mediaUrl || null,
-      poll_options: data.messageType === 'poll' ? data.pollOptions : null,
-      poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
-      scheduled_at: now.toISOString(),
-      send_speed: data.sendSpeed,
-    }).select().single();
 
-    if (error) throw error;
-
-    // Immediately trigger sending
-    await sendMessage(inserted.id);
+    if (data.messageType === 'image' && data.mediaItems && data.mediaItems.length > 0) {
+      for (let i = 0; i < data.mediaItems.length; i++) {
+        const item = data.mediaItems[i];
+        const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+          campaign_id: campaignId,
+          message_type: 'image',
+          message_content: item.caption || null,
+          media_url: item.url,
+          scheduled_at: now.toISOString(),
+          send_speed: data.sendSpeed,
+        }).select().single();
+        if (error) throw error;
+        await sendMessage(inserted.id);
+      }
+    } else {
+      const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+        campaign_id: campaignId,
+        message_type: data.messageType,
+        message_content: data.messageContent,
+        media_url: data.mediaUrl || null,
+        poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+        poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
+        scheduled_at: now.toISOString(),
+        send_speed: data.sendSpeed,
+      }).select().single();
+      if (error) throw error;
+      await sendMessage(inserted.id);
+    }
     fetchMessages();
   };
 

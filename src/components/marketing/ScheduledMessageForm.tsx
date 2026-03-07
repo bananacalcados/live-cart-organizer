@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, Sparkles, Loader2, Play, Upload, Link as LinkIcon, Variable, Save, FileText, Mic, Square, Send, ShoppingBag, Image as ImageIcon, Trash2, Search } from "lucide-react";
+import { CalendarIcon, Sparkles, Loader2, Play, Upload, Link as LinkIcon, Variable, Save, FileText, Mic, Square, Send, ShoppingBag, Image as ImageIcon, Trash2, Search, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,16 @@ import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 
+export interface MediaItem {
+  url: string;
+  caption: string;
+}
+
 export interface ScheduledMessageData {
   messageType: string;
   messageContent: string;
   mediaUrl: string;
+  mediaItems: MediaItem[];
   pollOptions: string[];
   pollMaxOptions: number;
   scheduledAt: Date;
@@ -70,6 +76,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const [messageContent, setMessageContent] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaMode, setMediaMode] = useState<"url" | "upload" | "shopify">("url");
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
@@ -85,6 +92,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const multiFileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -134,6 +142,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     setPollOptions(["", ""]); setMessageType("text");
     setMediaMode("url"); setTemplateName("");
     setAudioPreviewUrl(null); setIsPlayingPreview(false);
+    setMediaItems([]);
   };
 
   const insertVariable = (varName: string) => {
@@ -165,6 +174,32 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       toast.success("Arquivo enviado!");
     } catch { toast.error("Erro no upload"); }
     finally { setIsUploading(false); }
+  };
+
+  const handleMultiFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const remaining = 10 - mediaItems.length;
+    if (files.length > remaining) {
+      toast.error(`Máximo ${remaining} foto(s) restante(s) (limite: 10)`);
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const newItems: MediaItem[] = [];
+      for (const file of Array.from(files)) {
+        if (file.size > 16 * 1024 * 1024) { toast.error(`${file.name} muito grande (max 16MB)`); continue; }
+        const ext = file.name.split('.').pop();
+        const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+        if (error) { toast.error(`Erro no upload de ${file.name}`); continue; }
+        const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+        newItems.push({ url: urlData.publicUrl, caption: '' });
+      }
+      setMediaItems(prev => [...prev, ...newItems]);
+      if (newItems.length > 0) toast.success(`${newItems.length} foto(s) enviada(s)!`);
+    } catch { toast.error("Erro no upload"); }
+    finally { setIsUploading(false); if (multiFileInputRef.current) multiFileInputRef.current.value = ''; }
   };
 
   const loadTemplate = (t: MessageTemplate) => {
@@ -325,11 +360,14 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
 
   const selectShopifyProduct = (product: ShopifyProduct, imageUrl: string) => {
     if (shopifySendMode === 'photo_only') {
-      setMessageType('image');
-      setMediaUrl(imageUrl);
-      setMediaMode('shopify');
+      if (messageType === 'image' && mediaItems.length < 10) {
+        setMediaItems(prev => [...prev, { url: imageUrl, caption: '' }]);
+      } else {
+        setMessageType('image');
+        setMediaItems([{ url: imageUrl, caption: '' }]);
+      }
       setShowShopifyPicker(false);
-      toast.success("Foto do produto selecionada!");
+      toast.success("Foto do produto adicionada!");
     } else {
       // Send product link
       const handle = product.node.handle;
@@ -344,6 +382,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   const handleSubmit = async () => {
     if (!scheduledDate) { toast.error("Selecione uma data"); return; }
     if (!messageContent.trim() && messageType === 'text') { toast.error("Mensagem obrigatória"); return; }
+    if (messageType === 'image' && mediaItems.length === 0 && !mediaUrl) { toast.error("Adicione pelo menos 1 foto"); return; }
     if (messageType === 'poll' && pollOptions.filter(o => o.trim()).length < 2) {
       toast.error("Enquete precisa de ao menos 2 opções"); return;
     }
@@ -352,6 +391,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     try {
       const data: ScheduledMessageData = {
         messageType, messageContent, mediaUrl,
+        mediaItems: messageType === 'image' ? mediaItems : [],
         pollOptions: pollOptions.filter(o => o.trim()),
         pollMaxOptions: pollAllowMultiple ? 0 : 1,
         scheduledAt: scheduledDate, scheduledTime, sendSpeed,
@@ -432,8 +472,68 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             </Select>
           </div>
 
-          {/* Media URL, Upload or Shopify */}
-          {messageType !== 'text' && messageType !== 'poll' && (
+          {/* Multi-photo upload for image type */}
+          {messageType === 'image' && (
+            <div className="space-y-2">
+              <Label className="text-xs">Fotos ({mediaItems.length}/10)</Label>
+              <div className="flex gap-2 mb-2 flex-wrap">
+                <Button variant="outline" size="sm" className="gap-1"
+                  onClick={() => multiFileInputRef.current?.click()}
+                  disabled={isUploading || mediaItems.length >= 10}>
+                  {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  Upload Fotos
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1" onClick={openShopifyPicker}
+                  disabled={mediaItems.length >= 10}>
+                  <ShoppingBag className="h-3.5 w-3.5" /> Shopify
+                </Button>
+              </div>
+              <input ref={multiFileInputRef} type="file" accept="image/*" multiple
+                onChange={handleMultiFileUpload} className="hidden" />
+
+              {/* URL manual add */}
+              <div className="flex gap-2">
+                <Input placeholder="Ou cole URL da imagem..." value={mediaUrl}
+                  onChange={e => setMediaUrl(e.target.value)} className="flex-1" />
+                <Button variant="outline" size="sm" disabled={!mediaUrl.trim() || mediaItems.length >= 10}
+                  onClick={() => {
+                    setMediaItems(prev => [...prev, { url: mediaUrl, caption: '' }]);
+                    setMediaUrl('');
+                  }}>
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+
+              {/* Media items list with captions */}
+              {mediaItems.length > 0 && (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {mediaItems.map((item, i) => (
+                    <div key={i} className="flex gap-2 items-start border rounded-lg p-2">
+                      <img src={item.url} alt={`Foto ${i + 1}`}
+                        className="w-16 h-16 object-cover rounded shrink-0" />
+                      <div className="flex-1 space-y-1">
+                        <p className="text-[10px] text-muted-foreground">Foto {i + 1}</p>
+                        <Input placeholder="Legenda desta foto..." value={item.caption}
+                          onChange={e => {
+                            const next = [...mediaItems];
+                            next[i] = { ...next[i], caption: e.target.value };
+                            setMediaItems(next);
+                          }}
+                          className="h-7 text-xs" />
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                        onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Media URL, Upload or Shopify for non-image media types */}
+          {messageType !== 'text' && messageType !== 'poll' && messageType !== 'image' && (
             <div className="space-y-2">
               <Label className="text-xs">Mídia</Label>
               <div className="flex gap-2 mb-2 flex-wrap">
@@ -445,31 +545,9 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                   onClick={() => setMediaMode("upload")}>
                   <Upload className="h-3.5 w-3.5" /> Upload
                 </Button>
-                {(messageType === 'image' || messageType === 'text') && (
-                  <Button variant={mediaMode === "shopify" ? "default" : "outline"} size="sm" className="gap-1"
-                    onClick={openShopifyPicker}>
-                    <ShoppingBag className="h-3.5 w-3.5" /> Shopify
-                  </Button>
-                )}
               </div>
               {mediaMode === "url" ? (
                 <Input placeholder="https://..." value={mediaUrl} onChange={e => setMediaUrl(e.target.value)} />
-              ) : mediaMode === "shopify" ? (
-                <div className="space-y-2">
-                  {mediaUrl && (
-                    <div className="relative">
-                      <img src={mediaUrl} alt="Produto" className="w-full h-32 object-contain rounded-lg border" />
-                      <Button variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6"
-                        onClick={() => { setMediaUrl(""); setMediaMode("url"); }}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  )}
-                  <Button variant="outline" className="w-full gap-1" onClick={openShopifyPicker}>
-                    <ShoppingBag className="h-4 w-4" />
-                    {mediaUrl ? "Trocar produto" : "Selecionar produto da Shopify"}
-                  </Button>
-                </div>
               ) : (
                 <div>
                   <input ref={fileInputRef} type="file" accept={acceptTypes[messageType] || "*/*"}
@@ -647,6 +725,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
               try {
                 const data: ScheduledMessageData = {
                   messageType, messageContent, mediaUrl,
+                  mediaItems: messageType === 'image' ? mediaItems : [],
                   pollOptions: pollOptions.filter(o => o.trim()),
                   pollMaxOptions: pollAllowMultiple ? 0 : 1,
                   scheduledAt: new Date(), scheduledTime: format(new Date(), 'HH:mm'), sendSpeed,
