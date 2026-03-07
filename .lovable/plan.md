@@ -1,126 +1,87 @@
 
 
-## Melhorias no Sistema de Grupos VIP
+## Diagnosis: Why the Redirect is Slow
 
-### Resumo das Funcionalidades
+The current flow has **3 layers of latency** stacked:
 
-1. **Gerenciamento em massa de grupos dentro da campanha** - Alterar nome, foto, descricao e permissoes de todos os grupos vinculados a campanha de uma vez
-2. **Fotos de perfil dos grupos** - Buscar foto via Z-API durante sincronizacao (ja existe `imgUrl`/`profileThumbnail` mas pode nao estar vindo)
-3. **Upload local de arquivos** - Para audio, video e documentos na criacao de mensagens agendadas
-4. **Calendario de mensagens agendadas** - Visao mensal/semanal por campanha
-5. **Edicao de mensagens pendentes** - Editar mensagens que ainda nao foram enviadas
-6. **Modelos de mensagens** - Templates reutilizaveis salvos no banco
-7. **Variaveis dinamicas nas mensagens** - Ex: `{{link_live}}`, `{{nome_grupo}}`, substituidas no momento do envio
+```text
+User clicks link
+  └─ 1. Load entire React SPA (~1-3s: JS bundle, hydration, React mount)
+       └─ 2. Fetch edge function API (~300-800ms: cold start + DB queries)
+            └─ 3. setTimeout delay (400ms iOS / 800ms Android)
+                 └─ 4. Browser navigates to WhatsApp
+```
 
----
+**Total: 2-5 seconds** before anything happens. On mobile with slower connections, even worse.
 
-### 1. Migracao de Banco de Dados
+### Root Causes
 
-**Nova tabela `group_message_templates`:**
-- `id` (uuid PK)
-- `name` (text) - nome do modelo
-- `message_type` (text) - text/image/video/audio/document/poll
-- `message_content` (text) - conteudo com placeholders de variaveis
-- `media_url` (text, nullable)
-- `poll_options` (jsonb, nullable)
-- `created_at` (timestamptz)
-
-**Nova tabela `campaign_variables`:**
-- `id` (uuid PK)
-- `campaign_id` (uuid FK -> group_campaigns)
-- `variable_name` (text) - ex: `link_live`
-- `variable_value` (text) - valor atual
-- `updated_at` (timestamptz)
-- UNIQUE(campaign_id, variable_name)
-
-Isso permite programar mensagens com `{{link_live}}` e atualizar o valor da variavel separadamente. Na hora do envio, o edge function substitui as variaveis pelos valores atuais.
+| Bottleneck | Impact | Where |
+|---|---|---|
+| Loading full React SPA just to redirect | ~1-3s | VipGroupRedirectPage.tsx |
+| Edge function does 3+ sequential DB queries | ~300ms | group-redirect-link |
+| Click count update blocks response | ~100ms | group-redirect-link |
+| Artificial setTimeout before redirect | 400-800ms | VipGroupRedirectPage.tsx |
+| No caching of resolved invite URL | repeat cost | group_redirect_links table |
 
 ---
 
-### 2. Upload Local de Arquivos
+## Optimization Plan
 
-Na `ScheduledMessageForm`, trocar o campo "URL da Midia" por um componente que oferece duas opcoes:
-- **URL externa** (campo de texto como hoje)
-- **Upload do computador** (input type="file" que faz upload para o bucket `marketing-attachments` do storage e obtem a URL publica)
+### Strategy: Eliminate the SPA, go direct HTML redirect
 
-Isso ja funciona com o bucket existente `marketing-attachments` (publico).
+Instead of loading React, the edge function itself should return an **instant HTML redirect** with the cached URL. The React page becomes a fallback only for in-app browsers.
 
----
+### Change 1 — Add `cached_invite_url` column to `group_redirect_links`
 
-### 3. Fotos dos Grupos
+Store the resolved WhatsApp invite URL directly on the link record so lookups become a single query.
 
-A Z-API retorna `imgUrl` ou `profileThumbnail` nos dados do grupo. O `zapi-list-groups` ja faz `photo_url: g.imgUrl || g.profileThumbnail || null`. Se nao esta vindo, pode ser que a Z-API nao retorne por padrao. Vou adicionar uma chamada separada ao endpoint `profile-picture` da Z-API para cada grupo durante a sincronizacao, ou usar o endpoint `group-metadata` que retorna a foto.
+```sql
+ALTER TABLE group_redirect_links ADD COLUMN cached_invite_url text;
+ALTER TABLE group_redirect_links ADD COLUMN cached_at timestamptz;
+```
 
-Alternativa mais eficiente: ao sincronizar, para grupos sem foto, fazer chamada ao endpoint `profile-picture` da Z-API em batch.
+### Change 2 — Rewrite edge function for speed
 
----
+The optimized flow:
 
-### 4. Gerenciamento em Massa na Campanha
+```text
+User clicks link
+  └─ 1 query: fetch link + cached_invite_url
+       ├─ HAS cache → instant HTML redirect (< 200ms total)
+       └─ NO cache → resolve group → cache → redirect (~500ms)
+       └─ (click/redirect counts updated async, non-blocking)
+```
 
-Adicionar uma secao no `CampaignDetailPanel` com:
-- Botao "Configurar Grupos" que abre painel com acoes em massa:
-  - Alterar foto de todos os grupos
-  - Alterar descricao de todos
-  - Alterar nome (com sufixo automatico ex: "#1", "#2")
-  - Toggle permissoes (admins enviam / admins adicionam) para todos
+Key changes in `group-redirect-link/index.ts`:
+- **Check `cached_invite_url` first** — if present and fresh (< 1 hour), skip all group resolution logic
+- **Fire-and-forget analytics** — update click_count and redirect_count without `await` (don't block the response)
+- **Return instant 302 redirect** for non-API, non-in-app requests instead of an HTML page with JS redirect
+- **Cache the resolved URL** back to the link record after resolution
+- For API mode: same fast path, return JSON immediately
 
-Cada acao itera sobre os grupos da campanha e chama `zapi-group-settings` sequencialmente.
+### Change 3 — Optimize the React page (fallback path)
 
----
+For cases where the React page is still used (in-app browsers, no-group scenarios):
+- Remove the `setTimeout` delays — redirect with `window.location.href` immediately
+- On Android, try intent URL immediately without 800ms fallback delay
 
-### 5. Calendario de Mensagens
+### Change 4 — Add direct edge function route for production
 
-Adicionar uma aba/secao "Calendario" no `CampaignDetailPanel` usando um grid simples de calendario mensal, mostrando as mensagens agendadas em cada dia. Ao clicar no dia, mostra as mensagens daquela data.
+For the production domain (`checkout.bananacalcados.com.br/vip/slug`), the optimal path is:
+- Keep the React route as-is for SPA navigation
+- But add a note: for maximum speed, the link could point directly to the edge function URL (skipping SPA entirely), which now returns a 302 redirect in ~100-200ms
 
----
+### Expected Performance
 
-### 6. Edicao de Mensagens Pendentes
+| Scenario | Before | After |
+|---|---|---|
+| Cached URL, normal browser | 2-5s | **< 300ms** (302 redirect) |
+| No cache, needs group lookup | 2-5s | **< 800ms** |
+| In-app browser (Instagram/FB) | 2-5s | **~1.5s** (SPA still loads, but no setTimeout) |
 
-Na lista de mensagens do `CampaignDetailPanel`, adicionar botao de edicao para mensagens com status `pending`. Ao clicar, abre o `ScheduledMessageForm` pre-preenchido. Ao salvar, faz UPDATE em vez de INSERT.
-
----
-
-### 7. Modelos de Mensagens
-
-Na `ScheduledMessageForm`:
-- Botao "Usar Modelo" que abre um select/dialog com templates salvos
-- Botao "Salvar como Modelo" que salva a mensagem atual como template reutilizavel
-- Templates ficam na tabela `group_message_templates`
-
----
-
-### 8. Variaveis Dinamicas
-
-Na `ScheduledMessageForm`:
-- Botoes para inserir variaveis no cursor: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, etc.
-- Preview mostra como ficara a mensagem com os valores atuais
-
-No `CampaignDetailPanel`:
-- Secao "Variaveis" onde o usuario define/atualiza os valores das variaveis da campanha
-- Ex: campo "link_live" = "https://youtube.com/live/abc123"
-
-No `zapi-group-scheduled-send`:
-- Antes de enviar, buscar variaveis da campanha e fazer `replace` no conteudo da mensagem
-- `{{nome_grupo}}` substituido pelo nome real do grupo de destino
-
----
-
-### Resumo de Arquivos
-
-| Arquivo | Acao |
-|---|---|
-| Migracao SQL | Criar `group_message_templates`, `campaign_variables` |
-| `src/components/marketing/ScheduledMessageForm.tsx` | Upload local, variaveis, modelos, modo edicao |
-| `src/components/marketing/CampaignDetailPanel.tsx` | Calendario, edicao, gerenciamento em massa de grupos, secao de variaveis |
-| `supabase/functions/zapi-group-scheduled-send/index.ts` | Substituicao de variaveis antes do envio |
-| `supabase/functions/zapi-list-groups/index.ts` | Buscar fotos de perfil via endpoint `profile-picture` |
-| `src/components/marketing/GroupsVipManager.tsx` | Exibir fotos dos grupos nos cards |
-
-### Detalhes Tecnicos
-
-- Upload de arquivos: usa `supabase.storage.from('marketing-attachments').upload()` e `getPublicUrl()`
-- Variaveis suportadas inicialmente: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, `{{horario}}`, variaveis customizadas
-- Calendario: grid CSS simples (7 colunas x 5-6 linhas), sem dependencia externa
-- Edicao de mensagens: reutiliza `ScheduledMessageForm` com prop `editingMessage` para pre-preencher
-- Fotos de grupo: tenta `profile-picture/${groupId}` na Z-API durante sync
+### Files to Modify
+1. **Database migration** — add `cached_invite_url` and `cached_at` columns
+2. **`supabase/functions/group-redirect-link/index.ts`** — fast-path with cache, 302 redirects, non-blocking analytics
+3. **`src/pages/VipGroupRedirectPage.tsx`** — remove setTimeout delays, redirect instantly
 
