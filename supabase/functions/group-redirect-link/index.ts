@@ -63,7 +63,7 @@ serve(async (req) => {
       .select('id, group_id, name, invite_link, is_full, participant_count, max_participants')
       .in('id', targetGroupIds)
       .eq('is_full', false)
-      .order('participant_count', { ascending: true });
+      .order('participant_count', { ascending: false });
 
     // Helper to fetch invite link from Z-API
     const fetchInviteLink = async (groupId: string): Promise<string | null> => {
