@@ -30,12 +30,58 @@ export default function LiveConsumidorLP() {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const requestPushPermission = async () => {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      
+      const registration = await navigator.serviceWorker.register('/push-sw.js');
+      
+      // Get VAPID public key
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/push-notifications?action=vapid-public-key`, {
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+      });
+      const { publicKey } = await res.json();
+      if (!publicKey) return;
+      
+      // Convert VAPID key
+      const padding = '='.repeat((4 - publicKey.length % 4) % 4);
+      const base64 = (publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawKey = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: rawKey,
+      });
+
+      const subJson = subscription.toJSON();
+      
+      // Save subscription (non-blocking)
+      fetch(`${supabaseUrl}/functions/v1/push-notifications?action=subscribe`, {
+        method: 'POST',
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          endpoint: subJson.endpoint,
+          keys: subJson.keys,
+          campaign_tag: CAMPAIGN_TAG,
+          lead_name: name.trim(),
+          lead_phone: phone.trim(),
+        }),
+      });
+    } catch (err) {
+      console.log('Push permission denied or unavailable:', err);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim() || submitting) return;
     setSubmitting(true);
 
-    // Non-blocking save — redirect immediately
+    // Non-blocking save
     supabase.from('lp_leads').insert({
       campaign_tag: CAMPAIGN_TAG,
       name: name.trim(),
@@ -44,8 +90,10 @@ export default function LiveConsumidorLP() {
     }).then(() => {});
 
     setSubmitted(true);
-    // Redirect fast — don't wait for DB
-    setTimeout(() => { window.location.href = VIP_REDIRECT; }, 1200);
+    
+    // Request push permission, then redirect
+    await requestPushPermission();
+    setTimeout(() => { window.location.href = VIP_REDIRECT; }, 1500);
   };
 
   const CD = ({ v, l }: { v: number; l: string }) => (

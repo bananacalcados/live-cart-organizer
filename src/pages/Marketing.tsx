@@ -7,7 +7,7 @@ import {
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles,
-  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift
+  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ import { PrizeManager } from "@/components/marketing/PrizeManager";
 import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLandingPageCreator";
 import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
 import { LinkPageManager } from "@/components/marketing/LinkPageManager";
+import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
 
 // ─── Types ──────────────────────────────────────
 
@@ -664,6 +665,7 @@ export default function Marketing() {
                 <SelectItem value="prizes">🎁 Prêmios</SelectItem>
                 <SelectItem value="live_commerce">🌐 Live Commerce</SelectItem>
                 <SelectItem value="link_pages">🔗 Link Pages</SelectItem>
+                <SelectItem value="push_notifications">🔔 Push Notifications</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -685,6 +687,7 @@ export default function Marketing() {
                 <TabsTrigger value="prizes" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Gift className="h-3.5 w-3.5" />Prêmios</TabsTrigger>
                 <TabsTrigger value="live_commerce" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Globe className="h-3.5 w-3.5" />Live Commerce</TabsTrigger>
                 <TabsTrigger value="link_pages" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Link className="h-3.5 w-3.5" />Link Pages</TabsTrigger>
+                <TabsTrigger value="push_notifications" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Bell className="h-3.5 w-3.5" />Push</TabsTrigger>
               </TabsList>
             </ScrollArea>
           </div>
@@ -1075,7 +1078,11 @@ export default function Marketing() {
             <LinkPageManager />
           </TabsContent>
 
-          {/* ── CALENDÁRIO ── */}
+          {/* ── PUSH NOTIFICATIONS ── */}
+          <TabsContent value="push_notifications" className="space-y-4">
+            <PushNotificationPanel />
+          </TabsContent>
+
           <TabsContent value="calendar" className="space-y-4">
             <MarketingCalendar />
           </TabsContent>
