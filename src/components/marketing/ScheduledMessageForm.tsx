@@ -142,6 +142,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     setPollOptions(["", ""]); setMessageType("text");
     setMediaMode("url"); setTemplateName("");
     setAudioPreviewUrl(null); setIsPlayingPreview(false);
+    setMediaItems([]);
   };
 
   const insertVariable = (varName: string) => {
@@ -173,6 +174,32 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       toast.success("Arquivo enviado!");
     } catch { toast.error("Erro no upload"); }
     finally { setIsUploading(false); }
+  };
+
+  const handleMultiFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const remaining = 10 - mediaItems.length;
+    if (files.length > remaining) {
+      toast.error(`Máximo ${remaining} foto(s) restante(s) (limite: 10)`);
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const newItems: MediaItem[] = [];
+      for (const file of Array.from(files)) {
+        if (file.size > 16 * 1024 * 1024) { toast.error(`${file.name} muito grande (max 16MB)`); continue; }
+        const ext = file.name.split('.').pop();
+        const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+        if (error) { toast.error(`Erro no upload de ${file.name}`); continue; }
+        const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+        newItems.push({ url: urlData.publicUrl, caption: '' });
+      }
+      setMediaItems(prev => [...prev, ...newItems]);
+      if (newItems.length > 0) toast.success(`${newItems.length} foto(s) enviada(s)!`);
+    } catch { toast.error("Erro no upload"); }
+    finally { setIsUploading(false); if (multiFileInputRef.current) multiFileInputRef.current.value = ''; }
   };
 
   const loadTemplate = (t: MessageTemplate) => {
