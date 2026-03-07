@@ -225,6 +225,20 @@ export function CreateGroupDialog({ open, onOpenChange, onCreated }: CreateGroup
               />
             </div>
 
+            {/* Initial participants */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Participantes iniciais *</Label>
+              <Textarea
+                placeholder={"Cole os números (um por linha ou separados por vírgula)\nEx: 5533999999999, 5533988888888"}
+                value={initialPhones}
+                onChange={(e) => setInitialPhones(e.target.value)}
+                rows={3}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                É obrigatório pelo menos 1 participante para criar o grupo. Use o formato com DDI+DDD+número.
+              </p>
+            </div>
+
             <Separator />
 
             {/* Description */}
