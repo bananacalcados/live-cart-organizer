@@ -13,6 +13,7 @@ interface GroupSettingsRequest {
   groupName?: string;
   value?: string;
   phone?: string;
+  phones?: string[];
 }
 
 serve(async (req) => {
