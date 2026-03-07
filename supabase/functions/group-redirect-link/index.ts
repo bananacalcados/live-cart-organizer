@@ -1,4 +1,4 @@
-// VIP Group redirect with API mode support - v2
+// VIP Group redirect — optimized v3 (cache-first, 302 redirects, non-blocking analytics)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -29,10 +31,10 @@ serve(async (req) => {
       );
     }
 
-    // Fetch redirect link
+    // Single query: fetch link with cached URL
     const { data: link, error: linkErr } = await supabase
       .from('group_redirect_links')
-      .select('*, group_campaigns!inner(target_groups, is_deep_link)')
+      .select('id, slug, campaign_id, click_count, redirect_count, is_active, is_deep_link, cached_invite_url, cached_at, group_campaigns!inner(target_groups, is_deep_link)')
       .eq('slug', slug)
       .eq('is_active', true)
       .single();
@@ -44,178 +46,181 @@ serve(async (req) => {
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      return new Response('<html><body><h1>Link não encontrado</h1></body></html>', {
-        status: 404,
-        headers: { 'Content-Type': 'text/html' },
-      });
+      return new Response('Link não encontrado', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     }
 
-    // Increment click count
-    await supabase.from('group_redirect_links')
+    // Fire-and-forget: increment click count (non-blocking)
+    supabase.from('group_redirect_links')
       .update({ click_count: (link.click_count || 0) + 1 })
-      .eq('id', link.id);
+      .eq('id', link.id)
+      .then(() => {});
 
-    const campaign = link.group_campaigns;
-    const targetGroupIds = campaign.target_groups || [];
-
-    // Get ALL non-full groups (don't filter by invite_link)
-    const { data: groups } = await supabase
-      .from('whatsapp_groups')
-      .select('id, group_id, name, invite_link, is_full, participant_count, max_participants')
-      .in('id', targetGroupIds)
-      .eq('is_full', false)
-      .order('participant_count', { ascending: false });
-
-    // Helper to fetch invite link from Z-API
-    const fetchInviteLink = async (groupId: string): Promise<string | null> => {
-      const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-      const token = Deno.env.get('ZAPI_TOKEN');
-      const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
-      if (!instanceId || !token || !clientToken) {
-        console.error('Z-API credentials missing');
-        return null;
-      }
-
-      try {
-        // Z-API docs: POST group-invitation-link/{groupId} - groupId includes "-group" suffix
-        const apiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invitation-link/${groupId}`;
-        console.log(`Fetching invite link from: ${apiUrl}`);
-        const res = await fetch(apiUrl, {
-          method: 'GET',
-          headers: { 'Client-Token': clientToken },
-        });
-        const data = await res.json();
-        console.log('Z-API invite link response:', JSON.stringify(data));
-        return data.invitationLink || data.link || null;
-      } catch (e) {
-        console.error('Error fetching invite link:', e);
-        return null;
-      }
-    };
-
-    let targetGroup = null;
+    // ─── FAST PATH: cached URL ───
     let redirectUrl: string | null = null;
+    const cachedAt = link.cached_at ? new Date(link.cached_at).getTime() : 0;
+    const isCacheFresh = link.cached_invite_url && (Date.now() - cachedAt < CACHE_TTL_MS);
 
-    if (groups && groups.length > 0) {
-      // Try to find a group with an invite link, or generate one
-      for (const group of groups) {
-        if (group.invite_link) {
-          targetGroup = group;
-          redirectUrl = group.invite_link;
-          break;
-        }
-      }
-
-      // If no group has an invite link, generate one for the first available group
-      if (!redirectUrl && groups.length > 0) {
-        const group = groups[0];
-        console.log(`Group "${group.name}" has no invite link, fetching from Z-API...`);
-        const inviteLink = await fetchInviteLink(group.group_id);
-        if (inviteLink) {
-          // Save the invite link for future use
-          await supabase.from('whatsapp_groups')
-            .update({ invite_link: inviteLink })
-            .eq('id', group.id);
-          targetGroup = group;
-          redirectUrl = inviteLink;
-          console.log(`Generated invite link for "${group.name}": ${inviteLink}`);
-        }
-      }
+    if (isCacheFresh) {
+      redirectUrl = link.cached_invite_url;
+      console.log(`[FAST] Cache hit for slug="${slug}"`);
     }
 
-    // If still no group available, try auto-creating
+    // ─── SLOW PATH: resolve group ───
     if (!redirectUrl) {
-      console.log('No available groups for campaign, attempting auto-create...');
-      try {
-        const autoCreateRes = await fetch(`${supabaseUrl}/functions/v1/auto-create-vip-group`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
-          },
-          body: JSON.stringify({ campaign_id: link.campaign_id }),
-        });
-        const autoResult = await autoCreateRes.json();
+      console.log(`[SLOW] Cache miss for slug="${slug}", resolving...`);
+      redirectUrl = await resolveGroupUrl(supabase, link, supabaseUrl, supabaseKey);
 
-        if (autoResult.success && autoResult.group?.invite_link) {
-          console.log('Auto-created group:', autoResult.group.name);
-          redirectUrl = autoResult.group.invite_link;
-        } else {
-          console.error('Auto-create response:', autoResult);
-        }
-      } catch (e) {
-        console.error('Auto-create failed:', e);
+      // Cache the result for next time (non-blocking)
+      if (redirectUrl) {
+        supabase.from('group_redirect_links')
+          .update({ cached_invite_url: redirectUrl, cached_at: new Date().toISOString() })
+          .eq('id', link.id)
+          .then(() => {});
       }
     }
 
-    if (!redirectUrl && isApiMode) {
+    // ─── NO GROUP AVAILABLE ───
+    if (!redirectUrl) {
+      if (isApiMode) {
+        return new Response(
+          JSON.stringify({ invite_url: null, error: 'no_group_available' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      // Return minimal auto-retry HTML
       return new Response(
-        JSON.stringify({ invite_url: null, error: 'no_group_available' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preparando...</title>
+        <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#075e54;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{text-align:center;padding:2rem}.s{border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;width:40px;height:40px;animation:r .8s linear infinite;margin:0 auto 1rem}@keyframes r{to{transform:rotate(360deg)}}.b{background:#25D366;color:#fff;border:none;padding:.75rem 1.5rem;border-radius:50px;font-weight:600;cursor:pointer;font-size:.95rem}</style>
+        </head><body><div class="c"><div class="s"></div><h2>⏳ Preparando grupo VIP</h2><p style="opacity:.85;margin:.5rem 0 1rem;font-size:.9rem">Redirecionando em <span id="t">5</span>s...</p><button class="b" onclick="location.reload()">Tentar agora</button></div>
+        <script>let n=5;const e=document.getElementById('t');setInterval(()=>{if(--n<=0)location.reload();e.textContent=n},1000)</script></body></html>`,
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
       );
     }
 
-    if (!redirectUrl) {
-      return new Response(
-        `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preparando grupo...</title>
-        <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;background:#075e54;color:white;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}.card{background:rgba(0,0,0,.25);border-radius:16px;padding:2rem;text-align:center;max-width:360px;width:100%}.spinner{border:3px solid rgba(255,255,255,.3);border-top:3px solid white;border-radius:50%;width:44px;height:44px;animation:spin .9s linear infinite;margin:0 auto 1.2rem}@keyframes spin{to{transform:rotate(360deg)}}h2{font-size:1.15rem;margin-bottom:.5rem}p{font-size:.9rem;opacity:.85;margin-bottom:1rem;line-height:1.5}.btn{display:inline-block;background:#25D366;color:white;text-decoration:none;padding:.75rem 1.5rem;border-radius:50px;font-weight:600;font-size:.95rem;cursor:pointer;border:none;width:100%;max-width:260px}#cd{font-weight:bold}</style>
-        </head><body><div class="card"><div class="spinner"></div><h2>⏳ Preparando seu grupo VIP</h2><p>Estamos configurando um grupo exclusivo. Redirecionando em <span id="cd">10</span>s...</p><button class="btn" onclick="location.reload()">Tentar agora</button></div>
-        <script>let t=10;const c=document.getElementById('cd');const i=setInterval(()=>{t--;c.textContent=t;if(t<=0){clearInterval(i);location.reload();}},1000);</script>
-        </body></html>`,
-        { status: 200, headers: { 'Content-Type': 'text/html' } }
-      );
-    }
+    // Fire-and-forget: increment redirect count (non-blocking)
+    supabase.from('group_redirect_links')
+      .update({ redirect_count: (link.redirect_count || 0) + 1 })
+      .eq('id', link.id)
+      .then(() => {});
 
-    // API mode: return JSON immediately (before deep link transform)
+    // ─── API MODE: return JSON ───
     if (isApiMode) {
-      // Increment redirect count
-      await supabase.from('group_redirect_links')
-        .update({ redirect_count: (link.redirect_count || 0) + 1 })
-        .eq('id', link.id);
-
       return new Response(
         JSON.stringify({ invite_url: redirectUrl }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Deep link format (only for HTML mode)
-    const useDeepLink = link.is_deep_link || campaign.is_deep_link;
-    if (useDeepLink && redirectUrl) {
-      const inviteCode = redirectUrl.replace('https://chat.whatsapp.com/', '');
-      const userAgent = req.headers.get('user-agent') || '';
-      const isAndroid = userAgent.toLowerCase().includes('android');
-      
-      if (isAndroid) {
-        redirectUrl = `intent://invite/${inviteCode}#Intent;scheme=whatsapp;package=com.whatsapp;end`;
-      } else {
-        redirectUrl = `https://chat.whatsapp.com/${inviteCode}`;
-      }
+    // ─── DETECT IN-APP BROWSER ───
+    const userAgent = req.headers.get('user-agent') || '';
+    const isInApp = /Instagram|FBAN|FBAV/i.test(userAgent);
+
+    if (isInApp) {
+      // In-app browsers can't open WhatsApp directly, show instructions
+      return new Response(
+        `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Abrir no navegador</title>
+        <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#075e54;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}.c{background:rgba(0,0,0,.25);border-radius:16px;padding:2rem;text-align:center;max-width:360px;width:100%}.w{background:rgba(255,180,0,.15);border:1px solid rgba(255,180,0,.4);border-radius:10px;padding:1rem;margin-bottom:1rem;text-align:left}ol{padding-left:1.2rem;margin-top:.5rem}li{font-size:.85rem;margin-bottom:.35rem}.b{display:block;width:100%;background:#25D366;color:#fff;border:none;padding:.75rem;border-radius:50px;font-weight:600;cursor:pointer;font-size:.95rem;margin-bottom:.5rem;text-decoration:none;text-align:center}</style>
+        </head><body><div class="c"><div class="w"><strong>📱 Abra no navegador</strong><ol><li>Toque nos <strong>3 pontos</strong> (⋮) acima</li><li>Selecione <strong>"Abrir no navegador"</strong></li><li>Ou copie o link abaixo</li></ol></div><button class="b" onclick="navigator.clipboard&&navigator.clipboard.writeText('${redirectUrl}').then(()=>alert('Link copiado!'))">📋 Copiar link do grupo</button><a href="${redirectUrl}" class="b" style="background:rgba(255,255,255,.15)">Tentar assim mesmo</a></div></body></html>`,
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
     }
 
-    // Increment redirect count
-    await supabase.from('group_redirect_links')
-      .update({ redirect_count: (link.redirect_count || 0) + 1 })
-      .eq('id', link.id);
+    // ─── INSTANT 302 REDIRECT ───
+    const campaign = link.group_campaigns as any;
+    const useDeepLink = link.is_deep_link || campaign?.is_deep_link;
+    const isAndroid = /android/i.test(userAgent);
 
-    const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2;url=${redirectUrl}">
-<title>Redirecionando...</title>
-<style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#075e54;color:white}.container{text-align:center}.spinner{border:3px solid rgba(255,255,255,0.3);border-top:3px solid white;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 16px}@keyframes spin{to{transform:rotate(360deg)}}a{color:white}</style>
-</head><body><div class="container"><div class="spinner"></div><h2>Entrando no grupo...</h2><p>Você será redirecionado automaticamente.</p><p><a href="${redirectUrl}">Clique aqui se não for redirecionado</a></p></div>
-<script>window.location.href="${redirectUrl}";</script></body></html>`;
+    let finalUrl = redirectUrl;
+    if (useDeepLink && isAndroid) {
+      const inviteCode = redirectUrl.replace('https://chat.whatsapp.com/', '');
+      finalUrl = `intent://invite/${inviteCode}#Intent;scheme=whatsapp;package=com.whatsapp;S.browser_fallback_url=${encodeURIComponent(redirectUrl)};end`;
+    }
 
-    return new Response(html, {
-      status: 200,
-      headers: { 'Content-Type': 'text/html' },
+    return new Response(null, {
+      status: 302,
+      headers: { 'Location': finalUrl, 'Cache-Control': 'no-cache, no-store' },
     });
+
   } catch (error) {
     console.error('Error in redirect:', error);
-    return new Response(
-      `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Erro</title>
-      <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;background:#075e54;color:white;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}.card{background:rgba(0,0,0,.25);border-radius:16px;padding:2rem;text-align:center;max-width:360px;width:100%}h2{font-size:1.1rem;margin-bottom:.75rem}p{font-size:.9rem;opacity:.85;margin-bottom:1.2rem;line-height:1.5}.btn{display:inline-block;background:#25D366;color:white;text-decoration:none;padding:.75rem 1.5rem;border-radius:50px;font-weight:600;font-size:.95rem;cursor:pointer;border:none;width:100%;max-width:260px}</style>
-      </head><body><div class="card"><h2>⚠️ Erro temporário</h2><p>Não foi possível processar o link agora. Tente novamente em instantes.</p><button class="btn" onclick="location.reload()">Tentar novamente</button></div></body></html>`,
-      { status: 500, headers: { 'Content-Type': 'text/html' } }
-    );
+    return new Response('Erro temporário. Tente novamente.', {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
   }
 });
+
+// ─── Helper: resolve the WhatsApp invite URL from campaign groups ───
+async function resolveGroupUrl(
+  supabase: any,
+  link: any,
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<string | null> {
+  const campaign = link.group_campaigns as any;
+  const targetGroupIds = campaign?.target_groups || [];
+
+  if (!targetGroupIds.length) return null;
+
+  const { data: groups } = await supabase
+    .from('whatsapp_groups')
+    .select('id, group_id, name, invite_link, is_full, participant_count, max_participants')
+    .in('id', targetGroupIds)
+    .eq('is_full', false)
+    .order('participant_count', { ascending: false });
+
+  if (!groups || groups.length === 0) {
+    return await tryAutoCreate(supabaseUrl, supabaseKey, link.campaign_id);
+  }
+
+  // Try groups with existing invite links first
+  for (const group of groups) {
+    if (group.invite_link) return group.invite_link;
+  }
+
+  // Generate invite link for first available group
+  const group = groups[0];
+  const inviteLink = await fetchInviteLink(group.group_id);
+  if (inviteLink) {
+    // Save for future use (non-blocking)
+    supabase.from('whatsapp_groups')
+      .update({ invite_link: inviteLink })
+      .eq('id', group.id)
+      .then(() => {});
+    return inviteLink;
+  }
+
+  return await tryAutoCreate(supabaseUrl, supabaseKey, link.campaign_id);
+}
+
+async function fetchInviteLink(groupId: string): Promise<string | null> {
+  const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
+  const token = Deno.env.get('ZAPI_TOKEN');
+  const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+  if (!instanceId || !token || !clientToken) return null;
+
+  try {
+    const res = await fetch(
+      `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invitation-link/${groupId}`,
+      { method: 'GET', headers: { 'Client-Token': clientToken } }
+    );
+    const data = await res.json();
+    return data.invitationLink || data.link || null;
+  } catch {
+    return null;
+  }
+}
+
+async function tryAutoCreate(supabaseUrl: string, supabaseKey: string, campaignId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/auto-create-vip-group`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+      body: JSON.stringify({ campaign_id: campaignId }),
+    });
+    const result = await res.json();
+    return result.success && result.group?.invite_link ? result.group.invite_link : null;
+  } catch {
+    return null;
+  }
+}
