@@ -1,3 +1,4 @@
+// VIP Group redirect with API mode support - v2
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -165,7 +166,20 @@ serve(async (req) => {
       );
     }
 
-    // Deep link format
+    // API mode: return JSON immediately (before deep link transform)
+    if (isApiMode) {
+      // Increment redirect count
+      await supabase.from('group_redirect_links')
+        .update({ redirect_count: (link.redirect_count || 0) + 1 })
+        .eq('id', link.id);
+
+      return new Response(
+        JSON.stringify({ invite_url: redirectUrl }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Deep link format (only for HTML mode)
     const useDeepLink = link.is_deep_link || campaign.is_deep_link;
     if (useDeepLink && redirectUrl) {
       const inviteCode = redirectUrl.replace('https://chat.whatsapp.com/', '');
@@ -183,13 +197,6 @@ serve(async (req) => {
     await supabase.from('group_redirect_links')
       .update({ redirect_count: (link.redirect_count || 0) + 1 })
       .eq('id', link.id);
-
-    if (isApiMode) {
-      return new Response(
-        JSON.stringify({ invite_url: redirectUrl }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2;url=${redirectUrl}">
