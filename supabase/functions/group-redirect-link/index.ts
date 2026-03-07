@@ -62,18 +62,21 @@ serve(async (req) => {
       const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
       const token = Deno.env.get('ZAPI_TOKEN');
       const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
-      if (!instanceId || !token || !clientToken) return null;
+      if (!instanceId || !token || !clientToken) {
+        console.error('Z-API credentials missing');
+        return null;
+      }
 
       try {
-        const res = await fetch(
-          `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invitation-link/${groupId}`,
-          {
-            method: 'POST',
-            headers: { 'Client-Token': clientToken, 'Content-Type': 'application/json' },
-          }
-        );
+        const apiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invite-link/${groupId}`;
+        console.log(`Fetching invite link from: ${apiUrl}`);
+        const res = await fetch(apiUrl, {
+          method: 'GET',
+          headers: { 'Client-Token': clientToken },
+        });
         const data = await res.json();
-        return data.invitationLink || null;
+        console.log('Z-API invite link response:', JSON.stringify(data));
+        return data.invitationLink || data.link || null;
       } catch (e) {
         console.error('Error fetching invite link:', e);
         return null;
