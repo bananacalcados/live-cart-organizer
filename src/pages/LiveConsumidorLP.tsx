@@ -116,8 +116,11 @@ export default function LiveConsumidorLP() {
             fontSize: 21, fontWeight: 800, lineHeight: 1.15, margin: '0 0 4px',
             textShadow: '0 2px 12px rgba(0,0,0,0.5)',
           }}>
-            Live Shopping<br />Dia do Consumidor
+            Live Shopping de<br />Calçados Ortopédicos
           </h1>
+          <p style={{ fontSize: 12, opacity: 0.75, margin: 0, lineHeight: 1.4 }}>
+            Chega de sentir dor nos pés! Oportunidade única para melhorar a saúde dos seus pés.
+          </p>
         </div>
 
         {/* Countdown */}
