@@ -36,6 +36,23 @@ serve(async (req) => {
     const { action, groupId, groupName, value, phone, phones }: GroupSettingsRequest = await req.json();
     const baseUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}`;
 
+    // Normalize Brazilian phone numbers: ensure 13 digits (55 + DD + 9 + 8 digits)
+    const normalizeBrPhone = (p: string): string => {
+      let clean = p.replace(/\D/g, '');
+      // Add country code if missing
+      if (!clean.startsWith('55') && clean.length <= 11) clean = '55' + clean;
+      // Brazilian mobile: if 12 digits (55+DD+8), add the 9th digit
+      if (clean.startsWith('55') && clean.length === 12) {
+        const ddd = clean.substring(2, 4);
+        const local = clean.substring(4);
+        // Only add 9 for mobile numbers (starting with 9, 8, 7, 6)
+        if (['9', '8', '7', '6'].includes(local[0])) {
+          clean = '55' + ddd + '9' + local;
+        }
+      }
+      return clean;
+    };
+
     let endpoint: string;
     let method = 'POST';
     let body: Record<string, unknown> = {};
@@ -43,10 +60,12 @@ serve(async (req) => {
     switch (action) {
       case 'create':
         endpoint = `${baseUrl}/create-group`;
+        const normalizedPhones = (phones || []).map(normalizeBrPhone);
+        console.log('Creating group with phones:', normalizedPhones);
         body = { 
           autoInvite: true,
           groupName: groupName || value || 'Novo Grupo',
-          phones: phones || [],
+          phones: normalizedPhones,
         };
         break;
       case 'update-photo':
