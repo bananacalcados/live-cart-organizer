@@ -303,7 +303,10 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   };
 
   const copyLink = (slug: string) => {
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/group-redirect-link?slug=${slug}`;
+    const customBase = import.meta.env.VITE_REDIRECT_BASE_URL;
+    const url = customBase
+      ? `${customBase}/${slug}`
+      : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/group-redirect-link?slug=${slug}`;
     navigator.clipboard.writeText(url);
     toast.success("Link copiado!");
   };
