@@ -556,7 +556,7 @@ export function CatalogLeadPageCreator() {
 556:                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filtered.map(r => {
+                           {filtered.map(r => {
                             const cartItems = r.cart_items || [];
                             const statusBadge = r.status === "completed" ? "default"
                               : r.status === "checkout_started" ? "secondary"
@@ -566,6 +566,9 @@ export function CatalogLeadPageCreator() {
                               : r.status === "checkout_started" ? "🔄 Checkout"
                               : r.status === "cart_created" ? "🛒 Carrinho"
                               : "👀 Navegando";
+
+                            const phoneClean = r.whatsapp?.replace(/\D/g, "") || "";
+                            const fullPhone = phoneClean.startsWith("55") ? phoneClean : `55${phoneClean}`;
 
                             return (
                               <TableRow key={r.id}>
@@ -604,6 +607,20 @@ export function CatalogLeadPageCreator() {
                                   {new Date(r.created_at).toLocaleDateString("pt-BR")}
                                   <br />
                                   {new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                </TableCell>
+                                <TableCell>
+                                  {phoneClean && (
+                                    <div className="flex items-center gap-1">
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Abrir WhatsApp Web"
+                                        onClick={() => window.open(`https://wa.me/${fullPhone}`, "_blank")}>
+                                        <ExternalLink className="h-3.5 w-3.5 text-emerald-600" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Abrir no Chat interno"
+                                        onClick={() => window.open(`/chat?phone=${fullPhone}`, "_blank")}>
+                                        <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                                      </Button>
+                                    </div>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             );
