@@ -574,8 +574,7 @@ export default function CatalogLeadPage() {
               const inCart = cart.some(c => c.productId === p.id);
               return (
                 <button key={p.id} onClick={() => handleProductClick(p)}
-                  className={`bg-white rounded-xl overflow-hidden shadow-lg text-left active:scale-95 transition-transform ${inCart ? "ring-2 ring-offset-1" : ""}`}
-                  style={inCart ? { ringColor: theme.primaryColor } : {}}>
+                  className={`bg-white rounded-xl overflow-hidden shadow-lg text-left active:scale-95 transition-transform ${inCart ? "ring-2 ring-emerald-500 ring-offset-1" : ""}`}>
                   <div className="relative">
                     <img src={p.imageUrl} alt={p.title} className="w-full aspect-square object-cover" />
                     {inCart && (
