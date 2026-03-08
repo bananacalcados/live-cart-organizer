@@ -313,7 +313,9 @@ export default function CatalogLeadPage() {
     }));
   };
 
-  const cartTotal = cart.reduce((s, c) => s + Number(c.variant.price) * c.quantity, 0);
+  const cartSubtotal = cart.reduce((s, c) => s + Number(c.variant.price) * c.quantity, 0);
+  const shippingCost = config?.shipping_cost || 0;
+  const cartTotal = cartSubtotal + shippingCost;
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
