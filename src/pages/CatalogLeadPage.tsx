@@ -437,15 +437,25 @@ export default function CatalogLeadPage() {
         </div>
         {cart.length > 0 && (
           <div className="border-t p-4 space-y-3">
-            <div className="flex justify-between font-bold text-lg">
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Subtotal</span>
+              <span>{fmt(cartSubtotal)}</span>
+            </div>
+            {shippingCost > 0 && (
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>📦 Frete</span>
+                <span>{fmt(shippingCost)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold text-lg border-t pt-2">
               <span>Total</span>
               <span style={{ color: theme.primaryColor }}>{fmt(cartTotal)}</span>
             </div>
             <button onClick={handleCheckout} disabled={checkoutLoading}
-              className="w-full py-3.5 rounded-xl text-white font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-60"
-              style={{ background: theme.primaryColor }}>
-              {checkoutLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingBag className="h-5 w-5" />}
-              Ir para Pagamento
+              className="w-full py-4 rounded-xl text-white font-black text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-60 uppercase tracking-wider shadow-lg"
+              style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.secondaryColor})` }}>
+              {checkoutLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "💳"}
+              PAGAR AGORA
             </button>
           </div>
         )}
