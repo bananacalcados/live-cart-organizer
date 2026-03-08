@@ -342,12 +342,13 @@ export default function CatalogLeadPage() {
         store_id: DEFAULT_STORE_ID,
         sale_type: "online",
         status: "pending",
-        subtotal: cartTotal,
+        subtotal: cartSubtotal,
         total: cartTotal,
+        shipping_cost: shippingCost,
         discount: 0,
         customer_name: stored.instagram ? `@${stored.instagram}` : null,
         customer_phone: stored.whatsapp || null,
-        notes: `Catálogo Lead: ${slug} | IG: @${stored.instagram || ""}`,
+        notes: `Catálogo Lead: ${slug} | IG: @${stored.instagram || ""}${shippingCost > 0 ? ` | Frete: R$${shippingCost.toFixed(2)}` : ""}`,
         checkout_step: 0,
       }).select("id").single();
 
