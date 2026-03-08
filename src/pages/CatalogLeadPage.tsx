@@ -132,6 +132,7 @@ export default function CatalogLeadPage() {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [cartBounce, setCartBounce] = useState(false);
+  const [shippingAlreadyPaid, setShippingAlreadyPaid] = useState(false);
 
   // Check if already registered
   useEffect(() => {
