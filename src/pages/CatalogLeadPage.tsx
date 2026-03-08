@@ -713,7 +713,7 @@ export default function CatalogLeadPage() {
               <div className="max-w-lg mx-auto flex items-center gap-3">
                 <button onClick={() => setCartOpen(true)} className="flex items-center gap-2 text-sm font-medium text-gray-600">
                   🛒 <span className="font-bold">{cart.reduce((s, c) => s + c.quantity, 0)}</span> itens
-                  {shippingCost > 0 && <span className="text-[10px] text-gray-400">(+frete)</span>}
+                  {shippingAlreadyPaid ? <span className="text-[10px] text-emerald-500">(frete grátis ✅)</span> : shippingCost > 0 && <span className="text-[10px] text-gray-400">(+frete)</span>}
                 </button>
                 <div className="flex-1 text-right">
                   <span className="text-lg font-black" style={{ color: theme.primaryColor }}>{fmt(cartTotal)}</span>
