@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Plus, Save, Trash2, Loader2, Search, Check, X, ExternalLink, Copy, Eye,
   ShoppingBag, Users, ShoppingCart, CheckCircle, XCircle, Instagram, Phone,
+  ArrowUp, Star, GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,10 @@ export function CatalogLeadPageCreator() {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [regsLoading, setRegsLoading] = useState(false);
 
+  // Live-mode: quick add products to existing page
+  const [livePageId, setLivePageId] = useState<string | null>(null);
+  const [liveAddOpen, setLiveAddOpen] = useState(false);
+
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProductSimple[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productSearch, setProductSearch] = useState("");
@@ -110,10 +115,22 @@ export function CatalogLeadPageCreator() {
   const toggleProduct = (id: string) => {
     if (!editingPage) return;
     const ids = editingPage.selected_product_ids || [];
-    setEditingPage({
-      ...editingPage,
-      selected_product_ids: ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id],
-    });
+    if (ids.includes(id)) {
+      // Remove
+      setEditingPage({ ...editingPage, selected_product_ids: ids.filter(x => x !== id) });
+    } else {
+      // Add to FRONT (newest first)
+      setEditingPage({ ...editingPage, selected_product_ids: [id, ...ids] });
+    }
+  };
+
+  // Move a product to the front of the list (boost)
+  const boostProduct = (id: string) => {
+    if (!editingPage) return;
+    const ids = editingPage.selected_product_ids || [];
+    if (!ids.includes(id)) return;
+    setEditingPage({ ...editingPage, selected_product_ids: [id, ...ids.filter(x => x !== id)] });
+    toast.success("Produto movido para o topo!");
   };
 
   const handleSave = async () => {
@@ -140,7 +157,7 @@ export function CatalogLeadPageCreator() {
     if ((editingPage as any).id) {
       const { error } = await supabase.from("catalog_lead_pages").update(payload as any).eq("id", (editingPage as any).id);
       if (error) { toast.error(error.message); setSaving(false); return; }
-      toast.success("Página atualizada!");
+      toast.success("Página atualizada! (atualiza em tempo real para visitantes)");
     } else {
       const { error } = await supabase.from("catalog_lead_pages").insert(payload as any);
       if (error) { toast.error(error.message); setSaving(false); return; }
@@ -158,6 +175,47 @@ export function CatalogLeadPageCreator() {
     fetchPages();
   };
 
+  // ── Live Quick-Add: add product to an existing page instantly ──
+  const openLiveAdd = (page: CatalogLeadPage) => {
+    setLivePageId(page.id);
+    setEditingPage(page);
+    loadShopifyProducts();
+    setLiveAddOpen(true);
+  };
+
+  const liveToggleProduct = async (productId: string) => {
+    if (!editingPage || !livePageId) return;
+    const ids = editingPage.selected_product_ids || [];
+    let newIds: string[];
+    if (ids.includes(productId)) {
+      newIds = ids.filter(x => x !== productId);
+    } else {
+      newIds = [productId, ...ids]; // Add to front
+    }
+    // Save immediately to DB (triggers realtime)
+    const { error } = await supabase.from("catalog_lead_pages")
+      .update({ selected_product_ids: newIds } as any)
+      .eq("id", livePageId);
+    if (error) { toast.error(error.message); return; }
+    setEditingPage({ ...editingPage, selected_product_ids: newIds });
+    toast.success(ids.includes(productId) ? "Produto removido" : "Produto adicionado ao vivo! 🔴");
+    // Refresh pages list
+    fetchPages();
+  };
+
+  const liveBoostProduct = async (productId: string) => {
+    if (!editingPage || !livePageId) return;
+    const ids = editingPage.selected_product_ids || [];
+    if (!ids.includes(productId)) return;
+    const newIds = [productId, ...ids.filter(x => x !== productId)];
+    const { error } = await supabase.from("catalog_lead_pages")
+      .update({ selected_product_ids: newIds } as any)
+      .eq("id", livePageId);
+    if (error) { toast.error(error.message); return; }
+    setEditingPage({ ...editingPage, selected_product_ids: newIds });
+    toast.success("Produto destacado ao vivo! ⭐");
+  };
+
   const openDashboard = async (page: CatalogLeadPage) => {
     setDashboardPage(page);
     setDashboardOpen(true);
@@ -173,10 +231,21 @@ export function CatalogLeadPageCreator() {
 
   const baseUrl = "https://checkout.bananacalcados.com.br";
   const selectedIds = new Set(editingPage?.selected_product_ids || []);
+  const selectedIdsArray = editingPage?.selected_product_ids || [];
 
   const filteredProducts = productSearch
     ? shopifyProducts.filter(p => p.title.toLowerCase().includes(productSearch.toLowerCase()))
     : shopifyProducts;
+
+  // Sort products: selected ones first in their array order, then unselected
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    const aIdx = selectedIdsArray.indexOf(a.id);
+    const bIdx = selectedIdsArray.indexOf(b.id);
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+    if (aIdx !== -1) return -1;
+    if (bIdx !== -1) return 1;
+    return 0;
+  });
 
   // Dashboard stats
   const totalLeads = registrations.length;
@@ -185,6 +254,11 @@ export function CatalogLeadPageCreator() {
   const completed = registrations.filter(r => r.status === "completed");
   const abandoned = withCart.filter(r => r.status !== "completed" && r.status !== "checkout_started");
 
+  // Selected products in order for the live panel
+  const liveSelectedProducts = selectedIdsArray
+    .map(id => shopifyProducts.find(p => p.id === id))
+    .filter(Boolean) as ShopifyProductSimple[];
+
   return (
     <>
       <Card>
@@ -192,7 +266,7 @@ export function CatalogLeadPageCreator() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-sm">Catálogo com Captação de Lead</CardTitle>
-              <CardDescription className="text-xs">Links de catálogo com carrinho + checkout transparente</CardDescription>
+              <CardDescription className="text-xs">Links de catálogo com carrinho + checkout transparente (atualização em tempo real)</CardDescription>
             </div>
             <Button size="sm" className="gap-1" onClick={() => openEditor()}>
               <Plus className="h-3.5 w-3.5" />Criar
@@ -217,12 +291,15 @@ export function CatalogLeadPageCreator() {
                     <p className="text-xs text-muted-foreground mt-0.5">{p.selected_product_ids?.length || 0} produtos • {p.views} views • {p.leads_count} leads</p>
                     <p className="text-xs text-muted-foreground font-mono truncate">{url}</p>
                   </div>
-                  <div className="flex gap-1 shrink-0 ml-2">
+                  <div className="flex gap-1 shrink-0 ml-2 flex-wrap">
                     <Button variant="outline" size="sm" className="gap-1" onClick={() => { navigator.clipboard.writeText(url); toast.success("Link copiado!"); }}>
                       <Copy className="h-3.5 w-3.5" />
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => window.open(url, "_blank")}>
                       <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="default" size="sm" className="gap-1 bg-red-600 hover:bg-red-700 text-white" onClick={() => openLiveAdd(p)}>
+                      🔴 Live
                     </Button>
                     <Button variant="outline" size="sm" className="gap-1" onClick={() => openDashboard(p)}>
                       <Eye className="h-3.5 w-3.5" />Dashboard
@@ -269,6 +346,31 @@ export function CatalogLeadPageCreator() {
                 <Switch checked={editingPage?.is_active ?? true} onCheckedChange={v => setEditingPage({ ...editingPage, is_active: v })} />
                 <Label className="text-xs">Ativa</Label>
               </div>
+
+              {/* Selected products in order */}
+              {selectedIdsArray.length > 0 && (
+                <div>
+                  <Label className="text-xs font-semibold">Ordem dos produtos (arraste ⭐ para destacar)</Label>
+                  <div className="mt-2 space-y-1 max-h-[200px] overflow-auto">
+                    {liveSelectedProducts.map((p, idx) => (
+                      <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card text-xs">
+                        <span className="text-muted-foreground w-5 text-center">{idx + 1}</span>
+                        {p.imageUrl && <img src={p.imageUrl} className="w-8 h-8 rounded object-cover" />}
+                        <span className="flex-1 truncate font-medium">{p.title}</span>
+                        {idx > 0 && (
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => boostProduct(p.id)} title="Mover para o topo">
+                            <ArrowUp className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => toggleProduct(p.id)} title="Remover">
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label className="text-xs font-semibold">Produtos ({selectedIds.size} selecionados)</Label>
                 <div className="relative mt-1">
@@ -279,7 +381,7 @@ export function CatalogLeadPageCreator() {
                   {productsLoading ? (
                     <div className="col-span-full flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
                   ) : (
-                    filteredProducts.map(p => {
+                    sortedProducts.map(p => {
                       const selected = selectedIds.has(p.id);
                       return (
                         <button key={p.id} onClick={() => toggleProduct(p.id)}
@@ -305,6 +407,76 @@ export function CatalogLeadPageCreator() {
         </DialogContent>
       </Dialog>
 
+      {/* Live Mode Dialog */}
+      <Dialog open={liveAddOpen} onOpenChange={setLiveAddOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+              Modo Live — Atualização em Tempo Real
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">Adicione, remova e destaque produtos. Visitantes verão as mudanças instantaneamente.</p>
+          </DialogHeader>
+
+          <div className="px-6 py-3">
+            {/* Currently selected - reorder */}
+            <Label className="text-xs font-semibold">Produtos no catálogo ({selectedIdsArray.length})</Label>
+            <div className="mt-2 space-y-1 max-h-[200px] overflow-auto mb-4">
+              {liveSelectedProducts.length === 0 && (
+                <p className="text-xs text-muted-foreground py-4 text-center">Nenhum produto selecionado</p>
+              )}
+              {liveSelectedProducts.map((p, idx) => (
+                <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card text-xs">
+                  <span className={`w-5 text-center font-bold ${idx === 0 ? "text-amber-500" : "text-muted-foreground"}`}>
+                    {idx === 0 ? "⭐" : idx + 1}
+                  </span>
+                  {p.imageUrl && <img src={p.imageUrl} className="w-8 h-8 rounded object-cover" />}
+                  <span className="flex-1 truncate font-medium">{p.title}</span>
+                  {idx > 0 && (
+                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => liveBoostProduct(p.id)}>
+                      <Star className="h-3 w-3" />Destacar
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => liveToggleProduct(p.id)}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <ScrollArea className="flex-1 px-6 pb-4">
+            <Label className="text-xs font-semibold">Adicionar produtos</Label>
+            <div className="relative mt-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar produto..." value={productSearch} onChange={e => setProductSearch(e.target.value)} className="pl-8 h-9 text-sm" />
+            </div>
+            <div className="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[300px] overflow-auto">
+              {productsLoading ? (
+                <div className="col-span-full flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
+              ) : (
+                filteredProducts.map(p => {
+                  const selected = selectedIds.has(p.id);
+                  return (
+                    <button key={p.id} onClick={() => liveToggleProduct(p.id)}
+                      className={`relative text-left rounded-lg border p-1.5 transition-all ${selected ? "border-primary ring-1 ring-primary bg-primary/5" : "border-border hover:border-primary/50"}`}>
+                      {selected && <div className="absolute top-1 right-1 h-5 w-5 rounded-full bg-primary flex items-center justify-center z-10"><Check className="h-3 w-3 text-primary-foreground" /></div>}
+                      {p.imageUrl ? <img src={p.imageUrl} alt={p.title} className="w-full aspect-square object-cover rounded" /> : <div className="w-full aspect-square bg-muted rounded" />}
+                      <p className="text-[11px] font-medium line-clamp-2 mt-1">{p.title}</p>
+                      <p className="text-[10px] text-muted-foreground">R$ {Number(p.price).toFixed(2)}</p>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="px-6 py-3 border-t">
+            <Button variant="outline" onClick={() => setLiveAddOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dashboard Dialog */}
       <Dialog open={dashboardOpen} onOpenChange={setDashboardOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
@@ -316,7 +488,6 @@ export function CatalogLeadPageCreator() {
           </DialogHeader>
 
           <div className="px-6 py-3">
-            {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <div className="p-3 rounded-xl border bg-card text-center">
                 <Users className="h-5 w-5 mx-auto text-primary mb-1" />

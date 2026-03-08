@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { toast } from "sonner";
-import { ShoppingBag, X, ChevronLeft, Instagram, Phone, Loader2, Check, Trash2, Plus, Minus } from "lucide-react";
+import { ShoppingBag, X, ChevronLeft, Instagram, Phone, Loader2, Check, Trash2, Plus, Minus, Sparkles } from "lucide-react";
 
 // ─── Types ───
 interface PageConfig {
@@ -48,10 +48,9 @@ interface CartItem {
 }
 
 // ─── Helpers ───
-function buildProducts(raw: ShopifyProduct[], selectedIds: Set<string>): CatalogProduct[] {
-  const products: CatalogProduct[] = [];
+function buildProductMap(raw: ShopifyProduct[]): Map<string, CatalogProduct> {
+  const map = new Map<string, CatalogProduct>();
   for (const sp of raw) {
-    if (selectedIds.size > 0 && !selectedIds.has(sp.node.id)) continue;
     const fallbackImg = sp.node.images.edges[0]?.node.url || "";
     const variants: CatalogVariant[] = [];
     for (const ve of sp.node.variants.edges) {
@@ -68,8 +67,7 @@ function buildProducts(raw: ShopifyProduct[], selectedIds: Set<string>): Catalog
       variants.push({
         id: v.id.split("/").pop() || v.id,
         gid: v.id,
-        color,
-        size,
+        color, size,
         label: parts.join(" / "),
         price: v.price.amount,
         compareAtPrice: v.compareAtPrice?.amount || null,
@@ -80,7 +78,7 @@ function buildProducts(raw: ShopifyProduct[], selectedIds: Set<string>): Catalog
     }
     if (variants.length === 0) continue;
     const defaultV = variants[0];
-    products.push({
+    map.set(sp.node.id, {
       id: sp.node.id,
       title: sp.node.title,
       handle: sp.node.handle,
@@ -90,7 +88,7 @@ function buildProducts(raw: ShopifyProduct[], selectedIds: Set<string>): Catalog
       variants,
     });
   }
-  return products;
+  return map;
 }
 
 const fmt = (v: string | number) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -101,7 +99,6 @@ const formatPhone = (value: string) => {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 };
 
-// Default store for checkout (Centro)
 const DEFAULT_STORE_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
 const CHECKOUT_BASE_URL = "https://checkout.bananacalcados.com.br";
 
@@ -109,9 +106,13 @@ const CHECKOUT_BASE_URL = "https://checkout.bananacalcados.com.br";
 export default function CatalogLeadPage() {
   const { slug } = useParams<{ slug: string }>();
   const [config, setConfig] = useState<PageConfig | null>(null);
-  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [productMap, setProductMap] = useState<Map<string, CatalogProduct>>(new Map());
   const [loading, setLoading] = useState(true);
   const [productsLoading, setProductsLoading] = useState(false);
+
+  // Track newly added/boosted products for highlight animation
+  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
+  const prevIdsRef = useRef<string[]>([]);
 
   // Registration
   const [registered, setRegistered] = useState(false);
@@ -131,7 +132,7 @@ export default function CatalogLeadPage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [cartBounce, setCartBounce] = useState(false);
 
-  // Check if already registered in this session
+  // Check if already registered
   useEffect(() => {
     const key = `catalog_lead_${slug}`;
     const stored = localStorage.getItem(key);
@@ -168,21 +169,72 @@ export default function CatalogLeadPage() {
         require_registration: cfg.require_registration ?? true,
         whatsapp_numbers: cfg.whatsapp_numbers || [],
       });
+      prevIdsRef.current = cfg.selected_product_ids || [];
       supabase.from("catalog_lead_pages").update({ views: (cfg.views || 0) + 1 } as any).eq("id", cfg.id).then();
       setLoading(false);
     })();
   }, [slug]);
 
-  // Load products after config
+  // Subscribe to realtime changes on this page
+  useEffect(() => {
+    if (!config?.id) return;
+    const channel = supabase
+      .channel(`catalog-lead-${config.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "catalog_lead_pages", filter: `id=eq.${config.id}` },
+        (payload) => {
+          const newData = payload.new as any;
+          const newIds: string[] = newData.selected_product_ids || [];
+          const oldIds = prevIdsRef.current;
+
+          // Detect newly added or boosted-to-front products
+          const newHighlights = new Set<string>();
+          // Products that are new (not in old list)
+          for (const id of newIds) {
+            if (!oldIds.includes(id)) newHighlights.add(id);
+          }
+          // Product moved to position 0 that wasn't there before
+          if (newIds[0] && newIds[0] !== oldIds[0]) {
+            newHighlights.add(newIds[0]);
+          }
+
+          if (newHighlights.size > 0) {
+            setHighlightedIds(newHighlights);
+            setTimeout(() => setHighlightedIds(new Set()), 5000);
+          }
+
+          prevIdsRef.current = newIds;
+
+          setConfig(prev => prev ? {
+            ...prev,
+            title: newData.title || prev.title,
+            subtitle: newData.subtitle,
+            selected_product_ids: newIds,
+            theme_config: newData.theme_config || prev.theme_config,
+          } : prev);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [config?.id]);
+
+  // Load products after config (and when product IDs change, load any new ones)
   useEffect(() => {
     if (!config) return;
     (async () => {
       setProductsLoading(true);
       const raw = await fetchProducts(250);
-      setProducts(buildProducts(raw, new Set(config.selected_product_ids)));
+      setProductMap(buildProductMap(raw));
       setProductsLoading(false);
     })();
-  }, [config]);
+  }, [config?.id]); // Only reload shopify products on initial load
+
+  // Build ordered product list from config.selected_product_ids
+  const orderedProducts: CatalogProduct[] = (config?.selected_product_ids || [])
+    .map(id => productMap.get(id))
+    .filter(Boolean) as CatalogProduct[];
 
   const handleRegister = async () => {
     const igClean = instagram.trim().replace(/^@/, "");
@@ -251,26 +303,20 @@ export default function CatalogLeadPage() {
     setSelectedVariant(null);
   };
 
-  const removeFromCart = (variantGid: string) => {
-    setCart(cart.filter(c => c.variant.gid !== variantGid));
-  };
-
+  const removeFromCart = (variantGid: string) => setCart(cart.filter(c => c.variant.gid !== variantGid));
   const updateQty = (variantGid: string, delta: number) => {
     setCart(cart.map(c => {
       if (c.variant.gid !== variantGid) return c;
-      const newQty = Math.max(1, c.quantity + delta);
-      return { ...c, quantity: newQty };
+      return { ...c, quantity: Math.max(1, c.quantity + delta) };
     }));
   };
 
   const cartTotal = cart.reduce((s, c) => s + Number(c.variant.price) * c.quantity, 0);
 
-  // Create pos_sales and redirect to checkout
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     setCheckoutLoading(true);
     try {
-      // Update registration with cart data
       if (registrationId) {
         await supabase.from("catalog_lead_registrations").update({
           cart_items: cart.map(c => ({
@@ -287,7 +333,6 @@ export default function CatalogLeadPage() {
         } as any).eq("id", registrationId);
       }
 
-      // Create pos_sale
       const stored = JSON.parse(localStorage.getItem(`catalog_lead_${slug}`) || "{}");
       const { data: sale, error: saleError } = await supabase.from("pos_sales").insert({
         store_id: DEFAULT_STORE_ID,
@@ -304,7 +349,6 @@ export default function CatalogLeadPage() {
 
       if (saleError) throw saleError;
 
-      // Create sale items
       const items = cart.map(c => ({
         sale_id: sale.id,
         sku: c.variant.sku || `CAT-${c.variant.id}`,
@@ -317,7 +361,6 @@ export default function CatalogLeadPage() {
 
       await supabase.from("pos_sale_items").insert(items);
 
-      // Update registration with sale ID
       if (registrationId) {
         await supabase.from("catalog_lead_registrations").update({
           checkout_sale_id: sale.id,
@@ -325,7 +368,6 @@ export default function CatalogLeadPage() {
         } as any).eq("id", registrationId);
       }
 
-      // Redirect to checkout
       window.location.href = `${CHECKOUT_BASE_URL}/checkout-loja/${DEFAULT_STORE_ID}/${sale.id}`;
     } catch (e) {
       console.error(e);
@@ -415,7 +457,6 @@ export default function CatalogLeadPage() {
     return (
       <div className="min-h-screen" style={{ background: theme.backgroundGradient }}>
         {cartDrawer}
-        {/* Cart FAB */}
         {cart.length > 0 && (
           <button onClick={() => setCartOpen(true)}
             className={`fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white text-xl active:scale-90 transition-transform ${cartBounce ? "animate-bounce" : ""}`}
@@ -430,11 +471,7 @@ export default function CatalogLeadPage() {
             <ChevronLeft className="h-4 w-4" />Voltar
           </button>
           <div className="bg-white rounded-2xl overflow-hidden shadow-xl">
-            <img
-              src={selectedVariant?.imageUrl || selectedProduct.imageUrl}
-              alt={selectedProduct.title}
-              className="w-full aspect-square object-cover"
-            />
+            <img src={selectedVariant?.imageUrl || selectedProduct.imageUrl} alt={selectedProduct.title} className="w-full aspect-square object-cover" />
             <div className="p-4 space-y-4">
               <h2 className="text-lg font-bold text-gray-900">{selectedProduct.title}</h2>
               <div className="flex items-center gap-2">
@@ -446,7 +483,6 @@ export default function CatalogLeadPage() {
                 </span>
               </div>
 
-              {/* Size selector */}
               {uniqueSizes.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-2">Tamanho</p>
@@ -469,7 +505,6 @@ export default function CatalogLeadPage() {
                 </div>
               )}
 
-              {/* Color selector */}
               {uniqueColors.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-gray-600 mb-2">Cor</p>
@@ -537,13 +572,12 @@ export default function CatalogLeadPage() {
     </div>
   );
 
-  // ─── Product Grid ───
+  // ─── Product Grid (ordered by selected_product_ids) ───
   return (
     <div className="min-h-screen" style={{ background: theme.backgroundGradient }}>
       {registrationModal}
       {cartDrawer}
 
-      {/* Cart FAB */}
       {cart.length > 0 && (
         <button onClick={() => setCartOpen(true)}
           className={`fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white text-xl active:scale-90 transition-transform ${cartBounce ? "animate-bounce" : ""}`}
@@ -554,7 +588,6 @@ export default function CatalogLeadPage() {
       )}
 
       <div className="max-w-lg mx-auto px-4 py-6">
-        {/* Header */}
         <div className="text-center mb-6">
           <h2 className="text-2xl font-black text-white tracking-wider drop-shadow-lg">🍌 BANANA</h2>
           <p className="text-xs font-bold text-white/80 tracking-[0.3em] -mt-1">CALÇADOS</p>
@@ -562,21 +595,27 @@ export default function CatalogLeadPage() {
           {config.subtitle && <p className="text-sm text-white/80 mt-1">{config.subtitle}</p>}
         </div>
 
-        {/* Products */}
         {productsLoading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-white" /></div>
-        ) : products.length === 0 ? (
+        ) : orderedProducts.length === 0 ? (
           <p className="text-center text-white/70">Nenhum produto disponível</p>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {products.map(p => {
+            {orderedProducts.map((p, idx) => {
               const hasDiscount = p.compareAtPrice && Number(p.compareAtPrice) > Number(p.price);
               const inCart = cart.some(c => c.productId === p.id);
+              const isHighlighted = highlightedIds.has(p.id);
               return (
                 <button key={p.id} onClick={() => handleProductClick(p)}
-                  className={`bg-white rounded-xl overflow-hidden shadow-lg text-left active:scale-95 transition-transform ${inCart ? "ring-2 ring-emerald-500 ring-offset-1" : ""}`}>
+                  className={`bg-white rounded-xl overflow-hidden shadow-lg text-left active:scale-95 transition-all duration-500 ${inCart ? "ring-2 ring-emerald-500 ring-offset-1" : ""} ${isHighlighted ? "ring-2 ring-yellow-400 ring-offset-2 scale-[1.02] shadow-yellow-400/40 shadow-2xl" : ""}`}
+                  style={isHighlighted ? { animation: "pulse 1.5s ease-in-out 3" } : {}}>
                   <div className="relative">
                     <img src={p.imageUrl} alt={p.title} className="w-full aspect-square object-cover" />
+                    {isHighlighted && (
+                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 text-[10px] font-bold flex items-center gap-1 shadow-lg animate-bounce">
+                        <Sparkles className="h-3 w-3" />NOVO
+                      </div>
+                    )}
                     {inCart && (
                       <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
                         style={{ background: theme.primaryColor }}>
@@ -598,7 +637,6 @@ export default function CatalogLeadPage() {
           </div>
         )}
 
-        {/* Bottom spacer for cart FAB */}
         {cart.length > 0 && <div className="h-20" />}
       </div>
     </div>
