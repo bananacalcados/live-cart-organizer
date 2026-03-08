@@ -545,14 +545,15 @@ export function CatalogLeadPageCreator() {
                     ) : (
                       <Table>
                         <TableHeader>
-                          <TableRow>
-                            <TableHead>Instagram</TableHead>
-                            <TableHead>WhatsApp</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Produtos</TableHead>
-                            <TableHead>Total</TableHead>
-                            <TableHead>Data</TableHead>
-                          </TableRow>
+                           <TableRow>
+549:                             <TableHead>Instagram</TableHead>
+550:                             <TableHead>WhatsApp</TableHead>
+551:                             <TableHead>Status</TableHead>
+552:                             <TableHead>Produtos</TableHead>
+553:                             <TableHead>Total</TableHead>
+554:                             <TableHead>Data</TableHead>
+555:                             <TableHead>Ações</TableHead>
+556:                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {filtered.map(r => {
