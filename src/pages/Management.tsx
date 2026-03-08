@@ -1008,6 +1008,7 @@ export default function Management() {
   const shopifyRevenue = filteredTinyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
   const shopifyDiscount = filteredTinyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
   const shopifyOrders = filteredTinyOrders.length;
+  const shopifyTicket = shopifyOrders > 0 ? shopifyRevenue / shopifyOrders : 0;
 
   const totalRevenue = physicalRevenue + shopifyRevenue;
   const totalOrders = physicalOrders + shopifyOrders;
