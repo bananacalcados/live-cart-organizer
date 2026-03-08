@@ -108,6 +108,7 @@ export function CatalogLeadPageCreator() {
       selected_product_ids: [],
       whatsapp_numbers: [{ name: "Banana Calçados", number: "5533936180084" }],
       require_registration: true,
+      shipping_cost: 0,
     });
     loadShopifyProducts();
     setEditorOpen(true);
