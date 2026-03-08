@@ -214,6 +214,7 @@ export default function CatalogLeadPage() {
             subtitle: newData.subtitle,
             selected_product_ids: newIds,
             theme_config: newData.theme_config || prev.theme_config,
+            shipping_cost: Number(newData.shipping_cost) || 0,
           } : prev);
         }
       )
