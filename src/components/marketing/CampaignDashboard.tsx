@@ -125,6 +125,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
   useEffect(() => {
     fetchSnapshots();
     fetchLinkStats();
+    fetchGroupsFromDb();
     // Auto-sync group participants on first load
     if (!initialSyncDone.current && campaignGroups.length > 0) {
       initialSyncDone.current = true;
@@ -136,25 +137,27 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
             headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
             body: JSON.stringify({ syncToDb: true, filterGroupIds: groupIds }),
           });
+          await fetchGroupsFromDb();
           if (onRefreshGroups) await onRefreshGroups();
         } catch { /* ignore */ }
       };
       syncParticipants();
     }
-  }, [fetchSnapshots, fetchLinkStats, campaignGroups, onRefreshGroups]);
+  }, [fetchSnapshots, fetchLinkStats, fetchGroupsFromDb, campaignGroups, onRefreshGroups]);
 
-  // Auto-refresh polling every 30s — includes group data refresh
+  // Auto-refresh polling every 30s
   useEffect(() => {
     autoRefreshRef.current = setInterval(async () => {
       fetchLinkStats();
       fetchSnapshots();
+      fetchGroupsFromDb();
       if (onRefreshGroups) await onRefreshGroups();
     }, AUTO_REFRESH_INTERVAL);
 
     return () => {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     };
-  }, [fetchLinkStats, fetchSnapshots, onRefreshGroups]);
+  }, [fetchLinkStats, fetchSnapshots, fetchGroupsFromDb, onRefreshGroups]);
 
   // Realtime subscription for link stats
   useEffect(() => {
