@@ -112,6 +112,8 @@ export default function LiveConsumidorLP() {
     }
 
     setSubmitted(true);
+    trackPixelEvent('Lead', { content_name: 'Live Consumidor LP', content_category: 'vip_group' });
+    trackPixelEvent('CompleteRegistration', { content_name: 'Grupo VIP Live', value: 0, currency: 'BRL' });
     setTimeout(() => { window.location.href = VIP_REDIRECT; }, 600);
   };
 
