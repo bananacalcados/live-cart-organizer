@@ -41,6 +41,7 @@ import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLanding
 import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
 import { LinkPageManager } from "@/components/marketing/LinkPageManager";
 import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
+import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
 
 // ─── Types ──────────────────────────────────────
 
@@ -1056,6 +1057,7 @@ export default function Marketing() {
                 </>
               );
             })()}
+            <CatalogLeadPageCreator />
           </TabsContent>
 
           {/* ── GRUPOS VIP ── */}

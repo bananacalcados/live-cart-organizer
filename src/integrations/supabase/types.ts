@@ -763,6 +763,86 @@ export type Database = {
         }
         Relationships: []
       }
+      catalog_lead_pages: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          leads_count: number
+          require_registration: boolean
+          selected_product_ids: string[] | null
+          slug: string
+          subtitle: string | null
+          theme_config: Json
+          title: string
+          updated_at: string
+          views: number
+          whatsapp_numbers: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          leads_count?: number
+          require_registration?: boolean
+          selected_product_ids?: string[] | null
+          slug: string
+          subtitle?: string | null
+          theme_config?: Json
+          title: string
+          updated_at?: string
+          views?: number
+          whatsapp_numbers?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          leads_count?: number
+          require_registration?: boolean
+          selected_product_ids?: string[] | null
+          slug?: string
+          subtitle?: string | null
+          theme_config?: Json
+          title?: string
+          updated_at?: string
+          views?: number
+          whatsapp_numbers?: Json
+        }
+        Relationships: []
+      }
+      catalog_lead_registrations: {
+        Row: {
+          catalog_page_id: string
+          created_at: string
+          id: string
+          instagram_handle: string
+          whatsapp: string
+        }
+        Insert: {
+          catalog_page_id: string
+          created_at?: string
+          id?: string
+          instagram_handle: string
+          whatsapp: string
+        }
+        Update: {
+          catalog_page_id?: string
+          created_at?: string
+          id?: string
+          instagram_handle?: string
+          whatsapp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_lead_registrations_catalog_page_id_fkey"
+            columns: ["catalog_page_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_lead_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_archived_conversations: {
         Row: {
           archived_at: string
