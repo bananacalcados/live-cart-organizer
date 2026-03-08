@@ -154,6 +154,7 @@ export function CatalogLeadPageCreator() {
       selected_product_ids: editingPage.selected_product_ids,
       whatsapp_numbers: editingPage.whatsapp_numbers,
       require_registration: editingPage.require_registration ?? true,
+      shipping_cost: editingPage.shipping_cost ?? 0,
     };
 
     if ((editingPage as any).id) {
