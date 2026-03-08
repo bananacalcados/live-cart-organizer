@@ -49,12 +49,43 @@ const ABC_COLORS = {
   "Sem Venda": "hsl(0, 0%, 50%)",
 };
 
+const COLORS_SET = new Set([
+  "preto","branco","marrom","café","caramelo","nude","rosa","verde","azul","cinza",
+  "oliva","bronze","ouro","rosado","rose","bege","dourado","dourada","gelo","kiwi",
+  "areia","off white","branco/off","cinza/preto","bege/azul","bege/preto","ouro/rosado",
+  "marfim","vermelho","amarelo","laranja","lilás","roxo","vinho","creme","natural",
+  "chocolate","grafite","prata","coral","salmão","jeans","off","white","brule",
+]);
+
+function isVariantSegment(seg: string): boolean {
+  const s = seg.trim().toLowerCase();
+  if (!s) return true;
+  // Size patterns: "37", "35/36", "33/34", "39/40", "17..."
+  if (/^\d{2,3}(\/\d{2,3})?\.{0,3}$/.test(s)) return true;
+  // Color or color+size like "Preto 37", "Nude 36"
+  if (COLORS_SET.has(s)) return true;
+  // "37 Preto", "38 KIWI", "35 Ouro/Rosado" etc
+  if (/^\d{2,3}\s+\w/.test(s)) return true;
+  // "Preto 37", "Nude 36"
+  if (/^\w+\s+\d{2,3}(\/\d{2,3})?$/.test(s) && COLORS_SET.has(s.replace(/\s+\d.*$/, '').toLowerCase())) return true;
+  // Multi-color "Cinza/preto 37/38"
+  if (/^\w+\/\w+/.test(s)) return true;
+  return false;
+}
+
 function getParentName(name: string): string {
-  // Remove variant info like "34 / Verde" patterns, trailing size numbers, etc.
-  return name
-    .replace(/\s*[-–]\s*(Conforto|Estilo|Alívio|leveza|Conforto Diário).*$/i, "")
-    .replace(/\s+\d{2,3}\s*\/\s*\w+$/i, "")
-    .trim();
+  // Also handle long descriptive names with em-dash
+  let cleaned = name.replace(/\s*[—]\s*.+$/, '');
+  
+  // Split by " - " and keep only non-variant segments
+  const parts = cleaned.split(/\s*[-–]\s*/);
+  const kept: string[] = [];
+  for (const part of parts) {
+    if (isVariantSegment(part)) break;
+    kept.push(part);
+  }
+  
+  return (kept.length > 0 ? kept.join(' - ') : name).trim();
 }
 
 function classifyAbc(items: { name: string; revenue: number; qty: number }[]) {
