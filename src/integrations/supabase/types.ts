@@ -813,24 +813,39 @@ export type Database = {
       }
       catalog_lead_registrations: {
         Row: {
+          cart_items: Json | null
+          cart_total: number | null
           catalog_page_id: string
+          checkout_sale_id: string | null
           created_at: string
           id: string
           instagram_handle: string
+          status: string
+          updated_at: string
           whatsapp: string
         }
         Insert: {
+          cart_items?: Json | null
+          cart_total?: number | null
           catalog_page_id: string
+          checkout_sale_id?: string | null
           created_at?: string
           id?: string
           instagram_handle: string
+          status?: string
+          updated_at?: string
           whatsapp: string
         }
         Update: {
+          cart_items?: Json | null
+          cart_total?: number | null
           catalog_page_id?: string
+          checkout_sale_id?: string | null
           created_at?: string
           id?: string
           instagram_handle?: string
+          status?: string
+          updated_at?: string
           whatsapp?: string
         }
         Relationships: [

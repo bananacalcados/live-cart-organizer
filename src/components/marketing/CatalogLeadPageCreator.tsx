@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { toast } from "sonner";
 import {
-  Plus, Save, Trash2, Loader2, Search, Check, X, ExternalLink, Copy, Eye, EyeOff,
+  Plus, Save, Trash2, Loader2, Search, Check, X, ExternalLink, Copy, Eye,
+  ShoppingBag, Users, ShoppingCart, CheckCircle, XCircle, Instagram, Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface CatalogLeadPage {
   id: string;
@@ -29,6 +32,18 @@ interface CatalogLeadPage {
   created_at: string;
 }
 
+interface Registration {
+  id: string;
+  instagram_handle: string;
+  whatsapp: string;
+  cart_items: any[];
+  cart_total: number;
+  status: string;
+  checkout_sale_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface ShopifyProductSimple {
   id: string;
   title: string;
@@ -42,6 +57,10 @@ export function CatalogLeadPageCreator() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingPage, setEditingPage] = useState<Partial<CatalogLeadPage> | null>(null);
+  const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [dashboardPage, setDashboardPage] = useState<CatalogLeadPage | null>(null);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [regsLoading, setRegsLoading] = useState(false);
 
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProductSimple[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -139,12 +158,32 @@ export function CatalogLeadPageCreator() {
     fetchPages();
   };
 
+  const openDashboard = async (page: CatalogLeadPage) => {
+    setDashboardPage(page);
+    setDashboardOpen(true);
+    setRegsLoading(true);
+    const { data } = await supabase
+      .from("catalog_lead_registrations")
+      .select("*")
+      .eq("catalog_page_id", page.id)
+      .order("created_at", { ascending: false });
+    setRegistrations((data as any[]) || []);
+    setRegsLoading(false);
+  };
+
   const baseUrl = "https://checkout.bananacalcados.com.br";
   const selectedIds = new Set(editingPage?.selected_product_ids || []);
 
   const filteredProducts = productSearch
     ? shopifyProducts.filter(p => p.title.toLowerCase().includes(productSearch.toLowerCase()))
     : shopifyProducts;
+
+  // Dashboard stats
+  const totalLeads = registrations.length;
+  const withCart = registrations.filter(r => (r.cart_items || []).length > 0);
+  const checkoutStarted = registrations.filter(r => r.status === "checkout_started" || r.status === "completed");
+  const completed = registrations.filter(r => r.status === "completed");
+  const abandoned = withCart.filter(r => r.status !== "completed" && r.status !== "checkout_started");
 
   return (
     <>
@@ -153,7 +192,7 @@ export function CatalogLeadPageCreator() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-sm">Catálogo com Captação de Lead</CardTitle>
-              <CardDescription className="text-xs">Links de catálogo que exigem @ Instagram e WhatsApp antes de ver variações</CardDescription>
+              <CardDescription className="text-xs">Links de catálogo com carrinho + checkout transparente</CardDescription>
             </div>
             <Button size="sm" className="gap-1" onClick={() => openEditor()}>
               <Plus className="h-3.5 w-3.5" />Criar
@@ -185,6 +224,9 @@ export function CatalogLeadPageCreator() {
                     <Button variant="outline" size="sm" onClick={() => window.open(url, "_blank")}>
                       <ExternalLink className="h-3.5 w-3.5" />
                     </Button>
+                    <Button variant="outline" size="sm" className="gap-1" onClick={() => openDashboard(p)}>
+                      <Eye className="h-3.5 w-3.5" />Dashboard
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => openEditor(p)}>Editar</Button>
                     <Button variant="ghost" size="sm" onClick={() => handleDelete(p.id)}>
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
@@ -205,7 +247,6 @@ export function CatalogLeadPageCreator() {
           </DialogHeader>
           <ScrollArea className="flex-1 px-6 pb-4">
             <div className="space-y-4 py-2">
-              {/* Basic info */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Slug (URL)</Label>
@@ -220,17 +261,14 @@ export function CatalogLeadPageCreator() {
                 <Label className="text-xs">Subtítulo (opcional)</Label>
                 <Input placeholder="Os melhores calçados..." value={editingPage?.subtitle || ""} onChange={e => setEditingPage({ ...editingPage, subtitle: e.target.value })} className="h-9 text-sm" />
               </div>
-
               <div className="flex items-center gap-3">
                 <Switch checked={editingPage?.require_registration ?? true} onCheckedChange={v => setEditingPage({ ...editingPage, require_registration: v })} />
-                <Label className="text-xs">Exigir cadastro (@ Instagram + WhatsApp) antes de selecionar variações</Label>
+                <Label className="text-xs">Exigir cadastro (@ Instagram + WhatsApp)</Label>
               </div>
               <div className="flex items-center gap-3">
                 <Switch checked={editingPage?.is_active ?? true} onCheckedChange={v => setEditingPage({ ...editingPage, is_active: v })} />
                 <Label className="text-xs">Ativa</Label>
               </div>
-
-              {/* Product selector */}
               <div>
                 <Label className="text-xs font-semibold">Produtos ({selectedIds.size} selecionados)</Label>
                 <div className="relative mt-1">
@@ -264,6 +302,139 @@ export function CatalogLeadPageCreator() {
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Salvar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dashboard Dialog */}
+      <Dialog open={dashboardOpen} onOpenChange={setDashboardOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingBag className="h-5 w-5" />
+              Dashboard: {dashboardPage?.title}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="px-6 py-3">
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div className="p-3 rounded-xl border bg-card text-center">
+                <Users className="h-5 w-5 mx-auto text-primary mb-1" />
+                <p className="text-2xl font-bold">{totalLeads}</p>
+                <p className="text-[10px] text-muted-foreground">Cadastros</p>
+              </div>
+              <div className="p-3 rounded-xl border bg-card text-center">
+                <ShoppingCart className="h-5 w-5 mx-auto text-orange-500 mb-1" />
+                <p className="text-2xl font-bold">{withCart.length}</p>
+                <p className="text-[10px] text-muted-foreground">Com Carrinho</p>
+              </div>
+              <div className="p-3 rounded-xl border bg-card text-center">
+                <XCircle className="h-5 w-5 mx-auto text-destructive mb-1" />
+                <p className="text-2xl font-bold">{abandoned.length}</p>
+                <p className="text-[10px] text-muted-foreground">Abandonados</p>
+              </div>
+              <div className="p-3 rounded-xl border bg-card text-center">
+                <CheckCircle className="h-5 w-5 mx-auto text-emerald-500 mb-1" />
+                <p className="text-2xl font-bold">{checkoutStarted.length}</p>
+                <p className="text-[10px] text-muted-foreground">Checkout Iniciado</p>
+              </div>
+            </div>
+          </div>
+
+          <ScrollArea className="flex-1 px-6 pb-6">
+            <Tabs defaultValue="all" className="w-full">
+              <TabsList className="mb-3">
+                <TabsTrigger value="all">Todos ({totalLeads})</TabsTrigger>
+                <TabsTrigger value="cart">Com Carrinho ({withCart.length})</TabsTrigger>
+                <TabsTrigger value="abandoned">Abandonados ({abandoned.length})</TabsTrigger>
+                <TabsTrigger value="checkout">Checkout ({checkoutStarted.length})</TabsTrigger>
+              </TabsList>
+
+              {["all", "cart", "abandoned", "checkout"].map(tab => {
+                const filtered = tab === "all" ? registrations
+                  : tab === "cart" ? withCart
+                  : tab === "abandoned" ? abandoned
+                  : checkoutStarted;
+
+                return (
+                  <TabsContent key={tab} value={tab}>
+                    {regsLoading ? (
+                      <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                    ) : filtered.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">Nenhum registro</p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Instagram</TableHead>
+                            <TableHead>WhatsApp</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Produtos</TableHead>
+                            <TableHead>Total</TableHead>
+                            <TableHead>Data</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filtered.map(r => {
+                            const cartItems = r.cart_items || [];
+                            const statusBadge = r.status === "completed" ? "default"
+                              : r.status === "checkout_started" ? "secondary"
+                              : r.status === "cart_created" ? "outline"
+                              : "outline";
+                            const statusLabel = r.status === "completed" ? "✅ Pago"
+                              : r.status === "checkout_started" ? "🔄 Checkout"
+                              : r.status === "cart_created" ? "🛒 Carrinho"
+                              : "👀 Navegando";
+
+                            return (
+                              <TableRow key={r.id}>
+                                <TableCell className="font-medium text-sm">
+                                  <div className="flex items-center gap-1">
+                                    <Instagram className="h-3.5 w-3.5 text-muted-foreground" />
+                                    @{r.instagram_handle}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  <div className="flex items-center gap-1">
+                                    <Phone className="h-3 w-3 text-muted-foreground" />
+                                    {r.whatsapp}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={statusBadge as any} className="text-[10px]">{statusLabel}</Badge>
+                                </TableCell>
+                                <TableCell className="text-xs max-w-[200px]">
+                                  {cartItems.length === 0 ? (
+                                    <span className="text-muted-foreground">—</span>
+                                  ) : (
+                                    <div className="space-y-0.5">
+                                      {cartItems.map((item: any, i: number) => (
+                                        <p key={i} className="truncate">
+                                          {item.quantity}x {item.title} {item.variant && `(${item.variant})`}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-xs font-semibold">
+                                  {r.cart_total > 0 ? `R$ ${Number(r.cart_total).toFixed(2)}` : "—"}
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {new Date(r.created_at).toLocaleDateString("pt-BR")}
+                                  <br />
+                                  {new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </>
