@@ -112,16 +112,16 @@ export default function LiveConsumidorLP() {
       <div style={{
         background: 'rgba(0,0,0,0.5)',
         backdropFilter: 'blur(8px)',
-        borderRadius: 8,
-        width: 52, height: 48,
+        borderRadius: 10,
+        width: 62, height: 56,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         border: '1px solid rgba(255,255,255,0.12)',
       }}>
-        <span style={{ fontSize: 22, fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: 28, fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
           {String(v).padStart(2, '0')}
         </span>
       </div>
-      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', letterSpacing: 1, textTransform: 'uppercase', marginTop: 2, display: 'block' }}>
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', letterSpacing: 1, textTransform: 'uppercase', marginTop: 3, display: 'block' }}>
         {l}
       </span>
     </div>
@@ -216,20 +216,20 @@ export default function LiveConsumidorLP() {
           <div style={{
             display: 'inline-block',
             background: '#e53e3e',
-            fontSize: 10, fontWeight: 700,
-            padding: '3px 10px', borderRadius: 50,
+            fontSize: 13, fontWeight: 700,
+            padding: '5px 14px', borderRadius: 50,
             letterSpacing: 1.2, textTransform: 'uppercase',
-            marginBottom: 6,
+            marginBottom: 8,
           }}>
             {isLive ? '🔴 AO VIVO AGORA' : '📅 14 e 15 de Março • 15h'}
           </div>
           <h1 style={{
-            fontSize: 21, fontWeight: 800, lineHeight: 1.15, margin: '0 0 4px',
+            fontSize: 26, fontWeight: 800, lineHeight: 1.2, margin: '0 0 6px',
             textShadow: '0 2px 12px rgba(0,0,0,0.5)',
           }}>
             Live Shopping de<br />Calçados Ortopédicos
           </h1>
-          <p style={{ fontSize: 12, opacity: 0.75, margin: 0, lineHeight: 1.4 }}>
+          <p style={{ fontSize: 15, opacity: 0.8, margin: 0, lineHeight: 1.5 }}>
             Chega de sentir dor nos pés! Oportunidade única para melhorar a saúde dos seus pés.
           </p>
         </div>
@@ -244,7 +244,7 @@ export default function LiveConsumidorLP() {
         {/* Benefits row */}
         <div style={{
           display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: 6, marginBottom: 14,
+          gap: 8, marginBottom: 16,
         }}>
           {[
             { emoji: '🦶', text: 'Ortopédicos originais' },
@@ -255,9 +255,9 @@ export default function LiveConsumidorLP() {
             <div key={i} style={{
               background: 'rgba(255,255,255,0.08)',
               border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 8, padding: '8px 10px',
-              fontSize: 12, fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 6,
+              borderRadius: 10, padding: '10px 12px',
+              fontSize: 14, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center',
             }}>
               <span>{b.emoji}</span> {b.text}
             </div>
@@ -285,8 +285,8 @@ export default function LiveConsumidorLP() {
                 background: 'rgba(255,255,255,0.1)',
                 border: '1px solid rgba(255,255,255,0.18)',
                 color: '#fff', borderRadius: 10,
-                height: 44, padding: '0 14px',
-                fontSize: 14, outline: 'none',
+                height: 50, padding: '0 16px',
+                fontSize: 16, outline: 'none',
                 width: '100%', boxSizing: 'border-box',
               }}
             />
@@ -300,8 +300,8 @@ export default function LiveConsumidorLP() {
                 background: 'rgba(255,255,255,0.1)',
                 border: '1px solid rgba(255,255,255,0.18)',
                 color: '#fff', borderRadius: 10,
-                height: 44, padding: '0 14px',
-                fontSize: 14, outline: 'none',
+                height: 50, padding: '0 16px',
+                fontSize: 16, outline: 'none',
                 width: '100%', boxSizing: 'border-box',
               }}
             />
@@ -310,16 +310,16 @@ export default function LiveConsumidorLP() {
               disabled={submitting}
               style={{
                 background: 'linear-gradient(135deg, #25D366, #128C7E)',
-                color: '#fff', border: 'none', borderRadius: 10,
-                height: 48, fontSize: 15, fontWeight: 700,
+                color: '#fff', border: 'none', borderRadius: 12,
+                height: 54, fontSize: 18, fontWeight: 700,
                 cursor: 'pointer', width: '100%',
               }}
             >
               {submitting ? '⏳ Entrando...' : '💬 Entrar no Grupo VIP'}
             </button>
             <p style={{
-              fontSize: 10, color: 'rgba(255,255,255,0.4)',
-              textAlign: 'center', margin: '2px 0 0',
+              fontSize: 12, color: 'rgba(255,255,255,0.5)',
+              textAlign: 'center', margin: '4px 0 0',
             }}>
               Entregamos para todo o Brasil 🇧🇷
             </p>
