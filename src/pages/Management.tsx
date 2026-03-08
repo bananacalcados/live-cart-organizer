@@ -1250,35 +1250,12 @@ export default function Management() {
 
               {/* Products */}
               <TabsContent value="products" className="space-y-4">
-                <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Top Produtos (Tiny ERP)</CardTitle></CardHeader>
-                  <CardContent>
-                    {productRanking.length === 0 ? (
-                      <p className="text-muted-foreground text-sm text-center py-8">Sincronize os dados do Tiny para ver o ranking de produtos.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>#</TableHead>
-                            <TableHead>Produto</TableHead>
-                            <TableHead className="text-right">Qtd</TableHead>
-                            <TableHead className="text-right">Receita</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {productRanking.map((p, i) => (
-                            <TableRow key={i}>
-                              <TableCell className="font-bold text-primary">{i + 1}</TableCell>
-                              <TableCell className="max-w-[300px] truncate text-xs">{p.name}</TableCell>
-                              <TableCell className="text-right">{p.qty}</TableCell>
-                              <TableCell className="text-right font-semibold">{fmt(p.revenue)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    )}
-                  </CardContent>
-                </Card>
+                <AbcCurveAnalysis
+                  saleItems={abcSaleItems}
+                  stockItems={abcStockItems}
+                  stores={stores}
+                  fmt={fmt}
+                />
               </TabsContent>
 
               {/* Stores */}
