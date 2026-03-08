@@ -28,6 +28,7 @@ interface CatalogLeadPage {
   selected_product_ids: string[];
   whatsapp_numbers: Array<{ name: string; number: string }>;
   require_registration: boolean;
+  shipping_cost: number;
   views: number;
   leads_count: number;
   created_at: string;
