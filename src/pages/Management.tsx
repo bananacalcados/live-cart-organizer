@@ -623,10 +623,14 @@ export default function Management() {
   const [syncProgress, setSyncProgress] = useState<{ currentDate: string; storeName: string; phase: string } | null>(null);
 
   const [tinyOrders, setTinyOrders] = useState<TinySyncedOrder[]>([]);
+  const [posSales, setPosSales] = useState<PosSale[]>([]);
+  const [posSaleItems, setPosSaleItems] = useState<(PosSaleItem & { store_id: string })[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [inventoryData, setInventoryData] = useState<InventorySummaryRow[]>([]);
   const [accountsPayable, setAccountsPayable] = useState<any[]>([]);
   const [syncingAP, setSyncingAP] = useState(false);
+  const [stockItems, setStockItems] = useState<any[]>([]);
+  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const dateRange = useMemo(() => {
     const now = new Date();
@@ -658,26 +662,82 @@ export default function Management() {
     return allData;
   };
 
-  const fetchData = async () => {
+  const fetchPosSales = async (startISO: string, endISO: string) => {
+    const PAGE_SIZE = 1000;
+    let allSales: any[] = [];
+    let allItems: any[] = [];
+    let from = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabase.from("pos_sales")
+        .select("id, store_id, total, discount, subtotal, payment_method, paid_at, status")
+        .eq("status", "completed")
+        .not("paid_at", "is", null)
+        .gte("paid_at", startISO)
+        .lte("paid_at", endISO)
+        .in("store_id", PHYSICAL_STORE_IDS)
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      allSales = allSales.concat(data || []);
+      hasMore = (data?.length || 0) === PAGE_SIZE;
+      from += PAGE_SIZE;
+    }
+
+    // Fetch items for these sales
+    if (allSales.length > 0) {
+      const saleIds = allSales.map(s => s.id);
+      // Batch fetch items (max 1000 at a time)
+      for (let i = 0; i < saleIds.length; i += 200) {
+        const batch = saleIds.slice(i, i + 200);
+        const { data: items } = await supabase.from("pos_sale_items")
+          .select("product_name, variant_name, sku, quantity, total_price, sale_id")
+          .in("sale_id", batch);
+        if (items) {
+          const enriched = items.map(item => {
+            const sale = allSales.find(s => s.id === item.sale_id);
+            return { ...item, store_id: sale?.store_id || "" };
+          });
+          allItems = allItems.concat(enriched);
+        }
+      }
+    }
+
+    return { sales: allSales, items: allItems };
+  };
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const startDate = dateRange.start.toISOString().split('T')[0];
     const endDate = dateRange.end.toISOString().split('T')[0];
+    const startISO = dateRange.start.toISOString();
+    const endISO = dateRange.end.toISOString();
 
     const APPROVED_STATUSES = ['Faturado', 'Aprovado', 'Preparando envio', 'Pronto para envio', 'Enviado', 'Entregue', 'Não entregue'];
 
-    const [tinyData, storesRes, invRes, apRes] = await Promise.all([
+    // Only fetch Tiny orders for online stores
+    const onlineStoreIds = ['2bd2c08d-321c-47ee-98a9-e27e936818ab', '04408292-fc70-4f04-822b-349cbd4f6b09'];
+
+    const [tinyData, posData, storesRes, invRes, apRes, stockRes] = await Promise.all([
       fetchAllTinyOrders(startDate, endDate, APPROVED_STATUSES),
+      fetchPosSales(startISO, endISO),
       supabase.from("pos_stores").select("id, name, revenue_target, is_simulation").eq("is_active", true),
       supabase.rpc("get_inventory_summary"),
       supabase.from("tiny_accounts_payable").select("*").order("data_vencimento", { ascending: true }),
+      supabase.from("pos_products").select("name, variant, sku, stock, price, cost_price, store_id").eq("is_active", true).gt("stock", 0),
     ]);
 
-    setTinyOrders(tinyData as unknown as TinySyncedOrder[]);
+    // Filter tiny orders to only online stores
+    const onlineTinyOrders = (tinyData as TinySyncedOrder[]).filter(o => onlineStoreIds.includes(o.store_id));
+
+    setTinyOrders(onlineTinyOrders);
+    setPosSales(posData.sales);
+    setPosSaleItems(posData.items);
     setStores(storesRes.data || []);
     setInventoryData((invRes.data || []) as unknown as InventorySummaryRow[]);
     setAccountsPayable((apRes.data || []) as any[]);
+    setStockItems(stockRes.data || []);
     setLoading(false);
-  };
+  }, [dateRange]);
 
   const runSyncWithResume = async (body: any) => {
     setSyncing(true);
