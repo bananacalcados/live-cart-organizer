@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Plus, Save, Trash2, Loader2, Search, Check, X, ExternalLink, Copy, Eye,
   ShoppingBag, Users, ShoppingCart, CheckCircle, XCircle, Instagram, Phone,
-  ArrowUp, Star, GripVertical,
+  ArrowUp, Star, GripVertical, MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

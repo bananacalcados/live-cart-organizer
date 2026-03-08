@@ -285,6 +285,26 @@ export default function CatalogLeadPage() {
     setSelectedVariant(null);
   };
 
+  // Persist cart to DB whenever it changes
+  useEffect(() => {
+    if (!registrationId || cart.length === 0) return;
+    const cartData = cart.map(c => ({
+      title: c.productTitle,
+      variant: c.variant.label,
+      sku: c.variant.sku,
+      price: Number(c.variant.price),
+      quantity: c.quantity,
+      image: c.imageUrl,
+      variantGid: c.variant.gid,
+    }));
+    const total = cart.reduce((s, c) => s + Number(c.variant.price) * c.quantity, 0);
+    supabase.from("catalog_lead_registrations").update({
+      cart_items: cartData,
+      cart_total: total,
+      status: "cart_created",
+    } as any).eq("id", registrationId).then();
+  }, [cart, registrationId]);
+
   const addToCart = () => {
     if (!selectedProduct || !selectedVariant) return;
     const existing = cart.find(c => c.variant.gid === selectedVariant.gid);
