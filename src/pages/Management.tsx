@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -28,6 +28,27 @@ import { StrategyManager } from "@/components/management/StrategyManager";
 import { MarginFormation } from "@/components/management/MarginFormation";
 import { CrmDuplicates } from "@/components/management/CrmDuplicates";
 import { InvestmentsDashboard } from "@/components/management/InvestmentsDashboard";
+import { AbcCurveAnalysis } from "@/components/management/AbcCurveAnalysis";
+
+interface PosSale {
+  id: string;
+  store_id: string;
+  total: number;
+  discount: number;
+  subtotal: number;
+  payment_method: string | null;
+  paid_at: string | null;
+  status: string;
+}
+
+interface PosSaleItem {
+  product_name: string;
+  variant_name: string | null;
+  sku: string | null;
+  quantity: number;
+  total_price: number;
+  sale_id: string;
+}
 
 interface TinySyncedOrder {
   id: string;
@@ -66,6 +87,12 @@ const CHART_COLORS = [
   "hsl(0, 0%, 35%)", "hsl(48, 80%, 40%)", "hsl(25, 70%, 40%)",
   "hsl(0, 0%, 55%)", "hsl(48, 60%, 60%)"
 ];
+
+const CENTRO_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
+const PEROLA_ID = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
+const PHYSICAL_STORE_IDS = [CENTRO_ID, PEROLA_ID];
+
+const AUTO_REFRESH_MS = 60_000; // 1 minute
 
 type Period = "today" | "7d" | "30d" | "month" | "last_month" | "custom";
 
