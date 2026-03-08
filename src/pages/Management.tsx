@@ -1021,8 +1021,9 @@ export default function Management() {
   const dailyTrend = useMemo(() => {
     const map = new Map<string, { centro: number; perola: number; shopify: number }>();
     posSales.forEach(s => {
-      if (!s.paid_at) return;
-      const day = format(new Date(s.paid_at), "dd/MM");
+      const dateRef = s.paid_at || (s as any).created_at;
+      if (!dateRef) return;
+      const day = format(new Date(dateRef), "dd/MM");
       const cur = map.get(day) || { centro: 0, perola: 0, shopify: 0 };
       if (s.store_id === CENTRO_ID) cur.centro += Number(s.total);
       else if (s.store_id === PEROLA_ID) cur.perola += Number(s.total);
