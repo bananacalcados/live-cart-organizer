@@ -991,6 +991,16 @@ export default function Management() {
   const centroDiscount = centroSales.reduce((s, v) => s + Number(v.discount || 0), 0);
   const perolaDiscount = perolaSales.reduce((s, v) => s + Number(v.discount || 0), 0);
 
+  const centroItems = posSaleItems.filter(i => i.store_id === CENTRO_ID);
+  const perolaItems = posSaleItems.filter(i => i.store_id === PEROLA_ID);
+  const centroItemsSold = centroItems.reduce((s, v) => s + (v.quantity || 0), 0);
+  const perolaItemsSold = perolaItems.reduce((s, v) => s + (v.quantity || 0), 0);
+  const centroTicket = centroSales.length > 0 ? centroRevenue / centroSales.length : 0;
+  const perolaTicket = perolaSales.length > 0 ? perolaRevenue / perolaSales.length : 0;
+  const centroItemsPerSale = centroSales.length > 0 ? centroItemsSold / centroSales.length : 0;
+  const perolaItemsPerSale = perolaSales.length > 0 ? perolaItemsSold / perolaSales.length : 0;
+  const shopifyTicket = shopifyOrders > 0 ? shopifyRevenue / shopifyOrders : 0;
+
   const physicalRevenue = filteredPosSales.reduce((s, v) => s + Number(v.total || 0), 0);
   const physicalDiscount = filteredPosSales.reduce((s, v) => s + Number(v.discount || 0), 0);
   const physicalOrders = filteredPosSales.length;
