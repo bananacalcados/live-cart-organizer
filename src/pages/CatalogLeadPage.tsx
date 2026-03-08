@@ -145,9 +145,36 @@ export default function CatalogLeadPage() {
         if (parsed.registrationId) setRegistrationId(parsed.registrationId);
         if (parsed.instagram) setInstagram(parsed.instagram);
         if (parsed.whatsapp) setWhatsapp(parsed.whatsapp);
+        if (parsed.shippingPaid) setShippingAlreadyPaid(true);
       } catch { /* ignore */ }
     }
   }, [slug]);
+
+  // Check if customer already paid shipping in a previous purchase on this catalog
+  useEffect(() => {
+    if (!registrationId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("catalog_lead_registrations")
+        .select("checkout_sale_id, status")
+        .eq("id", registrationId)
+        .maybeSingle();
+      if (data?.status === "completed" && data?.checkout_sale_id) {
+        // Check if that sale had shipping
+        const { data: sale } = await supabase
+          .from("pos_sales")
+          .select("shipping_cost, status")
+          .eq("id", data.checkout_sale_id)
+          .maybeSingle();
+        if (sale && Number(sale.shipping_cost) > 0 && sale.status === "completed") {
+          setShippingAlreadyPaid(true);
+          const key = `catalog_lead_${slug}`;
+          const stored = JSON.parse(localStorage.getItem(key) || "{}");
+          localStorage.setItem(key, JSON.stringify({ ...stored, shippingPaid: true }));
+        }
+      }
+    })();
+  }, [registrationId, slug]);
 
   // Load config
   useEffect(() => {
