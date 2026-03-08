@@ -233,6 +233,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
         body: JSON.stringify({ syncToDb: true, filterGroupIds: campaignGroupIds }),
       });
       await res.json();
+      await fetchGroupsFromDb();
       if (onRefreshGroups) await onRefreshGroups();
       await Promise.all([fetchSnapshots(), fetchLinkStats()]);
     } catch { /* ignore */ }
