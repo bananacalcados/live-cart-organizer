@@ -491,12 +491,17 @@ export default function CatalogLeadPage() {
               <span>Subtotal</span>
               <span>{fmt(cartSubtotal)}</span>
             </div>
-            {shippingCost > 0 && (
+            {shippingAlreadyPaid ? (
+              <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                <span>📦 Frete</span>
+                <span>✅ Já pago</span>
+              </div>
+            ) : shippingCost > 0 ? (
               <div className="flex justify-between text-sm text-gray-600">
                 <span>📦 Frete</span>
                 <span>{fmt(shippingCost)}</span>
               </div>
-            )}
+            ) : null}
             <div className="flex justify-between font-bold text-lg border-t pt-2">
               <span>Total</span>
               <span style={{ color: theme.primaryColor }}>{fmt(cartTotal)}</span>
