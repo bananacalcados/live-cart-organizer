@@ -221,7 +221,7 @@ export function TeamChat() {
   };
 
   // Hide on POS page (has its own chat) and landing pages
-  if (location.pathname === '/pos' || location.pathname === '/live' || location.pathname === '/live-consumidor' || location.pathname.startsWith('/banana-') || location.pathname.startsWith('/lp/')) return null;
+  if (location.pathname === '/pos' || location.pathname === '/live' || location.pathname === '/live-consumidor' || location.pathname.startsWith('/banana-') || location.pathname.startsWith('/lp/') || location.pathname.startsWith('/cat/')) return null;
 
   if (!isOpen) {
     return (
