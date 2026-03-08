@@ -1150,13 +1150,15 @@ export default function Management() {
         ) : (
           <>
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               <KPICard title="Faturamento Total" value={fmt(totalRevenue)} icon={DollarSign} />
-              <KPICard title="Lojas Físicas" value={fmt(physicalRevenue)} icon={Store} sub={`${filteredPhysicalOrders.length} pedidos`} />
-              <KPICard title="Shopify (Online)" value={fmt(shopifyRevenue)} icon={ShoppingCart} sub={`${filteredShopifyOrders.length} pedidos`} />
+              <KPICard title="Loja Centro" value={fmt(centroRevenue)} icon={Store} sub={`${centroSales.length} vendas`} />
+              <KPICard title="Loja Pérola" value={fmt(perolaRevenue)} icon={Store} sub={`${perolaSales.length} vendas`} />
+              <KPICard title="Shopify (Online)" value={fmt(shopifyRevenue)} icon={ShoppingCart} sub={`${shopifyOrders} pedidos`} />
               <KPICard title="Ticket Médio" value={fmt(totalOrders > 0 ? totalRevenue / totalOrders : 0)} icon={TrendingUp} />
-              <KPICard title="Itens Vendidos" value={tinyItemsSold.toString()} icon={Package} />
-              <KPICard title="Descontos" value={fmt(tinyDiscount + shopifyDiscount)} icon={ArrowDownRight} variant="destructive" />
+              <KPICard title="Itens Vendidos" value={(physicalItemsSold).toString()} icon={Package} sub="Lojas físicas" />
+              <KPICard title="Total Pedidos" value={totalOrders.toString()} icon={ShoppingBag} />
+              <KPICard title="Descontos" value={fmt(totalDiscount)} icon={ArrowDownRight} variant="destructive" />
             </div>
 
             <Tabs defaultValue="overview" className="space-y-4">
