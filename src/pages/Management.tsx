@@ -1201,7 +1201,7 @@ export default function Management() {
               <TabsContent value="overview" className="space-y-4">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <Card className="lg:col-span-2">
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">Faturamento Diário (Tiny ERP + Shopify)</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Faturamento Diário (POS + Shopify)</CardTitle></CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={280}>
                         <BarChart data={dailyTrend}>
@@ -1210,7 +1210,8 @@ export default function Management() {
                           <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
                           <Tooltip formatter={(v: number) => fmt(v)} />
                           <Legend />
-                          <Bar dataKey="lojas" name="Lojas (Tiny)" fill="hsl(0, 0%, 15%)" radius={[4,4,0,0]} />
+                          <Bar dataKey="centro" name="Loja Centro" fill="hsl(0, 0%, 15%)" radius={[4,4,0,0]} stackId="lojas" />
+                          <Bar dataKey="perola" name="Loja Pérola" fill="hsl(25, 90%, 52%)" radius={[4,4,0,0]} stackId="lojas" />
                           <Bar dataKey="shopify" name="Shopify" fill="hsl(48, 95%, 50%)" radius={[4,4,0,0]} />
                         </BarChart>
                       </ResponsiveContainer>
