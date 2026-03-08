@@ -1197,15 +1197,12 @@ export default function Management() {
         ) : (
           <>
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-              <KPICard title="Faturamento Total" value={fmt(totalRevenue)} icon={DollarSign} />
-              <KPICard title="Loja Centro" value={fmt(centroRevenue)} icon={Store} sub={`${centroSales.length} vendas`} />
-              <KPICard title="Loja Pérola" value={fmt(perolaRevenue)} icon={Store} sub={`${perolaSales.length} vendas`} />
-              <KPICard title="Shopify (Online)" value={fmt(shopifyRevenue)} icon={ShoppingCart} sub={`${shopifyOrders} pedidos`} />
-              <KPICard title="Ticket Médio" value={fmt(totalOrders > 0 ? totalRevenue / totalOrders : 0)} icon={TrendingUp} />
-              <KPICard title="Itens Vendidos" value={(physicalItemsSold).toString()} icon={Package} sub="Lojas físicas" />
-              <KPICard title="Total Pedidos" value={totalOrders.toString()} icon={ShoppingBag} />
-              <KPICard title="Descontos" value={fmt(totalDiscount)} icon={ArrowDownRight} variant="destructive" />
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              <KPICard title="Faturamento Total" value={fmt(totalRevenue)} icon={DollarSign} sub={`${totalOrders} vendas • TM ${fmt(totalOrders > 0 ? totalRevenue / totalOrders : 0)}`} />
+              <KPICard title="Loja Centro" value={fmt(centroRevenue)} icon={Store} sub={`${centroSales.length} vendas • TM ${fmt(centroTicket)} • ${centroItemsPerSale.toFixed(1)} itens/venda`} />
+              <KPICard title="Loja Pérola" value={fmt(perolaRevenue)} icon={Store} sub={`${perolaSales.length} vendas • TM ${fmt(perolaTicket)} • ${perolaItemsPerSale.toFixed(1)} itens/venda`} />
+              <KPICard title="Shopify (Online)" value={fmt(shopifyRevenue)} icon={ShoppingCart} sub={`${shopifyOrders} pedidos • TM ${fmt(shopifyTicket)}`} />
+              <KPICard title="Descontos" value={fmt(totalDiscount)} icon={ArrowDownRight} variant="destructive" sub={`${totalRevenue > 0 ? ((totalDiscount / (totalRevenue + totalDiscount)) * 100).toFixed(1) : 0}% do bruto`} />
             </div>
 
             <Tabs defaultValue="overview" className="space-y-4">
