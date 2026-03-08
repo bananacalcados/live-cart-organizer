@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Plus, Save, Trash2, Loader2, Search, Check, X, ExternalLink, Copy, Eye,
   ShoppingBag, Users, ShoppingCart, CheckCircle, XCircle, Instagram, Phone,
-  ArrowUp, Star, GripVertical, MessageSquare,
+  ArrowUp, Star, GripVertical, MessageSquare, Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -518,6 +518,25 @@ export function CatalogLeadPageCreator() {
                 <p className="text-2xl font-bold">{checkoutStarted.length}</p>
                 <p className="text-[10px] text-muted-foreground">Checkout Iniciado</p>
               </div>
+            </div>
+
+            {/* Quick shipping cost editor */}
+            <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
+              <Truck className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <Label className="text-xs font-medium whitespace-nowrap">Frete (R$):</Label>
+              <Input
+                type="number" min="0" step="0.01" placeholder="0.00"
+                className="h-8 text-sm w-28"
+                defaultValue={dashboardPage?.shipping_cost || ""}
+                onBlur={async (e) => {
+                  const val = Number(e.target.value) || 0;
+                  if (!dashboardPage) return;
+                  await supabase.from("catalog_lead_pages").update({ shipping_cost: val } as any).eq("id", dashboardPage.id);
+                  setDashboardPage({ ...dashboardPage, shipping_cost: val });
+                  toast.success(`Frete atualizado para R$ ${val.toFixed(2)}`);
+                }}
+              />
+              <span className="text-[10px] text-muted-foreground">Altere durante o evento</span>
             </div>
           </div>
 
