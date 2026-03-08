@@ -132,6 +132,7 @@ export default function CatalogLeadPage() {
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [cartBounce, setCartBounce] = useState(false);
+  const [shippingAlreadyPaid, setShippingAlreadyPaid] = useState(false);
 
   // Check if already registered
   useEffect(() => {
@@ -144,9 +145,43 @@ export default function CatalogLeadPage() {
         if (parsed.registrationId) setRegistrationId(parsed.registrationId);
         if (parsed.instagram) setInstagram(parsed.instagram);
         if (parsed.whatsapp) setWhatsapp(parsed.whatsapp);
+        if (parsed.shippingPaid) setShippingAlreadyPaid(true);
       } catch { /* ignore */ }
     }
   }, [slug]);
+
+  // Check if customer already paid shipping in a previous purchase on this catalog
+  useEffect(() => {
+    if (!config?.id || !whatsapp || shippingAlreadyPaid) return;
+    const phoneClean = whatsapp.replace(/\D/g, "");
+    if (phoneClean.length < 8) return;
+    (async () => {
+      // Find any completed registration for this catalog with this phone
+      const { data: regs } = await supabase
+        .from("catalog_lead_registrations")
+        .select("checkout_sale_id, status")
+        .eq("catalog_page_id", config.id)
+        .eq("status", "completed")
+        .ilike("whatsapp", `%${phoneClean.slice(-8)}%`);
+      if (!regs || regs.length === 0) return;
+      
+      for (const reg of regs) {
+        if (!reg.checkout_sale_id) continue;
+        const { data: sale } = await supabase
+          .from("pos_sales")
+          .select("*")
+          .eq("id", reg.checkout_sale_id)
+          .maybeSingle();
+        if (sale && Number((sale as any).shipping_cost) > 0 && sale.status === "completed") {
+          setShippingAlreadyPaid(true);
+          const key = `catalog_lead_${slug}`;
+          const stored = JSON.parse(localStorage.getItem(key) || "{}");
+          localStorage.setItem(key, JSON.stringify({ ...stored, shippingPaid: true }));
+          return;
+        }
+      }
+    })();
+  }, [config?.id, whatsapp, slug, shippingAlreadyPaid]);
 
   // Load config
   useEffect(() => {
@@ -335,7 +370,7 @@ export default function CatalogLeadPage() {
   };
 
   const cartSubtotal = cart.reduce((s, c) => s + Number(c.variant.price) * c.quantity, 0);
-  const shippingCost = config?.shipping_cost || 0;
+  const shippingCost = shippingAlreadyPaid ? 0 : (config?.shipping_cost || 0);
   const cartTotal = cartSubtotal + shippingCost;
 
   const handleCheckout = async () => {
@@ -463,12 +498,17 @@ export default function CatalogLeadPage() {
               <span>Subtotal</span>
               <span>{fmt(cartSubtotal)}</span>
             </div>
-            {shippingCost > 0 && (
+            {shippingAlreadyPaid ? (
+              <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                <span>📦 Frete</span>
+                <span>✅ Já pago</span>
+              </div>
+            ) : shippingCost > 0 ? (
               <div className="flex justify-between text-sm text-gray-600">
                 <span>📦 Frete</span>
                 <span>{fmt(shippingCost)}</span>
               </div>
-            )}
+            ) : null}
             <div className="flex justify-between font-bold text-lg border-t pt-2">
               <span>Total</span>
               <span style={{ color: theme.primaryColor }}>{fmt(cartTotal)}</span>
@@ -680,7 +720,7 @@ export default function CatalogLeadPage() {
               <div className="max-w-lg mx-auto flex items-center gap-3">
                 <button onClick={() => setCartOpen(true)} className="flex items-center gap-2 text-sm font-medium text-gray-600">
                   🛒 <span className="font-bold">{cart.reduce((s, c) => s + c.quantity, 0)}</span> itens
-                  {shippingCost > 0 && <span className="text-[10px] text-gray-400">(+frete)</span>}
+                  {shippingAlreadyPaid ? <span className="text-[10px] text-emerald-500">(frete grátis ✅)</span> : shippingCost > 0 && <span className="text-[10px] text-gray-400">(+frete)</span>}
                 </button>
                 <div className="flex-1 text-right">
                   <span className="text-lg font-black" style={{ color: theme.primaryColor }}>{fmt(cartTotal)}</span>
