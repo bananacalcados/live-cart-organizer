@@ -35,6 +35,7 @@ const StoreCheckout = lazy(() => import("./pages/StoreCheckout"));
 const LinkPageView = lazy(() => import("./pages/LinkPageView"));
 const VipGroupRedirectPage = lazy(() => import("./pages/VipGroupRedirectPage"));
 const LiveConsumidorLP = lazy(() => import("./pages/LiveConsumidorLP"));
+const CatalogLeadPage = lazy(() => import("./pages/CatalogLeadPage"));
 
 const queryClient = new QueryClient();
 
