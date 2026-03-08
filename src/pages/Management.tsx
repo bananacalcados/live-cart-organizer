@@ -38,6 +38,7 @@ interface PosSale {
   subtotal: number;
   payment_method: string | null;
   paid_at: string | null;
+  created_at: string;
   status: string;
 }
 
