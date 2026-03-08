@@ -1057,6 +1057,7 @@ export default function Marketing() {
                 </>
               );
             })()}
+            <CatalogLeadPageCreator />
           </TabsContent>
 
           {/* ── GRUPOS VIP ── */}
