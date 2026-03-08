@@ -363,7 +363,7 @@ export default function CatalogLeadPage() {
   };
 
   const cartSubtotal = cart.reduce((s, c) => s + Number(c.variant.price) * c.quantity, 0);
-  const shippingCost = config?.shipping_cost || 0;
+  const shippingCost = shippingAlreadyPaid ? 0 : (config?.shipping_cost || 0);
   const cartTotal = cartSubtotal + shippingCost;
 
   const handleCheckout = async () => {
