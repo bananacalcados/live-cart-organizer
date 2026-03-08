@@ -771,6 +771,7 @@ export type Database = {
           leads_count: number
           require_registration: boolean
           selected_product_ids: string[] | null
+          shipping_cost: number | null
           slug: string
           subtitle: string | null
           theme_config: Json
@@ -786,6 +787,7 @@ export type Database = {
           leads_count?: number
           require_registration?: boolean
           selected_product_ids?: string[] | null
+          shipping_cost?: number | null
           slug: string
           subtitle?: string | null
           theme_config?: Json
@@ -801,6 +803,7 @@ export type Database = {
           leads_count?: number
           require_registration?: boolean
           selected_product_ids?: string[] | null
+          shipping_cost?: number | null
           slug?: string
           subtitle?: string | null
           theme_config?: Json
