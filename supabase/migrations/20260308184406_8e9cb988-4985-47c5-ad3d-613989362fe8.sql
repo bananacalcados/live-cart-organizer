@@ -1,0 +1,1 @@
+ALTER TABLE public.catalog_lead_pages ADD COLUMN shipping_cost numeric DEFAULT 0;

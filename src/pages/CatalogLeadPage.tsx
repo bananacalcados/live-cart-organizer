@@ -14,6 +14,7 @@ interface PageConfig {
   selected_product_ids: string[];
   require_registration: boolean;
   whatsapp_numbers: Array<{ name: string; number: string }>;
+  shipping_cost: number;
 }
 
 interface CatalogProduct {
@@ -168,6 +169,7 @@ export default function CatalogLeadPage() {
         selected_product_ids: cfg.selected_product_ids || [],
         require_registration: cfg.require_registration ?? true,
         whatsapp_numbers: cfg.whatsapp_numbers || [],
+        shipping_cost: Number(cfg.shipping_cost) || 0,
       });
       prevIdsRef.current = cfg.selected_product_ids || [];
       supabase.from("catalog_lead_pages").update({ views: (cfg.views || 0) + 1 } as any).eq("id", cfg.id).then();
@@ -212,6 +214,7 @@ export default function CatalogLeadPage() {
             subtitle: newData.subtitle,
             selected_product_ids: newIds,
             theme_config: newData.theme_config || prev.theme_config,
+            shipping_cost: Number(newData.shipping_cost) || 0,
           } : prev);
         }
       )
@@ -311,7 +314,9 @@ export default function CatalogLeadPage() {
     }));
   };
 
-  const cartTotal = cart.reduce((s, c) => s + Number(c.variant.price) * c.quantity, 0);
+  const cartSubtotal = cart.reduce((s, c) => s + Number(c.variant.price) * c.quantity, 0);
+  const shippingCost = config?.shipping_cost || 0;
+  const cartTotal = cartSubtotal + shippingCost;
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
@@ -338,12 +343,13 @@ export default function CatalogLeadPage() {
         store_id: DEFAULT_STORE_ID,
         sale_type: "online",
         status: "pending",
-        subtotal: cartTotal,
+        subtotal: cartSubtotal,
         total: cartTotal,
+        shipping_cost: shippingCost,
         discount: 0,
         customer_name: stored.instagram ? `@${stored.instagram}` : null,
         customer_phone: stored.whatsapp || null,
-        notes: `Catálogo Lead: ${slug} | IG: @${stored.instagram || ""}`,
+        notes: `Catálogo Lead: ${slug} | IG: @${stored.instagram || ""}${shippingCost > 0 ? ` | Frete: R$${shippingCost.toFixed(2)}` : ""}`,
         checkout_step: 0,
       }).select("id").single();
 
@@ -433,15 +439,25 @@ export default function CatalogLeadPage() {
         </div>
         {cart.length > 0 && (
           <div className="border-t p-4 space-y-3">
-            <div className="flex justify-between font-bold text-lg">
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Subtotal</span>
+              <span>{fmt(cartSubtotal)}</span>
+            </div>
+            {shippingCost > 0 && (
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>📦 Frete</span>
+                <span>{fmt(shippingCost)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold text-lg border-t pt-2">
               <span>Total</span>
               <span style={{ color: theme.primaryColor }}>{fmt(cartTotal)}</span>
             </div>
             <button onClick={handleCheckout} disabled={checkoutLoading}
-              className="w-full py-3.5 rounded-xl text-white font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-60"
-              style={{ background: theme.primaryColor }}>
-              {checkoutLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingBag className="h-5 w-5" />}
-              Ir para Pagamento
+              className="w-full py-4 rounded-xl text-white font-black text-lg flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-60 uppercase tracking-wider shadow-lg"
+              style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.secondaryColor})` }}>
+              {checkoutLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "💳"}
+              PAGAR AGORA
             </button>
           </div>
         )}
@@ -637,7 +653,28 @@ export default function CatalogLeadPage() {
           </div>
         )}
 
-        {cart.length > 0 && <div className="h-20" />}
+        {cart.length > 0 && (
+          <>
+            <div className="h-24" />
+            <div className="fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/95 backdrop-blur-sm border-t shadow-2xl">
+              <div className="max-w-lg mx-auto flex items-center gap-3">
+                <button onClick={() => setCartOpen(true)} className="flex items-center gap-2 text-sm font-medium text-gray-600">
+                  🛒 <span className="font-bold">{cart.reduce((s, c) => s + c.quantity, 0)}</span> itens
+                  {shippingCost > 0 && <span className="text-[10px] text-gray-400">(+frete)</span>}
+                </button>
+                <div className="flex-1 text-right">
+                  <span className="text-lg font-black" style={{ color: theme.primaryColor }}>{fmt(cartTotal)}</span>
+                </div>
+                <button onClick={handleCheckout} disabled={checkoutLoading}
+                  className="px-6 py-3 rounded-xl text-white font-black text-sm uppercase tracking-wider flex items-center gap-2 active:scale-95 transition-transform disabled:opacity-60 shadow-lg"
+                  style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.secondaryColor})` }}>
+                  {checkoutLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "💳"}
+                  PAGAR AGORA
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

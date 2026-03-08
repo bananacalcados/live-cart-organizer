@@ -28,6 +28,7 @@ interface CatalogLeadPage {
   selected_product_ids: string[];
   whatsapp_numbers: Array<{ name: string; number: string }>;
   require_registration: boolean;
+  shipping_cost: number;
   views: number;
   leads_count: number;
   created_at: string;
@@ -107,6 +108,7 @@ export function CatalogLeadPageCreator() {
       selected_product_ids: [],
       whatsapp_numbers: [{ name: "Banana Calçados", number: "5533936180084" }],
       require_registration: true,
+      shipping_cost: 0,
     });
     loadShopifyProducts();
     setEditorOpen(true);
@@ -152,6 +154,7 @@ export function CatalogLeadPageCreator() {
       selected_product_ids: editingPage.selected_product_ids,
       whatsapp_numbers: editingPage.whatsapp_numbers,
       require_registration: editingPage.require_registration ?? true,
+      shipping_cost: editingPage.shipping_cost ?? 0,
     };
 
     if ((editingPage as any).id) {
@@ -345,6 +348,12 @@ export function CatalogLeadPageCreator() {
               <div className="flex items-center gap-3">
                 <Switch checked={editingPage?.is_active ?? true} onCheckedChange={v => setEditingPage({ ...editingPage, is_active: v })} />
                 <Label className="text-xs">Ativa</Label>
+              </div>
+              <div>
+                <Label className="text-xs">📦 Valor do Frete (R$)</Label>
+                <Input type="number" min="0" step="0.01" placeholder="0.00" value={editingPage?.shipping_cost || ""} 
+                  onChange={e => setEditingPage({ ...editingPage, shipping_cost: Number(e.target.value) || 0 })} className="h-9 text-sm w-40" />
+                <p className="text-[10px] text-muted-foreground mt-1">Será adicionado ao total do carrinho e cobrado no pagamento</p>
               </div>
 
               {/* Selected products in order */}
