@@ -98,22 +98,41 @@ export function CampaignDashboard({ targetGroups, allGroups, links, messages, ca
     if (data) setLiveLinks(data);
   }, [campaignId]);
 
+  // Initial sync: fetch group participant counts from WhatsApp on mount
+  const initialSyncDone = useRef(false);
   useEffect(() => {
     fetchSnapshots();
     fetchLinkStats();
-  }, [fetchSnapshots, fetchLinkStats]);
+    // Auto-sync group participants on first load
+    if (!initialSyncDone.current && campaignGroups.length > 0) {
+      initialSyncDone.current = true;
+      const syncParticipants = async () => {
+        try {
+          const groupIds = campaignGroups.map(g => g.group_id);
+          await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
+            method: 'POST',
+            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ syncToDb: true, filterGroupIds: groupIds }),
+          });
+          if (onRefreshGroups) await onRefreshGroups();
+        } catch { /* ignore */ }
+      };
+      syncParticipants();
+    }
+  }, [fetchSnapshots, fetchLinkStats, campaignGroups, onRefreshGroups]);
 
-  // Auto-refresh polling every 30s
+  // Auto-refresh polling every 30s — includes group data refresh
   useEffect(() => {
-    autoRefreshRef.current = setInterval(() => {
+    autoRefreshRef.current = setInterval(async () => {
       fetchLinkStats();
       fetchSnapshots();
+      if (onRefreshGroups) await onRefreshGroups();
     }, AUTO_REFRESH_INTERVAL);
 
     return () => {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     };
-  }, [fetchLinkStats, fetchSnapshots]);
+  }, [fetchLinkStats, fetchSnapshots, onRefreshGroups]);
 
   // Realtime subscription for link stats
   useEffect(() => {
