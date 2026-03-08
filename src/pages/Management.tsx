@@ -908,111 +908,149 @@ export default function Management() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [period, customFrom, customTo]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Auto-refresh every minute
+  useEffect(() => {
+    autoRefreshRef.current = setInterval(() => { fetchData(); }, AUTO_REFRESH_MS);
+    return () => { if (autoRefreshRef.current) clearInterval(autoRefreshRef.current); };
+  }, [fetchData]);
 
   // --- Computed ---
+
+  // POS sales for physical stores
+  const filteredPosSales = useMemo(() => {
+    if (storeFilter === "all") return posSales;
+    return posSales.filter(s => s.store_id === storeFilter);
+  }, [posSales, storeFilter]);
+
+  const filteredPosItems = useMemo(() => {
+    if (storeFilter === "all") return posSaleItems;
+    return posSaleItems.filter(i => i.store_id === storeFilter);
+  }, [posSaleItems, storeFilter]);
+
+  // Online (Tiny/Shopify) orders
   const filteredTinyOrders = useMemo(() => {
     if (storeFilter === "all") return tinyOrders;
     return tinyOrders.filter(s => s.store_id === storeFilter);
   }, [tinyOrders, storeFilter]);
 
-  
-
-  // Parse items from tiny orders
+  // Parse items from tiny orders for ABC
   const allTinyItems = useMemo(() => {
     const items: { name: string; sku: string; quantity: number; unit_price: number; total: number; store_id: string }[] = [];
-    filteredTinyOrders.forEach(order => {
+    tinyOrders.forEach(order => {
       try {
         const parsed = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
         parsed.forEach((i: any) => items.push({ ...i, store_id: order.store_id }));
       } catch {}
     });
     return items;
-  }, [filteredTinyOrders]);
+  }, [tinyOrders]);
 
-  // KPIs
-  const tinyTotalRevenue = filteredTinyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
-  const tinyItemsSold = allTinyItems.reduce((s, v) => s + (v.quantity || 0), 0);
-  const tinyDiscount = filteredTinyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
+  // Per-store KPIs
+  const centroSales = posSales.filter(s => s.store_id === CENTRO_ID);
+  const perolaSales = posSales.filter(s => s.store_id === PEROLA_ID);
+  const centroRevenue = centroSales.reduce((s, v) => s + Number(v.total || 0), 0);
+  const perolaRevenue = perolaSales.reduce((s, v) => s + Number(v.total || 0), 0);
+  const centroDiscount = centroSales.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const perolaDiscount = perolaSales.reduce((s, v) => s + Number(v.discount || 0), 0);
 
-  const onlineStoreIds = useMemo(() =>
-    stores
-      .filter(s => {
-        const n = s.name.toLowerCase();
-        return n.includes('shopify') || n.includes('site') || n.includes('online') || n.includes('ecommerce');
-      })
-      .map(s => s.id),
-    [stores]
-  );
+  const physicalRevenue = filteredPosSales.reduce((s, v) => s + Number(v.total || 0), 0);
+  const physicalDiscount = filteredPosSales.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const physicalOrders = filteredPosSales.length;
+  const physicalItemsSold = filteredPosItems.reduce((s, v) => s + (v.quantity || 0), 0);
 
-  const filteredPhysicalOrders = useMemo(() =>
-    filteredTinyOrders.filter(o => !onlineStoreIds.includes(o.store_id)),
-    [filteredTinyOrders, onlineStoreIds]
-  );
-  const filteredShopifyOrders = useMemo(() =>
-    filteredTinyOrders.filter(o => onlineStoreIds.includes(o.store_id)),
-    [filteredTinyOrders, onlineStoreIds]
-  );
+  const shopifyRevenue = filteredTinyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
+  const shopifyDiscount = filteredTinyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const shopifyOrders = filteredTinyOrders.length;
 
-  const physicalRevenue = filteredPhysicalOrders.reduce((s, v) => s + Number(v.total || 0), 0);
-  const shopifyRevenue = filteredShopifyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
-  const shopifyDiscount = filteredShopifyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const totalRevenue = physicalRevenue + shopifyRevenue;
+  const totalOrders = physicalOrders + shopifyOrders;
+  const totalDiscount = physicalDiscount + shopifyDiscount;
 
-  const totalRevenue = tinyTotalRevenue;
-  const totalOrders = filteredTinyOrders.length;
-
-  // Top products (from Tiny items)
-  const productRanking = useMemo(() => {
-    const map = new Map<string, { name: string; qty: number; revenue: number }>();
-    allTinyItems.forEach(i => {
-      const key = i.name || i.sku;
-      if (!key) return;
-      const cur = map.get(key) || { name: key, qty: 0, revenue: 0 };
-      cur.qty += i.quantity || 0;
-      cur.revenue += i.total || (i.unit_price * i.quantity) || 0;
-      map.set(key, cur);
-    });
-    return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 15);
-  }, [allTinyItems]);
-
-  // Payment methods
+  // Payment methods (physical stores)
   const paymentBreakdown = useMemo(() => {
     const map = new Map<string, number>();
-    filteredTinyOrders.forEach(s => {
+    filteredPosSales.forEach(s => {
       const m = s.payment_method || "Outros";
       map.set(m, (map.get(m) || 0) + Number(s.total));
     });
+    filteredTinyOrders.forEach(s => {
+      const m = s.payment_method || "Online";
+      map.set(m, (map.get(m) || 0) + Number(s.total));
+    });
     return [...map.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filteredTinyOrders]);
+  }, [filteredPosSales, filteredTinyOrders]);
 
   // Daily trend
   const dailyTrend = useMemo(() => {
-    const map = new Map<string, { lojas: number; shopify: number }>();
-    filteredTinyOrders.forEach(s => {
-      const day = s.order_date ? format(new Date(s.order_date + 'T12:00:00'), "dd/MM") : "??";
-      const cur = map.get(day) || { lojas: 0, shopify: 0 };
-      if (onlineStoreIds.includes(s.store_id)) {
-        cur.shopify += Number(s.total);
-      } else {
-        cur.lojas += Number(s.total);
-      }
+    const map = new Map<string, { centro: number; perola: number; shopify: number }>();
+    posSales.forEach(s => {
+      if (!s.paid_at) return;
+      const day = format(new Date(s.paid_at), "dd/MM");
+      const cur = map.get(day) || { centro: 0, perola: 0, shopify: 0 };
+      if (s.store_id === CENTRO_ID) cur.centro += Number(s.total);
+      else if (s.store_id === PEROLA_ID) cur.perola += Number(s.total);
       map.set(day, cur);
     });
-    return [...map.entries()].map(([date, v]) => ({ date, ...v, total: v.lojas + v.shopify })).sort((a, b) => a.date.localeCompare(b.date));
-  }, [filteredTinyOrders, onlineStoreIds]);
+    tinyOrders.forEach(s => {
+      const day = s.order_date ? format(new Date(s.order_date + 'T12:00:00'), "dd/MM") : "??";
+      const cur = map.get(day) || { centro: 0, perola: 0, shopify: 0 };
+      cur.shopify += Number(s.total);
+      map.set(day, cur);
+    });
+    return [...map.entries()]
+      .map(([date, v]) => ({ date, ...v, total: v.centro + v.perola + v.shopify }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [posSales, tinyOrders]);
 
   // Store comparison
   const storeComparison = useMemo(() => {
-    const map = new Map<string, { name: string; revenue: number; orders: number }>();
-    stores.forEach(st => map.set(st.id, { name: st.name, revenue: 0, orders: 0 }));
-    tinyOrders.forEach(s => {
-      const cur = map.get(s.store_id);
-      if (cur) { cur.revenue += Number(s.total); cur.orders++; }
-    });
-    return [...map.values()].filter(s => s.orders > 0).sort((a, b) => b.revenue - a.revenue);
-  }, [tinyOrders, stores]);
+    const results: { name: string; revenue: number; orders: number }[] = [];
+    // Centro
+    results.push({ name: "Loja Centro", revenue: centroRevenue, orders: centroSales.length });
+    // Perola
+    results.push({ name: "Loja Perola", revenue: perolaRevenue, orders: perolaSales.length });
+    // Shopify
+    results.push({ name: "Shopify (Online)", revenue: shopifyRevenue, orders: shopifyOrders });
+    return results.filter(s => s.orders > 0).sort((a, b) => b.revenue - a.revenue);
+  }, [centroRevenue, perolaRevenue, shopifyRevenue, centroSales, perolaSales, shopifyOrders]);
 
-  // Inventory summary (from DB function — no row limit)
+  // ABC Curve data — merge POS items + Shopify items
+  const abcSaleItems = useMemo(() => {
+    const items: { product_name: string; variant_name: string | null; sku: string | null; quantity: number; total_price: number; store_id: string; source: "pos" | "shopify" }[] = [];
+    // POS items
+    posSaleItems.forEach(i => {
+      items.push({ ...i, source: "pos" });
+    });
+    // Shopify/Tiny items
+    allTinyItems.forEach(i => {
+      items.push({
+        product_name: i.name,
+        variant_name: null,
+        sku: i.sku,
+        quantity: i.quantity,
+        total_price: i.total || (i.unit_price * i.quantity) || 0,
+        store_id: i.store_id,
+        source: "shopify",
+      });
+    });
+    return items;
+  }, [posSaleItems, allTinyItems]);
+
+  const abcStockItems = useMemo(() => {
+    return stockItems.map((i: any) => ({
+      name: i.name,
+      variant: i.variant,
+      sku: i.sku,
+      stock: i.stock,
+      price: i.price,
+      cost_price: i.cost_price || 0,
+      store_id: i.store_id,
+    }));
+  }, [stockItems]);
+
+  // Inventory summary
   const inventorySummary = useMemo(() => {
     return stores.map(st => {
       const inv = inventoryData.find(i => i.store_id === st.id);
