@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2 } from "lucide-react";
+import { initMetaPixel, trackPageView, trackPixelEvent } from "@/lib/metaPixel";
 
 const VIP_REDIRECT = '/vip/liveconsumidor';
 const CAMPAIGN_TAG = 'live-consumidor-mar26';
