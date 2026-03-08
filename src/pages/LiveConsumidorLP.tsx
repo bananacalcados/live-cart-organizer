@@ -34,6 +34,13 @@ export default function LiveConsumidorLP() {
   const [showPushBanner, setShowPushBanner] = useState(false);
   const [pushDismissed, setPushDismissed] = useState(false);
 
+  // Init Meta Pixel & fire PageView
+  useEffect(() => {
+    initMetaPixel();
+    trackPageView();
+    trackPixelEvent('ViewContent', { content_name: 'Live Consumidor LP', content_category: 'landing_page' });
+  }, []);
+
   // Check if push is available and not yet granted
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
