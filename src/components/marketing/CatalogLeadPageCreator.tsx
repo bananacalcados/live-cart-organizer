@@ -1,0 +1,271 @@
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { toast } from "sonner";
+import {
+  Plus, Save, Trash2, Loader2, Search, Check, X, ExternalLink, Copy, Eye, EyeOff,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+interface CatalogLeadPage {
+  id: string;
+  slug: string;
+  title: string;
+  subtitle: string | null;
+  is_active: boolean;
+  theme_config: any;
+  selected_product_ids: string[];
+  whatsapp_numbers: Array<{ name: string; number: string }>;
+  require_registration: boolean;
+  views: number;
+  leads_count: number;
+  created_at: string;
+}
+
+interface ShopifyProductSimple {
+  id: string;
+  title: string;
+  imageUrl: string;
+  price: string;
+}
+
+export function CatalogLeadPageCreator() {
+  const [pages, setPages] = useState<CatalogLeadPage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingPage, setEditingPage] = useState<Partial<CatalogLeadPage> | null>(null);
+
+  const [shopifyProducts, setShopifyProducts] = useState<ShopifyProductSimple[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+
+  const fetchPages = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("catalog_lead_pages")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setPages((data as any[]) || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchPages(); }, [fetchPages]);
+
+  const loadShopifyProducts = async (query?: string) => {
+    setProductsLoading(true);
+    try {
+      const raw = await fetchProducts(100, query ? `title:*${query}*` : undefined);
+      setShopifyProducts(raw.map(p => ({
+        id: p.node.id,
+        title: p.node.title,
+        imageUrl: p.node.images.edges[0]?.node.url || "",
+        price: p.node.priceRange.minVariantPrice.amount,
+      })));
+    } catch { /* ignore */ }
+    setProductsLoading(false);
+  };
+
+  const openEditor = (page?: CatalogLeadPage) => {
+    setEditingPage(page || {
+      slug: "",
+      title: "",
+      subtitle: null,
+      is_active: true,
+      theme_config: { primaryColor: "#00BFA6", secondaryColor: "#00897B", backgroundGradient: "linear-gradient(160deg, #00BFA6 0%, #00897B 50%, #004D40 100%)" },
+      selected_product_ids: [],
+      whatsapp_numbers: [{ name: "Banana Calçados", number: "5533936180084" }],
+      require_registration: true,
+    });
+    loadShopifyProducts();
+    setEditorOpen(true);
+  };
+
+  const toggleProduct = (id: string) => {
+    if (!editingPage) return;
+    const ids = editingPage.selected_product_ids || [];
+    setEditingPage({
+      ...editingPage,
+      selected_product_ids: ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id],
+    });
+  };
+
+  const handleSave = async () => {
+    if (!editingPage?.slug?.trim() || !editingPage?.title?.trim()) {
+      toast.error("Preencha slug e título");
+      return;
+    }
+    if ((editingPage.selected_product_ids || []).length === 0) {
+      toast.error("Selecione pelo menos 1 produto");
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      slug: editingPage.slug.trim().toLowerCase().replace(/\s+/g, "-"),
+      title: editingPage.title.trim(),
+      subtitle: editingPage.subtitle || null,
+      is_active: editingPage.is_active ?? true,
+      theme_config: editingPage.theme_config,
+      selected_product_ids: editingPage.selected_product_ids,
+      whatsapp_numbers: editingPage.whatsapp_numbers,
+      require_registration: editingPage.require_registration ?? true,
+    };
+
+    if ((editingPage as any).id) {
+      const { error } = await supabase.from("catalog_lead_pages").update(payload as any).eq("id", (editingPage as any).id);
+      if (error) { toast.error(error.message); setSaving(false); return; }
+      toast.success("Página atualizada!");
+    } else {
+      const { error } = await supabase.from("catalog_lead_pages").insert(payload as any);
+      if (error) { toast.error(error.message); setSaving(false); return; }
+      toast.success("Página criada!");
+    }
+    setSaving(false);
+    setEditorOpen(false);
+    fetchPages();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Excluir esta página?")) return;
+    await supabase.from("catalog_lead_pages").delete().eq("id", id);
+    toast.success("Excluída");
+    fetchPages();
+  };
+
+  const baseUrl = "https://checkout.bananacalcados.com.br";
+  const selectedIds = new Set(editingPage?.selected_product_ids || []);
+
+  const filteredProducts = productSearch
+    ? shopifyProducts.filter(p => p.title.toLowerCase().includes(productSearch.toLowerCase()))
+    : shopifyProducts;
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-sm">Catálogo com Captação de Lead</CardTitle>
+              <CardDescription className="text-xs">Links de catálogo que exigem @ Instagram e WhatsApp antes de ver variações</CardDescription>
+            </div>
+            <Button size="sm" className="gap-1" onClick={() => openEditor()}>
+              <Plus className="h-3.5 w-3.5" />Criar
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {loading ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          ) : pages.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">Nenhuma página criada</p>
+          ) : (
+            pages.map(p => {
+              const url = `${baseUrl}/cat/${p.slug}`;
+              return (
+                <div key={p.id} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{p.title}</p>
+                      <Badge variant={p.is_active ? "default" : "secondary"} className="text-[10px]">{p.is_active ? "Ativa" : "Inativa"}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{p.selected_product_ids?.length || 0} produtos • {p.views} views • {p.leads_count} leads</p>
+                    <p className="text-xs text-muted-foreground font-mono truncate">{url}</p>
+                  </div>
+                  <div className="flex gap-1 shrink-0 ml-2">
+                    <Button variant="outline" size="sm" className="gap-1" onClick={() => { navigator.clipboard.writeText(url); toast.success("Link copiado!"); }}>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => window.open(url, "_blank")}>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => openEditor(p)}>Editar</Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(p.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Editor Dialog */}
+      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle>{(editingPage as any)?.id ? "Editar" : "Criar"} Catálogo Lead</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-6 pb-4">
+            <div className="space-y-4 py-2">
+              {/* Basic info */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Slug (URL)</Label>
+                  <Input placeholder="verao-2026" value={editingPage?.slug || ""} onChange={e => setEditingPage({ ...editingPage, slug: e.target.value })} className="h-9 text-sm" />
+                </div>
+                <div>
+                  <Label className="text-xs">Título</Label>
+                  <Input placeholder="Coleção Verão" value={editingPage?.title || ""} onChange={e => setEditingPage({ ...editingPage, title: e.target.value })} className="h-9 text-sm" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Subtítulo (opcional)</Label>
+                <Input placeholder="Os melhores calçados..." value={editingPage?.subtitle || ""} onChange={e => setEditingPage({ ...editingPage, subtitle: e.target.value })} className="h-9 text-sm" />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Switch checked={editingPage?.require_registration ?? true} onCheckedChange={v => setEditingPage({ ...editingPage, require_registration: v })} />
+                <Label className="text-xs">Exigir cadastro (@ Instagram + WhatsApp) antes de selecionar variações</Label>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={editingPage?.is_active ?? true} onCheckedChange={v => setEditingPage({ ...editingPage, is_active: v })} />
+                <Label className="text-xs">Ativa</Label>
+              </div>
+
+              {/* Product selector */}
+              <div>
+                <Label className="text-xs font-semibold">Produtos ({selectedIds.size} selecionados)</Label>
+                <div className="relative mt-1">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Buscar produto..." value={productSearch} onChange={e => setProductSearch(e.target.value)} className="pl-8 h-9 text-sm" />
+                </div>
+                <div className="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[300px] overflow-auto">
+                  {productsLoading ? (
+                    <div className="col-span-full flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                  ) : (
+                    filteredProducts.map(p => {
+                      const selected = selectedIds.has(p.id);
+                      return (
+                        <button key={p.id} onClick={() => toggleProduct(p.id)}
+                          className={`relative text-left rounded-lg border p-1.5 transition-all ${selected ? "border-primary ring-1 ring-primary bg-primary/5" : "border-border hover:border-primary/50"}`}>
+                          {selected && <div className="absolute top-1 right-1 h-5 w-5 rounded-full bg-primary flex items-center justify-center z-10"><Check className="h-3 w-3 text-primary-foreground" /></div>}
+                          {p.imageUrl ? <img src={p.imageUrl} alt={p.title} className="w-full aspect-square object-cover rounded" /> : <div className="w-full aspect-square bg-muted rounded" />}
+                          <p className="text-[11px] font-medium line-clamp-2 mt-1">{p.title}</p>
+                          <p className="text-[10px] text-muted-foreground">R$ {Number(p.price).toFixed(2)}</p>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+          <DialogFooter className="px-6 py-3 border-t">
+            <Button variant="outline" onClick={() => setEditorOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={saving} className="gap-1">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
