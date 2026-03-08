@@ -308,8 +308,8 @@ export default function CatalogLeadPage() {
       const items = cart.map(c => ({
         sale_id: sale.id,
         sku: c.variant.sku || `CAT-${c.variant.id}`,
-        name: c.productTitle,
-        variant: c.variant.label,
+        product_name: c.productTitle,
+        variant_name: c.variant.label,
         quantity: c.quantity,
         unit_price: Number(c.variant.price),
         total_price: Number(c.variant.price) * c.quantity,
