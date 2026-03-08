@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -28,6 +28,27 @@ import { StrategyManager } from "@/components/management/StrategyManager";
 import { MarginFormation } from "@/components/management/MarginFormation";
 import { CrmDuplicates } from "@/components/management/CrmDuplicates";
 import { InvestmentsDashboard } from "@/components/management/InvestmentsDashboard";
+import { AbcCurveAnalysis } from "@/components/management/AbcCurveAnalysis";
+
+interface PosSale {
+  id: string;
+  store_id: string;
+  total: number;
+  discount: number;
+  subtotal: number;
+  payment_method: string | null;
+  paid_at: string | null;
+  status: string;
+}
+
+interface PosSaleItem {
+  product_name: string;
+  variant_name: string | null;
+  sku: string | null;
+  quantity: number;
+  total_price: number;
+  sale_id: string;
+}
 
 interface TinySyncedOrder {
   id: string;
@@ -66,6 +87,12 @@ const CHART_COLORS = [
   "hsl(0, 0%, 35%)", "hsl(48, 80%, 40%)", "hsl(25, 70%, 40%)",
   "hsl(0, 0%, 55%)", "hsl(48, 60%, 60%)"
 ];
+
+const CENTRO_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
+const PEROLA_ID = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
+const PHYSICAL_STORE_IDS = [CENTRO_ID, PEROLA_ID];
+
+const AUTO_REFRESH_MS = 60_000; // 1 minute
 
 type Period = "today" | "7d" | "30d" | "month" | "last_month" | "custom";
 
@@ -596,10 +623,14 @@ export default function Management() {
   const [syncProgress, setSyncProgress] = useState<{ currentDate: string; storeName: string; phase: string } | null>(null);
 
   const [tinyOrders, setTinyOrders] = useState<TinySyncedOrder[]>([]);
+  const [posSales, setPosSales] = useState<PosSale[]>([]);
+  const [posSaleItems, setPosSaleItems] = useState<(PosSaleItem & { store_id: string })[]>([]);
   const [stores, setStores] = useState<StoreRow[]>([]);
   const [inventoryData, setInventoryData] = useState<InventorySummaryRow[]>([]);
   const [accountsPayable, setAccountsPayable] = useState<any[]>([]);
   const [syncingAP, setSyncingAP] = useState(false);
+  const [stockItems, setStockItems] = useState<any[]>([]);
+  const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const dateRange = useMemo(() => {
     const now = new Date();
@@ -631,26 +662,82 @@ export default function Management() {
     return allData;
   };
 
-  const fetchData = async () => {
+  const fetchPosSales = async (startISO: string, endISO: string) => {
+    const PAGE_SIZE = 1000;
+    let allSales: any[] = [];
+    let allItems: any[] = [];
+    let from = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabase.from("pos_sales")
+        .select("id, store_id, total, discount, subtotal, payment_method, paid_at, status")
+        .eq("status", "completed")
+        .not("paid_at", "is", null)
+        .gte("paid_at", startISO)
+        .lte("paid_at", endISO)
+        .in("store_id", PHYSICAL_STORE_IDS)
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      allSales = allSales.concat(data || []);
+      hasMore = (data?.length || 0) === PAGE_SIZE;
+      from += PAGE_SIZE;
+    }
+
+    // Fetch items for these sales
+    if (allSales.length > 0) {
+      const saleIds = allSales.map(s => s.id);
+      // Batch fetch items (max 1000 at a time)
+      for (let i = 0; i < saleIds.length; i += 200) {
+        const batch = saleIds.slice(i, i + 200);
+        const { data: items } = await supabase.from("pos_sale_items")
+          .select("product_name, variant_name, sku, quantity, total_price, sale_id")
+          .in("sale_id", batch);
+        if (items) {
+          const enriched = items.map(item => {
+            const sale = allSales.find(s => s.id === item.sale_id);
+            return { ...item, store_id: sale?.store_id || "" };
+          });
+          allItems = allItems.concat(enriched);
+        }
+      }
+    }
+
+    return { sales: allSales, items: allItems };
+  };
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const startDate = dateRange.start.toISOString().split('T')[0];
     const endDate = dateRange.end.toISOString().split('T')[0];
+    const startISO = dateRange.start.toISOString();
+    const endISO = dateRange.end.toISOString();
 
     const APPROVED_STATUSES = ['Faturado', 'Aprovado', 'Preparando envio', 'Pronto para envio', 'Enviado', 'Entregue', 'Não entregue'];
 
-    const [tinyData, storesRes, invRes, apRes] = await Promise.all([
+    // Only fetch Tiny orders for online stores
+    const onlineStoreIds = ['2bd2c08d-321c-47ee-98a9-e27e936818ab', '04408292-fc70-4f04-822b-349cbd4f6b09'];
+
+    const [tinyData, posData, storesRes, invRes, apRes, stockRes] = await Promise.all([
       fetchAllTinyOrders(startDate, endDate, APPROVED_STATUSES),
+      fetchPosSales(startISO, endISO),
       supabase.from("pos_stores").select("id, name, revenue_target, is_simulation").eq("is_active", true),
       supabase.rpc("get_inventory_summary"),
       supabase.from("tiny_accounts_payable").select("*").order("data_vencimento", { ascending: true }),
+      supabase.from("pos_products").select("name, variant, sku, stock, price, cost_price, store_id").eq("is_active", true).gt("stock", 0),
     ]);
 
-    setTinyOrders(tinyData as unknown as TinySyncedOrder[]);
+    // Filter tiny orders to only online stores
+    const onlineTinyOrders = (tinyData as TinySyncedOrder[]).filter(o => onlineStoreIds.includes(o.store_id));
+
+    setTinyOrders(onlineTinyOrders);
+    setPosSales(posData.sales);
+    setPosSaleItems(posData.items);
     setStores(storesRes.data || []);
     setInventoryData((invRes.data || []) as unknown as InventorySummaryRow[]);
     setAccountsPayable((apRes.data || []) as any[]);
+    setStockItems(stockRes.data || []);
     setLoading(false);
-  };
+  }, [dateRange]);
 
   const runSyncWithResume = async (body: any) => {
     setSyncing(true);
@@ -821,111 +908,149 @@ export default function Management() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [period, customFrom, customTo]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Auto-refresh every minute
+  useEffect(() => {
+    autoRefreshRef.current = setInterval(() => { fetchData(); }, AUTO_REFRESH_MS);
+    return () => { if (autoRefreshRef.current) clearInterval(autoRefreshRef.current); };
+  }, [fetchData]);
 
   // --- Computed ---
+
+  // POS sales for physical stores
+  const filteredPosSales = useMemo(() => {
+    if (storeFilter === "all") return posSales;
+    return posSales.filter(s => s.store_id === storeFilter);
+  }, [posSales, storeFilter]);
+
+  const filteredPosItems = useMemo(() => {
+    if (storeFilter === "all") return posSaleItems;
+    return posSaleItems.filter(i => i.store_id === storeFilter);
+  }, [posSaleItems, storeFilter]);
+
+  // Online (Tiny/Shopify) orders
   const filteredTinyOrders = useMemo(() => {
     if (storeFilter === "all") return tinyOrders;
     return tinyOrders.filter(s => s.store_id === storeFilter);
   }, [tinyOrders, storeFilter]);
 
-  
-
-  // Parse items from tiny orders
+  // Parse items from tiny orders for ABC
   const allTinyItems = useMemo(() => {
     const items: { name: string; sku: string; quantity: number; unit_price: number; total: number; store_id: string }[] = [];
-    filteredTinyOrders.forEach(order => {
+    tinyOrders.forEach(order => {
       try {
         const parsed = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []);
         parsed.forEach((i: any) => items.push({ ...i, store_id: order.store_id }));
       } catch {}
     });
     return items;
-  }, [filteredTinyOrders]);
+  }, [tinyOrders]);
 
-  // KPIs
-  const tinyTotalRevenue = filteredTinyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
-  const tinyItemsSold = allTinyItems.reduce((s, v) => s + (v.quantity || 0), 0);
-  const tinyDiscount = filteredTinyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
+  // Per-store KPIs
+  const centroSales = posSales.filter(s => s.store_id === CENTRO_ID);
+  const perolaSales = posSales.filter(s => s.store_id === PEROLA_ID);
+  const centroRevenue = centroSales.reduce((s, v) => s + Number(v.total || 0), 0);
+  const perolaRevenue = perolaSales.reduce((s, v) => s + Number(v.total || 0), 0);
+  const centroDiscount = centroSales.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const perolaDiscount = perolaSales.reduce((s, v) => s + Number(v.discount || 0), 0);
 
-  const onlineStoreIds = useMemo(() =>
-    stores
-      .filter(s => {
-        const n = s.name.toLowerCase();
-        return n.includes('shopify') || n.includes('site') || n.includes('online') || n.includes('ecommerce');
-      })
-      .map(s => s.id),
-    [stores]
-  );
+  const physicalRevenue = filteredPosSales.reduce((s, v) => s + Number(v.total || 0), 0);
+  const physicalDiscount = filteredPosSales.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const physicalOrders = filteredPosSales.length;
+  const physicalItemsSold = filteredPosItems.reduce((s, v) => s + (v.quantity || 0), 0);
 
-  const filteredPhysicalOrders = useMemo(() =>
-    filteredTinyOrders.filter(o => !onlineStoreIds.includes(o.store_id)),
-    [filteredTinyOrders, onlineStoreIds]
-  );
-  const filteredShopifyOrders = useMemo(() =>
-    filteredTinyOrders.filter(o => onlineStoreIds.includes(o.store_id)),
-    [filteredTinyOrders, onlineStoreIds]
-  );
+  const shopifyRevenue = filteredTinyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
+  const shopifyDiscount = filteredTinyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const shopifyOrders = filteredTinyOrders.length;
 
-  const physicalRevenue = filteredPhysicalOrders.reduce((s, v) => s + Number(v.total || 0), 0);
-  const shopifyRevenue = filteredShopifyOrders.reduce((s, v) => s + Number(v.total || 0), 0);
-  const shopifyDiscount = filteredShopifyOrders.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const totalRevenue = physicalRevenue + shopifyRevenue;
+  const totalOrders = physicalOrders + shopifyOrders;
+  const totalDiscount = physicalDiscount + shopifyDiscount;
 
-  const totalRevenue = tinyTotalRevenue;
-  const totalOrders = filteredTinyOrders.length;
-
-  // Top products (from Tiny items)
-  const productRanking = useMemo(() => {
-    const map = new Map<string, { name: string; qty: number; revenue: number }>();
-    allTinyItems.forEach(i => {
-      const key = i.name || i.sku;
-      if (!key) return;
-      const cur = map.get(key) || { name: key, qty: 0, revenue: 0 };
-      cur.qty += i.quantity || 0;
-      cur.revenue += i.total || (i.unit_price * i.quantity) || 0;
-      map.set(key, cur);
-    });
-    return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 15);
-  }, [allTinyItems]);
-
-  // Payment methods
+  // Payment methods (physical stores)
   const paymentBreakdown = useMemo(() => {
     const map = new Map<string, number>();
-    filteredTinyOrders.forEach(s => {
+    filteredPosSales.forEach(s => {
       const m = s.payment_method || "Outros";
       map.set(m, (map.get(m) || 0) + Number(s.total));
     });
+    filteredTinyOrders.forEach(s => {
+      const m = s.payment_method || "Online";
+      map.set(m, (map.get(m) || 0) + Number(s.total));
+    });
     return [...map.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filteredTinyOrders]);
+  }, [filteredPosSales, filteredTinyOrders]);
 
   // Daily trend
   const dailyTrend = useMemo(() => {
-    const map = new Map<string, { lojas: number; shopify: number }>();
-    filteredTinyOrders.forEach(s => {
-      const day = s.order_date ? format(new Date(s.order_date + 'T12:00:00'), "dd/MM") : "??";
-      const cur = map.get(day) || { lojas: 0, shopify: 0 };
-      if (onlineStoreIds.includes(s.store_id)) {
-        cur.shopify += Number(s.total);
-      } else {
-        cur.lojas += Number(s.total);
-      }
+    const map = new Map<string, { centro: number; perola: number; shopify: number }>();
+    posSales.forEach(s => {
+      if (!s.paid_at) return;
+      const day = format(new Date(s.paid_at), "dd/MM");
+      const cur = map.get(day) || { centro: 0, perola: 0, shopify: 0 };
+      if (s.store_id === CENTRO_ID) cur.centro += Number(s.total);
+      else if (s.store_id === PEROLA_ID) cur.perola += Number(s.total);
       map.set(day, cur);
     });
-    return [...map.entries()].map(([date, v]) => ({ date, ...v, total: v.lojas + v.shopify })).sort((a, b) => a.date.localeCompare(b.date));
-  }, [filteredTinyOrders, onlineStoreIds]);
+    tinyOrders.forEach(s => {
+      const day = s.order_date ? format(new Date(s.order_date + 'T12:00:00'), "dd/MM") : "??";
+      const cur = map.get(day) || { centro: 0, perola: 0, shopify: 0 };
+      cur.shopify += Number(s.total);
+      map.set(day, cur);
+    });
+    return [...map.entries()]
+      .map(([date, v]) => ({ date, ...v, total: v.centro + v.perola + v.shopify }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [posSales, tinyOrders]);
 
   // Store comparison
   const storeComparison = useMemo(() => {
-    const map = new Map<string, { name: string; revenue: number; orders: number }>();
-    stores.forEach(st => map.set(st.id, { name: st.name, revenue: 0, orders: 0 }));
-    tinyOrders.forEach(s => {
-      const cur = map.get(s.store_id);
-      if (cur) { cur.revenue += Number(s.total); cur.orders++; }
-    });
-    return [...map.values()].filter(s => s.orders > 0).sort((a, b) => b.revenue - a.revenue);
-  }, [tinyOrders, stores]);
+    const results: { name: string; revenue: number; orders: number }[] = [];
+    // Centro
+    results.push({ name: "Loja Centro", revenue: centroRevenue, orders: centroSales.length });
+    // Perola
+    results.push({ name: "Loja Perola", revenue: perolaRevenue, orders: perolaSales.length });
+    // Shopify
+    results.push({ name: "Shopify (Online)", revenue: shopifyRevenue, orders: shopifyOrders });
+    return results.filter(s => s.orders > 0).sort((a, b) => b.revenue - a.revenue);
+  }, [centroRevenue, perolaRevenue, shopifyRevenue, centroSales, perolaSales, shopifyOrders]);
 
-  // Inventory summary (from DB function — no row limit)
+  // ABC Curve data — merge POS items + Shopify items
+  const abcSaleItems = useMemo(() => {
+    const items: { product_name: string; variant_name: string | null; sku: string | null; quantity: number; total_price: number; store_id: string; source: "pos" | "shopify" }[] = [];
+    // POS items
+    posSaleItems.forEach(i => {
+      items.push({ ...i, source: "pos" });
+    });
+    // Shopify/Tiny items
+    allTinyItems.forEach(i => {
+      items.push({
+        product_name: i.name,
+        variant_name: null,
+        sku: i.sku,
+        quantity: i.quantity,
+        total_price: i.total || (i.unit_price * i.quantity) || 0,
+        store_id: i.store_id,
+        source: "shopify",
+      });
+    });
+    return items;
+  }, [posSaleItems, allTinyItems]);
+
+  const abcStockItems = useMemo(() => {
+    return stockItems.map((i: any) => ({
+      name: i.name,
+      variant: i.variant,
+      sku: i.sku,
+      stock: i.stock,
+      price: i.price,
+      cost_price: i.cost_price || 0,
+      store_id: i.store_id,
+    }));
+  }, [stockItems]);
+
+  // Inventory summary
   const inventorySummary = useMemo(() => {
     return stores.map(st => {
       const inv = inventoryData.find(i => i.store_id === st.id);
@@ -1025,13 +1150,15 @@ export default function Management() {
         ) : (
           <>
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               <KPICard title="Faturamento Total" value={fmt(totalRevenue)} icon={DollarSign} />
-              <KPICard title="Lojas Físicas" value={fmt(physicalRevenue)} icon={Store} sub={`${filteredPhysicalOrders.length} pedidos`} />
-              <KPICard title="Shopify (Online)" value={fmt(shopifyRevenue)} icon={ShoppingCart} sub={`${filteredShopifyOrders.length} pedidos`} />
+              <KPICard title="Loja Centro" value={fmt(centroRevenue)} icon={Store} sub={`${centroSales.length} vendas`} />
+              <KPICard title="Loja Pérola" value={fmt(perolaRevenue)} icon={Store} sub={`${perolaSales.length} vendas`} />
+              <KPICard title="Shopify (Online)" value={fmt(shopifyRevenue)} icon={ShoppingCart} sub={`${shopifyOrders} pedidos`} />
               <KPICard title="Ticket Médio" value={fmt(totalOrders > 0 ? totalRevenue / totalOrders : 0)} icon={TrendingUp} />
-              <KPICard title="Itens Vendidos" value={tinyItemsSold.toString()} icon={Package} />
-              <KPICard title="Descontos" value={fmt(tinyDiscount + shopifyDiscount)} icon={ArrowDownRight} variant="destructive" />
+              <KPICard title="Itens Vendidos" value={(physicalItemsSold).toString()} icon={Package} sub="Lojas físicas" />
+              <KPICard title="Total Pedidos" value={totalOrders.toString()} icon={ShoppingBag} />
+              <KPICard title="Descontos" value={fmt(totalDiscount)} icon={ArrowDownRight} variant="destructive" />
             </div>
 
             <Tabs defaultValue="overview" className="space-y-4">
@@ -1074,7 +1201,7 @@ export default function Management() {
               <TabsContent value="overview" className="space-y-4">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <Card className="lg:col-span-2">
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">Faturamento Diário (Tiny ERP + Shopify)</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Faturamento Diário (POS + Shopify)</CardTitle></CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={280}>
                         <BarChart data={dailyTrend}>
@@ -1083,7 +1210,8 @@ export default function Management() {
                           <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
                           <Tooltip formatter={(v: number) => fmt(v)} />
                           <Legend />
-                          <Bar dataKey="lojas" name="Lojas (Tiny)" fill="hsl(0, 0%, 15%)" radius={[4,4,0,0]} />
+                          <Bar dataKey="centro" name="Loja Centro" fill="hsl(0, 0%, 15%)" radius={[4,4,0,0]} stackId="lojas" />
+                          <Bar dataKey="perola" name="Loja Pérola" fill="hsl(25, 90%, 52%)" radius={[4,4,0,0]} stackId="lojas" />
                           <Bar dataKey="shopify" name="Shopify" fill="hsl(48, 95%, 50%)" radius={[4,4,0,0]} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -1123,35 +1251,12 @@ export default function Management() {
 
               {/* Products */}
               <TabsContent value="products" className="space-y-4">
-                <Card>
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Top Produtos (Tiny ERP)</CardTitle></CardHeader>
-                  <CardContent>
-                    {productRanking.length === 0 ? (
-                      <p className="text-muted-foreground text-sm text-center py-8">Sincronize os dados do Tiny para ver o ranking de produtos.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>#</TableHead>
-                            <TableHead>Produto</TableHead>
-                            <TableHead className="text-right">Qtd</TableHead>
-                            <TableHead className="text-right">Receita</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {productRanking.map((p, i) => (
-                            <TableRow key={i}>
-                              <TableCell className="font-bold text-primary">{i + 1}</TableCell>
-                              <TableCell className="max-w-[300px] truncate text-xs">{p.name}</TableCell>
-                              <TableCell className="text-right">{p.qty}</TableCell>
-                              <TableCell className="text-right font-semibold">{fmt(p.revenue)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    )}
-                  </CardContent>
-                </Card>
+                <AbcCurveAnalysis
+                  saleItems={abcSaleItems}
+                  stockItems={abcStockItems}
+                  stores={stores}
+                  fmt={fmt}
+                />
               </TabsContent>
 
               {/* Stores */}
