@@ -61,16 +61,38 @@ function KpiCard({ icon, value, label, tooltip, variant = 'default' }: KpiCardPr
 
 const AUTO_REFRESH_INTERVAL = 30_000; // 30 seconds
 
-export function CampaignDashboard({ targetGroups, allGroups, links, messages, campaignId, onRefreshGroups }: CampaignDashboardProps) {
+export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, messages, campaignId, onRefreshGroups }: CampaignDashboardProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [snapshots, setSnapshots] = useState<any[]>([]);
   const [liveLinks, setLiveLinks] = useState<any[]>(links);
+  const [liveGroups, setLiveGroups] = useState<any[]>(propGroups);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Keep liveLinks in sync with prop changes
   useEffect(() => { setLiveLinks(links); }, [links]);
+  useEffect(() => { setLiveGroups(propGroups); }, [propGroups]);
 
-  const campaignGroups = allGroups.filter(g => targetGroups.includes(g.id));
+  // Fetch fresh group data directly from DB
+  const fetchGroupsFromDb = useCallback(async () => {
+    if (targetGroups.length === 0) return;
+    const { data } = await supabase
+      .from('whatsapp_groups')
+      .select('id, group_id, name, participant_count, previous_participant_count, max_participants')
+      .in('id', targetGroups);
+    if (data && data.length > 0) {
+      setLiveGroups(prev => {
+        const updated = [...prev];
+        for (const fresh of data) {
+          const idx = updated.findIndex(g => g.id === fresh.id);
+          if (idx >= 0) updated[idx] = { ...updated[idx], ...fresh };
+          else updated.push(fresh);
+        }
+        return updated;
+      });
+    }
+  }, [targetGroups]);
+
+  const campaignGroups = liveGroups.filter(g => targetGroups.includes(g.id));
 
   const totalParticipants = campaignGroups.reduce((sum, g) => sum + (g.participant_count || 0), 0);
   const totalGroups = campaignGroups.length;
@@ -103,6 +125,7 @@ export function CampaignDashboard({ targetGroups, allGroups, links, messages, ca
   useEffect(() => {
     fetchSnapshots();
     fetchLinkStats();
+    fetchGroupsFromDb();
     // Auto-sync group participants on first load
     if (!initialSyncDone.current && campaignGroups.length > 0) {
       initialSyncDone.current = true;
@@ -114,25 +137,27 @@ export function CampaignDashboard({ targetGroups, allGroups, links, messages, ca
             headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
             body: JSON.stringify({ syncToDb: true, filterGroupIds: groupIds }),
           });
+          await fetchGroupsFromDb();
           if (onRefreshGroups) await onRefreshGroups();
         } catch { /* ignore */ }
       };
       syncParticipants();
     }
-  }, [fetchSnapshots, fetchLinkStats, campaignGroups, onRefreshGroups]);
+  }, [fetchSnapshots, fetchLinkStats, fetchGroupsFromDb, campaignGroups, onRefreshGroups]);
 
-  // Auto-refresh polling every 30s — includes group data refresh
+  // Auto-refresh polling every 30s
   useEffect(() => {
     autoRefreshRef.current = setInterval(async () => {
       fetchLinkStats();
       fetchSnapshots();
+      fetchGroupsFromDb();
       if (onRefreshGroups) await onRefreshGroups();
     }, AUTO_REFRESH_INTERVAL);
 
     return () => {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     };
-  }, [fetchLinkStats, fetchSnapshots, onRefreshGroups]);
+  }, [fetchLinkStats, fetchSnapshots, fetchGroupsFromDb, onRefreshGroups]);
 
   // Realtime subscription for link stats
   useEffect(() => {
@@ -208,6 +233,7 @@ export function CampaignDashboard({ targetGroups, allGroups, links, messages, ca
         body: JSON.stringify({ syncToDb: true, filterGroupIds: campaignGroupIds }),
       });
       await res.json();
+      await fetchGroupsFromDb();
       if (onRefreshGroups) await onRefreshGroups();
       await Promise.all([fetchSnapshots(), fetchLinkStats()]);
     } catch { /* ignore */ }

@@ -133,7 +133,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   }, [campaignId]);
 
   const fetchAllGroups = useCallback(async () => {
-    const { data } = await supabase.from('whatsapp_groups').select('id, group_id, name, photo_url, participant_count, max_participants').order('name');
+    const { data } = await supabase.from('whatsapp_groups').select('id, group_id, name, photo_url, participant_count, previous_participant_count, max_participants').order('name');
     setAllGroups(data || []);
   }, []);
 
