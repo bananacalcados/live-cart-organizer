@@ -163,10 +163,10 @@ export default function CatalogLeadPage() {
         // Check if that sale had shipping
         const { data: sale } = await supabase
           .from("pos_sales")
-          .select("shipping_cost, status")
+          .select("*")
           .eq("id", data.checkout_sale_id)
           .maybeSingle();
-        if (sale && Number(sale.shipping_cost) > 0 && sale.status === "completed") {
+        if (sale && Number((sale as any).shipping_cost) > 0 && sale.status === "completed") {
           setShippingAlreadyPaid(true);
           const key = `catalog_lead_${slug}`;
           const stored = JSON.parse(localStorage.getItem(key) || "{}");
