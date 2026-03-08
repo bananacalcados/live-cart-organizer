@@ -152,29 +152,36 @@ export default function CatalogLeadPage() {
 
   // Check if customer already paid shipping in a previous purchase on this catalog
   useEffect(() => {
-    if (!registrationId) return;
+    if (!config?.id || !whatsapp || shippingAlreadyPaid) return;
+    const phoneClean = whatsapp.replace(/\D/g, "");
+    if (phoneClean.length < 8) return;
     (async () => {
-      const { data } = await supabase
+      // Find any completed registration for this catalog with this phone
+      const { data: regs } = await supabase
         .from("catalog_lead_registrations")
         .select("checkout_sale_id, status")
-        .eq("id", registrationId)
-        .maybeSingle();
-      if (data?.status === "completed" && data?.checkout_sale_id) {
-        // Check if that sale had shipping
+        .eq("catalog_page_id", config.id)
+        .eq("status", "completed")
+        .ilike("whatsapp", `%${phoneClean.slice(-8)}%`);
+      if (!regs || regs.length === 0) return;
+      
+      for (const reg of regs) {
+        if (!reg.checkout_sale_id) continue;
         const { data: sale } = await supabase
           .from("pos_sales")
           .select("*")
-          .eq("id", data.checkout_sale_id)
+          .eq("id", reg.checkout_sale_id)
           .maybeSingle();
         if (sale && Number((sale as any).shipping_cost) > 0 && sale.status === "completed") {
           setShippingAlreadyPaid(true);
           const key = `catalog_lead_${slug}`;
           const stored = JSON.parse(localStorage.getItem(key) || "{}");
           localStorage.setItem(key, JSON.stringify({ ...stored, shippingPaid: true }));
+          return;
         }
       }
     })();
-  }, [registrationId, slug]);
+  }, [config?.id, whatsapp, slug, shippingAlreadyPaid]);
 
   // Load config
   useEffect(() => {
