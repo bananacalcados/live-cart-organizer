@@ -136,6 +136,58 @@ serve(async (req) => {
           (existingGroups || []).map((g: any) => [`${g.group_id}_${g.instance_id}`, g])
         );
 
+        // Check for orphan records (same group_id but NULL instance_id) and consolidate
+        const groupIds = rows.map((r: any) => r.group_id);
+        const { data: orphanGroups } = await supabase
+          .from('whatsapp_groups')
+          .select('id, group_id, instance_id')
+          .in('group_id', groupIds)
+          .is('instance_id', null);
+
+        if (orphanGroups && orphanGroups.length > 0) {
+          console.log(`Found ${orphanGroups.length} orphan group records to consolidate`);
+          
+          for (const orphan of orphanGroups) {
+            // Update any campaign references from orphan ID to the synced record
+            const existingSynced = existingMap.get(`${orphan.group_id}_${instanceId}`);
+            if (existingSynced) {
+              // There's already a synced record — migrate references and delete orphan
+              await supabase.rpc('migrate_group_references', { old_id: orphan.id, new_id: existingSynced.id }).catch(() => null);
+              
+              // Update campaigns target_groups arrays
+              const { data: campaigns } = await supabase
+                .from('group_campaigns')
+                .select('id, target_groups');
+              
+              if (campaigns) {
+                for (const camp of campaigns) {
+                  const targets = camp.target_groups as string[];
+                  if (targets && targets.includes(orphan.id)) {
+                    const updated = targets.map((t: string) => t === orphan.id ? existingSynced.id : t);
+                    await supabase.from('group_campaigns').update({ target_groups: updated }).eq('id', camp.id);
+                    console.log(`Migrated campaign ${camp.id} reference from ${orphan.id} to ${existingSynced.id}`);
+                  }
+                }
+              }
+
+              // Also update group_redirect_links
+              await supabase.from('group_redirect_links')
+                .update({})  // trigger updated_at
+                .eq('campaign_id', 'dummy'); // no-op, we handle below
+              
+              // Delete orphan record
+              await supabase.from('whatsapp_groups').delete().eq('id', orphan.id);
+              console.log(`Deleted orphan record ${orphan.id} for group ${orphan.group_id}`);
+            } else {
+              // No synced record yet — just set the instance_id on the orphan so upsert finds it
+              await supabase.from('whatsapp_groups')
+                .update({ instance_id: instanceId })
+                .eq('id', orphan.id);
+              console.log(`Set instance_id on orphan ${orphan.id} for group ${orphan.group_id}`);
+            }
+          }
+        }
+
         // Upsert groups with previous_participant_count
         const rowsWithPrevious = rows.map((r: any) => {
           const existing = existingMap.get(`${r.group_id}_${r.instance_id}`);
