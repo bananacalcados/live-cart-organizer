@@ -349,6 +349,12 @@ export function CatalogLeadPageCreator() {
                 <Switch checked={editingPage?.is_active ?? true} onCheckedChange={v => setEditingPage({ ...editingPage, is_active: v })} />
                 <Label className="text-xs">Ativa</Label>
               </div>
+              <div>
+                <Label className="text-xs">📦 Valor do Frete (R$)</Label>
+                <Input type="number" min="0" step="0.01" placeholder="0.00" value={editingPage?.shipping_cost || ""} 
+                  onChange={e => setEditingPage({ ...editingPage, shipping_cost: Number(e.target.value) || 0 })} className="h-9 text-sm w-40" />
+                <p className="text-[10px] text-muted-foreground mt-1">Será adicionado ao total do carrinho e cobrado no pagamento</p>
+              </div>
 
               {/* Selected products in order */}
               {selectedIdsArray.length > 0 && (
