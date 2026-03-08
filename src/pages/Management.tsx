@@ -666,12 +666,14 @@ export default function Management() {
     const PAGE_SIZE = 1000;
     let allSales: any[] = [];
     let allItems: any[] = [];
+
+    // Fetch completed sales with paid_at in range
     let from = 0;
     let hasMore = true;
     while (hasMore) {
       const { data, error } = await supabase.from("pos_sales")
-        .select("id, store_id, total, discount, subtotal, payment_method, paid_at, status")
-        .eq("status", "completed")
+        .select("id, store_id, total, discount, subtotal, payment_method, paid_at, status, created_at")
+        .in("status", ["completed", "paid"])
         .not("paid_at", "is", null)
         .gte("paid_at", startISO)
         .lte("paid_at", endISO)
@@ -683,19 +685,52 @@ export default function Management() {
       from += PAGE_SIZE;
     }
 
+    // Also fetch completed sales WITHOUT paid_at (use created_at as fallback)
+    from = 0;
+    hasMore = true;
+    while (hasMore) {
+      const { data, error } = await supabase.from("pos_sales")
+        .select("id, store_id, total, discount, subtotal, payment_method, paid_at, status, created_at")
+        .in("status", ["completed", "paid"])
+        .is("paid_at", null)
+        .gte("created_at", startISO)
+        .lte("created_at", endISO)
+        .in("store_id", PHYSICAL_STORE_IDS)
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      allSales = allSales.concat(data || []);
+      hasMore = (data?.length || 0) === PAGE_SIZE;
+      from += PAGE_SIZE;
+    }
+
+    // Deduplicate by id (in case of overlap)
+    const seenIds = new Set<string>();
+    allSales = allSales.filter(s => {
+      if (seenIds.has(s.id)) return false;
+      seenIds.add(s.id);
+      return true;
+    });
+
     // Fetch items for these sales
     if (allSales.length > 0) {
       const saleIds = allSales.map(s => s.id);
-      // Batch fetch items (max 1000 at a time)
       for (let i = 0; i < saleIds.length; i += 200) {
         const batch = saleIds.slice(i, i + 200);
         const { data: items } = await supabase.from("pos_sale_items")
           .select("product_name, variant_name, sku, quantity, total_price, sale_id")
           .in("sale_id", batch);
         if (items) {
+          // Enrich items: add store_id and fix total_price when 0
           const enriched = items.map(item => {
             const sale = allSales.find(s => s.id === item.sale_id);
-            return { ...item, store_id: sale?.store_id || "" };
+            let itemPrice = Number(item.total_price || 0);
+            // When total_price is 0, distribute sale total proportionally
+            if (itemPrice === 0 && sale) {
+              const saleItems = items.filter(it => it.sale_id === item.sale_id);
+              const totalQty = saleItems.reduce((s, it) => s + (it.quantity || 1), 0);
+              itemPrice = (Number(sale.total || 0) / totalQty) * (item.quantity || 1);
+            }
+            return { ...item, total_price: itemPrice, store_id: sale?.store_id || "" };
           });
           allItems = allItems.concat(enriched);
         }
