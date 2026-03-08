@@ -169,6 +169,7 @@ export default function CatalogLeadPage() {
         selected_product_ids: cfg.selected_product_ids || [],
         require_registration: cfg.require_registration ?? true,
         whatsapp_numbers: cfg.whatsapp_numbers || [],
+        shipping_cost: Number(cfg.shipping_cost) || 0,
       });
       prevIdsRef.current = cfg.selected_product_ids || [];
       supabase.from("catalog_lead_pages").update({ views: (cfg.views || 0) + 1 } as any).eq("id", cfg.id).then();
