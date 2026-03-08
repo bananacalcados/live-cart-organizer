@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2 } from "lucide-react";
+import { initMetaPixel, trackPageView, trackPixelEvent } from "@/lib/metaPixel";
 
 const VIP_REDIRECT = '/vip/liveconsumidor';
 const CAMPAIGN_TAG = 'live-consumidor-mar26';
@@ -32,6 +33,13 @@ export default function LiveConsumidorLP() {
   const [pushSubscription, setPushSubscription] = useState<any>(null);
   const [showPushBanner, setShowPushBanner] = useState(false);
   const [pushDismissed, setPushDismissed] = useState(false);
+
+  // Init Meta Pixel & fire PageView
+  useEffect(() => {
+    initMetaPixel();
+    trackPageView();
+    trackPixelEvent('ViewContent', { content_name: 'Live Consumidor LP', content_category: 'landing_page' });
+  }, []);
 
   // Check if push is available and not yet granted
   useEffect(() => {
@@ -104,6 +112,8 @@ export default function LiveConsumidorLP() {
     }
 
     setSubmitted(true);
+    trackPixelEvent('Lead', { content_name: 'Live Consumidor LP', content_category: 'vip_group' });
+    trackPixelEvent('CompleteRegistration', { content_name: 'Grupo VIP Live', value: 0, currency: 'BRL' });
     setTimeout(() => { window.location.href = VIP_REDIRECT; }, 600);
   };
 
