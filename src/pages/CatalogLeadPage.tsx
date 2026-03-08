@@ -14,6 +14,7 @@ interface PageConfig {
   selected_product_ids: string[];
   require_registration: boolean;
   whatsapp_numbers: Array<{ name: string; number: string }>;
+  shipping_cost: number;
 }
 
 interface CatalogProduct {
