@@ -423,7 +423,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message: messageText,
         direction: "outgoing",
         status: "sent",
-        whatsapp_number_id: selectedNumberId || null,
+        whatsapp_number_id: numberIdToUse || null,
         message_id: metaMessageId,
       });
 
