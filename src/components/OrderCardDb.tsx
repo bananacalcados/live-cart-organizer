@@ -234,6 +234,21 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             Pago Externo
           </Badge>
         )}
+        {/* Payment Gateway Badge */}
+        {(order.is_paid || order.paid_externally) && (() => {
+          const gateway = order.mercadopago_payment_id ? 'Mercado Pago'
+            : (order as any).pagarme_order_id ? 'Pagar.me'
+            : (order as any).appmax_order_id ? 'AppMax'
+            : (order as any).vindi_transaction_id ? 'Vindi'
+            : null;
+          if (!gateway) return null;
+          return (
+            <Badge variant="secondary" className="text-[10px] bg-muted text-muted-foreground border-border">
+              <CreditCard className="h-3 w-3 mr-1" />
+              {gateway}
+            </Badge>
+          );
+        })()}
         {order.has_gift && (
           <Badge variant="secondary" className="text-[10px] bg-accent/20 text-accent border-accent/30">
             <Gift className="h-3 w-3 mr-1" />
