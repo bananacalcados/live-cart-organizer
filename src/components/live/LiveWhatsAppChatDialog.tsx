@@ -239,7 +239,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
             if (error) throw error;
           } else {
             const { error } = await supabase.functions.invoke("zapi-send-media", {
-              body: { phone: viewerPhone, mediaUrl: publicUrl, mediaType: "audio", caption: "" },
+              body: { phone: viewerPhone, mediaUrl: publicUrl, mediaType: "audio", caption: "", whatsapp_number_id: selectedNum?.id },
             });
             if (error) throw error;
           }
@@ -251,7 +251,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
             status: "sent",
             media_type: "audio",
             media_url: publicUrl,
-            whatsapp_number_id: selectedNum?.provider === "meta" ? selectedNum.id : null,
+            whatsapp_number_id: selectedNum?.id || null,
           });
           toast.success("Áudio enviado!");
         } catch (err: any) {
