@@ -407,7 +407,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         audioMsgId = res.data?.messageId || null;
       } else {
         await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio" },
+          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: selectedNumberId },
         });
       }
       await supabase.from("whatsapp_messages").insert({
