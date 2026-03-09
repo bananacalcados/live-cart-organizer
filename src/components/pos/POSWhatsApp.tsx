@@ -777,12 +777,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               </div>
             </div>
 
-            {/* API Selector */}
+             {/* API Selector */}
             <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] bg-white dark:bg-[#202c33] text-xs flex-shrink-0">
               <span className="text-muted-foreground">Via:</span>
               <button onClick={() => setSendVia("zapi")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "zapi" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Z-API</button>
               <button onClick={() => setSendVia("meta")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "meta" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Meta API</button>
-              {sendVia === "meta" && metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" />}
+              {metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />}
             </div>
 
             <ChatView
