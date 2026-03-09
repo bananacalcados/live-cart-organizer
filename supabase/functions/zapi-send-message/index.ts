@@ -1,35 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface SendMessageRequest {
-  phone: string;
-  message: string;
-}
-
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const token = Deno.env.get('ZAPI_TOKEN');
-    const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
-
-    if (!instanceId || !token || !clientToken) {
-      console.error('Missing Z-API credentials');
-      return new Response(
-        JSON.stringify({ error: 'Z-API credentials not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { phone, message }: SendMessageRequest = await req.json();
+    const { phone, message, whatsapp_number_id } = await req.json();
 
     if (!phone || !message) {
       return new Response(
@@ -38,14 +21,15 @@ serve(async (req) => {
       );
     }
 
-    // Format phone number - don't modify group IDs (they start with "120" or contain "-" or "@")
+    const { instanceId, token, clientToken } = await resolveZApiCredentials(whatsapp_number_id);
+
+    // Format phone number - don't modify group IDs
     let formattedPhone = phone.replace(/\D/g, '');
     const isGroup = phone.includes('@') || phone.includes('-') || formattedPhone.startsWith('120');
     if (!isGroup && !formattedPhone.startsWith('55')) {
       formattedPhone = '55' + formattedPhone;
     }
 
-    // Z-API endpoint for sending text messages
     const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
 
     const response = await fetch(zapiUrl, {
