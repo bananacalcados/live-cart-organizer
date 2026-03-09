@@ -141,7 +141,7 @@ export function ConversationList({
 
   // Count per status
   const statusCounts: Record<ConversationStatusFilter, number> = {
-    all: conversations.filter(c => !c.isArchived).length,
+    all: conversations.filter(c => !c.isArchived && !c.isFinished).length,
     not_started: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'not_started').length,
     awaiting_reply: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'awaiting_reply').length,
     awaiting_customer: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'awaiting_customer').length,
