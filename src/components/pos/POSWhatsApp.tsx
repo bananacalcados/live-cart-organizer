@@ -72,10 +72,15 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [showSellerGate, setShowSellerGate] = useState(true);
-  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(() => sessionStorage.getItem('pos_whatsapp_seller_id'));
-  const [selectedSellerName, setSelectedSellerName] = useState<string | null>(() => sessionStorage.getItem('pos_whatsapp_seller_name'));
+  const sellerKey = `pos_whatsapp_seller_id_${storeId}`;
+  const sellerNameKey = `pos_whatsapp_seller_name_${storeId}`;
+  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(() => sessionStorage.getItem(sellerKey));
+  const [selectedSellerName, setSelectedSellerName] = useState<string | null>(() => sessionStorage.getItem(sellerNameKey));
   const [showFinishDialog, setShowFinishDialog] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem('pos_whatsapp_seller_id'));
+  const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
+
+  // Store-specific WhatsApp number IDs
+  const [storeNumberIds, setStoreNumberIds] = useState<string[]>([]);
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation } = useConversationEnrichment();
