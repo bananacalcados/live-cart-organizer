@@ -437,22 +437,14 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         if (error || !data?.approvalUrl) throw new Error(data?.error || "Erro PayPal");
         link = data.approvalUrl;
       } else if (gateway === "pix") {
-        const description = cart.map(c => `${c.title} x${c.quantity}`).join(", ");
-        const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
-          body: {
-            amount: orderTotal,
-            description: description.substring(0, 140),
-            payer_email: linkedCustomer?.email || "cliente@email.com",
-          },
-        });
-        if (error || !data?.success) throw new Error(data?.error || "Erro PIX");
-        link = data.ticket_url || data.qr_code_url || "";
+        // PIX requires orderId — sale will be created first below, then PIX generated
+        link = "__PIX_PENDING__";
       }
 
-      if (gateway !== "delivery" && gateway !== "pickup" && gateway !== "store-checkout" && !link) throw new Error("Link não gerado");
+      if (gateway !== "delivery" && gateway !== "pickup" && gateway !== "store-checkout" && gateway !== "pix" && !link) throw new Error("Link não gerado");
 
-      // For store-checkout, we need to save the sale first and then generate the link
-      if (gateway !== "store-checkout") {
+      // For store-checkout and pix, we need to save the sale first and then generate the link
+      if (gateway !== "store-checkout" && gateway !== "pix") {
         setGeneratedLink(link || "DELIVERY_CONFIRMED");
       }
       if (gateway === "delivery") setDeliveryConfirmed(true);
@@ -530,6 +522,17 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       if (gateway === "store-checkout" && sale) {
         const storeCheckoutLink = `https://checkout.bananacalcados.com.br/checkout-loja/${storeId}/${sale.id}`;
         setGeneratedLink(storeCheckoutLink);
+        setShowLinkDialog(true);
+      }
+
+      // For PIX, now that we have the sale ID, generate the PIX
+      if (gateway === "pix" && sale) {
+        const { data: pixData, error: pixErr } = await supabase.functions.invoke("mercadopago-create-pix", {
+          body: { orderId: sale.id },
+        });
+        if (pixErr || !pixData?.qrCode) throw new Error(pixData?.error || "Erro ao gerar PIX");
+        const pixLink = pixData.ticketUrl || pixData.qrCode || "";
+        setGeneratedLink(pixLink);
         setShowLinkDialog(true);
       }
 
