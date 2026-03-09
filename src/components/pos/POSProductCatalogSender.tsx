@@ -206,13 +206,13 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
             });
           } else {
             await supabase.functions.invoke("zapi-send-media", {
-              body: { phone, mediaUrl: product.image_url, mediaType: "image", caption },
+              body: { phone, mediaUrl: product.image_url, mediaType: "image", caption, whatsapp_number_id: resolvedNumberId },
             });
           }
           await supabase.from("whatsapp_messages").insert({
             phone, message: caption, direction: "outgoing", status: "sent",
             media_type: "image", media_url: product.image_url,
-            whatsapp_number_id: sendVia === "meta" ? resolvedNumberId : null,
+            whatsapp_number_id: resolvedNumberId || null,
           });
         }
 
