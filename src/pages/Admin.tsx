@@ -12,9 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ZApiInstanceManager } from "@/components/admin/ZApiInstanceManager";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft,
-  LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3,
+  LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone,
 } from "lucide-react";
 
 const ALL_MODULES = [
