@@ -356,7 +356,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         metaMessageId = res.data?.messageId || null;
       } else {
         const { error } = await supabase.functions.invoke("zapi-send-message", {
-          body: { phone: selectedPhone, message: messageText },
+          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: selectedNumberId },
         });
         if (error) throw error;
       }
