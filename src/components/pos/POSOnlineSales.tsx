@@ -441,10 +441,10 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         link = "__PIX_PENDING__";
       }
 
-      if (gateway !== "delivery" && gateway !== "pickup" && gateway !== "store-checkout" && !link) throw new Error("Link não gerado");
+      if (gateway !== "delivery" && gateway !== "pickup" && gateway !== "store-checkout" && gateway !== "pix" && !link) throw new Error("Link não gerado");
 
-      // For store-checkout, we need to save the sale first and then generate the link
-      if (gateway !== "store-checkout") {
+      // For store-checkout and pix, we need to save the sale first and then generate the link
+      if (gateway !== "store-checkout" && gateway !== "pix") {
         setGeneratedLink(link || "DELIVERY_CONFIRMED");
       }
       if (gateway === "delivery") setDeliveryConfirmed(true);
