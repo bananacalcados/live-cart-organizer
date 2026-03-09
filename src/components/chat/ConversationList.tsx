@@ -113,8 +113,8 @@ export function ConversationList({
     })
     .filter(c => {
       if (statusFilter === 'all') {
-        // "Todas" hides archived conversations
-        return !c.isArchived;
+        // "Todas" hides archived and finished conversations
+        return !c.isArchived && !c.isFinished;
       }
       if (statusFilter === 'archived') return c.isArchived;
       if (statusFilter === 'awaiting_payment') return c.isAwaitingPayment && !c.isArchived;
@@ -141,7 +141,7 @@ export function ConversationList({
 
   // Count per status
   const statusCounts: Record<ConversationStatusFilter, number> = {
-    all: conversations.filter(c => !c.isArchived).length,
+    all: conversations.filter(c => !c.isArchived && !c.isFinished).length,
     not_started: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'not_started').length,
     awaiting_reply: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'awaiting_reply').length,
     awaiting_customer: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'awaiting_customer').length,
