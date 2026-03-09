@@ -437,16 +437,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         if (error || !data?.approvalUrl) throw new Error(data?.error || "Erro PayPal");
         link = data.approvalUrl;
       } else if (gateway === "pix") {
-        const description = cart.map(c => `${c.title} x${c.quantity}`).join(", ");
-        const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
-          body: {
-            amount: orderTotal,
-            description: description.substring(0, 140),
-            payer_email: linkedCustomer?.email || "cliente@email.com",
-          },
-        });
-        if (error || !data?.success) throw new Error(data?.error || "Erro PIX");
-        link = data.ticket_url || data.qr_code_url || "";
+        // PIX requires orderId — sale will be created first below, then PIX generated
+        link = "__PIX_PENDING__";
       }
 
       if (gateway !== "delivery" && gateway !== "pickup" && gateway !== "store-checkout" && !link) throw new Error("Link não gerado");
