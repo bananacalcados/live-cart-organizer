@@ -909,8 +909,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         onSellerSelected={(id, name) => {
           setSelectedSellerId(id);
           setSelectedSellerName(name);
-          sessionStorage.setItem('pos_whatsapp_seller_id', id);
-          sessionStorage.setItem('pos_whatsapp_seller_name', name);
+          sessionStorage.setItem(sellerKey, id);
+          sessionStorage.setItem(sellerNameKey, name);
           setShowSellerGate(false);
           setShowDashboard(true);
           toast.success(`Vendedora: ${name}`);
