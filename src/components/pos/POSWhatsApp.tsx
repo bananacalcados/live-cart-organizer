@@ -372,6 +372,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       if (conv.whatsapp_number_id) setSelectedNumberId(conv.whatsapp_number_id);
     } else {
       setSendVia("zapi");
+      // Set the correct Z-API instance for this conversation
+      if (conv?.whatsapp_number_id) {
+        setSelectedNumberId(conv.whatsapp_number_id);
+      } else {
+        // If no specific number, use first Z-API number from store
+        const firstZapi = storeNumbers.find(n => n.provider === 'zapi');
+        if (firstZapi) setSelectedNumberId(firstZapi.id);
+      }
     }
     // Track seller assignment (opened_at)
     if (selectedSellerId) {
