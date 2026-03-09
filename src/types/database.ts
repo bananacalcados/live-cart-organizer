@@ -57,6 +57,11 @@ export interface DbOrder {
   eligible_for_prize?: boolean;
   created_at: string;
   updated_at: string;
+  // Payment gateway IDs
+  pagarme_order_id?: string | null;
+  mercadopago_payment_id?: string | null;
+  appmax_order_id?: string | null;
+  vindi_transaction_id?: string | null;
   // Joined data
   customer?: DbCustomer;
 }
