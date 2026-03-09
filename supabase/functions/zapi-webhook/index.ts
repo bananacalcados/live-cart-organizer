@@ -184,6 +184,7 @@ serve(async (req) => {
           status,
           is_group: isGroup,
           sender_name: senderName,
+          whatsapp_number_id: whatsappNumberId,
         });
 
         // Reopen conversations that were auto-closed by dispatch
