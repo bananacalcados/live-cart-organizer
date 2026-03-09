@@ -525,6 +525,17 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         setShowLinkDialog(true);
       }
 
+      // For PIX, now that we have the sale ID, generate the PIX
+      if (gateway === "pix" && sale) {
+        const { data: pixData, error: pixErr } = await supabase.functions.invoke("mercadopago-create-pix", {
+          body: { orderId: sale.id },
+        });
+        if (pixErr || !pixData?.qrCode) throw new Error(pixData?.error || "Erro ao gerar PIX");
+        const pixLink = pixData.ticketUrl || pixData.qrCode || "";
+        setGeneratedLink(pixLink);
+        setShowLinkDialog(true);
+      }
+
       // Create Tiny order for delivery, PayPal and PIX
       if (gateway === "delivery" || gateway === "paypal" || gateway === "pix") {
         const tinyResult = await createTinyOrder();
