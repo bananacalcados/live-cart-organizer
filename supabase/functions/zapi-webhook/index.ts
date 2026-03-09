@@ -93,6 +93,27 @@ serve(async (req) => {
     const payload = (await req.json()) as AnyPayload;
     console.log('Webhook received:', JSON.stringify(payload));
 
+    // Extract whatsapp_number_id from query param or try to resolve from client-token header
+    const url = new URL(req.url);
+    let whatsappNumberId: string | null = url.searchParams.get('number_id');
+
+    // If no number_id in query, try to resolve from instanceId in payload
+    if (!whatsappNumberId) {
+      const instanceId = asString(payload.instanceId);
+      if (instanceId) {
+        const { data: numRow } = await supabase
+          .from('whatsapp_numbers')
+          .select('id')
+          .eq('zapi_instance_id', instanceId)
+          .eq('provider', 'zapi')
+          .limit(1)
+          .maybeSingle();
+        if (numRow) whatsappNumberId = numRow.id;
+      }
+    }
+
+    console.log(`Resolved whatsapp_number_id: ${whatsappNumberId}`);
+
     // 1) ReceivedCallback (text messages) - can include fromMe=true for messages we sent
     const rawPhone = asString(payload.phone);
     const messageText = getMessageText(payload);
