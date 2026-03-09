@@ -83,7 +83,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [storeNumberIds, setStoreNumberIds] = useState<string[]>([]);
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
-  const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
 
   // CRM phone lookup for conversation names
