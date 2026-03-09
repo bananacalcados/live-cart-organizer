@@ -436,7 +436,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         mediaMsgId = res.data?.messageId || null;
       } else {
         await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption },
+          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: selectedNumberId },
         });
       }
       await supabase.from("whatsapp_messages").insert({
