@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,22 +13,14 @@ serve(async (req) => {
   }
 
   try {
-    const { phones } = await req.json();
+    const { phones, whatsapp_number_id } = await req.json();
     if (!phones || !Array.isArray(phones) || phones.length === 0) {
       return new Response(JSON.stringify({ error: 'phones array required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const token = Deno.env.get('ZAPI_TOKEN');
-    const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
-
-    if (!instanceId || !token) {
-      return new Response(JSON.stringify({ error: 'Z-API not configured' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const { instanceId, token, clientToken } = await resolveZApiCredentials(whatsapp_number_id);
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -35,8 +28,6 @@ serve(async (req) => {
     );
 
     const results: Record<string, string> = {};
-    
-    // Process up to 20 phones per call to avoid timeout
     const batch = phones.slice(0, 20);
     
     for (const phone of batch) {
@@ -57,8 +48,6 @@ serve(async (req) => {
           
           if (picUrl) {
             results[phone] = picUrl;
-            
-            // Save to chat_contacts
             await supabase
               .from('chat_contacts')
               .upsert(
@@ -68,7 +57,6 @@ serve(async (req) => {
           }
         }
         
-        // Rate limit
         await new Promise(r => setTimeout(r, 300));
       } catch (e) {
         console.error(`Error fetching pic for ${phone}:`, e);

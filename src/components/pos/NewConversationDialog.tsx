@@ -231,10 +231,11 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
         // Z-API
         if (!messageText.trim()) { toast.error("Digite uma mensagem"); setSending(false); return; }
         await supabase.functions.invoke("zapi-send-message", {
-          body: { phone: cleanPhone, message: messageText.trim() },
+          body: { phone: cleanPhone, message: messageText.trim(), whatsapp_number_id: selectedNumberId },
         });
         await supabase.from("whatsapp_messages").insert({
           phone: cleanPhone, message: messageText.trim(), direction: "outgoing", status: "sent",
+          whatsapp_number_id: selectedNumberId || null,
         });
       }
 
@@ -334,9 +335,9 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
                   Meta API
                 </button>
               </div>
-              {sendVia === "meta" && metaNumbers.length > 1 && (
+              {metaNumbers.length > 1 && (
                 <div className="mt-2">
-                  <WhatsAppNumberSelector className="h-8 text-xs" />
+                  <WhatsAppNumberSelector className="h-8 text-xs" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />
                 </div>
               )}
             </div>

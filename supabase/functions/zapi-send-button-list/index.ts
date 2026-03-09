@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { phone, message, imageUrl, buttons, instanceId, token, clientToken } = await req.json();
+    const { phone, message, imageUrl, buttons, whatsapp_number_id } = await req.json();
 
     if (!phone) {
       return new Response(JSON.stringify({ error: 'Phone is required' }), {
@@ -19,52 +20,32 @@ serve(async (req) => {
       });
     }
 
-    const zapiInstanceId = instanceId || Deno.env.get('ZAPI_INSTANCE_ID') || '';
-    const zapiToken = token || Deno.env.get('ZAPI_TOKEN') || '';
-    const zapiClientToken = clientToken || Deno.env.get('ZAPI_CLIENT_TOKEN') || '';
-
-    if (!zapiInstanceId || !zapiToken) {
-      return new Response(JSON.stringify({ error: 'Z-API credentials not configured' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const { instanceId, token, clientToken } = await resolveZApiCredentials(whatsapp_number_id);
 
     let formattedPhone = phone.replace(/\D/g, '');
     if (!formattedPhone.startsWith('55')) formattedPhone = '55' + formattedPhone;
 
-    // Use send-button-list-image when image is provided, otherwise send-button-list
     const endpoint = imageUrl ? 'send-button-list-image' : 'send-button-list';
-    const url = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/${endpoint}`;
+    const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/${endpoint}`;
 
-    // Build buttons array
     const buttonArray = (buttons || []).map((btn: { id: string; title: string }, i: number) => ({
       id: btn.id || `btn_${i}`,
       label: btn.title || `Opção ${i + 1}`,
     }));
 
-    // Build payload in the correct Z-API format
     const body: Record<string, unknown> = {
       phone: formattedPhone,
       message: message || '',
     };
 
     if (imageUrl) {
-      // For send-button-list-image: buttonList is an object with image + buttons
-      body.buttonList = {
-        image: imageUrl,
-        buttons: buttonArray,
-      };
+      body.buttonList = { image: imageUrl, buttons: buttonArray };
     } else {
-      // For send-button-list without image: buttonList is just the array
       body.buttonList = buttonArray;
     }
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (zapiClientToken) {
-      headers['Client-Token'] = zapiClientToken;
-    }
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (clientToken) headers['Client-Token'] = clientToken;
 
     console.log('Z-API button list request:', JSON.stringify({ url: endpoint, body }));
 
@@ -74,7 +55,6 @@ serve(async (req) => {
       body: JSON.stringify(body),
     });
 
-    // Safe response parsing - Z-API may return empty or non-JSON responses
     const responseText = await response.text();
     let data: any;
     try {

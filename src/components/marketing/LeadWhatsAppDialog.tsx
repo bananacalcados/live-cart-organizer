@@ -103,13 +103,13 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
         if (error) throw error;
       } else {
         const { error } = await supabase.functions.invoke('zapi-send-message', {
-          body: { phone: sendPhone, message: text },
+          body: { phone: sendPhone, message: text, whatsapp_number_id: selectedNumberId },
         });
         if (error) throw error;
       }
       await supabase.from('whatsapp_messages').insert({
         phone: sendPhone, message: text, direction: 'outgoing', status: 'sent',
-        whatsapp_number_id: sendVia === 'meta' ? selectedNumberId : null,
+        whatsapp_number_id: selectedNumberId || null,
       });
       loadMessages();
     } catch (err) {

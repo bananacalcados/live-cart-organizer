@@ -356,7 +356,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         metaMessageId = res.data?.messageId || null;
       } else {
         const { error } = await supabase.functions.invoke("zapi-send-message", {
-          body: { phone: selectedPhone, message: messageText },
+          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: selectedNumberId },
         });
         if (error) throw error;
       }
@@ -366,7 +366,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message: messageText,
         direction: "outgoing",
         status: "sent",
-        whatsapp_number_id: sendVia === "meta" ? selectedNumberId : null,
+        whatsapp_number_id: selectedNumberId || null,
         message_id: metaMessageId,
       });
 
@@ -407,7 +407,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         audioMsgId = res.data?.messageId || null;
       } else {
         await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio" },
+          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: selectedNumberId },
         });
       }
       await supabase.from("whatsapp_messages").insert({
@@ -436,7 +436,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         mediaMsgId = res.data?.messageId || null;
       } else {
         await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption },
+          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: selectedNumberId },
         });
       }
       await supabase.from("whatsapp_messages").insert({
@@ -455,7 +455,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const handleDeleteMessage = async (msg: any) => {
     if (!msg.message_id || !selectedPhone) throw new Error('No message_id');
     const res = await supabase.functions.invoke("zapi-delete-message", {
-      body: { phone: selectedPhone, messageId: msg.message_id, dbMessageId: msg.id },
+      body: { phone: selectedPhone, messageId: msg.message_id, dbMessageId: msg.id, whatsapp_number_id: selectedNumberId },
     });
     if (res.error) throw res.error;
     if (res.data?.error) throw new Error(res.data.error);
@@ -465,7 +465,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const handleEditMessage = async (msg: any, newText: string) => {
     if (!msg.message_id || !selectedPhone) throw new Error('No message_id');
     const res = await supabase.functions.invoke("zapi-edit-message", {
-      body: { phone: selectedPhone, messageId: msg.message_id, newMessage: newText, dbMessageId: msg.id },
+      body: { phone: selectedPhone, messageId: msg.message_id, newMessage: newText, dbMessageId: msg.id, whatsapp_number_id: selectedNumberId },
     });
     if (res.error) throw res.error;
     if (res.data?.error) throw new Error(res.data.error);
@@ -777,12 +777,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               </div>
             </div>
 
-            {/* API Selector */}
+             {/* API Selector */}
             <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] bg-white dark:bg-[#202c33] text-xs flex-shrink-0">
               <span className="text-muted-foreground">Via:</span>
               <button onClick={() => setSendVia("zapi")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "zapi" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Z-API</button>
               <button onClick={() => setSendVia("meta")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "meta" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Meta API</button>
-              {sendVia === "meta" && metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" />}
+              {metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />}
             </div>
 
             <ChatView

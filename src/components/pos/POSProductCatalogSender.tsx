@@ -206,13 +206,13 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
             });
           } else {
             await supabase.functions.invoke("zapi-send-media", {
-              body: { phone, mediaUrl: product.image_url, mediaType: "image", caption },
+              body: { phone, mediaUrl: product.image_url, mediaType: "image", caption, whatsapp_number_id: resolvedNumberId },
             });
           }
           await supabase.from("whatsapp_messages").insert({
             phone, message: caption, direction: "outgoing", status: "sent",
             media_type: "image", media_url: product.image_url,
-            whatsapp_number_id: sendVia === "meta" ? resolvedNumberId : null,
+            whatsapp_number_id: resolvedNumberId || null,
           });
         }
 
@@ -229,7 +229,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
           });
         } else {
           await supabase.functions.invoke("zapi-send-button-list", {
-            body: { phone, message: buttonText, buttons },
+            body: { phone, message: buttonText, buttons, whatsapp_number_id: resolvedNumberId },
           });
         }
 
@@ -237,7 +237,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
           phone,
           message: `[Botões] ${displayName}\n• Entrega: R$ ${deliveryPrice.toFixed(2)}\n• Retirada: R$ ${pickupPrice.toFixed(2)}\n• Loja: R$ ${storePrice.toFixed(2)}`,
           direction: "outgoing", status: "sent",
-          whatsapp_number_id: sendVia === "meta" ? resolvedNumberId : null,
+          whatsapp_number_id: resolvedNumberId || null,
         });
 
         successCount++;

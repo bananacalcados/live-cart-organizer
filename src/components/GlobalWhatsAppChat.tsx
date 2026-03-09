@@ -164,13 +164,13 @@ export function GlobalWhatsAppChat() {
         if (error) throw error;
       } else {
         const { error } = await supabase.functions.invoke('zapi-send-message', {
-          body: { phone: selectedPhone, message: messageText },
+          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: selectedNumberId },
         });
         if (error) throw error;
       }
       await supabase.from('whatsapp_messages').insert({
         phone: selectedPhone, message: messageText, direction: 'outgoing', status: 'sent',
-        whatsapp_number_id: sendVia === 'meta' ? selectedNumberId : null,
+        whatsapp_number_id: selectedNumberId || null,
       });
       loadMessages(selectedPhone);
     } catch (error) {
@@ -192,7 +192,7 @@ export function GlobalWhatsAppChat() {
         if (error) throw error;
       } else {
         const { error } = await supabase.functions.invoke('zapi-send-media', {
-          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: 'audio' },
+          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: 'audio', whatsapp_number_id: selectedNumberId },
         });
         if (error) throw error;
       }
@@ -301,7 +301,7 @@ export function GlobalWhatsAppChat() {
           <span className="text-muted-foreground">Enviar via:</span>
           <button onClick={() => setSendVia('zapi')} className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'zapi' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>Z-API</button>
           <button onClick={() => setSendVia('meta')} className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'meta' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>Meta API</button>
-          {sendVia === 'meta' && metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" />}
+          {metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />}
           {sendVia === 'meta' && metaNumbers.length > 0 && (
             <span className="text-muted-foreground truncate">{metaNumbers.find(n => n.id === selectedNumberId)?.label || ''}</span>
           )}
