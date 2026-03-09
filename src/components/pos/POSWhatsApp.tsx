@@ -465,7 +465,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const handleEditMessage = async (msg: any, newText: string) => {
     if (!msg.message_id || !selectedPhone) throw new Error('No message_id');
     const res = await supabase.functions.invoke("zapi-edit-message", {
-      body: { phone: selectedPhone, messageId: msg.message_id, newMessage: newText, dbMessageId: msg.id },
+      body: { phone: selectedPhone, messageId: msg.message_id, newMessage: newText, dbMessageId: msg.id, whatsapp_number_id: selectedNumberId },
     });
     if (res.error) throw res.error;
     if (res.data?.error) throw new Error(res.data.error);
