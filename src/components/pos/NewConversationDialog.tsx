@@ -335,9 +335,9 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
                   Meta API
                 </button>
               </div>
-              {sendVia === "meta" && metaNumbers.length > 1 && (
+              {metaNumbers.length > 1 && (
                 <div className="mt-2">
-                  <WhatsAppNumberSelector className="h-8 text-xs" />
+                  <WhatsAppNumberSelector className="h-8 text-xs" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />
                 </div>
               )}
             </div>
