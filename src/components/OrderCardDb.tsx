@@ -237,9 +237,9 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         {/* Payment Gateway Badge */}
         {(order.is_paid || order.paid_externally) && (() => {
           const gateway = order.mercadopago_payment_id ? 'Mercado Pago'
-            : (order as any).pagarme_order_id ? 'Pagar.me'
-            : (order as any).appmax_order_id ? 'AppMax'
-            : (order as any).vindi_transaction_id ? 'Vindi'
+            : order.pagarme_order_id ? 'Pagar.me'
+            : order.appmax_order_id ? 'AppMax'
+            : order.vindi_transaction_id ? 'Vindi'
             : null;
           if (!gateway) return null;
           return (
