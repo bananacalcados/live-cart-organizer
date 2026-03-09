@@ -366,7 +366,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message: messageText,
         direction: "outgoing",
         status: "sent",
-        whatsapp_number_id: sendVia === "meta" ? selectedNumberId : null,
+        whatsapp_number_id: selectedNumberId || null,
         message_id: metaMessageId,
       });
 
