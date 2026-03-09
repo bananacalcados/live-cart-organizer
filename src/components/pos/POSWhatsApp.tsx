@@ -352,7 +352,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers]);
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, finishedPhones, archivedPhones, awaitingPaymentPhones]);
 
   const loadMessages = async (phone: string) => {
     const { data } = await supabase
