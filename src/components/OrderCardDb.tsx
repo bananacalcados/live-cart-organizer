@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store } from "lucide-react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES } from "@/types/order";
 import { Button } from "@/components/ui/button";
@@ -234,6 +234,21 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             Pago Externo
           </Badge>
         )}
+        {/* Payment Gateway Badge */}
+        {(order.is_paid || order.paid_externally) && (() => {
+          const gateway = order.mercadopago_payment_id ? 'Mercado Pago'
+            : order.pagarme_order_id ? 'Pagar.me'
+            : order.appmax_order_id ? 'AppMax'
+            : order.vindi_transaction_id ? 'Vindi'
+            : null;
+          if (!gateway) return null;
+          return (
+            <Badge variant="secondary" className="text-[10px] bg-muted text-muted-foreground border-border">
+              <CreditCard className="h-3 w-3 mr-1" />
+              {gateway}
+            </Badge>
+          );
+        })()}
         {order.has_gift && (
           <Badge variant="secondary" className="text-[10px] bg-accent/20 text-accent border-accent/30">
             <Gift className="h-3 w-3 mr-1" />
