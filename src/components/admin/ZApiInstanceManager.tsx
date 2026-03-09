@@ -148,12 +148,15 @@ export function ZApiInstanceManager() {
     }
     setTestingId(inst.id);
     try {
-      const zapiUrl = `https://api.z-api.io/instances/${inst.zapi_instance_id}/token/${inst.zapi_token}/status`;
-      const res = await fetch(zapiUrl, {
-        headers: { "Client-Token": inst.zapi_client_token },
+      const { data, error } = await supabase.functions.invoke('zapi-test-connection', {
+        body: {
+          instance_id: inst.zapi_instance_id,
+          token: inst.zapi_token,
+          client_token: inst.zapi_client_token,
+        },
       });
-      const data = await res.json();
-      const connected = data?.connected === true || data?.smartphoneConnected === true;
+      if (error) throw error;
+      const connected = data?.connected === true;
       setConnectionResults(prev => ({ ...prev, [inst.id]: { connected, tested: true } }));
       toast({
         title: connected ? "✅ Conectado!" : "❌ Desconectado",
