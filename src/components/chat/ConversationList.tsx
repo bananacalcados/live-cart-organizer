@@ -150,6 +150,30 @@ export function ConversationList({
     archived: conversations.filter(c => c.isArchived).length,
   };
 
+  // Count per instance (for tabs)
+  const instanceCounts: Record<string, number> = { all: conversations.filter(c => !c.isArchived).length };
+  for (const c of conversations.filter(c => !c.isArchived)) {
+    if (c.whatsapp_number_id) {
+      instanceCounts[c.whatsapp_number_id] = (instanceCounts[c.whatsapp_number_id] || 0) + 1;
+    } else {
+      instanceCounts['zapi'] = (instanceCounts['zapi'] || 0) + 1;
+    }
+  }
+
+  // Build instance tabs
+  const instanceTabs: { value: string; label: string; count: number }[] = [
+    { value: 'all', label: 'Todas', count: instanceCounts['all'] || 0 },
+  ];
+  // Add individual number tabs
+  for (const num of metaNumbers) {
+    const count = instanceCounts[num.id] || 0;
+    instanceTabs.push({ value: num.id, label: num.label, count });
+  }
+  // Add generic zapi tab only if there are zapi messages not tied to a specific number
+  if ((instanceCounts['zapi'] || 0) > 0 && !metaNumbers.some(n => n.provider === 'zapi')) {
+    instanceTabs.push({ value: 'zapi', label: 'Z-API', count: instanceCounts['zapi'] || 0 });
+  }
+
   const togglePhone = (phone: string) => {
     setSelectedPhones(prev => {
       const next = new Set(prev);
