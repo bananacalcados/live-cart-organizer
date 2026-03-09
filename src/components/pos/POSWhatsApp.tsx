@@ -713,7 +713,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             onInstanceFilterChange={setInstanceFilter}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
-            metaNumbers={metaNumbers}
+            metaNumbers={storeNumbers}
             contactPhotos={contactPhotos}
             contactNames={chatContacts}
             selectedPhone={selectedPhone}
