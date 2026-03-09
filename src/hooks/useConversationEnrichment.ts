@@ -92,7 +92,7 @@ export function useConversationEnrichment() {
   }, []);
 
   const getInstanceLabel = useCallback((whatsappNumberId: string | null | undefined): string => {
-    if (!whatsappNumberId) return 'Z-API';
+    if (!whatsappNumberId) return '';
     const num = numbers.find(n => n.id === whatsappNumberId);
     return num?.label || 'Meta';
   }, [numbers]);
