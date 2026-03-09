@@ -296,6 +296,16 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
       const phoneMap = new Map<string, { messages: Message[]; unread: number; isGroup: boolean }>();
       for (const msg of data || []) {
+        // Filter by store's assigned WhatsApp numbers
+        if (storeNumberIds.length > 0) {
+          const msgNumberId = msg.whatsapp_number_id;
+          if (msgNumberId && !storeNumberIds.includes(msgNumberId)) continue;
+          if (!msgNumberId) {
+            // Z-API messages (no whatsapp_number_id) — include only if store has Z-API numbers
+            const hasZapiInStore = storeNumbers.some(n => n.provider === 'zapi');
+            if (!hasZapiInStore) continue;
+          }
+        }
         if (!phoneMap.has(msg.phone)) phoneMap.set(msg.phone, { messages: [], unread: 0, isGroup: msg.is_group || false });
         const entry = phoneMap.get(msg.phone)!;
         entry.messages.push(msg);
@@ -342,7 +352,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [selectedPhone, chatContacts, crmMap]);
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers]);
 
   const loadMessages = async (phone: string) => {
     const { data } = await supabase
