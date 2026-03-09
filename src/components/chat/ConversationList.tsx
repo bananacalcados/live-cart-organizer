@@ -150,6 +150,30 @@ export function ConversationList({
     archived: conversations.filter(c => c.isArchived).length,
   };
 
+  // Count per instance (for tabs)
+  const instanceCounts: Record<string, number> = { all: conversations.filter(c => !c.isArchived).length };
+  for (const c of conversations.filter(c => !c.isArchived)) {
+    if (c.whatsapp_number_id) {
+      instanceCounts[c.whatsapp_number_id] = (instanceCounts[c.whatsapp_number_id] || 0) + 1;
+    } else {
+      instanceCounts['zapi'] = (instanceCounts['zapi'] || 0) + 1;
+    }
+  }
+
+  // Build instance tabs
+  const instanceTabs: { value: string; label: string; count: number }[] = [
+    { value: 'all', label: 'Todas', count: instanceCounts['all'] || 0 },
+  ];
+  // Add individual number tabs
+  for (const num of metaNumbers) {
+    const count = instanceCounts[num.id] || 0;
+    instanceTabs.push({ value: num.id, label: num.label, count });
+  }
+  // Add generic zapi tab only if there are zapi messages not tied to a specific number
+  if ((instanceCounts['zapi'] || 0) > 0 && !metaNumbers.some(n => n.provider === 'zapi')) {
+    instanceTabs.push({ value: 'zapi', label: 'Z-API', count: instanceCounts['zapi'] || 0 });
+  }
+
   const togglePhone = (phone: string) => {
     setSelectedPhones(prev => {
       const next = new Set(prev);
@@ -184,6 +208,33 @@ export function ConversationList({
             className="pl-9 h-9 bg-[#f0f2f5] dark:bg-[#202c33] border-0 rounded-lg"
           />
         </div>
+
+        {/* Instance filter tabs (above status tabs) */}
+        {instanceTabs.length > 1 && (
+          <div className="flex gap-1 overflow-x-auto pb-1">
+            {instanceTabs.map(tab => (
+              <button
+                key={tab.value}
+                onClick={() => onInstanceFilterChange(tab.value)}
+                className={cn(
+                  "px-2 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-colors flex-shrink-0 flex items-center gap-1",
+                  instanceFilter === tab.value
+                    ? "bg-[#075e54] text-white"
+                    : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
+                )}
+              >
+                <Wifi className="h-3 w-3" />
+                {tab.label}
+                <span className={cn(
+                  "text-[9px] px-1 rounded-full",
+                  instanceFilter === tab.value ? "bg-white/20" : "bg-black/10 dark:bg-white/10"
+                )}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Status filter tabs */}
         <div className="flex gap-1 overflow-x-auto pb-1">
@@ -246,24 +297,6 @@ export function ConversationList({
             )}
           </button>
         )}
-
-        {/* Instance filter */}
-        <Select value={instanceFilter} onValueChange={onInstanceFilterChange}>
-          <SelectTrigger className="h-8 text-xs bg-[#f0f2f5] dark:bg-[#202c33] border-0">
-            <Wifi className="h-3 w-3 mr-2" />
-            <SelectValue placeholder="Filtrar por instância" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as instâncias</SelectItem>
-            <SelectItem value="zapi">Z-API</SelectItem>
-            <SelectItem value="meta">Meta API (todas)</SelectItem>
-            {metaNumbers.map(num => (
-              <SelectItem key={num.id} value={num.id}>
-                Meta - {num.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
 
         {/* Stage filter */}
         <Select value={stageFilter} onValueChange={onStageFilterChange}>

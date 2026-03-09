@@ -72,10 +72,15 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [showSellerGate, setShowSellerGate] = useState(true);
-  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(() => sessionStorage.getItem('pos_whatsapp_seller_id'));
-  const [selectedSellerName, setSelectedSellerName] = useState<string | null>(() => sessionStorage.getItem('pos_whatsapp_seller_name'));
+  const sellerKey = `pos_whatsapp_seller_id_${storeId}`;
+  const sellerNameKey = `pos_whatsapp_seller_name_${storeId}`;
+  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(() => sessionStorage.getItem(sellerKey));
+  const [selectedSellerName, setSelectedSellerName] = useState<string | null>(() => sessionStorage.getItem(sellerNameKey));
   const [showFinishDialog, setShowFinishDialog] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem('pos_whatsapp_seller_id'));
+  const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
+
+  // Store-specific WhatsApp number IDs
+  const [storeNumberIds, setStoreNumberIds] = useState<string[]>([]);
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation } = useConversationEnrichment();
@@ -86,6 +91,34 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const { crmMap, deleteWhatsApp } = useCrmPhoneLookup(conversationPhones);
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
+
+  // Load store-specific WhatsApp numbers
+  useEffect(() => {
+    const loadStoreNumbers = async () => {
+      const { data } = await supabase
+        .from('pos_store_whatsapp_numbers')
+        .select('whatsapp_number_id')
+        .eq('store_id', storeId);
+      setStoreNumberIds((data || []).map((d: any) => d.whatsapp_number_id));
+    };
+    loadStoreNumbers();
+  }, [storeId]);
+
+  // Reset seller when storeId changes
+  useEffect(() => {
+    const savedId = sessionStorage.getItem(`pos_whatsapp_seller_id_${storeId}`);
+    const savedName = sessionStorage.getItem(`pos_whatsapp_seller_name_${storeId}`);
+    setSelectedSellerId(savedId);
+    setSelectedSellerName(savedName);
+    setShowSellerGate(!savedId);
+    setShowDashboard(!!savedId);
+  }, [storeId]);
+
+  // Numbers assigned to this store
+  const storeNumbers = useMemo(() => {
+    if (storeNumberIds.length === 0) return metaNumbers;
+    return metaNumbers.filter(n => storeNumberIds.includes(n.id));
+  }, [metaNumbers, storeNumberIds]);
 
   // Load chat contacts + photos + group names
   useEffect(() => {
@@ -263,6 +296,16 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
       const phoneMap = new Map<string, { messages: Message[]; unread: number; isGroup: boolean }>();
       for (const msg of data || []) {
+        // Filter by store's assigned WhatsApp numbers
+        if (storeNumberIds.length > 0) {
+          const msgNumberId = msg.whatsapp_number_id;
+          if (msgNumberId && !storeNumberIds.includes(msgNumberId)) continue;
+          if (!msgNumberId) {
+            // Z-API messages (no whatsapp_number_id) — include only if store has Z-API numbers
+            const hasZapiInStore = storeNumbers.some(n => n.provider === 'zapi');
+            if (!hasZapiInStore) continue;
+          }
+        }
         if (!phoneMap.has(msg.phone)) phoneMap.set(msg.phone, { messages: [], unread: 0, isGroup: msg.is_group || false });
         const entry = phoneMap.get(msg.phone)!;
         entry.messages.push(msg);
@@ -309,7 +352,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [selectedPhone, chatContacts, crmMap]);
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers]);
 
   const loadMessages = async (phone: string) => {
     const { data } = await supabase
@@ -642,8 +685,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           onChangeSeller={() => {
             setSelectedSellerId(null);
             setSelectedSellerName(null);
-            sessionStorage.removeItem('pos_whatsapp_seller_id');
-            sessionStorage.removeItem('pos_whatsapp_seller_name');
+            sessionStorage.removeItem(sellerKey);
+            sessionStorage.removeItem(sellerNameKey);
             setShowDashboard(false);
             setShowSellerGate(true);
           }}
@@ -670,7 +713,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             onInstanceFilterChange={setInstanceFilter}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
-            metaNumbers={metaNumbers}
+            metaNumbers={storeNumbers}
             contactPhotos={contactPhotos}
             contactNames={chatContacts}
             selectedPhone={selectedPhone}
@@ -748,22 +791,22 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                   title="Arquivar Conversa"
                   onClick={async () => {
                     if (selectedPhone) {
-                      const conv = conversations.find(c => c.phone === selectedPhone);
-                      if (conv?.isArchived) {
-                        await unarchiveConversation(selectedPhone);
-                        toast.success("Conversa desarquivada");
-                      } else {
-                        await archiveConversation(selectedPhone, selectedSellerId || undefined);
-                        toast.success("Conversa arquivada");
-                        setSelectedPhone(null);
-                        setMessages([]);
-                      }
-                    }
-                  }}
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                  <span className="hidden xl:inline">{conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}</span>
-                </Button>
+          const conv = conversations.find(c => c.phone === selectedPhone);
+          if (conv?.isArchived) {
+            await unarchiveConversation(selectedPhone);
+            toast.success("Conversa desarquivada");
+          } else {
+            await archiveConversation(selectedPhone, selectedSellerId || undefined);
+            toast.success("Conversa arquivada");
+            setSelectedPhone(null);
+            setMessages([]);
+          }
+        }
+      }}
+    >
+      <Archive className="h-3.5 w-3.5" />
+      <span className="hidden xl:inline">{conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}</span>
+    </Button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -777,12 +820,17 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               </div>
             </div>
 
-             {/* API Selector */}
+             {/* API Selector + Instance info */}
             <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] bg-white dark:bg-[#202c33] text-xs flex-shrink-0">
+              {selectedConversation?.instanceLabel && (
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 border-[#00a884]/40 text-[#00a884] font-medium">
+                  {selectedConversation.instanceLabel}
+                </Badge>
+              )}
               <span className="text-muted-foreground">Via:</span>
               <button onClick={() => setSendVia("zapi")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "zapi" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Z-API</button>
               <button onClick={() => setSendVia("meta")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "meta" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Meta API</button>
-              {metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />}
+              {storeNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />}
             </div>
 
             <ChatView
@@ -866,8 +914,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         onSellerSelected={(id, name) => {
           setSelectedSellerId(id);
           setSelectedSellerName(name);
-          sessionStorage.setItem('pos_whatsapp_seller_id', id);
-          sessionStorage.setItem('pos_whatsapp_seller_name', name);
+          sessionStorage.setItem(sellerKey, id);
+          sessionStorage.setItem(sellerNameKey, name);
           setShowSellerGate(false);
           setShowDashboard(true);
           toast.success(`Vendedora: ${name}`);

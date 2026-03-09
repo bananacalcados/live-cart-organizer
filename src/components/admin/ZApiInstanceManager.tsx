@@ -234,6 +234,16 @@ export function ZApiInstanceManager() {
                         <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => toggleVisibility(inst.id)}>
                           {show ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                         </Button>
+                        <div className="mt-1">
+                          <p className="text-[9px] text-muted-foreground">Webhook URL:</p>
+                          <code className="text-[9px] bg-muted px-1 py-0.5 rounded break-all select-all cursor-pointer" title="Clique para copiar" onClick={() => {
+                            const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-webhook?number_id=${inst.id}`;
+                            navigator.clipboard.writeText(url);
+                            toast({ title: "URL copiada!" });
+                          }}>
+                            .../zapi-webhook?number_id={inst.id.slice(0, 8)}...
+                          </code>
+                        </div>
                       </TableCell>
                       <TableCell>
                         {inst.is_active
