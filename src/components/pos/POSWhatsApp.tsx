@@ -83,7 +83,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [storeNumberIds, setStoreNumberIds] = useState<string[]>([]);
 
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
-  const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
 
   // CRM phone lookup for conversation names
@@ -352,7 +352,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers]);
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, finishedPhones, archivedPhones, awaitingPaymentPhones]);
 
   const loadMessages = async (phone: string) => {
     const { data } = await supabase
