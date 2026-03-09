@@ -92,6 +92,34 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
+  // Load store-specific WhatsApp numbers
+  useEffect(() => {
+    const loadStoreNumbers = async () => {
+      const { data } = await supabase
+        .from('pos_store_whatsapp_numbers')
+        .select('whatsapp_number_id')
+        .eq('store_id', storeId);
+      setStoreNumberIds((data || []).map((d: any) => d.whatsapp_number_id));
+    };
+    loadStoreNumbers();
+  }, [storeId]);
+
+  // Reset seller when storeId changes
+  useEffect(() => {
+    const savedId = sessionStorage.getItem(`pos_whatsapp_seller_id_${storeId}`);
+    const savedName = sessionStorage.getItem(`pos_whatsapp_seller_name_${storeId}`);
+    setSelectedSellerId(savedId);
+    setSelectedSellerName(savedName);
+    setShowSellerGate(!savedId);
+    setShowDashboard(!!savedId);
+  }, [storeId]);
+
+  // Numbers assigned to this store
+  const storeNumbers = useMemo(() => {
+    if (storeNumberIds.length === 0) return metaNumbers;
+    return metaNumbers.filter(n => storeNumberIds.includes(n.id));
+  }, [metaNumbers, storeNumberIds]);
+
   // Load chat contacts + photos + group names
   useEffect(() => {
     const load = async () => {
