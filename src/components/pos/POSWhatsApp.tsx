@@ -398,16 +398,22 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     setIsSending(true);
     setNewMessage("");
     try {
+      // Resolve the number ID to use - ensure we always have one for Z-API
+      const numberIdToUse = selectedNumberId || storeNumbers.find(n => n.provider === 'zapi')?.id || null;
+      
       let metaMessageId: string | null = null;
-      if (sendVia === "meta" && selectedNumberId) {
+      if (sendVia === "meta" && numberIdToUse) {
         const res = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: selectedNumberId },
+          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: numberIdToUse },
         });
         if (res.error) throw res.error;
         metaMessageId = res.data?.messageId || null;
       } else {
+        if (!numberIdToUse) {
+          throw new Error("Nenhuma instância Z-API configurada para esta loja");
+        }
         const { error } = await supabase.functions.invoke("zapi-send-message", {
-          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: selectedNumberId },
+          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: numberIdToUse },
         });
         if (error) throw error;
       }
