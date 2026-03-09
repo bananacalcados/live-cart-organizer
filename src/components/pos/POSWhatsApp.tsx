@@ -791,22 +791,22 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                   title="Arquivar Conversa"
                   onClick={async () => {
                     if (selectedPhone) {
-                      const conv = conversations.find(c => c.phone === selectedPhone);
-                      if (conv?.isArchived) {
-                        await unarchiveConversation(selectedPhone);
-                        toast.success("Conversa desarquivada");
-                      } else {
-                        await archiveConversation(selectedPhone, selectedSellerId || undefined);
-                        toast.success("Conversa arquivada");
-                        setSelectedPhone(null);
-                        setMessages([]);
-                      }
-                    }
-                  }}
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                  <span className="hidden xl:inline">{conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}</span>
-                </Button>
+          const conv = conversations.find(c => c.phone === selectedPhone);
+          if (conv?.isArchived) {
+            await unarchiveConversation(selectedPhone);
+            toast.success("Conversa desarquivada");
+          } else {
+            await archiveConversation(selectedPhone, selectedSellerId || undefined);
+            toast.success("Conversa arquivada");
+            setSelectedPhone(null);
+            setMessages([]);
+          }
+        }
+      }}
+    >
+      <Archive className="h-3.5 w-3.5" />
+      <span className="hidden xl:inline">{conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}</span>
+    </Button>
                 <Button
                   variant="ghost"
                   size="sm"
