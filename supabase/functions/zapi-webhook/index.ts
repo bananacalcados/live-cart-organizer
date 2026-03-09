@@ -165,6 +165,7 @@ serve(async (req) => {
           message_id: messageId,
           status,
           is_group: isGroup,
+          whatsapp_number_id: whatsappNumberId,
         });
 
         if (insertError) {
