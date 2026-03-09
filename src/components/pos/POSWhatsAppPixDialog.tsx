@@ -141,11 +141,11 @@ export function POSWhatsAppPixDialog({
       if (sendVia === "meta" && selectedNumberId) {
         await supabase.functions.invoke("meta-whatsapp-send", { body: { phone, message, whatsapp_number_id: selectedNumberId } });
       } else {
-        await supabase.functions.invoke("zapi-send-message", { body: { phone, message } });
+        await supabase.functions.invoke("zapi-send-message", { body: { phone, message, whatsapp_number_id: selectedNumberId } });
       }
       await supabase.from("whatsapp_messages").insert({
         phone, message, direction: "outgoing", status: "sent",
-        whatsapp_number_id: sendVia === "meta" ? selectedNumberId : null,
+        whatsapp_number_id: selectedNumberId || null,
       });
       toast.success("PIX enviado!");
     } catch {

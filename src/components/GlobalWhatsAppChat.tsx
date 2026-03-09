@@ -192,7 +192,7 @@ export function GlobalWhatsAppChat() {
         if (error) throw error;
       } else {
         const { error } = await supabase.functions.invoke('zapi-send-media', {
-          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: 'audio' },
+          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: 'audio', whatsapp_number_id: selectedNumberId },
         });
         if (error) throw error;
       }
