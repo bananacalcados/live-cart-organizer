@@ -113,8 +113,8 @@ export function ConversationList({
     })
     .filter(c => {
       if (statusFilter === 'all') {
-        // "Todas" hides archived conversations
-        return !c.isArchived;
+        // "Todas" hides archived and finished conversations
+        return !c.isArchived && !c.isFinished;
       }
       if (statusFilter === 'archived') return c.isArchived;
       if (statusFilter === 'awaiting_payment') return c.isAwaitingPayment && !c.isArchived;
