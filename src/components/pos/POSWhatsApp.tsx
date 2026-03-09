@@ -685,8 +685,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           onChangeSeller={() => {
             setSelectedSellerId(null);
             setSelectedSellerName(null);
-            sessionStorage.removeItem('pos_whatsapp_seller_id');
-            sessionStorage.removeItem('pos_whatsapp_seller_name');
+            sessionStorage.removeItem(sellerKey);
+            sessionStorage.removeItem(sellerNameKey);
             setShowDashboard(false);
             setShowSellerGate(true);
           }}
