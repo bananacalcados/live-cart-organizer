@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { DbOrder, DbOrderProduct, DbCustomer, DiscountType } from '@/types/database';
 import { OrderStage, isOrderComplete } from '@/types/order';
 import { toast } from 'sonner';
-import { createShopifyCartFromOrder } from '@/lib/shopifyCart';
+
 import { Json } from '@/integrations/supabase/types';
 
 // Helper to convert products array to Json type
