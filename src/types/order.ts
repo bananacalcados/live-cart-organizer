@@ -1,4 +1,6 @@
 export type OrderStage = 
+  | 'incomplete_order'
+  | 'awaiting_confirmation'
   | 'new'
   | 'contacted'
   | 'no_response'
