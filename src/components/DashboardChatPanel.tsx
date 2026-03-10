@@ -361,7 +361,7 @@ export function DashboardChatPanel() {
                 key={sf.id}
                 onClick={() => setFilter(sf.id)}
                 className={cn(
-                  "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2",
+                  "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2 flex-shrink-0 whitespace-nowrap",
                   filter === sf.id
                     ? `${sf.color} text-white border-transparent shadow-md scale-105`
                     : `${sf.color}/15 border-current/30 hover:opacity-80`
