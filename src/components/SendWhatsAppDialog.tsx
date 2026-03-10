@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { MessageCircle, Send, Loader2, ExternalLink } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -73,8 +74,17 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
   const handleSend = async () => {
     if (!order.whatsapp) return;
     
-    const result = await sendMessage(order.whatsapp, message, selectedNumberId || undefined);
+    const phone = order.whatsapp.replace(/\D/g, "");
+    const result = await sendMessage(phone, message, selectedNumberId || undefined);
     if (result.success) {
+      // Persist message to whatsapp_messages so it appears in the chat
+      await supabase.from('whatsapp_messages').insert({
+        phone,
+        message,
+        direction: 'outgoing',
+        status: 'sent',
+        whatsapp_number_id: selectedNumberId || null,
+      });
       onOpenChange(false);
     }
   };
