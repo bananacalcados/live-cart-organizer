@@ -172,6 +172,12 @@ const Index = () => {
                 <MessageSquare className="h-3 w-3" />
                 Templates API
               </TabsTrigger>
+              {currentEvent?.catalog_lead_page_id && (
+                <TabsTrigger value="carts" className="gap-1">
+                  <ShoppingCart className="h-3 w-3" />
+                  Carrinhos
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
