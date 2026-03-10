@@ -1049,6 +1049,9 @@ export default function Inventory() {
                 <TabsTrigger value="counting" className="flex-1">
                   <ScanBarcode className="h-4 w-4 mr-1" /> Bipagem
                 </TabsTrigger>
+                <TabsTrigger value="verification" className="flex-1">
+                  <ClipboardCheck className="h-4 w-4 mr-1" /> Conferência
+                </TabsTrigger>
                 <TabsTrigger value="unresolved" className="flex-1 relative">
                   <HelpCircle className="h-4 w-4 mr-1" /> Pendentes
                   {pendingUnresolved.length > 0 && (
