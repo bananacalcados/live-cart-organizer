@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 import { DbOrder, DbOrderProduct, DbCustomer, DiscountType } from '@/types/database';
-import { OrderStage } from '@/types/order';
+import { OrderStage, isOrderComplete } from '@/types/order';
 import { toast } from 'sonner';
 import { createShopifyCartFromOrder } from '@/lib/shopifyCart';
 import { Json } from '@/integrations/supabase/types';
