@@ -19,6 +19,8 @@ export function GlobalWhatsAppChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
+  const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -69,11 +71,13 @@ export function GlobalWhatsAppChat() {
 
       if (error) { console.error('Error loading messages:', error); return; }
 
-      const phoneMap = new Map<string, { messages: Message[], unread: number, isGroup: boolean }>();
+      // Group by phone + whatsapp_number_id for separate conversations per instance
+      const convMap = new Map<string, { messages: Message[], unread: number, isGroup: boolean, phone: string, numberId: string | null }>();
       
       for (const msg of data || []) {
-        if (!phoneMap.has(msg.phone)) phoneMap.set(msg.phone, { messages: [], unread: 0, isGroup: msg.is_group || false });
-        const entry = phoneMap.get(msg.phone)!;
+        const convKey = `${msg.phone}__${msg.whatsapp_number_id || 'none'}`;
+        if (!convMap.has(convKey)) convMap.set(convKey, { messages: [], unread: 0, isGroup: msg.is_group || false, phone: msg.phone, numberId: msg.whatsapp_number_id || null });
+        const entry = convMap.get(convKey)!;
         entry.messages.push(msg);
         if (msg.direction === 'incoming' && msg.status !== 'read') entry.unread++;
         if (msg.is_group) entry.isGroup = true;
@@ -82,14 +86,14 @@ export function GlobalWhatsAppChat() {
       const convs: Conversation[] = [];
       const phoneMessages = new Map<string, { direction: string }[]>();
       
-      phoneMap.forEach((value, phone) => {
+      convMap.forEach((value, convKey) => {
+        const phone = value.phone;
         const lastMsg = value.messages[0];
         const matchingOrders = orders.filter(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
         const order = matchingOrders[0];
         const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
         const isGroup = value.isGroup || phone.includes('@g.us') || phone.includes('-');
         const lastIncoming = value.messages.find(m => m.direction === 'incoming');
-        // Detect provider by cross-referencing whatsapp_number_id with metaNumbers
         const lastIncomingInstance: 'zapi' | 'meta' | undefined = (() => {
           if (!lastIncoming) return undefined;
           if (!lastIncoming.whatsapp_number_id) return 'zapi';
@@ -97,10 +101,9 @@ export function GlobalWhatsAppChat() {
           if (matchedNumber) return (matchedNumber.provider === 'meta' ? 'meta' : 'zapi') as 'zapi' | 'meta';
           return 'zapi';
         })();
-        const msgWithNumberId = value.messages.find(m => m.whatsapp_number_id);
         const eventNames = matchingOrders.map(o => events.find(e => e.id === o.event_id)?.name).filter(Boolean) as string[];
         
-        phoneMessages.set(phone, value.messages.map(m => ({ direction: m.direction })));
+        phoneMessages.set(convKey, value.messages.map(m => ({ direction: m.direction })));
         
         convs.push({
           phone,
@@ -113,7 +116,7 @@ export function GlobalWhatsAppChat() {
           stage: order?.stage,
           customerId: order?.customer_id || customer?.id,
           customerTags: customer?.tags,
-          whatsapp_number_id: msgWithNumberId?.whatsapp_number_id || null,
+          whatsapp_number_id: value.numberId,
           lastIncomingInstance,
           eventNames: [...new Set(eventNames)],
         });
@@ -129,32 +132,39 @@ export function GlobalWhatsAppChat() {
       .channel('global-whatsapp-chat-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' }, () => {
         loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone);
+        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_messages' }, () => loadConversations())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [isOpen, orders, selectedPhone, customers, events, chatContacts, enrichConversations]);
+  }, [isOpen, orders, selectedPhone, selectedConvNumberId, customers, events, chatContacts, enrichConversations]);
 
-  const loadMessages = async (phone: string) => {
-    const { data } = await supabase.from('whatsapp_messages').select('*').eq('phone', phone).order('created_at', { ascending: true });
+  const loadMessages = async (phone: string, numberId?: string | null) => {
+    let query = supabase.from('whatsapp_messages').select('*').eq('phone', phone).order('created_at', { ascending: true });
+    if (numberId) {
+      query = query.eq('whatsapp_number_id', numberId);
+    } else if (numberId === null) {
+      query = query.is('whatsapp_number_id', null);
+    }
+    const { data } = await query;
     if (data) setMessages(data || []);
   };
 
-  const handleSelectConversation = (phone: string) => {
+  const handleSelectConversation = (phone: string, whatsappNumberId?: string | null) => {
     setSelectedPhone(phone);
-    loadMessages(phone);
+    setSelectedConvNumberId(whatsappNumberId ?? null);
+    setSelectedConvKey(`${phone}__${whatsappNumberId || 'none'}`);
+    loadMessages(phone, whatsappNumberId);
     // Auto-route: detect instance from conversation metadata
-    const conv = conversations.find(c => c.phone === phone);
-    if (conv?.whatsapp_number_id) {
-      const matchedNumber = metaNumbers.find(n => n.id === conv.whatsapp_number_id);
+    if (whatsappNumberId) {
+      const matchedNumber = metaNumbers.find(n => n.id === whatsappNumberId);
       if (matchedNumber) {
         setSendVia(matchedNumber.provider === 'meta' ? 'meta' : 'zapi');
         setSelectedNumberId(matchedNumber.id);
       } else {
         setSendVia('zapi');
-        setSelectedNumberId(conv.whatsapp_number_id);
+        setSelectedNumberId(whatsappNumberId);
       }
     } else {
       setSendVia('zapi');
@@ -184,7 +194,7 @@ export function GlobalWhatsAppChat() {
         phone: selectedPhone, message: messageText, direction: 'outgoing', status: 'sent',
         whatsapp_number_id: selectedNumberId || null,
       });
-      loadMessages(selectedPhone);
+      loadMessages(selectedPhone, selectedConvNumberId);
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Erro ao enviar mensagem');
@@ -211,7 +221,7 @@ export function GlobalWhatsAppChat() {
       await supabase.from('whatsapp_messages').insert({
         phone: selectedPhone, message: '[áudio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: audioUrl,
       });
-      loadMessages(selectedPhone);
+      loadMessages(selectedPhone, selectedConvNumberId);
       toast.success('Áudio enviado!');
     } catch (error) {
       console.error('Error sending audio:', error);
@@ -240,7 +250,7 @@ export function GlobalWhatsAppChat() {
     }
   };
 
-  const selectedConversation = conversations.find(c => c.phone === selectedPhone) || null;
+  const selectedConversation = conversations.find(c => c.conversationKey === selectedConvKey) || conversations.find(c => c.phone === selectedPhone) || null;
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   if (!isOpen) {
@@ -321,6 +331,12 @@ export function GlobalWhatsAppChat() {
               <span className="text-muted-foreground">Nenhuma instância detectada</span>
             );
           })()}
+          {/* Cross-instance indicator */}
+          {selectedConversation?.hasOtherInstances && (
+            <span className="text-[10px] text-orange-400">
+              🔗 Também em: {selectedConversation.otherInstanceLabels?.join(', ')}
+            </span>
+          )}
           <span className="text-muted-foreground ml-auto">
             {sendVia === 'meta' ? 'Meta API' : 'Z-API'}
           </span>

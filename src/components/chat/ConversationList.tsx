@@ -24,7 +24,7 @@ interface ConversationListProps {
   conversations: Conversation[];
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  onSelectConversation: (phone: string) => void;
+  onSelectConversation: (phone: string, whatsappNumberId?: string | null) => void;
   chatFilter: ChatFilter;
   onChatFilterChange: (filter: ChatFilter) => void;
   stageFilter: StageFilter;
@@ -37,6 +37,7 @@ interface ConversationListProps {
   contactPhotos?: Record<string, string>;
   contactNames?: Record<string, string>;
   selectedPhone?: string | null;
+  selectedConversationKey?: string | null;
   onBulkFinish?: (phones: string[]) => void;
   /** Optional: function to check if a phone has active support tickets */
   hasActiveSupport?: (phone: string) => boolean;
@@ -75,6 +76,7 @@ export function ConversationList({
   contactPhotos = {},
   contactNames = {},
   selectedPhone,
+  selectedConversationKey,
   onBulkFinish,
   hasActiveSupport,
   supportFilterActive,
@@ -373,18 +375,18 @@ export function ConversationList({
           <div>
             {filteredConversations.map((conv) => (
               <button
-                key={conv.phone}
+                key={conv.conversationKey || conv.phone}
                 onClick={() => {
                   if (selectMode) {
                     togglePhone(conv.phone);
                   } else {
-                    onSelectConversation(conv.phone);
+                    onSelectConversation(conv.phone, conv.whatsapp_number_id);
                   }
                 }}
                 className={cn(
                   "w-full px-3 py-3 flex items-center gap-3 hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors text-left border-b border-[#e9edef] dark:border-[#313d45]",
                   conv.hasUnansweredMessage && "bg-[#d9fdd3]/30 dark:bg-[#005c4b]/20",
-                  selectedPhone === conv.phone && "bg-[#f0f2f5] dark:bg-[#2a3942]",
+                  (selectedConversationKey ? selectedConversationKey === conv.conversationKey : selectedPhone === conv.phone) && "bg-[#f0f2f5] dark:bg-[#2a3942]",
                   selectMode && selectedPhones.has(conv.phone) && "bg-[#00a884]/10"
                 )}
               >
@@ -423,7 +425,9 @@ export function ConversationList({
                           {conv.customerName || contactNames[conv.phone] || conv.phone}
                         </span>
                         {conv.hasOtherInstances && (
-                          <Link2 className="h-3 w-3 text-orange-400 flex-shrink-0" />
+                          <span className="text-[9px] text-orange-400 flex-shrink-0" title={conv.otherInstanceLabels?.join(', ') || 'Outra instância'}>
+                            🔗 {conv.otherInstanceLabels?.length ? `+${conv.otherInstanceLabels.length}` : ''}
+                          </span>
                         )}
                       </div>
                       {(conv.customerName || contactNames[conv.phone]) && (

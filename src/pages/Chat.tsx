@@ -108,6 +108,8 @@ export default function ChatPage() {
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null | undefined>(undefined);
+  const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -194,7 +196,7 @@ export default function ChatPage() {
     setEditingName(false);
   };
 
-  // ── Load conversations via RPC ──
+  // ── Load conversations via RPC (now grouped by phone + whatsapp_number_id) ──
   const loadConversations = useCallback(async () => {
     const numberId = numberFilter !== 'all' ? numberFilter : undefined;
 
@@ -209,16 +211,17 @@ export default function ChatPage() {
 
     for (const row of data || []) {
       const phone = row.phone;
+      const rowNumberId = row.whatsapp_number_id || null;
+      const convKey = `${phone}__${rowNumberId || 'none'}`;
       const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
       const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
       const isGroup = row.is_group || phone.includes('@g.us') || phone.includes('-');
 
-      // Build minimal message list for status computation
       const msgs: { direction: string }[] = [{ direction: row.direction }];
       if (row.has_outgoing && row.direction === 'incoming') {
-        msgs.push({ direction: 'outgoing' }); // indicate we have outgoing messages
+        msgs.push({ direction: 'outgoing' });
       }
-      phoneMessages.set(phone, msgs);
+      phoneMessages.set(convKey, msgs);
 
       convs.push({
         phone,
@@ -231,7 +234,7 @@ export default function ChatPage() {
         stage: order?.stage,
         customerId: order?.customer_id || customer?.id,
         customerTags: customer?.tags,
-        whatsapp_number_id: row.whatsapp_number_id,
+        whatsapp_number_id: rowNumberId,
       });
     }
 
@@ -244,7 +247,7 @@ export default function ChatPage() {
       .channel('chat-page-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' }, () => {
         loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone);
+        if (selectedPhone) loadMessages(selectedPhone, false, selectedConvNumberId);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_messages' }, () => {
         loadConversations();
@@ -256,17 +259,28 @@ export default function ChatPage() {
   // ── Load messages for a phone (paginated) ──
   const PAGE_SIZE = 50;
 
-  const loadMessages = async (phone: string, loadMore = false) => {
+  const loadMessages = async (phone: string, loadMore = false, numberId?: string | null) => {
     if (loadMore) setIsLoadingMore(true);
     else setIsLoadingMessages(true);
 
     const offset = loadMore ? messages.length : 0;
-    const { data, error } = await supabase
+    let query = supabase
       .from('whatsapp_messages')
       .select('*')
       .eq('phone', phone)
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
+    
+    // Filter by whatsapp_number_id if specified
+    if (numberId !== undefined) {
+      if (numberId) {
+        query = query.eq('whatsapp_number_id', numberId);
+      } else {
+        query = query.is('whatsapp_number_id', null);
+      }
+    }
+
+    const { data, error } = await query;
 
     if (!error && data) {
       const sorted = [...data].reverse() as Message[];
@@ -284,15 +298,20 @@ export default function ChatPage() {
 
   // ── Select conversation ──
   const handleSelectConversation = (phone: string) => {
+    // Find the conversation to get its whatsapp_number_id
+    // Since Chat.tsx doesn't use ConversationList, we match by phone
+    const conv = conversations.find(c => c.phone === phone);
+    const numberId = conv?.whatsapp_number_id;
     setSelectedPhone(phone);
-    loadMessages(phone);
+    setSelectedConvNumberId(numberId);
+    setSelectedConvKey(conv?.conversationKey || `${phone}__${numberId || 'none'}`);
+    loadMessages(phone, false, numberId);
     const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
     if (order) setHasUnreadMessages(order.id, false);
-    // Auto-route: lock to the instance of the last incoming message
-    const conv = conversations.find(c => c.phone === phone);
-    if (conv?.whatsapp_number_id) {
-      setNumberFilter(conv.whatsapp_number_id);
-      setSelectedNumberId(conv.whatsapp_number_id);
+    // Auto-route: lock to the instance
+    if (numberId) {
+      setNumberFilter(numberId);
+      setSelectedNumberId(numberId);
     }
   };
 
@@ -414,7 +433,7 @@ export default function ChatPage() {
           whatsapp_number_id: numberId,
           message_id: sendResult.messageId || null,
         });
-        loadMessages(selectedPhone);
+        loadMessages(selectedPhone, false, selectedConvNumberId);
       }
       URL.revokeObjectURL(selectedMedia.previewUrl);
       setSelectedMedia(null);
@@ -445,7 +464,7 @@ export default function ChatPage() {
         whatsapp_number_id: numberId,
         message_id: sendResult.messageId || null,
       });
-      loadMessages(selectedPhone);
+      loadMessages(selectedPhone, false, selectedConvNumberId);
     }
     setIsSending(false);
   };
@@ -555,7 +574,7 @@ export default function ChatPage() {
           whatsapp_number_id: numberId || null,
         });
         toast.success('Template enviado!');
-        loadMessages(selectedPhone);
+        loadMessages(selectedPhone, false, selectedConvNumberId);
       } else {
         toast.error(result.error || 'Erro ao enviar template');
       }
@@ -595,7 +614,7 @@ export default function ChatPage() {
       c.customerName?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-  const selectedConv = conversations.find(c => c.phone === selectedPhone);
+  const selectedConv = conversations.find(c => c.conversationKey === selectedConvKey) || conversations.find(c => c.phone === selectedPhone);
   const contactsCount = conversations.filter(c => !c.isGroup).length;
   const groupsCount = conversations.filter(c => c.isGroup).length;
 
@@ -727,7 +746,7 @@ export default function ChatPage() {
             ) : (
               filteredConversations.map((conv) => (
                 <button
-                  key={conv.phone}
+                  key={conv.conversationKey || conv.phone}
                   onClick={() => handleSelectConversation(conv.phone)}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-3 hover:bg-[#202c33] transition-colors",
@@ -927,7 +946,7 @@ export default function ChatPage() {
                               <MessageMedia msg={msg} />
                               {msg.message && <p className="whitespace-pre-wrap break-words pr-14 leading-[1.35]">{msg.message}</p>}
                               <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[11px] text-[#ffffff99]">
-                                <span>{format(new Date(msg.created_at), "HH:mm")}</span>
+                                <span>{isToday(new Date(msg.created_at)) ? format(new Date(msg.created_at), "HH:mm") : format(new Date(msg.created_at), "dd/MM HH:mm")}</span>
                                 {msg.direction === 'outgoing' && <StatusIcon status={msg.status || null} />}
                               </div>
                             </div>

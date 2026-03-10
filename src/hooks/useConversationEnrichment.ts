@@ -102,31 +102,40 @@ export function useConversationEnrichment() {
     phoneMessages: Map<string, { direction: string }[]>
   ): Conversation[] => {
     // Track all phone base numbers to detect cross-instance contacts
-    const phoneBaseMap = new Map<string, string[]>();
+    // Key: phone digits suffix, Value: array of { conversationKey, instanceLabel }
+    const phoneBaseMap = new Map<string, { key: string; label: string }[]>();
     for (const conv of convs) {
       const base = conv.phone.replace(/\D/g, '').slice(-8);
+      const convKey = `${conv.phone}__${conv.whatsapp_number_id || 'none'}`;
+      const label = getInstanceLabel(conv.whatsapp_number_id);
       if (!phoneBaseMap.has(base)) phoneBaseMap.set(base, []);
-      phoneBaseMap.get(base)!.push(conv.phone);
+      phoneBaseMap.get(base)!.push({ key: convKey, label: label || 'Sem instância' });
     }
 
     return convs.map(conv => {
-      const msgs = phoneMessages.get(conv.phone) || [];
+      const convKey = `${conv.phone}__${conv.whatsapp_number_id || 'none'}`;
+      const msgs = phoneMessages.get(convKey) || phoneMessages.get(conv.phone) || [];
       const status = computeStatus(msgs);
       const isFinished = finishedPhones.has(conv.phone);
       const isArchived = archivedPhones.has(conv.phone);
       const isAwaitingPayment = awaitingPaymentPhones.has(conv.phone);
       const instanceLabel = getInstanceLabel(conv.whatsapp_number_id);
       const base = conv.phone.replace(/\D/g, '').slice(-8);
-      const hasOtherInstances = (phoneBaseMap.get(base)?.length || 0) > 1;
+      const allInstances = phoneBaseMap.get(base) || [];
+      const otherInstances = allInstances.filter(i => i.key !== convKey);
+      const hasOtherInstances = otherInstances.length > 0;
+      const otherInstanceLabels = otherInstances.map(i => i.label);
 
       return {
         ...conv,
+        conversationKey: convKey,
         conversationStatus: status,
         isFinished,
         isArchived,
         isAwaitingPayment,
         instanceLabel,
         hasOtherInstances,
+        otherInstanceLabels,
       };
     });
   }, [computeStatus, finishedPhones, archivedPhones, awaitingPaymentPhones, getInstanceLabel]);
