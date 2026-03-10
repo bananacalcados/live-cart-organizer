@@ -44,15 +44,22 @@ async function downloadMetaMedia(mediaId: string, accessToken: string, supabase:
       return null;
     }
 
-    const blob = await downloadRes.blob();
+    const arrayBuffer = await downloadRes.arrayBuffer();
     const mimeType = metaData.mime_type || 'application/octet-stream';
     const ext = mimeType.split('/')[1]?.split(';')[0] || 'bin';
     const fileName = `meta-${mediaId}.${ext}`;
 
+    if (arrayBuffer.byteLength === 0) {
+      console.error('Downloaded media is empty (0 bytes)');
+      return null;
+    }
+
+    console.log(`Downloaded media ${mediaId}: ${arrayBuffer.byteLength} bytes, type: ${mimeType}`);
+
     // Step 3: Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('whatsapp-media')
-      .upload(fileName, blob, {
+      .upload(fileName, new Uint8Array(arrayBuffer), {
         contentType: mimeType,
         upsert: true,
       });
