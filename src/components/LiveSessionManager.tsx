@@ -342,11 +342,17 @@ export function LiveSessionManager() {
   }, [privateChatMessages]);
 
   const toggleSpotlight = async (product: ProductRef) => {
-    const exists = spotlightProducts.find(p => p.handle === product.handle);
-    const newSpotlight = exists ? spotlightProducts.filter(p => p.handle !== product.handle) : [...spotlightProducts, product];
-    setSpotlightProducts(newSpotlight);
+    let newSpotlight: ProductRef[] = [];
+    setSpotlightProducts(prev => {
+      const exists = prev.find(p => p.handle === product.handle);
+      newSpotlight = exists ? prev.filter(p => p.handle !== product.handle) : [...prev, product];
+      return newSpotlight;
+    });
+    // Wait a tick to ensure state is settled before saving
+    await new Promise(r => setTimeout(r, 0));
     await supabase.from("live_sessions").update({ spotlight_products: newSpotlight as any }).eq("id", adminSessionId!);
-    toast.success(exists ? `${product.title} removido do destaque` : `${product.title} em destaque! 🔥`);
+    const wasAdded = newSpotlight.some(p => p.handle === product.handle);
+    toast.success(wasAdded ? `${product.title} em destaque! 🔥` : `${product.title} removido do destaque`);
   };
 
   const isSpotlight = (handle: string) => spotlightProducts.some(p => p.handle === handle);
