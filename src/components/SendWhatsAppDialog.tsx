@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { MessageCircle, Send, Loader2, ExternalLink } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
