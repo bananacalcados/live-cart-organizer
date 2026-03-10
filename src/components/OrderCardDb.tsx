@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard } from "lucide-react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES, getMissingFields } from "@/types/order";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -45,6 +45,9 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
   const [shopifyOrderName, setShopifyOrderName] = useState<string | null>(null);
   const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [liveMessages, setLiveMessages] = useState<string[]>([]);
+  const { moveOrder: storeMove } = useDbOrderStore();
 
   // Check registration + Shopify status directly from DB
   useEffect(() => {
@@ -123,6 +126,52 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     checkRegistration();
   }, [order.customer_id, order.is_paid, order.paid_externally, order.customer?.whatsapp]);
 
+  // Fetch live messages the customer sent (for awaiting_confirmation display)
+  useEffect(() => {
+    if (order.stage !== 'awaiting_confirmation' && order.stage !== 'incomplete_order') return;
+    if (!order.customer?.whatsapp) return;
+    const phone = order.customer.whatsapp.replace(/\D/g, '');
+    if (!phone) return;
+    const fetchMessages = async () => {
+      const { data } = await supabase
+        .from('whatsapp_messages')
+        .select('message')
+        .eq('phone', phone)
+        .eq('direction', 'incoming')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (data) setLiveMessages(data.map(m => m.message).filter(Boolean));
+    };
+    fetchMessages();
+  }, [order.stage, order.customer?.whatsapp]);
+
+  const handleConfirmOrder = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsConfirming(true);
+    try {
+      await storeMove(order.id, 'new');
+      const payload = {
+        order_id: order.id,
+        customer: { instagram: order.customer?.instagram_handle, whatsapp: order.customer?.whatsapp },
+        products: order.products.map(p => ({ title: p.title, variant: p.variant, quantity: p.quantity, price: p.price, sku: p.sku })),
+        total: order.products.reduce((s, p) => s + p.price * p.quantity, 0),
+        cart_link: order.cart_link,
+        notes: order.notes,
+        event_id: order.event_id,
+      };
+      fetch('http://31.97.23.119:8000/webhook/novo-pedido', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(err => console.error('Webhook error:', err));
+      toast.success('Pedido confirmado e enviado ao Agente!');
+    } catch {
+      toast.error('Erro ao confirmar pedido');
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
   const handleCreateShopifyOrder = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsCreatingShopifyOrder(true);
@@ -140,7 +189,6 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       setIsCreatingShopifyOrder(false);
     }
   };
-  const { moveOrder: storeMove } = useDbOrderStore();
   
   const stage = STAGES.find((s) => s.id === order.stage);
   const totalValue = order.products.reduce(
@@ -467,6 +515,43 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             <Store className="h-3 w-3" />
             Enviar ao PDV (Retirada)
           </Button>
+        </div>
+      )}
+
+      {/* Awaiting Confirmation: live messages + action buttons */}
+      {order.stage === 'awaiting_confirmation' && (
+        <div className="mt-3 space-y-2">
+          {liveMessages.length > 0 && (
+            <div className="bg-secondary/50 rounded-lg p-2 space-y-1">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Mensagens do cliente</p>
+              {liveMessages.map((msg, i) => (
+                <p key={i} className="text-xs text-foreground bg-background/60 rounded px-2 py-1">
+                  "{msg}"
+                </p>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              className="flex-1 text-xs gap-1 bg-stage-paid hover:bg-stage-paid/90 text-white"
+              onClick={handleConfirmOrder}
+              disabled={isConfirming}
+            >
+              {isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+              Confirmar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 text-xs gap-1"
+              onClick={(e) => { e.stopPropagation(); onEdit(order); }}
+            >
+              <Pencil className="h-3 w-3" />
+              Corrigir
+            </Button>
+          </div>
         </div>
       )}
 
