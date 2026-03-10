@@ -120,20 +120,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         } catch {}
       }
 
-      // Generate cart link if products exist
-      let cartLink: string | undefined;
-      let checkoutToken: string | undefined;
-      
-      if (products.length > 0) {
-        cartLink = await createShopifyCartFromOrder(products) || undefined;
-        if (cartLink) {
-          // Extract checkout token from URL
-          try {
-            const url = new URL(cartLink);
-            checkoutToken = url.pathname.split('/').pop();
-          } catch {}
-        }
-      }
+      // Cart link will be set after insert (needs orderId for transparent checkout)
 
       // Check for event shipping cost and if customer already has an order in this event
       let applyShipping = false;
