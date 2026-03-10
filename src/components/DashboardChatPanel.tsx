@@ -345,7 +345,7 @@ export function DashboardChatPanel() {
           <button
             onClick={() => setFilter("recentes")}
             className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2",
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2 flex-shrink-0 whitespace-nowrap",
               filter === "recentes"
                 ? "bg-[hsl(210,80%,50%)] text-white border-[hsl(210,80%,50%)] shadow-md scale-105"
                 : "bg-[hsl(210,80%,50%)]/15 text-[hsl(210,80%,50%)] border-[hsl(210,80%,50%)]/30 hover:bg-[hsl(210,80%,50%)]/25"
