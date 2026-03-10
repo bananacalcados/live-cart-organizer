@@ -164,25 +164,13 @@ export function applyTemplateVariables(
   result = result.replace(/\{\{emoji_urgente\}\}/gi, () => getRandomEmoji('urgente'));
   result = result.replace(/\{\{emoji_agradecimento\}\}/gi, () => getRandomEmoji('agradecimento'));
   
-  // Replace regular variables
-  if (variables.nome) {
-    result = result.replace(/\{\{nome\}\}/gi, variables.nome);
-  }
-  if (variables.instagram) {
-    result = result.replace(/\{\{instagram\}\}/gi, variables.instagram);
-  }
-  if (variables.whatsapp) {
-    result = result.replace(/\{\{whatsapp\}\}/gi, variables.whatsapp);
-  }
-  if (variables.link_carrinho) {
-    result = result.replace(/\{\{link_carrinho\}\}/gi, variables.link_carrinho);
-  }
-  if (variables.total) {
-    result = result.replace(/\{\{total\}\}/gi, variables.total);
-  }
-  if (variables.produtos) {
-    result = result.replace(/\{\{produtos\}\}/gi, variables.produtos);
-  }
+  // Replace regular variables (always replace, even if empty)
+  result = result.replace(/\{\{nome\}\}/gi, variables.nome || '');
+  result = result.replace(/\{\{instagram\}\}/gi, variables.instagram || '');
+  result = result.replace(/\{\{whatsapp\}\}/gi, variables.whatsapp || '');
+  result = result.replace(/\{\{link_carrinho\}\}/gi, variables.link_carrinho || '');
+  result = result.replace(/\{\{total\}\}/gi, variables.total || '');
+  result = result.replace(/\{\{produtos\}\}/gi, variables.produtos || '');
   
   return result;
 }
