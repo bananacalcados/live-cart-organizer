@@ -26,6 +26,7 @@ export function ProductSelector({
   onRemoveProduct,
   onUpdateQuantity,
 }: ProductSelectorProps) {
+  const [allProducts, setAllProducts] = useState<ShopifyProduct[]>([]);
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -41,15 +42,48 @@ export function ProductSelector({
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Fetch products when search changes
+  // Load all products once on mount
   useEffect(() => {
-    loadProducts(debouncedSearch);
-  }, [debouncedSearch]);
+    loadAllProducts();
+  }, []);
 
-  const loadProducts = async (searchQuery: string = "") => {
+  // Filter products when search changes
+  useEffect(() => {
+    if (!debouncedSearch.trim()) {
+      setProducts(allProducts);
+      return;
+    }
+    const q = debouncedSearch.trim().toLowerCase();
+    const filtered = allProducts.filter((p) => {
+      // Match by title
+      if (p.node.title.toLowerCase().includes(q)) return true;
+      // Match by variant SKU or barcode (GTIN)
+      return p.node.variants.edges.some(
+        (v) =>
+          (v.node.sku && v.node.sku.toLowerCase().includes(q)) ||
+          (v.node.barcode && v.node.barcode.toLowerCase().includes(q))
+      );
+    });
+
+    // Auto-select the matching variant when searching by SKU/barcode
+    filtered.forEach((p) => {
+      const matchIdx = p.node.variants.edges.findIndex(
+        (v) =>
+          (v.node.sku && v.node.sku.toLowerCase().includes(q)) ||
+          (v.node.barcode && v.node.barcode.toLowerCase().includes(q))
+      );
+      if (matchIdx >= 0) {
+        setSelectedVariants((prev) => ({ ...prev, [p.node.id]: matchIdx }));
+      }
+    });
+
+    setProducts(filtered);
+  }, [debouncedSearch, allProducts]);
+
+  const loadAllProducts = async () => {
     setLoading(true);
-    const query = searchQuery.trim() ? `title:*${searchQuery}*` : undefined;
-    const data = await fetchProducts(250, query);
+    const data = await fetchProducts(250);
+    setAllProducts(data);
     setProducts(data);
     setLoading(false);
   };
@@ -89,7 +123,8 @@ export function ProductSelector({
 
   const getVariantLabel = (variant: ShopifyProduct["node"]["variants"]["edges"][0]["node"]) => {
     if (variant.title === "Default Title") return "Padrão";
-    return variant.title;
+    const skuLabel = variant.sku ? ` (${variant.sku})` : "";
+    return `${variant.title}${skuLabel}`;
   };
 
   return (
@@ -97,7 +132,7 @@ export function ProductSelector({
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar produtos..."
+          placeholder="Buscar por nome, SKU ou GTIN..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"
