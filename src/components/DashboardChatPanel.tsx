@@ -125,7 +125,25 @@ export function DashboardChatPanel() {
     });
 
     convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
-    setConversations(enrichConversations(convs, phoneMessages));
+    const enriched = enrichConversations(convs, phoneMessages);
+    setConversations(enriched);
+
+    // Fetch profile pics for Z-API conversations missing pics
+    const phonesNeedingPics = enriched
+      .filter(c => !c.isGroup && !profilePics[c.phone] && !fetchedPicsRef.current.has(c.phone) && c.lastIncomingInstance === "zapi")
+      .map(c => c.phone)
+      .slice(0, 20);
+
+    if (phonesNeedingPics.length > 0) {
+      phonesNeedingPics.forEach(p => fetchedPicsRef.current.add(p));
+      supabase.functions.invoke("zapi-profile-picture", {
+        body: { phones: phonesNeedingPics, whatsapp_number_id: metaNumbers.find(n => n.provider === "zapi")?.id },
+      }).then(({ data }) => {
+        if (data?.photos) {
+          setProfilePics(prev => ({ ...prev, ...data.photos }));
+        }
+      }).catch(() => {});
+    }
   }, [orders, customers, events, chatContacts, metaNumbers, enrichConversations]);
 
   useEffect(() => {
