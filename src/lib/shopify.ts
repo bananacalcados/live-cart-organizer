@@ -40,6 +40,7 @@ export interface ShopifyProduct {
           id: string;
           title: string;
           sku: string | null;
+          barcode: string | null;
           price: {
             amount: string;
             currencyCode: string;
