@@ -11,6 +11,8 @@ import { PrizeEligibleList } from "@/components/PrizeEligibleList";
 import { EventPromotionManager } from "@/components/EventPromotionManager";
 import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
+import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
+import { EventStockAlerts } from "@/components/events/EventStockAlerts";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -112,6 +114,7 @@ const Index = () => {
                   ({unpaidCount} não pago{unpaidCount !== 1 ? 's' : ''})
                 </span>
               )}
+              <EventTeamDisplay eventId={currentEventId} />
             </div>
             <div className="flex items-center gap-2">
               <OrderReportDialog orders={orders} />
@@ -135,6 +138,12 @@ const Index = () => {
         selectedStage={selectedStage} 
         onSelectStage={setSelectedStage} 
       />
+
+      {currentEventId && (
+        <div className="container py-2">
+          <EventStockAlerts eventId={currentEventId} />
+        </div>
+      )}
 
       <main className="container py-6">
         <Tabs defaultValue="kanban" className="w-full">
