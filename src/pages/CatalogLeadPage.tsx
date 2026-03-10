@@ -37,6 +37,7 @@ interface CatalogVariant {
   compareAtPrice: string | null;
   imageUrl: string;
   available: boolean;
+  quantityAvailable: number | null;
   sku: string | null;
 }
 
@@ -56,7 +57,10 @@ function buildProductMap(raw: ShopifyProduct[]): Map<string, CatalogProduct> {
     const variants: CatalogVariant[] = [];
     for (const ve of sp.node.variants.edges) {
       const v = ve.node;
+      const qty = v.quantityAvailable ?? null;
+      // Skip variants that are not available OR have 0 stock
       if (!v.availableForSale) continue;
+      if (qty !== null && qty <= 0) continue;
       let color: string | null = null;
       let size: string | null = null;
       for (const opt of v.selectedOptions) {
@@ -74,6 +78,7 @@ function buildProductMap(raw: ShopifyProduct[]): Map<string, CatalogProduct> {
         compareAtPrice: v.compareAtPrice?.amount || null,
         imageUrl: v.image?.url || fallbackImg,
         available: v.availableForSale,
+        quantityAvailable: qty,
         sku: v.sku || null,
       });
     }
