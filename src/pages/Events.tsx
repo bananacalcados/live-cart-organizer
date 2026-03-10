@@ -270,6 +270,9 @@ const Events = () => {
                       Se definido, será aplicado automaticamente ao primeiro pedido de cada cliente. A partir do 2º pedido no mesmo evento, o frete é grátis.
                     </p>
                   </div>
+                  {editingEvent && (
+                    <EventTeamSelector eventId={editingEvent} />
+                  )}
                   <div className="flex gap-3">
                     <Button
                       variant="outline"
