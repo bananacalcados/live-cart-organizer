@@ -25,23 +25,50 @@ interface SendWhatsAppDialogProps {
 export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDialogProps) {
   const { sendMessage, isLoading } = useZapi();
   const { fetchNumbers, selectedNumberId } = useWhatsAppNumberStore();
+  const { getTemplatesByStage, fetchTemplates, templates } = useTemplateStore();
 
   useEffect(() => {
-    if (open) fetchNumbers();
-  }, [open, fetchNumbers]);
-  
+    if (open) {
+      fetchNumbers();
+      if (templates.length === 0) fetchTemplates();
+    }
+  }, [open, fetchNumbers, fetchTemplates, templates.length]);
+
   const totalValue = order.products.reduce(
     (sum, p) => sum + p.price * p.quantity,
     0
   );
 
-  const defaultMessage = order.products.length > 0
-    ? `Olá! 👋\n\nSeu pedido na Live Cart está confirmado:\n\n${order.products
-        .map((p) => `• ${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`)
-        .join("\n")}\n\n💰 Total: R$ ${totalValue.toFixed(2)}\n\nObrigado pela preferência!`
-    : `Olá! 👋\n\nObrigado pelo interesse em nossos produtos. Como posso ajudar?`;
+  const buildDefaultMessage = () => {
+    // Try to use a saved template for this stage
+    const stageTemplates = getTemplatesByStage(order.stage);
+    if (stageTemplates.length > 0) {
+      const firstName = order.instagramHandle?.replace('@', '') || '';
+      const productsList = order.products.map(p => `${p.quantity}x ${p.title}`).join(', ');
+      return applyTemplateVariables(stageTemplates[0].message, {
+        nome: firstName,
+        instagram: order.instagramHandle ? `@${order.instagramHandle.replace('@', '')}` : '',
+        whatsapp: order.whatsapp || '',
+        total: `R$ ${totalValue.toFixed(2)}`,
+        produtos: productsList,
+      });
+    }
 
-  const [message, setMessage] = useState(defaultMessage);
+    // Fallback to hardcoded message
+    return order.products.length > 0
+      ? `Olá! 👋\n\nSeu pedido na Live Cart está confirmado:\n\n${order.products
+          .map((p) => `• ${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`)
+          .join("\n")}\n\n💰 Total: R$ ${totalValue.toFixed(2)}\n\nObrigado pela preferência!`
+      : `Olá! 👋\n\nObrigado pelo interesse em nossos produtos. Como posso ajudar?`;
+  };
+
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setMessage(buildDefaultMessage());
+    }
+  }, [open, templates]);
 
   const handleSend = async () => {
     if (!order.whatsapp) return;
