@@ -92,14 +92,12 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
     }
   };
 
-  const getStageLabel = (stageId: OrderStage | 'all') => {
-    if (stageId === 'all') return 'Todas as etapas';
-    return STAGES.find(s => s.id === stageId)?.title || stageId;
-  };
-
-  const getStageColor = (stageId: OrderStage | 'all') => {
-    if (stageId === 'all') return 'bg-muted';
-    return STAGES.find(s => s.id === stageId)?.color || 'bg-muted';
+  const getStageBadges = (stageStr: string) => {
+    if (stageStr === 'all') return [{ label: 'Todas as etapas', color: 'bg-muted' }];
+    return stageStr.split(',').map(s => {
+      const found = STAGES.find(st => st.id === s);
+      return { label: found?.title || s, color: found?.color || 'bg-muted' };
+    });
   };
 
   const dataVariables = [
