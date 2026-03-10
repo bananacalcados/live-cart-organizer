@@ -520,7 +520,7 @@ serve(async (req) => {
 
     // Resolve shippingAmount server-side if not provided
     if (!params.shippingAmount && orderSource === "orders" && order) {
-      params.shippingAmount = Number(order.shipping_cost || 0);
+      params.shippingAmount = order.free_shipping ? 0 : Number(order.shipping_cost || 0);
     } else if (!params.shippingAmount && orderSource === "pos_sales") {
       const { data: saleShip } = await supabase.from("pos_sales").select("payment_details").eq("id", params.orderId).maybeSingle();
       const pd = saleShip?.payment_details as Record<string, unknown> | null;
