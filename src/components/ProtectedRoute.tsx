@@ -9,7 +9,7 @@ const CACHE_TTL = 60_000; // 1 minute
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredModule?: string;
+  requiredModule?: string | string[];
 }
 
 export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps) {
@@ -49,11 +49,12 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
     }
 
     const userId = session.user.id;
+    const modulesToCheck = Array.isArray(requiredModule) ? requiredModule : [requiredModule];
 
     // Check cache first
     const cached = permissionCache.get(userId);
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      setHasAccess(cached.modules.includes(requiredModule));
+      setHasAccess(modulesToCheck.some(m => cached.modules.includes(m)));
       return;
     }
 
@@ -82,7 +83,7 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
 
         const modules = result.data as string[];
         permissionCache.set(userId, { modules, ts: Date.now() });
-        setHasAccess(modules.includes(requiredModule));
+        setHasAccess(modulesToCheck.some(m => modules.includes(m)));
       } catch {
         if (cancelled) return;
         if (attempt < 3) {
