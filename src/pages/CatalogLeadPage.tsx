@@ -37,6 +37,7 @@ interface CatalogVariant {
   compareAtPrice: string | null;
   imageUrl: string;
   available: boolean;
+  quantityAvailable: number | null;
   sku: string | null;
 }
 
