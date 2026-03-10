@@ -54,10 +54,10 @@ export function ProductSelector({
       return;
     }
     const q = debouncedSearch.trim().toLowerCase();
+    const isSkuOrGtin = /^[a-z0-9\-]+$/i.test(q) && q.length >= 4 && !q.includes(" ");
+
     const filtered = allProducts.filter((p) => {
-      // Match by title
       if (p.node.title.toLowerCase().includes(q)) return true;
-      // Match by variant SKU or barcode (GTIN)
       return p.node.variants.edges.some(
         (v) =>
           (v.node.sku && v.node.sku.toLowerCase().includes(q)) ||
@@ -65,17 +65,46 @@ export function ProductSelector({
       );
     });
 
-    // Auto-select the matching variant when searching by SKU/barcode
-    filtered.forEach((p) => {
-      const matchIdx = p.node.variants.edges.findIndex(
-        (v) =>
-          (v.node.sku && v.node.sku.toLowerCase().includes(q)) ||
-          (v.node.barcode && v.node.barcode.toLowerCase().includes(q))
-      );
-      if (matchIdx >= 0) {
-        setSelectedVariants((prev) => ({ ...prev, [p.node.id]: matchIdx }));
+    // Auto-select and auto-add when SKU/GTIN exact match found
+    if (isSkuOrGtin) {
+      for (const p of filtered) {
+        const matchIdx = p.node.variants.edges.findIndex(
+          (v) =>
+            (v.node.sku && v.node.sku.toLowerCase() === q) ||
+            (v.node.barcode && v.node.barcode.toLowerCase() === q) ||
+            (v.node.sku && v.node.sku.toLowerCase().includes(q)) ||
+            (v.node.barcode && v.node.barcode.toLowerCase().includes(q))
+        );
+        if (matchIdx >= 0) {
+          setSelectedVariants((prev) => ({ ...prev, [p.node.id]: matchIdx }));
+
+          // Auto-add if not already in cart
+          const variant = p.node.variants.edges[matchIdx]?.node;
+          if (variant) {
+            const existingId = `${p.node.id}-${variant.id}`;
+            const alreadyAdded = selectedProducts.some((sp) => sp.id === existingId);
+            if (!alreadyAdded) {
+              handleAddProduct(p, matchIdx);
+              // Clear search after auto-add
+              setTimeout(() => setSearch(""), 100);
+            }
+          }
+          break; // Only auto-add first match
+        }
       }
-    });
+    } else {
+      // For title search, just pre-select matching variants
+      filtered.forEach((p) => {
+        const matchIdx = p.node.variants.edges.findIndex(
+          (v) =>
+            (v.node.sku && v.node.sku.toLowerCase().includes(q)) ||
+            (v.node.barcode && v.node.barcode.toLowerCase().includes(q))
+        );
+        if (matchIdx >= 0) {
+          setSelectedVariants((prev) => ({ ...prev, [p.node.id]: matchIdx }));
+        }
+      });
+    }
 
     setProducts(filtered);
   }, [debouncedSearch, allProducts]);
