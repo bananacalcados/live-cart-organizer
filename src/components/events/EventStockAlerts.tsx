@@ -233,6 +233,7 @@ export async function createStockAlert(
         body: {
           phone: (member as any).whatsapp,
           message,
+          whatsapp_number_id: whatsappNumberId || undefined,
         },
       });
     } catch (e) {
