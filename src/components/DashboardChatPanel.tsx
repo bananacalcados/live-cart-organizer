@@ -154,16 +154,21 @@ export function DashboardChatPanel() {
         loadConversations();
         if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "whatsapp_messages" }, () => loadConversations())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "whatsapp_messages" }, () => {
+        loadConversations();
+        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [loadConversations, selectedPhone, selectedConvNumberId]);
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
-    let query = supabase.from("whatsapp_messages").select("*").eq("phone", phone).order("created_at", { ascending: true });
-    if (numberId) query = query.eq("whatsapp_number_id", numberId);
-    else if (numberId === null) query = query.is("whatsapp_number_id", null);
-    const { data } = await query;
+    // Load ALL messages for this phone across all instances so sidebar stays in sync with kanban card chats
+    const { data } = await supabase
+      .from("whatsapp_messages")
+      .select("*")
+      .eq("phone", phone)
+      .order("created_at", { ascending: true });
     if (data) setMessages(data || []);
   };
 
@@ -385,12 +390,12 @@ export function DashboardChatPanel() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
                           <span className="text-sm font-semibold text-foreground truncate">
-                            {conv.customerName || conv.phone}
+                            {conv.phone}
                           </span>
                           {instagramHandle && (
-                            <span className="text-[10px] text-primary/70 truncate">@{instagramHandle.replace(/^@/, "")}</span>
+                            <span className="text-[11px] font-medium text-primary truncate">@{instagramHandle.replace(/^@/, "")}</span>
                           )}
                         </div>
                         <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
