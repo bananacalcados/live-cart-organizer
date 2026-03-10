@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard } from "lucide-react";
 import { DbOrder } from "@/types/database";
-import { STAGES } from "@/types/order";
+import { STAGES, getMissingFields } from "@/types/order";
+import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
@@ -139,6 +140,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       setIsCreatingShopifyOrder(false);
     }
   };
+  const { moveOrder: storeMove } = useDbOrderStore();
   
   const stage = STAGES.find((s) => s.id === order.stage);
   const totalValue = order.products.reduce(
@@ -148,6 +150,17 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const totalItems = order.products.reduce((sum, p) => sum + p.quantity, 0);
 
   const hasUnread = order.has_unread_messages;
+  
+  // Missing fields for incomplete orders
+  const missingFields = getMissingFields(order);
+  const isIncomplete = missingFields.length > 0;
+
+  // Auto-promote: if order is incomplete_order but all fields are filled, move to awaiting_confirmation
+  useEffect(() => {
+    if (order.stage === 'incomplete_order' && !isIncomplete) {
+      storeMove(order.id, 'awaiting_confirmation');
+    }
+  }, [order.stage, isIncomplete, order.id, storeMove]);
 
   // Calculate discount
   const discountAmount = order.discount_type && order.discount_value
@@ -207,6 +220,17 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           </Button>
         </div>
       </div>
+
+      {/* Missing fields badges for incomplete orders */}
+      {order.stage === 'incomplete_order' && missingFields.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {missingFields.map((field) => (
+            <Badge key={field} variant="outline" className="text-[10px] bg-stage-incomplete/10 text-stage-incomplete border-stage-incomplete/40">
+              ⚠️ {field}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">

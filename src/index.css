@@ -43,6 +43,8 @@
     --radius: 0.75rem;
 
     /* Kanban stage colors */
+    --stage-incomplete: 48 90% 50%;
+    --stage-awaiting-confirm: 30 90% 55%;
     --stage-new: 200 80% 50%;
     --stage-contacted: 45 90% 50%;
     --stage-no-response: 15 85% 55%;

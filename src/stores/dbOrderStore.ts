@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 import { DbOrder, DbOrderProduct, DbCustomer, DiscountType } from '@/types/database';
-import { OrderStage } from '@/types/order';
+import { OrderStage, isOrderComplete } from '@/types/order';
 import { toast } from 'sonner';
 import { createShopifyCartFromOrder } from '@/lib/shopifyCart';
 import { Json } from '@/integrations/supabase/types';
@@ -112,7 +112,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           products: productsToJson(products),
           cart_link: cartLink,
           checkout_token: checkoutToken,
-          stage: 'new',
+          stage: 'incomplete_order',
           // Apply shipping or free shipping based on order count
           free_shipping: !applyShipping && shippingCost > 0 ? true : false,
           discount_type: applyShipping && shippingCost > 0 ? 'fixed' as DiscountType : undefined,
@@ -444,7 +444,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
     
     const ordersToUpdate = get().orders.filter((order) => {
-      if (order.stage === 'no_response' || order.stage === 'awaiting_payment' || order.stage === 'paid' || order.stage === 'shipped' || order.stage === 'cancelled' || order.stage === 'collect_next_day') {
+      if (order.stage === 'incomplete_order' || order.stage === 'awaiting_confirmation' || order.stage === 'no_response' || order.stage === 'awaiting_payment' || order.stage === 'paid' || order.stage === 'shipped' || order.stage === 'cancelled' || order.stage === 'collect_next_day') {
         return false;
       }
       
