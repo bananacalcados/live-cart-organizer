@@ -10,11 +10,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 
+interface ProductVariantInfo {
+  title: string;
+  sku: string | null;
+  available: boolean;
+  color: string | null;
+  size: string | null;
+}
+
 interface ShopifyProductSimple {
   id: string;
   title: string;
   imageUrl: string;
   price: string;
+  variants: ProductVariantInfo[];
 }
 
 interface ActiveProductBarProps {
@@ -152,12 +161,31 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
     setProductsLoading(true);
     try {
       const raw = await fetchProducts(100, query ? `title:*${query}*` : undefined);
-      setShopifyProducts(raw.map(p => ({
-        id: p.node.id,
-        title: p.node.title,
-        imageUrl: p.node.images.edges[0]?.node.url || "",
-        price: p.node.priceRange.minVariantPrice.amount,
-      })));
+      setShopifyProducts(raw.map(p => {
+        const variants: ProductVariantInfo[] = p.node.variants.edges.map(v => {
+          let color: string | null = null;
+          let size: string | null = null;
+          for (const opt of v.node.selectedOptions) {
+            const n = opt.name.toLowerCase();
+            if (n === "cor" || n === "color" || n === "colour") color = opt.value;
+            if (n === "tamanho" || n === "size") size = opt.value;
+          }
+          return {
+            title: v.node.title,
+            sku: v.node.sku,
+            available: v.node.availableForSale,
+            color,
+            size,
+          };
+        });
+        return {
+          id: p.node.id,
+          title: p.node.title,
+          imageUrl: p.node.images.edges[0]?.node.url || "",
+          price: p.node.priceRange.minVariantPrice.amount,
+          variants,
+        };
+      }));
     } catch { /* ignore */ }
     setProductsLoading(false);
   };
@@ -370,15 +398,18 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="space-y-2">
                 {shopifyProducts.map(p => {
                   const isSelected = selectedSet.has(p.id);
                   const isActive = selectedProductIds[0] === p.id;
+                  const availableVariants = p.variants.filter(v => v.available);
+                  const sizes = [...new Set(availableVariants.map(v => v.size).filter(Boolean))];
+                  const colors = [...new Set(availableVariants.map(v => v.color).filter(Boolean))];
+                  
                   return (
-                    <button
+                    <div
                       key={p.id}
-                      onClick={() => toggleProduct(p.id)}
-                      className={`relative rounded-lg border p-2 text-left transition-all hover:shadow-md ${
+                      className={`relative rounded-lg border p-3 transition-all hover:shadow-md ${
                         isActive
                           ? "border-amber-500 bg-amber-500/10 ring-2 ring-amber-500"
                           : isSelected
@@ -387,19 +418,60 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
                       }`}
                     >
                       {isActive && (
-                        <div className="absolute -top-1.5 -right-1.5 bg-amber-500 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                        <div className="absolute -top-1.5 -right-1.5 bg-amber-500 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-full z-10">
                           ATIVO
                         </div>
                       )}
-                      <img
-                        src={p.imageUrl}
-                        alt={p.title}
-                        className="w-full aspect-square object-cover rounded-md mb-1.5"
-                        loading="lazy"
-                      />
-                      <p className="text-xs font-medium truncate">{p.title}</p>
-                      <p className="text-xs text-muted-foreground">{fmt(p.price)}</p>
-                    </button>
+                      <div className="flex gap-3">
+                        <button onClick={() => toggleProduct(p.id)} className="flex-shrink-0">
+                          <img
+                            src={p.imageUrl}
+                            alt={p.title}
+                            className="w-16 h-16 object-cover rounded-md"
+                            loading="lazy"
+                          />
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <button onClick={() => toggleProduct(p.id)} className="text-left w-full">
+                            <p className="text-sm font-medium truncate">{p.title}</p>
+                            <p className="text-xs text-muted-foreground">{fmt(p.price)}</p>
+                          </button>
+                          
+                          {/* Available sizes */}
+                          {sizes.length > 0 && (
+                            <div className="mt-1.5">
+                              <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Tamanhos disponíveis:</p>
+                              <div className="flex flex-wrap gap-0.5">
+                                {sizes.map(s => (
+                                  <span key={s} className="text-[10px] bg-secondary px-1.5 py-0.5 rounded font-medium">
+                                    {s}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Available colors */}
+                          {colors.length > 0 && (
+                            <div className="mt-1">
+                              <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Cores:</p>
+                              <div className="flex flex-wrap gap-0.5">
+                                {colors.map(c => (
+                                  <span key={c} className="text-[10px] bg-secondary px-1.5 py-0.5 rounded font-medium">
+                                    {c}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Variant count */}
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            {availableVariants.length} variação{availableVariants.length !== 1 ? "ões" : ""} disponível{availableVariants.length !== 1 ? "is" : ""}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
