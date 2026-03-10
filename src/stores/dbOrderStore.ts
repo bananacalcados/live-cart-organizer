@@ -112,7 +112,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           products: productsToJson(products),
           cart_link: cartLink,
           checkout_token: checkoutToken,
-          stage: 'new',
+          stage: 'incomplete_order',
           // Apply shipping or free shipping based on order count
           free_shipping: !applyShipping && shippingCost > 0 ? true : false,
           discount_type: applyShipping && shippingCost > 0 ? 'fixed' as DiscountType : undefined,
