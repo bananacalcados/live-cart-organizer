@@ -206,7 +206,14 @@ export function DashboardChatPanel() {
         setSelectedNumberId(whatsappNumberId);
       }
     } else {
+      // No specific number — default to first available Z-API number
       setSendVia("zapi");
+      const defaultZapi = metaNumbers.find(n => n.provider === "zapi");
+      if (defaultZapi) {
+        setSelectedNumberId(defaultZapi.id);
+      } else if (metaNumbers.length > 0) {
+        setSelectedNumberId(metaNumbers[0].id);
+      }
     }
     const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, "") === phone.replace(/\D/g, ""));
     if (order) setHasUnreadMessages(order.id, false);
