@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { MessageCircle, Send, Loader2, ArrowLeft, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -39,6 +40,8 @@ export function DashboardChatPanel() {
   const [isSending, setIsSending] = useState(false);
   const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
+  const [profilePics, setProfilePics] = useState<Record<string, string>>({});
+  const fetchedPicsRef = useRef<Set<string>>(new Set());
 
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
@@ -50,14 +53,17 @@ export function DashboardChatPanel() {
 
   useEffect(() => {
     const loadChatContacts = async () => {
-      const { data } = await supabase.from("chat_contacts").select("phone, custom_name, display_name");
+      const { data } = await supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url");
       if (data) {
-        const map: Record<string, string> = {};
+        const nameMap: Record<string, string> = {};
+        const picMap: Record<string, string> = {};
         for (const c of data) {
-          if (c.custom_name) map[c.phone] = c.custom_name;
-          else if (c.display_name) map[c.phone] = c.display_name;
+          if (c.custom_name) nameMap[c.phone] = c.custom_name;
+          else if (c.display_name) nameMap[c.phone] = c.display_name;
+          if (c.profile_pic_url) picMap[c.phone] = c.profile_pic_url;
         }
-        setChatContacts(map);
+        setChatContacts(nameMap);
+        setProfilePics(prev => ({ ...prev, ...picMap }));
       }
     };
     loadChatContacts();
@@ -119,7 +125,25 @@ export function DashboardChatPanel() {
     });
 
     convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
-    setConversations(enrichConversations(convs, phoneMessages));
+    const enriched = enrichConversations(convs, phoneMessages);
+    setConversations(enriched);
+
+    // Fetch profile pics for Z-API conversations missing pics
+    const phonesNeedingPics = enriched
+      .filter(c => !c.isGroup && !profilePics[c.phone] && !fetchedPicsRef.current.has(c.phone) && c.lastIncomingInstance === "zapi")
+      .map(c => c.phone)
+      .slice(0, 20);
+
+    if (phonesNeedingPics.length > 0) {
+      phonesNeedingPics.forEach(p => fetchedPicsRef.current.add(p));
+      supabase.functions.invoke("zapi-profile-picture", {
+        body: { phones: phonesNeedingPics, whatsapp_number_id: metaNumbers.find(n => n.provider === "zapi")?.id },
+      }).then(({ data }) => {
+        if (data?.photos) {
+          setProfilePics(prev => ({ ...prev, ...data.photos }));
+        }
+      }).catch(() => {});
+    }
   }, [orders, customers, events, chatContacts, metaNumbers, enrichConversations]);
 
   useEffect(() => {
@@ -335,47 +359,62 @@ export function DashboardChatPanel() {
             <p className="text-xs">Nenhuma conversa encontrada</p>
           </div>
         ) : (
-          <div className="divide-y divide-border">
-            {filteredConversations.map(conv => (
-              <button
-                key={`${conv.phone}__${conv.whatsapp_number_id || "none"}`}
-                onClick={() => handleSelectConversation(conv.phone, conv.whatsapp_number_id)}
-                className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-start gap-2">
-                  <div className="flex-shrink-0 mt-0.5">
-                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                      <span className="text-xs font-bold text-muted-foreground">
-                        {(conv.customerName || conv.phone)?.[0]?.toUpperCase() || "?"}
-                      </span>
+           <div className="divide-y divide-border">
+            {filteredConversations.map(conv => {
+              const instagramHandle = (() => {
+                const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, "") === conv.phone.replace(/\D/g, ""));
+                const customer = customers.find(c => c.whatsapp?.replace(/\D/g, "") === conv.phone.replace(/\D/g, ""));
+                return order?.customer?.instagram_handle || customer?.instagram_handle || null;
+              })();
+              const picUrl = profilePics[conv.phone];
+
+              return (
+                <button
+                  key={`${conv.phone}__${conv.whatsapp_number_id || "none"}`}
+                  onClick={() => handleSelectConversation(conv.phone, conv.whatsapp_number_id)}
+                  className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <Avatar className="h-9 w-9">
+                        {picUrl && <AvatarImage src={picUrl} alt={conv.customerName || conv.phone} />}
+                        <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">
+                          {(conv.customerName || conv.phone)?.[0]?.toUpperCase() || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="text-sm font-semibold text-foreground truncate">
+                            {conv.customerName || conv.phone}
+                          </span>
+                          {instagramHandle && (
+                            <span className="text-[10px] text-primary/70 truncate">@{instagramHandle.replace(/^@/, "")}</span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
+                          {formatTime(conv.lastMessageAt)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.lastMessage}</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        {conv.stage && (
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
+                            {STAGES.find(s => s.id === conv.stage)?.title || conv.stage}
+                          </Badge>
+                        )}
+                        {conv.unreadCount > 0 && (
+                          <Badge className="bg-[hsl(var(--stage-paid))] text-white text-[9px] px-1.5 py-0 h-4 ml-auto">
+                            {conv.unreadCount}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-foreground truncate">
-                        {conv.customerName || conv.phone}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
-                        {formatTime(conv.lastMessageAt)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.lastMessage}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      {conv.stage && (
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
-                          {STAGES.find(s => s.id === conv.stage)?.title || conv.stage}
-                        </Badge>
-                      )}
-                      {conv.unreadCount > 0 && (
-                        <Badge className="bg-[hsl(var(--stage-paid))] text-white text-[9px] px-1.5 py-0 h-4 ml-auto">
-                          {conv.unreadCount}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         )}
       </ScrollArea>
