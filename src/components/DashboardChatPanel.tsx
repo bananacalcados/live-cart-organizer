@@ -412,7 +412,7 @@ export function DashboardChatPanel() {
                             {conv.phone}
                           </span>
                           {instagramHandle && (
-                            <span className="text-[11px] font-medium text-primary truncate">@{instagramHandle.replace(/^@/, "")}</span>
+                            <span className="text-[11px] font-bold text-destructive truncate">@{instagramHandle.replace(/^@/, "")}</span>
                           )}
                         </div>
                         <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
@@ -421,11 +421,14 @@ export function DashboardChatPanel() {
                       </div>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.lastMessage}</p>
                       <div className="flex items-center gap-1 mt-1">
-                        {conv.stage && (
-                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
-                            {STAGES.find(s => s.id === conv.stage)?.title || conv.stage}
-                          </Badge>
-                        )}
+                        {conv.stage && (() => {
+                          const stageInfo = STAGES.find(s => s.id === conv.stage);
+                          return stageInfo ? (
+                            <Badge className={cn("text-[9px] px-1.5 py-0 h-4 text-white border-0", stageInfo.color)}>
+                              {stageInfo.title}
+                            </Badge>
+                          ) : null;
+                        })()}
                         {conv.unreadCount > 0 && (
                           <Badge className="bg-[hsl(var(--stage-paid))] text-white text-[9px] px-1.5 py-0 h-4 ml-auto">
                             {conv.unreadCount}
