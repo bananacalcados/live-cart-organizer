@@ -4,6 +4,8 @@ export interface DbEvent {
   description?: string;
   is_active: boolean;
   default_shipping_cost?: number;
+  catalog_lead_page_id?: string;
+  active_product_delay_seconds?: number;
   created_at: string;
   updated_at: string;
 }

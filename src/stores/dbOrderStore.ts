@@ -69,6 +69,57 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
 
   createOrder: async (eventId, customer, products = []) => {
     try {
+      // If no products, try to auto-fill from event's active product
+      if (products.length === 0) {
+        try {
+          const { data: eventData } = await supabase
+            .from('events')
+            .select('catalog_lead_page_id, active_product_delay_seconds')
+            .eq('id', eventId)
+            .single();
+
+          if (eventData?.catalog_lead_page_id) {
+            const { data: page } = await supabase
+              .from('catalog_lead_pages')
+              .select('selected_product_ids')
+              .eq('id', eventData.catalog_lead_page_id)
+              .single();
+
+            const activeIds = (page as any)?.selected_product_ids as string[] || [];
+            if (activeIds.length > 0) {
+              // The first product in the list is the "active" product
+              // Delay logic: we trust the presenter already set it correctly
+              // (the delay is handled by the bar — product changes are delayed)
+              try {
+                const { fetchProducts: fetchShopify } = await import('@/lib/shopify');
+                const activeGid = activeIds[0];
+                const numericId = activeGid.split('/').pop() || activeGid;
+                const raw = await fetchShopify(1, `id:${numericId}`);
+                if (raw.length > 0) {
+                  const p = raw[0].node;
+                  const firstVariant = p.variants.edges[0]?.node;
+                  if (firstVariant) {
+                    products = [{
+                      id: crypto.randomUUID(),
+                      shopifyId: p.id,
+                      title: p.title,
+                      variant: firstVariant.title || 'Default',
+                      price: Number(firstVariant.price.amount),
+                      compareAtPrice: firstVariant.compareAtPrice ? Number(firstVariant.compareAtPrice.amount) : undefined,
+                      quantity: 1,
+                      image: firstVariant.image?.url || p.images.edges[0]?.node.url || undefined,
+                      sku: firstVariant.sku || undefined,
+                    }];
+                  }
+                }
+              } catch (e) {
+                console.error('Error auto-filling active product:', e);
+              }
+            }
+          }
+        } catch {}
+      }
+
       // Generate cart link if products exist
       let cartLink: string | undefined;
       let checkoutToken: string | undefined;

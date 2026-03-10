@@ -10,6 +10,7 @@ import { OrderReportDialog } from "@/components/OrderReportDialog";
 import { PrizeEligibleList } from "@/components/PrizeEligibleList";
 import { EventPromotionManager } from "@/components/EventPromotionManager";
 import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
+import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -124,6 +125,10 @@ const Index = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {currentEventId && currentEvent && (
+        <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
       )}
       
       <StageNavigation 
