@@ -11,6 +11,8 @@ import { PrizeEligibleList } from "@/components/PrizeEligibleList";
 import { EventPromotionManager } from "@/components/EventPromotionManager";
 import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
+import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
+import { EventStockAlerts } from "@/components/events/EventStockAlerts";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
