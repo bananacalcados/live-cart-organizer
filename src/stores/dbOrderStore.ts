@@ -307,30 +307,16 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     }
 
     try {
-      // Regenerate cart link
-      const cartLink = await createShopifyCartFromOrder(newProducts) || undefined;
-      let checkoutToken: string | undefined;
-      if (cartLink) {
-        try {
-          const url = new URL(cartLink);
-          checkoutToken = url.pathname.split('/').pop();
-        } catch {}
-      }
-
       const { error } = await supabase
         .from('orders')
-        .update({ 
-          products: productsToJson(newProducts),
-          cart_link: cartLink,
-          checkout_token: checkoutToken
-        })
+        .update({ products: productsToJson(newProducts) })
         .eq('id', orderId);
 
       if (error) throw error;
       
       set((state) => ({
         orders: state.orders.map((o) => 
-          o.id === orderId ? { ...o, products: newProducts, cart_link: cartLink, checkout_token: checkoutToken } : o
+          o.id === orderId ? { ...o, products: newProducts } : o
         )
       }));
     } catch (error) {
