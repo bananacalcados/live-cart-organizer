@@ -163,10 +163,12 @@ export function DashboardChatPanel() {
   }, [loadConversations, selectedPhone, selectedConvNumberId]);
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
-    let query = supabase.from("whatsapp_messages").select("*").eq("phone", phone).order("created_at", { ascending: true });
-    if (numberId) query = query.eq("whatsapp_number_id", numberId);
-    else if (numberId === null) query = query.is("whatsapp_number_id", null);
-    const { data } = await query;
+    // Load ALL messages for this phone across all instances so sidebar stays in sync with kanban card chats
+    const { data } = await supabase
+      .from("whatsapp_messages")
+      .select("*")
+      .eq("phone", phone)
+      .order("created_at", { ascending: true });
     if (data) setMessages(data || []);
   };
 
