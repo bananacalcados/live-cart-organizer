@@ -50,6 +50,7 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
         nome: firstName,
         instagram: order.instagramHandle ? `@${order.instagramHandle.replace('@', '')}` : '',
         whatsapp: order.whatsapp || '',
+        link_carrinho: order.cartLink || '',
         total: `R$ ${totalValue.toFixed(2)}`,
         produtos: productsList,
       });
