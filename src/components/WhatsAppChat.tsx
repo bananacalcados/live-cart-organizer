@@ -388,7 +388,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       setMessages((prev) => [...prev, tempMessage]);
 
       setIsSending(true);
-      const result = await sendViaMeta(phone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
+      const result = await sendMessage(phone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
       setIsSending(false);
 
       if (result.success) {
