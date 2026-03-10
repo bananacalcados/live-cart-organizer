@@ -1,126 +1,50 @@
 
 
-## Melhorias no Sistema de Grupos VIP
+# Auto-Roteamento de Respostas pela Instância de Origem
 
-### Resumo das Funcionalidades
+## Problema
 
-1. **Gerenciamento em massa de grupos dentro da campanha** - Alterar nome, foto, descricao e permissoes de todos os grupos vinculados a campanha de uma vez
-2. **Fotos de perfil dos grupos** - Buscar foto via Z-API durante sincronizacao (ja existe `imgUrl`/`profileThumbnail` mas pode nao estar vindo)
-3. **Upload local de arquivos** - Para audio, video e documentos na criacao de mensagens agendadas
-4. **Calendario de mensagens agendadas** - Visao mensal/semanal por campanha
-5. **Edicao de mensagens pendentes** - Editar mensagens que ainda nao foram enviadas
-6. **Modelos de mensagens** - Templates reutilizaveis salvos no banco
-7. **Variaveis dinamicas nas mensagens** - Ex: `{{link_live}}`, `{{nome_grupo}}`, substituidas no momento do envio
+Quando um cliente manda mensagem pelo **Datacrazy** (instância Z-API), o sistema permite responder pelo **Whats Centro** (outra instância Z-API), causando confusão e erros (ex: erro de 24h da Meta quando a resposta sai por uma instância errada).
 
----
+**Causa raiz**: A detecção de instância está errada. Na linha 321 do `POSWhatsApp.tsx`:
+```typescript
+const lastIncomingInstance = lastIncoming?.whatsapp_number_id ? "meta" : "zapi";
+```
+Isso assume que se tem `whatsapp_number_id`, é Meta — mas instâncias Z-API também gravam esse campo. O sistema não distingue corretamente qual instância específica recebeu a mensagem.
 
-### 1. Migracao de Banco de Dados
+## Solução
 
-**Nova tabela `group_message_templates`:**
-- `id` (uuid PK)
-- `name` (text) - nome do modelo
-- `message_type` (text) - text/image/video/audio/document/poll
-- `message_content` (text) - conteudo com placeholders de variaveis
-- `media_url` (text, nullable)
-- `poll_options` (jsonb, nullable)
-- `created_at` (timestamptz)
+Implementar **auto-roteamento**: ao selecionar uma conversa, o sistema detecta automaticamente a instância da última mensagem recebida e trava o envio nela. O operador não precisa (nem consegue) escolher outra instância manualmente para aquela conversa.
 
-**Nova tabela `campaign_variables`:**
-- `id` (uuid PK)
-- `campaign_id` (uuid FK -> group_campaigns)
-- `variable_name` (text) - ex: `link_live`
-- `variable_value` (text) - valor atual
-- `updated_at` (timestamptz)
-- UNIQUE(campaign_id, variable_name)
+### Mudanças
 
-Isso permite programar mensagens com `{{link_live}}` e atualizar o valor da variavel separadamente. Na hora do envio, o edge function substitui as variaveis pelos valores atuais.
+**1. `src/components/pos/POSWhatsApp.tsx`**
 
----
+- **Corrigir detecção de provider**: Em vez de assumir que `whatsapp_number_id` = Meta, cruzar o ID com a lista `storeNumbers` para verificar o `provider` real.
+- **Auto-selecionar instância ao abrir conversa**: No `handleSelectConversation`, buscar a última mensagem incoming, pegar seu `whatsapp_number_id`, encontrar o provider correspondente e setar `sendVia` + `selectedNumberId` automaticamente.
+- **Travar seletor de instância**: Quando a conversa tem uma instância de origem definida, desabilitar os botões "Z-API" / "Meta API" e o seletor de número, mostrando apenas a instância ativa com um indicador visual (ex: badge "Auto: Datacrazy").
+- **Gravar `whatsapp_number_id` nas mensagens incoming do webhook Z-API** (já existe via `?number_id=UUID`), garantir que o campo é populado.
 
-### 2. Upload Local de Arquivos
+**2. `src/pages/Chat.tsx`** (módulo Marketing/Chat)
 
-Na `ScheduledMessageForm`, trocar o campo "URL da Midia" por um componente que oferece duas opcoes:
-- **URL externa** (campo de texto como hoje)
-- **Upload do computador** (input type="file" que faz upload para o bucket `marketing-attachments` do storage e obtem a URL publica)
+- Aplicar a mesma lógica: ao selecionar conversa, auto-detectar a instância de origem e setar `numberFilter` para o ID correto.
 
-Isso ja funciona com o bucket existente `marketing-attachments` (publico).
+**3. Lógica de detecção (ambos os módulos)**
 
----
+```text
+conversa selecionada
+  └─ buscar última mensagem incoming com whatsapp_number_id
+       └─ cruzar com storeNumbers/numbers para achar provider
+            ├─ provider = 'zapi' → setSendVia('zapi'), setSelectedNumberId(id)
+            ├─ provider = 'meta' → setSendVia('meta'), setSelectedNumberId(id)
+            └─ sem whatsapp_number_id → fallback para primeira instância Z-API da loja
+```
 
-### 3. Fotos dos Grupos
+**4. UI: Indicador de instância travada**
 
-A Z-API retorna `imgUrl` ou `profileThumbnail` nos dados do grupo. O `zapi-list-groups` ja faz `photo_url: g.imgUrl || g.profileThumbnail || null`. Se nao esta vindo, pode ser que a Z-API nao retorne por padrao. Vou adicionar uma chamada separada ao endpoint `profile-picture` da Z-API para cada grupo durante a sincronizacao, ou usar o endpoint `group-metadata` que retorna a foto.
-
-Alternativa mais eficiente: ao sincronizar, para grupos sem foto, fazer chamada ao endpoint `profile-picture` da Z-API em batch.
-
----
-
-### 4. Gerenciamento em Massa na Campanha
-
-Adicionar uma secao no `CampaignDetailPanel` com:
-- Botao "Configurar Grupos" que abre painel com acoes em massa:
-  - Alterar foto de todos os grupos
-  - Alterar descricao de todos
-  - Alterar nome (com sufixo automatico ex: "#1", "#2")
-  - Toggle permissoes (admins enviam / admins adicionam) para todos
-
-Cada acao itera sobre os grupos da campanha e chama `zapi-group-settings` sequencialmente.
-
----
-
-### 5. Calendario de Mensagens
-
-Adicionar uma aba/secao "Calendario" no `CampaignDetailPanel` usando um grid simples de calendario mensal, mostrando as mensagens agendadas em cada dia. Ao clicar no dia, mostra as mensagens daquela data.
-
----
-
-### 6. Edicao de Mensagens Pendentes
-
-Na lista de mensagens do `CampaignDetailPanel`, adicionar botao de edicao para mensagens com status `pending`. Ao clicar, abre o `ScheduledMessageForm` pre-preenchido. Ao salvar, faz UPDATE em vez de INSERT.
-
----
-
-### 7. Modelos de Mensagens
-
-Na `ScheduledMessageForm`:
-- Botao "Usar Modelo" que abre um select/dialog com templates salvos
-- Botao "Salvar como Modelo" que salva a mensagem atual como template reutilizavel
-- Templates ficam na tabela `group_message_templates`
-
----
-
-### 8. Variaveis Dinamicas
-
-Na `ScheduledMessageForm`:
-- Botoes para inserir variaveis no cursor: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, etc.
-- Preview mostra como ficara a mensagem com os valores atuais
-
-No `CampaignDetailPanel`:
-- Secao "Variaveis" onde o usuario define/atualiza os valores das variaveis da campanha
-- Ex: campo "link_live" = "https://youtube.com/live/abc123"
-
-No `zapi-group-scheduled-send`:
-- Antes de enviar, buscar variaveis da campanha e fazer `replace` no conteudo da mensagem
-- `{{nome_grupo}}` substituido pelo nome real do grupo de destino
-
----
-
-### Resumo de Arquivos
-
-| Arquivo | Acao |
-|---|---|
-| Migracao SQL | Criar `group_message_templates`, `campaign_variables` |
-| `src/components/marketing/ScheduledMessageForm.tsx` | Upload local, variaveis, modelos, modo edicao |
-| `src/components/marketing/CampaignDetailPanel.tsx` | Calendario, edicao, gerenciamento em massa de grupos, secao de variaveis |
-| `supabase/functions/zapi-group-scheduled-send/index.ts` | Substituicao de variaveis antes do envio |
-| `supabase/functions/zapi-list-groups/index.ts` | Buscar fotos de perfil via endpoint `profile-picture` |
-| `src/components/marketing/GroupsVipManager.tsx` | Exibir fotos dos grupos nos cards |
-
-### Detalhes Tecnicos
-
-- Upload de arquivos: usa `supabase.storage.from('marketing-attachments').upload()` e `getPublicUrl()`
-- Variaveis suportadas inicialmente: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, `{{horario}}`, variaveis customizadas
-- Calendario: grid CSS simples (7 colunas x 5-6 linhas), sem dependencia externa
-- Edicao de mensagens: reutiliza `ScheduledMessageForm` com prop `editingMessage` para pre-preencher
-- Fotos de grupo: tenta `profile-picture/${groupId}` na Z-API durante sync
+Substituir os botões manuais "Z-API" / "Meta API" por um badge informativo quando a instância estiver auto-detectada:
+```
+[🔒 Datacrazy]  Whats Cent... +5533991229191
+```
+O operador verá claramente por qual número está respondendo, sem poder trocar acidentalmente.
 
