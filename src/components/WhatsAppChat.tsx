@@ -123,7 +123,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [isSending, setIsSending] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
-  const { selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+  const { selectedNumberId, fetchNumbers, getSelectedNumber } = useWhatsAppNumberStore();
 
   // Meta templates state
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
