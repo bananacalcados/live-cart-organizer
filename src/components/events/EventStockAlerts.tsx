@@ -179,7 +179,8 @@ export function EventStockAlerts({ eventId }: EventStockAlertsProps) {
 // Function to create a stock alert and notify team via WhatsApp
 export async function createStockAlert(
   eventId: string,
-  product: { title: string; variant?: string; sku?: string; image?: string }
+  product: { title: string; variant?: string; sku?: string; image?: string },
+  whatsappNumberId?: string | null
 ) {
   // Insert alert
   const { data: alert, error } = await supabase
