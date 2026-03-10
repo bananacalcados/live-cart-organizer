@@ -307,16 +307,23 @@ export function GlobalWhatsAppChat() {
         </Button>
       </div>
 
-      {/* API Selector bar */}
+      {/* Auto-routed instance indicator (locked) */}
       {selectedPhone && (
         <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/50 text-xs flex-shrink-0">
-          <span className="text-muted-foreground">Enviar via:</span>
-          <button onClick={() => setSendVia('zapi')} className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'zapi' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>Z-API</button>
-          <button onClick={() => setSendVia('meta')} className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'meta' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>Meta API</button>
-          {metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />}
-          {sendVia === 'meta' && metaNumbers.length > 0 && (
-            <span className="text-muted-foreground truncate">{metaNumbers.find(n => n.id === selectedNumberId)?.label || ''}</span>
-          )}
+          {(() => {
+            const activeNum = metaNumbers.find(n => n.id === selectedNumberId);
+            return activeNum ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary text-primary-foreground font-medium">
+                🔒 {activeNum.label}
+                <span className="opacity-70">{activeNum.phone_display}</span>
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Nenhuma instância detectada</span>
+            );
+          })()}
+          <span className="text-muted-foreground ml-auto">
+            {sendVia === 'meta' ? 'Meta API' : 'Z-API'}
+          </span>
         </div>
       )}
 

@@ -842,17 +842,22 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               </div>
             </div>
 
-             {/* API Selector + Instance info */}
+             {/* Auto-routed instance indicator (locked) */}
             <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] bg-white dark:bg-[#202c33] text-xs flex-shrink-0">
-              {selectedConversation?.instanceLabel && (
-                <Badge variant="outline" className="text-[9px] px-1.5 py-0.5 border-[#00a884]/40 text-[#00a884] font-medium">
-                  {selectedConversation.instanceLabel}
-                </Badge>
-              )}
-              <span className="text-muted-foreground">Via:</span>
-              <button onClick={() => setSendVia("zapi")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "zapi" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Z-API</button>
-              <button onClick={() => setSendVia("meta")} className={`px-2 py-0.5 rounded-full font-medium transition-all ${sendVia === "meta" ? "bg-[#00a884] text-white" : "bg-[#e9edef] dark:bg-[#3b4a54] text-muted-foreground"}`}>Meta API</button>
-              {storeNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />}
+              {(() => {
+                const activeNum = storeNumbers.find(n => n.id === selectedNumberId);
+                return activeNum ? (
+                  <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium gap-1">
+                    🔒 {activeNum.label}
+                    <span className="opacity-70 ml-1">{activeNum.phone_display}</span>
+                  </Badge>
+                ) : (
+                  <span className="text-muted-foreground">Nenhuma instância detectada</span>
+                );
+              })()}
+              <span className="text-muted-foreground ml-auto">
+                {sendVia === 'meta' ? 'Meta API' : 'Z-API'}
+              </span>
             </div>
 
             <ChatView
