@@ -89,7 +89,14 @@ export function GlobalWhatsAppChat() {
         const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
         const isGroup = value.isGroup || phone.includes('@g.us') || phone.includes('-');
         const lastIncoming = value.messages.find(m => m.direction === 'incoming');
-        const lastIncomingInstance: 'zapi' | 'meta' | undefined = lastIncoming?.whatsapp_number_id ? 'meta' : lastIncoming ? 'zapi' : undefined;
+        // Detect provider by cross-referencing whatsapp_number_id with metaNumbers
+        const lastIncomingInstance: 'zapi' | 'meta' | undefined = (() => {
+          if (!lastIncoming) return undefined;
+          if (!lastIncoming.whatsapp_number_id) return 'zapi';
+          const matchedNumber = metaNumbers.find(n => n.id === lastIncoming.whatsapp_number_id);
+          if (matchedNumber) return (matchedNumber.provider === 'meta' ? 'meta' : 'zapi') as 'zapi' | 'meta';
+          return 'zapi';
+        })();
         const msgWithNumberId = value.messages.find(m => m.whatsapp_number_id);
         const eventNames = matchingOrders.map(o => events.find(e => e.id === o.event_id)?.name).filter(Boolean) as string[];
         
@@ -138,14 +145,19 @@ export function GlobalWhatsAppChat() {
   const handleSelectConversation = (phone: string) => {
     setSelectedPhone(phone);
     loadMessages(phone);
+    // Auto-route: detect instance from conversation metadata
     const conv = conversations.find(c => c.phone === phone);
-    if (conv) {
-      if (conv.lastIncomingInstance === 'meta') {
-        setSendVia('meta');
-        if (conv.whatsapp_number_id) setSelectedNumberId(conv.whatsapp_number_id);
+    if (conv?.whatsapp_number_id) {
+      const matchedNumber = metaNumbers.find(n => n.id === conv.whatsapp_number_id);
+      if (matchedNumber) {
+        setSendVia(matchedNumber.provider === 'meta' ? 'meta' : 'zapi');
+        setSelectedNumberId(matchedNumber.id);
       } else {
         setSendVia('zapi');
+        setSelectedNumberId(conv.whatsapp_number_id);
       }
+    } else {
+      setSendVia('zapi');
     }
     const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
     if (order) setHasUnreadMessages(order.id, false);
@@ -295,16 +307,23 @@ export function GlobalWhatsAppChat() {
         </Button>
       </div>
 
-      {/* API Selector bar */}
+      {/* Auto-routed instance indicator (locked) */}
       {selectedPhone && (
         <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/50 text-xs flex-shrink-0">
-          <span className="text-muted-foreground">Enviar via:</span>
-          <button onClick={() => setSendVia('zapi')} className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'zapi' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>Z-API</button>
-          <button onClick={() => setSendVia('meta')} className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'meta' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>Meta API</button>
-          {metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />}
-          {sendVia === 'meta' && metaNumbers.length > 0 && (
-            <span className="text-muted-foreground truncate">{metaNumbers.find(n => n.id === selectedNumberId)?.label || ''}</span>
-          )}
+          {(() => {
+            const activeNum = metaNumbers.find(n => n.id === selectedNumberId);
+            return activeNum ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary text-primary-foreground font-medium">
+                🔒 {activeNum.label}
+                <span className="opacity-70">{activeNum.phone_display}</span>
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Nenhuma instância detectada</span>
+            );
+          })()}
+          <span className="text-muted-foreground ml-auto">
+            {sendVia === 'meta' ? 'Meta API' : 'Z-API'}
+          </span>
         </div>
       )}
 

@@ -288,6 +288,12 @@ export default function ChatPage() {
     loadMessages(phone);
     const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
     if (order) setHasUnreadMessages(order.id, false);
+    // Auto-route: lock to the instance of the last incoming message
+    const conv = conversations.find(c => c.phone === phone);
+    if (conv?.whatsapp_number_id) {
+      setNumberFilter(conv.whatsapp_number_id);
+      setSelectedNumberId(conv.whatsapp_number_id);
+    }
   };
 
   // ── Scroll on new messages ──
