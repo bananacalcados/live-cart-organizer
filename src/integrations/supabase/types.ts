@@ -1920,6 +1920,122 @@ export type Database = {
           },
         ]
       }
+      event_stock_alerts: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          image_url: string | null
+          product_title: string
+          resolved_at: string | null
+          resolved_by: string | null
+          sku: string | null
+          status: string
+          variant: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          image_url?: string | null
+          product_title: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          sku?: string | null
+          status?: string
+          variant?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          image_url?: string | null
+          product_title?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          sku?: string | null
+          status?: string
+          variant?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_stock_alerts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_team_assignments: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          team_member_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          team_member_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          team_member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_team_assignments_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_team_assignments_team_member_id_fkey"
+            columns: ["team_member_id"]
+            isOneToOne: false
+            referencedRelation: "event_team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_team_members: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          photo_url: string | null
+          role: string
+          updated_at: string
+          whatsapp: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          photo_url?: string | null
+          role?: string
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          photo_url?: string | null
+          role?: string
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           active_product_delay_seconds: number
