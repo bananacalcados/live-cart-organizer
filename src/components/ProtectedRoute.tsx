@@ -49,11 +49,12 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
     }
 
     const userId = session.user.id;
+    const modulesToCheck = Array.isArray(requiredModule) ? requiredModule : [requiredModule];
 
     // Check cache first
     const cached = permissionCache.get(userId);
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      setHasAccess(cached.modules.includes(requiredModule));
+      setHasAccess(modulesToCheck.some(m => cached.modules.includes(m)));
       return;
     }
 
