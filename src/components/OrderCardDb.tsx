@@ -235,7 +235,8 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       : order.discount_value
     : 0;
   
-  const finalValue = Math.max(0, totalValue - discountAmount);
+  const orderShippingCost = Number(order.shipping_cost || 0);
+  const finalValue = Math.max(0, totalValue - discountAmount + orderShippingCost);
 
   // Convert for dialogs
   const orderForDialog = dbOrderToOrder(order);
