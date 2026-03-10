@@ -10,11 +10,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 
+interface ProductVariantInfo {
+  title: string;
+  sku: string | null;
+  available: boolean;
+  color: string | null;
+  size: string | null;
+}
+
 interface ShopifyProductSimple {
   id: string;
   title: string;
   imageUrl: string;
   price: string;
+  variants: ProductVariantInfo[];
 }
 
 interface ActiveProductBarProps {
