@@ -459,7 +459,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             )}
           </div>
           <div className="pt-2 border-t border-border/50 space-y-1">
-            {discountAmount > 0 && (
+            {(discountAmount > 0 || orderShippingCost > 0) && (
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Subtotal:</span>
                 <span className="text-muted-foreground">R$ {totalValue.toFixed(2)}</span>
@@ -469,6 +469,12 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               <div className="flex justify-between text-xs">
                 <span className="text-stage-contacted">Desconto:</span>
                 <span className="text-stage-contacted">-R$ {discountAmount.toFixed(2)}</span>
+              </div>
+            )}
+            {orderShippingCost > 0 && !order.free_shipping && (
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Frete:</span>
+                <span className="text-muted-foreground">+R$ {orderShippingCost.toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between">
