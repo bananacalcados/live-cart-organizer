@@ -145,14 +145,19 @@ export function GlobalWhatsAppChat() {
   const handleSelectConversation = (phone: string) => {
     setSelectedPhone(phone);
     loadMessages(phone);
+    // Auto-route: detect instance from conversation metadata
     const conv = conversations.find(c => c.phone === phone);
-    if (conv) {
-      if (conv.lastIncomingInstance === 'meta') {
-        setSendVia('meta');
-        if (conv.whatsapp_number_id) setSelectedNumberId(conv.whatsapp_number_id);
+    if (conv?.whatsapp_number_id) {
+      const matchedNumber = metaNumbers.find(n => n.id === conv.whatsapp_number_id);
+      if (matchedNumber) {
+        setSendVia(matchedNumber.provider === 'meta' ? 'meta' : 'zapi');
+        setSelectedNumberId(matchedNumber.id);
       } else {
         setSendVia('zapi');
+        setSelectedNumberId(conv.whatsapp_number_id);
       }
+    } else {
+      setSendVia('zapi');
     }
     const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
     if (order) setHasUnreadMessages(order.id, false);
