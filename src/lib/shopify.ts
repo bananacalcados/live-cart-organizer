@@ -113,10 +113,11 @@ const STOREFRONT_QUERY = `
                   currencyCode
                 }
                 availableForSale
-                selectedOptions {
+          selectedOptions {
                   name
                   value
                 }
+                barcode
                 image {
                   url
                 }
