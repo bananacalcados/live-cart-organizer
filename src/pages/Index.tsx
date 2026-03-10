@@ -139,6 +139,12 @@ const Index = () => {
         onSelectStage={setSelectedStage} 
       />
 
+      {currentEventId && (
+        <div className="container py-2">
+          <EventStockAlerts eventId={currentEventId} />
+        </div>
+      )}
+
       <main className="container py-6">
         <Tabs defaultValue="kanban" className="w-full">
           <div className="flex items-center gap-2 mb-4">
