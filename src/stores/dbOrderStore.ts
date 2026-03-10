@@ -211,8 +211,9 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
 
   updateOrder: async (orderId, updates) => {
     try {
-      // Convert products to Json if present
-      const dbUpdates: Record<string, unknown> = { ...updates };
+      // Build DB updates: convert products and remove joined/non-column fields
+      const { customer, id, event_id, customer_id, created_at, updated_at, ...rest } = updates as any;
+      const dbUpdates: Record<string, unknown> = { ...rest };
       if (updates.products) {
         dbUpdates.products = productsToJson(updates.products);
       }

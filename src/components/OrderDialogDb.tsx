@@ -350,17 +350,17 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
 
       // Update existing order
       const orderUpdates: Partial<DbOrder> = {
-        cart_link: cartLink || undefined,
-        notes: notes || undefined,
+        cart_link: cartLink || null,
+        notes: notes || null,
         stage,
         products: localProducts,
-        discount_type: discountType || undefined,
-        discount_value: discountValue || undefined,
+        discount_type: discountType || null,
+        discount_value: discountType ? (discountValue ?? 0) : 0,
         free_shipping: freeShipping,
         has_gift: hasGift,
-        coupon_code: couponCode || undefined,
+        coupon_code: couponCode || null,
         paid_externally: paidExternally,
-      };
+      } as any;
       
       // If marking as paid externally, also mark as paid
       if (paidExternally && !editingOrder.is_paid) {
