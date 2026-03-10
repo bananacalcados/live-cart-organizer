@@ -102,128 +102,134 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header onNewOrder={handleNewOrder} />
-      
-      {currentEvent && (
-        <div className="container py-2">
-          <div className="flex items-center justify-between bg-secondary/50 rounded-lg px-4 py-2">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-accent" />
-              <span className="font-medium">{currentEvent.name}</span>
-              {unpaidCount > 0 && (
-                <span className="text-sm text-stage-awaiting">
-                  ({unpaidCount} não pago{unpaidCount !== 1 ? 's' : ''})
-                </span>
-              )}
-              <EventTeamDisplay eventId={currentEventId} />
-            </div>
-            <div className="flex items-center gap-2">
-              <OrderReportDialog orders={orders} />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate("/events")}
-              >
-                Trocar Evento
-              </Button>
+    <div className="min-h-screen bg-background flex">
+      {/* Main content */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <Header onNewOrder={handleNewOrder} />
+        
+        {currentEvent && (
+          <div className="container py-2">
+            <div className="flex items-center justify-between bg-secondary/50 rounded-lg px-4 py-2">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-accent" />
+                <span className="font-medium">{currentEvent.name}</span>
+                {unpaidCount > 0 && (
+                  <span className="text-sm text-stage-awaiting">
+                    ({unpaidCount} não pago{unpaidCount !== 1 ? 's' : ''})
+                  </span>
+                )}
+                <EventTeamDisplay eventId={currentEventId} />
+              </div>
+              <div className="flex items-center gap-2">
+                <OrderReportDialog orders={orders} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate("/events")}
+                >
+                  Trocar Evento
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {currentEventId && currentEvent && (
-        <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
-      )}
-      
-      <StageNavigation 
-        selectedStage={selectedStage} 
-        onSelectStage={setSelectedStage} 
-      />
+        {currentEventId && currentEvent && (
+          <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
+        )}
+        
+        <StageNavigation 
+          selectedStage={selectedStage} 
+          onSelectStage={setSelectedStage} 
+        />
 
-      {currentEventId && (
-        <div className="container py-2">
-          <EventStockAlerts eventId={currentEventId} />
-        </div>
-      )}
+        {currentEventId && (
+          <div className="container py-2">
+            <EventStockAlerts eventId={currentEventId} />
+          </div>
+        )}
 
-      <main className="container py-6">
-        <Tabs defaultValue="kanban" className="w-full">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por @ ou WhatsApp..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <TabsList className="ml-auto">
-              <TabsTrigger value="kanban">Pedidos</TabsTrigger>
-              <TabsTrigger value="promotions" className="gap-1">
-                <Tag className="h-3 w-3" />
-                Promoções
-              </TabsTrigger>
-              <TabsTrigger value="prizes" className="gap-1">
-                <Trophy className="h-3 w-3" />
-                Roleta
-              </TabsTrigger>
-              <TabsTrigger value="meta-templates" className="gap-1">
-                <MessageSquare className="h-3 w-3" />
-                Templates API
-              </TabsTrigger>
-              {currentEvent?.catalog_lead_page_id && (
-                <TabsTrigger value="carts" className="gap-1">
-                  <ShoppingCart className="h-3 w-3" />
-                  Carrinhos
+        <main className="container py-6 flex-1">
+          <Tabs defaultValue="kanban" className="w-full">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por @ ou WhatsApp..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <TabsList className="ml-auto">
+                <TabsTrigger value="kanban">Pedidos</TabsTrigger>
+                <TabsTrigger value="promotions" className="gap-1">
+                  <Tag className="h-3 w-3" />
+                  Promoções
                 </TabsTrigger>
+                <TabsTrigger value="prizes" className="gap-1">
+                  <Trophy className="h-3 w-3" />
+                  Roleta
+                </TabsTrigger>
+                <TabsTrigger value="meta-templates" className="gap-1">
+                  <MessageSquare className="h-3 w-3" />
+                  Templates API
+                </TabsTrigger>
+                {currentEvent?.catalog_lead_page_id && (
+                  <TabsTrigger value="carts" className="gap-1">
+                    <ShoppingCart className="h-3 w-3" />
+                    Carrinhos
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
+
+            <TabsContent value="kanban">
+              <StatsBar orders={orders} />
+              
+              {isLoading ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  Carregando pedidos...
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <KanbanBoardDb orders={filteredOrders} onEditOrder={handleEditOrder} />
+                </div>
               )}
-            </TabsList>
-          </div>
-
-          <TabsContent value="kanban">
-            <StatsBar orders={orders} />
-            
-            {isLoading ? (
-              <div className="text-center py-12 text-muted-foreground">
-                Carregando pedidos...
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <KanbanBoardDb orders={filteredOrders} onEditOrder={handleEditOrder} />
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="promotions">
-            <EventPromotionManager eventId={currentEventId} />
-          </TabsContent>
-
-          <TabsContent value="prizes">
-            <PrizeEligibleList eventId={currentEventId} />
-          </TabsContent>
-
-          <TabsContent value="meta-templates">
-            <MetaTemplateCreator />
-          </TabsContent>
-
-          {currentEvent?.catalog_lead_page_id && (
-            <TabsContent value="carts">
-              <EventCartsPanel catalogLeadPageId={currentEvent.catalog_lead_page_id} />
             </TabsContent>
-          )}
-        </Tabs>
-      </main>
 
-      <OrderDialogDb
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        editingOrder={editingOrder}
-        eventId={currentEventId}
-      />
+            <TabsContent value="promotions">
+              <EventPromotionManager eventId={currentEventId} />
+            </TabsContent>
 
+            <TabsContent value="prizes">
+              <PrizeEligibleList eventId={currentEventId} />
+            </TabsContent>
 
+            <TabsContent value="meta-templates">
+              <MetaTemplateCreator />
+            </TabsContent>
+
+            {currentEvent?.catalog_lead_page_id && (
+              <TabsContent value="carts">
+                <EventCartsPanel catalogLeadPageId={currentEvent.catalog_lead_page_id} />
+              </TabsContent>
+            )}
+          </Tabs>
+        </main>
+
+        <OrderDialogDb
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          editingOrder={editingOrder}
+          eventId={currentEventId}
+        />
+      </div>
+
+      {/* Fixed WhatsApp Chat Panel - Right Side */}
+      <div className="hidden xl:flex w-[340px] flex-shrink-0 h-screen sticky top-0">
+        <DashboardChatPanel />
+      </div>
     </div>
   );
 };
