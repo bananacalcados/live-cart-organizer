@@ -293,6 +293,8 @@ const Events = () => {
       </header>
 
       <main className="container py-6">
+        <EventsDashboard />
+        
         {isLoading ? (
           <div className="text-center py-12 text-muted-foreground">
             Carregando eventos...
