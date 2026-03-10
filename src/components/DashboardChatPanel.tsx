@@ -363,7 +363,7 @@ export function DashboardChatPanel() {
                     <div className="flex items-center gap-1 mt-1">
                       {conv.stage && (
                         <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
-                          {STAGES.find(s => s.id === conv.stage)?.label || conv.stage}
+                          {STAGES.find(s => s.id === conv.stage)?.title || conv.stage}
                         </Badge>
                       )}
                       {conv.unreadCount > 0 && (
