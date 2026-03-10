@@ -330,8 +330,7 @@ export function DashboardChatPanel() {
           )}
         </div>
 
-        {/* Big colorful filter buttons */}
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin" style={{ WebkitOverflowScrolling: 'touch' }}>
           <button
             onClick={() => setFilter("sem_resposta")}
             className={cn(
