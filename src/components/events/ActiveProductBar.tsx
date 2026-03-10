@@ -161,12 +161,31 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
     setProductsLoading(true);
     try {
       const raw = await fetchProducts(100, query ? `title:*${query}*` : undefined);
-      setShopifyProducts(raw.map(p => ({
-        id: p.node.id,
-        title: p.node.title,
-        imageUrl: p.node.images.edges[0]?.node.url || "",
-        price: p.node.priceRange.minVariantPrice.amount,
-      })));
+      setShopifyProducts(raw.map(p => {
+        const variants: ProductVariantInfo[] = p.node.variants.edges.map(v => {
+          let color: string | null = null;
+          let size: string | null = null;
+          for (const opt of v.node.selectedOptions) {
+            const n = opt.name.toLowerCase();
+            if (n === "cor" || n === "color" || n === "colour") color = opt.value;
+            if (n === "tamanho" || n === "size") size = opt.value;
+          }
+          return {
+            title: v.node.title,
+            sku: v.node.sku,
+            available: v.node.availableForSale,
+            color,
+            size,
+          };
+        });
+        return {
+          id: p.node.id,
+          title: p.node.title,
+          imageUrl: p.node.images.edges[0]?.node.url || "",
+          price: p.node.priceRange.minVariantPrice.amount,
+          variants,
+        };
+      }));
     } catch { /* ignore */ }
     setProductsLoading(false);
   };
