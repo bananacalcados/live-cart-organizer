@@ -167,12 +167,13 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{template.name}</p>
-                      <Badge
-                        variant="secondary"
-                        className={cn("text-xs mt-1", getStageColor(template.stage), "text-white")}
-                      >
-                        {getStageLabel(template.stage)}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {getStageBadges(template.stage).map((b, i) => (
+                          <Badge key={i} variant="secondary" className={cn("text-xs", b.color, "text-white")}>
+                            {b.label}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                     <div className="flex gap-1">
                       <Button
