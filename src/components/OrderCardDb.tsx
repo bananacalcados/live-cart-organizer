@@ -140,6 +140,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       setIsCreatingShopifyOrder(false);
     }
   };
+  const { moveOrder: storeMove } = useDbOrderStore();
   
   const stage = STAGES.find((s) => s.id === order.stage);
   const totalValue = order.products.reduce(
@@ -149,6 +150,17 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const totalItems = order.products.reduce((sum, p) => sum + p.quantity, 0);
 
   const hasUnread = order.has_unread_messages;
+  
+  // Missing fields for incomplete orders
+  const missingFields = getMissingFields(order);
+  const isIncomplete = missingFields.length > 0;
+
+  // Auto-promote: if order is incomplete_order but all fields are filled, move to awaiting_confirmation
+  useEffect(() => {
+    if (order.stage === 'incomplete_order' && !isIncomplete) {
+      storeMove(order.id, 'awaiting_confirmation');
+    }
+  }, [order.stage, isIncomplete, order.id, storeMove]);
 
   // Calculate discount
   const discountAmount = order.discount_type && order.discount_value
