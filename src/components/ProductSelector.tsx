@@ -33,6 +33,7 @@ export function ProductSelector({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, number>>({});
+  const pendingAutoAddRef = useRef<{ product: ShopifyProduct; variantIndex: number } | null>(null);
 
   // Debounce search input
   useEffect(() => {
@@ -46,6 +47,35 @@ export function ProductSelector({
   useEffect(() => {
     loadAllProducts();
   }, []);
+
+  // Process pending auto-add
+  useEffect(() => {
+    if (pendingAutoAddRef.current) {
+      const { product, variantIndex } = pendingAutoAddRef.current;
+      const variant = product.node.variants.edges[variantIndex]?.node;
+      if (variant) {
+        const existingId = `${product.node.id}-${variant.id}`;
+        const alreadyAdded = selectedProducts.some((sp) => sp.id === existingId);
+        if (!alreadyAdded) {
+          const compareAt = variant.compareAtPrice ? parseFloat(variant.compareAtPrice.amount) : undefined;
+          const price = parseFloat(variant.price.amount);
+          onAddProduct({
+            id: existingId,
+            shopifyId: variant.id,
+            sku: variant.sku || undefined,
+            title: product.node.title,
+            variant: variant.title !== "Default Title" ? variant.title : "",
+            price,
+            compareAtPrice: compareAt && compareAt > price ? compareAt : undefined,
+            quantity: 1,
+            image: variant.image?.url || product.node.images.edges[0]?.node.url,
+          });
+          setSearch("");
+        }
+      }
+      pendingAutoAddRef.current = null;
+    }
+  });
 
   // Filter products when search changes
   useEffect(() => {
@@ -65,7 +95,7 @@ export function ProductSelector({
       );
     });
 
-    // Auto-select and auto-add when SKU/GTIN exact match found
+    // Auto-select and auto-add when SKU/GTIN match found
     if (isSkuOrGtin) {
       for (const p of filtered) {
         const matchIdx = p.node.variants.edges.findIndex(
@@ -77,23 +107,11 @@ export function ProductSelector({
         );
         if (matchIdx >= 0) {
           setSelectedVariants((prev) => ({ ...prev, [p.node.id]: matchIdx }));
-
-          // Auto-add if not already in cart
-          const variant = p.node.variants.edges[matchIdx]?.node;
-          if (variant) {
-            const existingId = `${p.node.id}-${variant.id}`;
-            const alreadyAdded = selectedProducts.some((sp) => sp.id === existingId);
-            if (!alreadyAdded) {
-              handleAddProduct(p, matchIdx);
-              // Clear search after auto-add
-              setTimeout(() => setSearch(""), 100);
-            }
-          }
-          break; // Only auto-add first match
+          pendingAutoAddRef.current = { product: p, variantIndex: matchIdx };
+          break;
         }
       }
     } else {
-      // For title search, just pre-select matching variants
       filtered.forEach((p) => {
         const matchIdx = p.node.variants.edges.findIndex(
           (v) =>
