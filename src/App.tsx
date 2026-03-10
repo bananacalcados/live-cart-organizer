@@ -70,6 +70,7 @@ const App = () => (
               <Route path="/catalogo/:slug" element={<DoseTriplaCatalog />} />
               <Route path="/l/:slug" element={<LinkPageView />} />
               <Route path="/cat/:slug" element={<CatalogLeadPage />} />
+              <Route path="/evento/:slug" element={<EventCatalogPage />} />
               <Route path="/vip/:slug" element={<VipGroupRedirectPage />} />
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />
 
