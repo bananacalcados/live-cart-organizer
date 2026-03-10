@@ -40,6 +40,8 @@ export function DashboardChatPanel() {
   const [isSending, setIsSending] = useState(false);
   const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
+  const [profilePics, setProfilePics] = useState<Record<string, string>>({});
+  const fetchedPicsRef = useRef<Set<string>>(new Set());
 
   const { orders, setHasUnreadMessages } = useDbOrderStore();
   const { customers } = useCustomerStore();
@@ -51,14 +53,17 @@ export function DashboardChatPanel() {
 
   useEffect(() => {
     const loadChatContacts = async () => {
-      const { data } = await supabase.from("chat_contacts").select("phone, custom_name, display_name");
+      const { data } = await supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url");
       if (data) {
-        const map: Record<string, string> = {};
+        const nameMap: Record<string, string> = {};
+        const picMap: Record<string, string> = {};
         for (const c of data) {
-          if (c.custom_name) map[c.phone] = c.custom_name;
-          else if (c.display_name) map[c.phone] = c.display_name;
+          if (c.custom_name) nameMap[c.phone] = c.custom_name;
+          else if (c.display_name) nameMap[c.phone] = c.display_name;
+          if (c.profile_pic_url) picMap[c.phone] = c.profile_pic_url;
         }
-        setChatContacts(map);
+        setChatContacts(nameMap);
+        setProfilePics(prev => ({ ...prev, ...picMap }));
       }
     };
     loadChatContacts();
