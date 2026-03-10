@@ -318,7 +318,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       phoneMap.forEach((value, phone) => {
         const lastMsg = value.messages[0];
         const lastIncoming = value.messages.find(m => m.direction === "incoming");
-        const lastIncomingInstance: "zapi" | "meta" | undefined = lastIncoming?.whatsapp_number_id ? "meta" : lastIncoming ? "zapi" : undefined;
+        // Detect provider by cross-referencing whatsapp_number_id with storeNumbers
+        const lastIncomingInstance: "zapi" | "meta" | undefined = (() => {
+          if (!lastIncoming) return undefined;
+          if (!lastIncoming.whatsapp_number_id) return "zapi";
+          const matchedNumber = storeNumbers.find(n => n.id === lastIncoming.whatsapp_number_id);
+          if (matchedNumber) return (matchedNumber.provider === 'meta' ? 'meta' : 'zapi') as "zapi" | "meta";
+          return "zapi";
+        })();
         const msgWithNumberId = value.messages.find(m => m.whatsapp_number_id);
 
         phoneMessages.set(phone, value.messages.map(m => ({ direction: m.direction })));
