@@ -114,6 +114,7 @@ const Index = () => {
                   ({unpaidCount} não pago{unpaidCount !== 1 ? 's' : ''})
                 </span>
               )}
+              <EventTeamDisplay eventId={currentEventId} />
             </div>
             <div className="flex items-center gap-2">
               <OrderReportDialog orders={orders} />
