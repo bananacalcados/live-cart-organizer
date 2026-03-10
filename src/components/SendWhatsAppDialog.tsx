@@ -14,6 +14,7 @@ import { useZapi } from "@/hooks/useZapi";
 import { Order } from "@/types/order";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { useTemplateStore, applyTemplateVariables } from "@/stores/templateStore";
 
 interface SendWhatsAppDialogProps {
   open: boolean;
