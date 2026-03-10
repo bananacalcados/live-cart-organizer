@@ -69,6 +69,23 @@ export function DashboardChatPanel() {
     loadChatContacts();
   }, []);
 
+  // Build a map of normalized phone → instagram handle from current event orders
+  const orderPhoneMap = useMemo(() => {
+    const map = new Map<string, { instagram?: string; stage?: string; customerId?: string }>();
+    for (const order of orders) {
+      const phone = order.customer?.whatsapp?.replace(/\D/g, "");
+      if (phone) {
+        const suffix = phone.slice(-8);
+        map.set(suffix, {
+          instagram: order.customer?.instagram_handle,
+          stage: order.stage,
+          customerId: order.customer_id,
+        });
+      }
+    }
+    return map;
+  }, [orders]);
+
   const loadConversations = useCallback(async () => {
     const { data, error } = await supabase
       .from("whatsapp_messages")
@@ -93,10 +110,13 @@ export function DashboardChatPanel() {
 
     convMap.forEach((value, convKey) => {
       const phone = value.phone;
+      const phoneSuffix = phone.replace(/\D/g, "").slice(-8);
+      const orderData = orderPhoneMap.get(phoneSuffix);
+
+      // Only include conversations that have orders in current event
+      if (!orderData) return;
+
       const lastMsg = value.messages[0];
-      const matchingOrders = orders.filter(o => o.customer?.whatsapp?.replace(/\D/g, "") === phone.replace(/\D/g, ""));
-      const order = matchingOrders[0];
-      const customer = customers.find(c => c.whatsapp?.replace(/\D/g, "") === phone.replace(/\D/g, ""));
       const isGroup = value.isGroup || phone.includes("@g.us") || phone.includes("-");
       const lastIncoming = value.messages.find((m: any) => m.direction === "incoming");
       const lastIncomingInstance: "zapi" | "meta" | undefined = (() => {
@@ -114,11 +134,11 @@ export function DashboardChatPanel() {
         lastMessage: lastMsg.message,
         lastMessageAt: new Date(lastMsg.created_at),
         unreadCount: value.unread,
-        customerName: chatContacts[phone] || order?.customer?.instagram_handle || customer?.instagram_handle,
+        customerName: chatContacts[phone] || orderData.instagram,
         isGroup,
         hasUnansweredMessage: lastMsg.direction === "incoming",
-        stage: order?.stage,
-        customerId: order?.customer_id || customer?.id,
+        stage: orderData.stage,
+        customerId: orderData.customerId,
         whatsapp_number_id: value.numberId,
         lastIncomingInstance,
       });
