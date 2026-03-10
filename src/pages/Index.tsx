@@ -13,6 +13,7 @@ import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { EventStockAlerts } from "@/components/events/EventStockAlerts";
+import { EventCartsPanel } from "@/components/events/EventCartsPanel";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
