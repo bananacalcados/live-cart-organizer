@@ -550,14 +550,31 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 type="button"
                 variant="outline"
                 size="icon"
-                onClick={() => {
+                onClick={async () => {
                   if (!editingOrder) {
                     toast.error("Salve o pedido primeiro");
                     return;
                   }
-                  const url = `${window.location.origin}/checkout/order/${editingOrder.id}`;
-                  setCartLink(url);
-                  toast.success("Link do checkout transparente gerado!");
+                  // Save current changes to DB before generating link
+                  try {
+                    const orderUpdates: Partial<DbOrder> = {
+                      products: localProducts,
+                      discount_type: discountType || null,
+                      discount_value: discountType ? (discountValue ?? 0) : 0,
+                      free_shipping: freeShipping,
+                      has_gift: hasGift,
+                      coupon_code: couponCode || null,
+                      notes: notes || null,
+                      shipping_cost: editingOrder.shipping_cost ?? null,
+                    } as any;
+                    await updateOrder(editingOrder.id, orderUpdates);
+                    const url = `${window.location.origin}/checkout/order/${editingOrder.id}`;
+                    setCartLink(url);
+                    toast.success("Pedido salvo e link do checkout gerado!");
+                  } catch (error) {
+                    console.error("Error saving order before checkout link:", error);
+                    toast.error("Erro ao salvar pedido antes de gerar link");
+                  }
                 }}
                 disabled={localProducts.length === 0 || !editingOrder}
                 title="Gerar link Checkout Transparente (Pagar.me/APPMAX)"
