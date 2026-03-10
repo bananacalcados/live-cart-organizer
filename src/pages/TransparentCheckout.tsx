@@ -953,7 +953,8 @@ export default function TransparentCheckout() {
           ? subtotal * (order.discount_value / 100)
           : order.discount_value;
       }
-      const totalAmount = Math.round(Math.max(0, subtotal - discountAmount) * 100) / 100;
+      const orderShippingCost = Number(order.shipping_cost || 0);
+      const totalAmount = Math.round(Math.max(0, subtotal - discountAmount + orderShippingCost) * 100) / 100;
 
       setOrderData({
         id: order.id,
@@ -961,7 +962,7 @@ export default function TransparentCheckout() {
         customerId: order.customer_id || undefined,
         products, subtotal, discountAmount, totalAmount,
         isPaid: order.is_paid, checkoutStartedAt: order.checkout_started_at,
-        freeShipping: order.free_shipping || false, shippingCost: 0,
+        freeShipping: order.free_shipping || false, shippingCost: orderShippingCost,
       });
 
       if (order.is_paid) {

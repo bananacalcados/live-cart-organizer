@@ -4715,6 +4715,7 @@ export type Database = {
           paid_externally: boolean | null
           pos_sale_id: string | null
           products: Json
+          shipping_cost: number | null
           stage: string
           updated_at: string
           vindi_transaction_id: string | null
@@ -4745,6 +4746,7 @@ export type Database = {
           paid_externally?: boolean | null
           pos_sale_id?: string | null
           products?: Json
+          shipping_cost?: number | null
           stage?: string
           updated_at?: string
           vindi_transaction_id?: string | null
@@ -4775,6 +4777,7 @@ export type Database = {
           paid_externally?: boolean | null
           pos_sale_id?: string | null
           products?: Json
+          shipping_cost?: number | null
           stage?: string
           updated_at?: string
           vindi_transaction_id?: string | null
