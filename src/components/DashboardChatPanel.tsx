@@ -334,7 +334,7 @@ export function DashboardChatPanel() {
           <button
             onClick={() => setFilter("sem_resposta")}
             className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2",
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2 flex-shrink-0 whitespace-nowrap",
               filter === "sem_resposta"
                 ? "bg-destructive text-destructive-foreground border-destructive shadow-md scale-105"
                 : "bg-destructive/15 text-destructive border-destructive/30 hover:bg-destructive/25"
