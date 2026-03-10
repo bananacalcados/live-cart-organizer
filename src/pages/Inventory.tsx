@@ -1168,7 +1168,24 @@ export default function Inventory() {
                 </ScrollArea>
               </TabsContent>
 
-              {/* Unresolved Barcodes Tab */}
+              {/* Verification Tab */}
+              <TabsContent value="verification" className="space-y-4">
+                {countItems.length === 0 ? (
+                  <div className="text-center py-12">
+                    <ClipboardCheck className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+                    <p className="text-muted-foreground">Nenhum produto bipado ainda.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Bipe os produtos na aba "Bipagem" primeiro.</p>
+                  </div>
+                ) : (
+                  <InventoryVerification
+                    countItems={countItems}
+                    storeName={selectedStore?.name || ""}
+                    countDate={activeCount.started_at}
+                    countScope={activeCount.scope}
+                  />
+                )}
+              </TabsContent>
+
               <TabsContent value="unresolved" className="space-y-4">
                 {unresolvedBarcodes.length === 0 ? (
                   <div className="text-center py-12">
