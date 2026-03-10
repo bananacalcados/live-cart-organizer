@@ -221,6 +221,17 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         </div>
       </div>
 
+      {/* Missing fields badges for incomplete orders */}
+      {order.stage === 'incomplete_order' && missingFields.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {missingFields.map((field) => (
+            <Badge key={field} variant="outline" className="text-[10px] bg-stage-incomplete/10 text-stage-incomplete border-stage-incomplete/40">
+              ⚠️ {field}
+            </Badge>
+          ))}
+        </div>
+      )}
+
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && shopifyOrderName && (
