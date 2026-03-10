@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { KanbanBoardDb } from "@/components/KanbanBoardDb";
@@ -13,12 +13,13 @@ import { MetaTemplateCreator } from "@/components/MetaTemplateCreator";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { EventStockAlerts } from "@/components/events/EventStockAlerts";
+import { EventCartsPanel } from "@/components/events/EventCartsPanel";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
-import { Calendar, Search, Trophy, Tag, MessageSquare } from "lucide-react";
+import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -171,6 +172,12 @@ const Index = () => {
                 <MessageSquare className="h-3 w-3" />
                 Templates API
               </TabsTrigger>
+              {currentEvent?.catalog_lead_page_id && (
+                <TabsTrigger value="carts" className="gap-1">
+                  <ShoppingCart className="h-3 w-3" />
+                  Carrinhos
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -199,6 +206,12 @@ const Index = () => {
           <TabsContent value="meta-templates">
             <MetaTemplateCreator />
           </TabsContent>
+
+          {currentEvent?.catalog_lead_page_id && (
+            <TabsContent value="carts">
+              <EventCartsPanel catalogLeadPageId={currentEvent.catalog_lead_page_id} />
+            </TabsContent>
+          )}
         </Tabs>
       </main>
 
