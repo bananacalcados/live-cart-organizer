@@ -518,6 +518,17 @@ serve(async (req) => {
     // Use the totalAmountCents from the frontend (includes interest calculation)
     const totalCents = params.totalAmountCents;
 
+    // Resolve shippingAmount server-side if not provided
+    if (!params.shippingAmount && orderSource === "orders" && order) {
+      params.shippingAmount = Number(order.shipping_cost || 0);
+    } else if (!params.shippingAmount && orderSource === "pos_sales") {
+      const { data: saleShip } = await supabase.from("pos_sales").select("payment_details").eq("id", params.orderId).maybeSingle();
+      const pd = saleShip?.payment_details as Record<string, unknown> | null;
+      if (pd && typeof pd === "object" && pd.shipping_amount) {
+        params.shippingAmount = Number(pd.shipping_amount) || 0;
+      }
+    }
+
     const chargeParams: ChargeRequest = {
       ...params,
       totalAmountCents: totalCents,
