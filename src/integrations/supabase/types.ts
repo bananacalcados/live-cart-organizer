@@ -1922,6 +1922,8 @@ export type Database = {
       }
       events: {
         Row: {
+          active_product_delay_seconds: number
+          catalog_lead_page_id: string | null
           created_at: string
           default_shipping_cost: number | null
           description: string | null
@@ -1931,6 +1933,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          active_product_delay_seconds?: number
+          catalog_lead_page_id?: string | null
           created_at?: string
           default_shipping_cost?: number | null
           description?: string | null
@@ -1940,6 +1944,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          active_product_delay_seconds?: number
+          catalog_lead_page_id?: string | null
           created_at?: string
           default_shipping_cost?: number | null
           description?: string | null
@@ -1948,7 +1954,15 @@ export type Database = {
           name?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "events_catalog_lead_page_id_fkey"
+            columns: ["catalog_lead_page_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_lead_pages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       expedition_beta_order_items: {
         Row: {
