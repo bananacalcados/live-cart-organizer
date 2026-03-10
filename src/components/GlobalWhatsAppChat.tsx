@@ -89,7 +89,14 @@ export function GlobalWhatsAppChat() {
         const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
         const isGroup = value.isGroup || phone.includes('@g.us') || phone.includes('-');
         const lastIncoming = value.messages.find(m => m.direction === 'incoming');
-        const lastIncomingInstance: 'zapi' | 'meta' | undefined = lastIncoming?.whatsapp_number_id ? 'meta' : lastIncoming ? 'zapi' : undefined;
+        // Detect provider by cross-referencing whatsapp_number_id with metaNumbers
+        const lastIncomingInstance: 'zapi' | 'meta' | undefined = (() => {
+          if (!lastIncoming) return undefined;
+          if (!lastIncoming.whatsapp_number_id) return 'zapi';
+          const matchedNumber = metaNumbers.find(n => n.id === lastIncoming.whatsapp_number_id);
+          if (matchedNumber) return (matchedNumber.provider === 'meta' ? 'meta' : 'zapi') as 'zapi' | 'meta';
+          return 'zapi';
+        })();
         const msgWithNumberId = value.messages.find(m => m.whatsapp_number_id);
         const eventNames = matchingOrders.map(o => events.find(e => e.id === o.event_id)?.name).filter(Boolean) as string[];
         
