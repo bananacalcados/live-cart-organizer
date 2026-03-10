@@ -26,6 +26,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { EventsDashboard } from "@/components/events/EventsDashboard";
 import { useEventStore } from "@/stores/eventStore";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
