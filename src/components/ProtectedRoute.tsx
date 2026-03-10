@@ -9,7 +9,7 @@ const CACHE_TTL = 60_000; // 1 minute
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredModule?: string;
+  requiredModule?: string | string[];
 }
 
 export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps) {
