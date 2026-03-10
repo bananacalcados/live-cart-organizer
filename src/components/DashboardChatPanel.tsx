@@ -359,47 +359,62 @@ export function DashboardChatPanel() {
             <p className="text-xs">Nenhuma conversa encontrada</p>
           </div>
         ) : (
-          <div className="divide-y divide-border">
-            {filteredConversations.map(conv => (
-              <button
-                key={`${conv.phone}__${conv.whatsapp_number_id || "none"}`}
-                onClick={() => handleSelectConversation(conv.phone, conv.whatsapp_number_id)}
-                className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-start gap-2">
-                  <div className="flex-shrink-0 mt-0.5">
-                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                      <span className="text-xs font-bold text-muted-foreground">
-                        {(conv.customerName || conv.phone)?.[0]?.toUpperCase() || "?"}
-                      </span>
+           <div className="divide-y divide-border">
+            {filteredConversations.map(conv => {
+              const instagramHandle = (() => {
+                const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, "") === conv.phone.replace(/\D/g, ""));
+                const customer = customers.find(c => c.whatsapp?.replace(/\D/g, "") === conv.phone.replace(/\D/g, ""));
+                return order?.customer?.instagram_handle || customer?.instagram_handle || null;
+              })();
+              const picUrl = profilePics[conv.phone];
+
+              return (
+                <button
+                  key={`${conv.phone}__${conv.whatsapp_number_id || "none"}`}
+                  onClick={() => handleSelectConversation(conv.phone, conv.whatsapp_number_id)}
+                  className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <Avatar className="h-9 w-9">
+                        {picUrl && <AvatarImage src={picUrl} alt={conv.customerName || conv.phone} />}
+                        <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">
+                          {(conv.customerName || conv.phone)?.[0]?.toUpperCase() || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="text-sm font-semibold text-foreground truncate">
+                            {conv.customerName || conv.phone}
+                          </span>
+                          {instagramHandle && (
+                            <span className="text-[10px] text-primary/70 truncate">@{instagramHandle.replace(/^@/, "")}</span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
+                          {formatTime(conv.lastMessageAt)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.lastMessage}</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        {conv.stage && (
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
+                            {STAGES.find(s => s.id === conv.stage)?.title || conv.stage}
+                          </Badge>
+                        )}
+                        {conv.unreadCount > 0 && (
+                          <Badge className="bg-[hsl(var(--stage-paid))] text-white text-[9px] px-1.5 py-0 h-4 ml-auto">
+                            {conv.unreadCount}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-foreground truncate">
-                        {conv.customerName || conv.phone}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
-                        {formatTime(conv.lastMessageAt)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.lastMessage}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      {conv.stage && (
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4">
-                          {STAGES.find(s => s.id === conv.stage)?.title || conv.stage}
-                        </Badge>
-                      )}
-                      {conv.unreadCount > 0 && (
-                        <Badge className="bg-[hsl(var(--stage-paid))] text-white text-[9px] px-1.5 py-0 h-4 ml-auto">
-                          {conv.unreadCount}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         )}
       </ScrollArea>
