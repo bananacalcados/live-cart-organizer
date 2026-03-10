@@ -109,7 +109,12 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
   },
 
   getTemplatesByStage: (stage) => {
-    return get().templates.filter((t) => t.stage === stage || t.stage === 'all');
+    return get().templates.filter((t) => {
+      if (t.stage === 'all') return true;
+      // Support comma-separated multi-stage values
+      const stages = t.stage.split(',');
+      return stages.includes(stage);
+    });
   },
 }));
 

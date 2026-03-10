@@ -19,13 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useTemplateStore, MessageTemplate } from "@/stores/templateStore";
 import { STAGES, OrderStage } from "@/types/order";
 import { toast } from "sonner";
@@ -43,7 +37,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
-  const [stage, setStage] = useState<OrderStage | 'all'>('all');
+  const [selectedStages, setSelectedStages] = useState<string[]>([]);
 
   useEffect(() => {
     fetchTemplates();
@@ -53,7 +47,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
     setEditingTemplate(template);
     setName(template.name);
     setMessage(template.message);
-    setStage(template.stage);
+    setSelectedStages(template.stage === 'all' ? [] : template.stage.split(','));
     setIsEditing(true);
   };
 
@@ -69,7 +63,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   const resetForm = () => {
     setName("");
     setMessage("");
-    setStage('all');
+    setSelectedStages([]);
     setEditingTemplate(null);
   };
 
@@ -80,12 +74,13 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
     }
 
     setIsSaving(true);
+    const stageValue = selectedStages.length === 0 ? 'all' : selectedStages.join(',');
     try {
       if (editingTemplate) {
-        await updateTemplate(editingTemplate.id, { name, message, stage });
+        await updateTemplate(editingTemplate.id, { name, message, stage: stageValue as any });
         toast.success("Template atualizado");
       } else {
-        await addTemplate({ name, message, stage });
+        await addTemplate({ name, message, stage: stageValue as any });
         toast.success("Template criado");
       }
       resetForm();
@@ -97,14 +92,12 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
     }
   };
 
-  const getStageLabel = (stageId: OrderStage | 'all') => {
-    if (stageId === 'all') return 'Todas as etapas';
-    return STAGES.find(s => s.id === stageId)?.title || stageId;
-  };
-
-  const getStageColor = (stageId: OrderStage | 'all') => {
-    if (stageId === 'all') return 'bg-muted';
-    return STAGES.find(s => s.id === stageId)?.color || 'bg-muted';
+  const getStageBadges = (stageStr: string) => {
+    if (stageStr === 'all') return [{ label: 'Todas as etapas', color: 'bg-muted' }];
+    return stageStr.split(',').map(s => {
+      const found = STAGES.find(st => st.id === s);
+      return { label: found?.title || s, color: found?.color || 'bg-muted' };
+    });
   };
 
   const dataVariables = [
@@ -174,12 +167,13 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{template.name}</p>
-                      <Badge
-                        variant="secondary"
-                        className={cn("text-xs mt-1", getStageColor(template.stage), "text-white")}
-                      >
-                        {getStageLabel(template.stage)}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {getStageBadges(template.stage).map((b, i) => (
+                          <Badge key={i} variant="secondary" className={cn("text-xs", b.color, "text-white")}>
+                            {b.label}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                     <div className="flex gap-1">
                       <Button
@@ -231,20 +225,31 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="template-stage">Etapa do Funil</Label>
-                <Select value={stage} onValueChange={(v) => setStage(v as OrderStage | 'all')}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as etapas</SelectItem>
-                    {STAGES.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Etapa do Funil</Label>
+                <p className="text-xs text-muted-foreground">
+                  {selectedStages.length === 0 ? "Nenhuma selecionada = Todas as etapas" : `${selectedStages.length} etapa(s) selecionada(s)`}
+                </p>
+                <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-auto border rounded-lg p-3">
+                  {STAGES.map((s) => {
+                    const checked = selectedStages.includes(s.id);
+                    return (
+                      <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm hover:bg-muted/50 rounded px-1 py-0.5">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            if (v) {
+                              setSelectedStages(prev => [...prev, s.id]);
+                            } else {
+                              setSelectedStages(prev => prev.filter(x => x !== s.id));
+                            }
+                          }}
+                        />
+                        <span className={cn("w-2 h-2 rounded-full shrink-0", s.color)} />
+                        <span className="truncate">{s.title}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="space-y-2">
