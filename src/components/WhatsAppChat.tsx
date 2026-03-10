@@ -142,6 +142,29 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
+  // ── Detect provider for selected number ──
+  const isZapiProvider = () => {
+    const num = getSelectedNumber();
+    return num?.provider === 'zapi';
+  };
+
+  // ── Send via Z-API ──
+  const sendViaZapi = async (
+    phoneNumber: string,
+    message: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('zapi-send-message', {
+        body: { phone: phoneNumber, message, whatsapp_number_id: selectedNumberId },
+      });
+      if (error) return { success: false, error: error.message };
+      if (data?.success) return { success: true, messageId: data?.data?.zapiMessageId };
+      return { success: false, error: data?.error || 'Erro ao enviar' };
+    } catch (err) {
+      return { success: false, error: 'Erro de conexão' };
+    }
+  };
+
   // ── Send via Meta API using selected number ──
   const sendViaMeta = async (
     phoneNumber: string,
@@ -175,6 +198,33 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     } catch (err) {
       return { success: false, error: 'Erro de conexão' };
     }
+  };
+
+  // ── Unified send that routes based on provider ──
+  const sendMessage = async (
+    phoneNumber: string,
+    message: string,
+    type: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text',
+    mediaUrl?: string,
+    caption?: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+    if (isZapiProvider()) {
+      if (type !== 'text' && mediaUrl) {
+        // Z-API media send
+        try {
+          const { data, error } = await supabase.functions.invoke('zapi-send-media', {
+            body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: selectedNumberId },
+          });
+          if (error) return { success: false, error: error.message };
+          if (data?.success) return { success: true };
+          return { success: false, error: data?.error || 'Erro ao enviar' };
+        } catch (err) {
+          return { success: false, error: 'Erro de conexão' };
+        }
+      }
+      return sendViaZapi(phoneNumber, message);
+    }
+    return sendViaMeta(phoneNumber, message, type, mediaUrl, caption);
   };
 
   const phone = order.whatsapp || '';
