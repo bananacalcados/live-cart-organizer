@@ -47,7 +47,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
     setEditingTemplate(template);
     setName(template.name);
     setMessage(template.message);
-    setStage(template.stage);
+    setSelectedStages(template.stage === 'all' ? [] : template.stage.split(','));
     setIsEditing(true);
   };
 
@@ -63,7 +63,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   const resetForm = () => {
     setName("");
     setMessage("");
-    setStage('all');
+    setSelectedStages([]);
     setEditingTemplate(null);
   };
 
