@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, Plus, Minus, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ export function ProductSelector({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, number>>({});
+  const pendingAutoAddRef = useRef<{ product: ShopifyProduct; variantIndex: number } | null>(null);
 
   // Debounce search input
   useEffect(() => {
@@ -47,6 +48,35 @@ export function ProductSelector({
     loadAllProducts();
   }, []);
 
+  // Process pending auto-add
+  useEffect(() => {
+    if (pendingAutoAddRef.current) {
+      const { product, variantIndex } = pendingAutoAddRef.current;
+      const variant = product.node.variants.edges[variantIndex]?.node;
+      if (variant) {
+        const existingId = `${product.node.id}-${variant.id}`;
+        const alreadyAdded = selectedProducts.some((sp) => sp.id === existingId);
+        if (!alreadyAdded) {
+          const compareAt = variant.compareAtPrice ? parseFloat(variant.compareAtPrice.amount) : undefined;
+          const price = parseFloat(variant.price.amount);
+          onAddProduct({
+            id: existingId,
+            shopifyId: variant.id,
+            sku: variant.sku || undefined,
+            title: product.node.title,
+            variant: variant.title !== "Default Title" ? variant.title : "",
+            price,
+            compareAtPrice: compareAt && compareAt > price ? compareAt : undefined,
+            quantity: 1,
+            image: variant.image?.url || product.node.images.edges[0]?.node.url,
+          });
+          setSearch("");
+        }
+      }
+      pendingAutoAddRef.current = null;
+    }
+  });
+
   // Filter products when search changes
   useEffect(() => {
     if (!debouncedSearch.trim()) {
@@ -54,10 +84,10 @@ export function ProductSelector({
       return;
     }
     const q = debouncedSearch.trim().toLowerCase();
+    const isSkuOrGtin = /^[a-z0-9\-]+$/i.test(q) && q.length >= 4 && !q.includes(" ");
+
     const filtered = allProducts.filter((p) => {
-      // Match by title
       if (p.node.title.toLowerCase().includes(q)) return true;
-      // Match by variant SKU or barcode (GTIN)
       return p.node.variants.edges.some(
         (v) =>
           (v.node.sku && v.node.sku.toLowerCase().includes(q)) ||
@@ -65,17 +95,34 @@ export function ProductSelector({
       );
     });
 
-    // Auto-select the matching variant when searching by SKU/barcode
-    filtered.forEach((p) => {
-      const matchIdx = p.node.variants.edges.findIndex(
-        (v) =>
-          (v.node.sku && v.node.sku.toLowerCase().includes(q)) ||
-          (v.node.barcode && v.node.barcode.toLowerCase().includes(q))
-      );
-      if (matchIdx >= 0) {
-        setSelectedVariants((prev) => ({ ...prev, [p.node.id]: matchIdx }));
+    // Auto-select and auto-add when SKU/GTIN match found
+    if (isSkuOrGtin) {
+      for (const p of filtered) {
+        const matchIdx = p.node.variants.edges.findIndex(
+          (v) =>
+            (v.node.sku && v.node.sku.toLowerCase() === q) ||
+            (v.node.barcode && v.node.barcode.toLowerCase() === q) ||
+            (v.node.sku && v.node.sku.toLowerCase().includes(q)) ||
+            (v.node.barcode && v.node.barcode.toLowerCase().includes(q))
+        );
+        if (matchIdx >= 0) {
+          setSelectedVariants((prev) => ({ ...prev, [p.node.id]: matchIdx }));
+          pendingAutoAddRef.current = { product: p, variantIndex: matchIdx };
+          break;
+        }
       }
-    });
+    } else {
+      filtered.forEach((p) => {
+        const matchIdx = p.node.variants.edges.findIndex(
+          (v) =>
+            (v.node.sku && v.node.sku.toLowerCase().includes(q)) ||
+            (v.node.barcode && v.node.barcode.toLowerCase().includes(q))
+        );
+        if (matchIdx >= 0) {
+          setSelectedVariants((prev) => ({ ...prev, [p.node.id]: matchIdx }));
+        }
+      });
+    }
 
     setProducts(filtered);
   }, [debouncedSearch, allProducts]);
