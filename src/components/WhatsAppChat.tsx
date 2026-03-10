@@ -620,7 +620,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
         const mediaUrl = await uploadMediaToStorage(file);
         if (mediaUrl) {
-          const result = await sendViaMeta(phone, '[Áudio]', 'audio', mediaUrl);
+          const result = await sendMessage(phone, '[Áudio]', 'audio', mediaUrl);
           if (result.success) {
             await supabase.from('whatsapp_messages').insert({
               phone: normalizedPhone,
