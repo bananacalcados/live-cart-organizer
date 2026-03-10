@@ -206,6 +206,12 @@ const Index = () => {
           <TabsContent value="meta-templates">
             <MetaTemplateCreator />
           </TabsContent>
+
+          {currentEvent?.catalog_lead_page_id && (
+            <TabsContent value="carts">
+              <EventCartsPanel catalogLeadPageId={currentEvent.catalog_lead_page_id} />
+            </TabsContent>
+          )}
         </Tabs>
       </main>
 
