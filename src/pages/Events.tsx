@@ -300,136 +300,156 @@ const Events = () => {
       </header>
 
       <main className="container py-6">
-        <EventsDashboard />
-        
-        {isLoading ? (
-          <div className="text-center py-12 text-muted-foreground">
-            Carregando eventos...
-          </div>
-        ) : events.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">Nenhum evento criado</h3>
-              <p className="text-muted-foreground text-center mb-4">
-                Crie seu primeiro evento para começar a organizar os pedidos das lives.
-              </p>
-              <Button className="btn-accent" onClick={() => setDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Criar Primeiro Evento
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {events.map((event) => {
-              const stats = getStats(event.id);
-              return (
-                <Card key={event.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-lg">{event.name}</CardTitle>
-                        <CardDescription>
-                          {format(new Date(event.created_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                        </CardDescription>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleEdit(event)}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
+        <Tabs defaultValue="events">
+          <TabsList className="mb-4">
+            <TabsTrigger value="events" className="gap-1">
+              <Calendar className="h-4 w-4" /> Eventos
+            </TabsTrigger>
+            <TabsTrigger value="team" className="gap-1">
+              <UserCheck className="h-4 w-4" /> Equipe
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="events">
+            <EventsDashboard />
+            
+            {isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                Carregando eventos...
+              </div>
+            ) : events.length === 0 ? (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">Nenhum evento criado</h3>
+                  <p className="text-muted-foreground text-center mb-4">
+                    Crie seu primeiro evento para começar a organizar os pedidos das lives.
+                  </p>
+                  <Button className="btn-accent" onClick={() => setDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Criar Primeiro Evento
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {events.map((event) => {
+                  const stats = getStats(event.id);
+                  return (
+                    <Card key={event.id} className="hover:shadow-lg transition-shadow">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-lg">{event.name}</CardTitle>
+                            <CardDescription>
+                              {format(new Date(event.created_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                            </CardDescription>
+                          </div>
+                          <div className="flex gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              className="h-8 w-8"
+                              onClick={() => handleEdit(event)}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Edit2 className="h-4 w-4" />
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Excluir evento?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Esta ação não pode ser desfeita. Todos os pedidos deste evento serão excluídos permanentemente.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                onClick={() => deleteEvent(event.id)}
-                              >
-                                Excluir
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {event.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {event.description}
-                      </p>
-                    )}
-                    {(event as any).default_shipping_cost && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Truck className="h-4 w-4" />
-                        <span>Frete fixo: <strong>R$ {Number((event as any).default_shipping_cost).toFixed(2)}</strong></span>
-                      </div>
-                    )}
-                    
-                    <div className="grid grid-cols-4 gap-2 text-center">
-                      <div className="bg-secondary/50 rounded-lg p-2">
-                        <ShoppingBag className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                        <p className="text-lg font-bold">{stats.totalOrders}</p>
-                        <p className="text-xs text-muted-foreground">Total</p>
-                      </div>
-                      <div className="bg-stage-awaiting/20 rounded-lg p-2">
-                        <AlertCircle className="h-4 w-4 mx-auto mb-1 text-stage-awaiting" />
-                        <p className="text-lg font-bold text-stage-awaiting">{stats.unpaidOrders}</p>
-                        <p className="text-xs text-muted-foreground">Não Pagos</p>
-                      </div>
-                      <div className="bg-stage-paid/20 rounded-lg p-2">
-                        <Users className="h-4 w-4 mx-auto mb-1 text-stage-paid" />
-                        <p className="text-lg font-bold text-stage-paid">{stats.paidOrders}</p>
-                        <p className="text-xs text-muted-foreground">Pagos</p>
-                      </div>
-                      {stats.missingShopify >= 0 ? (
-                        <div className={`rounded-lg p-2 cursor-pointer ${stats.missingShopify > 0 ? 'bg-destructive/10 animate-pulse' : 'bg-stage-paid/10'}`} onClick={() => handleVerifyShopify(event.id)}>
-                          <AlertTriangle className={`h-4 w-4 mx-auto mb-1 ${stats.missingShopify > 0 ? 'text-destructive' : 'text-stage-paid'}`} />
-                          <p className={`text-lg font-bold ${stats.missingShopify > 0 ? 'text-destructive' : 'text-stage-paid'}`}>{stats.missingShopify}</p>
-                          <p className="text-xs text-muted-foreground">Sem Shopify</p>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir evento?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta ação não pode ser desfeita. Todos os pedidos deste evento serão excluídos permanentemente.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    onClick={() => deleteEvent(event.id)}
+                                  >
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </div>
-                      ) : (
-                        <div className="rounded-lg p-2 bg-secondary/50">
-                          <Loader2 className="h-4 w-4 mx-auto mb-1 text-muted-foreground animate-spin" />
-                          <p className="text-xs font-medium text-muted-foreground mt-1">Verificando...</p>
-                        </div>
-                      )}
-                    </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {event.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {event.description}
+                          </p>
+                        )}
+                        {(event as any).default_shipping_cost && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Truck className="h-4 w-4" />
+                            <span>Frete fixo: <strong>R$ {Number((event as any).default_shipping_cost).toFixed(2)}</strong></span>
+                          </div>
+                        )}
 
-                    <Button
-                      className="w-full btn-accent"
-                      onClick={() => handleOpenEvent(event.id)}
-                    >
-                      <Play className="h-4 w-4 mr-2" />
-                      Abrir Evento
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                        {/* Team avatars */}
+                        <EventTeamDisplay eventId={event.id} />
+                        
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div className="bg-secondary/50 rounded-lg p-2">
+                            <ShoppingBag className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+                            <p className="text-lg font-bold">{stats.totalOrders}</p>
+                            <p className="text-xs text-muted-foreground">Total</p>
+                          </div>
+                          <div className="bg-stage-awaiting/20 rounded-lg p-2">
+                            <AlertCircle className="h-4 w-4 mx-auto mb-1 text-stage-awaiting" />
+                            <p className="text-lg font-bold text-stage-awaiting">{stats.unpaidOrders}</p>
+                            <p className="text-xs text-muted-foreground">Não Pagos</p>
+                          </div>
+                          <div className="bg-stage-paid/20 rounded-lg p-2">
+                            <Users className="h-4 w-4 mx-auto mb-1 text-stage-paid" />
+                            <p className="text-lg font-bold text-stage-paid">{stats.paidOrders}</p>
+                            <p className="text-xs text-muted-foreground">Pagos</p>
+                          </div>
+                          {stats.missingShopify >= 0 ? (
+                            <div className={`rounded-lg p-2 cursor-pointer ${stats.missingShopify > 0 ? 'bg-destructive/10 animate-pulse' : 'bg-stage-paid/10'}`} onClick={() => handleVerifyShopify(event.id)}>
+                              <AlertTriangle className={`h-4 w-4 mx-auto mb-1 ${stats.missingShopify > 0 ? 'text-destructive' : 'text-stage-paid'}`} />
+                              <p className={`text-lg font-bold ${stats.missingShopify > 0 ? 'text-destructive' : 'text-stage-paid'}`}>{stats.missingShopify}</p>
+                              <p className="text-xs text-muted-foreground">Sem Shopify</p>
+                            </div>
+                          ) : (
+                            <div className="rounded-lg p-2 bg-secondary/50">
+                              <Loader2 className="h-4 w-4 mx-auto mb-1 text-muted-foreground animate-spin" />
+                              <p className="text-xs font-medium text-muted-foreground mt-1">Verificando...</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <Button
+                          className="w-full btn-accent"
+                          onClick={() => handleOpenEvent(event.id)}
+                        >
+                          <Play className="h-4 w-4 mr-2" />
+                          Abrir Evento
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="team">
+            <EventTeamManager />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
