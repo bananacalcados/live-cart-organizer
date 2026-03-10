@@ -125,6 +125,52 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     checkRegistration();
   }, [order.customer_id, order.is_paid, order.paid_externally, order.customer?.whatsapp]);
 
+  // Fetch live messages the customer sent (for awaiting_confirmation display)
+  useEffect(() => {
+    if (order.stage !== 'awaiting_confirmation' && order.stage !== 'incomplete_order') return;
+    if (!order.customer?.whatsapp) return;
+    const phone = order.customer.whatsapp.replace(/\D/g, '');
+    if (!phone) return;
+    const fetchMessages = async () => {
+      const { data } = await supabase
+        .from('whatsapp_messages')
+        .select('message')
+        .eq('phone', phone)
+        .eq('direction', 'incoming')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (data) setLiveMessages(data.map(m => m.message).filter(Boolean));
+    };
+    fetchMessages();
+  }, [order.stage, order.customer?.whatsapp]);
+
+  const handleConfirmOrder = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsConfirming(true);
+    try {
+      await storeMove(order.id, 'new');
+      const payload = {
+        order_id: order.id,
+        customer: { instagram: order.customer?.instagram_handle, whatsapp: order.customer?.whatsapp },
+        products: order.products.map(p => ({ title: p.title, variant: p.variant, quantity: p.quantity, price: p.price, sku: p.sku })),
+        total: order.products.reduce((s, p) => s + p.price * p.quantity, 0),
+        cart_link: order.cart_link,
+        notes: order.notes,
+        event_id: order.event_id,
+      };
+      fetch('http://31.97.23.119:8000/webhook/novo-pedido', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(err => console.error('Webhook error:', err));
+      toast.success('Pedido confirmado e enviado ao Agente!');
+    } catch {
+      toast.error('Erro ao confirmar pedido');
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
   const handleCreateShopifyOrder = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsCreatingShopifyOrder(true);
