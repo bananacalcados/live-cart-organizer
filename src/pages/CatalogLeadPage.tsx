@@ -754,19 +754,23 @@ export default function CatalogLeadPage() {
           <>
             <div className="h-24" />
             <div className="fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/95 backdrop-blur-sm border-t shadow-2xl">
-              <div className="max-w-lg mx-auto flex items-center gap-3">
-                <button onClick={() => setCartOpen(true)} className="flex items-center gap-2 text-sm font-medium text-gray-600">
+              <div className="max-w-lg mx-auto flex items-center gap-2">
+                <button onClick={() => setCartOpen(true)} className="flex items-center gap-1.5 text-sm font-medium text-gray-600">
                   🛒 <span className="font-bold">{cart.reduce((s, c) => s + c.quantity, 0)}</span> itens
-                  {shippingAlreadyPaid ? <span className="text-[10px] text-emerald-500">(frete grátis ✅)</span> : shippingCost > 0 && <span className="text-[10px] text-gray-400">(+frete)</span>}
                 </button>
                 <div className="flex-1 text-right">
                   <span className="text-lg font-black" style={{ color: theme.primaryColor }}>{fmt(cartTotal)}</span>
                 </div>
+                <button onClick={() => setCartOpen(true)}
+                  className="px-4 py-3 rounded-xl border-2 font-black text-sm uppercase tracking-wider flex items-center gap-1.5 active:scale-95 transition-transform"
+                  style={{ borderColor: theme.primaryColor, color: theme.primaryColor }}>
+                  🛒 CARRINHO
+                </button>
                 <button onClick={handleCheckout} disabled={checkoutLoading}
-                  className="px-6 py-3 rounded-xl text-white font-black text-sm uppercase tracking-wider flex items-center gap-2 active:scale-95 transition-transform disabled:opacity-60 shadow-lg"
+                  className="px-4 py-3 rounded-xl text-white font-black text-sm uppercase tracking-wider flex items-center gap-1.5 active:scale-95 transition-transform disabled:opacity-60 shadow-lg"
                   style={{ background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.secondaryColor})` }}>
                   {checkoutLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "💳"}
-                  PAGAR AGORA
+                  COMPRAR
                 </button>
               </div>
             </div>
