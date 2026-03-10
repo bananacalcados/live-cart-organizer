@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard } from "lucide-react";
 import { DbOrder } from "@/types/database";
-import { STAGES } from "@/types/order";
+import { STAGES, getMissingFields } from "@/types/order";
+import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
