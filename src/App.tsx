@@ -36,6 +36,7 @@ const LinkPageView = lazy(() => import("./pages/LinkPageView"));
 const VipGroupRedirectPage = lazy(() => import("./pages/VipGroupRedirectPage"));
 const LiveConsumidorLP = lazy(() => import("./pages/LiveConsumidorLP"));
 const CatalogLeadPage = lazy(() => import("./pages/CatalogLeadPage"));
+const EventCatalogPage = lazy(() => import("./pages/EventCatalogPage"));
 
 const queryClient = new QueryClient();
 
