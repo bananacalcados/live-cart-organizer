@@ -53,6 +53,7 @@ export interface DbOrder {
   discount_type?: DiscountType;
   discount_value?: number;
   free_shipping?: boolean;
+  shipping_cost?: number;
   has_gift?: boolean;
   coupon_code?: string;
   checkout_started_at?: string;

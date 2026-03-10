@@ -149,9 +149,8 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           customer_id: customer.id,
           products: productsToJson(products),
           stage: 'incomplete_order',
-          // Apply shipping or free shipping based on order count
           free_shipping: !applyShipping && shippingCost > 0 ? true : false,
-          discount_type: applyShipping && shippingCost > 0 ? 'fixed' as DiscountType : undefined,
+          shipping_cost: applyShipping ? shippingCost : 0,
           notes: applyShipping && shippingCost > 0 ? `Frete: R$ ${shippingCost.toFixed(2)}` : (!applyShipping && shippingCost > 0 ? 'Frete grátis (2º+ pedido)' : undefined),
         })
         .select(`
