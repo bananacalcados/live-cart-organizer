@@ -126,6 +126,10 @@ const Index = () => {
           </div>
         </div>
       )}
+
+      {currentEventId && currentEvent && (
+        <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
+      )}
       
       <StageNavigation 
         selectedStage={selectedStage} 
