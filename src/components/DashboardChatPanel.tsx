@@ -412,7 +412,7 @@ export function DashboardChatPanel() {
                             {conv.phone}
                           </span>
                           {instagramHandle && (
-                            <span className="text-[11px] font-medium text-primary truncate">@{instagramHandle.replace(/^@/, "")}</span>
+                            <span className="text-[11px] font-bold text-destructive truncate">@{instagramHandle.replace(/^@/, "")}</span>
                           )}
                         </div>
                         <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
