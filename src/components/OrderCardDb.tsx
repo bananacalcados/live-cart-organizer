@@ -149,22 +149,40 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     e.stopPropagation();
     setIsConfirming(true);
     try {
+      // 1. Generate payment link
+      const paymentLink = `https://checkout.bananacalcados.com.br/checkout/order/${order.id}`;
+
+      // Save link to order
+      await supabase.from('orders').update({ cart_link: paymentLink }).eq('id', order.id);
+
+      // 2. Move to "Novo Pedido"
       await storeMove(order.id, 'new');
+
+      // 3. Build webhook payload
+      const firstProduct = order.products[0];
+      const variantParts = firstProduct?.variant?.split('/').map(s => s.trim()) || [];
+      const tamanho = variantParts[0] || '';
+      const cor = variantParts[1] || variantParts.length === 1 ? variantParts[0] : '';
+
       const payload = {
-        order_id: order.id,
-        customer: { instagram: order.customer?.instagram_handle, whatsapp: order.customer?.whatsapp },
-        products: order.products.map(p => ({ title: p.title, variant: p.variant, quantity: p.quantity, price: p.price, sku: p.sku })),
-        total: order.products.reduce((s, p) => s + p.price * p.quantity, 0),
-        cart_link: order.cart_link,
-        notes: order.notes,
-        event_id: order.event_id,
+        pedido_id: order.id,
+        cliente_nome: order.customer?.instagram_handle || '',
+        cliente_telefone: order.customer?.whatsapp || '',
+        produto: order.products.map(p => `${p.quantity}x ${p.title}`).join(', '),
+        tamanho,
+        cor: variantParts.length > 1 ? variantParts[1] : '',
+        valor_total: finalValue,
+        link_pagamento: paymentLink,
+        loja: 'centro',
       };
+
       fetch('http://31.97.23.119:8000/webhook/novo-pedido', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }).catch(err => console.error('Webhook error:', err));
-      toast.success('Pedido confirmado e enviado ao Agente!');
+
+      toast.success('Pedido confirmado! Link de pagamento gerado e enviado ao Agente.');
     } catch {
       toast.error('Erro ao confirmar pedido');
     } finally {
