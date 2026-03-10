@@ -12,7 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    const { phone, mediaUrl, mediaType, caption, filename, whatsapp_number_id } = await req.json();
+    const body = await req.json();
+    const { phone, mediaUrl, mediaType, caption, filename, whatsapp_number_id } = body;
+
+    console.log('Received body keys:', Object.keys(body), 'whatsapp_number_id:', whatsapp_number_id);
 
     if (!phone || !mediaUrl || !mediaType) {
       return new Response(
@@ -22,6 +25,7 @@ serve(async (req) => {
     }
 
     const { instanceId, token, clientToken } = await resolveZApiCredentials(whatsapp_number_id);
+    console.log('Resolved credentials - instanceId:', instanceId, 'clientToken prefix:', clientToken?.slice(0, 6));
 
     // Format phone number
     let formattedPhone = phone.replace(/\D/g, '');
