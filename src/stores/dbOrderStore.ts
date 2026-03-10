@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { DbOrder, DbOrderProduct, DbCustomer, DiscountType } from '@/types/database';
 import { OrderStage, isOrderComplete } from '@/types/order';
 import { toast } from 'sonner';
-import { createShopifyCartFromOrder } from '@/lib/shopifyCart';
+
 import { Json } from '@/integrations/supabase/types';
 
 // Helper to convert products array to Json type
@@ -120,20 +120,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         } catch {}
       }
 
-      // Generate cart link if products exist
-      let cartLink: string | undefined;
-      let checkoutToken: string | undefined;
-      
-      if (products.length > 0) {
-        cartLink = await createShopifyCartFromOrder(products) || undefined;
-        if (cartLink) {
-          // Extract checkout token from URL
-          try {
-            const url = new URL(cartLink);
-            checkoutToken = url.pathname.split('/').pop();
-          } catch {}
-        }
-      }
+      // Cart link will be set after insert (needs orderId for transparent checkout)
 
       // Check for event shipping cost and if customer already has an order in this event
       let applyShipping = false;
@@ -161,8 +148,6 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           event_id: eventId,
           customer_id: customer.id,
           products: productsToJson(products),
-          cart_link: cartLink,
-          checkout_token: checkoutToken,
           stage: 'incomplete_order',
           // Apply shipping or free shipping based on order count
           free_shipping: !applyShipping && shippingCost > 0 ? true : false,
@@ -176,9 +161,17 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         .single();
 
       if (error) throw error;
+
+      // Generate transparent checkout link using the new order ID
+      const cartLink = `https://checkout.bananacalcados.com.br/checkout/order/${data.id}`;
+      await supabase
+        .from('orders')
+        .update({ cart_link: cartLink })
+        .eq('id', data.id);
       
       const order = {
         ...data,
+        cart_link: cartLink,
         products: data.products as unknown as DbOrderProduct[],
         customer: data.customer as DbCustomer,
         discount_type: data.discount_type as DiscountType | undefined,
@@ -314,30 +307,16 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     }
 
     try {
-      // Regenerate cart link
-      const cartLink = await createShopifyCartFromOrder(newProducts) || undefined;
-      let checkoutToken: string | undefined;
-      if (cartLink) {
-        try {
-          const url = new URL(cartLink);
-          checkoutToken = url.pathname.split('/').pop();
-        } catch {}
-      }
-
       const { error } = await supabase
         .from('orders')
-        .update({ 
-          products: productsToJson(newProducts),
-          cart_link: cartLink,
-          checkout_token: checkoutToken
-        })
+        .update({ products: productsToJson(newProducts) })
         .eq('id', orderId);
 
       if (error) throw error;
       
       set((state) => ({
         orders: state.orders.map((o) => 
-          o.id === orderId ? { ...o, products: newProducts, cart_link: cartLink, checkout_token: checkoutToken } : o
+          o.id === orderId ? { ...o, products: newProducts } : o
         )
       }));
     } catch (error) {
@@ -353,32 +332,16 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     const newProducts = order.products.filter((p) => p.id !== productId);
 
     try {
-      // Regenerate cart link
-      const cartLink = newProducts.length > 0 
-        ? await createShopifyCartFromOrder(newProducts) || undefined
-        : undefined;
-      let checkoutToken: string | undefined;
-      if (cartLink) {
-        try {
-          const url = new URL(cartLink);
-          checkoutToken = url.pathname.split('/').pop();
-        } catch {}
-      }
-
       const { error } = await supabase
         .from('orders')
-        .update({ 
-          products: productsToJson(newProducts),
-          cart_link: cartLink,
-          checkout_token: checkoutToken
-        })
+        .update({ products: productsToJson(newProducts) })
         .eq('id', orderId);
 
       if (error) throw error;
       
       set((state) => ({
         orders: state.orders.map((o) => 
-          o.id === orderId ? { ...o, products: newProducts, cart_link: cartLink, checkout_token: checkoutToken } : o
+          o.id === orderId ? { ...o, products: newProducts } : o
         )
       }));
     } catch (error) {
@@ -401,30 +364,16 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     );
 
     try {
-      // Regenerate cart link
-      const cartLink = await createShopifyCartFromOrder(newProducts) || undefined;
-      let checkoutToken: string | undefined;
-      if (cartLink) {
-        try {
-          const url = new URL(cartLink);
-          checkoutToken = url.pathname.split('/').pop();
-        } catch {}
-      }
-
       const { error } = await supabase
         .from('orders')
-        .update({ 
-          products: productsToJson(newProducts),
-          cart_link: cartLink,
-          checkout_token: checkoutToken
-        })
+        .update({ products: productsToJson(newProducts) })
         .eq('id', orderId);
 
       if (error) throw error;
       
       set((state) => ({
         orders: state.orders.map((o) => 
-          o.id === orderId ? { ...o, products: newProducts, cart_link: cartLink, checkout_token: checkoutToken } : o
+          o.id === orderId ? { ...o, products: newProducts } : o
         )
       }));
     } catch (error) {
@@ -562,25 +511,18 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     if (!order || order.products.length === 0) return;
 
     try {
-      const cartLink = await createShopifyCartFromOrder(order.products) || undefined;
-      let checkoutToken: string | undefined;
-      if (cartLink) {
-        try {
-          const url = new URL(cartLink);
-          checkoutToken = url.pathname.split('/').pop();
-        } catch {}
-      }
+      const cartLink = `https://checkout.bananacalcados.com.br/checkout/order/${orderId}`;
 
       const { error } = await supabase
         .from('orders')
-        .update({ cart_link: cartLink, checkout_token: checkoutToken })
+        .update({ cart_link: cartLink })
         .eq('id', orderId);
 
       if (error) throw error;
       
       set((state) => ({
         orders: state.orders.map((o) => 
-          o.id === orderId ? { ...o, cart_link: cartLink, checkout_token: checkoutToken } : o
+          o.id === orderId ? { ...o, cart_link: cartLink } : o
         )
       }));
       
