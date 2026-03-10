@@ -45,7 +45,7 @@ serve(async (req) => {
       discountType = order.discount_type;
       discountValue = order.discount_value;
       customer = order.customer as Record<string, unknown> | null;
-      shippingAmount = Number(order.shipping_cost || 0);
+      shippingAmount = order.free_shipping ? 0 : Number(order.shipping_cost || 0);
     } else {
       // Fallback: try pos_sales
       const { data: sale, error: saleError } = await supabase
