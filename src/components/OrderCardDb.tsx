@@ -189,7 +189,6 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       setIsCreatingShopifyOrder(false);
     }
   };
-  const { moveOrder: storeMove } = useDbOrderStore();
   
   const stage = STAGES.find((s) => s.id === order.stage);
   const totalValue = order.products.reduce(
