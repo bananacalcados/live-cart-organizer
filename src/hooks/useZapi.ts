@@ -107,7 +107,8 @@ export function useZapi() {
     phone: string,
     mediaUrl: string,
     mediaType: MediaType,
-    caption?: string
+    caption?: string,
+    whatsappNumberId?: string
   ): Promise<SendMessageResult> => {
     if (!phone) {
       toast.error('Número de WhatsApp não informado');
@@ -117,7 +118,7 @@ export function useZapi() {
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('zapi-send-media', {
-        body: { phone, mediaUrl, mediaType, caption },
+        body: { phone, mediaUrl, mediaType, caption, whatsapp_number_id: whatsappNumberId },
       });
       
       if (error) {

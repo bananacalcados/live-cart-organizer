@@ -23,7 +23,7 @@ interface SendWhatsAppDialogProps {
 
 export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDialogProps) {
   const { sendMessage, isLoading } = useZapi();
-  const { fetchNumbers } = useWhatsAppNumberStore();
+  const { fetchNumbers, selectedNumberId } = useWhatsAppNumberStore();
 
   useEffect(() => {
     if (open) fetchNumbers();
@@ -45,7 +45,7 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
   const handleSend = async () => {
     if (!order.whatsapp) return;
     
-    const result = await sendMessage(order.whatsapp, message);
+    const result = await sendMessage(order.whatsapp, message, selectedNumberId || undefined);
     if (result.success) {
       onOpenChange(false);
     }
