@@ -444,7 +444,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
     
     const ordersToUpdate = get().orders.filter((order) => {
-      if (order.stage === 'no_response' || order.stage === 'awaiting_payment' || order.stage === 'paid' || order.stage === 'shipped' || order.stage === 'cancelled' || order.stage === 'collect_next_day') {
+      if (order.stage === 'incomplete_order' || order.stage === 'awaiting_confirmation' || order.stage === 'no_response' || order.stage === 'awaiting_payment' || order.stage === 'paid' || order.stage === 'shipped' || order.stage === 'cancelled' || order.stage === 'collect_next_day') {
         return false;
       }
       

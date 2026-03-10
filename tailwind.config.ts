@@ -69,6 +69,8 @@ export default {
           "orange-muted": "hsl(var(--pos-orange-muted))",
         },
         stage: {
+          incomplete: "hsl(var(--stage-incomplete))",
+          "awaiting-confirm": "hsl(var(--stage-awaiting-confirm))",
           new: "hsl(var(--stage-new))",
           contacted: "hsl(var(--stage-contacted))",
           "no-response": "hsl(var(--stage-no-response))",
