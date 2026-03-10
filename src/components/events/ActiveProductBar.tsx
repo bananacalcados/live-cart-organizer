@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { toast } from "sonner";
@@ -46,6 +46,7 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProductSimple[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productSearch, setProductSearch] = useState("");
+  const [variantFilter, setVariantFilter] = useState<Record<string, { type: "size" | "color"; value: string } | null>>({});
 
   // Active product name (first in list)
   const [activeProductName, setActiveProductName] = useState<string | null>(null);
@@ -402,9 +403,36 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
                 {shopifyProducts.map(p => {
                   const isSelected = selectedSet.has(p.id);
                   const isActive = selectedProductIds[0] === p.id;
-                  const availableVariants = p.variants.filter(v => v.available);
-                  const sizes = [...new Set(availableVariants.map(v => v.size).filter(Boolean))];
-                  const colors = [...new Set(availableVariants.map(v => v.color).filter(Boolean))];
+                  const allSizes = [...new Set(p.variants.map(v => v.size).filter(Boolean))] as string[];
+                  const allColors = [...new Set(p.variants.map(v => v.color).filter(Boolean))] as string[];
+                  const filter = variantFilter[p.id] || null;
+
+                  const toggleFilter = (type: "size" | "color", value: string) => {
+                    setVariantFilter(prev => {
+                      const current = prev[p.id];
+                      if (current?.type === type && current.value === value) {
+                        return { ...prev, [p.id]: null }; // deselect
+                      }
+                      return { ...prev, [p.id]: { type, value } };
+                    });
+                  };
+
+                  // Check if a specific size+color combination exists and is available
+                  const getAvailability = (size: string | null, color: string | null): boolean => {
+                    return p.variants.some(v => {
+                      const sizeMatch = !size || v.size === size;
+                      const colorMatch = !color || v.color === color;
+                      return sizeMatch && colorMatch && v.available;
+                    });
+                  };
+
+                  const variantExists = (size: string | null, color: string | null): boolean => {
+                    return p.variants.some(v => {
+                      const sizeMatch = !size || v.size === size;
+                      const colorMatch = !color || v.color === color;
+                      return sizeMatch && colorMatch;
+                    });
+                  };
                   
                   return (
                     <div
@@ -437,37 +465,88 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
                             <p className="text-xs text-muted-foreground">{fmt(p.price)}</p>
                           </button>
                           
-                          {/* Available sizes */}
-                          {sizes.length > 0 && (
+                          {/* Interactive sizes */}
+                          {allSizes.length > 0 && (
                             <div className="mt-1.5">
-                              <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Tamanhos disponíveis:</p>
+                              <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Tamanhos:</p>
                               <div className="flex flex-wrap gap-0.5">
-                                {sizes.map(s => (
-                                  <span key={s} className="text-[10px] bg-secondary px-1.5 py-0.5 rounded font-medium">
-                                    {s}
-                                  </span>
-                                ))}
+                                {allSizes.map(s => {
+                                  const isFilteredSize = filter?.type === "size" && filter.value === s;
+                                  // If a color is selected, show availability of this size for that color
+                                  let statusClass = "bg-secondary text-secondary-foreground";
+                                  if (filter?.type === "color") {
+                                    const exists = variantExists(s, filter.value);
+                                    if (!exists) {
+                                      statusClass = "bg-muted text-muted-foreground line-through opacity-40";
+                                    } else {
+                                      const avail = getAvailability(s, filter.value);
+                                      statusClass = avail
+                                        ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 ring-1 ring-green-500/30"
+                                        : "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400";
+                                    }
+                                  }
+                                  if (isFilteredSize) {
+                                    statusClass = "bg-primary text-primary-foreground ring-2 ring-primary";
+                                  }
+                                  return (
+                                    <button
+                                      key={s}
+                                      onClick={(e) => { e.stopPropagation(); toggleFilter("size", s); }}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium transition-all cursor-pointer hover:opacity-80 ${statusClass}`}
+                                    >
+                                      {s}
+                                      {filter?.type === "color" && !getAvailability(s, filter.value) && variantExists(s, filter.value) && (
+                                        <X className="inline w-2.5 h-2.5 ml-0.5 -mt-0.5" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
                           
-                          {/* Available colors */}
-                          {colors.length > 0 && (
+                          {/* Interactive colors */}
+                          {allColors.length > 0 && (
                             <div className="mt-1">
                               <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Cores:</p>
                               <div className="flex flex-wrap gap-0.5">
-                                {colors.map(c => (
-                                  <span key={c} className="text-[10px] bg-secondary px-1.5 py-0.5 rounded font-medium">
-                                    {c}
-                                  </span>
-                                ))}
+                                {allColors.map(c => {
+                                  const isFilteredColor = filter?.type === "color" && filter.value === c;
+                                  let statusClass = "bg-secondary text-secondary-foreground";
+                                  if (filter?.type === "size") {
+                                    const exists = variantExists(filter.value, c);
+                                    if (!exists) {
+                                      statusClass = "bg-muted text-muted-foreground line-through opacity-40";
+                                    } else {
+                                      const avail = getAvailability(filter.value, c);
+                                      statusClass = avail
+                                        ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 ring-1 ring-green-500/30"
+                                        : "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400";
+                                    }
+                                  }
+                                  if (isFilteredColor) {
+                                    statusClass = "bg-primary text-primary-foreground ring-2 ring-primary";
+                                  }
+                                  return (
+                                    <button
+                                      key={c}
+                                      onClick={(e) => { e.stopPropagation(); toggleFilter("color", c); }}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium transition-all cursor-pointer hover:opacity-80 ${statusClass}`}
+                                    >
+                                      {c}
+                                      {filter?.type === "size" && !getAvailability(filter.value, c) && variantExists(filter.value, c) && (
+                                        <X className="inline w-2.5 h-2.5 ml-0.5 -mt-0.5" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
                           
                           {/* Variant count */}
                           <p className="text-[10px] text-muted-foreground mt-1">
-                            {availableVariants.length} variação{availableVariants.length !== 1 ? "ões" : ""} disponível{availableVariants.length !== 1 ? "is" : ""}
+                            {p.variants.filter(v => v.available).length} variação{p.variants.filter(v => v.available).length !== 1 ? "ões" : ""} disponível{p.variants.filter(v => v.available).length !== 1 ? "is" : ""}
                           </p>
                         </div>
                       </div>
