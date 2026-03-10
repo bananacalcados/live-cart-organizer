@@ -4,8 +4,9 @@ import {
   ArrowLeft, Package, BarChart3, ScanBarcode, CheckCircle2,
   AlertTriangle, Loader2, Play, Pause, RotateCcw, Store,
   ClipboardList, Trash2, Search, ChevronDown, HelpCircle,
-  Camera, Tag, Printer, Download, FileText, Link2, ShoppingBag
+  Camera, Tag, Printer, Download, FileText, Link2, ShoppingBag, ClipboardCheck
 } from "lucide-react";
+import { InventoryVerification } from "@/components/inventory/InventoryVerification";
 import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
 import { Button } from "@/components/ui/button";
@@ -1048,6 +1049,9 @@ export default function Inventory() {
                 <TabsTrigger value="counting" className="flex-1">
                   <ScanBarcode className="h-4 w-4 mr-1" /> Bipagem
                 </TabsTrigger>
+                <TabsTrigger value="verification" className="flex-1">
+                  <ClipboardCheck className="h-4 w-4 mr-1" /> Conferência
+                </TabsTrigger>
                 <TabsTrigger value="unresolved" className="flex-1 relative">
                   <HelpCircle className="h-4 w-4 mr-1" /> Pendentes
                   {pendingUnresolved.length > 0 && (
@@ -1164,7 +1168,24 @@ export default function Inventory() {
                 </ScrollArea>
               </TabsContent>
 
-              {/* Unresolved Barcodes Tab */}
+              {/* Verification Tab */}
+              <TabsContent value="verification" className="space-y-4">
+                {countItems.length === 0 ? (
+                  <div className="text-center py-12">
+                    <ClipboardCheck className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+                    <p className="text-muted-foreground">Nenhum produto bipado ainda.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Bipe os produtos na aba "Bipagem" primeiro.</p>
+                  </div>
+                ) : (
+                  <InventoryVerification
+                    countItems={countItems}
+                    storeName={selectedStore?.name || ""}
+                    countDate={activeCount.started_at}
+                    countScope={activeCount.scope}
+                  />
+                )}
+              </TabsContent>
+
               <TabsContent value="unresolved" className="space-y-4">
                 {unresolvedBarcodes.length === 0 ? (
                   <div className="text-center py-12">
