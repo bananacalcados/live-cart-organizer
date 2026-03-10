@@ -26,6 +26,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { EventsDashboard } from "@/components/events/EventsDashboard";
 import { useEventStore } from "@/stores/eventStore";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -292,6 +293,8 @@ const Events = () => {
       </header>
 
       <main className="container py-6">
+        <EventsDashboard />
+        
         {isLoading ? (
           <div className="text-center py-12 text-muted-foreground">
             Carregando eventos...
