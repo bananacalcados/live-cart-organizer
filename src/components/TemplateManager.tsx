@@ -37,7 +37,7 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
   
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
-  const [stage, setStage] = useState<OrderStage | 'all'>('all');
+  const [selectedStages, setSelectedStages] = useState<string[]>([]);
 
   useEffect(() => {
     fetchTemplates();
