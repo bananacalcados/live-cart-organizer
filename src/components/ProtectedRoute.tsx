@@ -83,7 +83,7 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
 
         const modules = result.data as string[];
         permissionCache.set(userId, { modules, ts: Date.now() });
-        setHasAccess(modules.includes(requiredModule));
+        setHasAccess(modulesToCheck.some(m => modules.includes(m)));
       } catch {
         if (cancelled) return;
         if (attempt < 3) {
