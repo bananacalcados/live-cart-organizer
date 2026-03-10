@@ -390,12 +390,12 @@ export function DashboardChatPanel() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
                           <span className="text-sm font-semibold text-foreground truncate">
-                            {conv.customerName || conv.phone}
+                            {conv.phone}
                           </span>
                           {instagramHandle && (
-                            <span className="text-[10px] text-primary/70 truncate">@{instagramHandle.replace(/^@/, "")}</span>
+                            <span className="text-[11px] font-medium text-primary truncate">@{instagramHandle.replace(/^@/, "")}</span>
                           )}
                         </div>
                         <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
