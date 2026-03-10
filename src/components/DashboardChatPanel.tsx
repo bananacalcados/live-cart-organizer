@@ -385,11 +385,9 @@ export function DashboardChatPanel() {
         ) : (
            <div className="divide-y divide-border">
             {filteredConversations.map(conv => {
-              const instagramHandle = (() => {
-                const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, "") === conv.phone.replace(/\D/g, ""));
-                const customer = customers.find(c => c.whatsapp?.replace(/\D/g, "") === conv.phone.replace(/\D/g, ""));
-                return order?.customer?.instagram_handle || customer?.instagram_handle || null;
-              })();
+              const phoneSuffix = conv.phone.replace(/\D/g, "").slice(-8);
+              const orderData = orderPhoneMap.get(phoneSuffix);
+              const instagramHandle = orderData?.instagram || null;
               const picUrl = profilePics[conv.phone];
 
               return (
