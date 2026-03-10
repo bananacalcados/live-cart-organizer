@@ -148,8 +148,6 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           event_id: eventId,
           customer_id: customer.id,
           products: productsToJson(products),
-          cart_link: cartLink,
-          checkout_token: checkoutToken,
           stage: 'incomplete_order',
           // Apply shipping or free shipping based on order count
           free_shipping: !applyShipping && shippingCost > 0 ? true : false,
@@ -163,9 +161,17 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         .single();
 
       if (error) throw error;
+
+      // Generate transparent checkout link using the new order ID
+      const cartLink = `https://checkout.bananacalcados.com.br/checkout/order/${data.id}`;
+      await supabase
+        .from('orders')
+        .update({ cart_link: cartLink })
+        .eq('id', data.id);
       
       const order = {
         ...data,
+        cart_link: cartLink,
         products: data.products as unknown as DbOrderProduct[],
         customer: data.customer as DbCustomer,
         discount_type: data.discount_type as DiscountType | undefined,
