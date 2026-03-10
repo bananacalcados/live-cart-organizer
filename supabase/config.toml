@@ -236,3 +236,6 @@ verify_jwt = false
 
 [functions.cron-check-vip-groups]
 verify_jwt = false
+
+[functions.criar-pedido-externo]
+verify_jwt = false
