@@ -19,7 +19,7 @@ import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
-import { Calendar, Search, Trophy, Tag, MessageSquare } from "lucide-react";
+import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
