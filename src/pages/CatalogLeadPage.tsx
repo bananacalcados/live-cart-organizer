@@ -400,13 +400,13 @@ export default function CatalogLeadPage() {
         status: "pending",
         subtotal: cartSubtotal,
         total: cartTotal,
-        shipping_cost: shippingCost,
         discount: 0,
         customer_name: stored.instagram ? `@${stored.instagram}` : null,
         customer_phone: stored.whatsapp || null,
         notes: `Catálogo Lead: ${slug} | IG: @${stored.instagram || ""}${shippingCost > 0 ? ` | Frete: R$${shippingCost.toFixed(2)}` : ""}`,
         checkout_step: 0,
-      }).select("id").single();
+        payment_details: { shipping_amount: shippingCost },
+      } as any).select("id").single();
 
       if (saleError) throw saleError;
 
