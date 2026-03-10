@@ -51,6 +51,8 @@ interface CrmCustomerData {
 export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
+  const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -294,20 +296,21 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         .select("*")
         .order("created_at", { ascending: false });
 
-      const phoneMap = new Map<string, { messages: Message[]; unread: number; isGroup: boolean }>();
+      // Group by phone + whatsapp_number_id to create separate conversations per instance
+      const convMap = new Map<string, { messages: Message[]; unread: number; isGroup: boolean; phone: string; numberId: string | null }>();
       for (const msg of data || []) {
         // Filter by store's assigned WhatsApp numbers
         if (storeNumberIds.length > 0) {
           const msgNumberId = msg.whatsapp_number_id;
           if (msgNumberId && !storeNumberIds.includes(msgNumberId)) continue;
           if (!msgNumberId) {
-            // Z-API messages (no whatsapp_number_id) — include only if store has Z-API numbers
             const hasZapiInStore = storeNumbers.some(n => n.provider === 'zapi');
             if (!hasZapiInStore) continue;
           }
         }
-        if (!phoneMap.has(msg.phone)) phoneMap.set(msg.phone, { messages: [], unread: 0, isGroup: msg.is_group || false });
-        const entry = phoneMap.get(msg.phone)!;
+        const convKey = `${msg.phone}__${msg.whatsapp_number_id || 'none'}`;
+        if (!convMap.has(convKey)) convMap.set(convKey, { messages: [], unread: 0, isGroup: msg.is_group || false, phone: msg.phone, numberId: msg.whatsapp_number_id || null });
+        const entry = convMap.get(convKey)!;
         entry.messages.push(msg);
         if (msg.direction === "incoming" && msg.status !== "read") entry.unread++;
         if (msg.is_group) entry.isGroup = true;
@@ -315,10 +318,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
       const convs: Conversation[] = [];
       const phoneMessages = new Map<string, { direction: string }[]>();
-      phoneMap.forEach((value, phone) => {
+      convMap.forEach((value, convKey) => {
+        const phone = value.phone;
         const lastMsg = value.messages[0];
         const lastIncoming = value.messages.find(m => m.direction === "incoming");
-        // Detect provider by cross-referencing whatsapp_number_id with storeNumbers
         const lastIncomingInstance: "zapi" | "meta" | undefined = (() => {
           if (!lastIncoming) return undefined;
           if (!lastIncoming.whatsapp_number_id) return "zapi";
@@ -326,9 +329,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           if (matchedNumber) return (matchedNumber.provider === 'meta' ? 'meta' : 'zapi') as "zapi" | "meta";
           return "zapi";
         })();
-        const msgWithNumberId = value.messages.find(m => m.whatsapp_number_id);
 
-        phoneMessages.set(phone, value.messages.map(m => ({ direction: m.direction })));
+        phoneMessages.set(convKey, value.messages.map(m => ({ direction: m.direction })));
 
         convs.push({
           phone,
@@ -338,7 +340,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           customerName: chatContacts[phone] || crmMap.get(phone)?.name,
           isGroup: value.isGroup || phone.includes("@g.us"),
           hasUnansweredMessage: lastMsg.direction === "incoming",
-          whatsapp_number_id: msgWithNumberId?.whatsapp_number_id || null,
+          whatsapp_number_id: value.numberId,
           lastIncomingInstance,
         });
       });
@@ -353,7 +355,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       .channel("pos-whatsapp-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "whatsapp_messages" }, () => {
         loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone);
+        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "whatsapp_messages" }, () => loadConversations())
       .subscribe();
@@ -361,28 +363,38 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, finishedPhones, archivedPhones, awaitingPaymentPhones]);
 
-  const loadMessages = async (phone: string) => {
-    const { data } = await supabase
+  const loadMessages = async (phone: string, numberId?: string | null) => {
+    let query = supabase
       .from("whatsapp_messages")
       .select("*")
       .eq("phone", phone)
       .order("created_at", { ascending: true });
+    
+    if (numberId) {
+      query = query.eq("whatsapp_number_id", numberId);
+    } else if (numberId === null) {
+      query = query.is("whatsapp_number_id", null);
+    }
+    
+    const { data } = await query;
     setMessages(data || []);
   };
 
-  const handleSelectConversation = async (phone: string) => {
+  const handleSelectConversation = async (phone: string, whatsappNumberId?: string | null) => {
     setSelectedPhone(phone);
-    loadMessages(phone);
-    const conv = conversations.find(c => c.phone === phone);
-    // Auto-route: detect the instance of the last incoming message
-    if (conv?.whatsapp_number_id) {
-      const matchedNumber = storeNumbers.find(n => n.id === conv.whatsapp_number_id);
+    setSelectedConvNumberId(whatsappNumberId ?? null);
+    setSelectedConvKey(`${phone}__${whatsappNumberId || 'none'}`);
+    loadMessages(phone, whatsappNumberId);
+    const conv = conversations.find(c => c.conversationKey === `${phone}__${whatsappNumberId || 'none'}`);
+    // Auto-route: detect the instance of the conversation
+    if (whatsappNumberId) {
+      const matchedNumber = storeNumbers.find(n => n.id === whatsappNumberId);
       if (matchedNumber) {
         setSendVia(matchedNumber.provider === 'meta' ? 'meta' : 'zapi');
         setSelectedNumberId(matchedNumber.id);
       } else {
         setSendVia('zapi');
-        setSelectedNumberId(conv.whatsapp_number_id);
+        setSelectedNumberId(whatsappNumberId);
       }
     } else {
       setSendVia('zapi');
@@ -451,7 +463,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           .is("first_reply_at", null);
       }
 
-      loadMessages(selectedPhone);
+      loadMessages(selectedPhone, selectedConvNumberId);
     } catch (error) {
       console.error("Error sending:", error);
       toast.error("Erro ao enviar mensagem");
@@ -479,7 +491,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
         message_id: audioMsgId,
       });
-      loadMessages(selectedPhone);
+      loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Áudio enviado!");
     } catch (error) {
       toast.error("Erro ao enviar áudio");
@@ -508,7 +520,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
         message_id: mediaMsgId,
       });
-      loadMessages(selectedPhone);
+      loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Mídia enviada!");
     } catch (error) {
       toast.error("Erro ao enviar mídia");
@@ -524,7 +536,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     });
     if (res.error) throw res.error;
     if (res.data?.error) throw new Error(res.data.error);
-    loadMessages(selectedPhone);
+    loadMessages(selectedPhone, selectedConvNumberId);
   };
 
   const handleEditMessage = async (msg: any, newText: string) => {
@@ -534,7 +546,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     });
     if (res.error) throw res.error;
     if (res.data?.error) throw new Error(res.data.error);
-    loadMessages(selectedPhone);
+    loadMessages(selectedPhone, selectedConvNumberId);
   };
 
   const handleSaveContactName = async () => {
@@ -553,7 +565,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     } catch { toast.error("Erro ao salvar"); }
   };
 
-  const selectedConversation = conversations.find(c => c.phone === selectedPhone) || null;
+  const selectedConversation = conversations.find(c => c.conversationKey === selectedConvKey) || conversations.find(c => c.phone === selectedPhone) || null;
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   const statusLabels: Record<string, string> = {
@@ -739,6 +751,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             contactPhotos={contactPhotos}
             contactNames={chatContacts}
             selectedPhone={selectedPhone}
+            selectedConversationKey={selectedConvKey}
             onBulkFinish={async (phones) => {
               for (const phone of phones) {
                 await finishConversation(phone);

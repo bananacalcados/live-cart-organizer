@@ -27,10 +27,14 @@ export interface Conversation {
   whatsapp_number_id?: string | null;
   lastIncomingInstance?: 'zapi' | 'meta';
   eventNames?: string[];
+  /** Unique key for this conversation (phone + instance) */
+  conversationKey?: string;
   /** Computed conversation status */
   conversationStatus?: ConversationStatus;
   /** Whether this phone has conversations on other instances */
   hasOtherInstances?: boolean;
+  /** Labels of other instances where this phone has conversations */
+  otherInstanceLabels?: string[];
   /** Label of the instance (e.g. "DataCrazy", "Z-API") */
   instanceLabel?: string;
   /** Whether this conversation is marked as finished */
