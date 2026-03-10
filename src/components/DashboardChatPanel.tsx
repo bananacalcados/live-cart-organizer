@@ -164,7 +164,7 @@ export function DashboardChatPanel() {
         }
       }).catch(() => {});
     }
-  }, [orders, customers, events, chatContacts, metaNumbers, enrichConversations]);
+  }, [orderPhoneMap, chatContacts, metaNumbers, enrichConversations]);
 
   useEffect(() => {
     loadConversations();
