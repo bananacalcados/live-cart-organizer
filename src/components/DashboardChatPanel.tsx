@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { MessageCircle, Send, Loader2, ArrowLeft, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,23 @@ export function DashboardChatPanel() {
     loadChatContacts();
   }, []);
 
+  // Build a map of normalized phone → instagram handle from current event orders
+  const orderPhoneMap = useMemo(() => {
+    const map = new Map<string, { instagram?: string; stage?: string; customerId?: string }>();
+    for (const order of orders) {
+      const phone = order.customer?.whatsapp?.replace(/\D/g, "");
+      if (phone) {
+        const suffix = phone.slice(-8);
+        map.set(suffix, {
+          instagram: order.customer?.instagram_handle,
+          stage: order.stage,
+          customerId: order.customer_id,
+        });
+      }
+    }
+    return map;
+  }, [orders]);
+
   const loadConversations = useCallback(async () => {
     const { data, error } = await supabase
       .from("whatsapp_messages")
@@ -93,10 +110,13 @@ export function DashboardChatPanel() {
 
     convMap.forEach((value, convKey) => {
       const phone = value.phone;
+      const phoneSuffix = phone.replace(/\D/g, "").slice(-8);
+      const orderData = orderPhoneMap.get(phoneSuffix);
+
+      // Only include conversations that have orders in current event
+      if (!orderData) return;
+
       const lastMsg = value.messages[0];
-      const matchingOrders = orders.filter(o => o.customer?.whatsapp?.replace(/\D/g, "") === phone.replace(/\D/g, ""));
-      const order = matchingOrders[0];
-      const customer = customers.find(c => c.whatsapp?.replace(/\D/g, "") === phone.replace(/\D/g, ""));
       const isGroup = value.isGroup || phone.includes("@g.us") || phone.includes("-");
       const lastIncoming = value.messages.find((m: any) => m.direction === "incoming");
       const lastIncomingInstance: "zapi" | "meta" | undefined = (() => {
@@ -114,11 +134,11 @@ export function DashboardChatPanel() {
         lastMessage: lastMsg.message,
         lastMessageAt: new Date(lastMsg.created_at),
         unreadCount: value.unread,
-        customerName: chatContacts[phone] || order?.customer?.instagram_handle || customer?.instagram_handle,
+        customerName: chatContacts[phone] || orderData.instagram,
         isGroup,
         hasUnansweredMessage: lastMsg.direction === "incoming",
-        stage: order?.stage,
-        customerId: order?.customer_id || customer?.id,
+        stage: orderData.stage,
+        customerId: orderData.customerId,
         whatsapp_number_id: value.numberId,
         lastIncomingInstance,
       });
@@ -144,7 +164,7 @@ export function DashboardChatPanel() {
         }
       }).catch(() => {});
     }
-  }, [orders, customers, events, chatContacts, metaNumbers, enrichConversations]);
+  }, [orderPhoneMap, chatContacts, metaNumbers, enrichConversations]);
 
   useEffect(() => {
     loadConversations();
@@ -310,12 +330,11 @@ export function DashboardChatPanel() {
           )}
         </div>
 
-        {/* Big colorful filter buttons */}
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin" style={{ WebkitOverflowScrolling: 'touch' }}>
           <button
             onClick={() => setFilter("sem_resposta")}
             className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2",
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2 flex-shrink-0 whitespace-nowrap",
               filter === "sem_resposta"
                 ? "bg-destructive text-destructive-foreground border-destructive shadow-md scale-105"
                 : "bg-destructive/15 text-destructive border-destructive/30 hover:bg-destructive/25"
@@ -326,7 +345,7 @@ export function DashboardChatPanel() {
           <button
             onClick={() => setFilter("recentes")}
             className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2",
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2 flex-shrink-0 whitespace-nowrap",
               filter === "recentes"
                 ? "bg-[hsl(210,80%,50%)] text-white border-[hsl(210,80%,50%)] shadow-md scale-105"
                 : "bg-[hsl(210,80%,50%)]/15 text-[hsl(210,80%,50%)] border-[hsl(210,80%,50%)]/30 hover:bg-[hsl(210,80%,50%)]/25"
@@ -342,7 +361,7 @@ export function DashboardChatPanel() {
                 key={sf.id}
                 onClick={() => setFilter(sf.id)}
                 className={cn(
-                  "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2",
+                  "px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2 flex-shrink-0 whitespace-nowrap",
                   filter === sf.id
                     ? `${sf.color} text-white border-transparent shadow-md scale-105`
                     : `${sf.color}/15 border-current/30 hover:opacity-80`
@@ -366,11 +385,9 @@ export function DashboardChatPanel() {
         ) : (
            <div className="divide-y divide-border">
             {filteredConversations.map(conv => {
-              const instagramHandle = (() => {
-                const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, "") === conv.phone.replace(/\D/g, ""));
-                const customer = customers.find(c => c.whatsapp?.replace(/\D/g, "") === conv.phone.replace(/\D/g, ""));
-                return order?.customer?.instagram_handle || customer?.instagram_handle || null;
-              })();
+              const phoneSuffix = conv.phone.replace(/\D/g, "").slice(-8);
+              const orderData = orderPhoneMap.get(phoneSuffix);
+              const instagramHandle = orderData?.instagram || null;
               const picUrl = profilePics[conv.phone];
 
               return (
