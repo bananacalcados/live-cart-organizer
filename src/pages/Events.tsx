@@ -27,7 +27,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EventsDashboard } from "@/components/events/EventsDashboard";
+import { EventTeamManager } from "@/components/events/EventTeamManager";
+import { EventTeamSelector } from "@/components/events/EventTeamSelector";
+import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { useEventStore } from "@/stores/eventStore";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
