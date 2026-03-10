@@ -74,12 +74,13 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
     }
 
     setIsSaving(true);
+    const stageValue = selectedStages.length === 0 ? 'all' : selectedStages.join(',');
     try {
       if (editingTemplate) {
-        await updateTemplate(editingTemplate.id, { name, message, stage });
+        await updateTemplate(editingTemplate.id, { name, message, stage: stageValue as any });
         toast.success("Template atualizado");
       } else {
-        await addTemplate({ name, message, stage });
+        await addTemplate({ name, message, stage: stageValue as any });
         toast.success("Template criado");
       }
       resetForm();
