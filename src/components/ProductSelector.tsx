@@ -123,7 +123,8 @@ export function ProductSelector({
 
   const getVariantLabel = (variant: ShopifyProduct["node"]["variants"]["edges"][0]["node"]) => {
     if (variant.title === "Default Title") return "Padrão";
-    return variant.title;
+    const skuLabel = variant.sku ? ` (${variant.sku})` : "";
+    return `${variant.title}${skuLabel}`;
   };
 
   return (
