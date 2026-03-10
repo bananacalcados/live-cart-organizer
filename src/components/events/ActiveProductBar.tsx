@@ -46,6 +46,7 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProductSimple[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productSearch, setProductSearch] = useState("");
+  const [variantFilter, setVariantFilter] = useState<Record<string, { type: "size" | "color"; value: string } | null>>({});
 
   // Active product name (first in list)
   const [activeProductName, setActiveProductName] = useState<string | null>(null);
