@@ -123,7 +123,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [isSending, setIsSending] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
-  const { selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+  const { selectedNumberId, fetchNumbers, getSelectedNumber } = useWhatsAppNumberStore();
 
   // Meta templates state
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
@@ -141,6 +141,29 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
+
+  // ── Detect provider for selected number ──
+  const isZapiProvider = () => {
+    const num = getSelectedNumber();
+    return num?.provider === 'zapi';
+  };
+
+  // ── Send via Z-API ──
+  const sendViaZapi = async (
+    phoneNumber: string,
+    message: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('zapi-send-message', {
+        body: { phone: phoneNumber, message, whatsapp_number_id: selectedNumberId },
+      });
+      if (error) return { success: false, error: error.message };
+      if (data?.success) return { success: true, messageId: data?.data?.zapiMessageId };
+      return { success: false, error: data?.error || 'Erro ao enviar' };
+    } catch (err) {
+      return { success: false, error: 'Erro de conexão' };
+    }
+  };
 
   // ── Send via Meta API using selected number ──
   const sendViaMeta = async (
@@ -175,6 +198,33 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     } catch (err) {
       return { success: false, error: 'Erro de conexão' };
     }
+  };
+
+  // ── Unified send that routes based on provider ──
+  const sendMessage = async (
+    phoneNumber: string,
+    message: string,
+    type: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text',
+    mediaUrl?: string,
+    caption?: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+    if (isZapiProvider()) {
+      if (type !== 'text' && mediaUrl) {
+        // Z-API media send
+        try {
+          const { data, error } = await supabase.functions.invoke('zapi-send-media', {
+            body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: selectedNumberId },
+          });
+          if (error) return { success: false, error: error.message };
+          if (data?.success) return { success: true };
+          return { success: false, error: data?.error || 'Erro ao enviar' };
+        } catch (err) {
+          return { success: false, error: 'Erro de conexão' };
+        }
+      }
+      return sendViaZapi(phoneNumber, message);
+    }
+    return sendViaMeta(phoneNumber, message, type, mediaUrl, caption);
   };
 
   const phone = order.whatsapp || '';
@@ -338,7 +388,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       setMessages((prev) => [...prev, tempMessage]);
 
       setIsSending(true);
-      const result = await sendViaMeta(phone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
+      const result = await sendMessage(phone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
       setIsSending(false);
 
       if (result.success) {
@@ -387,7 +437,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     setMessages((prev) => [...prev, tempMessage]);
 
     setIsSending(true);
-    const result = await sendViaMeta(phone, messageText);
+    const result = await sendMessage(phone, messageText);
     setIsSending(false);
 
     if (result.success) {
@@ -570,7 +620,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
         const mediaUrl = await uploadMediaToStorage(file);
         if (mediaUrl) {
-          const result = await sendViaMeta(phone, '[Áudio]', 'audio', mediaUrl);
+          const result = await sendMessage(phone, '[Áudio]', 'audio', mediaUrl);
           if (result.success) {
             await supabase.from('whatsapp_messages').insert({
               phone: normalizedPhone,
