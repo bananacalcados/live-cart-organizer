@@ -225,20 +225,31 @@ export function TemplateManager({ trigger }: TemplateManagerProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="template-stage">Etapa do Funil</Label>
-                <Select value={stage} onValueChange={(v) => setStage(v as OrderStage | 'all')}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as etapas</SelectItem>
-                    {STAGES.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Etapa do Funil</Label>
+                <p className="text-xs text-muted-foreground">
+                  {selectedStages.length === 0 ? "Nenhuma selecionada = Todas as etapas" : `${selectedStages.length} etapa(s) selecionada(s)`}
+                </p>
+                <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-auto border rounded-lg p-3">
+                  {STAGES.map((s) => {
+                    const checked = selectedStages.includes(s.id);
+                    return (
+                      <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm hover:bg-muted/50 rounded px-1 py-0.5">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            if (v) {
+                              setSelectedStages(prev => [...prev, s.id]);
+                            } else {
+                              setSelectedStages(prev => prev.filter(x => x !== s.id));
+                            }
+                          }}
+                        />
+                        <span className={cn("w-2 h-2 rounded-full shrink-0", s.color)} />
+                        <span className="truncate">{s.title}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="space-y-2">
