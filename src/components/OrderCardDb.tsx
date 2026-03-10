@@ -518,6 +518,43 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         </div>
       )}
 
+      {/* Awaiting Confirmation: live messages + action buttons */}
+      {order.stage === 'awaiting_confirmation' && (
+        <div className="mt-3 space-y-2">
+          {liveMessages.length > 0 && (
+            <div className="bg-secondary/50 rounded-lg p-2 space-y-1">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Mensagens do cliente</p>
+              {liveMessages.map((msg, i) => (
+                <p key={i} className="text-xs text-foreground bg-background/60 rounded px-2 py-1">
+                  "{msg}"
+                </p>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              className="flex-1 text-xs gap-1 bg-stage-paid hover:bg-stage-paid/90 text-white"
+              onClick={handleConfirmOrder}
+              disabled={isConfirming}
+            >
+              {isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+              Confirmar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 text-xs gap-1"
+              onClick={(e) => { e.stopPropagation(); onEdit(order); }}
+            >
+              <Pencil className="h-3 w-3" />
+              Corrigir
+            </Button>
+          </div>
+        </div>
+      )}
+
       {order.notes && (
         <p className="mt-2 text-xs text-muted-foreground italic line-clamp-2">
           "{order.notes}"
