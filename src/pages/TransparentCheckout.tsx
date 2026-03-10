@@ -953,7 +953,7 @@ export default function TransparentCheckout() {
           ? subtotal * (order.discount_value / 100)
           : order.discount_value;
       }
-      const orderShippingCost = Number(order.shipping_cost || 0);
+      const orderShippingCost = (order.free_shipping) ? 0 : Number(order.shipping_cost || 0);
       const totalAmount = Math.round(Math.max(0, subtotal - discountAmount + orderShippingCost) * 100) / 100;
 
       setOrderData({
