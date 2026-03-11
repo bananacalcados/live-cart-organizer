@@ -128,6 +128,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       setCouponCode(editingOrder.coupon_code || "");
       setPaidExternally(editingOrder.paid_externally || false);
       setCustomShippingCost((editingOrder as any).custom_shipping_cost != null ? String((editingOrder as any).custom_shipping_cost) : "");
+      setIsPickup((editingOrder as any).is_pickup || false);
+      setPickupStoreId((editingOrder as any).pickup_store_id || "");
+      setIsDelivery((editingOrder as any).is_delivery || false);
     } else {
       resetForm();
     }
