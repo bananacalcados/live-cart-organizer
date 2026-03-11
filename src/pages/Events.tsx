@@ -156,7 +156,7 @@ const Events = () => {
     if (!name.trim()) return;
     
     const shippingValue = shippingCost ? parseFloat(shippingCost) : undefined;
-    const whatsappId = selectedWhatsAppId || null;
+    const whatsappId = selectedWhatsAppId && selectedWhatsAppId !== 'none' ? selectedWhatsAppId : null;
     
     if (editingEvent) {
       await updateEvent(editingEvent, { 
@@ -192,7 +192,7 @@ const Events = () => {
     setName(event.name);
     setDescription(event.description || "");
     setShippingCost(event.default_shipping_cost?.toString() || "");
-    setSelectedWhatsAppId((event as any).whatsapp_number_id || "");
+    setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
     setDialogOpen(true);
   };
 
@@ -292,7 +292,7 @@ const Events = () => {
                          <SelectValue placeholder="Selecione o número WhatsApp..." />
                        </SelectTrigger>
                        <SelectContent>
-                         <SelectItem value="">Nenhum (padrão)</SelectItem>
+                         <SelectItem value="none">Nenhum (padrão)</SelectItem>
                          {whatsappNumbers.map(n => (
                            <SelectItem key={n.id} value={n.id}>
                              {n.label} ({n.phone_display})
