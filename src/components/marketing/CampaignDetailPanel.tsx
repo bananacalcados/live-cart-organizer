@@ -470,6 +470,76 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     fetchLinks();
   };
 
+  const duplicateMessage = async (msg: ScheduledMessage) => {
+    const originalDate = new Date(msg.scheduled_at);
+    const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+      campaign_id: campaignId,
+      message_type: msg.message_type,
+      message_content: msg.message_content,
+      media_url: msg.media_url,
+      poll_options: msg.poll_options,
+      scheduled_at: originalDate.toISOString(),
+      send_speed: msg.send_speed,
+      status: 'pending',
+    });
+    if (error) { toast.error("Erro ao duplicar"); return; }
+    toast.success("Mensagem duplicada como pendente!");
+    fetchMessages();
+  };
+
+  const openImportDialog = async () => {
+    setShowImportMessages(true);
+    setSelectedImportCampaign(null);
+    setOtherMessages([]);
+    setSelectedImportMsgs([]);
+    const { data } = await supabase.from('group_campaigns').select('id, name, created_at')
+      .neq('id', campaignId).order('created_at', { ascending: false }).limit(50);
+    setOtherCampaigns(data || []);
+  };
+
+  const loadOtherCampaignMessages = async (otherCampaignId: string) => {
+    setSelectedImportCampaign(otherCampaignId);
+    setSelectedImportMsgs([]);
+    const { data } = await supabase.from('group_campaign_scheduled_messages')
+      .select('*').eq('campaign_id', otherCampaignId).order('scheduled_at', { ascending: true });
+    setOtherMessages((data || []) as ScheduledMessage[]);
+    if (data && data.length > 0) {
+      const first = new Date(data[0].scheduled_at);
+      setImportScheduleDate(first);
+      setImportScheduleTime(format(first, "HH:mm"));
+    }
+  };
+
+  const importSelectedMessages = async () => {
+    if (selectedImportMsgs.length === 0) { toast.error("Selecione mensagens"); return; }
+    setIsImporting(true);
+    try {
+      const [hours, minutes] = importScheduleTime.split(':').map(Number);
+      const baseDate = new Date(importScheduleDate);
+      baseDate.setHours(hours, minutes, 0, 0);
+
+      const msgsToImport = otherMessages.filter(m => selectedImportMsgs.includes(m.id));
+      for (let i = 0; i < msgsToImport.length; i++) {
+        const msg = msgsToImport[i];
+        const scheduledAt = new Date(baseDate.getTime() + i * 5000);
+        await supabase.from('group_campaign_scheduled_messages').insert({
+          campaign_id: campaignId,
+          message_type: msg.message_type,
+          message_content: msg.message_content,
+          media_url: msg.media_url,
+          poll_options: msg.poll_options,
+          scheduled_at: scheduledAt.toISOString(),
+          send_speed: msg.send_speed || 'normal',
+          status: 'pending',
+        });
+      }
+      toast.success(`${msgsToImport.length} mensagem(ns) importada(s)!`);
+      setShowImportMessages(false);
+      fetchMessages();
+    } catch { toast.error("Erro ao importar"); }
+    finally { setIsImporting(false); }
+  };
+
   const targetGroups: string[] = campaign?.target_groups || [];
   const groupCount = targetGroups.length;
 
