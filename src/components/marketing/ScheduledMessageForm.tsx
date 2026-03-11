@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
+import { WhatsAppFormattingToolbar } from "./WhatsAppFormattingToolbar";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
@@ -552,16 +553,22 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                         className="w-16 h-16 object-cover rounded shrink-0" />
                       <div className="flex-1 space-y-1">
                         <p className="text-[10px] text-muted-foreground">Foto {i + 1}</p>
-                        <div className="flex items-center gap-1">
-                          <Input placeholder="Legenda desta foto..." value={item.caption}
-                            onChange={e => {
-                              const next = [...mediaItems];
-                              next[i] = { ...next[i], caption: e.target.value };
-                              setMediaItems(next);
-                            }}
-                            className="h-7 text-xs flex-1" />
-                          <EmojiPickerButton onEmojiSelect={(emoji) => insertEmojiInCaption(emoji, i)} className="h-7 w-7 shrink-0" />
-                        </div>
+                        <Textarea placeholder="Legenda desta foto... (use Enter para quebra de linha)" value={item.caption}
+                          onChange={e => {
+                            const next = [...mediaItems];
+                            next[i] = { ...next[i], caption: e.target.value };
+                            setMediaItems(next);
+                          }}
+                          rows={2}
+                          className="text-xs" />
+                        <WhatsAppFormattingToolbar
+                          value={item.caption}
+                          onChange={(val) => {
+                            const next = [...mediaItems];
+                            next[i] = { ...next[i], caption: val };
+                            setMediaItems(next);
+                          }}
+                        />
                       </div>
                       <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
                         onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}>
@@ -616,16 +623,22 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                       </div>
                       <div className="flex-1 space-y-1">
                         <p className="text-[10px] text-muted-foreground">{messageType === 'video' ? 'Vídeo' : 'Documento'} {i + 1}</p>
-                        <div className="flex items-center gap-1">
-                          <Input placeholder="Legenda deste arquivo..." value={item.caption}
-                            onChange={e => {
-                              const next = [...mediaItems];
-                              next[i] = { ...next[i], caption: e.target.value };
-                              setMediaItems(next);
-                            }}
-                            className="h-7 text-xs flex-1" />
-                          <EmojiPickerButton onEmojiSelect={(emoji) => insertEmojiInCaption(emoji, i)} className="h-7 w-7 shrink-0" />
-                        </div>
+                        <Textarea placeholder="Legenda deste arquivo... (use Enter para quebra de linha)" value={item.caption}
+                          onChange={e => {
+                            const next = [...mediaItems];
+                            next[i] = { ...next[i], caption: e.target.value };
+                            setMediaItems(next);
+                          }}
+                          rows={2}
+                          className="text-xs" />
+                        <WhatsAppFormattingToolbar
+                          value={item.caption}
+                          onChange={(val) => {
+                            const next = [...mediaItems];
+                            next[i] = { ...next[i], caption: val };
+                            setMediaItems(next);
+                          }}
+                        />
                       </div>
                       <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
                         onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}>
@@ -739,9 +752,9 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
           <div>
             <Label className="text-xs">{messageType === 'poll' ? 'Pergunta da Enquete' : 'Texto da Mensagem'}</Label>
             <Textarea ref={textareaRef} value={messageContent} onChange={e => setMessageContent(e.target.value)} rows={4}
-              placeholder={messageType === 'poll' ? 'Qual sua preferência?' : 'Texto da mensagem...'} />
+              placeholder={messageType === 'poll' ? 'Qual sua preferência?' : 'Texto da mensagem... (use Enter para quebra de linha, *negrito*, _itálico_, ~tachado~)'} />
             <div className="flex items-center gap-1 mt-1">
-              <EmojiPickerButton onEmojiSelect={insertEmoji} className="h-8 w-8" />
+              <WhatsAppFormattingToolbar value={messageContent} onChange={setMessageContent} textareaRef={textareaRef} />
               {!isRecording && !audioPreviewUrl ? (
                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={startRecording}
                   title="Gravar áudio">
