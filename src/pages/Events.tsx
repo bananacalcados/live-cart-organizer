@@ -156,7 +156,7 @@ const Events = () => {
     if (!name.trim()) return;
     
     const shippingValue = shippingCost ? parseFloat(shippingCost) : undefined;
-    const whatsappId = selectedWhatsAppId || null;
+    const whatsappId = selectedWhatsAppId && selectedWhatsAppId !== 'none' ? selectedWhatsAppId : null;
     
     if (editingEvent) {
       await updateEvent(editingEvent, { 
