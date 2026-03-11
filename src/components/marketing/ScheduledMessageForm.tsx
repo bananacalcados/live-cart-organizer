@@ -752,9 +752,9 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
           <div>
             <Label className="text-xs">{messageType === 'poll' ? 'Pergunta da Enquete' : 'Texto da Mensagem'}</Label>
             <Textarea ref={textareaRef} value={messageContent} onChange={e => setMessageContent(e.target.value)} rows={4}
-              placeholder={messageType === 'poll' ? 'Qual sua preferência?' : 'Texto da mensagem...'} />
+              placeholder={messageType === 'poll' ? 'Qual sua preferência?' : 'Texto da mensagem... (use Enter para quebra de linha, *negrito*, _itálico_, ~tachado~)'} />
             <div className="flex items-center gap-1 mt-1">
-              <EmojiPickerButton onEmojiSelect={insertEmoji} className="h-8 w-8" />
+              <WhatsAppFormattingToolbar value={messageContent} onChange={setMessageContent} textareaRef={textareaRef} />
               {!isRecording && !audioPreviewUrl ? (
                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={startRecording}
                   title="Gravar áudio">
