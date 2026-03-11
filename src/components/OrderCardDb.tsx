@@ -220,11 +220,21 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         },
       };
 
-      fetch('http://31.97.23.119:8002/webhook/novo-pedido', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }).catch(err => console.error('Webhook error:', err));
+      console.log('🚀 [WEBHOOK] Disparando webhook novo-pedido para pedido:', order.id);
+      console.log('🚀 [WEBHOOK] Payload:', JSON.stringify(payload, null, 2));
+      
+      try {
+        const webhookResp = await fetch('http://31.97.23.119:8002/webhook/novo-pedido', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        console.log('🚀 [WEBHOOK] Response status:', webhookResp.status);
+        const webhookBody = await webhookResp.text();
+        console.log('🚀 [WEBHOOK] Response body:', webhookBody);
+      } catch (webhookErr) {
+        console.error('🚀 [WEBHOOK] Fetch falhou (CORS/rede):', webhookErr);
+      }
 
       toast.success('Pedido confirmado! Link de pagamento gerado e enviado ao Agente.');
     } catch {
