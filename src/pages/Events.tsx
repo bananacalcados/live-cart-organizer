@@ -60,6 +60,14 @@ const Events = () => {
   const [selectedWhatsAppId, setSelectedWhatsAppId] = useState<string>("");
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
+  const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
+
+  const handleCopyEventId = async (eventId: string) => {
+    await navigator.clipboard.writeText(eventId);
+    setCopiedEventId(eventId);
+    toast.success("Copiado!");
+    setTimeout(() => setCopiedEventId(null), 2000);
+  };
 
   useEffect(() => {
     fetchEvents();
