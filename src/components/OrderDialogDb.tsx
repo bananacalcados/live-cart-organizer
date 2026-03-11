@@ -160,6 +160,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     setCouponCode("");
     setPaidExternally(false);
     setCustomShippingCost("");
+    setIsPickup(false);
+    setPickupStoreId("");
+    setIsDelivery(false);
   };
 
   const handleAddLocalProduct = (product: DbOrderProduct) => {
