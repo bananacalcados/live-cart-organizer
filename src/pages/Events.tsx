@@ -431,6 +431,15 @@ const Events = () => {
                             <span>Frete fixo: <strong>R$ {Number((event as any).default_shipping_cost).toFixed(2)}</strong></span>
                           </div>
                         )}
+                        {(event as any).whatsapp_number_id && (() => {
+                          const wn = whatsappNumbers.find(n => n.id === (event as any).whatsapp_number_id);
+                          return wn ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Phone className="h-4 w-4" />
+                              <span>WhatsApp: <strong>{wn.label}</strong></span>
+                            </div>
+                          ) : null;
+                        })()}
 
                         {/* Team avatars */}
                         <EventTeamDisplay eventId={event.id} />
