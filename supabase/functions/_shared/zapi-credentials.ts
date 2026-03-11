@@ -1,5 +1,21 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+/**
+ * Normalize a Brazilian phone number:
+ * - Strip all non-digit characters
+ * - Add country code 55 if missing
+ * - Skip group IDs (contain @ or start with 120)
+ */
+export function normalizePhone(phone: string): string {
+  if (!phone) return phone;
+  // Don't touch group IDs
+  if (phone.includes('@') || phone.includes('-')) return phone;
+  let digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('120')) return digits; // group
+  if (!digits.startsWith('55')) digits = '55' + digits;
+  return digits;
+}
+
 interface ZApiCredentials {
   instanceId: string;
   token: string;

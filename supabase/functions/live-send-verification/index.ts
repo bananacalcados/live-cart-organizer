@@ -72,7 +72,7 @@ serve(async (req) => {
           "Client-Token": ZAPI_CLIENT_TOKEN || "",
         },
         body: JSON.stringify({
-          phone,
+          phone: phone.replace(/\D/g, '').startsWith('55') ? phone.replace(/\D/g, '') : '55' + phone.replace(/\D/g, ''),
           message,
         }),
       }
