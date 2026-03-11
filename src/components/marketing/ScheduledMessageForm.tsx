@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { format } from "date-fns";
-import { CalendarIcon, Sparkles, Loader2, Play, Upload, Link as LinkIcon, Variable, Save, FileText, Mic, Square, Send, ShoppingBag, Image as ImageIcon, Trash2, Search, Plus } from "lucide-react";
+import {
+  CalendarIcon, Sparkles, Loader2, Play, Upload, Link as LinkIcon, Variable, Save, FileText,
+  Mic, Square, Send, ShoppingBag, Image as ImageIcon, Trash2, Search, Plus, GripVertical,
+  ChevronUp, ChevronDown, Type, BarChart3
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -13,18 +17,29 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import { WhatsAppFormattingToolbar } from "./WhatsAppFormattingToolbar";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 
 export interface MediaItem {
   url: string;
   caption: string;
 }
 
+export interface MessageBlock {
+  id: string;
+  type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'poll';
+  content: string;
+  mediaItems: MediaItem[];
+  mediaUrl: string;
+  pollOptions: string[];
+  pollMaxOptions: number;
+}
+
 export interface ScheduledMessageData {
+  // Legacy single-message fields (kept for backward compat)
   messageType: string;
   messageContent: string;
   mediaUrl: string;
@@ -35,6 +50,8 @@ export interface ScheduledMessageData {
   scheduledTime: string;
   sendSpeed: string;
   mentionAll: boolean;
+  // New multi-block
+  blocks?: MessageBlock[];
 }
 
 interface EditingMessage {
@@ -73,55 +90,400 @@ const VARIABLES = [
   { name: "horario", label: "Horário Atual" },
 ];
 
-export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, editingMessage, onUpdate, campaignId }: ScheduledMessageFormProps) {
-  const [messageType, setMessageType] = useState("text");
-  const [messageContent, setMessageContent] = useState("");
-  const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaMode, setMediaMode] = useState<"url" | "upload" | "shopify">("url");
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
-  const [pollOptions, setPollOptions] = useState(["", ""]);
-  const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
-  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
-  const [scheduledTime, setScheduledTime] = useState("12:00");
-  const [sendSpeed, setSendSpeed] = useState("normal");
-  const [mentionAll, setMentionAll] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [templateName, setTemplateName] = useState("");
-  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+const BLOCK_TYPE_LABELS: Record<string, { icon: string; label: string }> = {
+  text: { icon: "📝", label: "Texto" },
+  image: { icon: "🖼️", label: "Imagem" },
+  video: { icon: "🎬", label: "Vídeo" },
+  audio: { icon: "🎵", label: "Áudio" },
+  document: { icon: "📄", label: "Documento" },
+  poll: { icon: "📊", label: "Enquete" },
+};
+
+function generateId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function createBlock(type: MessageBlock['type']): MessageBlock {
+  return {
+    id: generateId(),
+    type,
+    content: '',
+    mediaItems: [],
+    mediaUrl: '',
+    pollOptions: type === 'poll' ? ['', ''] : [],
+    pollMaxOptions: 1,
+  };
+}
+
+// ─── Individual Block Editor ───
+function BlockEditor({
+  block, onChange, onRemove, onMoveUp, onMoveDown, isFirst, isLast, onOpenShopify,
+}: {
+  block: MessageBlock;
+  onChange: (b: MessageBlock) => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  isFirst: boolean;
+  isLast: boolean;
+  onOpenShopify: (blockId: string) => void;
+}) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const multiFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+  // Audio recording state
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Audio preview
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
-  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
-  // Shopify product picker
+
+  const multiMediaTypes = ['image', 'video', 'document'];
+  const isMultiMedia = multiMediaTypes.includes(block.type);
+
+  const acceptTypes: Record<string, string> = {
+    image: "image/*",
+    video: "video/*",
+    audio: "audio/*",
+    document: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip",
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (block.type === 'audio') {
+      // Single audio
+      const file = files[0];
+      if (file.size > 16 * 1024 * 1024) { toast.error("Arquivo muito grande (max 16MB)"); return; }
+      setIsUploading(true);
+      try {
+        const ext = file.name.split('.').pop();
+        const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+        if (error) throw error;
+        const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+        onChange({ ...block, mediaUrl: urlData.publicUrl });
+        toast.success("Arquivo enviado!");
+      } catch { toast.error("Erro no upload"); }
+      finally { setIsUploading(false); }
+    } else {
+      // Multi media
+      const remaining = 10 - block.mediaItems.length;
+      if (files.length > remaining) { toast.error(`Máximo ${remaining} arquivo(s) restante(s)`); return; }
+      setIsUploading(true);
+      try {
+        const newItems: MediaItem[] = [];
+        for (const file of Array.from(files)) {
+          if (file.size > 16 * 1024 * 1024) { toast.error(`${file.name} muito grande`); continue; }
+          const ext = file.name.split('.').pop();
+          const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+          const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+          if (error) continue;
+          const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+          newItems.push({ url: urlData.publicUrl, caption: '' });
+        }
+        onChange({ ...block, mediaItems: [...block.mediaItems, ...newItems] });
+        if (newItems.length) toast.success(`${newItems.length} arquivo(s) enviado(s)!`);
+      } catch { toast.error("Erro no upload"); }
+      finally { setIsUploading(false); if (e.target) e.target.value = ''; }
+    }
+  };
+
+  const addUrl = () => {
+    if (!urlInput.trim()) return;
+    onChange({ ...block, mediaItems: [...block.mediaItems, { url: urlInput.trim(), caption: '' }] });
+    setUrlInput('');
+  };
+
+  const updateCaption = (idx: number, caption: string) => {
+    const next = [...block.mediaItems];
+    next[idx] = { ...next[idx], caption };
+    onChange({ ...block, mediaItems: next });
+  };
+
+  const removeItem = (idx: number) => {
+    onChange({ ...block, mediaItems: block.mediaItems.filter((_, i) => i !== idx) });
+  };
+
+  // Audio recording
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (blob.size === 0) return;
+        const previewUrl = URL.createObjectURL(blob);
+        setAudioPreviewUrl(previewUrl);
+        toast.success("Áudio gravado!");
+      };
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordingIntervalRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+    } catch { toast.error("Permissão de microfone negada"); }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+    if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
+  }, []);
+
+  const confirmAudio = async () => {
+    if (!audioPreviewUrl) return;
+    setIsUploading(true);
+    try {
+      const resp = await fetch(audioPreviewUrl);
+      const blob = await resp.blob();
+      const path = `group-messages/audio-${Date.now()}.webm`;
+      const { error } = await supabase.storage.from('marketing-attachments').upload(path, blob);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
+      onChange({ ...block, mediaUrl: urlData.publicUrl });
+      URL.revokeObjectURL(audioPreviewUrl);
+      setAudioPreviewUrl(null);
+      toast.success("Áudio confirmado!");
+    } catch { toast.error("Erro ao enviar áudio"); }
+    finally { setIsUploading(false); }
+  };
+
+  const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  const typeInfo = BLOCK_TYPE_LABELS[block.type];
+
+  return (
+    <div className="border rounded-lg bg-card relative group">
+      {/* Header with drag handle and controls */}
+      <div className="flex items-center gap-1 p-2 border-b bg-muted/30 rounded-t-lg">
+        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+        <span className="text-xs font-medium flex-1">{typeInfo.icon} {typeInfo.label}</span>
+        <div className="flex items-center gap-0.5">
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onMoveUp} disabled={isFirst}>
+            <ChevronUp className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onMoveDown} disabled={isLast}>
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onRemove}>
+            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="p-3 space-y-2">
+        {/* ── TEXT BLOCK ── */}
+        {block.type === 'text' && (
+          <>
+            <Textarea
+              ref={textareaRef}
+              value={block.content}
+              onChange={e => onChange({ ...block, content: e.target.value })}
+              rows={4}
+              placeholder="Escreva a sua mensagem... (use Enter para quebra de linha)"
+            />
+            <WhatsAppFormattingToolbar value={block.content} onChange={val => onChange({ ...block, content: val })} textareaRef={textareaRef} />
+            <Button variant="outline" size="sm" className="gap-1" onClick={() => onOpenShopify(block.id)}>
+              <ShoppingBag className="h-3.5 w-3.5" /> Produto Shopify
+            </Button>
+          </>
+        )}
+
+        {/* ── IMAGE / VIDEO / DOCUMENT BLOCK ── */}
+        {isMultiMedia && (
+          <>
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" size="sm" className="gap-1"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading || block.mediaItems.length >= 10}>
+                {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                Upload
+              </Button>
+              {block.type === 'image' && (
+                <Button variant="outline" size="sm" className="gap-1" onClick={() => onOpenShopify(block.id)}
+                  disabled={block.mediaItems.length >= 10}>
+                  <ShoppingBag className="h-3.5 w-3.5" /> Shopify
+                </Button>
+              )}
+            </div>
+            <input ref={fileInputRef} type="file" accept={acceptTypes[block.type]} multiple
+              onChange={handleFileUpload} className="hidden" />
+
+            {/* URL add */}
+            <div className="flex gap-2">
+              <Input placeholder="Ou cole URL..." value={urlInput} onChange={e => setUrlInput(e.target.value)} className="flex-1 text-xs" />
+              <Button variant="outline" size="sm" disabled={!urlInput.trim() || block.mediaItems.length >= 10} onClick={addUrl}>
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+
+            {/* Items list */}
+            {block.mediaItems.length > 0 && (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {block.mediaItems.map((item, i) => (
+                  <div key={i} className="flex gap-2 items-start border rounded p-2">
+                    <div className="w-14 h-14 bg-muted rounded shrink-0 overflow-hidden flex items-center justify-center">
+                      {block.type === 'image' ? (
+                        <img src={item.url} alt="" className="w-full h-full object-cover" />
+                      ) : block.type === 'video' ? (
+                        <video src={item.url} className="w-full h-full object-cover" />
+                      ) : (
+                        <FileText className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <Textarea placeholder="Legenda..." value={item.caption}
+                        onChange={e => updateCaption(i, e.target.value)} rows={2} className="text-xs" />
+                      <WhatsAppFormattingToolbar value={item.caption} onChange={val => updateCaption(i, val)} />
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeItem(i)}>
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-muted-foreground">{block.mediaItems.length}/10 arquivos</p>
+          </>
+        )}
+
+        {/* ── AUDIO BLOCK ── */}
+        {block.type === 'audio' && (
+          <>
+            {!block.mediaUrl && !audioPreviewUrl && !isRecording && (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="gap-1" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5" /> Upload
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1" onClick={startRecording}>
+                  <Mic className="h-3.5 w-3.5" /> Gravar
+                </Button>
+                <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
+              </div>
+            )}
+            {isRecording && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-destructive font-medium animate-pulse">● {formatRecTime(recordingTime)}</span>
+                <Button variant="destructive" size="sm" onClick={stopRecording} className="gap-1">
+                  <Square className="h-3 w-3" /> Parar
+                </Button>
+              </div>
+            )}
+            {audioPreviewUrl && (
+              <div className="space-y-2">
+                <audio src={audioPreviewUrl} controls className="w-full h-10" />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={confirmAudio} disabled={isUploading} className="gap-1 flex-1">
+                    {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                    Confirmar
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); }}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            {block.mediaUrl && !audioPreviewUrl && (
+              <div className="flex items-center gap-2">
+                <audio src={block.mediaUrl} controls className="flex-1 h-8" />
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onChange({ ...block, mediaUrl: '' })}>
+                  <Trash2 className="h-3 w-3 text-destructive" />
+                </Button>
+              </div>
+            )}
+            {/* URL input */}
+            {!block.mediaUrl && !audioPreviewUrl && !isRecording && (
+              <Input placeholder="Ou cole URL do áudio..." value={block.mediaUrl}
+                onChange={e => onChange({ ...block, mediaUrl: e.target.value })} className="text-xs" />
+            )}
+          </>
+        )}
+
+        {/* ── POLL BLOCK ── */}
+        {block.type === 'poll' && (
+          <>
+            <Textarea
+              value={block.content}
+              onChange={e => onChange({ ...block, content: e.target.value })}
+              rows={2}
+              placeholder="Pergunta da enquete..."
+              className="text-sm"
+            />
+            <div className="space-y-1">
+              {block.pollOptions.map((opt, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <Input placeholder={`Opção ${i + 1}`} value={opt}
+                    onChange={e => {
+                      const next = [...block.pollOptions];
+                      next[i] = e.target.value;
+                      onChange({ ...block, pollOptions: next });
+                    }} className="text-xs" />
+                  {block.pollOptions.length > 2 && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7"
+                      onClick={() => onChange({ ...block, pollOptions: block.pollOptions.filter((_, idx) => idx !== i) })}>
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {block.pollOptions.length < 6 && (
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => onChange({ ...block, pollOptions: [...block.pollOptions, ''] })}>
+                  + Opção
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t">
+              <Label className="text-xs">Múltiplas respostas</Label>
+              <Switch checked={block.pollMaxOptions === 0} onCheckedChange={v => onChange({ ...block, pollMaxOptions: v ? 0 : 1 })} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Composer ───
+export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, editingMessage, onUpdate, campaignId }: ScheduledMessageFormProps) {
+  const [blocks, setBlocks] = useState<MessageBlock[]>([createBlock('text')]);
+  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
+  const [scheduledTime, setScheduledTime] = useState("12:00");
+  const [sendSpeed, setSendSpeed] = useState("normal");
+  const [mentionAll, setMentionAll] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  // Templates
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  // Shopify
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
   const [shopifySearch, setShopifySearch] = useState("");
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [showShopifyPicker, setShowShopifyPicker] = useState(false);
   const [shopifySendMode, setShopifySendMode] = useState<"photo_only" | "link">("photo_only");
+  const [shopifyTargetBlockId, setShopifyTargetBlockId] = useState<string | null>(null);
 
-  // Load editing message data
+  // Load editing message (legacy single → one block)
   useEffect(() => {
     if (editingMessage) {
-      setMessageType(editingMessage.message_type);
-      setMessageContent(editingMessage.message_content || "");
-      setMediaUrl(editingMessage.media_url || "");
-      setSendSpeed(editingMessage.send_speed || "normal");
+      const b = createBlock(editingMessage.message_type as MessageBlock['type']);
+      b.content = editingMessage.message_content || '';
+      b.mediaUrl = editingMessage.media_url || '';
       if (editingMessage.poll_options) {
-        setPollOptions(Array.isArray(editingMessage.poll_options) ? editingMessage.poll_options : ["", ""]);
+        b.pollOptions = Array.isArray(editingMessage.poll_options) ? editingMessage.poll_options : ['', ''];
       }
+      setBlocks([b]);
+      setSendSpeed(editingMessage.send_speed || 'normal');
       const d = new Date(editingMessage.scheduled_at);
       setScheduledDate(d);
       setScheduledTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
@@ -130,10 +492,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     }
   }, [editingMessage, open]);
 
-  // Load templates
-  useEffect(() => {
-    if (open) fetchTemplates();
-  }, [open]);
+  useEffect(() => { if (open) fetchTemplates(); }, [open]);
 
   const fetchTemplates = async () => {
     const { data } = await supabase.from('group_message_templates').select('*').order('created_at', { ascending: false });
@@ -141,191 +500,104 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
   };
 
   const resetForm = () => {
-    setMessageContent(""); setMediaUrl(""); setAiPrompt("");
-    setPollOptions(["", ""]); setMessageType("text");
-    setMediaMode("url"); setTemplateName("");
-    setAudioPreviewUrl(null); setIsPlayingPreview(false);
-    setMediaItems([]); setMentionAll(false);
+    setBlocks([createBlock('text')]);
+    setAiPrompt('');
+    setTemplateName('');
+    setMentionAll(false);
+    setScheduledDate(new Date());
+    setScheduledTime('12:00');
+    setSendSpeed('normal');
   };
 
-  const insertVariable = (varName: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = messageContent;
-    const insert = `{{${varName}}}`;
-    setMessageContent(text.substring(0, start) + insert + text.substring(end));
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + insert.length, start + insert.length);
-    }, 0);
+  const addBlock = (type: MessageBlock['type']) => {
+    setBlocks(prev => [...prev, createBlock(type)]);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 16 * 1024 * 1024) { toast.error("Arquivo muito grande (max 16MB)"); return; }
-    setIsUploading(true);
-    try {
-      const ext = file.name.split('.').pop();
-      const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
-      setMediaUrl(urlData.publicUrl);
-      toast.success("Arquivo enviado!");
-    } catch { toast.error("Erro no upload"); }
-    finally { setIsUploading(false); }
+  const updateBlock = (id: string, updated: MessageBlock) => {
+    setBlocks(prev => prev.map(b => b.id === id ? updated : b));
   };
 
-  const handleMultiFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const remaining = 10 - mediaItems.length;
-    if (files.length > remaining) {
-      toast.error(`Máximo ${remaining} foto(s) restante(s) (limite: 10)`);
-      return;
-    }
-    setIsUploading(true);
-    try {
-      const newItems: MediaItem[] = [];
-      for (const file of Array.from(files)) {
-        if (file.size > 16 * 1024 * 1024) { toast.error(`${file.name} muito grande (max 16MB)`); continue; }
-        const ext = file.name.split('.').pop();
-        const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
-        if (error) { toast.error(`Erro no upload de ${file.name}`); continue; }
-        const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
-        newItems.push({ url: urlData.publicUrl, caption: '' });
-      }
-      setMediaItems(prev => [...prev, ...newItems]);
-      if (newItems.length > 0) toast.success(`${newItems.length} foto(s) enviada(s)!`);
-    } catch { toast.error("Erro no upload"); }
-    finally { setIsUploading(false); if (multiFileInputRef.current) multiFileInputRef.current.value = ''; }
+  const removeBlock = (id: string) => {
+    setBlocks(prev => prev.length > 1 ? prev.filter(b => b.id !== id) : prev);
   };
 
-  const loadTemplate = (t: MessageTemplate) => {
-    setMessageType(t.message_type);
-    setMessageContent(t.message_content || "");
-    setMediaUrl(t.media_url || "");
-    if (t.poll_options) setPollOptions(Array.isArray(t.poll_options) ? t.poll_options : ["", ""]);
-    setShowTemplates(false);
-    toast.success("Modelo carregado!");
-  };
-
-  // Audio recording with preview
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        if (blob.size === 0) return;
-        // Create preview URL instead of uploading immediately
-        const previewUrl = URL.createObjectURL(blob);
-        setAudioPreviewUrl(previewUrl);
-        setMessageType('audio');
-        toast.success("Áudio gravado! Escute antes de confirmar.");
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-      recordingIntervalRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
-    } catch {
-      toast.error("Permissão de microfone negada");
-    }
-  }, []);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    setIsRecording(false);
-    if (recordingIntervalRef.current) {
-      clearInterval(recordingIntervalRef.current);
-      recordingIntervalRef.current = null;
-    }
-  }, []);
-
-  const confirmAudio = async () => {
-    if (!audioPreviewUrl) return;
-    setIsUploading(true);
-    try {
-      // Re-fetch the blob from the preview URL
-      const resp = await fetch(audioPreviewUrl);
-      const blob = await resp.blob();
-      const path = `group-messages/audio-${Date.now()}.webm`;
-      const { error } = await supabase.storage.from('marketing-attachments').upload(path, blob);
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
-      setMediaUrl(urlData.publicUrl);
-      URL.revokeObjectURL(audioPreviewUrl);
-      setAudioPreviewUrl(null);
-      toast.success("Áudio confirmado!");
-    } catch { toast.error("Erro ao enviar áudio"); }
-    finally { setIsUploading(false); }
-  };
-
-  const discardAudio = () => {
-    if (audioPreviewUrl) {
-      URL.revokeObjectURL(audioPreviewUrl);
-      setAudioPreviewUrl(null);
-    }
-    toast("Áudio descartado");
-  };
-
-  const toggleAudioPreview = () => {
-    if (!audioPreviewRef.current) return;
-    if (isPlayingPreview) {
-      audioPreviewRef.current.pause();
-      setIsPlayingPreview(false);
-    } else {
-      audioPreviewRef.current.play();
-      setIsPlayingPreview(true);
-    }
-  };
-
-  const insertEmoji = (emoji: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) { setMessageContent(prev => prev + emoji); return; }
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = messageContent;
-    setMessageContent(text.substring(0, start) + emoji + text.substring(end));
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + emoji.length, start + emoji.length);
-    }, 0);
-  };
-
-  const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-
-  const saveAsTemplate = async () => {
-    if (!templateName.trim()) { toast.error("Nome obrigatório"); return; }
-    const { error } = await supabase.from('group_message_templates').insert({
-      name: templateName.trim(),
-      message_type: messageType,
-      message_content: messageContent || null,
-      media_url: mediaUrl || null,
-      poll_options: messageType === 'poll' ? pollOptions.filter(o => o.trim()) : null,
+  const moveBlock = (idx: number, dir: -1 | 1) => {
+    const target = idx + dir;
+    if (target < 0 || target >= blocks.length) return;
+    setBlocks(prev => {
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
     });
-    if (error) { toast.error("Erro ao salvar modelo"); return; }
-    toast.success("Modelo salvo!");
-    setShowSaveTemplate(false);
-    setTemplateName("");
-    fetchTemplates();
   };
 
+  // Build submit data from blocks
+  const buildData = (dateOverride?: Date, timeOverride?: string): ScheduledMessageData => {
+    const first = blocks[0];
+    return {
+      messageType: first.type,
+      messageContent: first.content,
+      mediaUrl: first.mediaUrl,
+      mediaItems: first.mediaItems,
+      pollOptions: first.pollOptions.filter(o => o.trim()),
+      pollMaxOptions: first.pollMaxOptions,
+      scheduledAt: dateOverride || scheduledDate || new Date(),
+      scheduledTime: timeOverride || scheduledTime,
+      sendSpeed,
+      mentionAll,
+      blocks,
+    };
+  };
+
+  const validate = (): boolean => {
+    for (const b of blocks) {
+      if (b.type === 'text' && !b.content.trim()) { toast.error("Bloco de texto vazio"); return false; }
+      if (['image', 'video', 'document'].includes(b.type) && b.mediaItems.length === 0) {
+        toast.error(`Bloco de ${BLOCK_TYPE_LABELS[b.type].label} sem arquivos`); return false;
+      }
+      if (b.type === 'audio' && !b.mediaUrl) { toast.error("Bloco de áudio sem arquivo"); return false; }
+      if (b.type === 'poll' && b.pollOptions.filter(o => o.trim()).length < 2) {
+        toast.error("Enquete precisa de ao menos 2 opções"); return false;
+      }
+    }
+    if (!scheduledDate) { toast.error("Selecione uma data"); return false; }
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    setIsSaving(true);
+    try {
+      await onSubmit(buildData());
+      resetForm();
+      onOpenChange(false);
+    } catch { toast.error("Erro ao salvar"); }
+    finally { setIsSaving(false); }
+  };
+
+  const handleSendNow = async () => {
+    if (!onSendNow || !validate()) return;
+    setIsSaving(true);
+    try {
+      await onSendNow(buildData(new Date(), format(new Date(), 'HH:mm')));
+      resetForm();
+      onOpenChange(false);
+    } catch { toast.error("Erro ao enviar"); }
+    finally { setIsSaving(false); }
+  };
+
+  const handleUpdate = async () => {
+    if (!editingMessage || !onUpdate || !validate()) return;
+    setIsSaving(true);
+    try {
+      await onUpdate(editingMessage.id, buildData());
+      resetForm();
+      onOpenChange(false);
+    } catch { toast.error("Erro ao salvar"); }
+    finally { setIsSaving(false); }
+  };
+
+  // AI
   const generateAI = async () => {
     if (!aiPrompt.trim()) { toast.error("Insira um prompt"); return; }
     setIsGenerating(true);
@@ -340,118 +612,98 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       });
       const data = await res.json();
       const content = typeof data.strategy === 'string' ? data.strategy : (data.copy || '');
-      if (content) { setMessageContent(content); toast.success("Texto gerado!"); }
-      else toast.error("IA não retornou conteúdo");
+      if (content) {
+        // Insert into first text block or create one
+        const textBlockIdx = blocks.findIndex(b => b.type === 'text');
+        if (textBlockIdx >= 0) {
+          updateBlock(blocks[textBlockIdx].id, { ...blocks[textBlockIdx], content });
+        } else {
+          const nb = createBlock('text');
+          nb.content = content;
+          setBlocks(prev => [nb, ...prev]);
+        }
+        toast.success("Texto gerado!");
+      } else toast.error("IA não retornou conteúdo");
     } catch { toast.error("Erro ao gerar"); }
     finally { setIsGenerating(false); }
   };
 
-  // Shopify product loading
-  const loadShopifyProducts = async (query?: string) => {
-    setIsLoadingProducts(true);
-    try {
-      const products = await fetchProducts(50, query || undefined);
-      setShopifyProducts(products);
-    } catch { toast.error("Erro ao carregar produtos"); }
-    finally { setIsLoadingProducts(false); }
+  // Templates
+  const loadTemplate = (t: MessageTemplate) => {
+    const b = createBlock(t.message_type as MessageBlock['type']);
+    b.content = t.message_content || '';
+    b.mediaUrl = t.media_url || '';
+    if (t.poll_options) b.pollOptions = Array.isArray(t.poll_options) ? t.poll_options : ['', ''];
+    setBlocks([b]);
+    setShowTemplates(false);
+    toast.success("Modelo carregado!");
   };
 
-  const openShopifyPicker = () => {
+  const saveAsTemplate = async () => {
+    if (!templateName.trim()) { toast.error("Nome obrigatório"); return; }
+    const first = blocks[0];
+    const { error } = await supabase.from('group_message_templates').insert({
+      name: templateName.trim(),
+      message_type: first.type,
+      message_content: first.content || null,
+      media_url: first.mediaUrl || null,
+      poll_options: first.type === 'poll' ? first.pollOptions.filter(o => o.trim()) : null,
+    });
+    if (error) { toast.error("Erro ao salvar modelo"); return; }
+    toast.success("Modelo salvo!");
+    setShowSaveTemplate(false);
+    setTemplateName("");
+    fetchTemplates();
+  };
+
+  // Shopify
+  const openShopifyPicker = (blockId: string) => {
+    setShopifyTargetBlockId(blockId);
     setShowShopifyPicker(true);
     loadShopifyProducts();
   };
 
+  const loadShopifyProducts = async (query?: string) => {
+    setIsLoadingProducts(true);
+    try { setShopifyProducts(await fetchProducts(50, query || undefined)); }
+    catch { toast.error("Erro ao carregar produtos"); }
+    finally { setIsLoadingProducts(false); }
+  };
+
   const selectShopifyProduct = (product: ShopifyProduct, imageUrl: string) => {
+    const targetBlock = blocks.find(b => b.id === shopifyTargetBlockId);
+    if (!targetBlock) return;
+
     if (shopifySendMode === 'photo_only') {
-      if (messageType === 'image' && mediaItems.length < 10) {
-        setMediaItems(prev => [...prev, { url: imageUrl, caption: '' }]);
-      } else {
-        setMessageType('image');
-        setMediaItems([{ url: imageUrl, caption: '' }]);
+      if (targetBlock.type === 'image') {
+        updateBlock(targetBlock.id, { ...targetBlock, mediaItems: [...targetBlock.mediaItems, { url: imageUrl, caption: '' }] });
+      } else if (targetBlock.type === 'text') {
+        // Add a new image block
+        const nb = createBlock('image');
+        nb.mediaItems = [{ url: imageUrl, caption: '' }];
+        setBlocks(prev => [...prev, nb]);
       }
-      setShowShopifyPicker(false);
-      toast.success("Foto do produto adicionada!");
     } else {
-      // Send product link
       const handle = product.node.handle;
       const link = `https://bananabrasil.com.br/products/${handle}`;
-      setMessageType('text');
-      setMessageContent(prev => prev ? `${prev}\n${link}` : link);
-      setShowShopifyPicker(false);
-      toast.success("Link do produto inserido!");
-    }
-  };
-
-  const multiMediaTypes = ['image', 'video', 'document'];
-
-  const handleMultiMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const remaining = 10 - mediaItems.length;
-    if (files.length > remaining) {
-      toast.error(`Máximo ${remaining} arquivo(s) restante(s) (limite: 10)`);
-      return;
-    }
-    setIsUploading(true);
-    try {
-      const newItems: MediaItem[] = [];
-      for (const file of Array.from(files)) {
-        if (file.size > 16 * 1024 * 1024) { toast.error(`${file.name} muito grande (max 16MB)`); continue; }
-        const ext = file.name.split('.').pop();
-        const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
-        if (error) { toast.error(`Erro no upload de ${file.name}`); continue; }
-        const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
-        newItems.push({ url: urlData.publicUrl, caption: '' });
+      if (targetBlock.type === 'text') {
+        updateBlock(targetBlock.id, { ...targetBlock, content: targetBlock.content ? `${targetBlock.content}\n${link}` : link });
       }
-      setMediaItems(prev => [...prev, ...newItems]);
-      if (newItems.length > 0) toast.success(`${newItems.length} arquivo(s) enviado(s)!`);
-    } catch { toast.error("Erro no upload"); }
-    finally { setIsUploading(false); if (e.target) e.target.value = ''; }
-  };
-
-  const insertEmojiInCaption = (emoji: string, index: number) => {
-    setMediaItems(prev => {
-      const next = [...prev];
-      next[index] = { ...next[index], caption: (next[index].caption || '') + emoji };
-      return next;
-    });
-  };
-
-  const handleSubmit = async () => {
-    if (!scheduledDate) { toast.error("Selecione uma data"); return; }
-    if (!messageContent.trim() && messageType === 'text') { toast.error("Mensagem obrigatória"); return; }
-    if (multiMediaTypes.includes(messageType) && mediaItems.length === 0 && !mediaUrl) { toast.error("Adicione pelo menos 1 arquivo"); return; }
-    if (messageType === 'poll' && pollOptions.filter(o => o.trim()).length < 2) {
-      toast.error("Enquete precisa de ao menos 2 opções"); return;
     }
-
-    setIsSaving(true);
-    try {
-      const data: ScheduledMessageData = {
-        messageType, messageContent, mediaUrl,
-        mediaItems: multiMediaTypes.includes(messageType) ? mediaItems : [],
-        pollOptions: pollOptions.filter(o => o.trim()),
-        pollMaxOptions: pollAllowMultiple ? 0 : 1,
-        scheduledAt: scheduledDate, scheduledTime, sendSpeed,
-        mentionAll,
-      };
-      if (editingMessage && onUpdate) {
-        await onUpdate(editingMessage.id, data);
-      } else {
-        await onSubmit(data);
-      }
-      resetForm();
-      onOpenChange(false);
-    } catch { toast.error("Erro ao salvar"); }
-    finally { setIsSaving(false); }
+    setShowShopifyPicker(false);
+    toast.success(shopifySendMode === 'photo_only' ? "Foto adicionada!" : "Link inserido!");
   };
 
-  const acceptTypes: Record<string, string> = {
-    image: "image/*",
-    video: "video/*",
-    audio: "audio/*",
-    document: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip",
+  // Variables - insert into first text block
+  const insertVariable = (varName: string) => {
+    const textBlock = blocks.find(b => b.type === 'text');
+    if (!textBlock) {
+      const nb = createBlock('text');
+      nb.content = `{{${varName}}}`;
+      setBlocks(prev => [nb, ...prev]);
+    } else {
+      updateBlock(textBlock.id, { ...textBlock, content: textBlock.content + `{{${varName}}}` });
+    }
   };
 
   return (
@@ -462,7 +714,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
           <DialogTitle>{editingMessage ? "Editar Mensagem" : "Enviar Mensagem"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Templates buttons */}
+          {/* Templates */}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="gap-1" onClick={() => setShowTemplates(!showTemplates)}>
               <FileText className="h-3.5 w-3.5" /> Usar Modelo
@@ -472,7 +724,6 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             </Button>
           </div>
 
-          {/* Template list */}
           {showTemplates && templates.length > 0 && (
             <div className="border rounded-lg p-2 space-y-1 max-h-32 overflow-y-auto">
               {templates.map(t => (
@@ -485,7 +736,6 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             </div>
           )}
 
-          {/* Save template dialog */}
           {showSaveTemplate && (
             <div className="border rounded-lg p-3 space-y-2">
               <Input placeholder="Nome do modelo" value={templateName} onChange={e => setTemplateName(e.target.value)} />
@@ -496,230 +746,35 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             </div>
           )}
 
-          {/* Type */}
-          <div>
-            <Label className="text-xs">Tipo</Label>
-            <Select value={messageType} onValueChange={setMessageType}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="text">📝 Texto</SelectItem>
-                <SelectItem value="image">🖼️ Imagem</SelectItem>
-                <SelectItem value="video">🎬 Vídeo</SelectItem>
-                <SelectItem value="audio">🎵 Áudio</SelectItem>
-                <SelectItem value="document">📄 Documento</SelectItem>
-                <SelectItem value="poll">📊 Enquete</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* ── BLOCKS ── */}
+          <div className="space-y-2">
+            {blocks.map((block, idx) => (
+              <BlockEditor
+                key={block.id}
+                block={block}
+                onChange={updated => updateBlock(block.id, updated)}
+                onRemove={() => removeBlock(block.id)}
+                onMoveUp={() => moveBlock(idx, -1)}
+                onMoveDown={() => moveBlock(idx, 1)}
+                isFirst={idx === 0}
+                isLast={idx === blocks.length - 1}
+                onOpenShopify={openShopifyPicker}
+              />
+            ))}
           </div>
 
-          {/* Multi-photo upload for image type */}
-          {messageType === 'image' && (
-            <div className="space-y-2">
-              <Label className="text-xs">Fotos ({mediaItems.length}/10)</Label>
-              <div className="flex gap-2 mb-2 flex-wrap">
-                <Button variant="outline" size="sm" className="gap-1"
-                  onClick={() => multiFileInputRef.current?.click()}
-                  disabled={isUploading || mediaItems.length >= 10}>
-                  {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  Upload Fotos
-                </Button>
-                <Button variant="outline" size="sm" className="gap-1" onClick={openShopifyPicker}
-                  disabled={mediaItems.length >= 10}>
-                  <ShoppingBag className="h-3.5 w-3.5" /> Shopify
-                </Button>
-              </div>
-              <input ref={multiFileInputRef} type="file" accept="image/*" multiple
-                onChange={handleMultiFileUpload} className="hidden" />
+          {/* Add block buttons */}
+          <div className="flex flex-wrap gap-1.5">
+            <span className="text-[10px] text-muted-foreground self-center mr-1">+ Adicionar:</span>
+            {Object.entries(BLOCK_TYPE_LABELS).map(([type, info]) => (
+              <Button key={type} variant="outline" size="sm" className="h-7 text-[11px] gap-1 px-2"
+                onClick={() => addBlock(type as MessageBlock['type'])}>
+                {info.icon} {info.label}
+              </Button>
+            ))}
+          </div>
 
-              {/* URL manual add */}
-              <div className="flex gap-2">
-                <Input placeholder="Ou cole URL da imagem..." value={mediaUrl}
-                  onChange={e => setMediaUrl(e.target.value)} className="flex-1" />
-                <Button variant="outline" size="sm" disabled={!mediaUrl.trim() || mediaItems.length >= 10}
-                  onClick={() => {
-                    setMediaItems(prev => [...prev, { url: mediaUrl, caption: '' }]);
-                    setMediaUrl('');
-                  }}>
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-
-              {/* Media items list with captions */}
-              {mediaItems.length > 0 && (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {mediaItems.map((item, i) => (
-                    <div key={i} className="flex gap-2 items-start border rounded-lg p-2">
-                      <img src={item.url} alt={`Foto ${i + 1}`}
-                        className="w-16 h-16 object-cover rounded shrink-0" />
-                      <div className="flex-1 space-y-1">
-                        <p className="text-[10px] text-muted-foreground">Foto {i + 1}</p>
-                        <Textarea placeholder="Legenda desta foto... (use Enter para quebra de linha)" value={item.caption}
-                          onChange={e => {
-                            const next = [...mediaItems];
-                            next[i] = { ...next[i], caption: e.target.value };
-                            setMediaItems(next);
-                          }}
-                          rows={2}
-                          className="text-xs" />
-                        <WhatsAppFormattingToolbar
-                          value={item.caption}
-                          onChange={(val) => {
-                            const next = [...mediaItems];
-                            next[i] = { ...next[i], caption: val };
-                            setMediaItems(next);
-                          }}
-                        />
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
-                        onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}>
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Multi-file upload for video and document types */}
-          {(messageType === 'video' || messageType === 'document') && (
-            <div className="space-y-2">
-              <Label className="text-xs">{messageType === 'video' ? 'Vídeos' : 'Documentos'} ({mediaItems.length}/10)</Label>
-              <div className="flex gap-2 mb-2 flex-wrap">
-                <Button variant="outline" size="sm" className="gap-1"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading || mediaItems.length >= 10}>
-                  {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  Upload {messageType === 'video' ? 'Vídeos' : 'Documentos'}
-                </Button>
-              </div>
-              <input ref={fileInputRef} type="file" accept={acceptTypes[messageType] || "*/*"} multiple
-                onChange={(e) => handleMultiMediaUpload(e, messageType)} className="hidden" />
-
-              {/* URL manual add */}
-              <div className="flex gap-2">
-                <Input placeholder="Ou cole URL do arquivo..." value={mediaUrl}
-                  onChange={e => setMediaUrl(e.target.value)} className="flex-1" />
-                <Button variant="outline" size="sm" disabled={!mediaUrl.trim() || mediaItems.length >= 10}
-                  onClick={() => {
-                    setMediaItems(prev => [...prev, { url: mediaUrl, caption: '' }]);
-                    setMediaUrl('');
-                  }}>
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-
-              {/* Media items list with captions and emoji */}
-              {mediaItems.length > 0 && (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {mediaItems.map((item, i) => (
-                    <div key={i} className="flex gap-2 items-start border rounded-lg p-2">
-                      <div className="w-16 h-16 bg-muted rounded shrink-0 flex items-center justify-center">
-                        {messageType === 'video' ? (
-                          <video src={item.url} className="w-full h-full object-cover rounded" />
-                        ) : (
-                          <FileText className="h-6 w-6 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1 space-y-1">
-                        <p className="text-[10px] text-muted-foreground">{messageType === 'video' ? 'Vídeo' : 'Documento'} {i + 1}</p>
-                        <Textarea placeholder="Legenda deste arquivo... (use Enter para quebra de linha)" value={item.caption}
-                          onChange={e => {
-                            const next = [...mediaItems];
-                            next[i] = { ...next[i], caption: e.target.value };
-                            setMediaItems(next);
-                          }}
-                          rows={2}
-                          className="text-xs" />
-                        <WhatsAppFormattingToolbar
-                          value={item.caption}
-                          onChange={(val) => {
-                            const next = [...mediaItems];
-                            next[i] = { ...next[i], caption: val };
-                            setMediaItems(next);
-                          }}
-                        />
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
-                        onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}>
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Single-file audio media (kept as-is since audio has recording flow) */}
-          {messageType === 'audio' && (
-            <div className="space-y-2">
-              <Label className="text-xs">Mídia</Label>
-              <div className="flex gap-2 mb-2 flex-wrap">
-                <Button variant={mediaMode === "url" ? "default" : "outline"} size="sm" className="gap-1"
-                  onClick={() => setMediaMode("url")}>
-                  <LinkIcon className="h-3.5 w-3.5" /> URL
-                </Button>
-                <Button variant={mediaMode === "upload" ? "default" : "outline"} size="sm" className="gap-1"
-                  onClick={() => setMediaMode("upload")}>
-                  <Upload className="h-3.5 w-3.5" /> Upload
-                </Button>
-              </div>
-              {mediaMode === "url" ? (
-                <Input placeholder="https://..." value={mediaUrl} onChange={e => setMediaUrl(e.target.value)} />
-              ) : (
-                <div>
-                  <input ref={fileInputRef} type="file" accept="audio/*"
-                    onChange={handleFileUpload} className="hidden" />
-                  <Button variant="outline" className="w-full gap-1" onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}>
-                    {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    {mediaUrl ? "Arquivo enviado ✓" : "Escolher arquivo"}
-                  </Button>
-                  {mediaUrl && <p className="text-[10px] text-muted-foreground mt-1 truncate">{mediaUrl}</p>}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Shopify button for text type too */}
-          {messageType === 'text' && (
-            <Button variant="outline" size="sm" className="gap-1" onClick={openShopifyPicker}>
-              <ShoppingBag className="h-3.5 w-3.5" /> Inserir Produto Shopify
-            </Button>
-          )}
-
-          {/* Poll options */}
-          {messageType === 'poll' && (
-            <div className="space-y-2">
-              <Label className="text-xs">Opções da Enquete</Label>
-              {pollOptions.map((opt, i) => (
-                <div key={i} className="flex items-center gap-1">
-                  <Input placeholder={`Opção ${i + 1}`} value={opt}
-                    onChange={e => {
-                      const next = [...pollOptions];
-                      next[i] = e.target.value;
-                      setPollOptions(next);
-                    }} />
-                  {pollOptions.length > 2 && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0"
-                      onClick={() => setPollOptions(pollOptions.filter((_, idx) => idx !== i))}>
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-              {pollOptions.length < 6 && (
-                <Button variant="outline" size="sm" onClick={() => setPollOptions([...pollOptions, ""])}>
-                  + Opção
-                </Button>
-              )}
-              <div className="flex items-center justify-between pt-2 border-t">
-                <Label className="text-xs">Permitir várias respostas</Label>
-                <Switch checked={pollAllowMultiple} onCheckedChange={setPollAllowMultiple} />
-              </div>
-            </div>
-          )}
+          <Separator />
 
           {/* AI */}
           <Card className="border-dashed">
@@ -748,55 +803,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             </div>
           </div>
 
-          {/* Message content */}
-          <div>
-            <Label className="text-xs">{messageType === 'poll' ? 'Pergunta da Enquete' : 'Texto da Mensagem'}</Label>
-            <Textarea ref={textareaRef} value={messageContent} onChange={e => setMessageContent(e.target.value)} rows={4}
-              placeholder={messageType === 'poll' ? 'Qual sua preferência?' : 'Texto da mensagem... (use Enter para quebra de linha, *negrito*, _itálico_, ~tachado~)'} />
-            <div className="flex items-center gap-1 mt-1">
-              <WhatsAppFormattingToolbar value={messageContent} onChange={setMessageContent} textareaRef={textareaRef} />
-              {!isRecording && !audioPreviewUrl ? (
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={startRecording}
-                  title="Gravar áudio">
-                  <Mic className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              ) : isRecording ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-destructive font-medium animate-pulse">● {formatRecTime(recordingTime)}</span>
-                  <Button type="button" variant="destructive" size="icon" className="h-8 w-8" onClick={stopRecording}>
-                    <Square className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Audio preview */}
-          {audioPreviewUrl && (
-            <Card className="border-primary/30">
-              <CardContent className="p-3 space-y-2">
-                <Label className="text-xs flex items-center gap-1">
-                  <Mic className="h-3.5 w-3.5 text-primary" /> Pré-escuta do Áudio
-                </Label>
-                <audio
-                  ref={audioPreviewRef}
-                  src={audioPreviewUrl}
-                  onEnded={() => setIsPlayingPreview(false)}
-                  className="w-full h-10"
-                  controls
-                />
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={confirmAudio} disabled={isUploading} className="gap-1 flex-1">
-                    {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                    Confirmar Áudio
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={discardAudio} className="gap-1">
-                    <Trash2 className="h-3.5 w-3.5" /> Descartar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <Separator />
 
           {/* Date & Time */}
           <div className="flex gap-3">
@@ -810,8 +817,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={scheduledDate} onSelect={setScheduledDate}
-                    className={cn("p-3 pointer-events-auto")} />
+                  <Calendar mode="single" selected={scheduledDate} onSelect={setScheduledDate} className="p-3 pointer-events-auto" />
                 </PopoverContent>
               </Popover>
             </div>
@@ -827,9 +833,9 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
             <Select value={sendSpeed} onValueChange={setSendSpeed}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="slow">🐢 Lento (8-15s) - Mais seguro</SelectItem>
+                <SelectItem value="slow">🐢 Lento (8-15s)</SelectItem>
                 <SelectItem value="normal">⚡ Normal (3-8s)</SelectItem>
-                <SelectItem value="fast">🚀 Rápido (1-3s) - Risco maior</SelectItem>
+                <SelectItem value="fast">🚀 Rápido (1-3s)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -846,30 +852,12 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           {!editingMessage && onSendNow && (
-            <Button variant="secondary" onClick={async () => {
-              if (!messageContent.trim() && messageType === 'text') { toast.error("Mensagem obrigatória"); return; }
-              if (messageType === 'poll' && pollOptions.filter(o => o.trim()).length < 2) { toast.error("Enquete precisa de ao menos 2 opções"); return; }
-              setIsSaving(true);
-              try {
-                const data: ScheduledMessageData = {
-                  messageType, messageContent, mediaUrl,
-                  mediaItems: multiMediaTypes.includes(messageType) ? mediaItems : [],
-                  pollOptions: pollOptions.filter(o => o.trim()),
-                  pollMaxOptions: pollAllowMultiple ? 0 : 1,
-                  scheduledAt: new Date(), scheduledTime: format(new Date(), 'HH:mm'), sendSpeed,
-                  mentionAll,
-                };
-                await onSendNow(data);
-                resetForm();
-                onOpenChange(false);
-              } catch { toast.error("Erro ao enviar"); }
-              finally { setIsSaving(false); }
-            }} disabled={isSaving} className="gap-1">
+            <Button variant="secondary" onClick={handleSendNow} disabled={isSaving} className="gap-1">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Enviar Agora
             </Button>
           )}
-          <Button onClick={handleSubmit} disabled={isSaving} className="gap-1">
+          <Button onClick={editingMessage ? handleUpdate : handleSubmit} disabled={isSaving} className="gap-1">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             {editingMessage ? "Salvar" : "Enviar Mensagem"}
           </Button>
@@ -877,7 +865,7 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
       </DialogContent>
     </Dialog>
 
-    {/* Shopify Product Picker Dialog */}
+    {/* Shopify Picker */}
     <Dialog open={showShopifyPicker} onOpenChange={setShowShopifyPicker}>
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
@@ -886,7 +874,6 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          {/* Send mode selector */}
           <div className="flex gap-2">
             <Button variant={shopifySendMode === "photo_only" ? "default" : "outline"} size="sm" className="gap-1"
               onClick={() => setShopifySendMode("photo_only")}>
@@ -897,13 +884,6 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
               <LinkIcon className="h-3.5 w-3.5" /> Link do Produto
             </Button>
           </div>
-          <p className="text-[10px] text-muted-foreground">
-            {shopifySendMode === "photo_only"
-              ? "A foto será enviada como imagem no grupo. Você pode adicionar uma legenda no campo de texto."
-              : "O link do produto no site será inserido na mensagem de texto."}
-          </p>
-
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar produto..." value={shopifySearch}
@@ -912,11 +892,8 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
               className="pl-9" />
           </div>
           <Button variant="outline" size="sm" onClick={() => loadShopifyProducts(shopifySearch)} disabled={isLoadingProducts}>
-            {isLoadingProducts ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-            Buscar
+            {isLoadingProducts ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null} Buscar
           </Button>
-
-          {/* Products grid */}
           <ScrollArea className="h-[400px]">
             {isLoadingProducts ? (
               <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -930,22 +907,18 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                   return (
                     <Card key={p.node.id} className="overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all">
                       <div className="space-y-2">
-                        {mainImage && (
-                          <img src={mainImage} alt={p.node.title} className="w-full h-32 object-cover" />
-                        )}
+                        {mainImage && <img src={mainImage} alt={p.node.title} className="w-full h-32 object-cover" />}
                         <div className="p-2">
                           <p className="text-xs font-medium truncate">{p.node.title}</p>
                           <p className="text-[10px] text-muted-foreground">
                             R$ {parseFloat(p.node.priceRange.minVariantPrice.amount).toFixed(2)}
                           </p>
-                          {/* Show all images if more than one */}
                           {images.length > 1 && shopifySendMode === 'photo_only' && (
                             <div className="flex gap-1 mt-1 overflow-x-auto">
                               {images.map((img, idx) => (
                                 <img key={idx} src={img.node.url} alt=""
                                   className="h-10 w-10 rounded object-cover cursor-pointer border-2 border-transparent hover:border-primary transition-colors shrink-0"
-                                  onClick={(e) => { e.stopPropagation(); selectShopifyProduct(p, img.node.url); }}
-                                />
+                                  onClick={(e) => { e.stopPropagation(); selectShopifyProduct(p, img.node.url); }} />
                               ))}
                             </div>
                           )}
