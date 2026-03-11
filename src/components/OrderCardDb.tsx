@@ -202,7 +202,11 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       const payload = {
         pedido_id: order.id,
         cliente_nome: order.customer?.instagram_handle || '',
-        cliente_telefone: order.customer?.whatsapp || '',
+        cliente_telefone: (() => {
+          const raw = order.customer?.whatsapp || '';
+          const digits = raw.replace(/\D/g, '');
+          return digits.startsWith('55') ? digits : '55' + digits;
+        })(),
         produto: order.products.map(p => `${p.quantity}x ${p.title}`).join(', '),
         tamanho,
         cor,

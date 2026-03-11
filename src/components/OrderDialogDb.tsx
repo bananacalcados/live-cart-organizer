@@ -506,8 +506,27 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 placeholder="(11) 99999-9999"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
+                onBlur={() => {
+                  if (whatsapp.trim()) {
+                    const digits = whatsapp.replace(/\D/g, '');
+                    const normalized = digits.startsWith('55') ? digits : '55' + digits;
+                    setWhatsapp(normalized);
+                  }
+                }}
                 disabled={false}
               />
+              {whatsapp.trim() && (() => {
+                const digits = whatsapp.replace(/\D/g, '');
+                const normalized = digits.startsWith('55') ? digits : '55' + digits;
+                if (normalized !== whatsapp) {
+                  return (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      📱 Será salvo como: <strong>{normalized}</strong>
+                    </p>
+                  );
+                }
+                return null;
+              })()}
               {existingCustomerByWhatsApp && (
                 <Alert className="mt-2 border-stage-paid/50 bg-stage-paid/10">
                   <Info className="h-4 w-4 text-stage-paid" />
