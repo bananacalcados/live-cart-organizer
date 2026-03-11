@@ -211,7 +211,16 @@ serve(async (req) => {
           })
           .eq("id", order.id);
         if (error) console.error("Error updating orders:", error);
-        else { updated = true; console.log(`orders ${order.id} marked as paid via webhook`); }
+        else {
+          updated = true;
+          console.log(`orders ${order.id} marked as paid via webhook`);
+          // Notify Livete agent
+          fetch('http://31.97.23.119:8002/webhook/pagamento-confirmado', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pedido_id: order.id, gateway: 'pagarme', transaction_id: String(transactionId) }),
+          }).catch(err => console.error('Livete webhook error:', err));
+        }
       }
     } else if (orderSource === "pos_sales" && sale) {
       // Guard: already paid

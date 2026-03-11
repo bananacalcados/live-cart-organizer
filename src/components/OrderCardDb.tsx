@@ -176,7 +176,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         loja: 'centro',
       };
 
-      fetch('http://31.97.23.119:8000/webhook/novo-pedido', {
+      fetch('http://31.97.23.119:8002/webhook/novo-pedido', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
