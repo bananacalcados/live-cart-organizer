@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
+import { WhatsAppFormattingToolbar } from "./WhatsAppFormattingToolbar";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
