@@ -294,7 +294,17 @@ serve(async (req) => {
           })
           .eq("id", ourOrderId);
         if (error) console.error("Error updating orders:", error);
-        else { updated = true; console.log(`orders ${ourOrderId} marked as paid via AppMax webhook`); console.log(`[appmax] Vinculado appmax_order_id=${appmaxOrderId} ao pedido ${ourOrderId}`); }
+        else {
+          updated = true;
+          console.log(`orders ${ourOrderId} marked as paid via AppMax webhook`);
+          console.log(`[appmax] Vinculado appmax_order_id=${appmaxOrderId} ao pedido ${ourOrderId}`);
+          // Notify Livete agent
+          fetch('http://31.97.23.119:8002/webhook/pagamento-confirmado', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pedido_id: ourOrderId, gateway: 'appmax', transaction_id: String(transactionId) }),
+          }).catch(err => console.error('Livete webhook error:', err));
+        }
       } else if (isFailed && record.is_paid) {
         // Reverter pagamento se já estava pago e veio status de falha
         const { error } = await supabase
