@@ -476,20 +476,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   };
 
   const duplicateMessage = async (msg: ScheduledMessage) => {
-    const originalDate = new Date(msg.scheduled_at);
-    const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
-      campaign_id: campaignId,
-      message_type: msg.message_type,
-      message_content: msg.message_content,
-      media_url: msg.media_url,
-      poll_options: msg.poll_options,
-      scheduled_at: originalDate.toISOString(),
-      send_speed: msg.send_speed,
+    // Open edit form pre-filled with original content so user can see/edit
+    const editMsg: ScheduledMessage = {
+      ...msg,
+      id: '__duplicate__' + msg.id,
       status: 'pending',
-    });
-    if (error) { toast.error("Erro ao duplicar"); return; }
-    toast.success("Mensagem duplicada como pendente!");
-    fetchMessages();
+      scheduled_at: msg.scheduled_at,
+    };
+    setEditingMessage(editMsg);
+    setShowMessageForm(true);
   };
 
   const openImportDialog = async () => {
