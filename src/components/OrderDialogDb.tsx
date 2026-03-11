@@ -74,6 +74,27 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [customShippingCost, setCustomShippingCost] = useState<string>("");
   const [paidExternally, setPaidExternally] = useState(false);
 
+  // Pickup & delivery
+  const [isPickup, setIsPickup] = useState(false);
+  const [pickupStoreId, setPickupStoreId] = useState<string>("");
+  const [isDelivery, setIsDelivery] = useState(false);
+  const [pickupStores, setPickupStores] = useState<{id: string; name: string}[]>([]);
+  const [isCreatingPickup, setIsCreatingPickup] = useState(false);
+
+  // Load stores for pickup
+  useEffect(() => {
+    const loadStores = async () => {
+      const { data } = await supabase
+        .from('pos_stores')
+        .select('id, name')
+        .eq('is_active', true)
+        .in('name', ['Loja Centro', 'Loja Perola'])
+        .order('name');
+      if (data) setPickupStores(data);
+    };
+    loadStores();
+  }, []);
+
   // Check for existing customer by Instagram as user types
   const existingCustomer = useMemo(() => {
     if (editingOrder || !instagramHandle.trim()) return null;
