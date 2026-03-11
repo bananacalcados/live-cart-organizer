@@ -292,7 +292,7 @@ const Events = () => {
                          <SelectValue placeholder="Selecione o número WhatsApp..." />
                        </SelectTrigger>
                        <SelectContent>
-                         <SelectItem value="">Nenhum (padrão)</SelectItem>
+                         <SelectItem value="none">Nenhum (padrão)</SelectItem>
                          {whatsappNumbers.map(n => (
                            <SelectItem key={n.id} value={n.id}>
                              {n.label} ({n.phone_display})
