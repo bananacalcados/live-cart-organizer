@@ -878,6 +878,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                   </Card>
                 ))}
               </div>
+            )}
           </TabsContent>
 
           {/* CALENDAR TAB */}
