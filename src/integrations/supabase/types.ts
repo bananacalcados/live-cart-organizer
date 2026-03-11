@@ -4706,7 +4706,9 @@ export type Database = {
           has_gift: boolean | null
           has_unread_messages: boolean
           id: string
+          is_delivery: boolean | null
           is_paid: boolean
+          is_pickup: boolean | null
           last_customer_message_at: string | null
           last_sent_message_at: string | null
           mercadopago_payment_id: string | null
@@ -4714,6 +4716,7 @@ export type Database = {
           pagarme_order_id: string | null
           paid_at: string | null
           paid_externally: boolean | null
+          pickup_store_id: string | null
           pos_sale_id: string | null
           products: Json
           shipping_cost: number | null
@@ -4738,7 +4741,9 @@ export type Database = {
           has_gift?: boolean | null
           has_unread_messages?: boolean
           id?: string
+          is_delivery?: boolean | null
           is_paid?: boolean
+          is_pickup?: boolean | null
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
           mercadopago_payment_id?: string | null
@@ -4746,6 +4751,7 @@ export type Database = {
           pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
+          pickup_store_id?: string | null
           pos_sale_id?: string | null
           products?: Json
           shipping_cost?: number | null
@@ -4770,7 +4776,9 @@ export type Database = {
           has_gift?: boolean | null
           has_unread_messages?: boolean
           id?: string
+          is_delivery?: boolean | null
           is_paid?: boolean
+          is_pickup?: boolean | null
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
           mercadopago_payment_id?: string | null
@@ -4778,6 +4786,7 @@ export type Database = {
           pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
+          pickup_store_id?: string | null
           pos_sale_id?: string | null
           products?: Json
           shipping_cost?: number | null
@@ -4798,6 +4807,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_pickup_store_id_fkey"
+            columns: ["pickup_store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
             referencedColumns: ["id"]
           },
         ]

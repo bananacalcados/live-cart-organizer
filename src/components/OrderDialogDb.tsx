@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode, Lock } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode, Lock, Store, MapPin, Package } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -74,6 +74,27 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [customShippingCost, setCustomShippingCost] = useState<string>("");
   const [paidExternally, setPaidExternally] = useState(false);
 
+  // Pickup & delivery
+  const [isPickup, setIsPickup] = useState(false);
+  const [pickupStoreId, setPickupStoreId] = useState<string>("");
+  const [isDelivery, setIsDelivery] = useState(false);
+  const [pickupStores, setPickupStores] = useState<{id: string; name: string}[]>([]);
+  const [isCreatingPickup, setIsCreatingPickup] = useState(false);
+
+  // Load stores for pickup
+  useEffect(() => {
+    const loadStores = async () => {
+      const { data } = await supabase
+        .from('pos_stores')
+        .select('id, name')
+        .eq('is_active', true)
+        .in('name', ['Loja Centro', 'Loja Perola'])
+        .order('name');
+      if (data) setPickupStores(data);
+    };
+    loadStores();
+  }, []);
+
   // Check for existing customer by Instagram as user types
   const existingCustomer = useMemo(() => {
     if (editingOrder || !instagramHandle.trim()) return null;
@@ -107,6 +128,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       setCouponCode(editingOrder.coupon_code || "");
       setPaidExternally(editingOrder.paid_externally || false);
       setCustomShippingCost((editingOrder as any).custom_shipping_cost != null ? String((editingOrder as any).custom_shipping_cost) : "");
+      setIsPickup((editingOrder as any).is_pickup || false);
+      setPickupStoreId((editingOrder as any).pickup_store_id || "");
+      setIsDelivery((editingOrder as any).is_delivery || false);
     } else {
       resetForm();
     }
@@ -136,6 +160,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     setCouponCode("");
     setPaidExternally(false);
     setCustomShippingCost("");
+    setIsPickup(false);
+    setPickupStoreId("");
+    setIsDelivery(false);
   };
 
   const handleAddLocalProduct = (product: DbOrderProduct) => {
@@ -363,6 +390,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         coupon_code: couponCode || null,
         paid_externally: paidExternally,
         custom_shipping_cost: parsedCustomShipping,
+        is_pickup: isPickup,
+        pickup_store_id: isPickup && pickupStoreId ? pickupStoreId : null,
+        is_delivery: isDelivery,
       } as any;
       
       // If marking as paid externally, also mark as paid
@@ -769,26 +799,92 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
               {/* Na Entrega */}
               <Button
                 type="button"
-                variant="outline"
-                className="w-full h-11 text-sm font-bold border-2 border-muted-foreground/30 gap-2"
-                onClick={() => toast.info("Funcionalidade 'Na Entrega' será implementada na próxima etapa")}
+                className={`w-full h-11 text-sm font-bold gap-2 ${isDelivery ? 'bg-[hsl(30,80%,50%)] text-white ring-2 ring-[hsl(30,80%,50%)] ring-offset-2' : 'bg-[hsl(30,80%,50%)] hover:bg-[hsl(30,80%,45%)] text-white'}`}
+                onClick={async () => {
+                  if (!editingOrder) {
+                    toast.error("Salve o pedido primeiro");
+                    return;
+                  }
+                  setIsDelivery(!isDelivery);
+                  setIsPickup(false);
+                  setPickupStoreId("");
+                  if (!isDelivery) {
+                    // Generate registration link
+                    const url = `${window.location.origin}/register/${editingOrder.id}`;
+                    setCartLink(url);
+                    // Save to DB
+                    await updateOrder(editingOrder.id, {
+                      is_delivery: true,
+                      is_pickup: false,
+                      pickup_store_id: null,
+                    } as any);
+                    toast.success("Link de cadastro gerado! Envie para o cliente preencher os dados.");
+                  } else {
+                    await updateOrder(editingOrder.id, { is_delivery: false } as any);
+                  }
+                }}
                 disabled={localProducts.length === 0 || !editingOrder}
               >
-                <Truck className="h-4 w-4" />
-                Na Entrega
+                <Truck className="h-5 w-5" />
+                Na Entrega {isDelivery && "✓"}
               </Button>
 
               {/* Retirar na Loja */}
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-11 text-sm font-bold border-2 border-[hsl(var(--chart-2))] text-[hsl(var(--chart-2))] hover:bg-[hsl(var(--chart-2))]/10 gap-2"
-                onClick={() => toast.info("Funcionalidade 'Retirar na Loja' será implementada na próxima etapa")}
-                disabled={localProducts.length === 0 || !editingOrder}
-              >
-                <ShoppingBag className="h-4 w-4" />
-                Retirar na Loja
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  className={`w-full h-11 text-sm font-bold gap-2 ${isPickup ? 'bg-[hsl(170,60%,40%)] text-white ring-2 ring-[hsl(170,60%,40%)] ring-offset-2' : 'bg-[hsl(170,60%,40%)] hover:bg-[hsl(170,60%,35%)] text-white'}`}
+                  onClick={() => {
+                    if (!editingOrder) {
+                      toast.error("Salve o pedido primeiro");
+                      return;
+                    }
+                    setIsPickup(!isPickup);
+                    setIsDelivery(false);
+                    if (!isPickup) {
+                      setCustomShippingCost("0");
+                      setFreeShipping(true);
+                    }
+                  }}
+                  disabled={localProducts.length === 0 || !editingOrder}
+                >
+                  <Package className="h-5 w-5" />
+                  Retirar na Loja {isPickup && "✓"}
+                </Button>
+
+                {isPickup && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {pickupStores.map((store) => (
+                      <Button
+                        key={store.id}
+                        type="button"
+                        variant={pickupStoreId === store.id ? "default" : "outline"}
+                        className={`h-12 text-sm font-bold gap-2 ${pickupStoreId === store.id ? 'bg-[hsl(170,60%,40%)] text-white' : 'border-2 border-[hsl(170,60%,40%)] text-[hsl(170,60%,40%)]'}`}
+                        onClick={async () => {
+                          setPickupStoreId(store.id);
+                          setCustomShippingCost("0");
+                          setFreeShipping(true);
+                          // Generate registration link for pickup
+                          const url = `${window.location.origin}/register/${editingOrder!.id}`;
+                          setCartLink(url);
+                          // Save to DB
+                          await updateOrder(editingOrder!.id, {
+                            is_pickup: true,
+                            pickup_store_id: store.id,
+                            is_delivery: false,
+                            custom_shipping_cost: 0,
+                            free_shipping: true,
+                          } as any);
+                          toast.success(`Retirada na ${store.name} selecionada! Frete zerado.`);
+                        }}
+                      >
+                        <Store className="h-4 w-4" />
+                        {store.name.replace('Loja ', '')}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Cart link */}
