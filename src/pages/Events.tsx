@@ -278,10 +278,32 @@ const Events = () => {
                       value={shippingCost}
                       onChange={(e) => setShippingCost(e.target.value)}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Se definido, será aplicado automaticamente ao primeiro pedido de cada cliente. A partir do 2º pedido no mesmo evento, o frete é grátis.
-                    </p>
-                  </div>
+                     <p className="text-xs text-muted-foreground">
+                       Se definido, será aplicado automaticamente ao primeiro pedido de cada cliente. A partir do 2º pedido no mesmo evento, o frete é grátis.
+                     </p>
+                   </div>
+                   <div className="space-y-2">
+                     <Label className="flex items-center gap-2">
+                       <Phone className="h-4 w-4" />
+                       WhatsApp do Evento
+                     </Label>
+                     <Select value={selectedWhatsAppId} onValueChange={setSelectedWhatsAppId}>
+                       <SelectTrigger>
+                         <SelectValue placeholder="Selecione o número WhatsApp..." />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="">Nenhum (padrão)</SelectItem>
+                         {whatsappNumbers.map(n => (
+                           <SelectItem key={n.id} value={n.id}>
+                             {n.label} ({n.phone_display})
+                           </SelectItem>
+                         ))}
+                       </SelectContent>
+                     </Select>
+                     <p className="text-xs text-muted-foreground">
+                       Número WhatsApp que será usado para disparos automáticos neste evento (ex: agente de cobrança).
+                     </p>
+                   </div>
                   {editingEvent && (
                     <EventTeamSelector eventId={editingEvent} />
                   )}
