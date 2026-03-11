@@ -183,6 +183,7 @@ const Events = () => {
     setName("");
     setDescription("");
     setShippingCost("");
+    setSelectedWhatsAppId("");
     setEditingEvent(null);
   };
 
