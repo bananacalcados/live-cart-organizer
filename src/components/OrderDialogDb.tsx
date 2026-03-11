@@ -71,6 +71,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [freeShipping, setFreeShipping] = useState(false);
   const [hasGift, setHasGift] = useState(false);
   const [couponCode, setCouponCode] = useState("");
+  const [customShippingCost, setCustomShippingCost] = useState<string>("");
   const [paidExternally, setPaidExternally] = useState(false);
 
   // Check for existing customer by Instagram as user types
