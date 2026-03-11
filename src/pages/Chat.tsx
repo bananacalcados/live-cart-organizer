@@ -451,7 +451,7 @@ export default function ChatPage() {
     if (useMeta) {
       sendResult = await sendViaMeta(selectedPhone, text);
     } else {
-      const result = await zapiSend(selectedPhone, text);
+      const result = await zapiSend(selectedPhone, text, numberId || undefined);
       sendResult = { success: result.success, messageId: undefined };
     }
 
