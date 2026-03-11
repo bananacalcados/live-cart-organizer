@@ -762,41 +762,159 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           </TabsContent>
 
           {/* CALENDAR TAB */}
-          <TabsContent value="calendar" className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <p className="text-sm font-medium">{format(calendarMonth, "MMMM yyyy", { locale: ptBR })}</p>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="grid grid-cols-7 gap-px text-center">
-              {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(d => (
-                <div key={d} className="text-[10px] font-medium text-muted-foreground py-1">{d}</div>
-              ))}
-              {Array.from({ length: startDayOfWeek }).map((_, i) => <div key={`empty-${i}`} />)}
-              {days.map(day => {
-                const dayMsgs = getMessagesForDay(day);
-                return (
-                  <div key={day.toISOString()} className={cn(
-                    "min-h-[48px] p-1 border rounded text-[10px]",
-                    isSameDay(day, new Date()) && "bg-primary/10 border-primary/30"
-                  )}>
-                    <p className="font-medium">{day.getDate()}</p>
-                    {dayMsgs.slice(0, 2).map(m => (
-                      <div key={m.id} className={cn("rounded px-0.5 mt-0.5 truncate",
-                        m.status === 'sent' ? 'bg-emerald-500/20' : m.status === 'pending' ? 'bg-amber-500/20' : 'bg-muted'
+          <TabsContent value="calendar" className="space-y-4">
+            {/* Calendar grid */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <p className="text-sm font-medium">{format(calendarMonth, "MMMM yyyy", { locale: ptBR })}</p>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1))}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-7 gap-px text-center">
+                {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(d => (
+                  <div key={d} className="text-[10px] font-medium text-muted-foreground py-1">{d}</div>
+                ))}
+                {Array.from({ length: startDayOfWeek }).map((_, i) => <div key={`empty-${i}`} />)}
+                {days.map(day => {
+                  const dayMsgs = getMessagesForDay(day);
+                  const isSelected = calendarSelectedDay && isSameDay(day, calendarSelectedDay);
+                  return (
+                    <div key={day.toISOString()} 
+                      onClick={() => setCalendarSelectedDay(prev => prev && isSameDay(prev, day) ? null : day)}
+                      className={cn(
+                        "min-h-[48px] p-1 border rounded text-[10px] cursor-pointer hover:bg-muted/50 transition-colors",
+                        isSameDay(day, new Date()) && "bg-primary/10 border-primary/30",
+                        isSelected && "ring-2 ring-primary border-primary"
                       )}>
-                        {format(new Date(m.scheduled_at), "HH:mm")}
-                      </div>
-                    ))}
-                    {dayMsgs.length > 2 && <p className="text-muted-foreground">+{dayMsgs.length - 2}</p>}
-                  </div>
-                );
-              })}
+                      <p className="font-medium">{day.getDate()}</p>
+                      {dayMsgs.slice(0, 2).map(m => (
+                        <div key={m.id} className={cn("rounded px-0.5 mt-0.5 truncate",
+                          m.status === 'sent' ? 'bg-emerald-500/20' : m.status === 'pending' ? 'bg-amber-500/20' : 'bg-muted'
+                        )}>
+                          {format(new Date(m.scheduled_at), "HH:mm")}
+                        </div>
+                      ))}
+                      {dayMsgs.length > 2 && <p className="text-muted-foreground">+{dayMsgs.length - 2}</p>}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+
+            <Separator />
+
+            {/* Action buttons */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">
+                {calendarSelectedDay 
+                  ? `MENSAGENS DE ${format(calendarSelectedDay, "dd/MM/yyyy")}` 
+                  : `TODAS AS MENSAGENS (${messages.length})`}
+              </p>
+              <div className="flex gap-1.5">
+                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={openImportDialog}>
+                  <Copy className="h-3 w-3" /> Importar
+                </Button>
+                <Button size="sm" className="gap-1 text-xs" onClick={() => { setEditingMessage(null); setShowMessageForm(true); }}>
+                  <Plus className="h-3 w-3" /> Nova
+                </Button>
+              </div>
+            </div>
+
+            {/* Message list below calendar */}
+            {(() => {
+              const displayMsgs = calendarSelectedDay 
+                ? messages.filter(m => isSameDay(new Date(m.scheduled_at), calendarSelectedDay))
+                : messages;
+              
+              if (displayMsgs.length === 0) return (
+                <Card><CardContent className="py-6 text-center">
+                  <CalendarIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-xs text-muted-foreground">
+                    {calendarSelectedDay ? "Nenhuma mensagem neste dia" : "Nenhuma mensagem agendada"}
+                  </p>
+                </CardContent></Card>
+              );
+
+              return (
+                <div className="space-y-2">
+                  {displayMsgs.map(msg => (
+                    <Card key={msg.id} className="overflow-hidden">
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              {STATUS_ICONS[msg.status]}
+                              <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
+                              <Badge variant="outline" className="text-[10px]">
+                                {format(new Date(msg.scheduled_at), "dd/MM HH:mm", { locale: ptBR })}
+                              </Badge>
+                              {msg.status === 'sent' && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  ✅ {msg.sent_count} {msg.failed_count > 0 && `· ❌ ${msg.failed_count}`}
+                                </span>
+                              )}
+                            </div>
+                            {msg.message_content && (
+                              <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">{msg.message_content}</p>
+                            )}
+                            {msg.media_url && (
+                              <p className="text-[10px] text-blue-500 truncate mt-0.5">📎 {msg.media_url.split('/').pop()}</p>
+                            )}
+                            {msg.poll_options && Array.isArray(msg.poll_options) && (
+                              <div className="mt-1 space-y-0.5">
+                                {msg.poll_options.map((opt: string, i: number) => (
+                                  <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            {msg.status === 'pending' && (
+                              <>
+                                <Button variant="outline" size="icon" className="h-7 w-7" title="Editar"
+                                  onClick={() => { setEditingMessage(msg); setShowMessageForm(true); }}>
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Button variant="outline" size="icon" className="h-7 w-7" title="Enviar agora"
+                                  onClick={() => sendMessage(msg.id)} disabled={isSending === msg.id}>
+                                  {isSending === msg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Cancelar"
+                                  onClick={() => cancelMessage(msg.id)}>
+                                  <XCircle className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                            {msg.status === 'sent' && (
+                              <Button variant="outline" size="icon" className="h-7 w-7" title="Reenviar como nova"
+                                onClick={() => duplicateMessage(msg)}>
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            )}
+                            {(msg.status === 'cancelled' || msg.status === 'failed') && (
+                              <>
+                                <Button variant="outline" size="icon" className="h-7 w-7" title="Reagendar"
+                                  onClick={() => duplicateMessage(msg)}>
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir"
+                                  onClick={() => deleteMessage(msg.id)}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              );
+            })()}
           </TabsContent>
 
           {/* VARIABLES TAB */}
