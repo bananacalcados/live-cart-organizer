@@ -386,6 +386,23 @@ const Events = () => {
                             <CardDescription>
                               {format(new Date(event.created_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                             </CardDescription>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[180px]" title={event.id}>
+                                ID: {event.id}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 shrink-0"
+                                onClick={(e) => { e.stopPropagation(); handleCopyEventId(event.id); }}
+                              >
+                                {copiedEventId === event.id ? (
+                                  <Check className="h-3 w-3 text-green-500" />
+                                ) : (
+                                  <Copy className="h-3 w-3 text-muted-foreground" />
+                                )}
+                              </Button>
+                            </div>
                           </div>
                           <div className="flex gap-1">
                             <Button
