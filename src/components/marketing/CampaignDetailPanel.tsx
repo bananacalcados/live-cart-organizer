@@ -365,21 +365,36 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     const scheduledAt = new Date(data.scheduledAt);
     scheduledAt.setHours(hours, minutes, 0, 0);
 
+    // Check if this is a duplicate (create new) or real edit
+    const isDuplicate = id.startsWith('__duplicate__');
+    
     // For update, use first block or legacy
     const block = data.blocks?.[0];
-    const { error } = await supabase.from('group_campaign_scheduled_messages').update({
+    const msgData = {
       message_type: block?.type || data.messageType,
       message_content: block?.content || data.messageContent,
-      media_url: block?.mediaUrl || data.mediaUrl || null,
+      media_url: block?.mediaItems?.[0]?.url || block?.mediaUrl || data.mediaUrl || null,
       poll_options: (block?.type || data.messageType) === 'poll' ? (block?.pollOptions || data.pollOptions) : null,
       poll_max_options: (block?.type || data.messageType) === 'poll' ? (block?.pollMaxOptions ?? data.pollMaxOptions) : 1,
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
-    }).eq('id', id);
+    };
 
-    if (error) throw error;
-    toast.success("Mensagem atualizada!");
+    if (isDuplicate) {
+      // Create new message
+      const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+        campaign_id: campaignId,
+        ...msgData,
+        status: 'pending',
+      });
+      if (error) throw error;
+      toast.success("Mensagem duplicada!");
+    } else {
+      const { error } = await supabase.from('group_campaign_scheduled_messages').update(msgData).eq('id', id);
+      if (error) throw error;
+      toast.success("Mensagem atualizada!");
+    }
     setEditingMessage(null);
     fetchMessages();
   };
