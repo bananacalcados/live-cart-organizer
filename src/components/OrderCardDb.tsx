@@ -224,7 +224,9 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       console.log('🚀 [WEBHOOK] Payload:', JSON.stringify(payload, null, 2));
       
       try {
-        const webhookResp = await fetch('http://31.97.23.119:8002/webhook/novo-pedido', {
+        const webhookUrl = import.meta.env.VITE_AGENTE2_NOVO_PEDIDO || 'https://api.bananacalcados.com.br/webhook/novo-pedido';
+        console.log('🚀 [WEBHOOK] URL:', webhookUrl);
+        const webhookResp = await fetch(webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

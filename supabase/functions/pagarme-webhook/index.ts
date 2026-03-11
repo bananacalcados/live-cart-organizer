@@ -215,7 +215,7 @@ serve(async (req) => {
           updated = true;
           console.log(`orders ${order.id} marked as paid via webhook`);
           // Notify Livete agent
-          fetch('http://31.97.23.119:8002/webhook/pagamento-confirmado', {
+          fetch(Deno.env.get('AGENTE2_PAGAMENTO_CONFIRMADO') || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pedido_id: order.id, gateway: 'pagarme', transaction_id: String(transactionId) }),
