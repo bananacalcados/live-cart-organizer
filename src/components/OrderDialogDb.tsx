@@ -135,6 +135,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     setHasGift(false);
     setCouponCode("");
     setPaidExternally(false);
+    setCustomShippingCost("");
   };
 
   const handleAddLocalProduct = (product: DbOrderProduct) => {
