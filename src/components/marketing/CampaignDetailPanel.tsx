@@ -798,7 +798,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                     <CardContent className="p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
                             {STATUS_ICONS[msg.status]}
                             <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
                             <Badge variant="outline" className="text-[10px]">
@@ -810,9 +810,32 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                               </span>
                             )}
                           </div>
-                          {msg.message_content && (
-                            <p className="text-xs text-muted-foreground line-clamp-2">{msg.message_content}</p>
-                          )}
+                          <ScrollArea className="max-h-[200px]">
+                            {msg.media_url && ['image'].includes(msg.message_type) && (
+                              <img src={msg.media_url} alt="" className="max-h-40 rounded-md mt-1 mb-1 object-contain" />
+                            )}
+                            {msg.media_url && msg.message_type === 'video' && (
+                              <video src={msg.media_url} controls className="max-h-40 rounded-md mt-1 mb-1" />
+                            )}
+                            {msg.media_url && msg.message_type === 'audio' && (
+                              <audio src={msg.media_url} controls className="mt-1 mb-1 w-full h-8" />
+                            )}
+                            {msg.media_url && msg.message_type === 'document' && (
+                              <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 underline mt-0.5 block">
+                                📄 {msg.media_url.split('/').pop()}
+                              </a>
+                            )}
+                            {msg.message_content && (
+                              <p className="text-xs text-muted-foreground whitespace-pre-wrap">{msg.message_content}</p>
+                            )}
+                            {msg.poll_options && Array.isArray(msg.poll_options) && (
+                              <div className="mt-1 space-y-0.5">
+                                {msg.poll_options.map((opt: string, i: number) => (
+                                  <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
+                                ))}
+                              </div>
+                            )}
+                          </ScrollArea>
                         </div>
                         <div className="flex gap-1 shrink-0">
                           {msg.status === 'pending' && (
@@ -831,13 +854,31 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                               </Button>
                             </>
                           )}
-                          {(msg.status === 'cancelled' || msg.status === 'failed') && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                              onClick={() => deleteMessage(msg.id)}>
-                              <Trash2 className="h-3 w-3" />
+                          {msg.status === 'sent' && (
+                            <Button variant="outline" size="icon" className="h-7 w-7" title="Reenviar como nova"
+                              onClick={() => duplicateMessage(msg)}>
+                              <Copy className="h-3 w-3" />
                             </Button>
                           )}
+                          {(msg.status === 'cancelled' || msg.status === 'failed') && (
+                            <>
+                              <Button variant="outline" size="icon" className="h-7 w-7" title="Reagendar"
+                                onClick={() => duplicateMessage(msg)}>
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                                onClick={() => deleteMessage(msg.id)}>
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </>
+                          )}
                         </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
                       </div>
                     </CardContent>
                   </Card>
