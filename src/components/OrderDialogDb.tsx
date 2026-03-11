@@ -767,7 +767,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
-                  className="h-11 text-sm font-bold bg-[hsl(var(--chart-4))] hover:opacity-90 text-white gap-2"
+                  className="h-11 text-sm font-bold bg-[hsl(45,100%,50%)] hover:bg-[hsl(45,100%,45%)] text-black gap-2"
                   onClick={generateYampiLink}
                   disabled={isGeneratingYampiLink || localProducts.length === 0}
                 >
