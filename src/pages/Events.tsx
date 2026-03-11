@@ -156,18 +156,22 @@ const Events = () => {
     if (!name.trim()) return;
     
     const shippingValue = shippingCost ? parseFloat(shippingCost) : undefined;
+    const whatsappId = selectedWhatsAppId || null;
     
     if (editingEvent) {
       await updateEvent(editingEvent, { 
         name, 
         description,
-        default_shipping_cost: shippingValue ?? null
+        default_shipping_cost: shippingValue ?? null,
+        whatsapp_number_id: whatsappId,
       } as any);
     } else {
-      // Create event then update shipping cost
       const eventId = await createEvent(name, description);
-      if (eventId && shippingValue) {
-        await updateEvent(eventId, { default_shipping_cost: shippingValue } as any);
+      if (eventId) {
+        const updates: any = {};
+        if (shippingValue) updates.default_shipping_cost = shippingValue;
+        if (whatsappId) updates.whatsapp_number_id = whatsappId;
+        if (Object.keys(updates).length > 0) await updateEvent(eventId, updates);
       }
     }
     
