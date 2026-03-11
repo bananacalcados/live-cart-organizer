@@ -978,19 +978,32 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                                 </span>
                               )}
                             </div>
-                            {msg.message_content && (
-                              <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">{msg.message_content}</p>
-                            )}
-                            {msg.media_url && (
-                              <p className="text-[10px] text-blue-500 truncate mt-0.5">📎 {msg.media_url.split('/').pop()}</p>
-                            )}
-                            {msg.poll_options && Array.isArray(msg.poll_options) && (
-                              <div className="mt-1 space-y-0.5">
-                                {msg.poll_options.map((opt: string, i: number) => (
-                                  <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
-                                ))}
-                              </div>
-                            )}
+                            <ScrollArea className="max-h-[250px]">
+                              {msg.media_url && ['image'].includes(msg.message_type) && (
+                                <img src={msg.media_url} alt="" className="max-h-40 rounded-md mt-1 mb-1 object-contain" />
+                              )}
+                              {msg.media_url && msg.message_type === 'video' && (
+                                <video src={msg.media_url} controls className="max-h-40 rounded-md mt-1 mb-1" />
+                              )}
+                              {msg.media_url && msg.message_type === 'audio' && (
+                                <audio src={msg.media_url} controls className="mt-1 mb-1 w-full h-8" />
+                              )}
+                              {msg.media_url && msg.message_type === 'document' && (
+                                <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 underline mt-0.5 block">
+                                  📄 {msg.media_url.split('/').pop()}
+                                </a>
+                              )}
+                              {msg.message_content && (
+                                <p className="text-xs text-muted-foreground whitespace-pre-wrap">{msg.message_content}</p>
+                              )}
+                              {msg.poll_options && Array.isArray(msg.poll_options) && (
+                                <div className="mt-1 space-y-0.5">
+                                  {msg.poll_options.map((opt: string, i: number) => (
+                                    <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
+                                  ))}
+                                </div>
+                              )}
+                            </ScrollArea>
                           </div>
                           <div className="flex gap-1 shrink-0">
                             {msg.status === 'pending' && (
