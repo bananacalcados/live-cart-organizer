@@ -26,42 +26,29 @@ function getMessageText(payload: AnyPayload): string | null {
 
 /**
  * Normalize phone number for storage and matching.
- * Always stores in format: 55XXXXXXXXXXX (country code + phone)
- * Handles different Z-API formats:
- * - Regular phone: "5511999999999" -> "5511999999999"
- * - @lid format: Uses the phone field which should contain the real number
- * - Group format: "120363405872786701-group" -> keep as-is for groups
  */
 function normalizePhone(payload: AnyPayload): { phone: string; isGroup: boolean } {
   const rawPhone = asString(payload.phone) || '';
   const chatLid = asString(payload.chatLid);
   
-  // Check if it's a group
   const isGroup = rawPhone.includes('-group') || rawPhone.includes('@g.us') || 
                   chatLid?.includes('-group') || chatLid?.includes('@g.us') ||
                   Boolean(payload.isGroup);
   
-  // For groups, keep the group ID
   if (isGroup) {
     const groupId = rawPhone.replace('@g.us', '').replace('-group', '').replace(/\D/g, '');
     return { phone: groupId, isGroup: true };
   }
   
-  // For regular chats: extract digits only
   let phone = rawPhone.replace(/\D/g, '');
   
-  // Ensure it has country code 55 for Brazil
   if (phone.length >= 10 && phone.length <= 11) {
     phone = '55' + phone;
   }
   
-  // Brazilian mobile normalization: 55 + DDD(2) + 9XXXXXXXX(9) = 13 digits
-  // Some systems send without the 9th digit: 55 + DDD(2) + XXXXXXXX(8) = 12 digits
-  // Always normalize to 13 digits by adding the 9 after the DDD
   if (phone.startsWith('55') && phone.length === 12) {
     const ddd = phone.substring(2, 4);
     const number = phone.substring(4);
-    // Only add 9 if the number doesn't already start with 9
     if (!number.startsWith('9')) {
       phone = '55' + ddd + '9' + number;
       console.log(`Normalized 12-digit BR phone to 13: ${rawPhone} -> ${phone}`);
@@ -73,6 +60,63 @@ function normalizePhone(payload: AnyPayload): { phone: string; isGroup: boolean 
   }
   
   return { phone, isGroup: false };
+}
+
+/**
+ * Resolve whatsapp_number_id from multiple sources:
+ * 1. ?number_id= query param
+ * 2. instanceId in payload → lookup in whatsapp_numbers table
+ * 3. connectedPhone in payload → lookup in whatsapp_numbers table
+ */
+async function resolveWhatsappNumberId(
+  supabase: any,
+  url: URL,
+  payload: AnyPayload
+): Promise<string | null> {
+  // 1. Query param (highest priority)
+  const fromParam = url.searchParams.get('number_id');
+  if (fromParam) {
+    console.log(`Resolved whatsapp_number_id from query param: ${fromParam}`);
+    return fromParam;
+  }
+
+  // 2. instanceId lookup
+  const instanceId = asString(payload.instanceId);
+  if (instanceId) {
+    const { data: numRow } = await supabase
+      .from('whatsapp_numbers')
+      .select('id')
+      .eq('zapi_instance_id', instanceId)
+      .eq('provider', 'zapi')
+      .limit(1)
+      .maybeSingle();
+    if (numRow) {
+      console.log(`Resolved whatsapp_number_id from instanceId ${instanceId}: ${numRow.id}`);
+      return numRow.id;
+    }
+    console.warn(`instanceId ${instanceId} not found in whatsapp_numbers table`);
+  }
+
+  // 3. connectedPhone lookup (fallback)
+  const connectedPhone = asString(payload.connectedPhone);
+  if (connectedPhone) {
+    const cleanPhone = connectedPhone.replace(/\D/g, '');
+    const { data: numRow } = await supabase
+      .from('whatsapp_numbers')
+      .select('id')
+      .eq('provider', 'zapi')
+      .or(`phone_number.eq.${cleanPhone},phone_number.eq.+${cleanPhone},phone_number.ilike.%${cleanPhone.slice(-8)}%`)
+      .limit(1)
+      .maybeSingle();
+    if (numRow) {
+      console.log(`Resolved whatsapp_number_id from connectedPhone ${connectedPhone}: ${numRow.id}`);
+      return numRow.id;
+    }
+    console.warn(`connectedPhone ${connectedPhone} not found in whatsapp_numbers table`);
+  }
+
+  console.error('FAILED to resolve whatsapp_number_id from any source');
+  return null;
 }
 
 serve(async (req) => {
@@ -93,28 +137,12 @@ serve(async (req) => {
     const payload = (await req.json()) as AnyPayload;
     console.log('Webhook received:', JSON.stringify(payload));
 
-    // Extract whatsapp_number_id from query param or try to resolve from client-token header
     const url = new URL(req.url);
-    let whatsappNumberId: string | null = url.searchParams.get('number_id');
+    const whatsappNumberId = await resolveWhatsappNumberId(supabase, url, payload);
 
-    // If no number_id in query, try to resolve from instanceId in payload
-    if (!whatsappNumberId) {
-      const instanceId = asString(payload.instanceId);
-      if (instanceId) {
-        const { data: numRow } = await supabase
-          .from('whatsapp_numbers')
-          .select('id')
-          .eq('zapi_instance_id', instanceId)
-          .eq('provider', 'zapi')
-          .limit(1)
-          .maybeSingle();
-        if (numRow) whatsappNumberId = numRow.id;
-      }
-    }
+    console.log(`Final resolved whatsapp_number_id: ${whatsappNumberId}`);
 
-    console.log(`Resolved whatsapp_number_id: ${whatsappNumberId}`);
-
-    // 1) ReceivedCallback (text messages) - can include fromMe=true for messages we sent
+    // 1) ReceivedCallback (text messages)
     const rawPhone = asString(payload.phone);
     const messageText = getMessageText(payload);
 
@@ -125,13 +153,12 @@ serve(async (req) => {
       const statusRaw = asString(payload.status);
       const status = (statusRaw ? statusRaw.toLowerCase() : (fromMe ? 'sent' : 'received'));
 
-      console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}`);
+      console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}, numberId=${whatsappNumberId}`);
 
       if (fromMe) {
-        // Avoid duplicate: when user sends via our UI we already INSERT outgoing with message_id=null.
-        // Here we attach message_id/status to the latest matching outgoing row.
+        // Dedup: match by phone + message + whatsapp_number_id
         if (messageId) {
-          const { data: existing } = await supabase
+          let dedupQuery = supabase
             .from('whatsapp_messages')
             .select('id, message_id')
             .eq('phone', phone)
@@ -139,6 +166,15 @@ serve(async (req) => {
             .eq('message', messageText)
             .order('created_at', { ascending: false })
             .limit(1);
+
+          // FIX #3: Filter by whatsapp_number_id in dedup to avoid cross-instance matching
+          if (whatsappNumberId) {
+            dedupQuery = dedupQuery.eq('whatsapp_number_id', whatsappNumberId);
+          } else {
+            dedupQuery = dedupQuery.is('whatsapp_number_id', null);
+          }
+
+          const { data: existing } = await dedupQuery;
 
           const row = existing?.[0];
           if (row && !row.message_id) {
@@ -157,7 +193,7 @@ serve(async (req) => {
           }
         }
 
-        // Fallback: if not found, save as outgoing (still NOT incoming)
+        // Fallback: save as outgoing
         const { error: insertError } = await supabase.from('whatsapp_messages').insert({
           phone,
           message: messageText,
@@ -172,8 +208,7 @@ serve(async (req) => {
           console.error('Error saving outgoing message:', insertError);
         }
       } else {
-      // Incoming message
-        // Capture sender name (pushName) from Z-API payload
+        // Incoming message
         const senderName = asString(payload.senderName) || asString(payload.chatName) || asString(payload.pushName) || null;
         
         const { error } = await supabase.from('whatsapp_messages').insert({
@@ -264,7 +299,6 @@ serve(async (req) => {
     }
 
     // 2) MessageStatusCallback
-    // payload.ids is usually an array of message ids
     const statusRaw = asString(payload.status);
     const ids = Array.isArray(payload.ids) ? (payload.ids as unknown[]).map(asString).filter(Boolean) as string[] : [];
     const singleId = asString(payload.id);

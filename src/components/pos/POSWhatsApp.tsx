@@ -487,9 +487,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: selectedNumberId },
         });
       }
+      const numberIdForAudio = selectedNumberId || storeNumbers.find(n => n.provider === 'zapi')?.id || null;
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
         message_id: audioMsgId,
+        whatsapp_number_id: numberIdForAudio,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Áudio enviado!");
@@ -516,9 +518,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: selectedNumberId },
         });
       }
+      const numberIdForMedia = selectedNumberId || storeNumbers.find(n => n.provider === 'zapi')?.id || null;
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
         message_id: mediaMsgId,
+        whatsapp_number_id: numberIdForMedia,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Mídia enviada!");

@@ -418,7 +418,7 @@ export default function ChatPage() {
       if (useMeta) {
         sendResult = await sendViaMeta(selectedPhone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
       } else {
-        const result = await zapiSendMedia(selectedPhone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined);
+        const result = await zapiSendMedia(selectedPhone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined, numberId || undefined);
         sendResult = { success: result.success, messageId: undefined };
       }
 
@@ -451,7 +451,7 @@ export default function ChatPage() {
     if (useMeta) {
       sendResult = await sendViaMeta(selectedPhone, text);
     } else {
-      const result = await zapiSend(selectedPhone, text);
+      const result = await zapiSend(selectedPhone, text, numberId || undefined);
       sendResult = { success: result.success, messageId: undefined };
     }
 
