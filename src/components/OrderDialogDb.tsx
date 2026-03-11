@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode, Lock } from "lucide-react";
+import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode, Lock, Store, MapPin, Package } from "lucide-react";
 import {
   Dialog,
   DialogContent,
