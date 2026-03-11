@@ -1157,6 +1157,101 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* IMPORT MESSAGES DIALOG */}
+      <Dialog open={showImportMessages} onOpenChange={setShowImportMessages}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Importar Mensagens de Outra Campanha</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            {/* Campaign selector */}
+            <div>
+              <Label className="text-xs font-medium">Selecione a campanha</Label>
+              <Select value={selectedImportCampaign || ''} onValueChange={loadOtherCampaignMessages}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Escolha uma campanha..." /></SelectTrigger>
+                <SelectContent>
+                  {otherCampaigns.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name} ({format(new Date(c.created_at), "dd/MM/yy")})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Messages from selected campaign */}
+            {selectedImportCampaign && (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">{otherMessages.length} mensagens encontradas</p>
+                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => {
+                    setSelectedImportMsgs(prev => prev.length === otherMessages.length ? [] : otherMessages.map(m => m.id));
+                  }}>
+                    {selectedImportMsgs.length === otherMessages.length ? "Desmarcar todas" : "Selecionar todas"}
+                  </Button>
+                </div>
+                <ScrollArea className="h-[250px] rounded-md border">
+                  <div className="p-2 space-y-1.5">
+                    {otherMessages.map(msg => (
+                      <div key={msg.id} 
+                        onClick={() => setSelectedImportMsgs(prev => prev.includes(msg.id) ? prev.filter(x => x !== msg.id) : [...prev, msg.id])}
+                        className={cn(
+                          "flex items-start gap-2 p-2 rounded-md border cursor-pointer hover:bg-muted/50 transition-colors",
+                          selectedImportMsgs.includes(msg.id) && "bg-primary/10 border-primary/30"
+                        )}>
+                        <Checkbox checked={selectedImportMsgs.includes(msg.id)} className="mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
+                            <Badge variant="outline" className="text-[10px]">
+                              {format(new Date(msg.scheduled_at), "dd/MM HH:mm")}
+                            </Badge>
+                          </div>
+                          {msg.message_content && (
+                            <p className="text-[11px] text-muted-foreground line-clamp-2 whitespace-pre-wrap">{msg.message_content}</p>
+                          )}
+                          {msg.media_url && <p className="text-[10px] text-blue-500 truncate">📎 mídia</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+
+                <Separator />
+
+                {/* Schedule config */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium">Agendar para:</p>
+                  <div className="flex gap-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="flex-1 justify-start text-xs gap-1">
+                          <CalendarIcon className="h-3.5 w-3.5" />
+                          {format(importScheduleDate, "dd/MM/yyyy")}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={importScheduleDate}
+                          onSelect={d => d && setImportScheduleDate(d)} />
+                      </PopoverContent>
+                    </Popover>
+                    <Input type="time" value={importScheduleTime} onChange={e => setImportScheduleTime(e.target.value)} className="w-[120px]" />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    As mensagens serão importadas com 5s de intervalo a partir deste horário.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImportMessages(false)}>Cancelar</Button>
+            <Button onClick={importSelectedMessages} disabled={isImporting || selectedImportMsgs.length === 0} className="gap-1">
+              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Importar {selectedImportMsgs.length > 0 ? `(${selectedImportMsgs.length})` : ''}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
