@@ -299,7 +299,7 @@ serve(async (req) => {
           console.log(`orders ${ourOrderId} marked as paid via AppMax webhook`);
           console.log(`[appmax] Vinculado appmax_order_id=${appmaxOrderId} ao pedido ${ourOrderId}`);
           // Notify Livete agent
-          fetch('http://31.97.23.119:8002/webhook/pagamento-confirmado', {
+          fetch(Deno.env.get('AGENTE2_PAGAMENTO_CONFIRMADO') || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pedido_id: ourOrderId, gateway: 'appmax', transaction_id: String(transactionId) }),
