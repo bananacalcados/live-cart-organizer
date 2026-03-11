@@ -192,7 +192,7 @@ const Events = () => {
     setName(event.name);
     setDescription(event.description || "");
     setShippingCost(event.default_shipping_cost?.toString() || "");
-    setSelectedWhatsAppId((event as any).whatsapp_number_id || "");
+    setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
     setDialogOpen(true);
   };
 
