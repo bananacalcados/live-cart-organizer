@@ -507,6 +507,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setSelectedImportCampaign(null);
     setOtherMessages([]);
     setSelectedImportMsgs([]);
+    setImportFilterDateFrom(undefined);
+    setImportFilterDateTo(undefined);
     const { data } = await supabase.from('group_campaigns').select('id, name, created_at')
       .neq('id', campaignId).order('created_at', { ascending: false }).limit(50);
     setOtherCampaigns(data || []);
