@@ -98,6 +98,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [zapiContactsLoading, setZapiContactsLoading] = useState(false);
   const [zapiContactsLoaded, setZapiContactsLoaded] = useState(false);
   const [selectedGroupContacts, setSelectedGroupContacts] = useState<{ phone: string; name: string; short: string }[]>([]);
+  const [showImportMessages, setShowImportMessages] = useState(false);
+  const [otherCampaigns, setOtherCampaigns] = useState<any[]>([]);
+  const [otherMessages, setOtherMessages] = useState<ScheduledMessage[]>([]);
+  const [selectedImportCampaign, setSelectedImportCampaign] = useState<string | null>(null);
+  const [selectedImportMsgs, setSelectedImportMsgs] = useState<string[]>([]);
+  const [importScheduleDate, setImportScheduleDate] = useState<Date>(new Date());
+  const [importScheduleTime, setImportScheduleTime] = useState("10:00");
+  const [isImporting, setIsImporting] = useState(false);
+  const [calendarSelectedDay, setCalendarSelectedDay] = useState<Date | null>(null);
   const [contactSearchQuery, setContactSearchQuery] = useState("");
 
   const fetchCampaign = useCallback(async () => {
