@@ -152,54 +152,189 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     const scheduledAt = new Date(data.scheduledAt);
     scheduledAt.setHours(hours, minutes, 0, 0);
 
-    // Multi-file: create one message per item (image, video, document)
     const multiMediaTypes = ['image', 'video', 'document'];
-    if (multiMediaTypes.includes(data.messageType) && data.mediaItems && data.mediaItems.length > 0) {
-      for (let i = 0; i < data.mediaItems.length; i++) {
-        const item = data.mediaItems[i];
-        const itemTime = new Date(scheduledAt.getTime() + i * 5000); // 5s offset
+
+    // Multi-block support
+    if (data.blocks && data.blocks.length > 0) {
+      let offset = 0;
+      for (const block of data.blocks) {
+        if (multiMediaTypes.includes(block.type) && block.mediaItems.length > 0) {
+          for (let i = 0; i < block.mediaItems.length; i++) {
+            const item = block.mediaItems[i];
+            const itemTime = new Date(scheduledAt.getTime() + offset * 5000);
+            const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+              campaign_id: campaignId,
+              message_type: block.type,
+              message_content: item.caption || null,
+              media_url: item.url,
+              scheduled_at: itemTime.toISOString(),
+              send_speed: data.sendSpeed,
+              mention_all: data.mentionAll,
+            });
+            if (error) throw error;
+            offset++;
+          }
+        } else if (block.type === 'text') {
+          const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+            campaign_id: campaignId,
+            message_type: 'text',
+            message_content: block.content,
+            scheduled_at: new Date(scheduledAt.getTime() + offset * 5000).toISOString(),
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+          });
+          if (error) throw error;
+          offset++;
+        } else if (block.type === 'poll') {
+          const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+            campaign_id: campaignId,
+            message_type: 'poll',
+            message_content: block.content,
+            poll_options: block.pollOptions.filter(o => o.trim()),
+            poll_max_options: block.pollMaxOptions,
+            scheduled_at: new Date(scheduledAt.getTime() + offset * 5000).toISOString(),
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+          });
+          if (error) throw error;
+          offset++;
+        } else if (block.type === 'audio') {
+          const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+            campaign_id: campaignId,
+            message_type: 'audio',
+            media_url: block.mediaUrl,
+            scheduled_at: new Date(scheduledAt.getTime() + offset * 5000).toISOString(),
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+          });
+          if (error) throw error;
+          offset++;
+        }
+      }
+      toast.success(`${offset} mensagem(ns) agendada(s)!`);
+    } else {
+      // Legacy fallback
+      if (multiMediaTypes.includes(data.messageType) && data.mediaItems && data.mediaItems.length > 0) {
+        for (let i = 0; i < data.mediaItems.length; i++) {
+          const item = data.mediaItems[i];
+          const itemTime = new Date(scheduledAt.getTime() + i * 5000);
+          const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+            campaign_id: campaignId,
+            message_type: data.messageType,
+            message_content: item.caption || null,
+            media_url: item.url,
+            scheduled_at: itemTime.toISOString(),
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+          });
+          if (error) throw error;
+        }
+        toast.success(`${data.mediaItems.length} arquivo(s) agendado(s)!`);
+      } else {
         const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
           campaign_id: campaignId,
           message_type: data.messageType,
-          message_content: item.caption || null,
-          media_url: item.url,
-          scheduled_at: itemTime.toISOString(),
+          message_content: data.messageContent,
+          media_url: data.mediaUrl || null,
+          poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+          poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
+          scheduled_at: scheduledAt.toISOString(),
           send_speed: data.sendSpeed,
           mention_all: data.mentionAll,
         });
         if (error) throw error;
+        toast.success("Mensagem agendada!");
       }
-      toast.success(`${data.mediaItems.length} arquivo(s) agendado(s)!`);
-    } else {
-      const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
-        campaign_id: campaignId,
-        message_type: data.messageType,
-        message_content: data.messageContent,
-        media_url: data.mediaUrl || null,
-        poll_options: data.messageType === 'poll' ? data.pollOptions : null,
-        poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
-        scheduled_at: scheduledAt.toISOString(),
-        send_speed: data.sendSpeed,
-        mention_all: data.mentionAll,
-      });
-      if (error) throw error;
-      toast.success("Mensagem agendada!");
     }
     fetchMessages();
   };
 
   const handleSendNow = async (data: ScheduledMessageData) => {
     const now = new Date();
-
     const multiMediaTypes = ['image', 'video', 'document'];
-    if (multiMediaTypes.includes(data.messageType) && data.mediaItems && data.mediaItems.length > 0) {
-      for (let i = 0; i < data.mediaItems.length; i++) {
-        const item = data.mediaItems[i];
+
+    if (data.blocks && data.blocks.length > 0) {
+      let offset = 0;
+      for (const block of data.blocks) {
+        if (multiMediaTypes.includes(block.type) && block.mediaItems.length > 0) {
+          for (const item of block.mediaItems) {
+            const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+              campaign_id: campaignId,
+              message_type: block.type,
+              message_content: item.caption || null,
+              media_url: item.url,
+              scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
+              send_speed: data.sendSpeed,
+              mention_all: data.mentionAll,
+            }).select().single();
+            if (error) throw error;
+            await sendMessage(inserted.id);
+            offset++;
+          }
+        } else if (block.type === 'text') {
+          const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+            campaign_id: campaignId,
+            message_type: 'text',
+            message_content: block.content,
+            scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+          }).select().single();
+          if (error) throw error;
+          await sendMessage(inserted.id);
+          offset++;
+        } else if (block.type === 'poll') {
+          const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+            campaign_id: campaignId,
+            message_type: 'poll',
+            message_content: block.content,
+            poll_options: block.pollOptions.filter(o => o.trim()),
+            poll_max_options: block.pollMaxOptions,
+            scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+          }).select().single();
+          if (error) throw error;
+          await sendMessage(inserted.id);
+          offset++;
+        } else if (block.type === 'audio') {
+          const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+            campaign_id: campaignId,
+            message_type: 'audio',
+            media_url: block.mediaUrl,
+            scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+          }).select().single();
+          if (error) throw error;
+          await sendMessage(inserted.id);
+          offset++;
+        }
+      }
+    } else {
+      // Legacy fallback
+      if (multiMediaTypes.includes(data.messageType) && data.mediaItems && data.mediaItems.length > 0) {
+        for (const item of data.mediaItems) {
+          const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+            campaign_id: campaignId,
+            message_type: data.messageType,
+            message_content: item.caption || null,
+            media_url: item.url,
+            scheduled_at: now.toISOString(),
+            send_speed: data.sendSpeed,
+            mention_all: data.mentionAll,
+          }).select().single();
+          if (error) throw error;
+          await sendMessage(inserted.id);
+        }
+      } else {
         const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
           campaign_id: campaignId,
           message_type: data.messageType,
-          message_content: item.caption || null,
-          media_url: item.url,
+          message_content: data.messageContent,
+          media_url: data.mediaUrl || null,
+          poll_options: data.messageType === 'poll' ? data.pollOptions : null,
+          poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
           scheduled_at: now.toISOString(),
           send_speed: data.sendSpeed,
           mention_all: data.mentionAll,
@@ -207,20 +342,6 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         if (error) throw error;
         await sendMessage(inserted.id);
       }
-    } else {
-      const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
-        campaign_id: campaignId,
-        message_type: data.messageType,
-        message_content: data.messageContent,
-        media_url: data.mediaUrl || null,
-        poll_options: data.messageType === 'poll' ? data.pollOptions : null,
-        poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
-        scheduled_at: now.toISOString(),
-        send_speed: data.sendSpeed,
-        mention_all: data.mentionAll,
-      }).select().single();
-      if (error) throw error;
-      await sendMessage(inserted.id);
     }
     fetchMessages();
   };
@@ -230,12 +351,14 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     const scheduledAt = new Date(data.scheduledAt);
     scheduledAt.setHours(hours, minutes, 0, 0);
 
+    // For update, use first block or legacy
+    const block = data.blocks?.[0];
     const { error } = await supabase.from('group_campaign_scheduled_messages').update({
-      message_type: data.messageType,
-      message_content: data.messageContent,
-      media_url: data.mediaUrl || null,
-      poll_options: data.messageType === 'poll' ? data.pollOptions : null,
-      poll_max_options: data.messageType === 'poll' ? data.pollMaxOptions : 1,
+      message_type: block?.type || data.messageType,
+      message_content: block?.content || data.messageContent,
+      media_url: block?.mediaUrl || data.mediaUrl || null,
+      poll_options: (block?.type || data.messageType) === 'poll' ? (block?.pollOptions || data.pollOptions) : null,
+      poll_max_options: (block?.type || data.messageType) === 'poll' ? (block?.pollMaxOptions ?? data.pollMaxOptions) : 1,
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
