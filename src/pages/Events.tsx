@@ -63,6 +63,7 @@ const Events = () => {
 
   useEffect(() => {
     fetchEvents();
+    fetchWhatsAppNumbers();
   }, [fetchEvents]);
 
   useEffect(() => {
