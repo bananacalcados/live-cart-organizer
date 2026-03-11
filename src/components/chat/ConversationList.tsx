@@ -157,9 +157,8 @@ export function ConversationList({
   for (const c of conversations.filter(c => !c.isArchived)) {
     if (c.whatsapp_number_id) {
       instanceCounts[c.whatsapp_number_id] = (instanceCounts[c.whatsapp_number_id] || 0) + 1;
-    } else {
-      instanceCounts['zapi'] = (instanceCounts['zapi'] || 0) + 1;
     }
+    // Don't count NULL as a separate "zapi" bucket - those are orphan messages
   }
 
   // Build instance tabs
@@ -170,10 +169,6 @@ export function ConversationList({
   for (const num of metaNumbers) {
     const count = instanceCounts[num.id] || 0;
     instanceTabs.push({ value: num.id, label: num.label, count });
-  }
-  // Add generic zapi tab only if there are zapi messages not tied to a specific number
-  if ((instanceCounts['zapi'] || 0) > 0 && !metaNumbers.some(n => n.provider === 'zapi')) {
-    instanceTabs.push({ value: 'zapi', label: 'Z-API', count: instanceCounts['zapi'] || 0 });
   }
 
   const togglePhone = (phone: string) => {
