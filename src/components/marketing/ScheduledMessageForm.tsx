@@ -478,6 +478,12 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     if (editingMessage) {
       const b = createBlock(editingMessage.message_type as MessageBlock['type']);
       b.content = editingMessage.message_content || '';
+      // For image/video/document types, load media_url into mediaItems array
+      const multiMediaTypes = ['image', 'video', 'document'];
+      if (multiMediaTypes.includes(editingMessage.message_type) && editingMessage.media_url) {
+        b.mediaItems = [{ url: editingMessage.media_url, caption: editingMessage.message_content || '' }];
+        b.content = ''; // caption is stored in mediaItems
+      }
       b.mediaUrl = editingMessage.media_url || '';
       if (editingMessage.poll_options) {
         b.pollOptions = Array.isArray(editingMessage.poll_options) ? editingMessage.poll_options : ['', ''];
