@@ -50,12 +50,14 @@ interface EventStats {
 const Events = () => {
   const navigate = useNavigate();
   const { events, isLoading, fetchEvents, createEvent, updateEvent, deleteEvent, setCurrentEvent } = useEventStore();
+  const { numbers: whatsappNumbers, fetchNumbers: fetchWhatsAppNumbers } = useWhatsAppNumberStore();
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [shippingCost, setShippingCost] = useState("");
+  const [selectedWhatsAppId, setSelectedWhatsAppId] = useState<string>("");
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
 
