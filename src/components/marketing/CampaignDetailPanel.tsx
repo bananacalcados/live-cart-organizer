@@ -22,6 +22,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { ScheduledMessageForm, type ScheduledMessageData } from "./ScheduledMessageForm";
 import { CampaignBulkSettings } from "./CampaignBulkSettings";
 import { CampaignDashboard } from "./CampaignDashboard";
@@ -98,6 +101,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [zapiContactsLoading, setZapiContactsLoading] = useState(false);
   const [zapiContactsLoaded, setZapiContactsLoaded] = useState(false);
   const [selectedGroupContacts, setSelectedGroupContacts] = useState<{ phone: string; name: string; short: string }[]>([]);
+  const [showImportMessages, setShowImportMessages] = useState(false);
+  const [otherCampaigns, setOtherCampaigns] = useState<any[]>([]);
+  const [otherMessages, setOtherMessages] = useState<ScheduledMessage[]>([]);
+  const [selectedImportCampaign, setSelectedImportCampaign] = useState<string | null>(null);
+  const [selectedImportMsgs, setSelectedImportMsgs] = useState<string[]>([]);
+  const [importScheduleDate, setImportScheduleDate] = useState<Date>(new Date());
+  const [importScheduleTime, setImportScheduleTime] = useState("10:00");
+  const [isImporting, setIsImporting] = useState(false);
+  const [calendarSelectedDay, setCalendarSelectedDay] = useState<Date | null>(null);
   const [contactSearchQuery, setContactSearchQuery] = useState("");
 
   const fetchCampaign = useCallback(async () => {
@@ -461,6 +473,76 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     fetchLinks();
   };
 
+  const duplicateMessage = async (msg: ScheduledMessage) => {
+    const originalDate = new Date(msg.scheduled_at);
+    const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+      campaign_id: campaignId,
+      message_type: msg.message_type,
+      message_content: msg.message_content,
+      media_url: msg.media_url,
+      poll_options: msg.poll_options,
+      scheduled_at: originalDate.toISOString(),
+      send_speed: msg.send_speed,
+      status: 'pending',
+    });
+    if (error) { toast.error("Erro ao duplicar"); return; }
+    toast.success("Mensagem duplicada como pendente!");
+    fetchMessages();
+  };
+
+  const openImportDialog = async () => {
+    setShowImportMessages(true);
+    setSelectedImportCampaign(null);
+    setOtherMessages([]);
+    setSelectedImportMsgs([]);
+    const { data } = await supabase.from('group_campaigns').select('id, name, created_at')
+      .neq('id', campaignId).order('created_at', { ascending: false }).limit(50);
+    setOtherCampaigns(data || []);
+  };
+
+  const loadOtherCampaignMessages = async (otherCampaignId: string) => {
+    setSelectedImportCampaign(otherCampaignId);
+    setSelectedImportMsgs([]);
+    const { data } = await supabase.from('group_campaign_scheduled_messages')
+      .select('*').eq('campaign_id', otherCampaignId).order('scheduled_at', { ascending: true });
+    setOtherMessages((data || []) as ScheduledMessage[]);
+    if (data && data.length > 0) {
+      const first = new Date(data[0].scheduled_at);
+      setImportScheduleDate(first);
+      setImportScheduleTime(format(first, "HH:mm"));
+    }
+  };
+
+  const importSelectedMessages = async () => {
+    if (selectedImportMsgs.length === 0) { toast.error("Selecione mensagens"); return; }
+    setIsImporting(true);
+    try {
+      const [hours, minutes] = importScheduleTime.split(':').map(Number);
+      const baseDate = new Date(importScheduleDate);
+      baseDate.setHours(hours, minutes, 0, 0);
+
+      const msgsToImport = otherMessages.filter(m => selectedImportMsgs.includes(m.id));
+      for (let i = 0; i < msgsToImport.length; i++) {
+        const msg = msgsToImport[i];
+        const scheduledAt = new Date(baseDate.getTime() + i * 5000);
+        await supabase.from('group_campaign_scheduled_messages').insert({
+          campaign_id: campaignId,
+          message_type: msg.message_type,
+          message_content: msg.message_content,
+          media_url: msg.media_url,
+          poll_options: msg.poll_options,
+          scheduled_at: scheduledAt.toISOString(),
+          send_speed: msg.send_speed || 'normal',
+          status: 'pending',
+        });
+      }
+      toast.success(`${msgsToImport.length} mensagem(ns) importada(s)!`);
+      setShowImportMessages(false);
+      fetchMessages();
+    } catch { toast.error("Erro ao importar"); }
+    finally { setIsImporting(false); }
+  };
+
   const targetGroups: string[] = campaign?.target_groups || [];
   const groupCount = targetGroups.length;
 
@@ -753,41 +835,159 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           </TabsContent>
 
           {/* CALENDAR TAB */}
-          <TabsContent value="calendar" className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <p className="text-sm font-medium">{format(calendarMonth, "MMMM yyyy", { locale: ptBR })}</p>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="grid grid-cols-7 gap-px text-center">
-              {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(d => (
-                <div key={d} className="text-[10px] font-medium text-muted-foreground py-1">{d}</div>
-              ))}
-              {Array.from({ length: startDayOfWeek }).map((_, i) => <div key={`empty-${i}`} />)}
-              {days.map(day => {
-                const dayMsgs = getMessagesForDay(day);
-                return (
-                  <div key={day.toISOString()} className={cn(
-                    "min-h-[48px] p-1 border rounded text-[10px]",
-                    isSameDay(day, new Date()) && "bg-primary/10 border-primary/30"
-                  )}>
-                    <p className="font-medium">{day.getDate()}</p>
-                    {dayMsgs.slice(0, 2).map(m => (
-                      <div key={m.id} className={cn("rounded px-0.5 mt-0.5 truncate",
-                        m.status === 'sent' ? 'bg-emerald-500/20' : m.status === 'pending' ? 'bg-amber-500/20' : 'bg-muted'
+          <TabsContent value="calendar" className="space-y-4">
+            {/* Calendar grid */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <p className="text-sm font-medium">{format(calendarMonth, "MMMM yyyy", { locale: ptBR })}</p>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1))}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-7 gap-px text-center">
+                {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(d => (
+                  <div key={d} className="text-[10px] font-medium text-muted-foreground py-1">{d}</div>
+                ))}
+                {Array.from({ length: startDayOfWeek }).map((_, i) => <div key={`empty-${i}`} />)}
+                {days.map(day => {
+                  const dayMsgs = getMessagesForDay(day);
+                  const isSelected = calendarSelectedDay && isSameDay(day, calendarSelectedDay);
+                  return (
+                    <div key={day.toISOString()} 
+                      onClick={() => setCalendarSelectedDay(prev => prev && isSameDay(prev, day) ? null : day)}
+                      className={cn(
+                        "min-h-[48px] p-1 border rounded text-[10px] cursor-pointer hover:bg-muted/50 transition-colors",
+                        isSameDay(day, new Date()) && "bg-primary/10 border-primary/30",
+                        isSelected && "ring-2 ring-primary border-primary"
                       )}>
-                        {format(new Date(m.scheduled_at), "HH:mm")}
-                      </div>
-                    ))}
-                    {dayMsgs.length > 2 && <p className="text-muted-foreground">+{dayMsgs.length - 2}</p>}
-                  </div>
-                );
-              })}
+                      <p className="font-medium">{day.getDate()}</p>
+                      {dayMsgs.slice(0, 2).map(m => (
+                        <div key={m.id} className={cn("rounded px-0.5 mt-0.5 truncate",
+                          m.status === 'sent' ? 'bg-emerald-500/20' : m.status === 'pending' ? 'bg-amber-500/20' : 'bg-muted'
+                        )}>
+                          {format(new Date(m.scheduled_at), "HH:mm")}
+                        </div>
+                      ))}
+                      {dayMsgs.length > 2 && <p className="text-muted-foreground">+{dayMsgs.length - 2}</p>}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+
+            <Separator />
+
+            {/* Action buttons */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">
+                {calendarSelectedDay 
+                  ? `MENSAGENS DE ${format(calendarSelectedDay, "dd/MM/yyyy")}` 
+                  : `TODAS AS MENSAGENS (${messages.length})`}
+              </p>
+              <div className="flex gap-1.5">
+                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={openImportDialog}>
+                  <Copy className="h-3 w-3" /> Importar
+                </Button>
+                <Button size="sm" className="gap-1 text-xs" onClick={() => { setEditingMessage(null); setShowMessageForm(true); }}>
+                  <Plus className="h-3 w-3" /> Nova
+                </Button>
+              </div>
+            </div>
+
+            {/* Message list below calendar */}
+            {(() => {
+              const displayMsgs = calendarSelectedDay 
+                ? messages.filter(m => isSameDay(new Date(m.scheduled_at), calendarSelectedDay))
+                : messages;
+              
+              if (displayMsgs.length === 0) return (
+                <Card><CardContent className="py-6 text-center">
+                  <CalendarIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-xs text-muted-foreground">
+                    {calendarSelectedDay ? "Nenhuma mensagem neste dia" : "Nenhuma mensagem agendada"}
+                  </p>
+                </CardContent></Card>
+              );
+
+              return (
+                <div className="space-y-2">
+                  {displayMsgs.map(msg => (
+                    <Card key={msg.id} className="overflow-hidden">
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              {STATUS_ICONS[msg.status]}
+                              <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
+                              <Badge variant="outline" className="text-[10px]">
+                                {format(new Date(msg.scheduled_at), "dd/MM HH:mm", { locale: ptBR })}
+                              </Badge>
+                              {msg.status === 'sent' && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  ✅ {msg.sent_count} {msg.failed_count > 0 && `· ❌ ${msg.failed_count}`}
+                                </span>
+                              )}
+                            </div>
+                            {msg.message_content && (
+                              <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">{msg.message_content}</p>
+                            )}
+                            {msg.media_url && (
+                              <p className="text-[10px] text-blue-500 truncate mt-0.5">📎 {msg.media_url.split('/').pop()}</p>
+                            )}
+                            {msg.poll_options && Array.isArray(msg.poll_options) && (
+                              <div className="mt-1 space-y-0.5">
+                                {msg.poll_options.map((opt: string, i: number) => (
+                                  <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            {msg.status === 'pending' && (
+                              <>
+                                <Button variant="outline" size="icon" className="h-7 w-7" title="Editar"
+                                  onClick={() => { setEditingMessage(msg); setShowMessageForm(true); }}>
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Button variant="outline" size="icon" className="h-7 w-7" title="Enviar agora"
+                                  onClick={() => sendMessage(msg.id)} disabled={isSending === msg.id}>
+                                  {isSending === msg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Cancelar"
+                                  onClick={() => cancelMessage(msg.id)}>
+                                  <XCircle className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                            {msg.status === 'sent' && (
+                              <Button variant="outline" size="icon" className="h-7 w-7" title="Reenviar como nova"
+                                onClick={() => duplicateMessage(msg)}>
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            )}
+                            {(msg.status === 'cancelled' || msg.status === 'failed') && (
+                              <>
+                                <Button variant="outline" size="icon" className="h-7 w-7" title="Reagendar"
+                                  onClick={() => duplicateMessage(msg)}>
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Excluir"
+                                  onClick={() => deleteMessage(msg.id)}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              );
+            })()}
           </TabsContent>
 
           {/* VARIABLES TAB */}
@@ -956,6 +1156,101 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             <Button onClick={createGroupForCampaign} disabled={isCreatingGroup} className="gap-1">
               {isCreatingGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Criar Grupo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* IMPORT MESSAGES DIALOG */}
+      <Dialog open={showImportMessages} onOpenChange={setShowImportMessages}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Importar Mensagens de Outra Campanha</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            {/* Campaign selector */}
+            <div>
+              <Label className="text-xs font-medium">Selecione a campanha</Label>
+              <Select value={selectedImportCampaign || ''} onValueChange={loadOtherCampaignMessages}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Escolha uma campanha..." /></SelectTrigger>
+                <SelectContent>
+                  {otherCampaigns.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name} ({format(new Date(c.created_at), "dd/MM/yy")})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Messages from selected campaign */}
+            {selectedImportCampaign && (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">{otherMessages.length} mensagens encontradas</p>
+                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => {
+                    setSelectedImportMsgs(prev => prev.length === otherMessages.length ? [] : otherMessages.map(m => m.id));
+                  }}>
+                    {selectedImportMsgs.length === otherMessages.length ? "Desmarcar todas" : "Selecionar todas"}
+                  </Button>
+                </div>
+                <ScrollArea className="h-[250px] rounded-md border">
+                  <div className="p-2 space-y-1.5">
+                    {otherMessages.map(msg => (
+                      <div key={msg.id} 
+                        onClick={() => setSelectedImportMsgs(prev => prev.includes(msg.id) ? prev.filter(x => x !== msg.id) : [...prev, msg.id])}
+                        className={cn(
+                          "flex items-start gap-2 p-2 rounded-md border cursor-pointer hover:bg-muted/50 transition-colors",
+                          selectedImportMsgs.includes(msg.id) && "bg-primary/10 border-primary/30"
+                        )}>
+                        <Checkbox checked={selectedImportMsgs.includes(msg.id)} className="mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
+                            <Badge variant="outline" className="text-[10px]">
+                              {format(new Date(msg.scheduled_at), "dd/MM HH:mm")}
+                            </Badge>
+                          </div>
+                          {msg.message_content && (
+                            <p className="text-[11px] text-muted-foreground line-clamp-2 whitespace-pre-wrap">{msg.message_content}</p>
+                          )}
+                          {msg.media_url && <p className="text-[10px] text-blue-500 truncate">📎 mídia</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+
+                <Separator />
+
+                {/* Schedule config */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium">Agendar para:</p>
+                  <div className="flex gap-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="flex-1 justify-start text-xs gap-1">
+                          <CalendarIcon className="h-3.5 w-3.5" />
+                          {format(importScheduleDate, "dd/MM/yyyy")}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={importScheduleDate}
+                          onSelect={d => d && setImportScheduleDate(d)} />
+                      </PopoverContent>
+                    </Popover>
+                    <Input type="time" value={importScheduleTime} onChange={e => setImportScheduleTime(e.target.value)} className="w-[120px]" />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    As mensagens serão importadas com 5s de intervalo a partir deste horário.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImportMessages(false)}>Cancelar</Button>
+            <Button onClick={importSelectedMessages} disabled={isImporting || selectedImportMsgs.length === 0} className="gap-1">
+              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Importar {selectedImportMsgs.length > 0 ? `(${selectedImportMsgs.length})` : ''}
             </Button>
           </DialogFooter>
         </DialogContent>
