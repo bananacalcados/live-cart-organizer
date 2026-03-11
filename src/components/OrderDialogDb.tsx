@@ -71,6 +71,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   const [freeShipping, setFreeShipping] = useState(false);
   const [hasGift, setHasGift] = useState(false);
   const [couponCode, setCouponCode] = useState("");
+  const [customShippingCost, setCustomShippingCost] = useState<string>("");
   const [paidExternally, setPaidExternally] = useState(false);
 
   // Check for existing customer by Instagram as user types
@@ -105,6 +106,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       setHasGift(editingOrder.has_gift || false);
       setCouponCode(editingOrder.coupon_code || "");
       setPaidExternally(editingOrder.paid_externally || false);
+      setCustomShippingCost((editingOrder as any).custom_shipping_cost != null ? String((editingOrder as any).custom_shipping_cost) : "");
     } else {
       resetForm();
     }
@@ -133,6 +135,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     setHasGift(false);
     setCouponCode("");
     setPaidExternally(false);
+    setCustomShippingCost("");
   };
 
   const handleAddLocalProduct = (product: DbOrderProduct) => {
@@ -269,7 +272,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       if (error) throw error;
 
       if (data?.qrCode) {
-        // Try clipboard, fallback gracefully
         try {
           await navigator.clipboard.writeText(data.qrCode);
           toast.success(`PIX gerado! Código copiado. Valor: R$ ${data.amount}`, { duration: 6000 });
@@ -281,7 +283,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
               label: "Copiar",
               onClick: () => {
                 navigator.clipboard.writeText(data.qrCode).catch(() => {
-                  // Final fallback: prompt
                   window.prompt("Copie o código PIX:", data.qrCode);
                 });
               },
@@ -349,6 +350,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       }
 
       // Update existing order
+      const parsedCustomShipping = customShippingCost ? parseFloat(customShippingCost) : null;
       const orderUpdates: Partial<DbOrder> = {
         cart_link: cartLink || null,
         notes: notes || null,
@@ -360,6 +362,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         has_gift: hasGift,
         coupon_code: couponCode || null,
         paid_externally: paidExternally,
+        custom_shipping_cost: parsedCustomShipping,
       } as any;
       
       // If marking as paid externally, also mark as paid
@@ -370,7 +373,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       
       await updateOrder(editingOrder.id, orderUpdates);
 
-      // Refresh orders to reflect updated joined customer data (e.g. whatsapp) in the cards/chat buttons
+      // Refresh orders to reflect updated joined customer data
       await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
 
       toast.success("Pedido atualizado!");
@@ -385,7 +388,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       // Check for existing active order in this event
       const activeOrder = findActiveOrderByCustomer(eventId, newCustomer.id);
       if (activeOrder) {
-        // Add products to existing order instead of creating new one
         for (const product of localProducts) {
           await useDbOrderStore.getState().addProductToOrder(activeOrder.id, product);
         }
@@ -396,7 +398,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         }
         toast.success("Produtos adicionados ao pedido existente!");
       } else {
-        // Create new order
         await createOrder(eventId, newCustomer, localProducts);
       }
     }
@@ -410,7 +411,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     0
   );
 
-  // Calculate discount
   const discountAmount = discountType && discountValue
     ? discountType === 'percentage'
       ? totalValue * (discountValue / 100)
@@ -489,152 +489,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="cartLink" className="flex items-center gap-2">
-              <Link className="h-4 w-4" />
-              Link do Carrinho
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                id="cartLink"
-                placeholder="https://..."
-                value={cartLink}
-                onChange={(e) => setCartLink(e.target.value)}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={generateCartLink}
-                disabled={isGeneratingCartLink || isGeneratingYampiLink || localProducts.length === 0}
-                title="Gerar link Shopify"
-              >
-                {isGeneratingCartLink ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={generateYampiLink}
-                disabled={isGeneratingCartLink || isGeneratingYampiLink || localProducts.length === 0}
-                title="Gerar link Yampi"
-                className="text-[#7C3AED] hover:text-[#7C3AED] hover:bg-[#7C3AED]/10"
-              >
-                {isGeneratingYampiLink ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ShoppingBag className="h-4 w-4" />
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={generatePayPalLink}
-                disabled={isGeneratingCartLink || isGeneratingYampiLink || isGeneratingPayPalLink || localProducts.length === 0 || !editingOrder}
-                title="Gerar link PayPal"
-                className="text-[#0070BA] hover:text-[#0070BA] hover:bg-[#0070BA]/10"
-              >
-                {isGeneratingPayPalLink ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <CreditCard className="h-4 w-4" />
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={async () => {
-                  if (!editingOrder) {
-                    toast.error("Salve o pedido primeiro");
-                    return;
-                  }
-                  // Save current changes to DB before generating link
-                  try {
-                    const orderUpdates: Partial<DbOrder> = {
-                      products: localProducts,
-                      discount_type: discountType || null,
-                      discount_value: discountType ? (discountValue ?? 0) : 0,
-                      free_shipping: freeShipping,
-                      has_gift: hasGift,
-                      coupon_code: couponCode || null,
-                      notes: notes || null,
-                      shipping_cost: editingOrder.shipping_cost ?? null,
-                    } as any;
-                    await updateOrder(editingOrder.id, orderUpdates);
-                    const url = `${window.location.origin}/checkout/order/${editingOrder.id}`;
-                    setCartLink(url);
-                    toast.success("Pedido salvo e link do checkout gerado!");
-                  } catch (error) {
-                    console.error("Error saving order before checkout link:", error);
-                    toast.error("Erro ao salvar pedido antes de gerar link");
-                  }
-                }}
-                disabled={localProducts.length === 0 || !editingOrder}
-                title="Gerar link Checkout Transparente (Pagar.me/APPMAX)"
-                className="text-emerald-600 hover:text-emerald-600 hover:bg-emerald-600/10"
-              >
-                <Lock className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={generatePixLink}
-                disabled={isGeneratingCartLink || isGeneratingYampiLink || isGeneratingPayPalLink || isGeneratingPixLink || localProducts.length === 0 || !editingOrder}
-                title="Gerar PIX (Mercado Pago)"
-                className="text-[#00BFAE] hover:text-[#00BFAE] hover:bg-[#00BFAE]/10"
-              >
-                {isGeneratingPixLink ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <QrCode className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-            {localProducts.length > 0 && !cartLink && (
-              <p className="text-xs text-muted-foreground">
-                Shopify (↻) | Yampi (🛍️) | PayPal (💳) | Checkout (🔒) | PIX (◻)
-              </p>
-            )}
-            <div className="flex items-center justify-between mt-3 p-3 bg-secondary/50 rounded-lg">
-              <Label htmlFor="paidExternally" className="flex items-center gap-2 cursor-pointer">
-                <Wallet className="h-4 w-4 text-primary" />
-                <div>
-                  <span>Pago Fora (Yampi/Shopify)</span>
-                  <p className="text-xs text-muted-foreground font-normal">PIX direto, dinheiro, etc.</p>
-                </div>
-              </Label>
-              <Switch
-                id="paidExternally"
-                checked={paidExternally}
-                onCheckedChange={setPaidExternally}
-              />
-            </div>
-            {editingOrder && editingOrder.is_paid && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full mt-2 text-primary hover:bg-primary/10"
-                onClick={handleCreateShopifyOrder}
-                disabled={isCreatingShopifyOrder || localProducts.length === 0}
-              >
-                {isCreatingShopifyOrder ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <ShoppingBag className="h-4 w-4 mr-2" />
-                )}
-                Criar Pedido na Shopify
-              </Button>
-            )}
-          </div>
-
           {editingOrder && (
             <div className="space-y-2">
               <Label>Etapa do Pedido</Label>
@@ -656,19 +510,17 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
             </div>
           )}
 
+          {/* Products + Discount/Extras + Notes tabs */}
           <Tabs defaultValue="products" className="w-full">
             <TabsList className="w-full">
               <TabsTrigger value="products" className="flex-1">
                 Produtos ({localProducts.length})
               </TabsTrigger>
-              <TabsTrigger value="extras" className="flex-1">
-                Desconto/Extras
-              </TabsTrigger>
               <TabsTrigger value="notes" className="flex-1">
                 Observações
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="products" className="mt-4">
+            <TabsContent value="products" className="mt-4 space-y-4">
               <ProductSelector
                 selectedProducts={localProducts}
                 onAddProduct={handleAddLocalProduct}
@@ -676,145 +528,149 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                 onUpdateQuantity={handleUpdateLocalQuantity}
               />
 
+              {/* Discount & Extras - inline below products */}
               {localProducts.length > 0 && (
-                <div className="mt-4 p-4 bg-secondary/50 rounded-lg space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">Subtotal</span>
-                    <span className="text-muted-foreground">
-                      R$ {totalValue.toFixed(2)}
-                    </span>
+                <div className="space-y-4 pt-2 border-t">
+                  {/* Discount */}
+                  <div className="space-y-3">
+                    <Label className="flex items-center gap-2">
+                      <Percent className="h-4 w-4" />
+                      Desconto
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Select 
+                        value={discountType} 
+                        onValueChange={(v) => setDiscountType(v as DiscountType | "")}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Tipo de desconto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fixed">
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4" />
+                              Valor fixo (R$)
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="percentage">
+                            <div className="flex items-center gap-2">
+                              <Percent className="h-4 w-4" />
+                              Percentual (%)
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        placeholder={discountType === 'percentage' ? 'Ex: 10' : 'Ex: 15.00'}
+                        value={discountValue || ''}
+                        onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
+                        disabled={!discountType}
+                      />
+                    </div>
+                    {discountType && discountValue > 0 && (
+                      <p className="text-sm text-stage-contacted">
+                        Desconto de R$ {discountAmount.toFixed(2)} aplicado
+                      </p>
+                    )}
                   </div>
-                  {discountAmount > 0 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-stage-contacted">Desconto</span>
-                      <span className="text-stage-contacted">
-                        -R$ {discountAmount.toFixed(2)}
+
+                  {/* Shipping */}
+                  <div className="space-y-3 pt-3 border-t">
+                    <div className="space-y-2">
+                      <Label htmlFor="customShipping" className="flex items-center gap-2">
+                        <Truck className="h-4 w-4" />
+                        Frete
+                      </Label>
+                      <Input
+                        id="customShipping"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0,00 = frete grátis"
+                        value={customShippingCost}
+                        onChange={(e) => setCustomShippingCost(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="hasGift" className="flex items-center gap-2 cursor-pointer">
+                        <Gift className="h-4 w-4 text-accent" />
+                        Incluir Brinde?
+                      </Label>
+                      <Switch
+                        id="hasGift"
+                        checked={hasGift}
+                        onCheckedChange={setHasGift}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Coupon Code */}
+                  <div className="space-y-2 pt-3 border-t">
+                    <Label className="flex items-center gap-2">
+                      <Tag className="h-4 w-4" />
+                      Cupom de Desconto (Yampi)
+                    </Label>
+                    <Input
+                      placeholder="Código do cupom (ex: DESCONTO20)"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    />
+                  </div>
+
+                  {/* Summary */}
+                  <div className="p-4 bg-secondary/50 rounded-lg space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">Subtotal</span>
+                      <span className="text-muted-foreground">
+                        R$ {totalValue.toFixed(2)}
                       </span>
                     </div>
-                  )}
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <span className="font-medium">Total</span>
-                    <span className="text-lg font-bold text-accent">
-                      R$ {finalValue.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="mt-2 space-y-2 pt-2 border-t">
-                    {localProducts.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex items-start justify-between text-sm text-muted-foreground gap-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="truncate">
-                            {p.quantity}x {p.title}
-                          </p>
-                          {p.variant && (
-                            <p className="text-xs text-accent font-medium">
-                              {p.variant}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 flex-shrink-0"
-                          onClick={() => handleRemoveLocalProduct(p.id)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
+                    {discountAmount > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-stage-contacted">Desconto</span>
+                        <span className="text-stage-contacted">
+                          -R$ {discountAmount.toFixed(2)}
+                        </span>
                       </div>
-                    ))}
+                    )}
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <span className="font-medium">Total</span>
+                      <span className="text-lg font-bold text-accent">
+                        R$ {finalValue.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="mt-2 space-y-2 pt-2 border-t">
+                      {localProducts.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-start justify-between text-sm text-muted-foreground gap-2"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="truncate">
+                              {p.quantity}x {p.title}
+                            </p>
+                            {p.variant && (
+                              <p className="text-xs text-accent font-medium">
+                                {p.variant}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 flex-shrink-0"
+                            onClick={() => handleRemoveLocalProduct(p.id)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
-            </TabsContent>
-            <TabsContent value="extras" className="mt-4 space-y-4">
-              {/* Discount */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2">
-                  <Percent className="h-4 w-4" />
-                  Desconto
-                </Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <Select 
-                    value={discountType} 
-                    onValueChange={(v) => setDiscountType(v as DiscountType | "")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Tipo de desconto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixed">
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4" />
-                          Valor fixo (R$)
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="percentage">
-                        <div className="flex items-center gap-2">
-                          <Percent className="h-4 w-4" />
-                          Percentual (%)
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number"
-                    placeholder={discountType === 'percentage' ? 'Ex: 10' : 'Ex: 15.00'}
-                    value={discountValue || ''}
-                    onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
-                    disabled={!discountType}
-                  />
-                </div>
-                {discountType && discountValue > 0 && (
-                  <p className="text-sm text-stage-contacted">
-                    Desconto de R$ {discountAmount.toFixed(2)} aplicado
-                  </p>
-                )}
-              </div>
-
-              {/* Coupon Code */}
-              <div className="space-y-3 pt-4 border-t">
-                <Label className="flex items-center gap-2">
-                  <Tag className="h-4 w-4" />
-                  Cupom de Desconto (Yampi)
-                </Label>
-                <Input
-                  placeholder="Código do cupom (ex: DESCONTO20)"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                />
-                <p className="text-xs text-muted-foreground">
-                  O cupom será aplicado ao link Yampi. Deve estar criado na Yampi.
-                </p>
-              </div>
-
-              {/* Free Shipping & Gift */}
-              <div className="space-y-3 pt-4 border-t">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="freeShipping" className="flex items-center gap-2 cursor-pointer">
-                    <Truck className="h-4 w-4 text-stage-paid" />
-                    Frete Grátis
-                  </Label>
-                  <Switch
-                    id="freeShipping"
-                    checked={freeShipping}
-                    onCheckedChange={setFreeShipping}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="hasGift" className="flex items-center gap-2 cursor-pointer">
-                    <Gift className="h-4 w-4 text-accent" />
-                    Incluir Brinde
-                  </Label>
-                  <Switch
-                    id="hasGift"
-                    checked={hasGift}
-                    onCheckedChange={setHasGift}
-                  />
-                </div>
-              </div>
             </TabsContent>
             <TabsContent value="notes" className="mt-4">
               <div className="space-y-2">
@@ -832,6 +688,172 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
               </div>
             </TabsContent>
           </Tabs>
+
+          {/* Gerar Link / Pagamento */}
+          <div className="space-y-3">
+            <Label className="text-base font-semibold">
+              Gerar Link / Pagamento
+            </Label>
+
+            <div className="space-y-2">
+              {/* Checkout Loja */}
+              <Button
+                type="button"
+                className="w-full h-12 text-base font-bold bg-accent hover:bg-accent/90 text-accent-foreground gap-2"
+                onClick={async () => {
+                  if (!editingOrder) {
+                    toast.error("Salve o pedido primeiro");
+                    return;
+                  }
+                  try {
+                    const parsedShipping = customShippingCost ? parseFloat(customShippingCost) : null;
+                    const orderUpdates: Partial<DbOrder> = {
+                      products: localProducts,
+                      discount_type: discountType || null,
+                      discount_value: discountType ? (discountValue ?? 0) : 0,
+                      free_shipping: freeShipping,
+                      has_gift: hasGift,
+                      coupon_code: couponCode || null,
+                      notes: notes || null,
+                      shipping_cost: editingOrder.shipping_cost ?? null,
+                      custom_shipping_cost: parsedShipping,
+                    } as any;
+                    await updateOrder(editingOrder.id, orderUpdates);
+                    const url = `${window.location.origin}/checkout/order/${editingOrder.id}`;
+                    setCartLink(url);
+                    toast.success("Pedido salvo e link do checkout gerado!");
+                  } catch (error) {
+                    console.error("Error saving order before checkout link:", error);
+                    toast.error("Erro ao salvar pedido antes de gerar link");
+                  }
+                }}
+                disabled={localProducts.length === 0 || !editingOrder}
+              >
+                <Lock className="h-5 w-5" />
+                Checkout Loja (+10 pts)
+              </Button>
+
+              {/* Yampi + PayPal */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  className="h-11 text-sm font-bold bg-[hsl(var(--chart-4))] hover:opacity-90 text-white gap-2"
+                  onClick={generateYampiLink}
+                  disabled={isGeneratingYampiLink || localProducts.length === 0}
+                >
+                  {isGeneratingYampiLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className="h-4 w-4" />}
+                  Yampi
+                </Button>
+                <Button
+                  type="button"
+                  className="h-11 text-sm font-bold bg-[hsl(220,80%,55%)] hover:opacity-90 text-white gap-2"
+                  onClick={generatePayPalLink}
+                  disabled={isGeneratingPayPalLink || localProducts.length === 0 || !editingOrder}
+                >
+                  {isGeneratingPayPalLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                  PayPal
+                </Button>
+              </div>
+
+              {/* PIX */}
+              <Button
+                type="button"
+                className="w-full h-11 text-sm font-bold bg-[hsl(160,70%,40%)] hover:opacity-90 text-white gap-2"
+                onClick={generatePixLink}
+                disabled={isGeneratingPixLink || localProducts.length === 0 || !editingOrder}
+              >
+                {isGeneratingPixLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+                PIX
+              </Button>
+
+              {/* Na Entrega */}
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-11 text-sm font-bold border-2 border-muted-foreground/30 gap-2"
+                onClick={() => toast.info("Funcionalidade 'Na Entrega' será implementada na próxima etapa")}
+                disabled={localProducts.length === 0 || !editingOrder}
+              >
+                <Truck className="h-4 w-4" />
+                Na Entrega
+              </Button>
+
+              {/* Retirar na Loja */}
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-11 text-sm font-bold border-2 border-[hsl(var(--chart-2))] text-[hsl(var(--chart-2))] hover:bg-[hsl(var(--chart-2))]/10 gap-2"
+                onClick={() => toast.info("Funcionalidade 'Retirar na Loja' será implementada na próxima etapa")}
+                disabled={localProducts.length === 0 || !editingOrder}
+              >
+                <ShoppingBag className="h-4 w-4" />
+                Retirar na Loja
+              </Button>
+            </div>
+
+            {/* Cart link */}
+            <div className="space-y-2">
+              <Label htmlFor="cartLink" className="flex items-center gap-2">
+                <Link className="h-4 w-4" />
+                Link do Carrinho
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="cartLink"
+                  placeholder="https://..."
+                  value={cartLink}
+                  onChange={(e) => setCartLink(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={generateCartLink}
+                  disabled={isGeneratingCartLink || localProducts.length === 0}
+                  title="Gerar link Shopify"
+                >
+                  {isGeneratingCartLink ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Pago Fora */}
+            <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
+              <Label htmlFor="paidExternally" className="flex items-center gap-2 cursor-pointer">
+                <Wallet className="h-4 w-4 text-primary" />
+                <div>
+                  <span>Pago Fora (Yampi/Shopify)</span>
+                  <p className="text-xs text-muted-foreground font-normal">PIX direto, dinheiro, etc.</p>
+                </div>
+              </Label>
+              <Switch
+                id="paidExternally"
+                checked={paidExternally}
+                onCheckedChange={setPaidExternally}
+              />
+            </div>
+            {editingOrder && editingOrder.is_paid && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full text-primary hover:bg-primary/10"
+                onClick={handleCreateShopifyOrder}
+                disabled={isCreatingShopifyOrder || localProducts.length === 0}
+              >
+                {isCreatingShopifyOrder ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <ShoppingBag className="h-4 w-4 mr-2" />
+                )}
+                Criar Pedido na Shopify
+              </Button>
+            )}
+          </div>
 
           <div className="flex gap-3 pt-4">
             {editingOrder && editingOrder.customer && !editingOrder.customer.is_banned && (

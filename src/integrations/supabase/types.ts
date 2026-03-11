@@ -4696,6 +4696,7 @@ export type Database = {
           checkout_token: string | null
           coupon_code: string | null
           created_at: string
+          custom_shipping_cost: number | null
           customer_id: string
           discount_type: string | null
           discount_value: number | null
@@ -4727,6 +4728,7 @@ export type Database = {
           checkout_token?: string | null
           coupon_code?: string | null
           created_at?: string
+          custom_shipping_cost?: number | null
           customer_id: string
           discount_type?: string | null
           discount_value?: number | null
@@ -4758,6 +4760,7 @@ export type Database = {
           checkout_token?: string | null
           coupon_code?: string | null
           created_at?: string
+          custom_shipping_cost?: number | null
           customer_id?: string
           discount_type?: string | null
           discount_value?: number | null
