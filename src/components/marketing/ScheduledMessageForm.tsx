@@ -623,16 +623,22 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
                       </div>
                       <div className="flex-1 space-y-1">
                         <p className="text-[10px] text-muted-foreground">{messageType === 'video' ? 'Vídeo' : 'Documento'} {i + 1}</p>
-                        <div className="flex items-center gap-1">
-                          <Input placeholder="Legenda deste arquivo..." value={item.caption}
-                            onChange={e => {
-                              const next = [...mediaItems];
-                              next[i] = { ...next[i], caption: e.target.value };
-                              setMediaItems(next);
-                            }}
-                            className="h-7 text-xs flex-1" />
-                          <EmojiPickerButton onEmojiSelect={(emoji) => insertEmojiInCaption(emoji, i)} className="h-7 w-7 shrink-0" />
-                        </div>
+                        <Textarea placeholder="Legenda deste arquivo... (use Enter para quebra de linha)" value={item.caption}
+                          onChange={e => {
+                            const next = [...mediaItems];
+                            next[i] = { ...next[i], caption: e.target.value };
+                            setMediaItems(next);
+                          }}
+                          rows={2}
+                          className="text-xs" />
+                        <WhatsAppFormattingToolbar
+                          value={item.caption}
+                          onChange={(val) => {
+                            const next = [...mediaItems];
+                            next[i] = { ...next[i], caption: val };
+                            setMediaItems(next);
+                          }}
+                        />
                       </div>
                       <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"
                         onClick={() => setMediaItems(prev => prev.filter((_, idx) => idx !== i))}>
