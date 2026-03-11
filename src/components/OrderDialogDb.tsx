@@ -106,6 +106,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       setHasGift(editingOrder.has_gift || false);
       setCouponCode(editingOrder.coupon_code || "");
       setPaidExternally(editingOrder.paid_externally || false);
+      setCustomShippingCost((editingOrder as any).custom_shipping_cost != null ? String((editingOrder as any).custom_shipping_cost) : "");
     } else {
       resetForm();
     }
