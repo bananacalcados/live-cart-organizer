@@ -158,11 +158,46 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       // 2. Move to "Novo Pedido"
       await storeMove(order.id, 'new');
 
-      // 3. Build webhook payload
+      // 3. Fetch event's whatsapp_number_id to resolve Z-API instance
+      let loja = 'centro';
+      let zapiInstanceId = '';
+      let zapiToken = '';
+      let zapiClientToken = '';
+      
+      if (order.event_id) {
+        const { data: eventData } = await supabase
+          .from('events')
+          .select('whatsapp_number_id')
+          .eq('id', order.event_id)
+          .single();
+        
+        if (eventData?.whatsapp_number_id) {
+          const { data: whatsappData } = await supabase
+            .from('whatsapp_numbers')
+            .select('id, label, phone_display, zapi_instance_id, zapi_token, zapi_client_token')
+            .eq('id', eventData.whatsapp_number_id)
+            .single();
+          
+          if (whatsappData) {
+            // Determine loja based on label
+            const labelLower = (whatsappData.label || '').toLowerCase();
+            if (labelLower.includes('pérola') || labelLower.includes('perola')) {
+              loja = 'perola';
+            } else {
+              loja = 'centro';
+            }
+            zapiInstanceId = (whatsappData as any).zapi_instance_id || '';
+            zapiToken = (whatsappData as any).zapi_token || '';
+            zapiClientToken = (whatsappData as any).zapi_client_token || '';
+          }
+        }
+      }
+
+      // 4. Build webhook payload
       const firstProduct = order.products[0];
       const variantParts = firstProduct?.variant?.split('/').map(s => s.trim()) || [];
       const tamanho = variantParts[0] || '';
-      const cor = variantParts[1] || variantParts.length === 1 ? variantParts[0] : '';
+      const cor = variantParts.length > 1 ? variantParts[1] : '';
 
       const payload = {
         pedido_id: order.id,
@@ -170,10 +205,15 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         cliente_telefone: order.customer?.whatsapp || '',
         produto: order.products.map(p => `${p.quantity}x ${p.title}`).join(', '),
         tamanho,
-        cor: variantParts.length > 1 ? variantParts[1] : '',
+        cor,
         valor_total: finalValue,
         link_pagamento: paymentLink,
-        loja: 'centro',
+        loja,
+        whatsapp: {
+          zapi_instance_id: zapiInstanceId,
+          zapi_token: zapiToken,
+          zapi_client_token: zapiClientToken,
+        },
       };
 
       fetch('http://31.97.23.119:8002/webhook/novo-pedido', {

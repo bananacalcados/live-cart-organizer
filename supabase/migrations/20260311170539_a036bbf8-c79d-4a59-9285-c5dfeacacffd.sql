@@ -1,0 +1,1 @@
+ALTER TABLE public.events ADD COLUMN whatsapp_number_id uuid REFERENCES public.whatsapp_numbers(id) ON DELETE SET NULL;

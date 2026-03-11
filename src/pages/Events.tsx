@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,8 @@ import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { useEventStore } from "@/stores/eventStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Phone } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -47,17 +50,20 @@ interface EventStats {
 const Events = () => {
   const navigate = useNavigate();
   const { events, isLoading, fetchEvents, createEvent, updateEvent, deleteEvent, setCurrentEvent } = useEventStore();
+  const { numbers: whatsappNumbers, fetchNumbers: fetchWhatsAppNumbers } = useWhatsAppNumberStore();
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [shippingCost, setShippingCost] = useState("");
+  const [selectedWhatsAppId, setSelectedWhatsAppId] = useState<string>("");
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchEvents();
+    fetchWhatsAppNumbers();
   }, [fetchEvents]);
 
   useEffect(() => {
@@ -150,18 +156,22 @@ const Events = () => {
     if (!name.trim()) return;
     
     const shippingValue = shippingCost ? parseFloat(shippingCost) : undefined;
+    const whatsappId = selectedWhatsAppId || null;
     
     if (editingEvent) {
       await updateEvent(editingEvent, { 
         name, 
         description,
-        default_shipping_cost: shippingValue ?? null
+        default_shipping_cost: shippingValue ?? null,
+        whatsapp_number_id: whatsappId,
       } as any);
     } else {
-      // Create event then update shipping cost
       const eventId = await createEvent(name, description);
-      if (eventId && shippingValue) {
-        await updateEvent(eventId, { default_shipping_cost: shippingValue } as any);
+      if (eventId) {
+        const updates: any = {};
+        if (shippingValue) updates.default_shipping_cost = shippingValue;
+        if (whatsappId) updates.whatsapp_number_id = whatsappId;
+        if (Object.keys(updates).length > 0) await updateEvent(eventId, updates);
       }
     }
     
@@ -173,14 +183,16 @@ const Events = () => {
     setName("");
     setDescription("");
     setShippingCost("");
+    setSelectedWhatsAppId("");
     setEditingEvent(null);
   };
 
-  const handleEdit = (event: { id: string; name: string; description?: string; default_shipping_cost?: number }) => {
+  const handleEdit = (event: { id: string; name: string; description?: string; default_shipping_cost?: number; whatsapp_number_id?: string }) => {
     setEditingEvent(event.id);
     setName(event.name);
     setDescription(event.description || "");
     setShippingCost(event.default_shipping_cost?.toString() || "");
+    setSelectedWhatsAppId((event as any).whatsapp_number_id || "");
     setDialogOpen(true);
   };
 
@@ -266,10 +278,32 @@ const Events = () => {
                       value={shippingCost}
                       onChange={(e) => setShippingCost(e.target.value)}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Se definido, será aplicado automaticamente ao primeiro pedido de cada cliente. A partir do 2º pedido no mesmo evento, o frete é grátis.
-                    </p>
-                  </div>
+                     <p className="text-xs text-muted-foreground">
+                       Se definido, será aplicado automaticamente ao primeiro pedido de cada cliente. A partir do 2º pedido no mesmo evento, o frete é grátis.
+                     </p>
+                   </div>
+                   <div className="space-y-2">
+                     <Label className="flex items-center gap-2">
+                       <Phone className="h-4 w-4" />
+                       WhatsApp do Evento
+                     </Label>
+                     <Select value={selectedWhatsAppId} onValueChange={setSelectedWhatsAppId}>
+                       <SelectTrigger>
+                         <SelectValue placeholder="Selecione o número WhatsApp..." />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="">Nenhum (padrão)</SelectItem>
+                         {whatsappNumbers.map(n => (
+                           <SelectItem key={n.id} value={n.id}>
+                             {n.label} ({n.phone_display})
+                           </SelectItem>
+                         ))}
+                       </SelectContent>
+                     </Select>
+                     <p className="text-xs text-muted-foreground">
+                       Número WhatsApp que será usado para disparos automáticos neste evento (ex: agente de cobrança).
+                     </p>
+                   </div>
                   {editingEvent && (
                     <EventTeamSelector eventId={editingEvent} />
                   )}
@@ -397,6 +431,15 @@ const Events = () => {
                             <span>Frete fixo: <strong>R$ {Number((event as any).default_shipping_cost).toFixed(2)}</strong></span>
                           </div>
                         )}
+                        {(event as any).whatsapp_number_id && (() => {
+                          const wn = whatsappNumbers.find(n => n.id === (event as any).whatsapp_number_id);
+                          return wn ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Phone className="h-4 w-4" />
+                              <span>WhatsApp: <strong>{wn.label}</strong></span>
+                            </div>
+                          ) : null;
+                        })()}
 
                         {/* Team avatars */}
                         <EventTeamDisplay eventId={event.id} />

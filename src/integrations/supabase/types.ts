@@ -2047,6 +2047,7 @@ export type Database = {
           is_active: boolean
           name: string
           updated_at: string
+          whatsapp_number_id: string | null
         }
         Insert: {
           active_product_delay_seconds?: number
@@ -2058,6 +2059,7 @@ export type Database = {
           is_active?: boolean
           name: string
           updated_at?: string
+          whatsapp_number_id?: string | null
         }
         Update: {
           active_product_delay_seconds?: number
@@ -2069,6 +2071,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           updated_at?: string
+          whatsapp_number_id?: string | null
         }
         Relationships: [
           {
@@ -2076,6 +2079,13 @@ export type Database = {
             columns: ["catalog_lead_page_id"]
             isOneToOne: false
             referencedRelation: "catalog_lead_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
         ]

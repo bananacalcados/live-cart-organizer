@@ -111,6 +111,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [isImporting, setIsImporting] = useState(false);
   const [calendarSelectedDay, setCalendarSelectedDay] = useState<Date | null>(null);
   const [contactSearchQuery, setContactSearchQuery] = useState("");
+  const [importFilterDateFrom, setImportFilterDateFrom] = useState<Date | undefined>(undefined);
+  const [importFilterDateTo, setImportFilterDateTo] = useState<Date | undefined>(undefined);
 
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
@@ -363,21 +365,36 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     const scheduledAt = new Date(data.scheduledAt);
     scheduledAt.setHours(hours, minutes, 0, 0);
 
+    // Check if this is a duplicate (create new) or real edit
+    const isDuplicate = id.startsWith('__duplicate__');
+    
     // For update, use first block or legacy
     const block = data.blocks?.[0];
-    const { error } = await supabase.from('group_campaign_scheduled_messages').update({
+    const msgData = {
       message_type: block?.type || data.messageType,
       message_content: block?.content || data.messageContent,
-      media_url: block?.mediaUrl || data.mediaUrl || null,
+      media_url: block?.mediaItems?.[0]?.url || block?.mediaUrl || data.mediaUrl || null,
       poll_options: (block?.type || data.messageType) === 'poll' ? (block?.pollOptions || data.pollOptions) : null,
       poll_max_options: (block?.type || data.messageType) === 'poll' ? (block?.pollMaxOptions ?? data.pollMaxOptions) : 1,
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
-    }).eq('id', id);
+    };
 
-    if (error) throw error;
-    toast.success("Mensagem atualizada!");
+    if (isDuplicate) {
+      // Create new message
+      const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
+        campaign_id: campaignId,
+        ...msgData,
+        status: 'pending',
+      });
+      if (error) throw error;
+      toast.success("Mensagem duplicada!");
+    } else {
+      const { error } = await supabase.from('group_campaign_scheduled_messages').update(msgData).eq('id', id);
+      if (error) throw error;
+      toast.success("Mensagem atualizada!");
+    }
     setEditingMessage(null);
     fetchMessages();
   };
@@ -474,20 +491,15 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   };
 
   const duplicateMessage = async (msg: ScheduledMessage) => {
-    const originalDate = new Date(msg.scheduled_at);
-    const { error } = await supabase.from('group_campaign_scheduled_messages').insert({
-      campaign_id: campaignId,
-      message_type: msg.message_type,
-      message_content: msg.message_content,
-      media_url: msg.media_url,
-      poll_options: msg.poll_options,
-      scheduled_at: originalDate.toISOString(),
-      send_speed: msg.send_speed,
+    // Open edit form pre-filled with original content so user can see/edit
+    const editMsg: ScheduledMessage = {
+      ...msg,
+      id: '__duplicate__' + msg.id,
       status: 'pending',
-    });
-    if (error) { toast.error("Erro ao duplicar"); return; }
-    toast.success("Mensagem duplicada como pendente!");
-    fetchMessages();
+      scheduled_at: msg.scheduled_at,
+    };
+    setEditingMessage(editMsg);
+    setShowMessageForm(true);
   };
 
   const openImportDialog = async () => {
@@ -495,6 +507,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setSelectedImportCampaign(null);
     setOtherMessages([]);
     setSelectedImportMsgs([]);
+    setImportFilterDateFrom(undefined);
+    setImportFilterDateTo(undefined);
     const { data } = await supabase.from('group_campaigns').select('id, name, created_at')
       .neq('id', campaignId).order('created_at', { ascending: false }).limit(50);
     setOtherCampaigns(data || []);
@@ -786,7 +800,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                     <CardContent className="p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
                             {STATUS_ICONS[msg.status]}
                             <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
                             <Badge variant="outline" className="text-[10px]">
@@ -798,9 +812,32 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                               </span>
                             )}
                           </div>
-                          {msg.message_content && (
-                            <p className="text-xs text-muted-foreground line-clamp-2">{msg.message_content}</p>
-                          )}
+                          <ScrollArea className="max-h-[200px]">
+                            {msg.media_url && ['image'].includes(msg.message_type) && (
+                              <img src={msg.media_url} alt="" className="max-h-40 rounded-md mt-1 mb-1 object-contain" />
+                            )}
+                            {msg.media_url && msg.message_type === 'video' && (
+                              <video src={msg.media_url} controls className="max-h-40 rounded-md mt-1 mb-1" />
+                            )}
+                            {msg.media_url && msg.message_type === 'audio' && (
+                              <audio src={msg.media_url} controls className="mt-1 mb-1 w-full h-8" />
+                            )}
+                            {msg.media_url && msg.message_type === 'document' && (
+                              <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 underline mt-0.5 block">
+                                📄 {msg.media_url.split('/').pop()}
+                              </a>
+                            )}
+                            {msg.message_content && (
+                              <p className="text-xs text-muted-foreground whitespace-pre-wrap">{msg.message_content}</p>
+                            )}
+                            {msg.poll_options && Array.isArray(msg.poll_options) && (
+                              <div className="mt-1 space-y-0.5">
+                                {msg.poll_options.map((opt: string, i: number) => (
+                                  <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
+                                ))}
+                              </div>
+                            )}
+                          </ScrollArea>
                         </div>
                         <div className="flex gap-1 shrink-0">
                           {msg.status === 'pending' && (
@@ -819,11 +856,23 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                               </Button>
                             </>
                           )}
-                          {(msg.status === 'cancelled' || msg.status === 'failed') && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                              onClick={() => deleteMessage(msg.id)}>
-                              <Trash2 className="h-3 w-3" />
+                          {msg.status === 'sent' && (
+                            <Button variant="outline" size="icon" className="h-7 w-7" title="Reenviar como nova"
+                              onClick={() => duplicateMessage(msg)}>
+                              <Copy className="h-3 w-3" />
                             </Button>
+                          )}
+                          {(msg.status === 'cancelled' || msg.status === 'failed') && (
+                            <>
+                              <Button variant="outline" size="icon" className="h-7 w-7" title="Reagendar"
+                                onClick={() => duplicateMessage(msg)}>
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                                onClick={() => deleteMessage(msg.id)}>
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -931,19 +980,32 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                                 </span>
                               )}
                             </div>
-                            {msg.message_content && (
-                              <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">{msg.message_content}</p>
-                            )}
-                            {msg.media_url && (
-                              <p className="text-[10px] text-blue-500 truncate mt-0.5">📎 {msg.media_url.split('/').pop()}</p>
-                            )}
-                            {msg.poll_options && Array.isArray(msg.poll_options) && (
-                              <div className="mt-1 space-y-0.5">
-                                {msg.poll_options.map((opt: string, i: number) => (
-                                  <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
-                                ))}
-                              </div>
-                            )}
+                            <ScrollArea className="max-h-[250px]">
+                              {msg.media_url && ['image'].includes(msg.message_type) && (
+                                <img src={msg.media_url} alt="" className="max-h-40 rounded-md mt-1 mb-1 object-contain" />
+                              )}
+                              {msg.media_url && msg.message_type === 'video' && (
+                                <video src={msg.media_url} controls className="max-h-40 rounded-md mt-1 mb-1" />
+                              )}
+                              {msg.media_url && msg.message_type === 'audio' && (
+                                <audio src={msg.media_url} controls className="mt-1 mb-1 w-full h-8" />
+                              )}
+                              {msg.media_url && msg.message_type === 'document' && (
+                                <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 underline mt-0.5 block">
+                                  📄 {msg.media_url.split('/').pop()}
+                                </a>
+                              )}
+                              {msg.message_content && (
+                                <p className="text-xs text-muted-foreground whitespace-pre-wrap">{msg.message_content}</p>
+                              )}
+                              {msg.poll_options && Array.isArray(msg.poll_options) && (
+                                <div className="mt-1 space-y-0.5">
+                                  {msg.poll_options.map((opt: string, i: number) => (
+                                    <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
+                                  ))}
+                                </div>
+                              )}
+                            </ScrollArea>
                           </div>
                           <div className="flex gap-1 shrink-0">
                             {msg.status === 'pending' && (
@@ -1184,40 +1246,102 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             {/* Messages from selected campaign */}
             {selectedImportCampaign && (
               <>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">{otherMessages.length} mensagens encontradas</p>
-                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => {
-                    setSelectedImportMsgs(prev => prev.length === otherMessages.length ? [] : otherMessages.map(m => m.id));
-                  }}>
-                    {selectedImportMsgs.length === otherMessages.length ? "Desmarcar todas" : "Selecionar todas"}
-                  </Button>
-                </div>
-                <ScrollArea className="h-[250px] rounded-md border">
-                  <div className="p-2 space-y-1.5">
-                    {otherMessages.map(msg => (
-                      <div key={msg.id} 
-                        onClick={() => setSelectedImportMsgs(prev => prev.includes(msg.id) ? prev.filter(x => x !== msg.id) : [...prev, msg.id])}
-                        className={cn(
-                          "flex items-start gap-2 p-2 rounded-md border cursor-pointer hover:bg-muted/50 transition-colors",
-                          selectedImportMsgs.includes(msg.id) && "bg-primary/10 border-primary/30"
-                        )}>
-                        <Checkbox checked={selectedImportMsgs.includes(msg.id)} className="mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {format(new Date(msg.scheduled_at), "dd/MM HH:mm")}
-                            </Badge>
-                          </div>
-                          {msg.message_content && (
-                            <p className="text-[11px] text-muted-foreground line-clamp-2 whitespace-pre-wrap">{msg.message_content}</p>
-                          )}
-                          {msg.media_url && <p className="text-[10px] text-blue-500 truncate">📎 mídia</p>}
-                        </div>
-                      </div>
-                    ))}
+                {/* Date filter */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Filtrar por data</Label>
+                  <div className="flex gap-2 items-center">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="text-xs gap-1">
+                          <CalendarIcon className="h-3 w-3" />
+                          {importFilterDateFrom ? format(importFilterDateFrom, "dd/MM/yy") : "De"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={importFilterDateFrom} onSelect={d => setImportFilterDateFrom(d || undefined)} />
+                      </PopoverContent>
+                    </Popover>
+                    <span className="text-xs text-muted-foreground">até</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="text-xs gap-1">
+                          <CalendarIcon className="h-3 w-3" />
+                          {importFilterDateTo ? format(importFilterDateTo, "dd/MM/yy") : "Até"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={importFilterDateTo} onSelect={d => setImportFilterDateTo(d || undefined)} />
+                      </PopoverContent>
+                    </Popover>
+                    {(importFilterDateFrom || importFilterDateTo) && (
+                      <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => { setImportFilterDateFrom(undefined); setImportFilterDateTo(undefined); }}>
+                        Limpar
+                      </Button>
+                    )}
                   </div>
-                </ScrollArea>
+                </div>
+
+                {(() => {
+                  const filteredImportMsgs = otherMessages.filter(m => {
+                    const d = new Date(m.scheduled_at);
+                    if (importFilterDateFrom && d < importFilterDateFrom) return false;
+                    if (importFilterDateTo) {
+                      const end = new Date(importFilterDateTo);
+                      end.setHours(23, 59, 59, 999);
+                      if (d > end) return false;
+                    }
+                    return true;
+                  });
+
+                  return (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">{filteredImportMsgs.length} mensagens{(importFilterDateFrom || importFilterDateTo) ? ' (filtradas)' : ''}</p>
+                        <Button variant="ghost" size="sm" className="text-xs" onClick={() => {
+                          setSelectedImportMsgs(prev => prev.length === filteredImportMsgs.length ? [] : filteredImportMsgs.map(m => m.id));
+                        }}>
+                          {selectedImportMsgs.length === filteredImportMsgs.length && filteredImportMsgs.length > 0 ? "Desmarcar todas" : "Selecionar todas"}
+                        </Button>
+                      </div>
+                      <ScrollArea className="h-[250px] rounded-md border">
+                        <div className="p-2 space-y-1.5">
+                          {filteredImportMsgs.map(msg => (
+                            <div key={msg.id} 
+                              onClick={() => setSelectedImportMsgs(prev => prev.includes(msg.id) ? prev.filter(x => x !== msg.id) : [...prev, msg.id])}
+                              className={cn(
+                                "flex items-start gap-2 p-2 rounded-md border cursor-pointer hover:bg-muted/50 transition-colors",
+                                selectedImportMsgs.includes(msg.id) && "bg-primary/10 border-primary/30"
+                              )}>
+                              <Checkbox checked={selectedImportMsgs.includes(msg.id)} className="mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {format(new Date(msg.scheduled_at), "dd/MM HH:mm")}
+                                  </Badge>
+                                </div>
+                                {msg.media_url && ['image'].includes(msg.message_type) && (
+                                  <img src={msg.media_url} alt="" className="max-h-20 rounded mt-1 mb-1 object-contain" />
+                                )}
+                                {msg.message_content && (
+                                  <p className="text-[11px] text-muted-foreground whitespace-pre-wrap">{msg.message_content}</p>
+                                )}
+                                {msg.media_url && !['image'].includes(msg.message_type) && <p className="text-[10px] text-blue-500 truncate">📎 mídia</p>}
+                                {msg.poll_options && Array.isArray(msg.poll_options) && (
+                                  <div className="mt-0.5">
+                                    {msg.poll_options.map((opt: string, i: number) => (
+                                      <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </>
+                  );
+                })()}
 
                 <Separator />
 
