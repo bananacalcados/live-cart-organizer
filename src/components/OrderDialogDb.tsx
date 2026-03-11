@@ -390,6 +390,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         coupon_code: couponCode || null,
         paid_externally: paidExternally,
         custom_shipping_cost: parsedCustomShipping,
+        is_pickup: isPickup,
+        pickup_store_id: isPickup && pickupStoreId ? pickupStoreId : null,
+        is_delivery: isDelivery,
       } as any;
       
       // If marking as paid externally, also mark as paid
