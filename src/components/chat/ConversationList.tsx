@@ -109,8 +109,8 @@ export function ConversationList({
     })
     .filter(c => {
       if (instanceFilter === 'all') return true;
-      if (instanceFilter === 'zapi') return !c.whatsapp_number_id;
-      if (instanceFilter === 'meta') return !!c.whatsapp_number_id;
+      // When filtering by a specific instance ID, match that ID exactly
+      // Also include NULL messages only under 'all' tab, not under specific instances
       return c.whatsapp_number_id === instanceFilter;
     })
     .filter(c => {
