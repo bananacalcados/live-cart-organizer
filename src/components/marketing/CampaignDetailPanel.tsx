@@ -1244,40 +1244,102 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             {/* Messages from selected campaign */}
             {selectedImportCampaign && (
               <>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">{otherMessages.length} mensagens encontradas</p>
-                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => {
-                    setSelectedImportMsgs(prev => prev.length === otherMessages.length ? [] : otherMessages.map(m => m.id));
-                  }}>
-                    {selectedImportMsgs.length === otherMessages.length ? "Desmarcar todas" : "Selecionar todas"}
-                  </Button>
-                </div>
-                <ScrollArea className="h-[250px] rounded-md border">
-                  <div className="p-2 space-y-1.5">
-                    {otherMessages.map(msg => (
-                      <div key={msg.id} 
-                        onClick={() => setSelectedImportMsgs(prev => prev.includes(msg.id) ? prev.filter(x => x !== msg.id) : [...prev, msg.id])}
-                        className={cn(
-                          "flex items-start gap-2 p-2 rounded-md border cursor-pointer hover:bg-muted/50 transition-colors",
-                          selectedImportMsgs.includes(msg.id) && "bg-primary/10 border-primary/30"
-                        )}>
-                        <Checkbox checked={selectedImportMsgs.includes(msg.id)} className="mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {format(new Date(msg.scheduled_at), "dd/MM HH:mm")}
-                            </Badge>
-                          </div>
-                          {msg.message_content && (
-                            <p className="text-[11px] text-muted-foreground line-clamp-2 whitespace-pre-wrap">{msg.message_content}</p>
-                          )}
-                          {msg.media_url && <p className="text-[10px] text-blue-500 truncate">📎 mídia</p>}
-                        </div>
-                      </div>
-                    ))}
+                {/* Date filter */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Filtrar por data</Label>
+                  <div className="flex gap-2 items-center">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="text-xs gap-1">
+                          <CalendarIcon className="h-3 w-3" />
+                          {importFilterDateFrom ? format(importFilterDateFrom, "dd/MM/yy") : "De"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={importFilterDateFrom} onSelect={d => setImportFilterDateFrom(d || undefined)} />
+                      </PopoverContent>
+                    </Popover>
+                    <span className="text-xs text-muted-foreground">até</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="text-xs gap-1">
+                          <CalendarIcon className="h-3 w-3" />
+                          {importFilterDateTo ? format(importFilterDateTo, "dd/MM/yy") : "Até"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={importFilterDateTo} onSelect={d => setImportFilterDateTo(d || undefined)} />
+                      </PopoverContent>
+                    </Popover>
+                    {(importFilterDateFrom || importFilterDateTo) && (
+                      <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => { setImportFilterDateFrom(undefined); setImportFilterDateTo(undefined); }}>
+                        Limpar
+                      </Button>
+                    )}
                   </div>
-                </ScrollArea>
+                </div>
+
+                {(() => {
+                  const filteredImportMsgs = otherMessages.filter(m => {
+                    const d = new Date(m.scheduled_at);
+                    if (importFilterDateFrom && d < importFilterDateFrom) return false;
+                    if (importFilterDateTo) {
+                      const end = new Date(importFilterDateTo);
+                      end.setHours(23, 59, 59, 999);
+                      if (d > end) return false;
+                    }
+                    return true;
+                  });
+
+                  return (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">{filteredImportMsgs.length} mensagens{(importFilterDateFrom || importFilterDateTo) ? ' (filtradas)' : ''}</p>
+                        <Button variant="ghost" size="sm" className="text-xs" onClick={() => {
+                          setSelectedImportMsgs(prev => prev.length === filteredImportMsgs.length ? [] : filteredImportMsgs.map(m => m.id));
+                        }}>
+                          {selectedImportMsgs.length === filteredImportMsgs.length && filteredImportMsgs.length > 0 ? "Desmarcar todas" : "Selecionar todas"}
+                        </Button>
+                      </div>
+                      <ScrollArea className="h-[250px] rounded-md border">
+                        <div className="p-2 space-y-1.5">
+                          {filteredImportMsgs.map(msg => (
+                            <div key={msg.id} 
+                              onClick={() => setSelectedImportMsgs(prev => prev.includes(msg.id) ? prev.filter(x => x !== msg.id) : [...prev, msg.id])}
+                              className={cn(
+                                "flex items-start gap-2 p-2 rounded-md border cursor-pointer hover:bg-muted/50 transition-colors",
+                                selectedImportMsgs.includes(msg.id) && "bg-primary/10 border-primary/30"
+                              )}>
+                              <Checkbox checked={selectedImportMsgs.includes(msg.id)} className="mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className="text-xs font-medium">{TYPE_LABELS[msg.message_type] || msg.message_type}</span>
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {format(new Date(msg.scheduled_at), "dd/MM HH:mm")}
+                                  </Badge>
+                                </div>
+                                {msg.media_url && ['image'].includes(msg.message_type) && (
+                                  <img src={msg.media_url} alt="" className="max-h-20 rounded mt-1 mb-1 object-contain" />
+                                )}
+                                {msg.message_content && (
+                                  <p className="text-[11px] text-muted-foreground whitespace-pre-wrap">{msg.message_content}</p>
+                                )}
+                                {msg.media_url && !['image'].includes(msg.message_type) && <p className="text-[10px] text-blue-500 truncate">📎 mídia</p>}
+                                {msg.poll_options && Array.isArray(msg.poll_options) && (
+                                  <div className="mt-0.5">
+                                    {msg.poll_options.map((opt: string, i: number) => (
+                                      <p key={i} className="text-[10px] text-muted-foreground">• {opt}</p>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </>
+                  );
+                })()}
 
                 <Separator />
 
