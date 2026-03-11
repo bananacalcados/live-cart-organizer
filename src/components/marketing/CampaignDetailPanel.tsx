@@ -111,6 +111,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [isImporting, setIsImporting] = useState(false);
   const [calendarSelectedDay, setCalendarSelectedDay] = useState<Date | null>(null);
   const [contactSearchQuery, setContactSearchQuery] = useState("");
+  const [importFilterDateFrom, setImportFilterDateFrom] = useState<Date | undefined>(undefined);
+  const [importFilterDateTo, setImportFilterDateTo] = useState<Date | undefined>(undefined);
 
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
