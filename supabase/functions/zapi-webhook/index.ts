@@ -89,10 +89,8 @@ function normalizePhone(payload: AnyPayload): { phone: string; isGroup: boolean 
   if (phone.startsWith('55') && phone.length === 12) {
     const ddd = phone.substring(2, 4);
     const number = phone.substring(4);
-    if (!number.startsWith('9')) {
-      phone = '55' + ddd + '9' + number;
-      console.log(`Normalized 12-digit BR phone to 13: ${rawPhone} -> ${phone}`);
-    }
+    phone = '55' + ddd + '9' + number;
+    console.log(`Normalized 12-digit BR phone to 13: ${rawPhone} -> ${phone}`);
   }
   
   if (phone.length > 13 || phone.length < 12) {
