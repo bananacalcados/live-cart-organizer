@@ -868,7 +868,29 @@ export default function Marketing() {
                   ) : filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>
                   ) : filtered.slice(0, 200).map(c => (
-                    <TableRow key={c.id} className="text-sm cursor-pointer hover:bg-muted/50" onClick={() => setSelectedCustomer(c)}>
+                    <TableRow key={c.id} className="text-sm cursor-pointer hover:bg-muted/50" onClick={async () => {
+                      setSelectedCustomer(c);
+                      // Enrich with last product and seller
+                      if (c.phone) {
+                        const suffix = c.phone.replace(/\D/g, '').slice(-8);
+                        const { data: sales } = await supabase
+                          .from('pos_sales')
+                          .select('id, seller_id, customer_phone')
+                          .ilike('customer_phone', `%${suffix}`)
+                          .order('created_at', { ascending: false })
+                          .limit(1);
+                        if (sales && sales.length > 0) {
+                          const sale = sales[0];
+                          const [itemsRes, sellerRes] = await Promise.all([
+                            supabase.from('pos_sale_items').select('product_name').eq('sale_id', sale.id).limit(3),
+                            sale.seller_id ? supabase.from('pos_sellers').select('name').eq('id', sale.seller_id).single() : Promise.resolve({ data: null }),
+                          ]);
+                          const lastProducts = (itemsRes.data || []).map((i: any) => i.product_name).join(', ');
+                          const sellerName = (sellerRes as any)?.data?.name || '';
+                          setSelectedCustomer(prev => prev ? { ...prev, _lastProductName: lastProducts, _lastSellerName: sellerName } as any : prev);
+                        }
+                      }
+                    }}>
                       <TableCell className="font-medium">{c.first_name} {c.last_name}</TableCell>
                       <TableCell className="text-xs">
                         <div className="space-y-0.5">
