@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-agent-key",
 };
 
-const AGENT_KEY = "bnn-agent-2f8a9c4e7b1d3f6a";
+const AGENT_KEY = Deno.env.get("MCP_AGENT_KEY") || "";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
