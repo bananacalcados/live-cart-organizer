@@ -98,13 +98,30 @@ export function MassTemplateDispatcher() {
   const [leads, setLeads] = useState<any[]>([]);
   const [isLoadingAudience, setIsLoadingAudience] = useState(false);
 
-  // CRM Filters
+  // CRM Filters (same as RFM tab)
   const [rfmFilter, setRfmFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
   const [dddFilter, setDddFilter] = useState<string>("all");
   const [regionFilter, setRegionFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [sellerFilter, setSellerFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [ticketMin, setTicketMin] = useState("");
+  const [ticketMax, setTicketMax] = useState("");
+  const [ordersMin, setOrdersMin] = useState("");
+  const [ordersMax, setOrdersMax] = useState("");
+  const [topN, setTopN] = useState<string>("all");
+
+  // Store/seller mapping
+  const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
+  const [storesList, setStoresList] = useState<{ id: string; name: string }[]>([]);
+  const [sellersList, setSellersList] = useState<{ id: string; name: string }[]>([]);
+
+  // Saved presets
+  const [savedPresets, setSavedPresets] = useState<{ id: string; key: string; value: any }[]>([]);
 
   // Leads filters
   const [leadCampaignFilter, setLeadCampaignFilter] = useState<string>("all");
