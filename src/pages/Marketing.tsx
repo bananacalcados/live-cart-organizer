@@ -806,6 +806,22 @@ export default function Marketing() {
                     <SelectItem value="unknown">❓ Indefinido</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={storeFilter} onValueChange={setStoreFilter}>
+                  <SelectTrigger className="h-9"><Store className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas Lojas</SelectItem>
+                    {storesList.map(s => (<SelectItem key={s.id} value={s.id}>🏪 {s.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 sm:flex gap-2">
+                <Select value={sellerFilter} onValueChange={setSellerFilter}>
+                  <SelectTrigger className="h-9"><Users className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas Vendedoras</SelectItem>
+                    {sellersList.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
                 <Select value={dddFilter} onValueChange={setDddFilter}>
                   <SelectTrigger className="h-9"><Phone className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -814,11 +830,13 @@ export default function Marketing() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 sm:flex gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9" placeholder="De" title="Compras a partir de" />
                 <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9" placeholder="Até" title="Compras até" />
                 <Input type="number" value={ticketMin} onChange={e => setTicketMin(e.target.value)} className="h-9" placeholder="Ticket mín" title="Ticket médio mínimo" />
                 <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
+                <Input type="number" value={ordersMin} onChange={e => setOrdersMin(e.target.value)} className="h-9" placeholder="Pedidos mín" title="Número mínimo de pedidos" />
+                <Input type="number" value={ordersMax} onChange={e => setOrdersMax(e.target.value)} className="h-9" placeholder="Pedidos máx" title="Número máximo de pedidos" />
               </div>
               <div className="flex flex-wrap gap-1 w-full sm:w-auto sm:ml-auto">
                 <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => {
