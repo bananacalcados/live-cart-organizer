@@ -7,7 +7,7 @@ import {
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles,
-  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell
+  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -188,10 +188,13 @@ export default function Marketing() {
   const [sellerFilter, setSellerFilter] = useState<string>("all");
   const [ordersMin, setOrdersMin] = useState("");
   const [ordersMax, setOrdersMax] = useState("");
-  const [topN, setTopN] = useState<string>("all");
-  const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
-  const [storesList, setStoresList] = useState<{ id: string; name: string }[]>([]);
-  const [sellersList, setSellersList] = useState<{ id: string; name: string }[]>([]);
+   const [topN, setTopN] = useState<string>("all");
+   const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
+   const [storesList, setStoresList] = useState<{ id: string; name: string }[]>([]);
+   const [sellersList, setSellersList] = useState<{ id: string; name: string }[]>([]);
+   const [savedPresets, setSavedPresets] = useState<{ id: string; key: string; value: any }[]>([]);
+   const [presetName, setPresetName] = useState("");
+   const [presetDialogOpen, setPresetDialogOpen] = useState(false);
 
   // ─── Fetch data ──────────────────────────────
 
@@ -284,6 +287,57 @@ export default function Marketing() {
     };
     fetchMapping();
   }, []);
+
+  // Fetch saved filter presets
+  const fetchPresets = useCallback(async () => {
+    const { data } = await supabase
+      .from('app_settings')
+      .select('id, key, value')
+      .like('key', 'rfm_filter_preset_%')
+      .order('created_at', { ascending: true });
+    setSavedPresets((data || []) as any[]);
+  }, []);
+
+  useEffect(() => { fetchPresets(); }, [fetchPresets]);
+
+  const saveCurrentPreset = async () => {
+    if (!presetName.trim()) { toast.error("Digite um nome para o filtro"); return; }
+    const preset = {
+      rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter,
+      dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, sortField, sortDir,
+    };
+    const key = `rfm_filter_preset_${Date.now()}`;
+    await supabase.from('app_settings').insert({ key, value: { name: presetName.trim(), filters: preset } });
+    toast.success("Filtro salvo!");
+    setPresetName("");
+    setPresetDialogOpen(false);
+    fetchPresets();
+  };
+
+  const loadPreset = (preset: any) => {
+    const f = preset.value?.filters || preset.value;
+    if (f.rfmFilter) setRfmFilter(f.rfmFilter);
+    if (f.regionFilter) setRegionFilter(f.regionFilter);
+    if (f.dddFilter) setDddFilter(f.dddFilter);
+    if (f.storeFilter) setStoreFilter(f.storeFilter);
+    if (f.sellerFilter) setSellerFilter(f.sellerFilter);
+    setDateFrom(f.dateFrom || "");
+    setDateTo(f.dateTo || "");
+    setTicketMin(f.ticketMin || "");
+    setTicketMax(f.ticketMax || "");
+    setOrdersMin(f.ordersMin || "");
+    setOrdersMax(f.ordersMax || "");
+    if (f.topN) setTopN(f.topN);
+    if (f.sortField) setSortField(f.sortField);
+    if (f.sortDir) setSortDir(f.sortDir);
+    toast.success(`Filtro "${(preset.value as any)?.name || 'Preset'}" aplicado`);
+  };
+
+  const deletePreset = async (id: string) => {
+    await supabase.from('app_settings').delete().eq('id', id);
+    toast.success("Filtro excluído");
+    fetchPresets();
+  };
 
   // ─── Campaign actions ──────────────────────────────
 
@@ -910,14 +964,62 @@ export default function Marketing() {
               </div>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              {filtered.length} clientes
-              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all") && (
-                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); }}>
-                  <X className="h-3 w-3 mr-0.5" />Limpar
-                </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs text-muted-foreground">
+                {filtered.length} clientes
+                {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all") && (
+                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); }}>
+                    <X className="h-3 w-3 mr-0.5" />Limpar
+                  </Button>
+                )}
+              </p>
+              <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={() => setPresetDialogOpen(true)}>
+                <Save className="h-3 w-3" />Salvar Filtro
+              </Button>
+              {savedPresets.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {savedPresets.map(p => (
+                    <div key={p.id} className="flex items-center gap-0.5">
+                      <Badge variant="outline" className="cursor-pointer gap-1 text-[10px] hover:bg-secondary" onClick={() => loadPreset(p)}>
+                        <Bookmark className="h-2.5 w-2.5" />{(p.value as any)?.name || 'Preset'}
+                      </Badge>
+                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deletePreset(p.id)}>
+                        <Trash2 className="h-2.5 w-2.5 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               )}
-            </p>
+            </div>
+
+            {/* Save Preset Dialog */}
+            <Dialog open={presetDialogOpen} onOpenChange={setPresetDialogOpen}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader><DialogTitle>Salvar Filtro Atual</DialogTitle></DialogHeader>
+                <div className="space-y-3 py-2">
+                  <Input placeholder="Nome do filtro (ex: Campeões Centro)" value={presetName} onChange={e => setPresetName(e.target.value)} />
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p className="font-medium">Filtros ativos:</p>
+                    {rfmFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Segmento: {rfmFilter}</Badge>}
+                    {regionFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Região: {regionFilter}</Badge>}
+                    {storeFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Loja: {storesList.find(s => s.id === storeFilter)?.name || storeFilter}</Badge>}
+                    {sellerFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Vendedora: {sellersList.find(s => s.id === sellerFilter)?.name || sellerFilter}</Badge>}
+                    {dddFilter !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">DDD: {dddFilter}</Badge>}
+                    {dateFrom && <Badge variant="secondary" className="text-[10px] mr-1">Depois de: {dateFrom}</Badge>}
+                    {dateTo && <Badge variant="secondary" className="text-[10px] mr-1">Antes de: {dateTo}</Badge>}
+                    {topN !== "all" && <Badge variant="secondary" className="text-[10px] mr-1">Top {topN}</Badge>}
+                    {ordersMin && <Badge variant="secondary" className="text-[10px] mr-1">Pedidos ≥ {ordersMin}</Badge>}
+                    {ordersMax && <Badge variant="secondary" className="text-[10px] mr-1">Pedidos ≤ {ordersMax}</Badge>}
+                    {ticketMin && <Badge variant="secondary" className="text-[10px] mr-1">Ticket ≥ {ticketMin}</Badge>}
+                    {ticketMax && <Badge variant="secondary" className="text-[10px] mr-1">Ticket ≤ {ticketMax}</Badge>}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => setPresetDialogOpen(false)}>Cancelar</Button>
+                    <Button className="flex-1 gap-1" onClick={saveCurrentPreset}><Save className="h-3.5 w-3.5" />Salvar</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <ScrollArea className="h-[calc(100vh-420px)]">
               <Table>
@@ -948,8 +1050,11 @@ export default function Marketing() {
                     <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>
                   ) : filtered.slice(0, 200).map(c => (
                     <TableRow key={c.id} className="text-sm cursor-pointer hover:bg-muted/50" onClick={async () => {
-                      setSelectedCustomer(c);
-                      // Enrich with last product and seller
+                      // Pre-populate seller from map immediately
+                      const phoneSuffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+                      const mapEntry = phoneSuffix ? customerStoreMap.get(phoneSuffix) : undefined;
+                      setSelectedCustomer({ ...c, _lastSellerName: mapEntry?.seller_name || '', _lastProductName: '' } as any);
+                      // Enrich with last product and seller (async)
                       if (c.phone) {
                         const suffix = c.phone.replace(/\D/g, '').slice(-8);
                         const { data: sales } = await supabase
@@ -965,7 +1070,7 @@ export default function Marketing() {
                             sale.seller_id ? supabase.from('pos_sellers').select('name').eq('id', sale.seller_id).single() : Promise.resolve({ data: null }),
                           ]);
                           const lastProducts = (itemsRes.data || []).map((i: any) => i.product_name).join(', ');
-                          const sellerName = (sellerRes as any)?.data?.name || '';
+                          const sellerName = (sellerRes as any)?.data?.name || mapEntry?.seller_name || '';
                           setSelectedCustomer(prev => prev ? { ...prev, _lastProductName: lastProducts, _lastSellerName: sellerName } as any : prev);
                         }
                       }
@@ -1321,7 +1426,7 @@ export default function Marketing() {
                       "{{ticket_medio}}": formatCurrency(selectedCustomer.avg_ticket),
                       "{{total_pedidos}}": String(selectedCustomer.total_orders),
                       "{{segmento}}": selectedCustomer.rfm_segment || '',
-                      "{{vendedora}}": (selectedCustomer as any)._lastSellerName || '',
+                      "{{vendedora}}": (selectedCustomer as any)._lastSellerName || (() => { const s = (selectedCustomer.phone || '').replace(/\D/g, '').slice(-8); return s ? (customerStoreMap.get(s)?.seller_name || '') : ''; })(),
                       "{{ultimo_produto}}": (selectedCustomer as any)._lastProductName || '',
                     }}
                   />
