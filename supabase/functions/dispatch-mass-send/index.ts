@@ -6,8 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 40;
-const DELAY_MS = 200; // delay between sends within a batch
+const BATCH_SIZE = 1000;
+const DELAY_MS = 100; // delay between sends within a batch
 
 interface VariableConfig {
   mode: string;
