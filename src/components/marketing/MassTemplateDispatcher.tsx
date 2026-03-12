@@ -304,7 +304,7 @@ export function MassTemplateDispatcher() {
       while (keepFetching) {
         const { data, error } = await supabase
           .from('zoppy_customers')
-          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type')
+          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type, total_orders, total_spent, avg_ticket, last_purchase_at')
           .not('phone', 'is', null)
           .order('total_spent', { ascending: false })
           .range(from, from + 999);
