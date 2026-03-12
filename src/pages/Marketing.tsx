@@ -832,8 +832,26 @@ export default function Marketing() {
                 </Select>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9" placeholder="De" title="Compras a partir de" />
-                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9" placeholder="Até" title="Compras até" />
+                <div className="relative">
+                  <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9 text-xs" title="Comprou depois de" />
+                  <span className="absolute -top-2 left-2 text-[10px] bg-background px-1 text-muted-foreground">Comprou depois de</span>
+                </div>
+                <div className="relative">
+                  <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9 text-xs" title="Comprou antes de" />
+                  <span className="absolute -top-2 left-2 text-[10px] bg-background px-1 text-muted-foreground">Comprou antes de</span>
+                </div>
+                <Select value={topN} onValueChange={setTopN}>
+                  <SelectTrigger className="h-9"><Crown className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="10">Top 10</SelectItem>
+                    <SelectItem value="20">Top 20</SelectItem>
+                    <SelectItem value="50">Top 50</SelectItem>
+                    <SelectItem value="100">Top 100</SelectItem>
+                    <SelectItem value="200">Top 200</SelectItem>
+                    <SelectItem value="500">Top 500</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Input type="number" value={ticketMin} onChange={e => setTicketMin(e.target.value)} className="h-9" placeholder="Ticket mín" title="Ticket médio mínimo" />
                 <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
                 <Input type="number" value={ordersMin} onChange={e => setOrdersMin(e.target.value)} className="h-9" placeholder="Pedidos mín" title="Número mínimo de pedidos" />
