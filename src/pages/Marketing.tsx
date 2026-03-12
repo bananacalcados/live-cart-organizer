@@ -1050,8 +1050,11 @@ export default function Marketing() {
                     <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>
                   ) : filtered.slice(0, 200).map(c => (
                     <TableRow key={c.id} className="text-sm cursor-pointer hover:bg-muted/50" onClick={async () => {
-                      setSelectedCustomer(c);
-                      // Enrich with last product and seller
+                      // Pre-populate seller from map immediately
+                      const phoneSuffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+                      const mapEntry = phoneSuffix ? customerStoreMap.get(phoneSuffix) : undefined;
+                      setSelectedCustomer({ ...c, _lastSellerName: mapEntry?.seller_name || '', _lastProductName: '' } as any);
+                      // Enrich with last product and seller (async)
                       if (c.phone) {
                         const suffix = c.phone.replace(/\D/g, '').slice(-8);
                         const { data: sales } = await supabase
@@ -1067,7 +1070,7 @@ export default function Marketing() {
                             sale.seller_id ? supabase.from('pos_sellers').select('name').eq('id', sale.seller_id).single() : Promise.resolve({ data: null }),
                           ]);
                           const lastProducts = (itemsRes.data || []).map((i: any) => i.product_name).join(', ');
-                          const sellerName = (sellerRes as any)?.data?.name || '';
+                          const sellerName = (sellerRes as any)?.data?.name || mapEntry?.seller_name || '';
                           setSelectedCustomer(prev => prev ? { ...prev, _lastProductName: lastProducts, _lastSellerName: sellerName } as any : prev);
                         }
                       }
