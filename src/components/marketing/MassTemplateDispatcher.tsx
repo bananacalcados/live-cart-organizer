@@ -439,6 +439,25 @@ export function MassTemplateDispatcher() {
         if (cityFilter !== 'all' && c.city !== cityFilter) continue;
         if (dddFilter !== 'all' && c.ddd !== dddFilter) continue;
         if (regionFilter !== 'all' && c.region_type !== regionFilter) continue;
+
+        // Store/seller filters via mapping
+        const phoneSuffix = phone.slice(-8);
+        const mapping = customerStoreMap.get(phoneSuffix);
+        if (storeFilter !== 'all' && mapping?.store_id !== storeFilter) continue;
+        if (sellerFilter !== 'all' && mapping?.seller_id !== sellerFilter) continue;
+
+        // Date filters
+        if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) continue;
+        if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo) continue;
+
+        // Ticket filters
+        if (ticketMin && (c.avg_ticket || 0) < parseFloat(ticketMin)) continue;
+        if (ticketMax && (c.avg_ticket || 0) > parseFloat(ticketMax)) continue;
+
+        // Orders filters
+        if (ordersMin && (c.total_orders || 0) < parseInt(ordersMin)) continue;
+        if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
+
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
           const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
@@ -480,8 +499,10 @@ export function MassTemplateDispatcher() {
       }
     }
 
-    return list;
-  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter]);
+    // Apply topN limit
+    const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
+    return finalList;
+  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap]);
 
   // Unique filter options
   const uniqueSegments = useMemo(() => [...new Set(crmCustomers.map(c => c.rfm_segment).filter(Boolean))].sort(), [crmCustomers]);
