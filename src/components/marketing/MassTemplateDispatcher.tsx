@@ -660,24 +660,38 @@ export function MassTemplateDispatcher() {
     const todayISO = today.toISOString();
 
     const alreadySent = new Set<string>();
-    let from = 0;
-    const pageSize = 1000;
-    while (true) {
-      const { data, error } = await supabase
-        .from('whatsapp_messages')
-        .select('phone')
-        .eq('direction', 'outgoing')
-        .eq('whatsapp_number_id', whatsappNumId)
-        .gte('created_at', todayISO)
-        .in('status', ['sent', 'delivered', 'read'])
-        .range(from, from + pageSize - 1);
-      if (error || !data || data.length === 0) break;
-      for (const row of data) {
-        if (row.phone) alreadySent.add(row.phone.replace(/\D/g, ''));
+
+    // Use dispatch_recipients for fast lookup — much faster than scanning whatsapp_messages
+    const { data: recentDispatches } = await supabase
+      .from('dispatch_history')
+      .select('id')
+      .eq('template_name', templateName)
+      .eq('whatsapp_number_id', whatsappNumId)
+      .gte('created_at', todayISO)
+      .in('status', ['sending', 'completed']);
+
+    if (recentDispatches && recentDispatches.length > 0) {
+      const dispatchIds = recentDispatches.map(d => d.id);
+      for (const dId of dispatchIds) {
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data, error } = await supabase
+            .from('dispatch_recipients')
+            .select('phone')
+            .eq('dispatch_id', dId)
+            .eq('status', 'sent')
+            .range(from, from + pageSize - 1);
+          if (error || !data || data.length === 0) break;
+          for (const row of data) {
+            if (row.phone) alreadySent.add(row.phone.replace(/\D/g, ''));
+          }
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
       }
-      if (data.length < pageSize) break;
-      from += pageSize;
     }
+
     return alreadySent;
   };
 
@@ -758,9 +772,11 @@ export function MassTemplateDispatcher() {
           recipient_name: recipientMap.get(p)?.name || null,
           status: 'pending',
         }));
-        for (let i = 0; i < recipientRows.length; i += 100) {
-          await supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 100));
+        const recipientBatches = [];
+        for (let i = 0; i < recipientRows.length; i += 500) {
+          recipientBatches.push(supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 500)));
         }
+        await Promise.all(recipientBatches);
       }
     } catch (err) {
       console.error('Error saving dispatch history:', err);
