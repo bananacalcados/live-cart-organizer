@@ -608,6 +608,14 @@ export default function Marketing() {
     if ((dateFrom || dateTo) && !c.last_purchase_at) return false;
     if (ticketMin && c.avg_ticket < parseFloat(ticketMin)) return false;
     if (ticketMax && c.avg_ticket > parseFloat(ticketMax)) return false;
+    if (ordersMin && c.total_orders < parseInt(ordersMin)) return false;
+    if (ordersMax && c.total_orders > parseInt(ordersMax)) return false;
+    if (storeFilter !== "all" || sellerFilter !== "all") {
+      const suffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+      const mapping = suffix ? customerStoreMap.get(suffix) : undefined;
+      if (storeFilter !== "all" && (!mapping || mapping.store_id !== storeFilter)) return false;
+      if (sellerFilter !== "all" && (!mapping || mapping.seller_id !== sellerFilter)) return false;
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
