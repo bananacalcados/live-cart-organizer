@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Send, Search, Users, Filter, Loader2, CheckCircle, TestTube,
   ChevronDown, ChevronUp, Phone, MapPin, Crown, FileSpreadsheet,
-  AlertTriangle, Eye, Zap, RefreshCw, Image, Paperclip
+  AlertTriangle, Eye, Zap, RefreshCw, Image, Paperclip, Store,
+  Calendar, ShoppingBag, Bookmark, Trash2, Save, X
 } from "lucide-react";
 import { DispatchHistoryList } from "./DispatchHistoryList";
 import { Button } from "@/components/ui/button";
@@ -97,13 +98,30 @@ export function MassTemplateDispatcher() {
   const [leads, setLeads] = useState<any[]>([]);
   const [isLoadingAudience, setIsLoadingAudience] = useState(false);
 
-  // CRM Filters
+  // CRM Filters (same as RFM tab)
   const [rfmFilter, setRfmFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
   const [dddFilter, setDddFilter] = useState<string>("all");
   const [regionFilter, setRegionFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [sellerFilter, setSellerFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [ticketMin, setTicketMin] = useState("");
+  const [ticketMax, setTicketMax] = useState("");
+  const [ordersMin, setOrdersMin] = useState("");
+  const [ordersMax, setOrdersMax] = useState("");
+  const [topN, setTopN] = useState<string>("all");
+
+  // Store/seller mapping
+  const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
+  const [storesList, setStoresList] = useState<{ id: string; name: string }[]>([]);
+  const [sellersList, setSellersList] = useState<{ id: string; name: string }[]>([]);
+
+  // Saved presets
+  const [savedPresets, setSavedPresets] = useState<{ id: string; key: string; value: any }[]>([]);
 
   // Leads filters
   const [leadCampaignFilter, setLeadCampaignFilter] = useState<string>("all");
@@ -199,6 +217,68 @@ export function MassTemplateDispatcher() {
     fetchAudience();
   }, []);
 
+  // Fetch store/seller mapping
+  useEffect(() => {
+    const fetchMapping = async () => {
+      const [mapRes, storesRes, sellersRes] = await Promise.all([
+        supabase.rpc('get_customer_store_seller_map' as any),
+        supabase.from('pos_stores').select('id, name').eq('is_active', true).order('name'),
+        supabase.from('pos_sellers').select('id, name').eq('is_active', true).order('name'),
+      ]);
+      if (mapRes.data) {
+        const map = new Map<string, any>();
+        for (const row of mapRes.data as any[]) {
+          map.set(row.customer_phone, row);
+        }
+        setCustomerStoreMap(map);
+      }
+      setStoresList((storesRes.data || []) as any[]);
+      setSellersList((sellersRes.data || []) as any[]);
+    };
+    fetchMapping();
+  }, []);
+
+  // Fetch saved presets
+  useEffect(() => {
+    const fetchPresets = async () => {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('id, key, value')
+        .like('key', 'rfm_filter_preset_%')
+        .order('created_at', { ascending: true });
+      setSavedPresets((data || []) as any[]);
+    };
+    fetchPresets();
+  }, []);
+
+  const loadPreset = (preset: any) => {
+    const f = preset.value?.filters || preset.value;
+    if (f.rfmFilter) setRfmFilter(f.rfmFilter);
+    if (f.regionFilter) setRegionFilter(f.regionFilter);
+    if (f.dddFilter) setDddFilter(f.dddFilter);
+    if (f.storeFilter) setStoreFilter(f.storeFilter);
+    if (f.sellerFilter) setSellerFilter(f.sellerFilter);
+    setDateFrom(f.dateFrom || "");
+    setDateTo(f.dateTo || "");
+    setTicketMin(f.ticketMin || "");
+    setTicketMax(f.ticketMax || "");
+    setOrdersMin(f.ordersMin || "");
+    setOrdersMax(f.ordersMax || "");
+    if (f.topN) setTopN(f.topN);
+    setSelectAll(false);
+    setSelectedPhones(new Set());
+    toast.success(`Filtro "${(preset.value as any)?.name || 'Preset'}" aplicado`);
+  };
+
+  const clearAllFilters = () => {
+    setRfmFilter("all"); setStateFilter("all"); setCityFilter("all");
+    setDddFilter("all"); setRegionFilter("all"); setStoreFilter("all");
+    setSellerFilter("all"); setDateFrom(""); setDateTo("");
+    setTicketMin(""); setTicketMax(""); setOrdersMin("");
+    setOrdersMax(""); setTopN("all"); setSearchQuery("");
+    setSelectAll(false); setSelectedPhones(new Set());
+  };
+
   const fetchTemplates = async () => {
     setIsLoadingTemplates(true);
     try {
@@ -224,7 +304,7 @@ export function MassTemplateDispatcher() {
       while (keepFetching) {
         const { data, error } = await supabase
           .from('zoppy_customers')
-          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type')
+          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type, total_orders, total_spent, avg_ticket, last_purchase_at')
           .not('phone', 'is', null)
           .order('total_spent', { ascending: false })
           .range(from, from + 999);
@@ -359,6 +439,25 @@ export function MassTemplateDispatcher() {
         if (cityFilter !== 'all' && c.city !== cityFilter) continue;
         if (dddFilter !== 'all' && c.ddd !== dddFilter) continue;
         if (regionFilter !== 'all' && c.region_type !== regionFilter) continue;
+
+        // Store/seller filters via mapping
+        const phoneSuffix = phone.slice(-8);
+        const mapping = customerStoreMap.get(phoneSuffix);
+        if (storeFilter !== 'all' && mapping?.store_id !== storeFilter) continue;
+        if (sellerFilter !== 'all' && mapping?.seller_id !== sellerFilter) continue;
+
+        // Date filters
+        if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) continue;
+        if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo) continue;
+
+        // Ticket filters
+        if (ticketMin && (c.avg_ticket || 0) < parseFloat(ticketMin)) continue;
+        if (ticketMax && (c.avg_ticket || 0) > parseFloat(ticketMax)) continue;
+
+        // Orders filters
+        if (ordersMin && (c.total_orders || 0) < parseInt(ordersMin)) continue;
+        if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
+
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
           const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
@@ -400,8 +499,10 @@ export function MassTemplateDispatcher() {
       }
     }
 
-    return list;
-  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter]);
+    // Apply topN limit
+    const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
+    return finalList;
+  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap]);
 
   // Unique filter options
   const uniqueSegments = useMemo(() => [...new Set(crmCustomers.map(c => c.rfm_segment).filter(Boolean))].sort(), [crmCustomers]);
@@ -983,6 +1084,18 @@ export function MassTemplateDispatcher() {
               </Button>
             </div>
 
+            {/* Saved presets */}
+            {savedPresets.length > 0 && (
+              <div className="flex flex-wrap gap-1 items-center">
+                <Bookmark className="h-3 w-3 text-muted-foreground" />
+                {savedPresets.map(p => (
+                  <Badge key={p.id} variant="outline" className="cursor-pointer gap-1 text-[10px] hover:bg-secondary" onClick={() => loadPreset(p)}>
+                    {(p.value as any)?.name || 'Filtro'}
+                  </Badge>
+                ))}
+              </div>
+            )}
+
             {/* Filters */}
             <div className="flex flex-wrap gap-2">
               {(audienceSource === 'crm' || audienceSource === 'both') && (
@@ -992,6 +1105,20 @@ export function MassTemplateDispatcher() {
                     <SelectContent>
                       <SelectItem value="all">Todos Segmentos</SelectItem>
                       {uniqueSegments.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={storeFilter} onValueChange={v => { setStoreFilter(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                    <SelectTrigger className="w-[150px] h-8 text-xs"><Store className="h-3 w-3 mr-1" /><SelectValue placeholder="Loja" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Lojas</SelectItem>
+                      {storesList.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={sellerFilter} onValueChange={v => { setSellerFilter(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                    <SelectTrigger className="w-[150px] h-8 text-xs"><Users className="h-3 w-3 mr-1" /><SelectValue placeholder="Vendedora" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Vendedoras</SelectItem>
+                      {sellersList.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Select value={stateFilter} onValueChange={v => { setStateFilter(v); setCityFilter('all'); setSelectAll(false); setSelectedPhones(new Set()); }}>
@@ -1023,6 +1150,18 @@ export function MassTemplateDispatcher() {
                       <SelectItem value="online">🌐 Online</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Select value={topN} onValueChange={v => { setTopN(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                    <SelectTrigger className="w-[130px] h-8 text-xs"><Crown className="h-3 w-3 mr-1" /><SelectValue placeholder="Top N" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="10">Top 10</SelectItem>
+                      <SelectItem value="20">Top 20</SelectItem>
+                      <SelectItem value="50">Top 50</SelectItem>
+                      <SelectItem value="100">Top 100</SelectItem>
+                      <SelectItem value="200">Top 200</SelectItem>
+                      <SelectItem value="500">Top 500</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </>
               )}
               {(audienceSource === 'leads' || audienceSource === 'both') && (
@@ -1041,6 +1180,39 @@ export function MassTemplateDispatcher() {
                 onChange={e => setSearchQuery(e.target.value)}
               />
             </div>
+
+            {/* Date & value filters */}
+            {(audienceSource === 'crm' || audienceSource === 'both') && (
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Comprou depois de</label>
+                  <Input type="date" className="w-[140px] h-8 text-xs" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Comprou antes de</label>
+                  <Input type="date" className="w-[140px] h-8 text-xs" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Ticket min</label>
+                  <Input type="number" className="w-[90px] h-8 text-xs" placeholder="R$" value={ticketMin} onChange={e => setTicketMin(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Ticket max</label>
+                  <Input type="number" className="w-[90px] h-8 text-xs" placeholder="R$" value={ticketMax} onChange={e => setTicketMax(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Pedidos min</label>
+                  <Input type="number" className="w-[80px] h-8 text-xs" value={ordersMin} onChange={e => setOrdersMin(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Pedidos max</label>
+                  <Input type="number" className="w-[80px] h-8 text-xs" value={ordersMax} onChange={e => setOrdersMax(e.target.value)} />
+                </div>
+                <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearAllFilters}>
+                  <X className="h-3 w-3" />Limpar
+                </Button>
+              </div>
+            )}
 
             {/* Select all */}
             <div className="flex items-center gap-2 py-1">
