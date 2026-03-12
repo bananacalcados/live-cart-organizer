@@ -42,7 +42,7 @@ import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLanding
 import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
 import { LinkPageManager } from "@/components/marketing/LinkPageManager";
 import { CrmMessageTemplateSelector } from "@/components/marketing/CrmMessageTemplateSelector";
-import * as XLSX from "xlsx";
+import * as XLSX from "@e965/xlsx";
 import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
 import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
 
@@ -410,7 +410,7 @@ export default function Marketing() {
     setUploadDialogOpen(true);
     setUploadStatus({ stage: 'reading', progress: 10, detail: 'Lendo arquivo...' });
     try {
-      const xlsxModule = await import('xlsx');
+      const xlsxModule = await import('@e965/xlsx');
       const XLSX = xlsxModule.default || xlsxModule;
       setUploadStatus({ stage: 'parsing', progress: 20, detail: 'Analisando planilha...' });
       const buffer = await file.arrayBuffer();
@@ -606,7 +606,7 @@ export default function Marketing() {
     setUploadDialogOpen(true);
     setUploadStatus({ stage: 'reading', progress: 10, detail: 'Lendo arquivo...' });
     try {
-      const xlsxModule = await import('xlsx');
+      const xlsxModule = await import('@e965/xlsx');
       const XLSX = xlsxModule.default || xlsxModule;
       setUploadStatus({ stage: 'parsing', progress: 20, detail: 'Analisando planilha...' });
       const buffer = await file.arrayBuffer();

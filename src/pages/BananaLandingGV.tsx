@@ -159,27 +159,12 @@ export default function BananaLandingGV() {
         body: { phone, name, campaignTag: "banana-verao-2025-gv" },
       }).catch((err) => console.error("Automation trigger error:", err));
 
-      const existing = await supabase
-        .from("customers")
-        .select("id, tags")
-        .eq("whatsapp", phone)
-        .maybeSingle();
-
-      if (existing.data) {
-        const tags = existing.data.tags || [];
-        if (!tags.includes("lp-banana-verao-gv")) {
-          await supabase
-            .from("customers")
-            .update({ tags: [...tags, "lp-banana-verao-gv"] })
-            .eq("id", existing.data.id);
-        }
-      } else {
-        await supabase.from("customers").insert({
-          instagram_handle: `@lead_${phone}`,
-          whatsapp: phone,
-          tags: ["lp-banana-verao-gv"],
-        });
-      }
+      // Upsert customer via security definer RPC (no anon SELECT needed)
+      await supabase.rpc("upsert_landing_customer", {
+        p_phone: phone,
+        p_instagram: `@lead_${phone}`,
+        p_tag: "lp-banana-verao-gv",
+      });
 
       trackPixelEvent("Lead", { content_name: "banana-verao-2025-gv", content_category: "landing_page" });
 
