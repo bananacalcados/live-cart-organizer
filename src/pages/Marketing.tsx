@@ -263,6 +263,27 @@ export default function Marketing() {
 
   useEffect(() => { fetchCustomers(); fetchCampaigns(); fetchLandingPages(); fetchLeads(); }, [fetchCustomers, fetchCampaigns, fetchLandingPages, fetchLeads]);
 
+  // Fetch store/seller mapping for filters
+  useEffect(() => {
+    const fetchMapping = async () => {
+      const [mapRes, storesRes, sellersRes] = await Promise.all([
+        supabase.rpc('get_customer_store_seller_map' as any),
+        supabase.from('pos_stores').select('id, name').eq('is_active', true).order('name'),
+        supabase.from('pos_sellers').select('id, name').eq('is_active', true).order('name'),
+      ]);
+      if (mapRes.data) {
+        const map = new Map<string, any>();
+        for (const row of mapRes.data as any[]) {
+          map.set(row.customer_phone, row);
+        }
+        setCustomerStoreMap(map);
+      }
+      setStoresList((storesRes.data || []) as any[]);
+      setSellersList((sellersRes.data || []) as any[]);
+    };
+    fetchMapping();
+  }, []);
+
   // ─── Campaign actions ──────────────────────────────
 
   const updateCampaignStatus = async (id: string, status: string) => {
