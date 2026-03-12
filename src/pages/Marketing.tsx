@@ -1206,35 +1206,54 @@ export default function Marketing() {
 
               {/* Contact Actions */}
               {selectedCustomer.phone && (
-                <div className="space-y-2 border-t pt-3">
-                  <p className="text-sm font-medium">Entrar em contato</p>
-                  <Input
-                    placeholder="Mensagem para o cliente..."
-                    value={whatsAppMessage}
-                    onChange={e => setWhatsAppMessage(e.target.value)}
+                <div className="space-y-3 border-t pt-3">
+                  <CrmMessageTemplateSelector
+                    onSelect={(msg) => setWhatsAppMessage(msg)}
+                    variables={{
+                      "{{nome}}": `${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim(),
+                      "{{primeiro_nome}}": selectedCustomer.first_name || '',
+                      "{{telefone}}": selectedCustomer.phone || '',
+                      "{{email}}": selectedCustomer.email || '',
+                      "{{ultima_compra}}": selectedCustomer.last_purchase_at ? new Date(selectedCustomer.last_purchase_at).toLocaleDateString('pt-BR') : '',
+                      "{{total_gasto}}": formatCurrency(selectedCustomer.total_spent),
+                      "{{ticket_medio}}": formatCurrency(selectedCustomer.avg_ticket),
+                      "{{total_pedidos}}": String(selectedCustomer.total_orders),
+                      "{{segmento}}": selectedCustomer.rfm_segment || '',
+                      "{{vendedora}}": (selectedCustomer as any)._lastSellerName || '',
+                      "{{ultimo_produto}}": (selectedCustomer as any)._lastProductName || '',
+                    }}
                   />
-                  <div className="flex gap-2">
-                    <Button size="sm" className="gap-1" onClick={() => {
-                      const phone = selectedCustomer.phone!.replace(/\D/g, '');
-                      const fullPhone = phone.startsWith('55') ? phone : `55${phone}`;
-                      const url = `https://wa.me/${fullPhone}${whatsAppMessage ? `?text=${encodeURIComponent(whatsAppMessage)}` : ''}`;
-                      window.open(url, '_blank');
-                    }}>
-                      <MessageSquare className="h-3.5 w-3.5" />WhatsApp
-                    </Button>
-                    <Button variant="outline" size="sm" className="gap-1" onClick={() => {
-                      const phone = selectedCustomer.phone!.replace(/\D/g, '');
-                      window.open(`tel:+55${phone}`, '_blank');
-                    }}>
-                      <Phone className="h-3.5 w-3.5" />Ligar
-                    </Button>
-                    {selectedCustomer.email && (
-                      <Button variant="outline" size="sm" className="gap-1" onClick={() => {
-                        window.open(`mailto:${selectedCustomer.email}`, '_blank');
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Entrar em contato</p>
+                    <Textarea
+                      placeholder="Mensagem para o cliente..."
+                      value={whatsAppMessage}
+                      onChange={e => setWhatsAppMessage(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" className="gap-1" onClick={() => {
+                        const phone = selectedCustomer.phone!.replace(/\D/g, '');
+                        const fullPhone = phone.startsWith('55') ? phone : `55${phone}`;
+                        const url = `https://wa.me/${fullPhone}${whatsAppMessage ? `?text=${encodeURIComponent(whatsAppMessage)}` : ''}`;
+                        window.open(url, '_blank');
                       }}>
-                        <Mail className="h-3.5 w-3.5" />Email
+                        <MessageSquare className="h-3.5 w-3.5" />WhatsApp
                       </Button>
-                    )}
+                      <Button variant="outline" size="sm" className="gap-1" onClick={() => {
+                        const phone = selectedCustomer.phone!.replace(/\D/g, '');
+                        window.open(`tel:+55${phone}`, '_blank');
+                      }}>
+                        <Phone className="h-3.5 w-3.5" />Ligar
+                      </Button>
+                      {selectedCustomer.email && (
+                        <Button variant="outline" size="sm" className="gap-1" onClick={() => {
+                          window.open(`mailto:${selectedCustomer.email}`, '_blank');
+                        }}>
+                          <Mail className="h-3.5 w-3.5" />Email
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
