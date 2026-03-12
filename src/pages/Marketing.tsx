@@ -305,9 +305,14 @@ export default function Marketing() {
 
   const saveCurrentPreset = async () => {
     if (!presetName.trim()) { toast.error("Digite um nome para o filtro"); return; }
+    // Resolve excluded/included preset keys (stable references instead of IDs)
+    const excludedPresetKeys = savedPresets.filter(p => excludedPresetIds.includes(p.id)).map(p => p.key);
+    const includedPresetKeys = savedPresets.filter(p => includedPresetIds.includes(p.id)).map(p => p.key);
     const preset = {
       rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter,
       dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, sortField, sortDir,
+      excludedPresetKeys: excludedPresetKeys.length > 0 ? excludedPresetKeys : undefined,
+      includedPresetKeys: includedPresetKeys.length > 0 ? includedPresetKeys : undefined,
     };
     const key = `rfm_filter_preset_${Date.now()}`;
     await supabase.from('app_settings').insert({ key, value: { name: presetName.trim(), filters: preset } });
@@ -333,6 +338,17 @@ export default function Marketing() {
     if (f.topN) setTopN(f.topN);
     if (f.sortField) setSortField(f.sortField);
     if (f.sortDir) setSortDir(f.sortDir);
+    // Restore excluded/included presets by key
+    if (f.excludedPresetKeys?.length) {
+      setExcludedPresetIds(savedPresets.filter(p => f.excludedPresetKeys.includes(p.key)).map(p => p.id));
+    } else {
+      setExcludedPresetIds([]);
+    }
+    if (f.includedPresetKeys?.length) {
+      setIncludedPresetIds(savedPresets.filter(p => f.includedPresetKeys.includes(p.key)).map(p => p.id));
+    } else {
+      setIncludedPresetIds([]);
+    }
     toast.success(`Filtro "${(preset.value as any)?.name || 'Preset'}" aplicado`);
   };
 
@@ -1096,6 +1112,16 @@ export default function Marketing() {
                     {ordersMax && <Badge variant="secondary" className="text-[10px] mr-1">Pedidos ≤ {ordersMax}</Badge>}
                     {ticketMin && <Badge variant="secondary" className="text-[10px] mr-1">Ticket ≥ {ticketMin}</Badge>}
                     {ticketMax && <Badge variant="secondary" className="text-[10px] mr-1">Ticket ≤ {ticketMax}</Badge>}
+                    {includedPresetIds.length > 0 && savedPresets.filter(p => includedPresetIds.includes(p.id)).map(p => (
+                      <Badge key={p.id} className="text-[10px] mr-1 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1">
+                        <PlusIcon className="h-2 w-2" />Incluir: {(p.value as any)?.name}
+                      </Badge>
+                    ))}
+                    {excludedPresetIds.length > 0 && savedPresets.filter(p => excludedPresetIds.includes(p.id)).map(p => (
+                      <Badge key={p.id} className="text-[10px] mr-1 bg-destructive/20 text-red-400 border-destructive/30 gap-1">
+                        <Minus className="h-2 w-2" />Excluir: {(p.value as any)?.name}
+                      </Badge>
+                    ))}
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1" onClick={() => setPresetDialogOpen(false)}>Cancelar</Button>
