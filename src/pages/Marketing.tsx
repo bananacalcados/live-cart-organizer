@@ -338,6 +338,8 @@ export default function Marketing() {
 
   const deletePreset = async (id: string) => {
     await supabase.from('app_settings').delete().eq('id', id);
+    setExcludedPresetIds(prev => prev.filter(x => x !== id));
+    setIncludedPresetIds(prev => prev.filter(x => x !== id));
     toast.success("Filtro excluído");
     fetchPresets();
   };
