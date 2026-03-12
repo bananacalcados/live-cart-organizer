@@ -772,9 +772,11 @@ export function MassTemplateDispatcher() {
           recipient_name: recipientMap.get(p)?.name || null,
           status: 'pending',
         }));
-        for (let i = 0; i < recipientRows.length; i += 100) {
-          await supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 100));
+        const recipientBatches = [];
+        for (let i = 0; i < recipientRows.length; i += 500) {
+          recipientBatches.push(supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 500)));
         }
+        await Promise.all(recipientBatches);
       }
     } catch (err) {
       console.error('Error saving dispatch history:', err);
