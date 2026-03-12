@@ -288,6 +288,57 @@ export default function Marketing() {
     fetchMapping();
   }, []);
 
+  // Fetch saved filter presets
+  const fetchPresets = useCallback(async () => {
+    const { data } = await supabase
+      .from('app_settings')
+      .select('id, key, value')
+      .like('key', 'rfm_filter_preset_%')
+      .order('created_at', { ascending: true });
+    setSavedPresets((data || []) as any[]);
+  }, []);
+
+  useEffect(() => { fetchPresets(); }, [fetchPresets]);
+
+  const saveCurrentPreset = async () => {
+    if (!presetName.trim()) { toast.error("Digite um nome para o filtro"); return; }
+    const preset = {
+      rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter,
+      dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, sortField, sortDir,
+    };
+    const key = `rfm_filter_preset_${Date.now()}`;
+    await supabase.from('app_settings').insert({ key, value: { name: presetName.trim(), filters: preset } });
+    toast.success("Filtro salvo!");
+    setPresetName("");
+    setPresetDialogOpen(false);
+    fetchPresets();
+  };
+
+  const loadPreset = (preset: any) => {
+    const f = preset.value?.filters || preset.value;
+    if (f.rfmFilter) setRfmFilter(f.rfmFilter);
+    if (f.regionFilter) setRegionFilter(f.regionFilter);
+    if (f.dddFilter) setDddFilter(f.dddFilter);
+    if (f.storeFilter) setStoreFilter(f.storeFilter);
+    if (f.sellerFilter) setSellerFilter(f.sellerFilter);
+    setDateFrom(f.dateFrom || "");
+    setDateTo(f.dateTo || "");
+    setTicketMin(f.ticketMin || "");
+    setTicketMax(f.ticketMax || "");
+    setOrdersMin(f.ordersMin || "");
+    setOrdersMax(f.ordersMax || "");
+    if (f.topN) setTopN(f.topN);
+    if (f.sortField) setSortField(f.sortField);
+    if (f.sortDir) setSortDir(f.sortDir);
+    toast.success(`Filtro "${(preset.value as any)?.name || 'Preset'}" aplicado`);
+  };
+
+  const deletePreset = async (id: string) => {
+    await supabase.from('app_settings').delete().eq('id', id);
+    toast.success("Filtro excluído");
+    fetchPresets();
+  };
+
   // ─── Campaign actions ──────────────────────────────
 
   const updateCampaignStatus = async (id: string, status: string) => {
