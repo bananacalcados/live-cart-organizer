@@ -40,6 +40,8 @@ import { PrizeManager } from "@/components/marketing/PrizeManager";
 import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLandingPageCreator";
 import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
 import { LinkPageManager } from "@/components/marketing/LinkPageManager";
+import { CrmMessageTemplateSelector } from "@/components/marketing/CrmMessageTemplateSelector";
+import * as XLSX from "xlsx";
 import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
 import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
 
