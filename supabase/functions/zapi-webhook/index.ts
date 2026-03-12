@@ -182,32 +182,35 @@ serve(async (req) => {
 
     console.log(`Final resolved whatsapp_number_id: ${whatsappNumberId}`);
 
-    // 1) ReceivedCallback (text messages)
+    // 1) ReceivedCallback (text and/or media messages)
     const rawPhone = asString(payload.phone);
     const messageText = getMessageText(payload);
+    const mediaInfo = getMediaInfo(payload);
 
-    if (rawPhone && messageText) {
+    if (rawPhone && (messageText || mediaInfo)) {
       const { phone, isGroup } = normalizePhone(payload);
       const messageId = asString(payload.messageId) || asString(payload.zapiMessageId);
       const fromMe = Boolean(payload.fromMe);
       const statusRaw = asString(payload.status);
       const status = (statusRaw ? statusRaw.toLowerCase() : (fromMe ? 'sent' : 'received'));
 
-      console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}, numberId=${whatsappNumberId}`);
+      // Build display message: use caption/text or fallback to media type label
+      const displayMessage = messageText || mediaInfo?.caption || (mediaInfo ? `📎 ${mediaInfo.mediaType}` : '');
+
+      console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}, media=${mediaInfo?.mediaType || 'none'}, numberId=${whatsappNumberId}`);
 
       if (fromMe) {
         // Dedup: match by phone + message + whatsapp_number_id
-        if (messageId) {
+        if (messageId && displayMessage) {
           let dedupQuery = supabase
             .from('whatsapp_messages')
             .select('id, message_id')
             .eq('phone', phone)
             .eq('direction', 'outgoing')
-            .eq('message', messageText)
+            .eq('message', displayMessage)
             .order('created_at', { ascending: false })
             .limit(1);
 
-          // FIX #3: Filter by whatsapp_number_id in dedup to avoid cross-instance matching
           if (whatsappNumberId) {
             dedupQuery = dedupQuery.eq('whatsapp_number_id', whatsappNumberId);
           } else {
@@ -236,12 +239,13 @@ serve(async (req) => {
         // Fallback: save as outgoing
         const { error: insertError } = await supabase.from('whatsapp_messages').insert({
           phone,
-          message: messageText,
+          message: displayMessage,
           direction: 'outgoing',
           message_id: messageId,
           status,
           is_group: isGroup,
           whatsapp_number_id: whatsappNumberId,
+          ...(mediaInfo ? { media_type: mediaInfo.mediaType, media_url: mediaInfo.mediaUrl } : {}),
         });
 
         if (insertError) {
@@ -253,13 +257,14 @@ serve(async (req) => {
         
         const { error } = await supabase.from('whatsapp_messages').insert({
           phone,
-          message: messageText,
+          message: displayMessage,
           direction: 'incoming',
           message_id: messageId,
           status,
           is_group: isGroup,
           sender_name: senderName,
           whatsapp_number_id: whatsappNumberId,
+          ...(mediaInfo ? { media_type: mediaInfo.mediaType, media_url: mediaInfo.mediaUrl } : {}),
         });
 
         // Reopen conversations that were auto-closed by dispatch
@@ -275,8 +280,8 @@ serve(async (req) => {
           }
         }
 
-        // NPS capture (only individual chats)
-        if (!isGroup) {
+        // NPS capture (only individual chats, only text)
+        if (!isGroup && messageText) {
           const trimmed = messageText.trim();
           const score = Number(trimmed);
           if (!Number.isNaN(score) && score >= 0 && score <= 10) {
@@ -326,13 +331,13 @@ serve(async (req) => {
         if (error) {
           console.error('Error saving incoming message:', error);
         } else {
-          console.log(`Saved incoming message from ${phone}`);
+          console.log(`Saved incoming ${mediaInfo ? mediaInfo.mediaType : 'text'} message from ${phone}`);
           
           // Trigger incoming_message automations (fire-and-forget) - skip groups
           fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, messageText, instance: 'zapi', isGroup }),
+            body: JSON.stringify({ phone, messageText: displayMessage, instance: 'zapi', isGroup }),
           }).catch(err => console.error('automation-trigger-incoming error:', err));
         }
       }
