@@ -195,6 +195,9 @@ export default function Marketing() {
    const [savedPresets, setSavedPresets] = useState<{ id: string; key: string; value: any }[]>([]);
    const [presetName, setPresetName] = useState("");
    const [presetDialogOpen, setPresetDialogOpen] = useState(false);
+   const [excludedPresetIds, setExcludedPresetIds] = useState<string[]>([]);
+   const [includedPresetIds, setIncludedPresetIds] = useState<string[]>([]);
+   const [presetOpsOpen, setPresetOpsOpen] = useState(false);
 
   // ─── Fetch data ──────────────────────────────
 
