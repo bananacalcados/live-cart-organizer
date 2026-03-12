@@ -648,7 +648,7 @@ export default function Marketing() {
     const av = (a as any)[sortField] ?? 0;
     const bv = (b as any)[sortField] ?? 0;
     return sortDir === "desc" ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
-  });
+  }).slice(0, topN !== "all" ? parseInt(topN) : undefined);
 
   const segments = customers.reduce((acc, c) => {
     const seg = c.rfm_segment || 'Outros';
