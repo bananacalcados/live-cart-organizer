@@ -1375,7 +1375,7 @@ export default function Marketing() {
                       "{{ticket_medio}}": formatCurrency(selectedCustomer.avg_ticket),
                       "{{total_pedidos}}": String(selectedCustomer.total_orders),
                       "{{segmento}}": selectedCustomer.rfm_segment || '',
-                      "{{vendedora}}": (selectedCustomer as any)._lastSellerName || '',
+                      "{{vendedora}}": (selectedCustomer as any)._lastSellerName || (() => { const s = (selectedCustomer.phone || '').replace(/\D/g, '').slice(-8); return s ? (customerStoreMap.get(s)?.seller_name || '') : ''; })(),
                       "{{ultimo_produto}}": (selectedCustomer as any)._lastProductName || '',
                     }}
                   />
