@@ -188,6 +188,7 @@ export default function Marketing() {
   const [sellerFilter, setSellerFilter] = useState<string>("all");
   const [ordersMin, setOrdersMin] = useState("");
   const [ordersMax, setOrdersMax] = useState("");
+  const [topN, setTopN] = useState<string>("all");
   const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
   const [storesList, setStoresList] = useState<{ id: string; name: string }[]>([]);
   const [sellersList, setSellersList] = useState<{ id: string; name: string }[]>([]);
@@ -647,7 +648,7 @@ export default function Marketing() {
     const av = (a as any)[sortField] ?? 0;
     const bv = (b as any)[sortField] ?? 0;
     return sortDir === "desc" ? (bv > av ? 1 : -1) : (av > bv ? 1 : -1);
-  });
+  }).slice(0, topN !== "all" ? parseInt(topN) : undefined);
 
   const segments = customers.reduce((acc, c) => {
     const seg = c.rfm_segment || 'Outros';
@@ -831,8 +832,26 @@ export default function Marketing() {
                 </Select>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9" placeholder="De" title="Compras a partir de" />
-                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9" placeholder="Até" title="Compras até" />
+                <div className="relative">
+                  <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9 text-xs" title="Comprou depois de" />
+                  <span className="absolute -top-2 left-2 text-[10px] bg-background px-1 text-muted-foreground">Comprou depois de</span>
+                </div>
+                <div className="relative">
+                  <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9 text-xs" title="Comprou antes de" />
+                  <span className="absolute -top-2 left-2 text-[10px] bg-background px-1 text-muted-foreground">Comprou antes de</span>
+                </div>
+                <Select value={topN} onValueChange={setTopN}>
+                  <SelectTrigger className="h-9"><Crown className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="10">Top 10</SelectItem>
+                    <SelectItem value="20">Top 20</SelectItem>
+                    <SelectItem value="50">Top 50</SelectItem>
+                    <SelectItem value="100">Top 100</SelectItem>
+                    <SelectItem value="200">Top 200</SelectItem>
+                    <SelectItem value="500">Top 500</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Input type="number" value={ticketMin} onChange={e => setTicketMin(e.target.value)} className="h-9" placeholder="Ticket mín" title="Ticket médio mínimo" />
                 <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
                 <Input type="number" value={ordersMin} onChange={e => setOrdersMin(e.target.value)} className="h-9" placeholder="Pedidos mín" title="Número mínimo de pedidos" />
@@ -893,8 +912,8 @@ export default function Marketing() {
 
             <p className="text-xs text-muted-foreground">
               {filtered.length} clientes
-              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax) && (
-                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); }}>
+              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all") && (
+                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); }}>
                   <X className="h-3 w-3 mr-0.5" />Limpar
                 </Button>
               )}
