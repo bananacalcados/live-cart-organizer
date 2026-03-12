@@ -184,6 +184,13 @@ export default function Marketing() {
   const [ticketMax, setTicketMax] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<ZoppyCustomer | null>(null);
   const [whatsAppMessage, setWhatsAppMessage] = useState("");
+  const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [sellerFilter, setSellerFilter] = useState<string>("all");
+  const [ordersMin, setOrdersMin] = useState("");
+  const [ordersMax, setOrdersMax] = useState("");
+  const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
+  const [storesList, setStoresList] = useState<{ id: string; name: string }[]>([]);
+  const [sellersList, setSellersList] = useState<{ id: string; name: string }[]>([]);
 
   // ─── Fetch data ──────────────────────────────
 
@@ -255,6 +262,27 @@ export default function Marketing() {
   }, []);
 
   useEffect(() => { fetchCustomers(); fetchCampaigns(); fetchLandingPages(); fetchLeads(); }, [fetchCustomers, fetchCampaigns, fetchLandingPages, fetchLeads]);
+
+  // Fetch store/seller mapping for filters
+  useEffect(() => {
+    const fetchMapping = async () => {
+      const [mapRes, storesRes, sellersRes] = await Promise.all([
+        supabase.rpc('get_customer_store_seller_map' as any),
+        supabase.from('pos_stores').select('id, name').eq('is_active', true).order('name'),
+        supabase.from('pos_sellers').select('id, name').eq('is_active', true).order('name'),
+      ]);
+      if (mapRes.data) {
+        const map = new Map<string, any>();
+        for (const row of mapRes.data as any[]) {
+          map.set(row.customer_phone, row);
+        }
+        setCustomerStoreMap(map);
+      }
+      setStoresList((storesRes.data || []) as any[]);
+      setSellersList((sellersRes.data || []) as any[]);
+    };
+    fetchMapping();
+  }, []);
 
   // ─── Campaign actions ──────────────────────────────
 
@@ -601,6 +629,14 @@ export default function Marketing() {
     if ((dateFrom || dateTo) && !c.last_purchase_at) return false;
     if (ticketMin && c.avg_ticket < parseFloat(ticketMin)) return false;
     if (ticketMax && c.avg_ticket > parseFloat(ticketMax)) return false;
+    if (ordersMin && c.total_orders < parseInt(ordersMin)) return false;
+    if (ordersMax && c.total_orders > parseInt(ordersMax)) return false;
+    if (storeFilter !== "all" || sellerFilter !== "all") {
+      const suffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+      const mapping = suffix ? customerStoreMap.get(suffix) : undefined;
+      if (storeFilter !== "all" && (!mapping || mapping.store_id !== storeFilter)) return false;
+      if (sellerFilter !== "all" && (!mapping || mapping.seller_id !== sellerFilter)) return false;
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
@@ -770,6 +806,22 @@ export default function Marketing() {
                     <SelectItem value="unknown">❓ Indefinido</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={storeFilter} onValueChange={setStoreFilter}>
+                  <SelectTrigger className="h-9"><Store className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas Lojas</SelectItem>
+                    {storesList.map(s => (<SelectItem key={s.id} value={s.id}>🏪 {s.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 sm:flex gap-2">
+                <Select value={sellerFilter} onValueChange={setSellerFilter}>
+                  <SelectTrigger className="h-9"><Users className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas Vendedoras</SelectItem>
+                    {sellersList.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
                 <Select value={dddFilter} onValueChange={setDddFilter}>
                   <SelectTrigger className="h-9"><Phone className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -778,33 +830,41 @@ export default function Marketing() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 sm:flex gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9" placeholder="De" title="Compras a partir de" />
                 <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9" placeholder="Até" title="Compras até" />
                 <Input type="number" value={ticketMin} onChange={e => setTicketMin(e.target.value)} className="h-9" placeholder="Ticket mín" title="Ticket médio mínimo" />
                 <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
+                <Input type="number" value={ordersMin} onChange={e => setOrdersMin(e.target.value)} className="h-9" placeholder="Pedidos mín" title="Número mínimo de pedidos" />
+                <Input type="number" value={ordersMax} onChange={e => setOrdersMax(e.target.value)} className="h-9" placeholder="Pedidos máx" title="Número máximo de pedidos" />
               </div>
               <div className="flex flex-wrap gap-1 w-full sm:w-auto sm:ml-auto">
                 <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => {
-                  const exportData = filtered.map(c => ({
-                    Nome: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
-                    Telefone: c.phone || '',
-                    Email: c.email || '',
-                    Região: c.region_type === 'local' ? 'Loja Física' : c.region_type === 'online' ? 'Online' : 'Indefinido',
-                    DDD: c.ddd || '',
-                    Segmento_RFM: c.rfm_segment || '',
-                    R: c.rfm_recency_score || '',
-                    F: c.rfm_frequency_score || '',
-                    M: c.rfm_monetary_score || '',
-                    Total_RFM: c.rfm_total_score || '',
-                    Pedidos: c.total_orders,
-                    Total_Gasto: c.total_spent,
-                    Ticket_Medio: c.avg_ticket,
-                    Ultima_Compra: c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : '',
-                    Primeira_Compra: c.first_purchase_at ? new Date(c.first_purchase_at).toLocaleDateString('pt-BR') : '',
-                    Cidade: c.city || '',
-                    Estado: c.state || '',
-                  }));
+                  const exportData = filtered.map(c => {
+                    const suffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+                    const mapping = suffix ? customerStoreMap.get(suffix) : undefined;
+                    return {
+                      Nome: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+                      Telefone: c.phone || '',
+                      Email: c.email || '',
+                      Região: c.region_type === 'local' ? 'Loja Física' : c.region_type === 'online' ? 'Online' : 'Indefinido',
+                      Loja: mapping?.store_name || '',
+                      Vendedora: mapping?.seller_name || '',
+                      DDD: c.ddd || '',
+                      Segmento_RFM: c.rfm_segment || '',
+                      R: c.rfm_recency_score || '',
+                      F: c.rfm_frequency_score || '',
+                      M: c.rfm_monetary_score || '',
+                      Total_RFM: c.rfm_total_score || '',
+                      Pedidos: c.total_orders,
+                      Total_Gasto: c.total_spent,
+                      Ticket_Medio: c.avg_ticket,
+                      Ultima_Compra: c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : '',
+                      Primeira_Compra: c.first_purchase_at ? new Date(c.first_purchase_at).toLocaleDateString('pt-BR') : '',
+                      Cidade: c.city || '',
+                      Estado: c.state || '',
+                    };
+                  });
                   const ws = XLSX.utils.json_to_sheet(exportData);
                   const wb = XLSX.utils.book_new();
                   XLSX.utils.book_append_sheet(wb, ws, "Clientes RFM");
@@ -833,8 +893,8 @@ export default function Marketing() {
 
             <p className="text-xs text-muted-foreground">
               {filtered.length} clientes
-              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax) && (
-                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); }}>
+              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax) && (
+                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); }}>
                   <X className="h-3 w-3 mr-0.5" />Limpar
                 </Button>
               )}

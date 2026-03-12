@@ -8160,6 +8160,16 @@ export type Database = {
           whatsapp_number_id: string
         }[]
       }
+      get_customer_store_seller_map: {
+        Args: never
+        Returns: {
+          customer_phone: string
+          seller_id: string
+          seller_name: string
+          store_id: string
+          store_name: string
+        }[]
+      }
       get_inventory_summary: {
         Args: never
         Returns: {
