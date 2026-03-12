@@ -1103,7 +1103,84 @@ export default function Marketing() {
               </DialogContent>
             </Dialog>
 
-            <ScrollArea className="h-[calc(100vh-420px)]">
+            {/* Preset Intersection/Exclusion Dialog */}
+            <Dialog open={presetOpsOpen} onOpenChange={setPresetOpsOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader><DialogTitle className="flex items-center gap-2"><Filter className="h-4 w-4" />Interseção e Exclusão de Filtros</DialogTitle></DialogHeader>
+                <div className="space-y-4 py-2">
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Incluir (interseção):</strong> mantém apenas clientes que também aparecem nesse filtro.<br/>
+                    <strong>Excluir:</strong> remove clientes que aparecem nesse filtro.
+                  </p>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {savedPresets.map(p => {
+                      const name = (p.value as any)?.name || 'Preset';
+                      const isExcluded = excludedPresetIds.includes(p.id);
+                      const isIncluded = includedPresetIds.includes(p.id);
+                      const presetFilters = p.value?.filters || p.value;
+                      const filterSummary: string[] = [];
+                      if (presetFilters?.rfmFilter && presetFilters.rfmFilter !== 'all') filterSummary.push(`Segmento: ${presetFilters.rfmFilter}`);
+                      if (presetFilters?.storeFilter && presetFilters.storeFilter !== 'all') filterSummary.push(`Loja`);
+                      if (presetFilters?.sellerFilter && presetFilters.sellerFilter !== 'all') filterSummary.push(`Vendedora`);
+                      if (presetFilters?.regionFilter && presetFilters.regionFilter !== 'all') filterSummary.push(`Região: ${presetFilters.regionFilter}`);
+                      if (presetFilters?.dateFrom) filterSummary.push(`De: ${presetFilters.dateFrom}`);
+                      if (presetFilters?.dateTo) filterSummary.push(`Até: ${presetFilters.dateTo}`);
+                      if (presetFilters?.topN && presetFilters.topN !== 'all') filterSummary.push(`Top ${presetFilters.topN}`);
+
+                      return (
+                        <div key={p.id} className={`rounded-lg border p-3 space-y-2 ${isExcluded ? 'border-destructive/40 bg-destructive/5' : isIncluded ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border'}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{name}</span>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant={isIncluded ? "default" : "outline"}
+                                className={`h-7 text-xs gap-1 ${isIncluded ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                                onClick={() => {
+                                  if (isIncluded) {
+                                    setIncludedPresetIds(prev => prev.filter(x => x !== p.id));
+                                  } else {
+                                    setIncludedPresetIds(prev => [...prev, p.id]);
+                                    setExcludedPresetIds(prev => prev.filter(x => x !== p.id));
+                                  }
+                                }}
+                              >
+                                <PlusIcon className="h-3 w-3" />Incluir
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={isExcluded ? "destructive" : "outline"}
+                                className="h-7 text-xs gap-1"
+                                onClick={() => {
+                                  if (isExcluded) {
+                                    setExcludedPresetIds(prev => prev.filter(x => x !== p.id));
+                                  } else {
+                                    setExcludedPresetIds(prev => [...prev, p.id]);
+                                    setIncludedPresetIds(prev => prev.filter(x => x !== p.id));
+                                  }
+                                }}
+                              >
+                                <Minus className="h-3 w-3" />Excluir
+                              </Button>
+                            </div>
+                          </div>
+                          {filterSummary.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {filterSummary.map((s, i) => <Badge key={i} variant="secondary" className="text-[9px]">{s}</Badge>)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => { setExcludedPresetIds([]); setIncludedPresetIds([]); }}>Limpar Tudo</Button>
+                    <Button className="flex-1" onClick={() => setPresetOpsOpen(false)}>Aplicar</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
               <Table>
                 <TableHeader>
                   <TableRow>
