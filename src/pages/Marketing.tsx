@@ -184,6 +184,13 @@ export default function Marketing() {
   const [ticketMax, setTicketMax] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<ZoppyCustomer | null>(null);
   const [whatsAppMessage, setWhatsAppMessage] = useState("");
+  const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [sellerFilter, setSellerFilter] = useState<string>("all");
+  const [ordersMin, setOrdersMin] = useState("");
+  const [ordersMax, setOrdersMax] = useState("");
+  const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
+  const [storesList, setStoresList] = useState<{ id: string; name: string }[]>([]);
+  const [sellersList, setSellersList] = useState<{ id: string; name: string }[]>([]);
 
   // ─── Fetch data ──────────────────────────────
 
