@@ -410,7 +410,7 @@ export default function Marketing() {
     setUploadDialogOpen(true);
     setUploadStatus({ stage: 'reading', progress: 10, detail: 'Lendo arquivo...' });
     try {
-      const xlsxModule = await import('xlsx');
+      const xlsxModule = await import('@e965/xlsx');
       const XLSX = xlsxModule.default || xlsxModule;
       setUploadStatus({ stage: 'parsing', progress: 20, detail: 'Analisando planilha...' });
       const buffer = await file.arrayBuffer();
