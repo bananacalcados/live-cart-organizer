@@ -1112,6 +1112,16 @@ export default function Marketing() {
                     {ordersMax && <Badge variant="secondary" className="text-[10px] mr-1">Pedidos ≤ {ordersMax}</Badge>}
                     {ticketMin && <Badge variant="secondary" className="text-[10px] mr-1">Ticket ≥ {ticketMin}</Badge>}
                     {ticketMax && <Badge variant="secondary" className="text-[10px] mr-1">Ticket ≤ {ticketMax}</Badge>}
+                    {includedPresetIds.length > 0 && savedPresets.filter(p => includedPresetIds.includes(p.id)).map(p => (
+                      <Badge key={p.id} className="text-[10px] mr-1 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1">
+                        <PlusIcon className="h-2 w-2" />Incluir: {(p.value as any)?.name}
+                      </Badge>
+                    ))}
+                    {excludedPresetIds.length > 0 && savedPresets.filter(p => excludedPresetIds.includes(p.id)).map(p => (
+                      <Badge key={p.id} className="text-[10px] mr-1 bg-destructive/20 text-red-400 border-destructive/30 gap-1">
+                        <Minus className="h-2 w-2" />Excluir: {(p.value as any)?.name}
+                      </Badge>
+                    ))}
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1" onClick={() => setPresetDialogOpen(false)}>Cancelar</Button>
