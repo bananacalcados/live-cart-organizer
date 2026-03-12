@@ -305,9 +305,14 @@ export default function Marketing() {
 
   const saveCurrentPreset = async () => {
     if (!presetName.trim()) { toast.error("Digite um nome para o filtro"); return; }
+    // Resolve excluded/included preset keys (stable references instead of IDs)
+    const excludedPresetKeys = savedPresets.filter(p => excludedPresetIds.includes(p.id)).map(p => p.key);
+    const includedPresetKeys = savedPresets.filter(p => includedPresetIds.includes(p.id)).map(p => p.key);
     const preset = {
       rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter,
       dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, sortField, sortDir,
+      excludedPresetKeys: excludedPresetKeys.length > 0 ? excludedPresetKeys : undefined,
+      includedPresetKeys: includedPresetKeys.length > 0 ? includedPresetKeys : undefined,
     };
     const key = `rfm_filter_preset_${Date.now()}`;
     await supabase.from('app_settings').insert({ key, value: { name: presetName.trim(), filters: preset } });
@@ -333,6 +338,17 @@ export default function Marketing() {
     if (f.topN) setTopN(f.topN);
     if (f.sortField) setSortField(f.sortField);
     if (f.sortDir) setSortDir(f.sortDir);
+    // Restore excluded/included presets by key
+    if (f.excludedPresetKeys?.length) {
+      setExcludedPresetIds(savedPresets.filter(p => f.excludedPresetKeys.includes(p.key)).map(p => p.id));
+    } else {
+      setExcludedPresetIds([]);
+    }
+    if (f.includedPresetKeys?.length) {
+      setIncludedPresetIds(savedPresets.filter(p => f.includedPresetKeys.includes(p.key)).map(p => p.id));
+    } else {
+      setIncludedPresetIds([]);
+    }
     toast.success(`Filtro "${(preset.value as any)?.name || 'Preset'}" aplicado`);
   };
 
