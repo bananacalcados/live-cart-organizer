@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,6 +41,8 @@ import { PrizeManager } from "@/components/marketing/PrizeManager";
 import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLandingPageCreator";
 import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
 import { LinkPageManager } from "@/components/marketing/LinkPageManager";
+import { CrmMessageTemplateSelector } from "@/components/marketing/CrmMessageTemplateSelector";
+import * as XLSX from "xlsx";
 import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
 import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
 
@@ -782,6 +785,35 @@ export default function Marketing() {
                 <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
               </div>
               <div className="flex flex-wrap gap-1 w-full sm:w-auto sm:ml-auto">
+                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => {
+                  const exportData = filtered.map(c => ({
+                    Nome: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+                    Telefone: c.phone || '',
+                    Email: c.email || '',
+                    Região: c.region_type === 'local' ? 'Loja Física' : c.region_type === 'online' ? 'Online' : 'Indefinido',
+                    DDD: c.ddd || '',
+                    Segmento_RFM: c.rfm_segment || '',
+                    R: c.rfm_recency_score || '',
+                    F: c.rfm_frequency_score || '',
+                    M: c.rfm_monetary_score || '',
+                    Total_RFM: c.rfm_total_score || '',
+                    Pedidos: c.total_orders,
+                    Total_Gasto: c.total_spent,
+                    Ticket_Medio: c.avg_ticket,
+                    Ultima_Compra: c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : '',
+                    Primeira_Compra: c.first_purchase_at ? new Date(c.first_purchase_at).toLocaleDateString('pt-BR') : '',
+                    Cidade: c.city || '',
+                    Estado: c.state || '',
+                  }));
+                  const ws = XLSX.utils.json_to_sheet(exportData);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, "Clientes RFM");
+                  const filterLabel = rfmFilter !== "all" ? `_${rfmFilter}` : regionFilter !== "all" ? `_${regionFilter}` : "";
+                  XLSX.writeFile(wb, `clientes_rfm${filterLabel}_${new Date().toISOString().slice(0,10)}.xlsx`);
+                  toast.success(`${exportData.length} clientes exportados`);
+                }}>
+                  <FileSpreadsheet className="h-3.5 w-3.5" />Exportar ({filtered.length})
+                </Button>
                 <Button variant="outline" size="sm" className="gap-1 relative overflow-hidden text-xs">
                   <Upload className="h-3.5 w-3.5" /><span className="hidden sm:inline">Upload </span>Excel
                   <input ref={rfmFileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleRfmExcelUpload}
@@ -836,7 +868,29 @@ export default function Marketing() {
                   ) : filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado</TableCell></TableRow>
                   ) : filtered.slice(0, 200).map(c => (
-                    <TableRow key={c.id} className="text-sm cursor-pointer hover:bg-muted/50" onClick={() => setSelectedCustomer(c)}>
+                    <TableRow key={c.id} className="text-sm cursor-pointer hover:bg-muted/50" onClick={async () => {
+                      setSelectedCustomer(c);
+                      // Enrich with last product and seller
+                      if (c.phone) {
+                        const suffix = c.phone.replace(/\D/g, '').slice(-8);
+                        const { data: sales } = await supabase
+                          .from('pos_sales')
+                          .select('id, seller_id, customer_phone')
+                          .ilike('customer_phone', `%${suffix}`)
+                          .order('created_at', { ascending: false })
+                          .limit(1);
+                        if (sales && sales.length > 0) {
+                          const sale = sales[0];
+                          const [itemsRes, sellerRes] = await Promise.all([
+                            supabase.from('pos_sale_items').select('product_name').eq('sale_id', sale.id).limit(3),
+                            sale.seller_id ? supabase.from('pos_sellers').select('name').eq('id', sale.seller_id).single() : Promise.resolve({ data: null }),
+                          ]);
+                          const lastProducts = (itemsRes.data || []).map((i: any) => i.product_name).join(', ');
+                          const sellerName = (sellerRes as any)?.data?.name || '';
+                          setSelectedCustomer(prev => prev ? { ...prev, _lastProductName: lastProducts, _lastSellerName: sellerName } as any : prev);
+                        }
+                      }
+                    }}>
                       <TableCell className="font-medium">{c.first_name} {c.last_name}</TableCell>
                       <TableCell className="text-xs">
                         <div className="space-y-0.5">
@@ -1175,35 +1229,54 @@ export default function Marketing() {
 
               {/* Contact Actions */}
               {selectedCustomer.phone && (
-                <div className="space-y-2 border-t pt-3">
-                  <p className="text-sm font-medium">Entrar em contato</p>
-                  <Input
-                    placeholder="Mensagem para o cliente..."
-                    value={whatsAppMessage}
-                    onChange={e => setWhatsAppMessage(e.target.value)}
+                <div className="space-y-3 border-t pt-3">
+                  <CrmMessageTemplateSelector
+                    onSelect={(msg) => setWhatsAppMessage(msg)}
+                    variables={{
+                      "{{nome}}": `${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim(),
+                      "{{primeiro_nome}}": selectedCustomer.first_name || '',
+                      "{{telefone}}": selectedCustomer.phone || '',
+                      "{{email}}": selectedCustomer.email || '',
+                      "{{ultima_compra}}": selectedCustomer.last_purchase_at ? new Date(selectedCustomer.last_purchase_at).toLocaleDateString('pt-BR') : '',
+                      "{{total_gasto}}": formatCurrency(selectedCustomer.total_spent),
+                      "{{ticket_medio}}": formatCurrency(selectedCustomer.avg_ticket),
+                      "{{total_pedidos}}": String(selectedCustomer.total_orders),
+                      "{{segmento}}": selectedCustomer.rfm_segment || '',
+                      "{{vendedora}}": (selectedCustomer as any)._lastSellerName || '',
+                      "{{ultimo_produto}}": (selectedCustomer as any)._lastProductName || '',
+                    }}
                   />
-                  <div className="flex gap-2">
-                    <Button size="sm" className="gap-1" onClick={() => {
-                      const phone = selectedCustomer.phone!.replace(/\D/g, '');
-                      const fullPhone = phone.startsWith('55') ? phone : `55${phone}`;
-                      const url = `https://wa.me/${fullPhone}${whatsAppMessage ? `?text=${encodeURIComponent(whatsAppMessage)}` : ''}`;
-                      window.open(url, '_blank');
-                    }}>
-                      <MessageSquare className="h-3.5 w-3.5" />WhatsApp
-                    </Button>
-                    <Button variant="outline" size="sm" className="gap-1" onClick={() => {
-                      const phone = selectedCustomer.phone!.replace(/\D/g, '');
-                      window.open(`tel:+55${phone}`, '_blank');
-                    }}>
-                      <Phone className="h-3.5 w-3.5" />Ligar
-                    </Button>
-                    {selectedCustomer.email && (
-                      <Button variant="outline" size="sm" className="gap-1" onClick={() => {
-                        window.open(`mailto:${selectedCustomer.email}`, '_blank');
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Entrar em contato</p>
+                    <Textarea
+                      placeholder="Mensagem para o cliente..."
+                      value={whatsAppMessage}
+                      onChange={e => setWhatsAppMessage(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" className="gap-1" onClick={() => {
+                        const phone = selectedCustomer.phone!.replace(/\D/g, '');
+                        const fullPhone = phone.startsWith('55') ? phone : `55${phone}`;
+                        const url = `https://wa.me/${fullPhone}${whatsAppMessage ? `?text=${encodeURIComponent(whatsAppMessage)}` : ''}`;
+                        window.open(url, '_blank');
                       }}>
-                        <Mail className="h-3.5 w-3.5" />Email
+                        <MessageSquare className="h-3.5 w-3.5" />WhatsApp
                       </Button>
-                    )}
+                      <Button variant="outline" size="sm" className="gap-1" onClick={() => {
+                        const phone = selectedCustomer.phone!.replace(/\D/g, '');
+                        window.open(`tel:+55${phone}`, '_blank');
+                      }}>
+                        <Phone className="h-3.5 w-3.5" />Ligar
+                      </Button>
+                      {selectedCustomer.email && (
+                        <Button variant="outline" size="sm" className="gap-1" onClick={() => {
+                          window.open(`mailto:${selectedCustomer.email}`, '_blank');
+                        }}>
+                          <Mail className="h-3.5 w-3.5" />Email
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
