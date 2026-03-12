@@ -1007,8 +1007,8 @@ export default function Marketing() {
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xs text-muted-foreground">
                 {filtered.length} clientes
-                {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all") && (
-                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); }}>
+                {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all" || excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
+                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); setExcludedPresetIds([]); setIncludedPresetIds([]); }}>
                     <X className="h-3 w-3 mr-0.5" />Limpar
                   </Button>
                 )}
@@ -1017,17 +1017,59 @@ export default function Marketing() {
                 <Save className="h-3 w-3" />Salvar Filtro
               </Button>
               {savedPresets.length > 0 && (
+                <>
+                  <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={() => setPresetOpsOpen(true)}>
+                    <Filter className="h-3 w-3" />Interseção / Exclusão
+                    {(excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
+                      <Badge variant="default" className="ml-1 text-[9px] h-4 px-1">{excludedPresetIds.length + includedPresetIds.length}</Badge>
+                    )}
+                  </Button>
+                  <div className="flex flex-wrap gap-1">
+                    {savedPresets.map(p => {
+                      const isExcluded = excludedPresetIds.includes(p.id);
+                      const isIncluded = includedPresetIds.includes(p.id);
+                      return (
+                        <div key={p.id} className="flex items-center gap-0.5">
+                          <Badge
+                            variant="outline"
+                            className={`cursor-pointer gap-1 text-[10px] hover:bg-secondary ${isExcluded ? 'border-destructive/50 bg-destructive/10 line-through' : isIncluded ? 'border-emerald-500/50 bg-emerald-500/10' : ''}`}
+                            onClick={() => loadPreset(p)}
+                          >
+                            {isExcluded && <Minus className="h-2.5 w-2.5 text-destructive" />}
+                            {isIncluded && <PlusIcon className="h-2.5 w-2.5 text-emerald-500" />}
+                            {!isExcluded && !isIncluded && <Bookmark className="h-2.5 w-2.5" />}
+                            {(p.value as any)?.name || 'Preset'}
+                          </Badge>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deletePreset(p.id)}>
+                            <Trash2 className="h-2.5 w-2.5 text-destructive" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {/* Active preset ops indicators */}
+              {(excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
                 <div className="flex flex-wrap gap-1">
-                  {savedPresets.map(p => (
-                    <div key={p.id} className="flex items-center gap-0.5">
-                      <Badge variant="outline" className="cursor-pointer gap-1 text-[10px] hover:bg-secondary" onClick={() => loadPreset(p)}>
-                        <Bookmark className="h-2.5 w-2.5" />{(p.value as any)?.name || 'Preset'}
+                  {includedPresetIds.map(id => {
+                    const p = savedPresets.find(s => s.id === id);
+                    return p ? (
+                      <Badge key={id} className="text-[10px] bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1">
+                        <PlusIcon className="h-2.5 w-2.5" />Incluir: {(p.value as any)?.name}
+                        <button onClick={() => setIncludedPresetIds(prev => prev.filter(x => x !== id))} className="ml-0.5"><X className="h-2.5 w-2.5" /></button>
                       </Badge>
-                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deletePreset(p.id)}>
-                        <Trash2 className="h-2.5 w-2.5 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
+                    ) : null;
+                  })}
+                  {excludedPresetIds.map(id => {
+                    const p = savedPresets.find(s => s.id === id);
+                    return p ? (
+                      <Badge key={id} className="text-[10px] bg-destructive/20 text-red-400 border-destructive/30 gap-1">
+                        <Minus className="h-2.5 w-2.5" />Excluir: {(p.value as any)?.name}
+                        <button onClick={() => setExcludedPresetIds(prev => prev.filter(x => x !== id))} className="ml-0.5"><X className="h-2.5 w-2.5" /></button>
+                      </Badge>
+                    ) : null;
+                  })}
                 </div>
               )}
             </div>
