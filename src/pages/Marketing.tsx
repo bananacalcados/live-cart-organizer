@@ -1181,6 +1181,7 @@ export default function Marketing() {
               </DialogContent>
             </Dialog>
 
+            <ScrollArea className="h-[calc(100vh-420px)]">
               <Table>
                 <TableHeader>
                   <TableRow>
