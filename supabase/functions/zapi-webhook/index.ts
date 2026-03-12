@@ -24,6 +24,46 @@ function getMessageText(payload: AnyPayload): string | null {
   return null;
 }
 
+interface MediaInfo {
+  mediaUrl: string;
+  mediaType: string;
+  caption: string | null;
+}
+
+function getMediaInfo(payload: AnyPayload): MediaInfo | null {
+  // Image
+  const image = payload.image as Record<string, unknown> | undefined;
+  if (image) {
+    const url = asString(image.imageUrl) || asString(image.url);
+    if (url) return { mediaUrl: url, mediaType: 'image', caption: asString(image.caption) };
+  }
+  // Video
+  const video = payload.video as Record<string, unknown> | undefined;
+  if (video) {
+    const url = asString(video.videoUrl) || asString(video.url);
+    if (url) return { mediaUrl: url, mediaType: 'video', caption: asString(video.caption) };
+  }
+  // Audio
+  const audio = payload.audio as Record<string, unknown> | undefined;
+  if (audio) {
+    const url = asString(audio.audioUrl) || asString(audio.url);
+    if (url) return { mediaUrl: url, mediaType: 'audio', caption: null };
+  }
+  // Document
+  const doc = payload.document as Record<string, unknown> | undefined;
+  if (doc) {
+    const url = asString(doc.documentUrl) || asString(doc.url);
+    if (url) return { mediaUrl: url, mediaType: 'document', caption: asString(doc.fileName) || asString(doc.caption) };
+  }
+  // Sticker
+  const sticker = payload.sticker as Record<string, unknown> | undefined;
+  if (sticker) {
+    const url = asString(sticker.stickerUrl) || asString(sticker.url);
+    if (url) return { mediaUrl: url, mediaType: 'image', caption: '🏷️ Sticker' };
+  }
+  return null;
+}
+
 /**
  * Normalize phone number for storage and matching.
  */
