@@ -784,6 +784,35 @@ export default function Marketing() {
                 <Input type="number" value={ticketMax} onChange={e => setTicketMax(e.target.value)} className="h-9" placeholder="Ticket máx" title="Ticket médio máximo" />
               </div>
               <div className="flex flex-wrap gap-1 w-full sm:w-auto sm:ml-auto">
+                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => {
+                  const exportData = filtered.map(c => ({
+                    Nome: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+                    Telefone: c.phone || '',
+                    Email: c.email || '',
+                    Região: c.region_type === 'local' ? 'Loja Física' : c.region_type === 'online' ? 'Online' : 'Indefinido',
+                    DDD: c.ddd || '',
+                    Segmento_RFM: c.rfm_segment || '',
+                    R: c.rfm_recency_score || '',
+                    F: c.rfm_frequency_score || '',
+                    M: c.rfm_monetary_score || '',
+                    Total_RFM: c.rfm_total_score || '',
+                    Pedidos: c.total_orders,
+                    Total_Gasto: c.total_spent,
+                    Ticket_Medio: c.avg_ticket,
+                    Ultima_Compra: c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : '',
+                    Primeira_Compra: c.first_purchase_at ? new Date(c.first_purchase_at).toLocaleDateString('pt-BR') : '',
+                    Cidade: c.city || '',
+                    Estado: c.state || '',
+                  }));
+                  const ws = XLSX.utils.json_to_sheet(exportData);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, "Clientes RFM");
+                  const filterLabel = rfmFilter !== "all" ? `_${rfmFilter}` : regionFilter !== "all" ? `_${regionFilter}` : "";
+                  XLSX.writeFile(wb, `clientes_rfm${filterLabel}_${new Date().toISOString().slice(0,10)}.xlsx`);
+                  toast.success(`${exportData.length} clientes exportados`);
+                }}>
+                  <FileSpreadsheet className="h-3.5 w-3.5" />Exportar ({filtered.length})
+                </Button>
                 <Button variant="outline" size="sm" className="gap-1 relative overflow-hidden text-xs">
                   <Upload className="h-3.5 w-3.5" /><span className="hidden sm:inline">Upload </span>Excel
                   <input ref={rfmFileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleRfmExcelUpload}
