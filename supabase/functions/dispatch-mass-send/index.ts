@@ -319,28 +319,29 @@ serve(async (req) => {
         if (response.ok) {
           const messageId = data.messages?.[0]?.id || null;
 
-          await supabase.from('dispatch_recipients').update({
-            status: 'sent',
-            message_wamid: messageId,
-          }).eq('id', recipient.id);
+          // Parallelize all DB writes — no need to await sequentially
+          await Promise.all([
+            supabase.from('dispatch_recipients').update({
+              status: 'sent',
+              message_wamid: messageId,
+            }).eq('id', recipient.id),
 
-          // Save to whatsapp_messages
-          await supabase.from('whatsapp_messages').insert({
-            phone: formattedPhone,
-            message: rendered || `[Template: ${dispatch.template_name}]`,
-            direction: 'outgoing',
-            message_id: messageId,
-            status: 'sent',
-            media_type: 'text',
-            whatsapp_number_id: dispatch.whatsapp_number_id,
-          });
+            supabase.from('whatsapp_messages').insert({
+              phone: formattedPhone,
+              message: rendered || `[Template: ${dispatch.template_name}]`,
+              direction: 'outgoing',
+              message_id: messageId,
+              status: 'sent',
+              media_type: 'text',
+              whatsapp_number_id: dispatch.whatsapp_number_id,
+            }),
 
-          // Auto-close conversation
-          await supabase.from('chat_finished_conversations').upsert({
-            phone: formattedPhone,
-            finished_at: new Date().toISOString(),
-            finish_reason: 'disparo_msg',
-          } as any, { onConflict: 'phone' });
+            supabase.from('chat_finished_conversations').upsert({
+              phone: formattedPhone,
+              finished_at: new Date().toISOString(),
+              finish_reason: 'disparo_msg',
+            } as any, { onConflict: 'phone' }),
+          ]);
 
           batchSent++;
         } else {
