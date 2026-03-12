@@ -912,8 +912,8 @@ export default function Marketing() {
 
             <p className="text-xs text-muted-foreground">
               {filtered.length} clientes
-              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax) && (
-                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); }}>
+              {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all") && (
+                <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); }}>
                   <X className="h-3 w-3 mr-0.5" />Limpar
                 </Button>
               )}
