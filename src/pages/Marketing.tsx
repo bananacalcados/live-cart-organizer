@@ -42,7 +42,7 @@ import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLanding
 import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
 import { LinkPageManager } from "@/components/marketing/LinkPageManager";
 import { CrmMessageTemplateSelector } from "@/components/marketing/CrmMessageTemplateSelector";
-import * as XLSX from "xlsx";
+import * as XLSX from "@e965/xlsx";
 import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
 import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
 
