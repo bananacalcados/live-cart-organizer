@@ -840,25 +840,31 @@ export default function Marketing() {
               </div>
               <div className="flex flex-wrap gap-1 w-full sm:w-auto sm:ml-auto">
                 <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => {
-                  const exportData = filtered.map(c => ({
-                    Nome: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
-                    Telefone: c.phone || '',
-                    Email: c.email || '',
-                    Região: c.region_type === 'local' ? 'Loja Física' : c.region_type === 'online' ? 'Online' : 'Indefinido',
-                    DDD: c.ddd || '',
-                    Segmento_RFM: c.rfm_segment || '',
-                    R: c.rfm_recency_score || '',
-                    F: c.rfm_frequency_score || '',
-                    M: c.rfm_monetary_score || '',
-                    Total_RFM: c.rfm_total_score || '',
-                    Pedidos: c.total_orders,
-                    Total_Gasto: c.total_spent,
-                    Ticket_Medio: c.avg_ticket,
-                    Ultima_Compra: c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : '',
-                    Primeira_Compra: c.first_purchase_at ? new Date(c.first_purchase_at).toLocaleDateString('pt-BR') : '',
-                    Cidade: c.city || '',
-                    Estado: c.state || '',
-                  }));
+                  const exportData = filtered.map(c => {
+                    const suffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+                    const mapping = suffix ? customerStoreMap.get(suffix) : undefined;
+                    return {
+                      Nome: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+                      Telefone: c.phone || '',
+                      Email: c.email || '',
+                      Região: c.region_type === 'local' ? 'Loja Física' : c.region_type === 'online' ? 'Online' : 'Indefinido',
+                      Loja: mapping?.store_name || '',
+                      Vendedora: mapping?.seller_name || '',
+                      DDD: c.ddd || '',
+                      Segmento_RFM: c.rfm_segment || '',
+                      R: c.rfm_recency_score || '',
+                      F: c.rfm_frequency_score || '',
+                      M: c.rfm_monetary_score || '',
+                      Total_RFM: c.rfm_total_score || '',
+                      Pedidos: c.total_orders,
+                      Total_Gasto: c.total_spent,
+                      Ticket_Medio: c.avg_ticket,
+                      Ultima_Compra: c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : '',
+                      Primeira_Compra: c.first_purchase_at ? new Date(c.first_purchase_at).toLocaleDateString('pt-BR') : '',
+                      Cidade: c.city || '',
+                      Estado: c.state || '',
+                    };
+                  });
                   const ws = XLSX.utils.json_to_sheet(exportData);
                   const wb = XLSX.utils.book_new();
                   XLSX.utils.book_append_sheet(wb, ws, "Clientes RFM");
