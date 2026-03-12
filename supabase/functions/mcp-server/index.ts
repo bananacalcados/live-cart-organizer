@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { McpServer, StreamableHttpTransport } from "mcp-lite";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const AGENT_KEY = "bnn-agent-2f8a9c4e7b1d3f6a";
+const AGENT_KEY = Deno.env.get("MCP_AGENT_KEY") || "";
 
 function getSupabase() {
   return createClient(

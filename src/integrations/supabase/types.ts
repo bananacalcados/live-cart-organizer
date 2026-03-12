@@ -8267,6 +8267,10 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       unaccent: { Args: { "": string }; Returns: string }
+      upsert_landing_customer: {
+        Args: { p_instagram: string; p_phone: string; p_tag: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "manager" | "user"
