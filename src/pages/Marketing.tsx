@@ -678,6 +678,29 @@ export default function Marketing() {
     segments: [...new Set(customers.map(c => c.rfm_segment).filter(Boolean))] as string[],
   } : null;
 
+  // Helper: check if a customer matches a preset's filters
+  const customerMatchesPreset = useCallback((c: ZoppyCustomer, presetValue: any): boolean => {
+    const f = presetValue?.filters || presetValue;
+    if (f.rfmFilter && f.rfmFilter !== "all" && c.rfm_segment !== f.rfmFilter) return false;
+    if (f.regionFilter && f.regionFilter !== "all" && c.region_type !== f.regionFilter) return false;
+    if (f.dddFilter && f.dddFilter !== "all" && c.ddd !== f.dddFilter) return false;
+    if (f.dateFrom && c.last_purchase_at && c.last_purchase_at < f.dateFrom) return false;
+    if (f.dateTo && c.last_purchase_at && c.last_purchase_at > f.dateTo + 'T23:59:59') return false;
+    if ((f.dateFrom || f.dateTo) && !c.last_purchase_at) return false;
+    if (f.ticketMin && c.avg_ticket < parseFloat(f.ticketMin)) return false;
+    if (f.ticketMax && c.avg_ticket > parseFloat(f.ticketMax)) return false;
+    if (f.ordersMin && c.total_orders < parseInt(f.ordersMin)) return false;
+    if (f.ordersMax && c.total_orders > parseInt(f.ordersMax)) return false;
+    if ((f.storeFilter && f.storeFilter !== "all") || (f.sellerFilter && f.sellerFilter !== "all")) {
+      const suffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+      const mapping = suffix ? customerStoreMap.get(suffix) : undefined;
+      if (f.storeFilter && f.storeFilter !== "all" && (!mapping || mapping.store_id !== f.storeFilter)) return false;
+      if (f.sellerFilter && f.sellerFilter !== "all" && (!mapping || mapping.seller_id !== f.sellerFilter)) return false;
+    }
+    // topN is not applied here — it's a limit, not a filter condition
+    return true;
+  }, [customerStoreMap]);
+
   const filtered = customers.filter(c => {
     if (regionFilter !== "all" && c.region_type !== regionFilter) return false;
     if (rfmFilter !== "all" && c.rfm_segment !== rfmFilter) return false;
@@ -698,7 +721,21 @@ export default function Marketing() {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
-      return name.includes(q) || (c.phone || '').includes(q) || (c.email || '').toLowerCase().includes(q);
+      if (!(name.includes(q) || (c.phone || '').includes(q) || (c.email || '').toLowerCase().includes(q))) return false;
+    }
+    // Exclude customers matching any excluded preset
+    if (excludedPresetIds.length > 0) {
+      const excludedPresets = savedPresets.filter(p => excludedPresetIds.includes(p.id));
+      for (const ep of excludedPresets) {
+        if (customerMatchesPreset(c, ep.value)) return false;
+      }
+    }
+    // Include intersection: customer must match ALL included presets
+    if (includedPresetIds.length > 0) {
+      const includedPresets = savedPresets.filter(p => includedPresetIds.includes(p.id));
+      for (const ip of includedPresets) {
+        if (!customerMatchesPreset(c, ip.value)) return false;
+      }
     }
     return true;
   }).sort((a, b) => {
