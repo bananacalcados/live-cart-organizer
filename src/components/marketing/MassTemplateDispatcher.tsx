@@ -1084,6 +1084,18 @@ export function MassTemplateDispatcher() {
               </Button>
             </div>
 
+            {/* Saved presets */}
+            {savedPresets.length > 0 && (
+              <div className="flex flex-wrap gap-1 items-center">
+                <Bookmark className="h-3 w-3 text-muted-foreground" />
+                {savedPresets.map(p => (
+                  <Badge key={p.id} variant="outline" className="cursor-pointer gap-1 text-[10px] hover:bg-secondary" onClick={() => loadPreset(p)}>
+                    {(p.value as any)?.name || 'Filtro'}
+                  </Badge>
+                ))}
+              </div>
+            )}
+
             {/* Filters */}
             <div className="flex flex-wrap gap-2">
               {(audienceSource === 'crm' || audienceSource === 'both') && (
@@ -1093,6 +1105,20 @@ export function MassTemplateDispatcher() {
                     <SelectContent>
                       <SelectItem value="all">Todos Segmentos</SelectItem>
                       {uniqueSegments.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={storeFilter} onValueChange={v => { setStoreFilter(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                    <SelectTrigger className="w-[150px] h-8 text-xs"><Store className="h-3 w-3 mr-1" /><SelectValue placeholder="Loja" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Lojas</SelectItem>
+                      {storesList.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={sellerFilter} onValueChange={v => { setSellerFilter(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                    <SelectTrigger className="w-[150px] h-8 text-xs"><Users className="h-3 w-3 mr-1" /><SelectValue placeholder="Vendedora" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Vendedoras</SelectItem>
+                      {sellersList.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Select value={stateFilter} onValueChange={v => { setStateFilter(v); setCityFilter('all'); setSelectAll(false); setSelectedPhones(new Set()); }}>
@@ -1124,6 +1150,18 @@ export function MassTemplateDispatcher() {
                       <SelectItem value="online">🌐 Online</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Select value={topN} onValueChange={v => { setTopN(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                    <SelectTrigger className="w-[130px] h-8 text-xs"><Crown className="h-3 w-3 mr-1" /><SelectValue placeholder="Top N" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="10">Top 10</SelectItem>
+                      <SelectItem value="20">Top 20</SelectItem>
+                      <SelectItem value="50">Top 50</SelectItem>
+                      <SelectItem value="100">Top 100</SelectItem>
+                      <SelectItem value="200">Top 200</SelectItem>
+                      <SelectItem value="500">Top 500</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </>
               )}
               {(audienceSource === 'leads' || audienceSource === 'both') && (
@@ -1142,6 +1180,39 @@ export function MassTemplateDispatcher() {
                 onChange={e => setSearchQuery(e.target.value)}
               />
             </div>
+
+            {/* Date & value filters */}
+            {(audienceSource === 'crm' || audienceSource === 'both') && (
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Comprou depois de</label>
+                  <Input type="date" className="w-[140px] h-8 text-xs" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Comprou antes de</label>
+                  <Input type="date" className="w-[140px] h-8 text-xs" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Ticket min</label>
+                  <Input type="number" className="w-[90px] h-8 text-xs" placeholder="R$" value={ticketMin} onChange={e => setTicketMin(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Ticket max</label>
+                  <Input type="number" className="w-[90px] h-8 text-xs" placeholder="R$" value={ticketMax} onChange={e => setTicketMax(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Pedidos min</label>
+                  <Input type="number" className="w-[80px] h-8 text-xs" value={ordersMin} onChange={e => setOrdersMin(e.target.value)} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[10px] text-muted-foreground">Pedidos max</label>
+                  <Input type="number" className="w-[80px] h-8 text-xs" value={ordersMax} onChange={e => setOrdersMax(e.target.value)} />
+                </div>
+                <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearAllFilters}>
+                  <X className="h-3 w-3" />Limpar
+                </Button>
+              </div>
+            )}
 
             {/* Select all */}
             <div className="flex items-center gap-2 py-1">
