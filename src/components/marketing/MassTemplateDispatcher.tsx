@@ -217,6 +217,68 @@ export function MassTemplateDispatcher() {
     fetchAudience();
   }, []);
 
+  // Fetch store/seller mapping
+  useEffect(() => {
+    const fetchMapping = async () => {
+      const [mapRes, storesRes, sellersRes] = await Promise.all([
+        supabase.rpc('get_customer_store_seller_map' as any),
+        supabase.from('pos_stores').select('id, name').eq('is_active', true).order('name'),
+        supabase.from('pos_sellers').select('id, name').eq('is_active', true).order('name'),
+      ]);
+      if (mapRes.data) {
+        const map = new Map<string, any>();
+        for (const row of mapRes.data as any[]) {
+          map.set(row.customer_phone, row);
+        }
+        setCustomerStoreMap(map);
+      }
+      setStoresList((storesRes.data || []) as any[]);
+      setSellersList((sellersRes.data || []) as any[]);
+    };
+    fetchMapping();
+  }, []);
+
+  // Fetch saved presets
+  useEffect(() => {
+    const fetchPresets = async () => {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('id, key, value')
+        .like('key', 'rfm_filter_preset_%')
+        .order('created_at', { ascending: true });
+      setSavedPresets((data || []) as any[]);
+    };
+    fetchPresets();
+  }, []);
+
+  const loadPreset = (preset: any) => {
+    const f = preset.value?.filters || preset.value;
+    if (f.rfmFilter) setRfmFilter(f.rfmFilter);
+    if (f.regionFilter) setRegionFilter(f.regionFilter);
+    if (f.dddFilter) setDddFilter(f.dddFilter);
+    if (f.storeFilter) setStoreFilter(f.storeFilter);
+    if (f.sellerFilter) setSellerFilter(f.sellerFilter);
+    setDateFrom(f.dateFrom || "");
+    setDateTo(f.dateTo || "");
+    setTicketMin(f.ticketMin || "");
+    setTicketMax(f.ticketMax || "");
+    setOrdersMin(f.ordersMin || "");
+    setOrdersMax(f.ordersMax || "");
+    if (f.topN) setTopN(f.topN);
+    setSelectAll(false);
+    setSelectedPhones(new Set());
+    toast.success(`Filtro "${(preset.value as any)?.name || 'Preset'}" aplicado`);
+  };
+
+  const clearAllFilters = () => {
+    setRfmFilter("all"); setStateFilter("all"); setCityFilter("all");
+    setDddFilter("all"); setRegionFilter("all"); setStoreFilter("all");
+    setSellerFilter("all"); setDateFrom(""); setDateTo("");
+    setTicketMin(""); setTicketMax(""); setOrdersMin("");
+    setOrdersMax(""); setTopN("all"); setSearchQuery("");
+    setSelectAll(false); setSelectedPhones(new Set());
+  };
+
   const fetchTemplates = async () => {
     setIsLoadingTemplates(true);
     try {
