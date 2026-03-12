@@ -7,7 +7,7 @@ import {
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles,
-  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark
+  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -195,6 +195,9 @@ export default function Marketing() {
    const [savedPresets, setSavedPresets] = useState<{ id: string; key: string; value: any }[]>([]);
    const [presetName, setPresetName] = useState("");
    const [presetDialogOpen, setPresetDialogOpen] = useState(false);
+   const [excludedPresetIds, setExcludedPresetIds] = useState<string[]>([]);
+   const [includedPresetIds, setIncludedPresetIds] = useState<string[]>([]);
+   const [presetOpsOpen, setPresetOpsOpen] = useState(false);
 
   // ─── Fetch data ──────────────────────────────
 
@@ -335,6 +338,8 @@ export default function Marketing() {
 
   const deletePreset = async (id: string) => {
     await supabase.from('app_settings').delete().eq('id', id);
+    setExcludedPresetIds(prev => prev.filter(x => x !== id));
+    setIncludedPresetIds(prev => prev.filter(x => x !== id));
     toast.success("Filtro excluído");
     fetchPresets();
   };
@@ -675,6 +680,29 @@ export default function Marketing() {
     segments: [...new Set(customers.map(c => c.rfm_segment).filter(Boolean))] as string[],
   } : null;
 
+  // Helper: check if a customer matches a preset's filters
+  const customerMatchesPreset = useCallback((c: ZoppyCustomer, presetValue: any): boolean => {
+    const f = presetValue?.filters || presetValue;
+    if (f.rfmFilter && f.rfmFilter !== "all" && c.rfm_segment !== f.rfmFilter) return false;
+    if (f.regionFilter && f.regionFilter !== "all" && c.region_type !== f.regionFilter) return false;
+    if (f.dddFilter && f.dddFilter !== "all" && c.ddd !== f.dddFilter) return false;
+    if (f.dateFrom && c.last_purchase_at && c.last_purchase_at < f.dateFrom) return false;
+    if (f.dateTo && c.last_purchase_at && c.last_purchase_at > f.dateTo + 'T23:59:59') return false;
+    if ((f.dateFrom || f.dateTo) && !c.last_purchase_at) return false;
+    if (f.ticketMin && c.avg_ticket < parseFloat(f.ticketMin)) return false;
+    if (f.ticketMax && c.avg_ticket > parseFloat(f.ticketMax)) return false;
+    if (f.ordersMin && c.total_orders < parseInt(f.ordersMin)) return false;
+    if (f.ordersMax && c.total_orders > parseInt(f.ordersMax)) return false;
+    if ((f.storeFilter && f.storeFilter !== "all") || (f.sellerFilter && f.sellerFilter !== "all")) {
+      const suffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+      const mapping = suffix ? customerStoreMap.get(suffix) : undefined;
+      if (f.storeFilter && f.storeFilter !== "all" && (!mapping || mapping.store_id !== f.storeFilter)) return false;
+      if (f.sellerFilter && f.sellerFilter !== "all" && (!mapping || mapping.seller_id !== f.sellerFilter)) return false;
+    }
+    // topN is not applied here — it's a limit, not a filter condition
+    return true;
+  }, [customerStoreMap]);
+
   const filtered = customers.filter(c => {
     if (regionFilter !== "all" && c.region_type !== regionFilter) return false;
     if (rfmFilter !== "all" && c.rfm_segment !== rfmFilter) return false;
@@ -695,7 +723,21 @@ export default function Marketing() {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
-      return name.includes(q) || (c.phone || '').includes(q) || (c.email || '').toLowerCase().includes(q);
+      if (!(name.includes(q) || (c.phone || '').includes(q) || (c.email || '').toLowerCase().includes(q))) return false;
+    }
+    // Exclude customers matching any excluded preset
+    if (excludedPresetIds.length > 0) {
+      const excludedPresets = savedPresets.filter(p => excludedPresetIds.includes(p.id));
+      for (const ep of excludedPresets) {
+        if (customerMatchesPreset(c, ep.value)) return false;
+      }
+    }
+    // Include intersection: customer must match ALL included presets
+    if (includedPresetIds.length > 0) {
+      const includedPresets = savedPresets.filter(p => includedPresetIds.includes(p.id));
+      for (const ip of includedPresets) {
+        if (!customerMatchesPreset(c, ip.value)) return false;
+      }
     }
     return true;
   }).sort((a, b) => {
@@ -967,8 +1009,8 @@ export default function Marketing() {
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xs text-muted-foreground">
                 {filtered.length} clientes
-                {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all") && (
-                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); }}>
+                {(regionFilter !== "all" || rfmFilter !== "all" || dddFilter !== "all" || storeFilter !== "all" || sellerFilter !== "all" || searchQuery || dateFrom || dateTo || ticketMin || ticketMax || ordersMin || ordersMax || topN !== "all" || excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
+                  <Button variant="link" className="text-xs p-0 h-auto ml-2" onClick={() => { setRegionFilter("all"); setRfmFilter("all"); setDddFilter("all"); setStoreFilter("all"); setSellerFilter("all"); setSearchQuery(""); setDateFrom(""); setDateTo(""); setTicketMin(""); setTicketMax(""); setOrdersMin(""); setOrdersMax(""); setTopN("all"); setExcludedPresetIds([]); setIncludedPresetIds([]); }}>
                     <X className="h-3 w-3 mr-0.5" />Limpar
                   </Button>
                 )}
@@ -977,17 +1019,59 @@ export default function Marketing() {
                 <Save className="h-3 w-3" />Salvar Filtro
               </Button>
               {savedPresets.length > 0 && (
+                <>
+                  <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={() => setPresetOpsOpen(true)}>
+                    <Filter className="h-3 w-3" />Interseção / Exclusão
+                    {(excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
+                      <Badge variant="default" className="ml-1 text-[9px] h-4 px-1">{excludedPresetIds.length + includedPresetIds.length}</Badge>
+                    )}
+                  </Button>
+                  <div className="flex flex-wrap gap-1">
+                    {savedPresets.map(p => {
+                      const isExcluded = excludedPresetIds.includes(p.id);
+                      const isIncluded = includedPresetIds.includes(p.id);
+                      return (
+                        <div key={p.id} className="flex items-center gap-0.5">
+                          <Badge
+                            variant="outline"
+                            className={`cursor-pointer gap-1 text-[10px] hover:bg-secondary ${isExcluded ? 'border-destructive/50 bg-destructive/10 line-through' : isIncluded ? 'border-emerald-500/50 bg-emerald-500/10' : ''}`}
+                            onClick={() => loadPreset(p)}
+                          >
+                            {isExcluded && <Minus className="h-2.5 w-2.5 text-destructive" />}
+                            {isIncluded && <PlusIcon className="h-2.5 w-2.5 text-emerald-500" />}
+                            {!isExcluded && !isIncluded && <Bookmark className="h-2.5 w-2.5" />}
+                            {(p.value as any)?.name || 'Preset'}
+                          </Badge>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deletePreset(p.id)}>
+                            <Trash2 className="h-2.5 w-2.5 text-destructive" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {/* Active preset ops indicators */}
+              {(excludedPresetIds.length > 0 || includedPresetIds.length > 0) && (
                 <div className="flex flex-wrap gap-1">
-                  {savedPresets.map(p => (
-                    <div key={p.id} className="flex items-center gap-0.5">
-                      <Badge variant="outline" className="cursor-pointer gap-1 text-[10px] hover:bg-secondary" onClick={() => loadPreset(p)}>
-                        <Bookmark className="h-2.5 w-2.5" />{(p.value as any)?.name || 'Preset'}
+                  {includedPresetIds.map(id => {
+                    const p = savedPresets.find(s => s.id === id);
+                    return p ? (
+                      <Badge key={id} className="text-[10px] bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1">
+                        <PlusIcon className="h-2.5 w-2.5" />Incluir: {(p.value as any)?.name}
+                        <button onClick={() => setIncludedPresetIds(prev => prev.filter(x => x !== id))} className="ml-0.5"><X className="h-2.5 w-2.5" /></button>
                       </Badge>
-                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deletePreset(p.id)}>
-                        <Trash2 className="h-2.5 w-2.5 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
+                    ) : null;
+                  })}
+                  {excludedPresetIds.map(id => {
+                    const p = savedPresets.find(s => s.id === id);
+                    return p ? (
+                      <Badge key={id} className="text-[10px] bg-destructive/20 text-red-400 border-destructive/30 gap-1">
+                        <Minus className="h-2.5 w-2.5" />Excluir: {(p.value as any)?.name}
+                        <button onClick={() => setExcludedPresetIds(prev => prev.filter(x => x !== id))} className="ml-0.5"><X className="h-2.5 w-2.5" /></button>
+                      </Badge>
+                    ) : null;
+                  })}
                 </div>
               )}
             </div>
@@ -1016,6 +1100,84 @@ export default function Marketing() {
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1" onClick={() => setPresetDialogOpen(false)}>Cancelar</Button>
                     <Button className="flex-1 gap-1" onClick={saveCurrentPreset}><Save className="h-3.5 w-3.5" />Salvar</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Preset Intersection/Exclusion Dialog */}
+            <Dialog open={presetOpsOpen} onOpenChange={setPresetOpsOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader><DialogTitle className="flex items-center gap-2"><Filter className="h-4 w-4" />Interseção e Exclusão de Filtros</DialogTitle></DialogHeader>
+                <div className="space-y-4 py-2">
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Incluir (interseção):</strong> mantém apenas clientes que também aparecem nesse filtro.<br/>
+                    <strong>Excluir:</strong> remove clientes que aparecem nesse filtro.
+                  </p>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {savedPresets.map(p => {
+                      const name = (p.value as any)?.name || 'Preset';
+                      const isExcluded = excludedPresetIds.includes(p.id);
+                      const isIncluded = includedPresetIds.includes(p.id);
+                      const presetFilters = p.value?.filters || p.value;
+                      const filterSummary: string[] = [];
+                      if (presetFilters?.rfmFilter && presetFilters.rfmFilter !== 'all') filterSummary.push(`Segmento: ${presetFilters.rfmFilter}`);
+                      if (presetFilters?.storeFilter && presetFilters.storeFilter !== 'all') filterSummary.push(`Loja`);
+                      if (presetFilters?.sellerFilter && presetFilters.sellerFilter !== 'all') filterSummary.push(`Vendedora`);
+                      if (presetFilters?.regionFilter && presetFilters.regionFilter !== 'all') filterSummary.push(`Região: ${presetFilters.regionFilter}`);
+                      if (presetFilters?.dateFrom) filterSummary.push(`De: ${presetFilters.dateFrom}`);
+                      if (presetFilters?.dateTo) filterSummary.push(`Até: ${presetFilters.dateTo}`);
+                      if (presetFilters?.topN && presetFilters.topN !== 'all') filterSummary.push(`Top ${presetFilters.topN}`);
+
+                      return (
+                        <div key={p.id} className={`rounded-lg border p-3 space-y-2 ${isExcluded ? 'border-destructive/40 bg-destructive/5' : isIncluded ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border'}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{name}</span>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant={isIncluded ? "default" : "outline"}
+                                className={`h-7 text-xs gap-1 ${isIncluded ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                                onClick={() => {
+                                  if (isIncluded) {
+                                    setIncludedPresetIds(prev => prev.filter(x => x !== p.id));
+                                  } else {
+                                    setIncludedPresetIds(prev => [...prev, p.id]);
+                                    setExcludedPresetIds(prev => prev.filter(x => x !== p.id));
+                                  }
+                                }}
+                              >
+                                <PlusIcon className="h-3 w-3" />Incluir
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={isExcluded ? "destructive" : "outline"}
+                                className="h-7 text-xs gap-1"
+                                onClick={() => {
+                                  if (isExcluded) {
+                                    setExcludedPresetIds(prev => prev.filter(x => x !== p.id));
+                                  } else {
+                                    setExcludedPresetIds(prev => [...prev, p.id]);
+                                    setIncludedPresetIds(prev => prev.filter(x => x !== p.id));
+                                  }
+                                }}
+                              >
+                                <Minus className="h-3 w-3" />Excluir
+                              </Button>
+                            </div>
+                          </div>
+                          {filterSummary.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {filterSummary.map((s, i) => <Badge key={i} variant="secondary" className="text-[9px]">{s}</Badge>)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => { setExcludedPresetIds([]); setIncludedPresetIds([]); }}>Limpar Tudo</Button>
+                    <Button className="flex-1" onClick={() => setPresetOpsOpen(false)}>Aplicar</Button>
                   </div>
                 </div>
               </DialogContent>
