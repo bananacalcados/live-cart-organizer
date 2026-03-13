@@ -418,11 +418,16 @@ function BlockPropertiesPanel({
 // ─── Main EmailBuilder Component ───
 interface EmailBuilderProps {
   initialBlocks?: EmailBlock[];
-  onSave?: (blocks: EmailBlock[], html: string) => void;
+  initialName?: string;
+  initialSubject?: string;
+  onSave?: (name: string, subject: string, blocks: EmailBlock[], html: string) => void;
+  onBack?: () => void;
 }
 
-export function EmailBuilder({ initialBlocks, onSave }: EmailBuilderProps) {
+export function EmailBuilder({ initialBlocks, initialName = '', initialSubject = '', onSave, onBack }: EmailBuilderProps) {
   const [blocks, setBlocks] = useState<EmailBlock[]>(initialBlocks || []);
+  const [templateName, setTemplateName] = useState(initialName);
+  const [templateSubject, setTemplateSubject] = useState(initialSubject);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
