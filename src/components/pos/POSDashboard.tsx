@@ -229,11 +229,12 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details")
+        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at")
         .eq("store_id", storeId)
         .eq("status", "completed")
-        .gte("created_at", start.toISOString())
-        .lte("created_at", end.toISOString());
+        .not("paid_at", "is", null)
+        .gte("paid_at", start.toISOString())
+        .lte("paid_at", end.toISOString());
 
       const completedSales = sales || [];
       const revenue = completedSales.reduce((s, sale) => s + (sale.total || 0), 0);
