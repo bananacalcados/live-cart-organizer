@@ -1067,7 +1067,24 @@ export default function TransparentCheckout() {
   };
 
   const handleStep2Next = async () => {
+    // Ensure address is fully saved BEFORE moving to payment step
     await saveRegistration(2);
+    // Verify the registration was actually saved with address data
+    if (orderData && !orderData.id.startsWith("live-")) {
+      try {
+        const { data: reg } = await supabase
+          .from("customer_registrations")
+          .select("id, address, city")
+          .eq("order_id", orderData.id)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!reg || !reg.address || reg.address === "Pendente") {
+          toast.error("Erro ao salvar endereço. Tente novamente.");
+          return;
+        }
+      } catch {}
+    }
     setCurrentStep(3);
   };
 
@@ -1109,10 +1126,31 @@ export default function TransparentCheckout() {
     // Create Shopify order for live commerce
     if (liveCartRaw && liveCartRaw.items.length > 0) {
       try {
-        const enrichedCustomer = {
+        // Fetch customer data from DB to avoid relying on potentially stale in-memory state (e.g. PIX polling)
+        let enrichedCustomer = {
           ...liveCartRaw.customer,
           ...(cd ? { name: cd.name, email: cd.email, phone: cd.phone, cpf: cd.cpf, address: cd.address } : {}),
         };
+        
+        // If cd is undefined/incomplete (PIX polling case), try to get from customerForm state
+        if (!cd || !cd.address) {
+          enrichedCustomer = {
+            ...enrichedCustomer,
+            name: customerForm.fullName || enrichedCustomer.name,
+            email: customerForm.email || enrichedCustomer.email,
+            phone: customerForm.whatsapp?.replace(/\D/g, "") || enrichedCustomer.phone,
+            cpf: customerForm.cpf?.replace(/\D/g, "") || enrichedCustomer.cpf,
+            address: customerForm.address ? {
+              street: customerForm.address,
+              number: customerForm.addressNumber,
+              neighborhood: customerForm.neighborhood,
+              city: customerForm.city,
+              state: customerForm.state,
+              cep: customerForm.cep?.replace(/\D/g, ""),
+            } : enrichedCustomer.address,
+          };
+        }
+        
         await supabase.functions.invoke("shopify-create-live-order", {
           body: {
             items: liveCartRaw.items.map((item: any) => ({
@@ -1151,7 +1189,7 @@ export default function TransparentCheckout() {
         await supabase.functions.invoke("shopify-create-order", { body: { orderId } });
       } catch (err) { console.error("Error creating Shopify order:", err); }
     }
-  }, [orderData, orderId, liveCartRaw, searchParams]);
+  }, [orderData, orderId, liveCartRaw, searchParams, customerForm]);
 
   if (isLoading) {
     return (

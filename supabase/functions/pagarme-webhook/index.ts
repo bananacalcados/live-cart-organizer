@@ -1,6 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+async function autoCreateShopifyOrder(_supabase: any, orderId: string, source: string, supabaseUrl: string, supabaseKey: string) {
+  try {
+    if (source !== "orders") return;
+    console.log(`[AUTO-SHOPIFY] Creating Shopify order for ${source} ${orderId}...`);
+    const res = await fetch(`${supabaseUrl}/functions/v1/shopify-create-order`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseKey}` },
+      body: JSON.stringify({ orderId }),
+    });
+    const data = await res.json();
+    console.log(`[AUTO-SHOPIFY] Result:`, JSON.stringify(data).substring(0, 500));
+  } catch (err: any) {
+    console.error(`[AUTO-SHOPIFY] Error (non-blocking):`, err.message || err);
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -220,6 +236,8 @@ serve(async (req) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pedido_id: order.id, gateway: 'pagarme', transaction_id: String(transactionId) }),
           }).catch(err => console.error('Livete webhook error:', err));
+          // Auto-create Shopify order
+          await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
         }
       }
     } else if (orderSource === "pos_sales" && sale) {

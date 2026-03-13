@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS customer_registrations_order_id_unique ON public.customer_registrations (order_id);
