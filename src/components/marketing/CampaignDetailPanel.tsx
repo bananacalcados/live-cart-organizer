@@ -762,6 +762,24 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
               </div>
+              <WhatsAppNumberSelector filterProvider="zapi" className="w-[180px] h-9 text-xs" />
+              <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={async () => {
+                setIsSyncingFromZapi(true);
+                try {
+                  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
+                    method: 'POST',
+                    headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ syncToDb: true, whatsapp_number_id: selectedNumberId }),
+                  });
+                  const data = await res.json();
+                  if (data.success) { toast.success(`${data.total} grupos sincronizados do WhatsApp!`); fetchAllGroups(); }
+                  else toast.error(data.error || "Erro ao sincronizar");
+                } catch { toast.error("Erro ao sincronizar"); }
+                finally { setIsSyncingFromZapi(false); }
+              }} disabled={isSyncingFromZapi}>
+                <RefreshCw className={`h-3.5 w-3.5 ${isSyncingFromZapi ? 'animate-spin' : ''}`} />
+                Sincronizar do WhatsApp
+              </Button>
               <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={() => setShowCreateGroup(true)}>
                 <Plus className="h-3.5 w-3.5" /> Criar Grupo
               </Button>
