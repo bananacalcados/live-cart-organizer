@@ -55,7 +55,7 @@ function getPeriodRange(period: Period, customRange: DateRange | undefined): { s
   if (period === "week") {
     start.setDate(start.getDate() - 6);
   } else if (period === "month") {
-    start.setDate(start.getDate() - 29);
+    start.setDate(1); // primeiro dia do mês calendário
   }
   return { start, end };
 }
