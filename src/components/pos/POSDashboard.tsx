@@ -152,9 +152,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
             .select("total")
             .eq("store_id", storeId)
             .eq("status", "completed")
-            .not("paid_at", "is", null)
-            .gte("paid_at", start.toISOString())
-            .lte("paid_at", end.toISOString());
+            .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
           const { data: influencedSales } = await (query as any).in("customer_phone", phones);
           setInfluencedRevenue((influencedSales || []).reduce((s, sale) => s + (sale.total || 0), 0));
         } else {
@@ -228,14 +226,13 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
     try {
       const { start, end } = getPeriodRange(period, customRange);
 
+      // Use paid_at when available, fallback to created_at for older sales without paid_at
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at")
+        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at")
         .eq("store_id", storeId)
         .eq("status", "completed")
-        .not("paid_at", "is", null)
-        .gte("paid_at", start.toISOString())
-        .lte("paid_at", end.toISOString());
+        .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
 
       const completedSales = sales || [];
       const revenue = completedSales.reduce((s, sale) => s + (sale.total || 0), 0);
