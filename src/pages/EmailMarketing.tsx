@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
 import { EmailBuilder } from "@/components/marketing/email/EmailBuilder";
+import { EmailContactsManager } from "@/components/marketing/email/EmailContactsManager";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -93,22 +94,7 @@ const EmailMarketing = () => {
           </TabsContent>
 
           <TabsContent value="contatos">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-primary" />
-                  Lista de Contatos
-                </CardTitle>
-                <CardDescription>
-                  Gerencie sua base de contatos, importe listas e crie segmentações para campanhas direcionadas.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-center h-48 text-muted-foreground">
-                  Em breve — gestão de contatos e segmentação
-                </div>
-              </CardContent>
-            </Card>
+            <EmailContactsManager />
           </TabsContent>
 
           <TabsContent value="metricas">
