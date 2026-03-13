@@ -55,7 +55,7 @@ function getPeriodRange(period: Period, customRange: DateRange | undefined): { s
   if (period === "week") {
     start.setDate(start.getDate() - 6);
   } else if (period === "month") {
-    start.setDate(start.getDate() - 29);
+    start.setDate(1); // primeiro dia do mês calendário
   }
   return { start, end };
 }
@@ -152,8 +152,9 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
             .select("total")
             .eq("store_id", storeId)
             .eq("status", "completed")
-            .gte("created_at", start.toISOString())
-            .lte("created_at", end.toISOString());
+            .not("paid_at", "is", null)
+            .gte("paid_at", start.toISOString())
+            .lte("paid_at", end.toISOString());
           const { data: influencedSales } = await (query as any).in("customer_phone", phones);
           setInfluencedRevenue((influencedSales || []).reduce((s, sale) => s + (sale.total || 0), 0));
         } else {
@@ -229,11 +230,12 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details")
+        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at")
         .eq("store_id", storeId)
         .eq("status", "completed")
-        .gte("created_at", start.toISOString())
-        .lte("created_at", end.toISOString());
+        .not("paid_at", "is", null)
+        .gte("paid_at", start.toISOString())
+        .lte("paid_at", end.toISOString());
 
       const completedSales = sales || [];
       const revenue = completedSales.reduce((s, sale) => s + (sale.total || 0), 0);
