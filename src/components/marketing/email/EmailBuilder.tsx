@@ -501,7 +501,28 @@ export function EmailBuilder({ initialBlocks, initialName = '', initialSubject =
   const blockTypes: EmailBlockType[] = ['header', 'text', 'image', 'button', 'divider', 'spacer', 'footer'];
 
   return (
-    <div className="flex h-[calc(100vh-220px)] min-h-[500px] bg-background rounded-lg border overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-120px)] min-h-[500px] bg-background rounded-lg border overflow-hidden">
+      {/* Name & Subject bar */}
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b bg-card">
+        {onBack && (
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        )}
+        <Input
+          placeholder="Nome do template *"
+          value={templateName}
+          onChange={(e) => setTemplateName(e.target.value)}
+          className="h-8 text-sm max-w-[220px]"
+        />
+        <Input
+          placeholder="Assunto do email"
+          value={templateSubject}
+          onChange={(e) => setTemplateSubject(e.target.value)}
+          className="h-8 text-sm flex-1 min-w-[180px]"
+        />
+      </div>
+      <div className="flex flex-1 overflow-hidden">
       {/* ── Left Panel ── */}
       <div className="w-[280px] border-r bg-card flex flex-col">
         <div className="p-3 border-b">
