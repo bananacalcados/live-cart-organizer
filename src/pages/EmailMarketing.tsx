@@ -94,22 +94,7 @@ const EmailMarketing = () => {
           </TabsContent>
 
           <TabsContent value="contatos">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-primary" />
-                  Lista de Contatos
-                </CardTitle>
-                <CardDescription>
-                  Gerencie sua base de contatos, importe listas e crie segmentações para campanhas direcionadas.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-center h-48 text-muted-foreground">
-                  Em breve — gestão de contatos e segmentação
-                </div>
-              </CardContent>
-            </Card>
+            <EmailContactsManager />
           </TabsContent>
 
           <TabsContent value="metricas">
