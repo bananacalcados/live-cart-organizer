@@ -18,6 +18,8 @@ import { GroupSettingsPanel } from "./GroupSettingsPanel";
 import { CampaignDetailPanel } from "./CampaignDetailPanel";
 import { VipStrategyPanel } from "./VipStrategyPanel";
 import { CreateGroupDialog } from "./CreateGroupDialog";
+import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 
 interface WhatsAppGroup {
   id: string;
