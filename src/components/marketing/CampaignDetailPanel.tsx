@@ -115,7 +115,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [contactSearchQuery, setContactSearchQuery] = useState("");
   const [importFilterDateFrom, setImportFilterDateFrom] = useState<Date | undefined>(undefined);
   const [importFilterDateTo, setImportFilterDateTo] = useState<Date | undefined>(undefined);
-
+  const [isSyncingFromZapi, setIsSyncingFromZapi] = useState(false);
+  const { selectedNumberId } = useWhatsAppNumberStore();
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
     setCampaign(data);
