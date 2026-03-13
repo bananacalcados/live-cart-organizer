@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
 import { EmailBuilder } from "@/components/marketing/email/EmailBuilder";
+import { EmailContactsManager } from "@/components/marketing/email/EmailContactsManager";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
