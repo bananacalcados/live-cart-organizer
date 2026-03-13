@@ -326,7 +326,7 @@ async function chargeAppmax(
         "access-token": accessToken,
         customer_id: customerId,
         products: orderProducts,
-        shipping: params.shippingAmount || 0,
+        shipping: 0, // shipping is already included in adjusted product prices via discountRatio
         custom_reference: params.orderId,
       }),
     });
