@@ -6,8 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 1000;
-const DELAY_MS = 100; // delay between sends within a batch
+const BATCH_SIZE = 500;
+const CONCURRENCY = 10; // parallel sends at a time
 
 interface VariableConfig {
   mode: string;
