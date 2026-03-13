@@ -1067,7 +1067,24 @@ export default function TransparentCheckout() {
   };
 
   const handleStep2Next = async () => {
+    // Ensure address is fully saved BEFORE moving to payment step
     await saveRegistration(2);
+    // Verify the registration was actually saved with address data
+    if (orderData && !orderData.id.startsWith("live-")) {
+      try {
+        const { data: reg } = await supabase
+          .from("customer_registrations")
+          .select("id, address, city")
+          .eq("order_id", orderData.id)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!reg || !reg.address || reg.address === "Pendente") {
+          toast.error("Erro ao salvar endereço. Tente novamente.");
+          return;
+        }
+      } catch {}
+    }
     setCurrentStep(3);
   };
 
