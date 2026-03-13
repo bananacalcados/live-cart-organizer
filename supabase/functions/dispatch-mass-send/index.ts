@@ -263,23 +263,11 @@ serve(async (req) => {
       });
     }
 
-    // Process batch
+    // Process batch in parallel chunks
     let batchSent = 0, batchFailed = 0;
+    let cancelled = false;
 
-    for (const recipient of pendingRecipients) {
-      // Re-check cancellation every 10 messages
-      if ((batchSent + batchFailed) % 10 === 0 && (batchSent + batchFailed) > 0) {
-        const { data: checkDisp } = await supabase
-          .from('dispatch_history')
-          .select('status')
-          .eq('id', dispatchId)
-          .single();
-        if (checkDisp?.status === 'cancelled') {
-          console.log('Dispatch cancelled, stopping batch');
-          break;
-        }
-      }
-
+    async function sendOne(recipient: any): Promise<boolean> {
       let formattedPhone = recipient.phone.replace(/\D/g, '');
       if (!formattedPhone.startsWith('55')) formattedPhone = '55' + formattedPhone;
 
@@ -318,14 +306,10 @@ serve(async (req) => {
 
         if (response.ok) {
           const messageId = data.messages?.[0]?.id || null;
-
-          // Parallelize all DB writes — no need to await sequentially
           await Promise.all([
             supabase.from('dispatch_recipients').update({
-              status: 'sent',
-              message_wamid: messageId,
+              status: 'sent', message_wamid: messageId,
             }).eq('id', recipient.id),
-
             supabase.from('whatsapp_messages').insert({
               phone: formattedPhone,
               message: rendered || `[Template: ${dispatch.template_name}]`,
@@ -335,32 +319,38 @@ serve(async (req) => {
               media_type: 'text',
               whatsapp_number_id: dispatch.whatsapp_number_id,
             }),
-
             supabase.from('chat_finished_conversations').upsert({
               phone: formattedPhone,
               finished_at: new Date().toISOString(),
               finish_reason: 'disparo_msg',
             } as any, { onConflict: 'phone' }),
           ]);
-
-          batchSent++;
+          return true; // sent
         } else {
-          const errorMsg = data.error?.message || JSON.stringify(data);
-          console.error(`Failed to send to ${formattedPhone}:`, errorMsg);
-          await supabase.from('dispatch_recipients').update({
-            status: 'failed',
-          }).eq('id', recipient.id);
-          batchFailed++;
+          console.error(`Failed to send to ${formattedPhone}:`, data.error?.message || JSON.stringify(data));
+          await supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', recipient.id);
+          return false; // failed
         }
-
-        // Delay between messages
-        await new Promise(resolve => setTimeout(resolve, DELAY_MS));
       } catch (sendErr) {
         console.error(`Error sending to ${formattedPhone}:`, sendErr);
-        await supabase.from('dispatch_recipients').update({
-          status: 'failed',
-        }).eq('id', recipient.id);
-        batchFailed++;
+        await supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', recipient.id);
+        return false;
+      }
+    }
+
+    // Process in chunks of CONCURRENCY
+    for (let i = 0; i < pendingRecipients.length; i += CONCURRENCY) {
+      // Check cancellation every chunk
+      if (i > 0 && i % (CONCURRENCY * 5) === 0) {
+        const { data: checkDisp } = await supabase
+          .from('dispatch_history').select('status').eq('id', dispatchId).single();
+        if (checkDisp?.status === 'cancelled') { cancelled = true; break; }
+      }
+
+      const chunk = pendingRecipients.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(chunk.map(r => sendOne(r)));
+      for (const ok of results) {
+        if (ok) batchSent++; else batchFailed++;
       }
     }
 
