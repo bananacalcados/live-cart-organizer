@@ -624,6 +624,7 @@ export function EmailBuilder({ initialBlocks, initialName = '', initialSubject =
           </div>
         </ScrollArea>
       </div>
+      </div>{/* close flex row */}
 
       {/* ── Preview Dialog ── */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
