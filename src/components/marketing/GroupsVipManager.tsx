@@ -107,13 +107,15 @@ export function GroupsVipManager() {
 
   useEffect(() => { fetchGroups(); fetchCampaigns(); }, [fetchGroups, fetchCampaigns]);
 
+  const { selectedNumberId } = useWhatsAppNumberStore();
+
   const syncGroups = async () => {
     setIsSyncing(true);
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
         method: 'POST',
         headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ syncToDb: true }),
+        body: JSON.stringify({ syncToDb: true, whatsapp_number_id: selectedNumberId }),
       });
       const data = await res.json();
       if (data.success) { toast.success(`${data.total} grupos sincronizados!`); fetchGroups(); }
