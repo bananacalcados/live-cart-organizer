@@ -74,11 +74,10 @@ async function chargePagarme(
   const cardToken = tokenData.id;
 
   // 2. Create order/charge
-  // Distribute discount proportionally across items
+  // Distribute discount proportionally across items (only when items > total, i.e. discount)
   const itemsTotal = products.reduce((s, p) => s + Math.round(p.price * 100) * p.quantity, 0);
   const diff = itemsTotal - params.totalAmountCents;
 
-  // Distribute discount proportionally across all items
   const items = products.map((p, i) => {
     const unitCents = Math.round(p.price * 100);
     let adjustedCents = unitCents;
@@ -95,7 +94,7 @@ async function chargePagarme(
     };
   });
 
-  // Adjust last item to ensure total matches exactly
+  // Adjust last item to ensure total matches exactly when discount applied
   if (diff > 0) {
     const currentTotal = items.reduce((s, it) => s + it.amount * it.quantity, 0);
     const remaining = currentTotal - params.totalAmountCents;
@@ -103,6 +102,18 @@ async function chargePagarme(
       const lastItem = items[items.length - 1];
       lastItem.amount = Math.max(1, lastItem.amount - Math.ceil(remaining / lastItem.quantity));
     }
+  }
+
+  // When total > items (shipping), add shipping as a separate line item
+  // so Pagar.me charges the full amount including freight
+  if (diff < 0) {
+    const shippingCents = Math.abs(diff);
+    items.push({
+      amount: shippingCents,
+      description: "Frete",
+      quantity: 1,
+      code: "shipping",
+    });
   }
 
   const orderBody = {
