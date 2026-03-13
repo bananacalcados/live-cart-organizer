@@ -4,6 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
+import { EmailBuilder } from "@/components/marketing/email/EmailBuilder";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const EmailMarketing = () => {
   const navigate = useNavigate();
