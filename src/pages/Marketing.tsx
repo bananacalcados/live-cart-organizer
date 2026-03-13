@@ -821,6 +821,9 @@ export default function Marketing() {
                 <SelectItem value="push_notifications">🔔 Push Notifications</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="outline" size="sm" className="w-full mt-2 gap-2" onClick={() => navigate('/marketing/email-marketing')}>
+              <Mail className="h-4 w-4" />Email Marketing
+            </Button>
           </div>
 
           {/* Desktop: Scrollable TabsList */}
