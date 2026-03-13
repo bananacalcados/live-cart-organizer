@@ -7,10 +7,12 @@ import { ptBR } from "date-fns/locale";
 import {
   ArrowLeft, Plus, Play, Clock, CheckCircle, XCircle, Loader2,
   Trash2, Users, Send, Link as LinkIcon, Copy, Edit, Calendar as CalendarIcon,
-  Variable, Settings, ChevronLeft, ChevronRight, Search,
+  Variable, Settings, ChevronLeft, ChevronRight, Search, RefreshCw,
   UserPlus, UserMinus, Percent, BarChart3, AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
