@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay } from "date-fns";
@@ -7,10 +7,12 @@ import { ptBR } from "date-fns/locale";
 import {
   ArrowLeft, Plus, Play, Clock, CheckCircle, XCircle, Loader2,
   Trash2, Users, Send, Link as LinkIcon, Copy, Edit, Calendar as CalendarIcon,
-  Variable, Settings, ChevronLeft, ChevronRight, Search,
+  Variable, Settings, ChevronLeft, ChevronRight, Search, RefreshCw,
   UserPlus, UserMinus, Percent, BarChart3, AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -113,7 +115,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [contactSearchQuery, setContactSearchQuery] = useState("");
   const [importFilterDateFrom, setImportFilterDateFrom] = useState<Date | undefined>(undefined);
   const [importFilterDateTo, setImportFilterDateTo] = useState<Date | undefined>(undefined);
-
+  const [isSyncingFromZapi, setIsSyncingFromZapi] = useState(false);
+  const { selectedNumberId } = useWhatsAppNumberStore();
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
     setCampaign(data);
@@ -759,6 +762,24 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
               </div>
+              <WhatsAppNumberSelector filterProvider="zapi" className="w-[180px] h-9 text-xs" />
+              <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={async () => {
+                setIsSyncingFromZapi(true);
+                try {
+                  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
+                    method: 'POST',
+                    headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ syncToDb: true, whatsapp_number_id: selectedNumberId }),
+                  });
+                  const data = await res.json();
+                  if (data.success) { toast.success(`${data.total} grupos sincronizados do WhatsApp!`); fetchAllGroups(); }
+                  else toast.error(data.error || "Erro ao sincronizar");
+                } catch { toast.error("Erro ao sincronizar"); }
+                finally { setIsSyncingFromZapi(false); }
+              }} disabled={isSyncingFromZapi}>
+                <RefreshCw className={`h-3.5 w-3.5 ${isSyncingFromZapi ? 'animate-spin' : ''}`} />
+                Sincronizar do WhatsApp
+              </Button>
               <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={() => setShowCreateGroup(true)}>
                 <Plus className="h-3.5 w-3.5" /> Criar Grupo
               </Button>

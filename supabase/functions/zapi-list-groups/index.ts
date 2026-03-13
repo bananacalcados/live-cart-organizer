@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,18 +13,10 @@ serve(async (req) => {
   }
 
   try {
-    const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const token = Deno.env.get('ZAPI_TOKEN');
-    const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+    const { syncToDb, filterGroupIds, whatsapp_number_id } = await req.json().catch(() => ({ syncToDb: false, filterGroupIds: null, whatsapp_number_id: null }));
 
-    if (!instanceId || !token || !clientToken) {
-      return new Response(
-        JSON.stringify({ error: 'Z-API credentials not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { syncToDb, filterGroupIds } = await req.json().catch(() => ({ syncToDb: false, filterGroupIds: null }));
+    // Resolve credentials from DB or env vars
+    const { instanceId, token, clientToken } = await resolveZApiCredentials(whatsapp_number_id);
 
     // Fetch all groups from Z-API with pagination
     let allGroups: any[] = [];
@@ -73,7 +66,7 @@ serve(async (req) => {
       console.log(`Filtered to ${groupsOnly.length} campaign groups out of ${allGroups.length} total`);
     }
 
-    // Fetch metadata (participant count + photo) for each group using light-group-metadata
+    // Fetch metadata (participant count + photo) for each group
     console.log(`Fetching metadata for ${groupsOnly.length} groups...`);
     
     for (const group of groupsOnly) {
@@ -86,22 +79,19 @@ serve(async (req) => {
         
         if (metaRes.ok) {
           const metaData = await metaRes.json();
-          // Get participant count from metadata
           if (metaData?.participants) {
             group._participantCount = metaData.participants.length;
           } else if (metaData?.participantsCount) {
             group._participantCount = metaData.participantsCount;
           }
-          // Get photo if missing
           if (!group.imgUrl && !group.profileThumbnail) {
             if (metaData?.profilePictureUrl || metaData?.imgUrl) {
               group.imgUrl = metaData.profilePictureUrl || metaData.imgUrl;
             }
           }
         } else {
-          await metaRes.text(); // consume body
+          await metaRes.text();
         }
-        // Small delay to avoid rate limiting
         await new Promise(r => setTimeout(r, 300));
       } catch (err) {
         console.error(`Error fetching metadata for ${group.name}:`, err);
@@ -126,7 +116,7 @@ serve(async (req) => {
       }));
 
       if (rows.length > 0) {
-        // First get current participant counts for delta tracking
+        // Get current participant counts for delta tracking
         const { data: existingGroups } = await supabase
           .from('whatsapp_groups')
           .select('id, group_id, instance_id, participant_count')
@@ -136,7 +126,7 @@ serve(async (req) => {
           (existingGroups || []).map((g: any) => [`${g.group_id}_${g.instance_id}`, g])
         );
 
-        // Check for orphan records (same group_id but NULL instance_id) and consolidate
+        // Handle orphan records
         const groupIds = rows.map((r: any) => r.group_id);
         const { data: orphanGroups } = await supabase
           .from('whatsapp_groups')
@@ -146,55 +136,31 @@ serve(async (req) => {
 
         if (orphanGroups && orphanGroups.length > 0) {
           console.log(`Found ${orphanGroups.length} orphan group records to consolidate`);
-          
           for (const orphan of orphanGroups) {
-            // Update any campaign references from orphan ID to the synced record
             const existingSynced = existingMap.get(`${orphan.group_id}_${instanceId}`);
             if (existingSynced) {
-              // There's already a synced record — migrate references and delete orphan
               await supabase.rpc('migrate_group_references', { old_id: orphan.id, new_id: existingSynced.id }).catch(() => null);
-              
-              // Update campaigns target_groups arrays
-              const { data: campaigns } = await supabase
-                .from('group_campaigns')
-                .select('id, target_groups');
-              
+              const { data: campaigns } = await supabase.from('group_campaigns').select('id, target_groups');
               if (campaigns) {
                 for (const camp of campaigns) {
                   const targets = camp.target_groups as string[];
                   if (targets && targets.includes(orphan.id)) {
                     const updated = targets.map((t: string) => t === orphan.id ? existingSynced.id : t);
                     await supabase.from('group_campaigns').update({ target_groups: updated }).eq('id', camp.id);
-                    console.log(`Migrated campaign ${camp.id} reference from ${orphan.id} to ${existingSynced.id}`);
                   }
                 }
               }
-
-              // Also update group_redirect_links
-              await supabase.from('group_redirect_links')
-                .update({})  // trigger updated_at
-                .eq('campaign_id', 'dummy'); // no-op, we handle below
-              
-              // Delete orphan record
               await supabase.from('whatsapp_groups').delete().eq('id', orphan.id);
-              console.log(`Deleted orphan record ${orphan.id} for group ${orphan.group_id}`);
             } else {
-              // No synced record yet — just set the instance_id on the orphan so upsert finds it
-              await supabase.from('whatsapp_groups')
-                .update({ instance_id: instanceId })
-                .eq('id', orphan.id);
-              console.log(`Set instance_id on orphan ${orphan.id} for group ${orphan.group_id}`);
+              await supabase.from('whatsapp_groups').update({ instance_id: instanceId }).eq('id', orphan.id);
             }
           }
         }
 
-        // Upsert groups with previous_participant_count
+        // Upsert with previous_participant_count
         const rowsWithPrevious = rows.map((r: any) => {
           const existing = existingMap.get(`${r.group_id}_${r.instance_id}`);
-          return {
-            ...r,
-            previous_participant_count: existing?.participant_count || 0,
-          };
+          return { ...r, previous_participant_count: existing?.participant_count || 0 };
         });
 
         const { error } = await supabase
@@ -205,8 +171,6 @@ serve(async (req) => {
           console.error('Error syncing groups to DB:', error);
         } else {
           console.log(`Synced ${rows.length} groups to DB`);
-
-          // Save snapshots for tracking over time
           const { data: updatedGroups } = await supabase
             .from('whatsapp_groups')
             .select('id, participant_count')
@@ -218,7 +182,6 @@ serve(async (req) => {
               participant_count: g.participant_count,
             }));
             await supabase.from('whatsapp_group_snapshots').insert(snapshots);
-            console.log(`Saved ${snapshots.length} snapshots`);
           }
         }
       }

@@ -18,6 +18,8 @@ import { GroupSettingsPanel } from "./GroupSettingsPanel";
 import { CampaignDetailPanel } from "./CampaignDetailPanel";
 import { VipStrategyPanel } from "./VipStrategyPanel";
 import { CreateGroupDialog } from "./CreateGroupDialog";
+import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 
 interface WhatsAppGroup {
   id: string;
@@ -105,13 +107,15 @@ export function GroupsVipManager() {
 
   useEffect(() => { fetchGroups(); fetchCampaigns(); }, [fetchGroups, fetchCampaigns]);
 
+  const { selectedNumberId } = useWhatsAppNumberStore();
+
   const syncGroups = async () => {
     setIsSyncing(true);
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
         method: 'POST',
         headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ syncToDb: true }),
+        body: JSON.stringify({ syncToDb: true, whatsapp_number_id: selectedNumberId }),
       });
       const data = await res.json();
       if (data.success) { toast.success(`${data.total} grupos sincronizados!`); fetchGroups(); }
@@ -203,6 +207,7 @@ export function GroupsVipManager() {
                 <SelectItem value="available">🟢 Disponíveis</SelectItem>
               </SelectContent>
             </Select>
+            <WhatsAppNumberSelector filterProvider="zapi" className="w-[180px] h-9 text-xs" />
             <Button variant="outline" size="sm" onClick={syncGroups} disabled={isSyncing} className="gap-1">
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sincronizar
             </Button>
