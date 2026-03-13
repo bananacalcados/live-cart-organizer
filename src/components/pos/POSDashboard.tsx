@@ -152,9 +152,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
             .select("total")
             .eq("store_id", storeId)
             .eq("status", "completed")
-            .not("paid_at", "is", null)
-            .gte("paid_at", start.toISOString())
-            .lte("paid_at", end.toISOString());
+            .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
           const { data: influencedSales } = await (query as any).in("customer_phone", phones);
           setInfluencedRevenue((influencedSales || []).reduce((s, sale) => s + (sale.total || 0), 0));
         } else {
