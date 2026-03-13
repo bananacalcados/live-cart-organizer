@@ -125,7 +125,20 @@ mcpServer.tool({
     const sb = getSupabase();
     const { data, error } = await sb.from("orders").select("*, customers(*), customer_registrations(*)").eq("id", order_id).single();
     if (error) return { content: [{ type: "text", text: `Erro: ${error.message}` }] };
-    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+
+    // Compute total: subtotal - discount + shipping
+    const products = (data.products as any[]) || [];
+    const subtotal = products.reduce((sum: number, p: any) => sum + (p.price || 0) * (p.quantity || 1), 0);
+    let discount = 0;
+    if (data.discount_value) {
+      discount = data.discount_type === 'percentage'
+        ? subtotal * (data.discount_value / 100)
+        : data.discount_value;
+    }
+    const shipping = data.free_shipping ? 0 : (data.shipping_cost || 0);
+    const computed_total = Math.round((subtotal - discount + shipping) * 100) / 100;
+
+    return { content: [{ type: "text", text: JSON.stringify({ ...data, subtotal, discount_applied: Math.round(discount * 100) / 100, shipping_applied: shipping, computed_total }, null, 2) }] };
   },
 });
 
