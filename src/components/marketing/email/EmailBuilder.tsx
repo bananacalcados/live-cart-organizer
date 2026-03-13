@@ -491,8 +491,11 @@ export function EmailBuilder({ initialBlocks, initialName = '', initialSubject =
   const html = generateEmailHTML(blocks);
 
   const handleSave = () => {
-    onSave?.(blocks, html);
-    toast.success('Template salvo com sucesso!');
+    if (!templateName.trim()) {
+      toast.error('Digite um nome para o template');
+      return;
+    }
+    onSave?.(templateName, templateSubject, blocks, html);
   };
 
   const blockTypes: EmailBlockType[] = ['header', 'text', 'image', 'button', 'divider', 'spacer', 'footer'];
