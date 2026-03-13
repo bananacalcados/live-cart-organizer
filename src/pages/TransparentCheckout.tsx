@@ -1189,7 +1189,7 @@ export default function TransparentCheckout() {
         await supabase.functions.invoke("shopify-create-order", { body: { orderId } });
       } catch (err) { console.error("Error creating Shopify order:", err); }
     }
-  }, [orderData, orderId, liveCartRaw, searchParams]);
+  }, [orderData, orderId, liveCartRaw, searchParams, customerForm]);
 
   if (isLoading) {
     return (

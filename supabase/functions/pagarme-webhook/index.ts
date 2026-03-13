@@ -220,6 +220,8 @@ serve(async (req) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pedido_id: order.id, gateway: 'pagarme', transaction_id: String(transactionId) }),
           }).catch(err => console.error('Livete webhook error:', err));
+          // Auto-create Shopify order
+          await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
         }
       }
     } else if (orderSource === "pos_sales" && sale) {

@@ -304,6 +304,8 @@ serve(async (req) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pedido_id: ourOrderId, gateway: 'appmax', transaction_id: String(transactionId) }),
           }).catch(err => console.error('Livete webhook error:', err));
+          // Auto-create Shopify order
+          await autoCreateShopifyOrder(supabase, ourOrderId, "orders", supabaseUrl, supabaseKey);
         }
       } else if (isFailed && record.is_paid) {
         // Reverter pagamento se já estava pago e veio status de falha

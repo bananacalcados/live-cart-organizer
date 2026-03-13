@@ -345,6 +345,8 @@ async function updateOrder(
     if (error) { console.error("Error updating orders:", error); return false; }
     console.log(`orders ${orderId} marked as paid via VINDI webhook`);
     console.log(`[vindi] Vinculado vindi_transaction_id=${tokenTransaction} ao pedido ${orderId}`);
+    // Auto-create Shopify order
+    await autoCreateShopifyOrder(supabase, orderId, "orders", supabaseUrl, supabaseKey);
     return true;
   }
   // Reverter pagamento se já estava pago e veio status de falha (ex: antifraude reprovou)
