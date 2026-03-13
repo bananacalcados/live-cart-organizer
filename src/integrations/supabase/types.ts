@@ -1900,6 +1900,221 @@ export type Database = {
           },
         ]
       }
+      email_campaigns: {
+        Row: {
+          created_at: string
+          from_email: string | null
+          from_name: string | null
+          id: string
+          list_id: string | null
+          name: string
+          scheduled_at: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+          template_id: string | null
+          total_recipients: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          list_id?: string | null
+          name: string
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string
+          subject: string
+          template_id?: string | null
+          total_recipients?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          list_id?: string | null
+          name?: string
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          template_id?: string | null
+          total_recipients?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "email_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaigns_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_contacts: {
+        Row: {
+          created_at: string
+          custom_fields: Json | null
+          email: string
+          id: string
+          list_id: string
+          name: string | null
+          subscribed: boolean
+          tags: string[] | null
+          unsubscribed_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          custom_fields?: Json | null
+          email: string
+          id?: string
+          list_id: string
+          name?: string | null
+          subscribed?: boolean
+          tags?: string[] | null
+          unsubscribed_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          custom_fields?: Json | null
+          email?: string
+          id?: string
+          list_id?: string
+          name?: string | null
+          subscribed?: boolean
+          tags?: string[] | null
+          unsubscribed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_contacts_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "email_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_events: {
+        Row: {
+          campaign_id: string
+          contact_id: string
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          campaign_id: string
+          contact_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          campaign_id?: string
+          contact_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "email_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_lists: {
+        Row: {
+          contact_count: number
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          contact_count?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          contact_count?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      email_templates: {
+        Row: {
+          blocks: Json | null
+          created_at: string
+          html_content: string | null
+          id: string
+          name: string
+          subject: string | null
+          thumbnail_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          blocks?: Json | null
+          created_at?: string
+          html_content?: string | null
+          id?: string
+          name: string
+          subject?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          blocks?: Json | null
+          created_at?: string
+          html_content?: string | null
+          id?: string
+          name?: string
+          subject?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       event_promotions: {
         Row: {
           created_at: string
