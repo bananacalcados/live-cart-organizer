@@ -4,6 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
+import { EmailBuilder } from "@/components/marketing/email/EmailBuilder";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const EmailMarketing = () => {
   const navigate = useNavigate();
@@ -66,22 +69,27 @@ const EmailMarketing = () => {
           </TabsContent>
 
           <TabsContent value="templates">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
-                  Templates de Email
-                </CardTitle>
-                <CardDescription>
-                  Crie templates reutilizáveis com editor visual drag-and-drop. Salve modelos para suas campanhas recorrentes.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-center h-48 text-muted-foreground">
-                  Em breve — editor de templates de email
-                </div>
-              </CardContent>
-            </Card>
+            <EmailBuilder
+              onSave={async (blocks, html) => {
+                try {
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (!user) {
+                    toast.error('Faça login para salvar templates');
+                    return;
+                  }
+                  const { error } = await supabase.from('email_templates').insert({
+                    name: 'Novo Template',
+                    blocks: blocks as any,
+                    html_content: html,
+                    user_id: user.id,
+                  });
+                  if (error) throw error;
+                  toast.success('Template salvo!');
+                } catch (err: any) {
+                  toast.error('Erro ao salvar: ' + err.message);
+                }
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="contatos">
