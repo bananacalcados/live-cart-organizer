@@ -242,13 +242,16 @@ serve(async (req) => {
 
     if (!pendingRecipients || pendingRecipients.length === 0) {
       // All done
-      const { data: counts } = await supabase
+      const { count: sentCount } = await supabase
         .from('dispatch_recipients')
-        .select('status')
-        .eq('dispatch_id', dispatchId);
-      
-      const sentCount = (counts || []).filter(r => r.status === 'sent').length;
-      const failedCount = (counts || []).filter(r => r.status === 'failed').length;
+        .select('*', { count: 'exact', head: true })
+        .eq('dispatch_id', dispatchId)
+        .eq('status', 'sent');
+      const { count: failedCount } = await supabase
+        .from('dispatch_recipients')
+        .select('*', { count: 'exact', head: true })
+        .eq('dispatch_id', dispatchId)
+        .eq('status', 'failed');
 
       await supabase.from('dispatch_history').update({
         processing_batch: false,
