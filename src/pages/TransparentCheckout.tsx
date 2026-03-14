@@ -283,9 +283,27 @@ function StepIdentification({ form, setForm, onNext }: { form: CustomerFormData;
   );
 }
 
+interface FreightOption {
+  id: string;
+  carrier: string;
+  service: string;
+  price: number;
+  delivery_days: number | null;
+  type: string;
+}
+
 // ── Step 2: Delivery Address ────────────────────────────────────
-function StepDelivery({ form, setForm, onNext, onBack }: { form: CustomerFormData; setForm: (f: CustomerFormData) => void; onNext: () => void; onBack: () => void }) {
+function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShippingSelected }: {
+  form: CustomerFormData; setForm: (f: CustomerFormData) => void;
+  onNext: () => void; onBack: () => void;
+  orderId?: string; orderData: OrderData | null;
+  onShippingSelected: (option: FreightOption) => void;
+}) {
   const [fetchingCep, setFetchingCep] = useState(false);
+  const [freightOptions, setFreightOptions] = useState<FreightOption[]>([]);
+  const [loadingFreight, setLoadingFreight] = useState(false);
+  const [selectedFreight, setSelectedFreight] = useState<string | null>(null);
+  const freightQuotedCep = useRef<string>("");
 
   const lookupCep = async (cepValue: string) => {
     const digits = cepValue.replace(/\D/g, "");
@@ -306,11 +324,55 @@ function StepDelivery({ form, setForm, onNext, onBack }: { form: CustomerFormDat
       }
     } catch {}
     setFetchingCep(false);
+    // Quote freight after CEP lookup
+    quoteFreight(digits);
+  };
+
+  const quoteFreight = async (cepDigits: string) => {
+    if (cepDigits.length !== 8 || cepDigits === freightQuotedCep.current) return;
+    freightQuotedCep.current = cepDigits;
+    setLoadingFreight(true);
+    setFreightOptions([]);
+    setSelectedFreight(null);
+    try {
+      const totalValue = orderData?.subtotal || 0;
+      const totalQty = orderData?.products.reduce((s, p) => s + p.quantity, 0) || 1;
+      const { data, error } = await supabase.functions.invoke("checkout-quote-freight", {
+        body: {
+          recipient_cep: cepDigits,
+          store: "centro", // default store
+          total_value: totalValue,
+          weight_kg: 0.3,
+          items_count: totalQty,
+        },
+      });
+      if (error) throw error;
+      if (data?.quotes) {
+        setFreightOptions(data.quotes);
+      }
+    } catch (err) {
+      console.error("Error quoting freight:", err);
+      // Fallback: at least show pickup
+      setFreightOptions([{
+        id: 'pickup', carrier: 'Retirada na Loja', service: 'Grátis',
+        price: 0, delivery_days: 0, type: 'pickup',
+      }]);
+    }
+    setLoadingFreight(false);
+  };
+
+  const handleSelectFreight = (option: FreightOption) => {
+    setSelectedFreight(option.id);
+    onShippingSelected(option);
   };
 
   const handleNext = () => {
     if (!form.cep.trim() || !form.address.trim() || !form.addressNumber.trim() || !form.neighborhood.trim() || !form.city.trim() || !form.state.trim()) {
       toast.error("Preencha todos os campos obrigatórios do endereço");
+      return;
+    }
+    if (!selectedFreight) {
+      toast.error("Selecione uma opção de frete");
       return;
     }
     onNext();
@@ -362,9 +424,62 @@ function StepDelivery({ form, setForm, onNext, onBack }: { form: CustomerFormDat
           </div>
         </div>
       </div>
+
+      {/* Freight Options */}
+      {loadingFreight && (
+        <div className="flex items-center gap-2 p-4 bg-secondary/30 rounded-lg">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Calculando opções de frete...</span>
+        </div>
+      )}
+
+      {freightOptions.length > 0 && !loadingFreight && (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Opção de Frete *</Label>
+          <div className="space-y-2">
+            {freightOptions.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => handleSelectFreight(opt)}
+                className={`w-full flex items-center justify-between p-3 rounded-lg border-2 transition-all text-left ${
+                  selectedFreight === opt.id
+                    ? 'border-primary bg-primary/5 shadow-sm'
+                    : 'border-border hover:border-primary/40 bg-background'
+                }`}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">{opt.carrier}</span>
+                    {opt.type === 'pickup' && <Badge variant="secondary" className="text-[10px]">🏪</Badge>}
+                    {opt.type === 'local' && <Badge variant="secondary" className="text-[10px]">🏍️</Badge>}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-muted-foreground">{opt.service}</span>
+                    {opt.delivery_days !== null && opt.delivery_days > 0 && (
+                      <span className="text-xs text-muted-foreground">• {opt.delivery_days} dia{opt.delivery_days > 1 ? 's' : ''} úteis</span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  {opt.price === 0 ? (
+                    <span className="font-bold text-sm text-stage-paid">GRÁTIS</span>
+                  ) : (
+                    <span className="font-bold text-sm">R$ {opt.price.toFixed(2)}</span>
+                  )}
+                </div>
+                {selectedFreight === opt.id && (
+                  <CheckCircle2 className="h-5 w-5 text-primary ml-2 flex-shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-3">
         <Button variant="outline" onClick={onBack} className="flex-1 h-12">Voltar</Button>
-        <Button onClick={handleNext} className="flex-[2] h-12 text-base font-semibold">
+        <Button onClick={handleNext} className="flex-[2] h-12 text-base font-semibold" disabled={!selectedFreight}>
           Ir para Pagamento <ChevronRight className="h-5 w-5 ml-1" />
         </Button>
       </div>
