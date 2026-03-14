@@ -272,24 +272,7 @@ const Events = () => {
                     rows={3}
                   />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="shipping" className="flex items-center gap-2">
-                      <Truck className="h-4 w-4" />
-                      Frete Fixo (R$)
-                    </Label>
-                    <Input
-                      id="shipping"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="Ex: 19.99 (deixe vazio se não cobrar)"
-                      value={shippingCost}
-                      onChange={(e) => setShippingCost(e.target.value)}
-                    />
-                     <p className="text-xs text-muted-foreground">
-                       Se definido, será aplicado automaticamente ao primeiro pedido de cada cliente. A partir do 2º pedido no mesmo evento, o frete é grátis.
-                     </p>
-                   </div>
+                   {/* Frete fixo removido — agora calculado dinamicamente no checkout */}
                    <div className="space-y-2">
                      <Label className="flex items-center gap-2">
                        <Phone className="h-4 w-4" />
@@ -449,12 +432,6 @@ const Events = () => {
                           <p className="text-sm text-muted-foreground line-clamp-2">
                             {event.description}
                           </p>
-                        )}
-                        {(event as any).default_shipping_cost && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Truck className="h-4 w-4" />
-                            <span>Frete fixo: <strong>R$ {Number((event as any).default_shipping_cost).toFixed(2)}</strong></span>
-                          </div>
                         )}
                         {(event as any).whatsapp_number_id && (() => {
                           const wn = whatsappNumbers.find(n => n.id === (event as any).whatsapp_number_id);

@@ -122,25 +122,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
 
       // Cart link will be set after insert (needs orderId for transparent checkout)
 
-      // Check for event shipping cost and if customer already has an order in this event
-      let applyShipping = false;
-      let shippingCost = 0;
-      try {
-        const { data: eventData } = await supabase
-          .from('events')
-          .select('default_shipping_cost')
-          .eq('id', eventId)
-          .single();
-        
-        if (eventData?.default_shipping_cost) {
-          shippingCost = Number(eventData.default_shipping_cost);
-          // Check if customer already has any order in this event
-          const existingOrders = get().orders.filter(
-            o => o.event_id === eventId && o.customer_id === customer.id
-          );
-          applyShipping = existingOrders.length === 0; // First order gets shipping
-        }
-      } catch {}
+      // Shipping is now calculated dynamically at checkout — no longer applied from event config
 
       const { data, error } = await supabase
         .from('orders')
@@ -149,9 +131,8 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           customer_id: customer.id,
           products: productsToJson(products),
           stage: 'incomplete_order',
-          free_shipping: !applyShipping && shippingCost > 0 ? true : false,
-          shipping_cost: applyShipping ? shippingCost : 0,
-          notes: applyShipping && shippingCost > 0 ? `Frete: R$ ${shippingCost.toFixed(2)}` : (!applyShipping && shippingCost > 0 ? 'Frete grátis (2º+ pedido)' : undefined),
+          free_shipping: false,
+          shipping_cost: 0,
         })
         .select(`
           *,

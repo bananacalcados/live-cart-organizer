@@ -202,18 +202,8 @@ export default function CatalogLeadPage() {
       if (error || !data) { setLoading(false); return; }
       const cfg = data as any;
 
-      // Resolve shipping: page's own shipping_cost, or fallback to event's default_shipping_cost
-      let resolvedShipping = Number(cfg.shipping_cost) || 0;
-      if (resolvedShipping === 0) {
-        const { data: linkedEvent } = await supabase
-          .from("events")
-          .select("default_shipping_cost")
-          .eq("catalog_lead_page_id", cfg.id)
-          .maybeSingle();
-        if (linkedEvent) {
-          resolvedShipping = Number((linkedEvent as any).default_shipping_cost) || 0;
-        }
-      }
+      // Shipping is now calculated dynamically at checkout
+      const resolvedShipping = 0;
 
       setConfig({
         id: cfg.id,
