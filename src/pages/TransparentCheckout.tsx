@@ -361,7 +361,14 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
     setLoadingFreight(false);
   };
 
-  const handleSelectFreight = (option: FreightOption) => {
+  // Auto-quote freight if CEP is already filled on mount (e.g. pre-filled from previous registration)
+  useEffect(() => {
+    const digits = form.cep.replace(/\D/g, "");
+    if (digits.length === 8 && freightOptions.length === 0 && !loadingFreight) {
+      quoteFreight(digits);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     setSelectedFreight(option.id);
     onShippingSelected(option);
   };
