@@ -426,6 +426,29 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         )}
       </div>
 
+      {/* Toggle Frete Grátis */}
+      {!order.is_paid && !order.paid_externally && (
+        <div className="mb-3">
+          <Button
+            variant={order.free_shipping ? "default" : "outline"}
+            size="sm"
+            className={`w-full text-xs gap-1.5 h-7 ${order.free_shipping ? 'bg-stage-paid hover:bg-stage-paid/90 text-white' : ''}`}
+            disabled={togglingFreeShipping}
+            onClick={async (e) => {
+              e.stopPropagation();
+              setTogglingFreeShipping(true);
+              try {
+                await updateOrder(order.id, { free_shipping: !order.free_shipping } as any);
+                toast.success(order.free_shipping ? 'Frete grátis removido' : 'Frete grátis ativado!');
+              } catch { toast.error('Erro ao atualizar'); }
+              setTogglingFreeShipping(false);
+            }}
+          >
+            <Truck className="h-3 w-3" />
+            {order.free_shipping ? '✅ Frete Grátis Ativo' : 'Ativar Frete Grátis'}
+          </Button>
+        </div>
+      )}
       {order.customer?.whatsapp && (
         <div className="flex items-center gap-2 mb-3">
           <a
