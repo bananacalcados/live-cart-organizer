@@ -8450,6 +8450,17 @@ export type Database = {
           phone: string
         }[]
       }
+      lookup_customer_by_whatsapp: {
+        Args: { p_whatsapp: string }
+        Returns: {
+          created_at: string
+          id: string
+          instagram_handle: string
+          is_banned: boolean
+          tags: string[]
+          whatsapp: string
+        }[]
+      }
       search_products_unaccent: {
         Args: { p_store_id: string; search_term: string }
         Returns: {
