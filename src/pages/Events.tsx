@@ -433,12 +433,6 @@ const Events = () => {
                             {event.description}
                           </p>
                         )}
-                        {(event as any).default_shipping_cost && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Truck className="h-4 w-4" />
-                            <span>Frete fixo: <strong>R$ {Number((event as any).default_shipping_cost).toFixed(2)}</strong></span>
-                          </div>
-                        )}
                         {(event as any).whatsapp_number_id && (() => {
                           const wn = whatsappNumbers.find(n => n.id === (event as any).whatsapp_number_id);
                           return wn ? (
