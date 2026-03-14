@@ -11,6 +11,21 @@ const productsToJson = (products: DbOrderProduct[]): Json => {
   return products as unknown as Json;
 };
 
+// Notify external agent when payment is confirmed
+const notifyPaymentConfirmed = async (orderId: string) => {
+  try {
+    const webhookUrl = import.meta.env.VITE_AGENTE2_PAGAMENTO_CONFIRMADO || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado';
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pedido_id: orderId, loja: 'centro' }),
+    });
+    console.log(`[payment-webhook] Notified agent for order ${orderId}`);
+  } catch (err) {
+    console.error('[payment-webhook] Failed to notify agent:', err);
+  }
+};
+
 interface DbOrderStore {
   orders: DbOrder[];
   isLoading: boolean;
