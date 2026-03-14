@@ -368,7 +368,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
       quoteFreight(digits);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
+  const handleSelectFreight = (option: FreightOption) => {
     setSelectedFreight(option.id);
     onShippingSelected(option);
   };
