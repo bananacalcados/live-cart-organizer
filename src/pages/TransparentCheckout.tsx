@@ -1394,7 +1394,31 @@ export default function TransparentCheckout() {
                     <StepIdentification form={customerForm} setForm={setCustomerForm} onNext={handleStep1Next} />
                   )}
                   {currentStep === 2 && (
-                    <StepDelivery form={customerForm} setForm={setCustomerForm} onNext={handleStep2Next} onBack={() => setCurrentStep(1)} />
+                    <StepDelivery
+                      form={customerForm}
+                      setForm={setCustomerForm}
+                      onNext={handleStep2Next}
+                      onBack={() => setCurrentStep(1)}
+                      orderId={orderId}
+                      orderData={orderData}
+                      onShippingSelected={async (option) => {
+                        // Update order shipping_cost in DB and local state
+                        const newShippingCost = option.price;
+                        const isPickup = option.type === 'pickup';
+                        if (orderId && !orderData.id.startsWith("live-")) {
+                          await supabase.from("orders").update({
+                            shipping_cost: newShippingCost,
+                            free_shipping: isPickup,
+                          }).eq("id", orderId);
+                        }
+                        // Recalculate total
+                        setOrderData(prev => {
+                          if (!prev) return prev;
+                          const totalAmount = Math.round(Math.max(0, prev.subtotal - prev.discountAmount + newShippingCost) * 100) / 100;
+                          return { ...prev, shippingCost: newShippingCost, freeShipping: isPickup, totalAmount };
+                        });
+                      }}
+                    />
                   )}
                   {currentStep === 3 && (
                     <StepPayment
