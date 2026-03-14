@@ -340,19 +340,27 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
       const { data, error } = await supabase.functions.invoke("checkout-quote-freight", {
         body: {
           recipient_cep: cepDigits,
-          store: "centro", // default store
+          store: "centro",
           total_value: totalValue,
           weight_kg: 0.3,
           items_count: totalQty,
+          order_id: orderId,
         },
       });
       if (error) throw error;
       if (data?.quotes) {
         setFreightOptions(data.quotes);
+        // Auto-select free shipping for repeat customers
+        if (data.repeat_customer_free_shipping) {
+          const freeOpt = data.quotes.find((q: FreightOption) => q.type === 'repeat_free');
+          if (freeOpt) {
+            setSelectedFreight(freeOpt.id);
+            onShippingSelected(freeOpt);
+          }
+        }
       }
     } catch (err) {
       console.error("Error quoting freight:", err);
-      // Fallback: at least show pickup
       setFreightOptions([{
         id: 'pickup', carrier: 'Retirada na Loja', service: 'Grátis',
         price: 0, delivery_days: 0, type: 'pickup',
@@ -460,6 +468,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
                     <span className="font-medium text-sm">{opt.carrier}</span>
                     {opt.type === 'pickup' && <Badge variant="secondary" className="text-[10px]">🏪</Badge>}
                     {opt.type === 'local' && <Badge variant="secondary" className="text-[10px]">🏍️</Badge>}
+                    {opt.type === 'repeat_free' && <Badge className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">🎉 2ª compra</Badge>}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-xs text-muted-foreground">{opt.service}</span>
