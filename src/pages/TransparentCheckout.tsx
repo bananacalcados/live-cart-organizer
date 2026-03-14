@@ -305,14 +305,6 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
   const [selectedFreight, setSelectedFreight] = useState<string | null>(null);
   const freightQuotedCep = useRef<string>("");
 
-  // Auto-quote freight if CEP is already filled on mount (e.g. pre-filled from previous registration)
-  useEffect(() => {
-    const digits = form.cep.replace(/\D/g, "");
-    if (digits.length === 8 && freightOptions.length === 0 && !loadingFreight) {
-      lookupCep(form.cep);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const lookupCep = async (cepValue: string) => {
     const digits = cepValue.replace(/\D/g, "");
     if (digits.length !== 8) return;
