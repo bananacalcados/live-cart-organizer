@@ -8429,20 +8429,38 @@ export type Database = {
       get_orders_by_customer: {
         Args: { p_customer_id: string }
         Returns: {
+          appmax_order_id: string
+          cart_link: string
+          checkout_started_at: string
+          checkout_token: string
+          computed_total: number
           coupon_code: string
           created_at: string
           customer_id: string
+          discount_applied: number
           discount_type: string
           discount_value: number
+          eligible_for_prize: boolean
           event_id: string
           free_shipping: boolean
+          has_gift: boolean
+          has_unread_messages: boolean
           id: string
           is_paid: boolean
+          last_customer_message_at: string
+          last_sent_message_at: string
+          mercadopago_payment_id: string
           notes: string
+          pagarme_order_id: string
+          paid_at: string
           paid_externally: boolean
           products: Json
+          shipping_applied: number
           shipping_cost: number
           stage: string
+          subtotal: number
+          updated_at: string
+          vindi_transaction_id: string
         }[]
       }
       get_user_allowed_modules: {
