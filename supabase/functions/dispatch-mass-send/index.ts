@@ -171,7 +171,7 @@ serve(async (req) => {
 
     // Stale lock detection: if processing_batch is true for >90s, force release
     if (dispatch.processing_batch) {
-      const lockAge = Date.now() - new Date(dispatch.updated_at || dispatch.created_at).getTime();
+      const lockAge = Date.now() - new Date(dispatch.started_at || dispatch.created_at).getTime();
       if (lockAge < 90_000) {
         return new Response(JSON.stringify({ success: true, message: 'Another batch is processing' }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
