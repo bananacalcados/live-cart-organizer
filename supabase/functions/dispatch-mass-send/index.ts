@@ -358,17 +358,14 @@ serve(async (req) => {
     }
 
     // Update dispatch progress
-    const { data: totalCounts } = await supabase
-      .from('dispatch_recipients')
-      .select('status')
-      .eq('dispatch_id', dispatchId);
-
-    const totalSent = (totalCounts || []).filter(r => r.status === 'sent').length;
-    const totalFailed = (totalCounts || []).filter(r => r.status === 'failed').length;
-    const totalPending = (totalCounts || []).filter(r => r.status === 'pending').length;
-
-    // Release lock
-    await supabase.from('dispatch_history').update({
+    const [{ count: totalSent }, { count: totalFailed }, { count: totalPending }] = await Promise.all([
+      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+        .eq('dispatch_id', dispatchId).eq('status', 'sent'),
+      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+        .eq('dispatch_id', dispatchId).eq('status', 'failed'),
+      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+        .eq('dispatch_id', dispatchId).eq('status', 'pending'),
+    ]);
       processing_batch: false,
       sent_count: totalSent,
       failed_count: totalFailed,
