@@ -266,6 +266,8 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       updates.paid_at = paidAt;
       stateUpdates.is_paid = true;
       stateUpdates.paid_at = paidAt;
+      // Fire-and-forget webhook notification
+      notifyPaymentConfirmed(orderId);
     }
 
     try {
