@@ -147,6 +147,13 @@ serve(async (req) => {
 
         console.log("Order marked as paid:", orderId);
 
+        // Notify external agent
+        fetch(Deno.env.get('AGENTE2_PAGAMENTO_CONFIRMADO') || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pedido_id: orderId, loja: 'centro' }),
+        }).catch(err => console.error('Webhook notification error:', err));
+
         const { data: fullOrder } = await supabase
           .from("orders")
           .select("*, customer:customers(*)")

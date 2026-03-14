@@ -11,6 +11,21 @@ const productsToJson = (products: DbOrderProduct[]): Json => {
   return products as unknown as Json;
 };
 
+// Notify external agent when payment is confirmed
+const notifyPaymentConfirmed = async (orderId: string) => {
+  try {
+    const webhookUrl = import.meta.env.VITE_AGENTE2_PAGAMENTO_CONFIRMADO || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado';
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pedido_id: orderId, loja: 'centro' }),
+    });
+    console.log(`[payment-webhook] Notified agent for order ${orderId}`);
+  } catch (err) {
+    console.error('[payment-webhook] Failed to notify agent:', err);
+  }
+};
+
 interface DbOrderStore {
   orders: DbOrder[];
   isLoading: boolean;
@@ -205,6 +220,12 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         .eq('id', orderId);
 
       if (error) throw error;
+
+      // Check if is_paid just transitioned to true
+      const prevOrder = get().orders.find((o) => o.id === orderId);
+      if (updates.is_paid && prevOrder && !prevOrder.is_paid) {
+        notifyPaymentConfirmed(orderId);
+      }
       
       set((state) => ({
         orders: state.orders.map((o) => 
@@ -251,6 +272,8 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       updates.paid_at = paidAt;
       stateUpdates.is_paid = true;
       stateUpdates.paid_at = paidAt;
+      // Fire-and-forget webhook notification
+      notifyPaymentConfirmed(orderId);
     }
 
     try {
