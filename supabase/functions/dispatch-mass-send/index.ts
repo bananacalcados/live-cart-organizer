@@ -306,10 +306,11 @@ serve(async (req) => {
 
         if (response.ok) {
           const messageId = data.messages?.[0]?.id || null;
-          // Fire and forget DB writes for speed
-          supabase.from('dispatch_recipients').update({
+          // Await the critical update (recipient status) so counts are accurate
+          await supabase.from('dispatch_recipients').update({
             status: 'sent', message_wamid: messageId,
-          }).eq('id', recipient.id).then(() => {});
+          }).eq('id', recipient.id);
+          // Fire and forget non-critical writes
           supabase.from('whatsapp_messages').insert({
             phone: formattedPhone,
             message: rendered || `[Template: ${dispatch.template_name}]`,
@@ -327,12 +328,12 @@ serve(async (req) => {
           return true;
         } else {
           console.error(`Failed ${formattedPhone}:`, data.error?.message || JSON.stringify(data));
-          supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', recipient.id).then(() => {});
+          await supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', recipient.id);
           return false;
         }
       } catch (sendErr) {
         console.error(`Error ${formattedPhone}:`, sendErr);
-        supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', recipient.id).then(() => {});
+        await supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', recipient.id);
         return false;
       }
     }
