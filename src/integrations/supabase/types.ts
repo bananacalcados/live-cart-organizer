@@ -8426,6 +8426,25 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_orders_by_customer: {
+        Args: { p_customer_id: string }
+        Returns: {
+          coupon_code: string
+          created_at: string
+          customer_id: string
+          discount_type: string
+          discount_value: number
+          event_id: string
+          free_shipping: boolean
+          id: string
+          is_paid: boolean
+          notes: string
+          paid_externally: boolean
+          products: Json
+          shipping_cost: number
+          stage: string
+        }[]
+      }
       get_user_allowed_modules: {
         Args: { p_user_id: string }
         Returns: string[]
