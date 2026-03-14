@@ -375,7 +375,7 @@ serve(async (req) => {
     }).eq('id', dispatchId);
 
     // Self-chain: if there are still pending recipients, trigger next batch
-    if (totalPending > 0) {
+    if ((totalPending || 0) > 0) {
       const { data: checkStatus } = await supabase
         .from('dispatch_history')
         .select('status')
@@ -399,8 +399,8 @@ serve(async (req) => {
       await supabase.from('dispatch_history').update({
         status: 'completed',
         completed_at: new Date().toISOString(),
-        sent_count: totalSent,
-        failed_count: totalFailed,
+        sent_count: totalSent || 0,
+        failed_count: totalFailed || 0,
       }).eq('id', dispatchId);
     }
 
@@ -408,9 +408,9 @@ serve(async (req) => {
       success: true,
       batchSent,
       batchFailed,
-      totalPending,
-      totalSent,
-      totalFailed,
+      totalPending: totalPending || 0,
+      totalSent: totalSent || 0,
+      totalFailed: totalFailed || 0,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
