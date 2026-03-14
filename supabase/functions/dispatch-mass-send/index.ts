@@ -6,9 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 50; // small batches to fit within timeout
+const BATCH_SIZE = 50;
 const CONCURRENCY = 10;
-const MAX_EXECUTION_MS = 50_000; // 50s safety margin (edge fn limit ~60s)
+const MAX_EXECUTION_MS = 45_000; // 45s safety margin
+const CHAIN_DELAY_MS = 3000; // 3s delay between chains to reduce DB pressure
 
 interface VariableConfig {
   mode: string;
@@ -150,10 +151,10 @@ serve(async (req) => {
       });
     }
 
-    // Load dispatch record
+    // Load dispatch record — single lean query
     const { data: dispatch, error: dispErr } = await supabase
       .from('dispatch_history')
-      .select('*')
+      .select('id,status,template_name,template_language,template_components,variables_config,has_dynamic_vars,header_media_url,whatsapp_number_id,processing_batch,started_at,created_at')
       .eq('id', dispatchId)
       .single();
 
@@ -163,16 +164,18 @@ serve(async (req) => {
       });
     }
 
-    if (dispatch.status === 'cancelled') {
-      return new Response(JSON.stringify({ success: true, message: 'Dispatch was cancelled' }), {
+    if (dispatch.status === 'cancelled' || dispatch.status === 'paused' || dispatch.status === 'completed') {
+      return new Response(JSON.stringify({ success: true, message: `Dispatch is ${dispatch.status}` }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Stale lock detection: if processing_batch is true for >90s, force release
+    // Stale lock detection: if processing_batch is true, check if we should wait or force release
     if (dispatch.processing_batch) {
+      // Use created_at of the dispatch as fallback — but really we track via the lock timestamp below
       const lockAge = Date.now() - new Date(dispatch.started_at || dispatch.created_at).getTime();
-      if (lockAge < 90_000) {
+      // Only force release after 120s to avoid conflicts
+      if (lockAge < 120_000) {
         return new Response(JSON.stringify({ success: true, message: 'Another batch is processing' }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -180,8 +183,26 @@ serve(async (req) => {
       console.log(`Stale lock detected (${Math.round(lockAge/1000)}s), forcing release`);
     }
 
-    // Acquire lock
-    await supabase.from('dispatch_history').update({ processing_batch: true, updated_at: new Date().toISOString() }).eq('id', dispatchId);
+    // Acquire lock — use started_at as lock timestamp (column exists)
+    const { error: lockErr } = await supabase
+      .from('dispatch_history')
+      .update({ processing_batch: true, started_at: new Date().toISOString() })
+      .eq('id', dispatchId);
+
+    if (lockErr) {
+      console.error('Failed to acquire lock:', lockErr);
+      return new Response(JSON.stringify({ error: 'Failed to acquire lock' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check time budget after lock
+    if (Date.now() - startTime > MAX_EXECUTION_MS) {
+      await supabase.from('dispatch_history').update({ processing_batch: false }).eq('id', dispatchId);
+      return new Response(JSON.stringify({ success: true, message: 'No time budget left' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Get credentials
     let phoneNumberId = '', accessToken = '';
@@ -219,6 +240,15 @@ serve(async (req) => {
       });
     }
 
+    // Check time budget after credentials
+    if (Date.now() - startTime > MAX_EXECUTION_MS) {
+      await supabase.from('dispatch_history').update({ processing_batch: false }).eq('id', dispatchId);
+      scheduleNextBatch(supabaseUrl, supabaseKey, dispatchId);
+      return new Response(JSON.stringify({ success: true, message: 'Setup took too long, rechaining' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const graphUrl = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
     const templateComponents = dispatch.template_components || [];
     const variablesConfig = dispatch.variables_config || {};
@@ -228,7 +258,7 @@ serve(async (req) => {
     // Fetch pending recipients batch
     const { data: pendingRecipients, error: pendErr } = await supabase
       .from('dispatch_recipients')
-      .select('*')
+      .select('id,phone,recipient_name,first_name,city,state,segment,email')
       .eq('dispatch_id', dispatchId)
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
@@ -243,7 +273,7 @@ serve(async (req) => {
     }
 
     if (!pendingRecipients || pendingRecipients.length === 0) {
-      // All done — get final counts
+      // All done
       const [{ count: sentCount }, { count: failedCount }] = await Promise.all([
         supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
           .eq('dispatch_id', dispatchId).eq('status', 'sent'),
@@ -264,7 +294,7 @@ serve(async (req) => {
       });
     }
 
-    // Process batch — collect results then batch-update DB
+    // Process batch
     let batchSent = 0, batchFailed = 0;
     const sentIds: { id: string; wamid: string | null; phone: string; rendered: string }[] = [];
     const failedIds: string[] = [];
@@ -326,12 +356,6 @@ serve(async (req) => {
         break;
       }
 
-      if (i > 0 && i % 50 === 0) {
-        const { data: checkDisp } = await supabase
-          .from('dispatch_history').select('status').eq('id', dispatchId).single();
-        if (checkDisp?.status === 'cancelled') break;
-      }
-
       const chunk = pendingRecipients.slice(i, i + CONCURRENCY);
       const results = await Promise.all(chunk.map(r => sendOne(r)));
       for (const r of results) {
@@ -345,7 +369,7 @@ serve(async (req) => {
       }
     }
 
-    // Batch DB updates in chunks of 20 to avoid overwhelming the connection
+    // Batch DB updates in chunks of 20
     const dbWrites: Promise<any>[] = [];
     for (const s of sentIds) {
       dbWrites.push(
@@ -357,11 +381,11 @@ serve(async (req) => {
         supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', fid)
       );
     }
-    // Execute in chunks of 20
     for (let i = 0; i < dbWrites.length; i += 20) {
       await Promise.all(dbWrites.slice(i, i + 20));
     }
-    // Fire and forget message inserts (non-critical for counts)
+
+    // Fire and forget message inserts
     for (const s of sentIds) {
       supabase.from('whatsapp_messages').insert({
         phone: s.phone,
@@ -389,24 +413,15 @@ serve(async (req) => {
       processing_batch: false,
       sent_count: totalSent || 0,
       failed_count: totalFailed || 0,
-      updated_at: new Date().toISOString(),
     }).eq('id', dispatchId);
 
-    // Self-chain if there are still pending recipients
+    // Self-chain if there are still pending recipients (with delay)
     if ((totalPending || 0) > 0) {
       const { data: checkStatus } = await supabase
         .from('dispatch_history').select('status').eq('id', dispatchId).single();
 
-      if (checkStatus?.status !== 'cancelled') {
-        const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
-        fetch(nextUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
-          },
-          body: JSON.stringify({ dispatchId }),
-        }).catch(err => console.error('Failed to chain next batch:', err));
+      if (checkStatus?.status !== 'cancelled' && checkStatus?.status !== 'paused') {
+        scheduleNextBatch(supabaseUrl, supabaseKey, dispatchId);
       }
     } else {
       await supabase.from('dispatch_history').update({
@@ -436,3 +451,18 @@ serve(async (req) => {
     });
   }
 });
+
+function scheduleNextBatch(supabaseUrl: string, supabaseKey: string, dispatchId: string) {
+  // Delay the next batch to reduce DB pressure
+  setTimeout(() => {
+    const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
+    fetch(nextUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ dispatchId }),
+    }).catch(err => console.error('Failed to chain next batch:', err));
+  }, CHAIN_DELAY_MS);
+}

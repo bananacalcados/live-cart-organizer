@@ -1,0 +1,1 @@
+UPDATE dispatch_history SET status = 'paused', processing_batch = false WHERE id = 'e408ebbf-9961-4ef6-a58c-29f67839af8d';
