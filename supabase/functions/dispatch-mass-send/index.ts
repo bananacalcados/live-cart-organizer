@@ -257,11 +257,11 @@ serve(async (req) => {
         processing_batch: false,
         status: 'completed',
         completed_at: new Date().toISOString(),
-        sent_count: sentCount,
-        failed_count: failedCount,
+        sent_count: sentCount || 0,
+        failed_count: failedCount || 0,
       }).eq('id', dispatchId);
 
-      return new Response(JSON.stringify({ success: true, message: 'Dispatch completed', sentCount, failedCount }), {
+      return new Response(JSON.stringify({ success: true, message: 'Dispatch completed', sentCount: sentCount || 0, failedCount: failedCount || 0 }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
