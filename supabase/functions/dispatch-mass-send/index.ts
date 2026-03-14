@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 100; // smaller batches to avoid timeout
+const BATCH_SIZE = 50; // small batches to fit within timeout
 const CONCURRENCY = 10;
 const MAX_EXECUTION_MS = 50_000; // 50s safety margin (edge fn limit ~60s)
 
