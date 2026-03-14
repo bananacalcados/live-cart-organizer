@@ -4939,6 +4939,8 @@ export type Database = {
       }
       orders: {
         Row: {
+          ai_paused: boolean | null
+          ai_paused_at: string | null
           appmax_order_id: string | null
           cart_link: string | null
           checkout_started_at: string | null
@@ -4974,6 +4976,8 @@ export type Database = {
           vindi_transaction_id: string | null
         }
         Insert: {
+          ai_paused?: boolean | null
+          ai_paused_at?: string | null
           appmax_order_id?: string | null
           cart_link?: string | null
           checkout_started_at?: string | null
@@ -5009,6 +5013,8 @@ export type Database = {
           vindi_transaction_id?: string | null
         }
         Update: {
+          ai_paused?: boolean | null
+          ai_paused_at?: string | null
           appmax_order_id?: string | null
           cart_link?: string | null
           checkout_started_at?: string | null
@@ -8352,6 +8358,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_order_ai_paused: {
+        Args: { p_phone: string }
+        Returns: {
+          ai_paused: boolean
+          order_id: string
+        }[]
+      }
       generate_ean13_barcode: { Args: never; Returns: string }
       get_conversation_counts: {
         Args: never
