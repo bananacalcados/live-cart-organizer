@@ -220,6 +220,12 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         .eq('id', orderId);
 
       if (error) throw error;
+
+      // Check if is_paid just transitioned to true
+      const prevOrder = get().orders.find((o) => o.id === orderId);
+      if (updates.is_paid && prevOrder && !prevOrder.is_paid) {
+        notifyPaymentConfirmed(orderId);
+      }
       
       set((state) => ({
         orders: state.orders.map((o) => 
