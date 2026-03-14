@@ -121,6 +121,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [isSending, setIsSending] = useState(false);
+  const [aiPaused, setAiPaused] = useState(false);
+  const [togglingAiPause, setTogglingAiPause] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
   const { selectedNumberId, fetchNumbers, getSelectedNumber } = useWhatsAppNumberStore();
