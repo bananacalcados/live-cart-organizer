@@ -99,43 +99,68 @@ export default function Home() {
   const [allowedModules, setAllowedModules] = useState<string[] | null>(null);
 
   useEffect(() => {
-    const checkPermissions = async () => {
+    let cancelled = false;
+
+    const timeoutPromise = <T,>(ms: number, fallback: T) =>
+      new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms));
+
+    const loadAllowedModules = async (userId: string, attempt = 1): Promise<string[]> => {
+      const result = await Promise.race([
+        supabase.rpc("get_user_allowed_modules", { p_user_id: userId }),
+        timeoutPromise(8000, { data: null, error: new Error("timeout") }),
+      ]);
+
+      if (result.error || !result.data) {
+        if (attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+          return loadAllowedModules(userId, attempt + 1);
+        }
+        throw result.error || new Error("Falha ao carregar permissões");
+      }
+
+      return result.data as string[];
+    };
+
+    const checkPermissions = async (sessionOverride?: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]) => {
       try {
-        const { data: { session } } = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise<any>((resolve) => setTimeout(() => resolve({ data: { session: null } }), 8000)),
-        ]);
-        if (!session) return;
+        const session = sessionOverride ?? (await supabase.auth.getSession()).data.session;
 
-        const { data, error } = await Promise.race([
-          supabase.rpc("get_user_allowed_modules", { p_user_id: session.user.id }),
-          new Promise<any>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 8000)),
-        ]);
+        if (!session) {
+          if (!cancelled) {
+            setAllowedModules([]);
+            navigate("/login");
+          }
+          return;
+        }
 
-        if (error || !data) {
+        const modules = await loadAllowedModules(session.user.id);
+        if (!cancelled) setAllowedModules(modules);
+      } catch (err) {
+        console.error("Error checking permissions:", err);
+        if (!cancelled) {
           setAllowedModules([]);
           toast({
             title: "Erro ao verificar permissões",
             description: "Não foi possível conectar ao servidor. Tente recarregar a página.",
             variant: "destructive",
           });
-          return;
         }
-
-        setAllowedModules(data as string[]);
-      } catch (err) {
-        console.error("Error checking permissions:", err);
-        setAllowedModules([]);
-        toast({
-          title: "Erro ao verificar permissões",
-          description: "Não foi possível conectar ao servidor. Tente recarregar a página.",
-          variant: "destructive",
-        });
       }
     };
 
     checkPermissions();
-  }, []);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      checkPermissions(session);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [navigate, toast]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
