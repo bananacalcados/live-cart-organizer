@@ -6,8 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 500;
-const CONCURRENCY = 10; // parallel sends at a time
+const BATCH_SIZE = 100; // smaller batches to avoid timeout
+const CONCURRENCY = 10;
+const MAX_EXECUTION_MS = 50_000; // 50s safety margin (edge fn limit ~60s)
 
 interface VariableConfig {
   mode: string;
@@ -35,13 +36,11 @@ function buildComponentsForRecipient(
   hasDynamicVars: boolean
 ) {
   const components: any[] = [];
-  
-  // Extract template variable info
   const bodyVars: { index: number; key: string }[] = [];
   const headerVars: { index: number; key: string }[] = [];
   const headerComp = templateComponents.find((c: any) => c.type === 'HEADER');
   const buttonsComp = templateComponents.find((c: any) => c.type === 'BUTTONS');
-  
+
   for (const comp of templateComponents) {
     if (comp.text) {
       const matches = [...comp.text.matchAll(/\{\{(\d+)\}\}/g)];
@@ -61,7 +60,6 @@ function buildComponentsForRecipient(
     return resolveVariable(vc, recipient) || 'Cliente';
   };
 
-  // Header media
   if (headerComp && headerComp.format && headerComp.format !== 'TEXT' && headerMediaUrl) {
     const mediaType = headerComp.format.toLowerCase();
     components.push({
@@ -82,7 +80,6 @@ function buildComponentsForRecipient(
     });
   }
 
-  // URL buttons
   const urlButtons = (buttonsComp?.buttons || []).filter((b: any) => b.type === 'URL' && b.url?.includes('{{'));
   urlButtons.forEach((btn: any, idx: number) => {
     const suffix = variablesConfig[`button_url_${idx}`]?.staticValue || '';
@@ -139,6 +136,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -164,22 +163,25 @@ serve(async (req) => {
       });
     }
 
-    // Check if cancelled
     if (dispatch.status === 'cancelled') {
       return new Response(JSON.stringify({ success: true, message: 'Dispatch was cancelled' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Check concurrency lock
+    // Stale lock detection: if processing_batch is true for >90s, force release
     if (dispatch.processing_batch) {
-      return new Response(JSON.stringify({ success: true, message: 'Another batch is processing' }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      const lockAge = Date.now() - new Date(dispatch.updated_at || dispatch.created_at).getTime();
+      if (lockAge < 90_000) {
+        return new Response(JSON.stringify({ success: true, message: 'Another batch is processing' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      console.log(`Stale lock detected (${Math.round(lockAge/1000)}s), forcing release`);
     }
 
     // Acquire lock
-    await supabase.from('dispatch_history').update({ processing_batch: true }).eq('id', dispatchId);
+    await supabase.from('dispatch_history').update({ processing_batch: true, updated_at: new Date().toISOString() }).eq('id', dispatchId);
 
     // Get credentials
     let phoneNumberId = '', accessToken = '';
@@ -241,17 +243,13 @@ serve(async (req) => {
     }
 
     if (!pendingRecipients || pendingRecipients.length === 0) {
-      // All done
-      const { count: sentCount } = await supabase
-        .from('dispatch_recipients')
-        .select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId)
-        .eq('status', 'sent');
-      const { count: failedCount } = await supabase
-        .from('dispatch_recipients')
-        .select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId)
-        .eq('status', 'failed');
+      // All done — get final counts
+      const [{ count: sentCount }, { count: failedCount }] = await Promise.all([
+        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+          .eq('dispatch_id', dispatchId).eq('status', 'sent'),
+        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+          .eq('dispatch_id', dispatchId).eq('status', 'failed'),
+      ]);
 
       await supabase.from('dispatch_history').update({
         processing_batch: false,
@@ -261,14 +259,13 @@ serve(async (req) => {
         failed_count: failedCount || 0,
       }).eq('id', dispatchId);
 
-      return new Response(JSON.stringify({ success: true, message: 'Dispatch completed', sentCount: sentCount || 0, failedCount: failedCount || 0 }), {
+      return new Response(JSON.stringify({ success: true, message: 'Dispatch completed', sentCount, failedCount }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Process batch in parallel chunks
+    // Process batch
     let batchSent = 0, batchFailed = 0;
-    let cancelled = false;
 
     async function sendOne(recipient: any): Promise<boolean> {
       let formattedPhone = recipient.phone.replace(/\D/g, '');
@@ -309,45 +306,50 @@ serve(async (req) => {
 
         if (response.ok) {
           const messageId = data.messages?.[0]?.id || null;
-          await Promise.all([
-            supabase.from('dispatch_recipients').update({
-              status: 'sent', message_wamid: messageId,
-            }).eq('id', recipient.id),
-            supabase.from('whatsapp_messages').insert({
-              phone: formattedPhone,
-              message: rendered || `[Template: ${dispatch.template_name}]`,
-              direction: 'outgoing',
-              message_id: messageId,
-              status: 'sent',
-              media_type: 'text',
-              whatsapp_number_id: dispatch.whatsapp_number_id,
-            }),
-            supabase.from('chat_finished_conversations').upsert({
-              phone: formattedPhone,
-              finished_at: new Date().toISOString(),
-              finish_reason: 'disparo_msg',
-            } as any, { onConflict: 'phone' }),
-          ]);
-          return true; // sent
+          // Fire and forget DB writes for speed
+          supabase.from('dispatch_recipients').update({
+            status: 'sent', message_wamid: messageId,
+          }).eq('id', recipient.id).then(() => {});
+          supabase.from('whatsapp_messages').insert({
+            phone: formattedPhone,
+            message: rendered || `[Template: ${dispatch.template_name}]`,
+            direction: 'outgoing',
+            message_id: messageId,
+            status: 'sent',
+            media_type: 'text',
+            whatsapp_number_id: dispatch.whatsapp_number_id,
+          }).then(() => {});
+          supabase.from('chat_finished_conversations').upsert({
+            phone: formattedPhone,
+            finished_at: new Date().toISOString(),
+            finish_reason: 'disparo_msg',
+          } as any, { onConflict: 'phone' }).then(() => {});
+          return true;
         } else {
-          console.error(`Failed to send to ${formattedPhone}:`, data.error?.message || JSON.stringify(data));
-          await supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', recipient.id);
-          return false; // failed
+          console.error(`Failed ${formattedPhone}:`, data.error?.message || JSON.stringify(data));
+          supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', recipient.id).then(() => {});
+          return false;
         }
       } catch (sendErr) {
-        console.error(`Error sending to ${formattedPhone}:`, sendErr);
-        await supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', recipient.id);
+        console.error(`Error ${formattedPhone}:`, sendErr);
+        supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', recipient.id).then(() => {});
         return false;
       }
     }
 
-    // Process in chunks of CONCURRENCY
+    // Process in chunks, checking timeout each chunk
     for (let i = 0; i < pendingRecipients.length; i += CONCURRENCY) {
-      // Check cancellation every chunk
-      if (i > 0 && i % (CONCURRENCY * 5) === 0) {
+      // Timeout guard
+      if (Date.now() - startTime > MAX_EXECUTION_MS) {
+        console.log(`Timeout guard hit after ${batchSent + batchFailed} sends`);
+        break;
+      }
+
+      // Check cancellation every 50 sends
+      if (i > 0 && i % 50 === 0) {
         const { data: checkDisp } = await supabase
           .from('dispatch_history').select('status').eq('id', dispatchId).single();
-        if (checkDisp?.status === 'cancelled') { cancelled = true; break; }
+        if (checkDisp?.status === 'cancelled') break;
       }
 
       const chunk = pendingRecipients.slice(i, i + CONCURRENCY);
@@ -357,7 +359,10 @@ serve(async (req) => {
       }
     }
 
-    // Update dispatch progress
+    // Small delay to let fire-and-forget DB writes settle
+    await new Promise(r => setTimeout(r, 500));
+
+    // Update counts from DB
     const [{ count: totalSent }, { count: totalFailed }, { count: totalPending }] = await Promise.all([
       supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
         .eq('dispatch_id', dispatchId).eq('status', 'sent'),
@@ -367,23 +372,20 @@ serve(async (req) => {
         .eq('dispatch_id', dispatchId).eq('status', 'pending'),
     ]);
 
-    // Release lock
+    // Release lock + update counts
     await supabase.from('dispatch_history').update({
       processing_batch: false,
       sent_count: totalSent || 0,
       failed_count: totalFailed || 0,
+      updated_at: new Date().toISOString(),
     }).eq('id', dispatchId);
 
-    // Self-chain: if there are still pending recipients, trigger next batch
+    // Self-chain if there are still pending recipients
     if ((totalPending || 0) > 0) {
       const { data: checkStatus } = await supabase
-        .from('dispatch_history')
-        .select('status')
-        .eq('id', dispatchId)
-        .single();
+        .from('dispatch_history').select('status').eq('id', dispatchId).single();
 
       if (checkStatus?.status !== 'cancelled') {
-        // Fire and forget the next batch
         const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
         fetch(nextUrl, {
           method: 'POST',
@@ -395,7 +397,6 @@ serve(async (req) => {
         }).catch(err => console.error('Failed to chain next batch:', err));
       }
     } else {
-      // Mark as completed
       await supabase.from('dispatch_history').update({
         status: 'completed',
         completed_at: new Date().toISOString(),
@@ -411,6 +412,7 @@ serve(async (req) => {
       totalPending: totalPending || 0,
       totalSent: totalSent || 0,
       totalFailed: totalFailed || 0,
+      elapsedMs: Date.now() - startTime,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
