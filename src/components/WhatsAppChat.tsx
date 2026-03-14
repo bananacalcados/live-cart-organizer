@@ -722,6 +722,23 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           <p className="text-xs text-white/70 truncate">{phone}</p>
         </div>
 
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "h-8 px-2 gap-1.5 text-xs font-medium",
+            aiPaused
+              ? "bg-red-500/20 text-red-200 hover:bg-red-500/30"
+              : "text-white/80 hover:bg-white/10"
+          )}
+          disabled={togglingAiPause}
+          onClick={handleToggleAiPause}
+          title={aiPaused ? 'Retomar IA' : 'Pausar IA'}
+        >
+          <Bot className="h-3.5 w-3.5" />
+          {aiPaused ? '▶ Retomar IA' : '⏸ Pausar IA'}
+        </Button>
+
         <CreateSupportTicketDialog
           phone={phone}
           customerName={contactName}
