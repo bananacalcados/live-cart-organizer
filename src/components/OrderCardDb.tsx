@@ -48,6 +48,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [isConfirming, setIsConfirming] = useState(false);
   const [liveMessages, setLiveMessages] = useState<string[]>([]);
   const [togglingFreeShipping, setTogglingFreeShipping] = useState(false);
+  const [togglingAiPause, setTogglingAiPause] = useState(false);
   const { moveOrder: storeMove, updateOrder } = useDbOrderStore();
 
   // Check registration + Shopify status directly from DB
