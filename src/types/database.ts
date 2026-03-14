@@ -65,6 +65,9 @@ export interface DbOrder {
   mercadopago_payment_id?: string | null;
   appmax_order_id?: string | null;
   vindi_transaction_id?: string | null;
+  // AI pause
+  ai_paused?: boolean;
+  ai_paused_at?: string | null;
   // Joined data
   customer?: DbCustomer;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil } from "lucide-react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil, Bot } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES, getMissingFields } from "@/types/order";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -48,6 +48,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [isConfirming, setIsConfirming] = useState(false);
   const [liveMessages, setLiveMessages] = useState<string[]>([]);
   const [togglingFreeShipping, setTogglingFreeShipping] = useState(false);
+  const [togglingAiPause, setTogglingAiPause] = useState(false);
   const { moveOrder: storeMove, updateOrder } = useDbOrderStore();
 
   // Check registration + Shopify status directly from DB
@@ -323,6 +324,29 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           <Button
             variant="ghost"
             size="icon"
+            className={`h-7 w-7 ${order.ai_paused ? 'text-destructive hover:text-destructive/80' : 'text-muted-foreground hover:text-foreground'}`}
+            title={order.ai_paused ? 'Retomar IA' : 'Pausar IA'}
+            disabled={togglingAiPause}
+            onClick={async (e) => {
+              e.stopPropagation();
+              setTogglingAiPause(true);
+              try {
+                const newPaused = !order.ai_paused;
+                await updateOrder(order.id, {
+                  ai_paused: newPaused,
+                  ai_paused_at: newPaused ? new Date().toISOString() : null,
+                } as any);
+                toast.success(newPaused ? 'IA pausada para este pedido' : 'IA retomada');
+              } catch { toast.error('Erro ao alterar pausa da IA'); }
+              setTogglingAiPause(false);
+            }}
+          >
+            <Bot className={`h-3.5 w-3.5 ${order.ai_paused ? 'opacity-100' : 'opacity-60'}`} />
+            {order.ai_paused && <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
             onClick={(e) => {
               e.stopPropagation();
@@ -344,6 +368,14 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           </Button>
         </div>
       </div>
+
+      {/* AI Paused indicator */}
+      {order.ai_paused && (
+        <div className="flex items-center gap-1.5 mb-2 px-2 py-1 bg-destructive/10 border border-destructive/30 rounded-md">
+          <Bot className="h-3 w-3 text-destructive" />
+          <span className="text-[10px] font-medium text-destructive">IA Pausada</span>
+        </div>
+      )}
 
       {/* Missing fields badges for incomplete orders */}
       {order.stage === 'incomplete_order' && missingFields.length > 0 && (

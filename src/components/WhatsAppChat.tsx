@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -121,6 +121,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [isSending, setIsSending] = useState(false);
+  const [aiPaused, setAiPaused] = useState(false);
+  const [togglingAiPause, setTogglingAiPause] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
   const { selectedNumberId, fetchNumbers, getSelectedNumber } = useWhatsAppNumberStore();
@@ -141,6 +143,26 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
+
+  // Load AI pause state from order store
+  useEffect(() => {
+    const dbOrder = useDbOrderStore.getState().orders.find(o => o.id === order.id);
+    if (dbOrder) setAiPaused(!!dbOrder.ai_paused);
+  }, [order.id]);
+
+  const handleToggleAiPause = async () => {
+    setTogglingAiPause(true);
+    try {
+      const newPaused = !aiPaused;
+      await updateOrder(order.id, {
+        ai_paused: newPaused,
+        ai_paused_at: newPaused ? new Date().toISOString() : null,
+      } as any);
+      setAiPaused(newPaused);
+      toast.success(newPaused ? 'IA pausada para este pedido' : 'IA retomada');
+    } catch { toast.error('Erro ao alterar pausa da IA'); }
+    setTogglingAiPause(false);
+  };
 
   // ── Detect provider for selected number ──
   const isZapiProvider = () => {
@@ -699,6 +721,23 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           <p className="font-medium text-base truncate">{contactName}</p>
           <p className="text-xs text-white/70 truncate">{phone}</p>
         </div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "h-8 px-2 gap-1.5 text-xs font-medium",
+            aiPaused
+              ? "bg-red-500/20 text-red-200 hover:bg-red-500/30"
+              : "text-white/80 hover:bg-white/10"
+          )}
+          disabled={togglingAiPause}
+          onClick={handleToggleAiPause}
+          title={aiPaused ? 'Retomar IA' : 'Pausar IA'}
+        >
+          <Bot className="h-3.5 w-3.5" />
+          {aiPaused ? '▶ Retomar IA' : '⏸ Pausar IA'}
+        </Button>
 
         <CreateSupportTicketDialog
           phone={phone}
