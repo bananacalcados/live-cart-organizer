@@ -144,6 +144,26 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
+  // Load AI pause state from order store
+  useEffect(() => {
+    const dbOrder = useDbOrderStore.getState().orders.find(o => o.id === order.id);
+    if (dbOrder) setAiPaused(!!dbOrder.ai_paused);
+  }, [order.id]);
+
+  const handleToggleAiPause = async () => {
+    setTogglingAiPause(true);
+    try {
+      const newPaused = !aiPaused;
+      await updateOrder(order.id, {
+        ai_paused: newPaused,
+        ai_paused_at: newPaused ? new Date().toISOString() : null,
+      } as any);
+      setAiPaused(newPaused);
+      toast.success(newPaused ? 'IA pausada para este pedido' : 'IA retomada');
+    } catch { toast.error('Erro ao alterar pausa da IA'); }
+    setTogglingAiPause(false);
+  };
+
   // ── Detect provider for selected number ──
   const isZapiProvider = () => {
     const num = getSelectedNumber();
