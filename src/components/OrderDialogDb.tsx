@@ -624,24 +624,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                     )}
                   </div>
 
-                  {/* Shipping */}
+                  {/* Extras */}
                   <div className="space-y-3 pt-3 border-t">
-                    <div className="space-y-2">
-                      <Label htmlFor="customShipping" className="flex items-center gap-2">
-                        <Truck className="h-4 w-4" />
-                        Frete
-                      </Label>
-                      <Input
-                        id="customShipping"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0,00 = frete grátis"
-                        value={customShippingCost}
-                        onChange={(e) => setCustomShippingCost(e.target.value)}
-                      />
-                    </div>
-
                     <div className="flex items-center justify-between">
                       <Label htmlFor="hasGift" className="flex items-center gap-2 cursor-pointer">
                         <Gift className="h-4 w-4 text-accent" />
