@@ -345,22 +345,11 @@ serve(async (req) => {
       }
     }
 
-    // Batch DB updates — parallel per-recipient updates (fast, no fire-and-forget)
+    // Batch DB updates in chunks of 20 to avoid overwhelming the connection
     const dbWrites: Promise<any>[] = [];
     for (const s of sentIds) {
       dbWrites.push(
         supabase.from('dispatch_recipients').update({ status: 'sent', message_wamid: s.wamid }).eq('id', s.id)
-      );
-      dbWrites.push(
-        supabase.from('whatsapp_messages').insert({
-          phone: s.phone,
-          message: s.rendered || `[Template: ${dispatch.template_name}]`,
-          direction: 'outgoing',
-          message_id: s.wamid,
-          status: 'sent',
-          media_type: 'text',
-          whatsapp_number_id: dispatch.whatsapp_number_id,
-        })
       );
     }
     for (const fid of failedIds) {
@@ -368,8 +357,22 @@ serve(async (req) => {
         supabase.from('dispatch_recipients').update({ status: 'failed' }).eq('id', fid)
       );
     }
-    // Execute all DB writes in parallel
-    await Promise.all(dbWrites);
+    // Execute in chunks of 20
+    for (let i = 0; i < dbWrites.length; i += 20) {
+      await Promise.all(dbWrites.slice(i, i + 20));
+    }
+    // Fire and forget message inserts (non-critical for counts)
+    for (const s of sentIds) {
+      supabase.from('whatsapp_messages').insert({
+        phone: s.phone,
+        message: s.rendered || `[Template: ${dispatch.template_name}]`,
+        direction: 'outgoing',
+        message_id: s.wamid,
+        status: 'sent',
+        media_type: 'text',
+        whatsapp_number_id: dispatch.whatsapp_number_id,
+      }).then(() => {});
+    }
 
     // Update counts from DB
     const [{ count: totalSent }, { count: totalFailed }, { count: totalPending }] = await Promise.all([
