@@ -369,6 +369,14 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         </div>
       </div>
 
+      {/* AI Paused indicator */}
+      {order.ai_paused && (
+        <div className="flex items-center gap-1.5 mb-2 px-2 py-1 bg-destructive/10 border border-destructive/30 rounded-md">
+          <Bot className="h-3 w-3 text-destructive" />
+          <span className="text-[10px] font-medium text-destructive">IA Pausada</span>
+        </div>
+      )}
+
       {/* Missing fields badges for incomplete orders */}
       {order.stage === 'incomplete_order' && missingFields.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
