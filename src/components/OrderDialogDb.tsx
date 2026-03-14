@@ -650,6 +650,19 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
                     />
                   </div>
 
+                  {/* Free Shipping Toggle */}
+                  <div className="flex items-center justify-between pt-3 border-t">
+                    <Label htmlFor="freeShipping" className="flex items-center gap-2 cursor-pointer">
+                      <Truck className="h-4 w-4 text-stage-paid" />
+                      Frete Grátis
+                    </Label>
+                    <Switch
+                      id="freeShipping"
+                      checked={freeShipping}
+                      onCheckedChange={setFreeShipping}
+                    />
+                  </div>
+
                   {/* Summary */}
                   <div className="p-4 bg-secondary/50 rounded-lg space-y-2">
                     <div className="flex items-center justify-between">
