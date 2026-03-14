@@ -1338,6 +1338,7 @@ export default function StoreCheckout() {
                           customer_neighborhood: customerForm.neighborhood,
                           customer_city: customerForm.city,
                           customer_state: customerForm.state,
+                          shipping_amount: saleData.shipping_amount,
                         },
                         shipping_address: {
                           cep: customerForm.cep.replace(/\D/g, ""),
@@ -1351,7 +1352,30 @@ export default function StoreCheckout() {
                       } as any).eq("id", saleData.id).then(() => {});
                     }
                     setCurrentStep(3);
-                  }} onBack={() => setCurrentStep(1)} />
+                  }} onBack={() => setCurrentStep(1)}
+                  saleData={saleData}
+                  onShippingSelected={(option) => {
+                    if (saleData) {
+                      const newShipping = option.price;
+                      // Update local state
+                      setSaleData(prev => prev ? { ...prev, shipping_amount: newShipping } : prev);
+                      // Update in DB
+                      supabase.from("pos_sales").update({
+                        payment_details: {
+                          ...((saleData as any).payment_details || {}),
+                          shipping_amount: newShipping,
+                          shipping_carrier: option.carrier,
+                          shipping_service: option.service,
+                        },
+                      } as any).eq("id", saleData.id).then(() => {});
+                      // Also update total
+                      const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
+                      const netProduct = subtotal - saleData.discount_amount;
+                      const newTotal = netProduct + newShipping;
+                      supabase.from("pos_sales").update({ total: newTotal } as any).eq("id", saleData.id).then(() => {});
+                    }
+                  }}
+                  />
                 )}
                 {currentStep === 3 && (
                   <div className="space-y-4">
