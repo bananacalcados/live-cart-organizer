@@ -324,6 +324,29 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           <Button
             variant="ghost"
             size="icon"
+            className={`h-7 w-7 ${order.ai_paused ? 'text-destructive hover:text-destructive/80' : 'text-muted-foreground hover:text-foreground'}`}
+            title={order.ai_paused ? 'Retomar IA' : 'Pausar IA'}
+            disabled={togglingAiPause}
+            onClick={async (e) => {
+              e.stopPropagation();
+              setTogglingAiPause(true);
+              try {
+                const newPaused = !order.ai_paused;
+                await updateOrder(order.id, {
+                  ai_paused: newPaused,
+                  ai_paused_at: newPaused ? new Date().toISOString() : null,
+                } as any);
+                toast.success(newPaused ? 'IA pausada para este pedido' : 'IA retomada');
+              } catch { toast.error('Erro ao alterar pausa da IA'); }
+              setTogglingAiPause(false);
+            }}
+          >
+            <Bot className={`h-3.5 w-3.5 ${order.ai_paused ? 'opacity-100' : 'opacity-60'}`} />
+            {order.ai_paused && <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
             onClick={(e) => {
               e.stopPropagation();
