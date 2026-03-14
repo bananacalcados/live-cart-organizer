@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +24,7 @@ serve(async (req) => {
   }
 
   try {
-    const { recipient_cep, store, total_value, weight_kg, items_count } = await req.json();
+    const { recipient_cep, store, total_value, weight_kg, items_count, order_id } = await req.json();
     if (!recipient_cep) throw new Error('recipient_cep is required');
 
     const cepDigits = recipient_cep.replace(/\D/g, '');
@@ -35,6 +36,42 @@ serve(async (req) => {
     const totalWeight = Math.max(0.3, weight_kg || 0.3);
     const totalQty = items_count || 1;
 
+    let repeatCustomerFreeShipping = false;
+
+    // Check if this customer already paid shipping in the same event
+    if (order_id) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        const { data: currentOrder } = await supabase
+          .from('orders')
+          .select('event_id, customer_id')
+          .eq('id', order_id)
+          .single();
+
+        if (currentOrder?.event_id && currentOrder?.customer_id) {
+          const { data: paidOrders } = await supabase
+            .from('orders')
+            .select('id, shipping_cost')
+            .eq('event_id', currentOrder.event_id)
+            .eq('customer_id', currentOrder.customer_id)
+            .neq('id', order_id)
+            .or('is_paid.eq.true,paid_externally.eq.true')
+            .gt('shipping_cost', 0)
+            .limit(1);
+
+          if (paidOrders && paidOrders.length > 0) {
+            repeatCustomerFreeShipping = true;
+            console.log(`Repeat customer detected: order ${order_id}, previous paid order ${paidOrders[0].id} with shipping ${paidOrders[0].shipping_cost}`);
+          }
+        }
+      } catch (e) {
+        console.warn('Error checking repeat customer:', e.message);
+      }
+    }
+
     const quotes: Array<{
       id: string;
       carrier: string;
@@ -43,6 +80,18 @@ serve(async (req) => {
       delivery_days: number | null;
       type: string;
     }> = [];
+
+    // 0. If repeat customer, add free shipping option first
+    if (repeatCustomerFreeShipping) {
+      quotes.push({
+        id: 'repeat-free',
+        carrier: 'Frete já pago em compra anterior',
+        service: 'Grátis ✅',
+        price: 0,
+        delivery_days: null,
+        type: 'repeat_free',
+      });
+    }
 
     // 1. Always add "Retirada na loja"
     quotes.push({
@@ -129,8 +178,10 @@ serve(async (req) => {
       console.warn('FRENET_TOKEN not configured');
     }
 
-    // Sort: pickup first, then mototaxi, then by price
+    // Sort: repeat_free first, then pickup, then local, then by price
     quotes.sort((a, b) => {
+      if (a.type === 'repeat_free') return -1;
+      if (b.type === 'repeat_free') return 1;
       if (a.type === 'pickup') return -1;
       if (b.type === 'pickup') return 1;
       if (a.type === 'local') return -1;
@@ -138,7 +189,7 @@ serve(async (req) => {
       return a.price - b.price;
     });
 
-    return new Response(JSON.stringify({ success: true, quotes }), {
+    return new Response(JSON.stringify({ success: true, quotes, repeat_customer_free_shipping: repeatCustomerFreeShipping }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {

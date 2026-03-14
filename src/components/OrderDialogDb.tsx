@@ -377,7 +377,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       }
 
       // Update existing order
-      const parsedCustomShipping = customShippingCost ? parseFloat(customShippingCost) : null;
       const orderUpdates: Partial<DbOrder> = {
         cart_link: cartLink || null,
         notes: notes || null,
@@ -389,7 +388,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         has_gift: hasGift,
         coupon_code: couponCode || null,
         paid_externally: paidExternally,
-        custom_shipping_cost: parsedCustomShipping,
         is_pickup: isPickup,
         pickup_store_id: isPickup && pickupStoreId ? pickupStoreId : null,
         is_delivery: isDelivery,
