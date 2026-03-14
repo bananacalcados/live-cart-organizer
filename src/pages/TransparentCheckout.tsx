@@ -468,6 +468,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
                     <span className="font-medium text-sm">{opt.carrier}</span>
                     {opt.type === 'pickup' && <Badge variant="secondary" className="text-[10px]">🏪</Badge>}
                     {opt.type === 'local' && <Badge variant="secondary" className="text-[10px]">🏍️</Badge>}
+                    {opt.type === 'repeat_free' && <Badge className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">🎉 2ª compra</Badge>}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-xs text-muted-foreground">{opt.service}</span>
