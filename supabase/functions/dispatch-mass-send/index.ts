@@ -366,9 +366,12 @@ serve(async (req) => {
       supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
         .eq('dispatch_id', dispatchId).eq('status', 'pending'),
     ]);
+
+    // Release lock
+    await supabase.from('dispatch_history').update({
       processing_batch: false,
-      sent_count: totalSent,
-      failed_count: totalFailed,
+      sent_count: totalSent || 0,
+      failed_count: totalFailed || 0,
     }).eq('id', dispatchId);
 
     // Self-chain: if there are still pending recipients, trigger next batch
