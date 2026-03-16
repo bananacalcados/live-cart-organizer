@@ -46,6 +46,9 @@ interface DbOrderStore {
   findActiveOrderByCustomer: (eventId: string, customerId: string) => DbOrder | undefined;
   getUnpaidOrdersCount: (eventId?: string) => number;
   regenerateCartLink: (orderId: string) => Promise<void>;
+  upsertOrderRealtime: (order: DbOrder) => void;
+  removeOrderRealtime: (orderId: string) => void;
+  subscribeToEventOrders: (eventId: string) => () => void;
 }
 
 export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
