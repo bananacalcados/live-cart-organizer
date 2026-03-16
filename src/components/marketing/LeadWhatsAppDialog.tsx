@@ -12,6 +12,7 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
+import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 
 interface LeadWhatsAppDialogProps {
   open: boolean;

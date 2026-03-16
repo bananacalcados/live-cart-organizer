@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { MessageStatusIcon } from "@/components/chat/MessageStatusIcon";
+import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 
 interface LiveWhatsAppChatDialogProps {
   open: boolean;
