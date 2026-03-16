@@ -1431,6 +1431,9 @@ export default function Marketing() {
                       <Input placeholder="Buscar por nome, telefone, email..." value={leadsSearch} onChange={e => setLeadsSearch(e.target.value)} className="pl-9" />
                     </div>
                     <Badge variant="secondary">{filteredLeads.length} leads</Badge>
+                    <Button variant="outline" size="sm" onClick={() => setLeadImportOpen(true)} className="gap-1">
+                      <Upload className="h-3.5 w-3.5" />Importar XLS
+                    </Button>
                     <Button variant="outline" size="sm" onClick={fetchLeads} className="gap-1">
                       <RefreshCw className="h-3.5 w-3.5" />Atualizar
                     </Button>
