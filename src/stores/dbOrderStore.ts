@@ -69,14 +69,8 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
 
       if (error) throw error;
       
-      // Parse products JSON and cast types
-      const orders = (data || []).map((order) => ({
-        ...order,
-        products: order.products as unknown as DbOrderProduct[],
-        customer: order.customer as DbCustomer,
-        discount_type: order.discount_type as DiscountType | undefined,
-      })) as DbOrder[];
-      
+      const orders = (data || []).map(mapDbOrder) as DbOrder[];
+
       set({ orders });
     } catch (error) {
       console.error('Error fetching orders:', error);
