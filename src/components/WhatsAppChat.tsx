@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { MessageStatusIcon } from "./chat/MessageStatusIcon";
+import { WhatsAppMediaAttachment } from "./chat/WhatsAppMediaAttachment";
 
 interface Message {
   id: string;
@@ -63,37 +64,15 @@ function getMediaType(file: File): 'image' | 'audio' | 'video' | 'document' {
 }
 
 function MessageMedia({ msg }: { msg: Message }) {
-  if (msg.media_type === 'text' || !msg.media_url) return null;
-
-  if (msg.media_type === 'image') {
-    return (
-      <img
-        src={msg.media_url}
-        alt="Imagem"
-        className="max-w-full rounded-lg mb-1"
-        style={{ maxHeight: 200 }}
-      />
-    );
-  }
-
-  if (msg.media_type === 'video') {
-    return (
-      <video
-        src={msg.media_url}
-        controls
-        className="max-w-full rounded-lg mb-1"
-        style={{ maxHeight: 200 }}
-      />
-    );
-  }
-
-  if (msg.media_type === 'audio') {
-    return (
-      <audio src={msg.media_url} controls className="w-full mb-1" />
-    );
-  }
-
-  return null;
+  return (
+    <WhatsAppMediaAttachment
+      mediaUrl={msg.media_url}
+      mediaType={msg.media_type}
+      message={msg.message}
+      imageStyle={{ maxHeight: 200 }}
+      videoStyle={{ maxHeight: 200 }}
+    />
+  );
 }
 
 interface MetaTemplate {
