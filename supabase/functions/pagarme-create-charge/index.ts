@@ -6,6 +6,52 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function notifyPaymentConfirmed(orderId: string, gateway: string, transactionId: string) {
+  try {
+    const webhookUrl = Deno.env.get("AGENTE2_PAGAMENTO_CONFIRMADO") || "https://api.bananacalcados.com.br/webhook/pagamento-confirmado";
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pedido_id: orderId,
+        loja: "centro",
+        gateway,
+        transaction_id: transactionId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`payment-confirmado ${response.status}: ${errorBody}`);
+    }
+
+    console.log(`[payment-confirmado] Livete notified for order ${orderId} via ${gateway}`);
+  } catch (error) {
+    console.error("[payment-confirmado] Failed to notify Livete:", error);
+  }
+}
+
+async function autoCreateShopifyOrder(orderId: string, source: "orders" | "pos_sales", supabaseUrl: string, supabaseKey: string) {
+  if (source !== "orders") return;
+
+  try {
+    console.log(`[AUTO-SHOPIFY] Creating Shopify order for ${source} ${orderId}...`);
+    const response = await fetch(`${supabaseUrl}/functions/v1/shopify-create-order`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ orderId }),
+    });
+
+    const data = await response.json();
+    console.log(`[AUTO-SHOPIFY] Result:`, JSON.stringify(data).substring(0, 500));
+  } catch (error) {
+    console.error("[AUTO-SHOPIFY] Error (non-blocking):", error);
+  }
+}
+
 interface CardData {
   number: string;
   holderName: string;
@@ -727,10 +773,16 @@ serve(async (req) => {
             ...gatewayIdField,
           })
           .eq("id", params.orderId);
-        if (updErr) console.error("Failed to update orders:", updErr);
-        else if (Object.keys(gatewayIdField).length) {
-          const [field, val] = Object.entries(gatewayIdField)[0];
-          console.log(`[${result.gateway}] Vinculado ${field}=${val} ao pedido ${params.orderId}`);
+        if (updErr) {
+          console.error("Failed to update orders:", updErr);
+        } else {
+          if (Object.keys(gatewayIdField).length) {
+            const [field, val] = Object.entries(gatewayIdField)[0];
+            console.log(`[${result.gateway}] Vinculado ${field}=${val} ao pedido ${params.orderId}`);
+          }
+
+          await notifyPaymentConfirmed(params.orderId, result.gateway || "unknown", String(result.transactionId || params.orderId));
+          await autoCreateShopifyOrder(params.orderId, orderSource, supabaseUrl, supabaseKey);
         }
       } else {
         const { error: updErr } = await supabase

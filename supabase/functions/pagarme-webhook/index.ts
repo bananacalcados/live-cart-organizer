@@ -234,7 +234,7 @@ serve(async (req) => {
           fetch(Deno.env.get('AGENTE2_PAGAMENTO_CONFIRMADO') || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pedido_id: order.id, gateway: 'pagarme', transaction_id: String(transactionId) }),
+            body: JSON.stringify({ pedido_id: order.id, loja: 'centro', gateway: 'pagarme', transaction_id: String(transactionId) }),
           }).catch(err => console.error('Livete webhook error:', err));
           // Auto-create Shopify order
           await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
