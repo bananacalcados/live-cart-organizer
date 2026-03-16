@@ -426,7 +426,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         await supabase.from("pos_sales").update({ customer_id: customerId } as any).eq("id", sale.id);
         const { data: freshCust } = await supabase
           .from("pos_customers")
-          .select("name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
+          .select("id, name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
           .eq("id", customerId)
           .maybeSingle();
         if (freshCust) setCurrentCustomer(freshCust as CustomerInfo);
