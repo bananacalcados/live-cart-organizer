@@ -956,8 +956,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
           <POSCustomerForm
             open={showCustomerForm}
             onOpenChange={setShowCustomerForm}
-            existingCustomer={sale.customer_id && currentCustomer ? {
-              id: sale.customer_id,
+            existingCustomer={currentCustomer ? {
+              id: currentCustomer.id || sale.customer_id || undefined,
               name: currentCustomer.name || undefined,
               email: currentCustomer.email || undefined,
               whatsapp: currentCustomer.whatsapp || undefined,
