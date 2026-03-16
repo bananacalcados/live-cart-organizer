@@ -107,6 +107,51 @@ function calculateInstallmentAmount(total: number, installments: number, config:
   };
 }
 
+function isPendingPlaceholder(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase() === "pendente";
+}
+
+function normalizeTextField(value: string | null | undefined) {
+  return isPendingPlaceholder(value) ? "" : (value ?? "").trim();
+}
+
+function normalizeAddressNumber(value: string | null | undefined) {
+  const trimmed = (value ?? "").trim();
+  return trimmed === "0" ? "" : trimmed;
+}
+
+function normalizeCepField(value: string | null | undefined) {
+  const digits = (value ?? "").replace(/\D/g, "");
+  return digits && digits !== "00000000" ? formatCEP(digits) : "";
+}
+
+function hasCompleteAddress(form: CustomerFormData) {
+  return Boolean(
+    normalizeCepField(form.cep) &&
+    normalizeTextField(form.address) &&
+    normalizeAddressNumber(form.addressNumber) &&
+    normalizeTextField(form.neighborhood) &&
+    normalizeTextField(form.city) &&
+    form.state.trim()
+  );
+}
+
+function mapRegistrationToCustomerForm(reg: any): CustomerFormData {
+  return {
+    fullName: reg?.full_name || "",
+    email: reg?.email || "",
+    cpf: formatCPF(reg?.cpf || ""),
+    whatsapp: formatPhone(reg?.whatsapp || ""),
+    cep: normalizeCepField(reg?.cep),
+    address: normalizeTextField(reg?.address),
+    addressNumber: normalizeAddressNumber(reg?.address_number),
+    complement: reg?.complement || "",
+    neighborhood: normalizeTextField(reg?.neighborhood),
+    city: normalizeTextField(reg?.city),
+    state: reg?.state || "",
+  };
+}
+
 // ── Stepper ─────────────────────────────────────────────────────
 function StepIndicator({ currentStep }: { currentStep: number }) {
   const steps = [
@@ -316,10 +361,10 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
         setForm({
           ...form,
           cep: cepValue,
-          address: data.logradouro || form.address,
-          neighborhood: data.bairro || form.neighborhood,
-          city: data.localidade || form.city,
-          state: data.uf || form.state,
+          address: data.logradouro?.trim() || (isPendingPlaceholder(form.address) ? "" : form.address),
+          neighborhood: data.bairro?.trim() || (isPendingPlaceholder(form.neighborhood) ? "" : form.neighborhood),
+          city: data.localidade?.trim() || form.city,
+          state: data.uf?.trim() || form.state,
         });
       }
     } catch {}
@@ -382,8 +427,8 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
   };
 
   const handleNext = () => {
-    if (!form.cep.trim() || !form.address.trim() || !form.addressNumber.trim() || !form.neighborhood.trim() || !form.city.trim() || !form.state.trim()) {
-      toast.error("Preencha todos os campos obrigatórios do endereço");
+    if (!hasCompleteAddress(form)) {
+      toast.error("Preencha rua, número, bairro, cidade e UF corretamente antes de continuar");
       return;
     }
     if (!selectedFreight) {
@@ -1113,37 +1158,13 @@ export default function TransparentCheckout() {
 
       if (orderReg) {
         setRegistrationId(orderReg.id);
-        setCustomerForm({
-          fullName: orderReg.full_name || "",
-          email: orderReg.email || "",
-          cpf: formatCPF(orderReg.cpf || ""),
-          whatsapp: formatPhone(orderReg.whatsapp || ""),
-          cep: formatCEP(orderReg.cep || ""),
-          address: orderReg.address || "",
-          addressNumber: orderReg.address_number || "",
-          complement: orderReg.complement || "",
-          neighborhood: orderReg.neighborhood || "",
-          city: orderReg.city || "",
-          state: orderReg.state || "",
-        });
+        setCustomerForm(mapRegistrationToCustomerForm(orderReg));
       } else if (order.customer_id) {
         const { data: prevReg } = await supabase
           .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
           .maybeSingle();
         if (prevReg) {
-          setCustomerForm({
-            fullName: prevReg.full_name || "",
-            email: prevReg.email || "",
-            cpf: formatCPF(prevReg.cpf || ""),
-            whatsapp: formatPhone(prevReg.whatsapp || ""),
-            cep: formatCEP(prevReg.cep || ""),
-            address: prevReg.address || "",
-            addressNumber: prevReg.address_number || "",
-            complement: prevReg.complement || "",
-            neighborhood: prevReg.neighborhood || "",
-            city: prevReg.city || "",
-            state: prevReg.state || "",
-          });
+          setCustomerForm(mapRegistrationToCustomerForm(prevReg));
         }
       }
     } catch (error) {
@@ -1173,33 +1194,34 @@ export default function TransparentCheckout() {
     if (!orderData || orderData.id.startsWith("live-")) return false;
 
     try {
+      const isAddressStep = step >= 2;
       const payload = {
         order_id: orderData.id,
-        full_name: customerForm.fullName,
-        email: customerForm.email,
+        full_name: customerForm.fullName.trim(),
+        email: customerForm.email.trim(),
         cpf: customerForm.cpf.replace(/\D/g, ""),
         whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
-        cep: step >= 2 ? customerForm.cep.replace(/\D/g, "") : customerForm.cep.replace(/\D/g, "") || "00000000",
-        address: step >= 2 ? customerForm.address : customerForm.address || "Pendente",
-        address_number: step >= 2 ? customerForm.addressNumber : customerForm.addressNumber || "0",
-        complement: customerForm.complement,
-        neighborhood: step >= 2 ? customerForm.neighborhood : customerForm.neighborhood || "Pendente",
-        city: step >= 2 ? customerForm.city : customerForm.city || "Pendente",
-        state: step >= 2 ? customerForm.state : customerForm.state || "SP",
+        cep: isAddressStep ? customerForm.cep.replace(/\D/g, "") : (customerForm.cep.replace(/\D/g, "") || "00000000"),
+        address: isAddressStep ? customerForm.address.trim() : (normalizeTextField(customerForm.address) || "Pendente"),
+        address_number: isAddressStep ? customerForm.addressNumber.trim() : (normalizeAddressNumber(customerForm.addressNumber) || "0"),
+        complement: customerForm.complement.trim(),
+        neighborhood: isAddressStep ? customerForm.neighborhood.trim() : (normalizeTextField(customerForm.neighborhood) || "Pendente"),
+        city: isAddressStep ? customerForm.city.trim() : (normalizeTextField(customerForm.city) || "Pendente"),
+        state: isAddressStep ? customerForm.state.trim().toUpperCase() : (customerForm.state.trim().toUpperCase() || "SP"),
         ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
       };
 
       const { data: reg, error } = await supabase
         .from("customer_registrations")
         .upsert(payload, { onConflict: "order_id" })
-        .select("id, address, city")
+        .select("id, cep, address, address_number, neighborhood, city, state")
         .single();
 
       if (error) throw error;
       if (reg?.id) setRegistrationId(reg.id);
       return true;
     } catch (err) {
-      console.error("Error saving registration:", err);
+      console.error(`Error saving registration on step ${step}:`, err);
       toast.error("Erro ao salvar endereço. Tente novamente.");
       return false;
     }
@@ -1211,6 +1233,11 @@ export default function TransparentCheckout() {
   };
 
   const handleStep2Next = async () => {
+    if (!hasCompleteAddress(customerForm)) {
+      toast.error("Preencha o endereço completo antes de ir para o pagamento");
+      return;
+    }
+
     // Ensure address is fully saved BEFORE moving to payment step
     const saved = await saveRegistration(2);
     if (!saved) return;
@@ -1220,11 +1247,13 @@ export default function TransparentCheckout() {
       try {
         const { data: reg } = await supabase
           .from("customer_registrations")
-          .select("id, address, city")
+          .select("cep, address, address_number, neighborhood, city, state")
           .eq("order_id", orderData.id)
           .maybeSingle();
-        if (!reg || !reg.address || reg.address === "Pendente") {
-          toast.error("Erro ao salvar endereço. Tente novamente.");
+
+        const persistedForm = mapRegistrationToCustomerForm(reg);
+        if (!reg || !hasCompleteAddress(persistedForm)) {
+          toast.error("Preencha rua e bairro manualmente quando o CEP não localizar esses dados");
           return;
         }
       } catch {
