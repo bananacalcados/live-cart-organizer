@@ -412,38 +412,29 @@ serve(async (req) => {
       }).then(() => {});
     }
 
-    // Update counts from DB
-    const [{ count: totalSent }, { count: totalFailed }, { count: totalPending }] = await Promise.all([
-      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId).eq('status', 'sent'),
-      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId).eq('status', 'failed'),
-      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId).eq('status', 'pending'),
-    ]);
+    const { sentCount: totalSent, failedCount: totalFailed, pendingCount: totalPending } = await getRecipientCounts(supabase, dispatchId);
 
-    // Release lock + update counts
-    await supabase.from('dispatch_history').update({
+    const nextStatus = totalPending > 0 ? dispatch.status : 'completed';
+    const completedAt = totalPending > 0 ? null : new Date().toISOString();
+    const { error: progressErr } = await supabase.from('dispatch_history').update({
       processing_batch: false,
-      sent_count: totalSent || 0,
-      failed_count: totalFailed || 0,
+      status: nextStatus,
+      completed_at: completedAt,
+      sent_count: totalSent,
+      failed_count: totalFailed,
     }).eq('id', dispatchId);
 
-    // Self-chain if there are still pending recipients (with delay)
-    if ((totalPending || 0) > 0) {
+    if (progressErr) {
+      console.error('Failed to persist dispatch progress:', progressErr, { dispatchId, totalSent, totalFailed, totalPending });
+    }
+
+    if (totalPending > 0) {
       const { data: checkStatus } = await supabase
         .from('dispatch_history').select('status').eq('id', dispatchId).single();
 
       if (checkStatus?.status !== 'cancelled' && checkStatus?.status !== 'paused') {
         scheduleNextBatch(supabaseUrl, supabaseKey, dispatchId);
       }
-    } else {
-      await supabase.from('dispatch_history').update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        sent_count: totalSent || 0,
-        failed_count: totalFailed || 0,
-      }).eq('id', dispatchId);
     }
 
     return new Response(JSON.stringify({
