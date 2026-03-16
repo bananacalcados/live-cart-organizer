@@ -410,15 +410,16 @@ export function ChatView({
                       : 'bg-white dark:bg-[#202c33] text-foreground'
                   )}
                 >
-                  {msg.media_url && msg.media_type?.includes('image') && (
-                    <img src={msg.media_url} alt="" className="max-w-[200px] max-h-[200px] rounded mb-1 object-cover cursor-pointer" onClick={() => window.open(msg.media_url!, '_blank')} />
-                  )}
-                  {msg.media_url && msg.media_type === 'audio' && (
-                    <audio src={msg.media_url} controls className="w-full mb-1" />
-                  )}
-                  {msg.media_url && msg.media_type === 'video' && (
-                    <video src={msg.media_url} controls className="max-w-full rounded mb-1" style={{ maxHeight: 200 }} />
-                  )}
+                  <WhatsAppMediaAttachment
+                    mediaUrl={msg.media_url}
+                    mediaType={msg.media_type}
+                    message={msg.message}
+                    imageClassName="max-w-[200px] max-h-[200px] rounded mb-1 object-cover cursor-pointer"
+                    videoClassName="max-w-full rounded mb-1"
+                    videoStyle={{ maxHeight: 200 }}
+                    audioClassName="w-full mb-1"
+                    pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
+                  />
                   {isEditing ? (
                     <div className="space-y-1">
                       <textarea
