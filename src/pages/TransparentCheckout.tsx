@@ -610,7 +610,7 @@ function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId
     // Save customer registration early
     if (orderId && !orderId.startsWith("live-")) {
       try {
-        await supabase.from("customer_registrations").insert({
+        await supabase.from("customer_registrations").upsert({
           order_id: orderId,
           full_name: form.fullName,
           email: form.email,
@@ -623,7 +623,7 @@ function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId
           neighborhood: form.neighborhood,
           city: form.city,
           state: form.state,
-        });
+        }, { onConflict: "order_id" });
       } catch {}
     }
 
@@ -1104,8 +1104,29 @@ export default function TransparentCheckout() {
         setOrderData((prev) => prev ? { ...prev, checkoutStartedAt: now } : prev);
       }
 
-      // Pre-fill from existing registration
-      if (order.customer_id) {
+      // Pre-fill from existing registration for this order first
+      const { data: orderReg } = await supabase
+        .from("customer_registrations")
+        .select("id, full_name, email, cpf, whatsapp, cep, address, address_number, complement, neighborhood, city, state")
+        .eq("order_id", order.id)
+        .maybeSingle();
+
+      if (orderReg) {
+        setRegistrationId(orderReg.id);
+        setCustomerForm({
+          fullName: orderReg.full_name || "",
+          email: orderReg.email || "",
+          cpf: formatCPF(orderReg.cpf || ""),
+          whatsapp: formatPhone(orderReg.whatsapp || ""),
+          cep: formatCEP(orderReg.cep || ""),
+          address: orderReg.address || "",
+          addressNumber: orderReg.address_number || "",
+          complement: orderReg.complement || "",
+          neighborhood: orderReg.neighborhood || "",
+          city: orderReg.city || "",
+          state: orderReg.state || "",
+        });
+      } else if (order.customer_id) {
         const { data: prevReg } = await supabase
           .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
           .maybeSingle();
@@ -1149,57 +1170,51 @@ export default function TransparentCheckout() {
 
   // Save/update registration progressively
   const saveRegistration = async (step: number) => {
-    if (!orderData || orderData.id.startsWith("live-")) return;
+    if (!orderData || orderData.id.startsWith("live-")) return false;
+
     try {
-      if (registrationId) {
-        // Update existing
-        await supabase.from("customer_registrations").update({
-          full_name: customerForm.fullName,
-          email: customerForm.email,
-          cpf: customerForm.cpf.replace(/\D/g, ""),
-          whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
-          ...(step >= 2 ? {
-            cep: customerForm.cep.replace(/\D/g, ""),
-            address: customerForm.address,
-            address_number: customerForm.addressNumber,
-            complement: customerForm.complement,
-            neighborhood: customerForm.neighborhood,
-            city: customerForm.city,
-            state: customerForm.state,
-          } : {}),
-        }).eq("id", registrationId);
-      } else {
-        // Insert new
-        const { data: reg } = await supabase.from("customer_registrations").insert({
-          order_id: orderData.id,
-          full_name: customerForm.fullName,
-          email: customerForm.email,
-          cpf: customerForm.cpf.replace(/\D/g, ""),
-          whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
-          cep: customerForm.cep.replace(/\D/g, "") || "00000000",
-          address: customerForm.address || "Pendente",
-          address_number: customerForm.addressNumber || "0",
-          neighborhood: customerForm.neighborhood || "Pendente",
-          city: customerForm.city || "Pendente",
-          state: customerForm.state || "SP",
-          complement: customerForm.complement,
-          ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
-        }).select("id").single();
-        if (reg) setRegistrationId(reg.id);
-      }
+      const payload = {
+        order_id: orderData.id,
+        full_name: customerForm.fullName,
+        email: customerForm.email,
+        cpf: customerForm.cpf.replace(/\D/g, ""),
+        whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
+        cep: step >= 2 ? customerForm.cep.replace(/\D/g, "") : customerForm.cep.replace(/\D/g, "") || "00000000",
+        address: step >= 2 ? customerForm.address : customerForm.address || "Pendente",
+        address_number: step >= 2 ? customerForm.addressNumber : customerForm.addressNumber || "0",
+        complement: customerForm.complement,
+        neighborhood: step >= 2 ? customerForm.neighborhood : customerForm.neighborhood || "Pendente",
+        city: step >= 2 ? customerForm.city : customerForm.city || "Pendente",
+        state: step >= 2 ? customerForm.state : customerForm.state || "SP",
+        ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
+      };
+
+      const { data: reg, error } = await supabase
+        .from("customer_registrations")
+        .upsert(payload, { onConflict: "order_id" })
+        .select("id, address, city")
+        .single();
+
+      if (error) throw error;
+      if (reg?.id) setRegistrationId(reg.id);
+      return true;
     } catch (err) {
       console.error("Error saving registration:", err);
+      toast.error("Erro ao salvar endereço. Tente novamente.");
+      return false;
     }
   };
 
   const handleStep1Next = async () => {
-    await saveRegistration(1);
-    setCurrentStep(2);
+    const saved = await saveRegistration(1);
+    if (saved) setCurrentStep(2);
   };
 
   const handleStep2Next = async () => {
     // Ensure address is fully saved BEFORE moving to payment step
-    await saveRegistration(2);
+    const saved = await saveRegistration(2);
+    if (!saved) return;
+
     // Verify the registration was actually saved with address data
     if (orderData && !orderData.id.startsWith("live-")) {
       try {
@@ -1207,14 +1222,15 @@ export default function TransparentCheckout() {
           .from("customer_registrations")
           .select("id, address, city")
           .eq("order_id", orderData.id)
-          .order("updated_at", { ascending: false })
-          .limit(1)
           .maybeSingle();
         if (!reg || !reg.address || reg.address === "Pendente") {
           toast.error("Erro ao salvar endereço. Tente novamente.");
           return;
         }
-      } catch {}
+      } catch {
+        toast.error("Erro ao salvar endereço. Tente novamente.");
+        return;
+      }
     }
     setCurrentStep(3);
   };
