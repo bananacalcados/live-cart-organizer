@@ -773,10 +773,16 @@ serve(async (req) => {
             ...gatewayIdField,
           })
           .eq("id", params.orderId);
-        if (updErr) console.error("Failed to update orders:", updErr);
-        else if (Object.keys(gatewayIdField).length) {
-          const [field, val] = Object.entries(gatewayIdField)[0];
-          console.log(`[${result.gateway}] Vinculado ${field}=${val} ao pedido ${params.orderId}`);
+        if (updErr) {
+          console.error("Failed to update orders:", updErr);
+        } else {
+          if (Object.keys(gatewayIdField).length) {
+            const [field, val] = Object.entries(gatewayIdField)[0];
+            console.log(`[${result.gateway}] Vinculado ${field}=${val} ao pedido ${params.orderId}`);
+          }
+
+          await notifyPaymentConfirmed(params.orderId, result.gateway || "unknown", String(result.transactionId || params.orderId));
+          await autoCreateShopifyOrder(params.orderId, orderSource, supabaseUrl, supabaseKey);
         }
       } else {
         const { error: updErr } = await supabase
