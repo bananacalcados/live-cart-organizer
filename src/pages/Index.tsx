@@ -34,7 +34,7 @@ const Index = () => {
   
   const { currentEventId, getCurrentEvent, fetchEvents } = useEventStore();
   const { fetchCustomers } = useCustomerStore();
-  const { orders, isLoading, fetchOrdersByEvent, checkNoResponseOrders, getUnpaidOrdersCount } = useDbOrderStore();
+  const { orders, isLoading, fetchOrdersByEvent, checkNoResponseOrders, getUnpaidOrdersCount, subscribeToEventOrders } = useDbOrderStore();
 
   const currentEvent = getCurrentEvent();
 

@@ -1,10 +1,11 @@
 import { create } from 'zustand';
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { DbOrder, DbOrderProduct, DbCustomer, DiscountType } from '@/types/database';
 import { OrderStage, isOrderComplete } from '@/types/order';
 import { toast } from 'sonner';
-
 import { Json } from '@/integrations/supabase/types';
+import { fetchDbOrderById, mapDbOrder, mergeDbOrder } from './dbOrderRealtime';
 
 // Helper to convert products array to Json type
 const productsToJson = (products: DbOrderProduct[]): Json => {
