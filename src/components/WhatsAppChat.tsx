@@ -229,7 +229,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   };
 
   const phone = order.whatsapp || '';
-  const contactName = order.instagramHandle;
+  const contactName = order.instagramHandle?.trim()
+    ? (order.instagramHandle.startsWith('@') ? order.instagramHandle : `@${order.instagramHandle}`)
+    : 'Sem identificação';
   const currentStage = STAGES.find(s => s.id === order.stage);
 
   // Normalize phone for database queries - create all possible variations
@@ -259,9 +261,13 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       .map((p) => `• ${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`)
       .join('\n');
 
+    const normalizedInstagram = order.instagramHandle?.trim()
+      ? (order.instagramHandle.startsWith('@') ? order.instagramHandle : `@${order.instagramHandle}`)
+      : '';
+
     return {
-      nome: order.instagramHandle.replace('@', ''),
-      instagram: order.instagramHandle,
+      nome: normalizedInstagram.replace('@', ''),
+      instagram: normalizedInstagram,
       whatsapp: order.whatsapp || '',
       link_carrinho: order.cartLink || '',
       total: totalValue.toFixed(2),

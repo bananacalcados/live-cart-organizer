@@ -22,20 +22,26 @@ interface OrderCardDbProps {
 }
 
 // Convert DbOrder to Order for dialog compatibility
-const dbOrderToOrder = (dbOrder: DbOrder): Order => ({
-  id: dbOrder.id,
-  instagramHandle: dbOrder.customer?.instagram_handle || '',
-  whatsapp: dbOrder.customer?.whatsapp,
-  cartLink: dbOrder.cart_link,
-  products: dbOrder.products,
-  stage: dbOrder.stage as Order['stage'],
-  notes: dbOrder.notes,
-  createdAt: new Date(dbOrder.created_at),
-  updatedAt: new Date(dbOrder.updated_at),
-  hasUnreadMessages: dbOrder.has_unread_messages,
-  lastCustomerMessageAt: dbOrder.last_customer_message_at ? new Date(dbOrder.last_customer_message_at) : undefined,
-  lastSentMessageAt: dbOrder.last_sent_message_at ? new Date(dbOrder.last_sent_message_at) : undefined,
-});
+const dbOrderToOrder = (dbOrder: DbOrder): Order => {
+  const instagramHandle = dbOrder.customer?.instagram_handle?.trim()
+    ? (dbOrder.customer.instagram_handle.startsWith('@') ? dbOrder.customer.instagram_handle : `@${dbOrder.customer.instagram_handle}`)
+    : '';
+
+  return {
+    id: dbOrder.id,
+    instagramHandle,
+    whatsapp: dbOrder.customer?.whatsapp,
+    cartLink: dbOrder.cart_link,
+    products: dbOrder.products,
+    stage: dbOrder.stage as Order['stage'],
+    notes: dbOrder.notes,
+    createdAt: new Date(dbOrder.created_at),
+    updatedAt: new Date(dbOrder.updated_at),
+    hasUnreadMessages: dbOrder.has_unread_messages,
+    lastCustomerMessageAt: dbOrder.last_customer_message_at ? new Date(dbOrder.last_customer_message_at) : undefined,
+    lastSentMessageAt: dbOrder.last_sent_message_at ? new Date(dbOrder.last_sent_message_at) : undefined,
+  };
+};
 
 export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDbProps) {
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);

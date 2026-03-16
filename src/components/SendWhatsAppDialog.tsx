@@ -41,14 +41,18 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
   );
 
   const buildDefaultMessage = () => {
+    const normalizedInstagram = order.instagramHandle?.trim()
+      ? (order.instagramHandle.startsWith('@') ? order.instagramHandle : `@${order.instagramHandle}`)
+      : '';
+
     // Try to use a saved template for this stage
     const stageTemplates = getTemplatesByStage(order.stage);
     if (stageTemplates.length > 0) {
-      const firstName = order.instagramHandle?.replace('@', '') || '';
+      const firstName = normalizedInstagram.replace('@', '') || '';
       const productsList = order.products.map(p => `${p.quantity}x ${p.title}`).join(', ');
       return applyTemplateVariables(stageTemplates[0].message, {
         nome: firstName,
-        instagram: order.instagramHandle ? `@${order.instagramHandle.replace('@', '')}` : '',
+        instagram: normalizedInstagram,
         whatsapp: order.whatsapp || '',
         link_carrinho: order.cartLink || '',
         total: `R$ ${totalValue.toFixed(2)}`,
