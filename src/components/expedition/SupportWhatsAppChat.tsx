@@ -15,6 +15,7 @@ import { WhatsAppNumberSelector } from '../WhatsAppNumberSelector';
 import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MessageStatusIcon } from '../chat/MessageStatusIcon';
+import { WhatsAppMediaAttachment } from '../chat/WhatsAppMediaAttachment';
 
 interface Message {
   id: string;
