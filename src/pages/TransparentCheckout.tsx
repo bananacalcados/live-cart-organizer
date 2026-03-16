@@ -1109,6 +1109,7 @@ export default function TransparentCheckout() {
     monthly_interest_rate: 2.49,
   });
   const [summaryCollapsed, setSummaryCollapsed] = useState(true);
+  const paymentConfirmedRef = useRef(false);
 
   // 3-step state
   const [currentStep, setCurrentStep] = useState(1);
