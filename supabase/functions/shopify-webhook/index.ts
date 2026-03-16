@@ -133,6 +133,14 @@ serve(async (req) => {
             throw updateError;
           }
 
+          await notifyPaymentConfirmed({
+            pedido_id: order.id,
+            loja: 'centro',
+            gateway: 'shopify',
+            transaction_id: body.id?.toString() || checkoutToken || order.id,
+            source: 'shopify-webhook',
+          });
+
           console.log("Order marked as paid:", order.id);
         } else {
           console.log("No order found for checkout token:", checkoutToken);

@@ -362,12 +362,13 @@ async function updateOrder(
     if (error) { console.error("Error updating orders:", error); return false; }
     console.log(`orders ${orderId} marked as paid via VINDI webhook`);
     console.log(`[vindi] Vinculado vindi_transaction_id=${tokenTransaction} ao pedido ${orderId}`);
-    // Notify external agent
-    fetch(Deno.env.get('AGENTE2_PAGAMENTO_CONFIRMADO') || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pedido_id: orderId, loja: 'centro' }),
-    }).catch(err => console.error('Webhook notification error:', err));
+    await notifyPaymentConfirmed({
+      pedido_id: orderId,
+      loja: 'centro',
+      gateway: 'vindi',
+      transaction_id: String(tokenTransaction),
+      source: 'vindi-webhook',
+    });
     // Auto-create Shopify order
     await autoCreateShopifyOrder(supabase, orderId, "orders", supabaseUrl, supabaseKey);
     return true;

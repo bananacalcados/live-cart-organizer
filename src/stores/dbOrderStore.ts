@@ -292,7 +292,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       updates.paid_at = paidAt;
       stateUpdates.is_paid = true;
       stateUpdates.paid_at = paidAt;
-      notifyPaymentConfirmed(orderId);
+      notifyPaymentConfirmed(orderId, 'events-kanban-drag');
     }
 
     // If moving away from paid manually, keep payment flags aligned
