@@ -552,4 +552,49 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       toast.error('Erro ao atualizar link');
     }
   },
+
+  upsertOrderRealtime: (order) => {
+    set((state) => ({
+      orders: mergeDbOrder(state.orders, order),
+    }));
+  },
+
+  removeOrderRealtime: (orderId) => {
+    set((state) => ({
+      orders: state.orders.filter((order) => order.id !== orderId),
+    }));
+  },
+
+  subscribeToEventOrders: (eventId) => {
+    const channel = supabase
+      .channel(`event-orders-${eventId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `event_id=eq.${eventId}` },
+        async (payload: RealtimePostgresChangesPayload<{ id: string; event_id: string }>) => {
+          try {
+            if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old?.id;
+              if (deletedId) get().removeOrderRealtime(deletedId);
+              return;
+            }
+
+            const orderId = payload.new?.id;
+            if (!orderId) return;
+
+            const freshOrder = await fetchDbOrderById(orderId);
+            if (freshOrder) {
+              get().upsertOrderRealtime(freshOrder);
+            }
+          } catch (error) {
+            console.error('Error syncing realtime order:', error);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
 }));
