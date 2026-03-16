@@ -107,6 +107,51 @@ function calculateInstallmentAmount(total: number, installments: number, config:
   };
 }
 
+function isPendingPlaceholder(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase() === "pendente";
+}
+
+function normalizeTextField(value: string | null | undefined) {
+  return isPendingPlaceholder(value) ? "" : (value ?? "").trim();
+}
+
+function normalizeAddressNumber(value: string | null | undefined) {
+  const trimmed = (value ?? "").trim();
+  return trimmed === "0" ? "" : trimmed;
+}
+
+function normalizeCepField(value: string | null | undefined) {
+  const digits = (value ?? "").replace(/\D/g, "");
+  return digits && digits !== "00000000" ? formatCEP(digits) : "";
+}
+
+function hasCompleteAddress(form: CustomerFormData) {
+  return Boolean(
+    normalizeCepField(form.cep) &&
+    normalizeTextField(form.address) &&
+    normalizeAddressNumber(form.addressNumber) &&
+    normalizeTextField(form.neighborhood) &&
+    normalizeTextField(form.city) &&
+    form.state.trim()
+  );
+}
+
+function mapRegistrationToCustomerForm(reg: any): CustomerFormData {
+  return {
+    fullName: reg?.full_name || "",
+    email: reg?.email || "",
+    cpf: formatCPF(reg?.cpf || ""),
+    whatsapp: formatPhone(reg?.whatsapp || ""),
+    cep: normalizeCepField(reg?.cep),
+    address: normalizeTextField(reg?.address),
+    addressNumber: normalizeAddressNumber(reg?.address_number),
+    complement: reg?.complement || "",
+    neighborhood: normalizeTextField(reg?.neighborhood),
+    city: normalizeTextField(reg?.city),
+    state: reg?.state || "",
+  };
+}
+
 // ── Stepper ─────────────────────────────────────────────────────
 function StepIndicator({ currentStep }: { currentStep: number }) {
   const steps = [
