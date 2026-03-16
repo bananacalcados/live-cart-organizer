@@ -59,6 +59,13 @@ const Index = () => {
     }
   }, [currentEventId, fetchOrdersByEvent]);
 
+  useEffect(() => {
+    if (!currentEventId) return;
+
+    const unsubscribe = subscribeToEventOrders(currentEventId);
+    return unsubscribe;
+  }, [currentEventId, subscribeToEventOrders]);
+
   // Check for no-response orders every minute
   useEffect(() => {
     const interval = setInterval(() => {
