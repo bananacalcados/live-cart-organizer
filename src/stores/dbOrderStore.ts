@@ -13,15 +13,21 @@ const productsToJson = (products: DbOrderProduct[]): Json => {
 };
 
 // Notify external agent when payment is confirmed
-const notifyPaymentConfirmed = async (orderId: string) => {
+const notifyPaymentConfirmed = async (orderId: string, source: string = 'events-kanban') => {
   try {
-    const webhookUrl = import.meta.env.VITE_AGENTE2_PAGAMENTO_CONFIRMADO || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado';
-    await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pedido_id: orderId, loja: 'centro' }),
+    const { data, error } = await supabase.functions.invoke('payment-confirmed-hook', {
+      body: {
+        pedido_id: orderId,
+        loja: 'centro',
+        source,
+      },
     });
-    console.log(`[payment-webhook] Notified agent for order ${orderId}`);
+
+    if (error) {
+      throw error;
+    }
+
+    console.log(`[payment-webhook] Notified agent for order ${orderId}`, data);
   } catch (err) {
     console.error('[payment-webhook] Failed to notify agent:', err);
   }
