@@ -262,6 +262,14 @@ export function POSPickupOrders({ storeId }: Props) {
           .from("orders")
           .update({ is_paid: true, paid_at: new Date().toISOString(), stage: "paid" })
           .eq("id", processingOrder.source_order_id);
+
+        await supabase.functions.invoke("payment-confirmed-hook", {
+          body: {
+            pedido_id: processingOrder.source_order_id,
+            loja: "centro",
+            source: "pos-pickup-confirmation",
+          },
+        });
       }
 
       if (data.success) {

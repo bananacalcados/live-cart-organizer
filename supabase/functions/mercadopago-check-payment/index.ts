@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -147,12 +148,13 @@ serve(async (req) => {
 
         console.log("Order marked as paid:", orderId);
 
-        // Notify external agent
-        fetch(Deno.env.get('AGENTE2_PAGAMENTO_CONFIRMADO') || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pedido_id: orderId, loja: 'centro' }),
-        }).catch(err => console.error('Webhook notification error:', err));
+        await notifyPaymentConfirmed({
+          pedido_id: orderId,
+          loja: 'centro',
+          gateway: 'mercadopago',
+          transaction_id: String(paymentId),
+          source: 'mercadopago-check-payment',
+        });
 
         const { data: fullOrder } = await supabase
           .from("orders")

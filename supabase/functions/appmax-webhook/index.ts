@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 
 async function autoCreateShopifyOrder(_supabase: any, orderId: string, source: string, supabaseUrl: string, supabaseKey: string) {
   try {
@@ -314,12 +315,13 @@ serve(async (req) => {
           updated = true;
           console.log(`orders ${ourOrderId} marked as paid via AppMax webhook`);
           console.log(`[appmax] Vinculado appmax_order_id=${appmaxOrderId} ao pedido ${ourOrderId}`);
-          // Notify Livete agent
-          fetch(Deno.env.get('AGENTE2_PAGAMENTO_CONFIRMADO') || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pedido_id: ourOrderId, loja: 'centro', gateway: 'appmax', transaction_id: String(transactionId) }),
-          }).catch(err => console.error('Livete webhook error:', err));
+          await notifyPaymentConfirmed({
+            pedido_id: ourOrderId,
+            loja: 'centro',
+            gateway: 'appmax',
+            transaction_id: String(transactionId),
+            source: 'appmax-webhook',
+          });
           // Auto-create Shopify order
           await autoCreateShopifyOrder(supabase, ourOrderId, "orders", supabaseUrl, supabaseKey);
         }

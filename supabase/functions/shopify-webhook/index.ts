@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -131,6 +132,14 @@ serve(async (req) => {
             console.error("Error updating order:", updateError);
             throw updateError;
           }
+
+          await notifyPaymentConfirmed({
+            pedido_id: order.id,
+            loja: 'centro',
+            gateway: 'shopify',
+            transaction_id: body.id?.toString() || checkoutToken || order.id,
+            source: 'shopify-webhook',
+          });
 
           console.log("Order marked as paid:", order.id);
         } else {

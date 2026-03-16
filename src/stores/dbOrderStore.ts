@@ -13,15 +13,21 @@ const productsToJson = (products: DbOrderProduct[]): Json => {
 };
 
 // Notify external agent when payment is confirmed
-const notifyPaymentConfirmed = async (orderId: string) => {
+const notifyPaymentConfirmed = async (orderId: string, source: string = 'events-kanban') => {
   try {
-    const webhookUrl = import.meta.env.VITE_AGENTE2_PAGAMENTO_CONFIRMADO || 'https://api.bananacalcados.com.br/webhook/pagamento-confirmado';
-    await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pedido_id: orderId, loja: 'centro' }),
+    const { data, error } = await supabase.functions.invoke('payment-confirmed-hook', {
+      body: {
+        pedido_id: orderId,
+        loja: 'centro',
+        source,
+      },
     });
-    console.log(`[payment-webhook] Notified agent for order ${orderId}`);
+
+    if (error) {
+      throw error;
+    }
+
+    console.log(`[payment-webhook] Notified agent for order ${orderId}`, data);
   } catch (err) {
     console.error('[payment-webhook] Failed to notify agent:', err);
   }
@@ -225,7 +231,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       // Check if is_paid just transitioned to true and keep stage consistent
       const prevOrder = get().orders.find((o) => o.id === orderId);
       if (data.is_paid && prevOrder && !prevOrder.is_paid) {
-        notifyPaymentConfirmed(orderId);
+        notifyPaymentConfirmed(orderId, 'events-manual-confirmation');
       }
 
       if (data.is_paid && data.stage === 'awaiting_payment') {
@@ -286,7 +292,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       updates.paid_at = paidAt;
       stateUpdates.is_paid = true;
       stateUpdates.paid_at = paidAt;
-      notifyPaymentConfirmed(orderId);
+      notifyPaymentConfirmed(orderId, 'events-kanban-drag');
     }
 
     // If moving away from paid manually, keep payment flags aligned
