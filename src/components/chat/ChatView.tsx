@@ -26,6 +26,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { CreateSupportTicketDialog } from "../CreateSupportTicketDialog";
 import { MessageStatusIcon } from "./MessageStatusIcon";
+import { WhatsAppMediaAttachment } from "./WhatsAppMediaAttachment";
 
 interface ChatViewProps {
   messages: Message[];
