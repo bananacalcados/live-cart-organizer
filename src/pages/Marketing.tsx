@@ -1745,6 +1745,13 @@ export default function Marketing() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <LeadImportDialog
+        open={leadImportOpen}
+        onOpenChange={setLeadImportOpen}
+        existingCampaignTags={[...new Set(leads.map((lead) => lead.campaign_tag).filter(Boolean))].sort()}
+        onImported={fetchLeads}
+      />
     </div>
   );
 }
