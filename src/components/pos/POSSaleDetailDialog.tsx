@@ -22,6 +22,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 interface CustomerInfo {
+  id?: string;
   name: string | null;
   cpf: string | null;
   whatsapp: string | null;
@@ -425,7 +426,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         await supabase.from("pos_sales").update({ customer_id: customerId } as any).eq("id", sale.id);
         const { data: freshCust } = await supabase
           .from("pos_customers")
-          .select("name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
+          .select("id, name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
           .eq("id", customerId)
           .maybeSingle();
         if (freshCust) setCurrentCustomer(freshCust as CustomerInfo);
@@ -955,8 +956,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
           <POSCustomerForm
             open={showCustomerForm}
             onOpenChange={setShowCustomerForm}
-            existingCustomer={sale.customer_id && currentCustomer ? {
-              id: sale.customer_id,
+            existingCustomer={currentCustomer ? {
+              id: currentCustomer.id || sale.customer_id || undefined,
               name: currentCustomer.name || undefined,
               email: currentCustomer.email || undefined,
               whatsapp: currentCustomer.whatsapp || undefined,
