@@ -34,7 +34,7 @@ const Index = () => {
   
   const { currentEventId, getCurrentEvent, fetchEvents } = useEventStore();
   const { fetchCustomers } = useCustomerStore();
-  const { orders, isLoading, fetchOrdersByEvent, checkNoResponseOrders, getUnpaidOrdersCount } = useDbOrderStore();
+  const { orders, isLoading, fetchOrdersByEvent, checkNoResponseOrders, getUnpaidOrdersCount, subscribeToEventOrders } = useDbOrderStore();
 
   const currentEvent = getCurrentEvent();
 
@@ -58,6 +58,13 @@ const Index = () => {
       fetchOrdersByEvent(currentEventId);
     }
   }, [currentEventId, fetchOrdersByEvent]);
+
+  useEffect(() => {
+    if (!currentEventId) return;
+
+    const unsubscribe = subscribeToEventOrders(currentEventId);
+    return unsubscribe;
+  }, [currentEventId, subscribeToEventOrders]);
 
   // Check for no-response orders every minute
   useEffect(() => {

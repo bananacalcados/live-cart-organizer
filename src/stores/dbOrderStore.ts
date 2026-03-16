@@ -1,10 +1,11 @@
 import { create } from 'zustand';
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { DbOrder, DbOrderProduct, DbCustomer, DiscountType } from '@/types/database';
 import { OrderStage, isOrderComplete } from '@/types/order';
 import { toast } from 'sonner';
-
 import { Json } from '@/integrations/supabase/types';
+import { fetchDbOrderById, mapDbOrder, mergeDbOrder } from './dbOrderRealtime';
 
 // Helper to convert products array to Json type
 const productsToJson = (products: DbOrderProduct[]): Json => {
@@ -45,6 +46,9 @@ interface DbOrderStore {
   findActiveOrderByCustomer: (eventId: string, customerId: string) => DbOrder | undefined;
   getUnpaidOrdersCount: (eventId?: string) => number;
   regenerateCartLink: (orderId: string) => Promise<void>;
+  upsertOrderRealtime: (order: DbOrder) => void;
+  removeOrderRealtime: (orderId: string) => void;
+  subscribeToEventOrders: (eventId: string) => () => void;
 }
 
 export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
@@ -65,14 +69,8 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
 
       if (error) throw error;
       
-      // Parse products JSON and cast types
-      const orders = (data || []).map((order) => ({
-        ...order,
-        products: order.products as unknown as DbOrderProduct[],
-        customer: order.customer as DbCustomer,
-        discount_type: order.discount_type as DiscountType | undefined,
-      })) as DbOrder[];
-      
+      const orders = (data || []).map(mapDbOrder) as DbOrder[];
+
       set({ orders });
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -547,5 +545,50 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       console.error('Error regenerating cart link:', error);
       toast.error('Erro ao atualizar link');
     }
+  },
+
+  upsertOrderRealtime: (order) => {
+    set((state) => ({
+      orders: mergeDbOrder(state.orders, order),
+    }));
+  },
+
+  removeOrderRealtime: (orderId) => {
+    set((state) => ({
+      orders: state.orders.filter((order) => order.id !== orderId),
+    }));
+  },
+
+  subscribeToEventOrders: (eventId) => {
+    const channel = supabase
+      .channel(`event-orders-${eventId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `event_id=eq.${eventId}` },
+        async (payload: RealtimePostgresChangesPayload<{ id: string; event_id: string }>) => {
+          try {
+            if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old?.id;
+              if (deletedId) get().removeOrderRealtime(deletedId);
+              return;
+            }
+
+            const orderId = payload.new?.id;
+            if (!orderId) return;
+
+            const freshOrder = await fetchDbOrderById(orderId);
+            if (freshOrder) {
+              get().upsertOrderRealtime(freshOrder);
+            }
+          } catch (error) {
+            console.error('Error syncing realtime order:', error);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   },
 }));
