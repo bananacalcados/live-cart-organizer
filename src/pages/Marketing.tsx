@@ -45,6 +45,7 @@ import { CrmMessageTemplateSelector } from "@/components/marketing/CrmMessageTem
 import * as XLSX from "@e965/xlsx";
 import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
 import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
+import { LeadImportDialog } from "@/components/marketing/LeadImportDialog";
 
 // ─── Types ──────────────────────────────────────
 
