@@ -177,6 +177,7 @@ export default function Marketing() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploadTarget, setUploadTarget] = useState<'campaign' | 'rfm'>('campaign');
   const [uploadStatus, setUploadStatus] = useState<{ stage: string; progress: number; detail: string; error?: string; done?: boolean } | null>(null);
+  const [leadImportOpen, setLeadImportOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rfmFileInputRef = useRef<HTMLInputElement>(null);
   const [dateFrom, setDateFrom] = useState("");
