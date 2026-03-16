@@ -9,7 +9,6 @@ const corsHeaders = {
 const BATCH_SIZE = 50;
 const CONCURRENCY = 10;
 const MAX_EXECUTION_MS = 45_000; // 45s safety margin
-const CHAIN_DELAY_MS = 3000; // 3s delay between chains to reduce DB pressure
 
 interface VariableConfig {
   mode: string;
@@ -130,6 +129,23 @@ function buildRenderedMessage(
     }
   }
   return parts.join('\n\n');
+}
+
+async function getRecipientCounts(supabase: ReturnType<typeof createClient>, dispatchId: string) {
+  const [{ count: sentCount }, { count: failedCount }, { count: pendingCount }] = await Promise.all([
+    supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+      .eq('dispatch_id', dispatchId).eq('status', 'sent'),
+    supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+      .eq('dispatch_id', dispatchId).eq('status', 'failed'),
+    supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+      .eq('dispatch_id', dispatchId).eq('status', 'pending'),
+  ]);
+
+  return {
+    sentCount: sentCount || 0,
+    failedCount: failedCount || 0,
+    pendingCount: pendingCount || 0,
+  };
 }
 
 serve(async (req) => {
@@ -258,7 +274,7 @@ serve(async (req) => {
     // Fetch pending recipients batch
     const { data: pendingRecipients, error: pendErr } = await supabase
       .from('dispatch_recipients')
-      .select('id,phone,recipient_name,first_name,city,state,segment,email')
+      .select('id,phone,recipient_name')
       .eq('dispatch_id', dispatchId)
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
@@ -273,21 +289,19 @@ serve(async (req) => {
     }
 
     if (!pendingRecipients || pendingRecipients.length === 0) {
-      // All done
-      const [{ count: sentCount }, { count: failedCount }] = await Promise.all([
-        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-          .eq('dispatch_id', dispatchId).eq('status', 'sent'),
-        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-          .eq('dispatch_id', dispatchId).eq('status', 'failed'),
-      ]);
+      const { sentCount, failedCount } = await getRecipientCounts(supabase, dispatchId);
 
-      await supabase.from('dispatch_history').update({
+      const { error: completeErr } = await supabase.from('dispatch_history').update({
         processing_batch: false,
         status: 'completed',
         completed_at: new Date().toISOString(),
-        sent_count: sentCount || 0,
-        failed_count: failedCount || 0,
+        sent_count: sentCount,
+        failed_count: failedCount,
       }).eq('id', dispatchId);
+
+      if (completeErr) {
+        console.error('Failed to finalize dispatch counts:', completeErr);
+      }
 
       return new Response(JSON.stringify({ success: true, message: 'Dispatch completed', sentCount, failedCount }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -398,38 +412,29 @@ serve(async (req) => {
       }).then(() => {});
     }
 
-    // Update counts from DB
-    const [{ count: totalSent }, { count: totalFailed }, { count: totalPending }] = await Promise.all([
-      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId).eq('status', 'sent'),
-      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId).eq('status', 'failed'),
-      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId).eq('status', 'pending'),
-    ]);
+    const { sentCount: totalSent, failedCount: totalFailed, pendingCount: totalPending } = await getRecipientCounts(supabase, dispatchId);
 
-    // Release lock + update counts
-    await supabase.from('dispatch_history').update({
+    const nextStatus = totalPending > 0 ? dispatch.status : 'completed';
+    const completedAt = totalPending > 0 ? null : new Date().toISOString();
+    const { error: progressErr } = await supabase.from('dispatch_history').update({
       processing_batch: false,
-      sent_count: totalSent || 0,
-      failed_count: totalFailed || 0,
+      status: nextStatus,
+      completed_at: completedAt,
+      sent_count: totalSent,
+      failed_count: totalFailed,
     }).eq('id', dispatchId);
 
-    // Self-chain if there are still pending recipients (with delay)
-    if ((totalPending || 0) > 0) {
+    if (progressErr) {
+      console.error('Failed to persist dispatch progress:', progressErr, { dispatchId, totalSent, totalFailed, totalPending });
+    }
+
+    if (totalPending > 0) {
       const { data: checkStatus } = await supabase
         .from('dispatch_history').select('status').eq('id', dispatchId).single();
 
       if (checkStatus?.status !== 'cancelled' && checkStatus?.status !== 'paused') {
         scheduleNextBatch(supabaseUrl, supabaseKey, dispatchId);
       }
-    } else {
-      await supabase.from('dispatch_history').update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        sent_count: totalSent || 0,
-        failed_count: totalFailed || 0,
-      }).eq('id', dispatchId);
     }
 
     return new Response(JSON.stringify({
@@ -453,16 +458,14 @@ serve(async (req) => {
 });
 
 function scheduleNextBatch(supabaseUrl: string, supabaseKey: string, dispatchId: string) {
-  // Delay the next batch to reduce DB pressure
-  setTimeout(() => {
-    const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
-    fetch(nextUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({ dispatchId }),
-    }).catch(err => console.error('Failed to chain next batch:', err));
-  }, CHAIN_DELAY_MS);
+  const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
+  void fetch(nextUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseKey}`,
+      'apikey': supabaseKey,
+    },
+    body: JSON.stringify({ dispatchId }),
+  }).catch(err => console.error('Failed to chain next batch:', err));
 }
