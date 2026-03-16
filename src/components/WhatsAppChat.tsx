@@ -229,7 +229,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   };
 
   const phone = order.whatsapp || '';
-  const contactName = order.instagramHandle;
+  const contactName = order.instagramHandle?.trim()
+    ? (order.instagramHandle.startsWith('@') ? order.instagramHandle : `@${order.instagramHandle}`)
+    : 'Sem identificação';
   const currentStage = STAGES.find(s => s.id === order.stage);
 
   // Normalize phone for database queries - create all possible variations
