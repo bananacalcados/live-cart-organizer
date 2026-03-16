@@ -152,6 +152,54 @@ function mapRegistrationToCustomerForm(reg: any): CustomerFormData {
   };
 }
 
+function safeParseLiveCheckoutPayload(liveParam: string | null) {
+  if (!liveParam) return null;
+
+  try {
+    return JSON.parse(decodeURIComponent(liveParam)) as {
+      sessionId?: string | null;
+      customer?: { name?: string | null; phone?: string | null };
+      items?: Array<{
+        variantId?: string | null;
+        title?: string | null;
+        productTitle?: string | null;
+        price?: number | null;
+        quantity?: number | null;
+      }>;
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildLiveShopifyDedupeKey(livePayload: {
+  sessionId?: string | null;
+  customer?: { phone?: string | null };
+  items?: Array<{
+    variantId?: string | null;
+    title?: string | null;
+    productTitle?: string | null;
+    price?: number | null;
+    quantity?: number | null;
+  }>;
+} | null) {
+  if (!livePayload) return "";
+
+  const phone = (livePayload.customer?.phone || "").replace(/\D/g, "");
+  const itemSignature = (livePayload.items || [])
+    .map((item) => {
+      const variantId = (item.variantId || "").trim();
+      const title = (item.title || item.productTitle || "produto").trim().toLowerCase();
+      const quantity = Number(item.quantity || 1);
+      const price = Number(item.price || 0).toFixed(2);
+      return `${variantId || title}:${quantity}:${price}`;
+    })
+    .sort()
+    .join("|");
+
+  return [livePayload.sessionId || "live", phone || "sem-telefone", itemSignature || "sem-itens"].join("::");
+}
+
 // ── Stepper ─────────────────────────────────────────────────────
 function StepIndicator({ currentStep }: { currentStep: number }) {
   const steps = [
@@ -1061,6 +1109,7 @@ export default function TransparentCheckout() {
     monthly_interest_rate: 2.49,
   });
   const [summaryCollapsed, setSummaryCollapsed] = useState(true);
+  const paymentConfirmedRef = useRef(false);
 
   // 3-step state
   const [currentStep, setCurrentStep] = useState(1);
@@ -1265,105 +1314,129 @@ export default function TransparentCheckout() {
   };
 
   const handlePaymentConfirmed = useCallback(async (paymentInfo?: { platform: string; method: string; customerData?: any }) => {
-    setPaymentStatus("success");
-    const cd = paymentInfo?.customerData;
+    if (paymentConfirmedRef.current) return;
+    paymentConfirmedRef.current = true;
 
-    if (orderData) {
-      trackPixelEvent("Purchase", {
-        value: orderData.totalAmount, currency: "BRL",
-        content_type: "product", num_items: orderData.products.reduce((s, p) => s + p.quantity, 0),
-      });
-    }
+    try {
+      setPaymentStatus("success");
+      const cd = paymentInfo?.customerData;
+      const livePayload = safeParseLiveCheckoutPayload(searchParams.get("live"));
 
-    if (orderData?.checkoutStartedAt) {
-      const elapsed = (Date.now() - new Date(orderData.checkoutStartedAt).getTime()) / 1000;
-      if (elapsed <= 600) {
-        setIsEligibleForPrize(true);
-        if (orderId) supabase.from("orders").update({ eligible_for_prize: true }).eq("id", orderId);
-      }
-    }
-
-    // Mark live viewer checkout completed
-    const liveParam = searchParams.get("live");
-    if (liveParam) {
-      try {
-        const decoded = JSON.parse(decodeURIComponent(liveParam));
-        const customer = decoded.customer;
-        const sessionId = decoded.sessionId;
-        if (customer?.phone && sessionId) {
-          await supabase.from("live_viewers").update({
-            checkout_completed: true, checkout_completed_at: new Date().toISOString(),
-            payment_platform: paymentInfo?.platform || null, payment_method: paymentInfo?.method || null,
-          }).eq("session_id", sessionId).eq("phone", customer.phone);
-        }
-      } catch {}
-    }
-
-    // Create Shopify order for live commerce
-    if (liveCartRaw && liveCartRaw.items.length > 0) {
-      try {
-        // Fetch customer data from DB to avoid relying on potentially stale in-memory state (e.g. PIX polling)
-        let enrichedCustomer = {
-          ...liveCartRaw.customer,
-          ...(cd ? { name: cd.name, email: cd.email, phone: cd.phone, cpf: cd.cpf, address: cd.address } : {}),
-        };
-        
-        // If cd is undefined/incomplete (PIX polling case), try to get from customerForm state
-        if (!cd || !cd.address) {
-          enrichedCustomer = {
-            ...enrichedCustomer,
-            name: customerForm.fullName || enrichedCustomer.name,
-            email: customerForm.email || enrichedCustomer.email,
-            phone: customerForm.whatsapp?.replace(/\D/g, "") || enrichedCustomer.phone,
-            cpf: customerForm.cpf?.replace(/\D/g, "") || enrichedCustomer.cpf,
-            address: customerForm.address ? {
-              street: customerForm.address,
-              number: customerForm.addressNumber,
-              neighborhood: customerForm.neighborhood,
-              city: customerForm.city,
-              state: customerForm.state,
-              cep: customerForm.cep?.replace(/\D/g, ""),
-            } : enrichedCustomer.address,
-          };
-        }
-        
-        await supabase.functions.invoke("shopify-create-live-order", {
-          body: {
-            items: liveCartRaw.items.map((item: any) => ({
-              variantId: item.variantId, title: item.title || item.productTitle, price: item.price, quantity: item.quantity || 1,
-            })),
-            customer: enrichedCustomer,
-          },
+      if (orderData) {
+        trackPixelEvent("Purchase", {
+          value: orderData.totalAmount, currency: "BRL",
+          content_type: "product", num_items: orderData.products.reduce((s, p) => s + p.quantity, 0),
         });
-      } catch (err) { console.error("Error creating Shopify live order:", err); }
-    }
+      }
 
-    // Save final customer data for CRM orders
-    if (orderId && !liveCartRaw && cd) {
-      try {
-        await supabase.from("customer_registrations").upsert({
-          order_id: orderId,
-          full_name: cd.name || "Cliente",
-          email: cd.email || "",
-          cpf: cd.cpf || "",
-          whatsapp: cd.phone || "",
-          cep: cd.address?.cep || "",
-          address: cd.address?.street || "",
-          address_number: cd.address?.number || "",
-          complement: "",
-          neighborhood: cd.address?.neighborhood || "",
-          city: cd.address?.city || "",
-          state: cd.address?.state || "",
-          ...(orderData?.customerId ? { customer_id: orderData.customerId } : {}),
-        }, { onConflict: 'order_id' });
-      } catch (err) { console.error("Error saving customer registration:", err); }
-    }
+      if (orderData?.checkoutStartedAt) {
+        const elapsed = (Date.now() - new Date(orderData.checkoutStartedAt).getTime()) / 1000;
+        if (elapsed <= 600) {
+          setIsEligibleForPrize(true);
+          if (orderId) supabase.from("orders").update({ eligible_for_prize: true }).eq("id", orderId);
+        }
+      }
 
-    // Create Shopify order for CRM orders
-    if (orderId && !liveCartRaw) {
-      try {
-        await supabase.functions.invoke("shopify-create-order", { body: { orderId } });
-      } catch (err) { console.error("Error creating Shopify order:", err); }
+      if (livePayload?.customer?.phone && livePayload.sessionId) {
+        await supabase.from("live_viewers").update({
+          checkout_completed: true,
+          checkout_completed_at: new Date().toISOString(),
+          payment_platform: paymentInfo?.platform || null,
+          payment_method: paymentInfo?.method || null,
+        }).eq("session_id", livePayload.sessionId).eq("phone", livePayload.customer.phone);
+      }
+
+      if (liveCartRaw && liveCartRaw.items.length > 0) {
+        const dedupeKey = buildLiveShopifyDedupeKey(livePayload || {
+          sessionId: null,
+          customer: liveCartRaw.customer,
+          items: liveCartRaw.items,
+        });
+        const syncStorageKey = dedupeKey ? `shopify_live_sync_${dedupeKey}` : null;
+        const syncState = syncStorageKey ? sessionStorage.getItem(syncStorageKey) : null;
+
+        if (syncState !== "pending" && syncState !== "done") {
+          try {
+            if (syncStorageKey) sessionStorage.setItem(syncStorageKey, "pending");
+
+            let enrichedCustomer = {
+              ...liveCartRaw.customer,
+              ...(cd ? { name: cd.name, email: cd.email, phone: cd.phone, cpf: cd.cpf, address: cd.address } : {}),
+            };
+
+            if (!cd || !cd.address) {
+              enrichedCustomer = {
+                ...enrichedCustomer,
+                name: customerForm.fullName || enrichedCustomer.name,
+                email: customerForm.email || enrichedCustomer.email,
+                phone: customerForm.whatsapp?.replace(/\D/g, "") || enrichedCustomer.phone,
+                cpf: customerForm.cpf?.replace(/\D/g, "") || enrichedCustomer.cpf,
+                address: customerForm.address ? {
+                  street: customerForm.address,
+                  number: customerForm.addressNumber,
+                  neighborhood: customerForm.neighborhood,
+                  city: customerForm.city,
+                  state: customerForm.state,
+                  cep: customerForm.cep?.replace(/\D/g, ""),
+                } : enrichedCustomer.address,
+              };
+            }
+
+            await supabase.functions.invoke("shopify-create-live-order", {
+              body: {
+                items: liveCartRaw.items.map((item: any) => ({
+                  variantId: item.variantId,
+                  title: item.title || item.productTitle,
+                  price: item.price,
+                  quantity: item.quantity || 1,
+                })),
+                customer: enrichedCustomer,
+                sessionId: livePayload?.sessionId || null,
+                source: "live-checkout",
+                dedupeKey: dedupeKey || null,
+              },
+            });
+
+            if (syncStorageKey) sessionStorage.setItem(syncStorageKey, "done");
+          } catch (err) {
+            if (syncStorageKey) sessionStorage.removeItem(syncStorageKey);
+            console.error("Error creating Shopify live order:", err);
+          }
+        }
+      }
+
+      if (orderId && !liveCartRaw && cd) {
+        try {
+          await supabase.from("customer_registrations").upsert({
+            order_id: orderId,
+            full_name: cd.name || "Cliente",
+            email: cd.email || "",
+            cpf: cd.cpf || "",
+            whatsapp: cd.phone || "",
+            cep: cd.address?.cep || "",
+            address: cd.address?.street || "",
+            address_number: cd.address?.number || "",
+            complement: "",
+            neighborhood: cd.address?.neighborhood || "",
+            city: cd.address?.city || "",
+            state: cd.address?.state || "",
+            ...(orderData?.customerId ? { customer_id: orderData.customerId } : {}),
+          }, { onConflict: 'order_id' });
+        } catch (err) {
+          console.error("Error saving customer registration:", err);
+        }
+      }
+
+      if (orderId && !liveCartRaw) {
+        try {
+          await supabase.functions.invoke("shopify-create-order", { body: { orderId } });
+        } catch (err) {
+          console.error("Error creating Shopify order:", err);
+        }
+      }
+    } catch (error) {
+      paymentConfirmedRef.current = false;
+      console.error("Error confirming checkout payment:", error);
     }
   }, [orderData, orderId, liveCartRaw, searchParams, customerForm]);
 
