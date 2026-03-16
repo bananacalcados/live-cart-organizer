@@ -559,8 +559,12 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
   },
 
   upsertOrderRealtime: (order) => {
+    const normalizedOrder = order.is_paid && order.stage === 'awaiting_payment'
+      ? { ...order, stage: 'paid' }
+      : order;
+
     set((state) => ({
-      orders: mergeDbOrder(state.orders, order),
+      orders: mergeDbOrder(state.orders, normalizedOrder),
     }));
   },
 

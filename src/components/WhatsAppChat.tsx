@@ -259,9 +259,13 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       .map((p) => `• ${p.quantity}x ${p.title} - R$ ${(p.price * p.quantity).toFixed(2)}`)
       .join('\n');
 
+    const normalizedInstagram = order.instagramHandle?.trim()
+      ? (order.instagramHandle.startsWith('@') ? order.instagramHandle : `@${order.instagramHandle}`)
+      : '';
+
     return {
-      nome: order.instagramHandle.replace('@', ''),
-      instagram: order.instagramHandle,
+      nome: normalizedInstagram.replace('@', ''),
+      instagram: normalizedInstagram,
       whatsapp: order.whatsapp || '',
       link_carrinho: order.cartLink || '',
       total: totalValue.toFixed(2),

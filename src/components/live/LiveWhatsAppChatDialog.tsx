@@ -442,10 +442,10 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
       <DialogContent className="max-w-md h-[650px] p-0 overflow-hidden gap-0 flex flex-col">
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 bg-[#008069] text-white flex-shrink-0">
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm truncate">{viewerName}</p>
-            <p className="text-xs text-white/70">{viewerPhone}</p>
-          </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm truncate">{viewerName?.trim() || 'Sem identificação'}</p>
+          <p className="text-xs text-white/70 truncate">{viewerPhone || 'WhatsApp não identificado'}</p>
+        </div>
           <a
             href={`https://wa.me/${viewerPhone.replace(/\D/g, '')}`}
             target="_blank"
