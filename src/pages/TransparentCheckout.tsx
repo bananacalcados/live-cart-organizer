@@ -1196,31 +1196,31 @@ export default function TransparentCheckout() {
     try {
       const payload = {
         order_id: orderData.id,
-        full_name: customerForm.fullName,
-        email: customerForm.email,
+        full_name: customerForm.fullName.trim(),
+        email: customerForm.email.trim(),
         cpf: customerForm.cpf.replace(/\D/g, ""),
         whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
-        cep: step >= 2 ? customerForm.cep.replace(/\D/g, "") : customerForm.cep.replace(/\D/g, "") || "00000000",
-        address: step >= 2 ? customerForm.address : customerForm.address || "Pendente",
-        address_number: step >= 2 ? customerForm.addressNumber : customerForm.addressNumber || "0",
-        complement: customerForm.complement,
-        neighborhood: step >= 2 ? customerForm.neighborhood : customerForm.neighborhood || "Pendente",
-        city: step >= 2 ? customerForm.city : customerForm.city || "Pendente",
-        state: step >= 2 ? customerForm.state : customerForm.state || "SP",
+        cep: customerForm.cep.replace(/\D/g, ""),
+        address: customerForm.address.trim(),
+        address_number: customerForm.addressNumber.trim(),
+        complement: customerForm.complement.trim(),
+        neighborhood: customerForm.neighborhood.trim(),
+        city: customerForm.city.trim(),
+        state: customerForm.state.trim().toUpperCase(),
         ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
       };
 
       const { data: reg, error } = await supabase
         .from("customer_registrations")
         .upsert(payload, { onConflict: "order_id" })
-        .select("id, address, city")
+        .select("id, cep, address, address_number, neighborhood, city, state")
         .single();
 
       if (error) throw error;
       if (reg?.id) setRegistrationId(reg.id);
       return true;
     } catch (err) {
-      console.error("Error saving registration:", err);
+      console.error(`Error saving registration on step ${step}:`, err);
       toast.error("Erro ao salvar endereço. Tente novamente.");
       return false;
     }
@@ -1232,6 +1232,11 @@ export default function TransparentCheckout() {
   };
 
   const handleStep2Next = async () => {
+    if (!hasCompleteAddress(customerForm)) {
+      toast.error("Preencha o endereço completo antes de ir para o pagamento");
+      return;
+    }
+
     // Ensure address is fully saved BEFORE moving to payment step
     const saved = await saveRegistration(2);
     if (!saved) return;
@@ -1241,11 +1246,13 @@ export default function TransparentCheckout() {
       try {
         const { data: reg } = await supabase
           .from("customer_registrations")
-          .select("id, address, city")
+          .select("cep, address, address_number, neighborhood, city, state")
           .eq("order_id", orderData.id)
           .maybeSingle();
-        if (!reg || !reg.address || reg.address === "Pendente") {
-          toast.error("Erro ao salvar endereço. Tente novamente.");
+
+        const persistedForm = mapRegistrationToCustomerForm(reg);
+        if (!reg || !hasCompleteAddress(persistedForm)) {
+          toast.error("Preencha rua e bairro manualmente quando o CEP não localizar esses dados");
           return;
         }
       } catch {
