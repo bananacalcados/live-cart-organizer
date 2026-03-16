@@ -1158,37 +1158,13 @@ export default function TransparentCheckout() {
 
       if (orderReg) {
         setRegistrationId(orderReg.id);
-        setCustomerForm({
-          fullName: orderReg.full_name || "",
-          email: orderReg.email || "",
-          cpf: formatCPF(orderReg.cpf || ""),
-          whatsapp: formatPhone(orderReg.whatsapp || ""),
-          cep: formatCEP(orderReg.cep || ""),
-          address: orderReg.address || "",
-          addressNumber: orderReg.address_number || "",
-          complement: orderReg.complement || "",
-          neighborhood: orderReg.neighborhood || "",
-          city: orderReg.city || "",
-          state: orderReg.state || "",
-        });
+        setCustomerForm(mapRegistrationToCustomerForm(orderReg));
       } else if (order.customer_id) {
         const { data: prevReg } = await supabase
           .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
           .maybeSingle();
         if (prevReg) {
-          setCustomerForm({
-            fullName: prevReg.full_name || "",
-            email: prevReg.email || "",
-            cpf: formatCPF(prevReg.cpf || ""),
-            whatsapp: formatPhone(prevReg.whatsapp || ""),
-            cep: formatCEP(prevReg.cep || ""),
-            address: prevReg.address || "",
-            addressNumber: prevReg.address_number || "",
-            complement: prevReg.complement || "",
-            neighborhood: prevReg.neighborhood || "",
-            city: prevReg.city || "",
-            state: prevReg.state || "",
-          });
+          setCustomerForm(mapRegistrationToCustomerForm(prevReg));
         }
       }
     } catch (error) {
