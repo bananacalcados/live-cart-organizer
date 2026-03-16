@@ -289,21 +289,19 @@ serve(async (req) => {
     }
 
     if (!pendingRecipients || pendingRecipients.length === 0) {
-      // All done
-      const [{ count: sentCount }, { count: failedCount }] = await Promise.all([
-        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-          .eq('dispatch_id', dispatchId).eq('status', 'sent'),
-        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-          .eq('dispatch_id', dispatchId).eq('status', 'failed'),
-      ]);
+      const { sentCount, failedCount } = await getRecipientCounts(supabase, dispatchId);
 
-      await supabase.from('dispatch_history').update({
+      const { error: completeErr } = await supabase.from('dispatch_history').update({
         processing_batch: false,
         status: 'completed',
         completed_at: new Date().toISOString(),
-        sent_count: sentCount || 0,
-        failed_count: failedCount || 0,
+        sent_count: sentCount,
+        failed_count: failedCount,
       }).eq('id', dispatchId);
+
+      if (completeErr) {
+        console.error('Failed to finalize dispatch counts:', completeErr);
+      }
 
       return new Response(JSON.stringify({ success: true, message: 'Dispatch completed', sentCount, failedCount }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
