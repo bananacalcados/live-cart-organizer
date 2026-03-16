@@ -222,10 +222,14 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       if (error) throw error;
       if (!data) throw new Error('Pedido não retornado após atualização');
 
-      // Check if is_paid just transitioned to true
+      // Check if is_paid just transitioned to true and keep stage consistent
       const prevOrder = get().orders.find((o) => o.id === orderId);
       if (data.is_paid && prevOrder && !prevOrder.is_paid) {
         notifyPaymentConfirmed(orderId);
+      }
+
+      if (data.is_paid && data.stage === 'awaiting_payment') {
+        data.stage = 'paid';
       }
 
       set((state) => ({
