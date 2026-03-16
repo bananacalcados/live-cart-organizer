@@ -1185,13 +1185,15 @@ export default function TransparentCheckout() {
   };
 
   const handleStep1Next = async () => {
-    await saveRegistration(1);
-    setCurrentStep(2);
+    const saved = await saveRegistration(1);
+    if (saved) setCurrentStep(2);
   };
 
   const handleStep2Next = async () => {
     // Ensure address is fully saved BEFORE moving to payment step
-    await saveRegistration(2);
+    const saved = await saveRegistration(2);
+    if (!saved) return;
+
     // Verify the registration was actually saved with address data
     if (orderData && !orderData.id.startsWith("live-")) {
       try {
@@ -1199,14 +1201,15 @@ export default function TransparentCheckout() {
           .from("customer_registrations")
           .select("id, address, city")
           .eq("order_id", orderData.id)
-          .order("updated_at", { ascending: false })
-          .limit(1)
           .maybeSingle();
         if (!reg || !reg.address || reg.address === "Pendente") {
           toast.error("Erro ao salvar endereço. Tente novamente.");
           return;
         }
-      } catch {}
+      } catch {
+        toast.error("Erro ao salvar endereço. Tente novamente.");
+        return;
+      }
     }
     setCurrentStep(3);
   };
