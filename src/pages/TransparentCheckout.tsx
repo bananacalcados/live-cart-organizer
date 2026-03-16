@@ -427,8 +427,8 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
   };
 
   const handleNext = () => {
-    if (!form.cep.trim() || !form.address.trim() || !form.addressNumber.trim() || !form.neighborhood.trim() || !form.city.trim() || !form.state.trim()) {
-      toast.error("Preencha todos os campos obrigatórios do endereço");
+    if (!hasCompleteAddress(form)) {
+      toast.error("Preencha rua, número, bairro, cidade e UF corretamente antes de continuar");
       return;
     }
     if (!selectedFreight) {
