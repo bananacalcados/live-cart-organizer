@@ -1149,46 +1149,38 @@ export default function TransparentCheckout() {
 
   // Save/update registration progressively
   const saveRegistration = async (step: number) => {
-    if (!orderData || orderData.id.startsWith("live-")) return;
+    if (!orderData || orderData.id.startsWith("live-")) return false;
+
     try {
-      if (registrationId) {
-        // Update existing
-        await supabase.from("customer_registrations").update({
-          full_name: customerForm.fullName,
-          email: customerForm.email,
-          cpf: customerForm.cpf.replace(/\D/g, ""),
-          whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
-          ...(step >= 2 ? {
-            cep: customerForm.cep.replace(/\D/g, ""),
-            address: customerForm.address,
-            address_number: customerForm.addressNumber,
-            complement: customerForm.complement,
-            neighborhood: customerForm.neighborhood,
-            city: customerForm.city,
-            state: customerForm.state,
-          } : {}),
-        }).eq("id", registrationId);
-      } else {
-        // Insert new
-        const { data: reg } = await supabase.from("customer_registrations").insert({
-          order_id: orderData.id,
-          full_name: customerForm.fullName,
-          email: customerForm.email,
-          cpf: customerForm.cpf.replace(/\D/g, ""),
-          whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
-          cep: customerForm.cep.replace(/\D/g, "") || "00000000",
-          address: customerForm.address || "Pendente",
-          address_number: customerForm.addressNumber || "0",
-          neighborhood: customerForm.neighborhood || "Pendente",
-          city: customerForm.city || "Pendente",
-          state: customerForm.state || "SP",
-          complement: customerForm.complement,
-          ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
-        }).select("id").single();
-        if (reg) setRegistrationId(reg.id);
-      }
+      const payload = {
+        order_id: orderData.id,
+        full_name: customerForm.fullName,
+        email: customerForm.email,
+        cpf: customerForm.cpf.replace(/\D/g, ""),
+        whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
+        cep: step >= 2 ? customerForm.cep.replace(/\D/g, "") : customerForm.cep.replace(/\D/g, "") || "00000000",
+        address: step >= 2 ? customerForm.address : customerForm.address || "Pendente",
+        address_number: step >= 2 ? customerForm.addressNumber : customerForm.addressNumber || "0",
+        complement: customerForm.complement,
+        neighborhood: step >= 2 ? customerForm.neighborhood : customerForm.neighborhood || "Pendente",
+        city: step >= 2 ? customerForm.city : customerForm.city || "Pendente",
+        state: step >= 2 ? customerForm.state : customerForm.state || "SP",
+        ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
+      };
+
+      const { data: reg, error } = await supabase
+        .from("customer_registrations")
+        .upsert(payload, { onConflict: "order_id" })
+        .select("id, address, city")
+        .single();
+
+      if (error) throw error;
+      if (reg?.id) setRegistrationId(reg.id);
+      return true;
     } catch (err) {
       console.error("Error saving registration:", err);
+      toast.error("Erro ao salvar endereço. Tente novamente.");
+      return false;
     }
   };
 
