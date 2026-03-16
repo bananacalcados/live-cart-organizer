@@ -1194,19 +1194,20 @@ export default function TransparentCheckout() {
     if (!orderData || orderData.id.startsWith("live-")) return false;
 
     try {
+      const isAddressStep = step >= 2;
       const payload = {
         order_id: orderData.id,
         full_name: customerForm.fullName.trim(),
         email: customerForm.email.trim(),
         cpf: customerForm.cpf.replace(/\D/g, ""),
         whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
-        cep: customerForm.cep.replace(/\D/g, ""),
-        address: customerForm.address.trim(),
-        address_number: customerForm.addressNumber.trim(),
+        cep: isAddressStep ? customerForm.cep.replace(/\D/g, "") : (customerForm.cep.replace(/\D/g, "") || "00000000"),
+        address: isAddressStep ? customerForm.address.trim() : (normalizeTextField(customerForm.address) || "Pendente"),
+        address_number: isAddressStep ? customerForm.addressNumber.trim() : (normalizeAddressNumber(customerForm.addressNumber) || "0"),
         complement: customerForm.complement.trim(),
-        neighborhood: customerForm.neighborhood.trim(),
-        city: customerForm.city.trim(),
-        state: customerForm.state.trim().toUpperCase(),
+        neighborhood: isAddressStep ? customerForm.neighborhood.trim() : (normalizeTextField(customerForm.neighborhood) || "Pendente"),
+        city: isAddressStep ? customerForm.city.trim() : (normalizeTextField(customerForm.city) || "Pendente"),
+        state: isAddressStep ? customerForm.state.trim().toUpperCase() : (customerForm.state.trim().toUpperCase() || "SP"),
         ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
       };
 
