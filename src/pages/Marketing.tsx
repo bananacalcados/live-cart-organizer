@@ -45,6 +45,7 @@ import { CrmMessageTemplateSelector } from "@/components/marketing/CrmMessageTem
 import * as XLSX from "@e965/xlsx";
 import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
 import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
+import { LeadImportDialog } from "@/components/marketing/LeadImportDialog";
 
 // ─── Types ──────────────────────────────────────
 
@@ -176,6 +177,7 @@ export default function Marketing() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploadTarget, setUploadTarget] = useState<'campaign' | 'rfm'>('campaign');
   const [uploadStatus, setUploadStatus] = useState<{ stage: string; progress: number; detail: string; error?: string; done?: boolean } | null>(null);
+  const [leadImportOpen, setLeadImportOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rfmFileInputRef = useRef<HTMLInputElement>(null);
   const [dateFrom, setDateFrom] = useState("");
@@ -1429,6 +1431,9 @@ export default function Marketing() {
                       <Input placeholder="Buscar por nome, telefone, email..." value={leadsSearch} onChange={e => setLeadsSearch(e.target.value)} className="pl-9" />
                     </div>
                     <Badge variant="secondary">{filteredLeads.length} leads</Badge>
+                    <Button variant="outline" size="sm" onClick={() => setLeadImportOpen(true)} className="gap-1">
+                      <Upload className="h-3.5 w-3.5" />Importar XLS
+                    </Button>
                     <Button variant="outline" size="sm" onClick={fetchLeads} className="gap-1">
                       <RefreshCw className="h-3.5 w-3.5" />Atualizar
                     </Button>
@@ -1740,6 +1745,13 @@ export default function Marketing() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <LeadImportDialog
+        open={leadImportOpen}
+        onOpenChange={setLeadImportOpen}
+        existingCampaignTags={[...new Set(leads.map((lead) => lead.campaign_tag).filter(Boolean))].sort()}
+        onImported={fetchLeads}
+      />
     </div>
   );
 }
