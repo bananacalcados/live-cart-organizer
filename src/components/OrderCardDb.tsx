@@ -316,8 +316,30 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
             <Instagram className="h-4 w-4 text-primary-foreground" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="font-semibold text-foreground text-sm">{order.customer?.instagram_handle}</p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="text-[11px] text-muted-foreground truncate font-mono">
+                ID: {order.id}
+              </p>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    await navigator.clipboard.writeText(order.id);
+                    toast.success("ID do pedido copiado!");
+                  } catch {
+                    window.prompt("Copie o ID do pedido:", order.id);
+                  }
+                }}
+                title="Copiar ID do pedido"
+              >
+                <ClipboardCopy className="h-3 w-3" />
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground">
               {formatDistanceToNow(new Date(order.created_at), {
                 addSuffix: true,

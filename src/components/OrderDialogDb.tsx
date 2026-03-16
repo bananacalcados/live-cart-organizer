@@ -457,6 +457,31 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
             <Instagram className="h-5 w-5 text-accent" />
             {editingOrder ? "Editar Pedido" : "Novo Pedido"}
           </DialogTitle>
+          {editingOrder && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="font-medium">ID do pedido:</span>
+              <code className="rounded bg-muted px-2 py-1 font-mono text-xs text-foreground break-all">
+                {editingOrder.id}
+              </code>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(editingOrder.id);
+                    toast.success("ID do pedido copiado!");
+                  } catch {
+                    window.prompt("Copie o ID do pedido:", editingOrder.id);
+                  }
+                }}
+              >
+                <Package className="h-4 w-4 mr-1" />
+                Copiar ID
+              </Button>
+            </div>
+          )}
         </DialogHeader>
 
         <div className="space-y-6 py-4 flex-1 overflow-y-auto">
