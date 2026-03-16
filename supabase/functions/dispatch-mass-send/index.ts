@@ -131,6 +131,23 @@ function buildRenderedMessage(
   return parts.join('\n\n');
 }
 
+async function getRecipientCounts(supabase: ReturnType<typeof createClient>, dispatchId: string) {
+  const [{ count: sentCount }, { count: failedCount }, { count: pendingCount }] = await Promise.all([
+    supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+      .eq('dispatch_id', dispatchId).eq('status', 'sent'),
+    supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+      .eq('dispatch_id', dispatchId).eq('status', 'failed'),
+    supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
+      .eq('dispatch_id', dispatchId).eq('status', 'pending'),
+  ]);
+
+  return {
+    sentCount: sentCount || 0,
+    failedCount: failedCount || 0,
+    pendingCount: pendingCount || 0,
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
