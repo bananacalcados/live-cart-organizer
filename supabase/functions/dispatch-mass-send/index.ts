@@ -458,16 +458,14 @@ serve(async (req) => {
 });
 
 function scheduleNextBatch(supabaseUrl: string, supabaseKey: string, dispatchId: string) {
-  // Delay the next batch to reduce DB pressure
-  setTimeout(() => {
-    const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
-    fetch(nextUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({ dispatchId }),
-    }).catch(err => console.error('Failed to chain next batch:', err));
-  }, CHAIN_DELAY_MS);
+  const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
+  void fetch(nextUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseKey}`,
+      'apikey': supabaseKey,
+    },
+    body: JSON.stringify({ dispatchId }),
+  }).catch(err => console.error('Failed to chain next batch:', err));
 }

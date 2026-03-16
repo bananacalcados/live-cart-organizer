@@ -167,26 +167,38 @@ export function MassTemplateDispatcher() {
   const startPolling = (dispatchId: string) => {
     if (pollingRef.current) clearInterval(pollingRef.current);
     pollingRef.current = setInterval(async () => {
-      const { data } = await supabase
-        .from('dispatch_history')
-        .select('sent_count, failed_count, total_recipients, status')
-        .eq('id', dispatchId)
-        .single();
-      if (!data) return;
+      const [{ data: dispatch }, sentRes, failedRes, pendingRes] = await Promise.all([
+        supabase
+          .from('dispatch_history')
+          .select('status, total_recipients')
+          .eq('id', dispatchId)
+          .single(),
+        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true }).eq('dispatch_id', dispatchId).eq('status', 'sent'),
+        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true }).eq('dispatch_id', dispatchId).eq('status', 'failed'),
+        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true }).eq('dispatch_id', dispatchId).eq('status', 'pending'),
+      ]);
+
+      if (!dispatch) return;
+
+      const sent = sentRes.count || 0;
+      const failed = failedRes.count || 0;
+      const pending = pendingRes.count || 0;
+
       setSendProgress({
-        sent: data.sent_count || 0,
-        total: data.total_recipients || 0,
-        failed: data.failed_count || 0,
+        sent,
+        total: dispatch.total_recipients || sent + failed + pending,
+        failed,
       });
-      if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'failed') {
+
+      if (dispatch.status === 'completed' || dispatch.status === 'cancelled' || dispatch.status === 'failed' || pending === 0) {
         if (pollingRef.current) clearInterval(pollingRef.current);
         pollingRef.current = null;
         setIsSending(false);
         setActiveDispatchId(null);
         setHistoryKey(k => k + 1);
-        if (data.status === 'completed') toast.success("✅ Disparo concluído em background!");
-        else if (data.status === 'cancelled') toast.info("Disparo cancelado");
-        else toast.error("Disparo falhou");
+        if (dispatch.status === 'cancelled') toast.info("Disparo cancelado");
+        else if (dispatch.status === 'failed') toast.error("Disparo falhou");
+        else toast.success("✅ Disparo concluído em background!");
       }
     }, 3000);
   };
