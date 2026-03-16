@@ -274,7 +274,7 @@ serve(async (req) => {
     // Fetch pending recipients batch
     const { data: pendingRecipients, error: pendErr } = await supabase
       .from('dispatch_recipients')
-      .select('id,phone,recipient_name,first_name,city,state,segment,email')
+      .select('id,phone,recipient_name')
       .eq('dispatch_id', dispatchId)
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
