@@ -358,14 +358,14 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
       const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
       const data = await res.json();
       if (!data.erro) {
-        setForm({
-          ...form,
+        setForm((prev) => ({
+          ...prev,
           cep: cepValue,
-          address: data.logradouro || form.address,
-          neighborhood: data.bairro || form.neighborhood,
-          city: data.localidade || form.city,
-          state: data.uf || form.state,
-        });
+          address: data.logradouro?.trim() || (isPendingPlaceholder(prev.address) ? "" : prev.address),
+          neighborhood: data.bairro?.trim() || (isPendingPlaceholder(prev.neighborhood) ? "" : prev.neighborhood),
+          city: data.localidade?.trim() || prev.city,
+          state: data.uf?.trim() || prev.state,
+        }));
       }
     } catch {}
     setFetchingCep(false);
