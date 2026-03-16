@@ -152,6 +152,54 @@ function mapRegistrationToCustomerForm(reg: any): CustomerFormData {
   };
 }
 
+function safeParseLiveCheckoutPayload(liveParam: string | null) {
+  if (!liveParam) return null;
+
+  try {
+    return JSON.parse(decodeURIComponent(liveParam)) as {
+      sessionId?: string | null;
+      customer?: { name?: string | null; phone?: string | null };
+      items?: Array<{
+        variantId?: string | null;
+        title?: string | null;
+        productTitle?: string | null;
+        price?: number | null;
+        quantity?: number | null;
+      }>;
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildLiveShopifyDedupeKey(livePayload: {
+  sessionId?: string | null;
+  customer?: { phone?: string | null };
+  items?: Array<{
+    variantId?: string | null;
+    title?: string | null;
+    productTitle?: string | null;
+    price?: number | null;
+    quantity?: number | null;
+  }>;
+} | null) {
+  if (!livePayload) return "";
+
+  const phone = (livePayload.customer?.phone || "").replace(/\D/g, "");
+  const itemSignature = (livePayload.items || [])
+    .map((item) => {
+      const variantId = (item.variantId || "").trim();
+      const title = (item.title || item.productTitle || "produto").trim().toLowerCase();
+      const quantity = Number(item.quantity || 1);
+      const price = Number(item.price || 0).toFixed(2);
+      return `${variantId || title}:${quantity}:${price}`;
+    })
+    .sort()
+    .join("|");
+
+  return [livePayload.sessionId || "live", phone || "sem-telefone", itemSignature || "sem-itens"].join("::");
+}
+
 // ── Stepper ─────────────────────────────────────────────────────
 function StepIndicator({ currentStep }: { currentStep: number }) {
   const steps = [
