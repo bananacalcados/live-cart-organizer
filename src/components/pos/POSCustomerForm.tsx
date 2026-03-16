@@ -69,54 +69,16 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
       toast.error("Nome é obrigatório");
       return;
     }
+
     setSaving(true);
     try {
-      const payload = {
-          name: form.name,
-          email: form.email || null,
-          whatsapp: form.whatsapp || null,
-          cpf: form.cpf || null,
-          cep: form.cep || null,
-          address: form.address || null,
-          address_number: form.address_number || null,
-          complement: form.complement || null,
-          neighborhood: form.neighborhood || null,
-          city: form.city || null,
-          state: form.state || null,
-          age_range: form.age_range || null,
-          preferred_style: form.preferred_style || null,
-          notes: form.notes || null,
-          shoe_size: form.shoe_size || null,
-          gender: form.gender || null,
-          has_children: form.has_children,
-          children_age_range: form.children_age_range || null,
-        } as any;
+      const data = await savePosCustomer(existingCustomer?.id, form);
 
-      let data: any;
-      if (existingCustomer?.id) {
-        const { data: updated, error } = await supabase
-          .from('pos_customers')
-          .update(payload)
-          .eq('id', existingCustomer.id)
-          .select()
-          .single();
-        if (error) throw error;
-        data = updated;
-        toast.success("Cadastro atualizado! +pontos de gamificação 🎯");
-      } else {
-        const { data: inserted, error } = await supabase
-          .from('pos_customers')
-          .insert(payload)
-          .select()
-          .single();
-        if (error) throw error;
-        data = inserted;
-        toast.success("Cliente cadastrado!");
-      }
+      toast.success(existingCustomer?.id ? "Cadastro atualizado! +pontos de gamificação 🎯" : "Cliente cadastrado!");
       onSaved({ id: data.id, name: data.name || '', cpf: data.cpf || undefined });
       setForm({ name: "", email: "", whatsapp: "", cpf: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", age_range: "", preferred_style: "", notes: "", shoe_size: "", gender: "", has_children: false, children_age_range: "" });
     } catch (e: any) {
-      console.error(e);
+      console.error("Erro ao salvar cliente POS:", e);
       toast.error("Erro ao salvar cliente");
     } finally {
       setSaving(false);
