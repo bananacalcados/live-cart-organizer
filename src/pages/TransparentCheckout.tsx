@@ -610,7 +610,7 @@ function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId
     // Save customer registration early
     if (orderId && !orderId.startsWith("live-")) {
       try {
-        await supabase.from("customer_registrations").insert({
+        await supabase.from("customer_registrations").upsert({
           order_id: orderId,
           full_name: form.fullName,
           email: form.email,
@@ -623,7 +623,7 @@ function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId
           neighborhood: form.neighborhood,
           city: form.city,
           state: form.state,
-        });
+        }, { onConflict: "order_id" });
       } catch {}
     }
 
