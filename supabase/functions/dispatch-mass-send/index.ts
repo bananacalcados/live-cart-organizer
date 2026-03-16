@@ -9,7 +9,6 @@ const corsHeaders = {
 const BATCH_SIZE = 50;
 const CONCURRENCY = 10;
 const MAX_EXECUTION_MS = 45_000; // 45s safety margin
-const CHAIN_DELAY_MS = 3000; // 3s delay between chains to reduce DB pressure
 
 interface VariableConfig {
   mode: string;
