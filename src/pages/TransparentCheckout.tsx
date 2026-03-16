@@ -1104,8 +1104,29 @@ export default function TransparentCheckout() {
         setOrderData((prev) => prev ? { ...prev, checkoutStartedAt: now } : prev);
       }
 
-      // Pre-fill from existing registration
-      if (order.customer_id) {
+      // Pre-fill from existing registration for this order first
+      const { data: orderReg } = await supabase
+        .from("customer_registrations")
+        .select("id, full_name, email, cpf, whatsapp, cep, address, address_number, complement, neighborhood, city, state")
+        .eq("order_id", order.id)
+        .maybeSingle();
+
+      if (orderReg) {
+        setRegistrationId(orderReg.id);
+        setCustomerForm({
+          fullName: orderReg.full_name || "",
+          email: orderReg.email || "",
+          cpf: formatCPF(orderReg.cpf || ""),
+          whatsapp: formatPhone(orderReg.whatsapp || ""),
+          cep: formatCEP(orderReg.cep || ""),
+          address: orderReg.address || "",
+          addressNumber: orderReg.address_number || "",
+          complement: orderReg.complement || "",
+          neighborhood: orderReg.neighborhood || "",
+          city: orderReg.city || "",
+          state: orderReg.state || "",
+        });
+      } else if (order.customer_id) {
         const { data: prevReg } = await supabase
           .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
           .maybeSingle();
