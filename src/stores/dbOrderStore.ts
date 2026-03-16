@@ -213,28 +213,40 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       if (updates.products) {
         dbUpdates.products = productsToJson(updates.products);
       }
-      
-      const { error } = await supabase
+
+      const { data, error } = await supabase
         .from('orders')
         .update(dbUpdates)
-        .eq('id', orderId);
+        .eq('id', orderId)
+        .select('*')
+        .single();
 
       if (error) throw error;
+      if (!data) throw new Error('Pedido não retornado após atualização');
 
       // Check if is_paid just transitioned to true
       const prevOrder = get().orders.find((o) => o.id === orderId);
-      if (updates.is_paid && prevOrder && !prevOrder.is_paid) {
+      if (data.is_paid && prevOrder && !prevOrder.is_paid) {
         notifyPaymentConfirmed(orderId);
       }
-      
+
       set((state) => ({
-        orders: state.orders.map((o) => 
-          o.id === orderId ? { ...o, ...updates } : o
+        orders: state.orders.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                ...data,
+                products: (data.products as unknown as DbOrderProduct[]) ?? o.products,
+                customer: o.customer,
+                discount_type: data.discount_type as DiscountType | undefined,
+              }
+            : o
         )
       }));
     } catch (error) {
       console.error('Error updating order:', error);
       toast.error('Erro ao atualizar pedido');
+      throw error;
     }
   },
 
