@@ -286,8 +286,15 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       updates.paid_at = paidAt;
       stateUpdates.is_paid = true;
       stateUpdates.paid_at = paidAt;
-      // Fire-and-forget webhook notification
       notifyPaymentConfirmed(orderId);
+    }
+
+    // If moving away from paid manually, keep payment flags aligned
+    if (newStage !== 'paid' && order.is_paid && order.stage === 'paid') {
+      updates.is_paid = false;
+      updates.paid_at = null;
+      stateUpdates.is_paid = false;
+      stateUpdates.paid_at = undefined;
     }
 
     try {
