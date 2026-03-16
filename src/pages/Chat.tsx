@@ -25,6 +25,7 @@ import { Message, Conversation, ChatFilter, ConversationStatusFilter } from "@/c
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { STAGES } from "@/types/order";
+import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 import {
   Select,
   SelectContent,
@@ -60,11 +61,20 @@ function StatusIcon({ status }: { status: string | null }) {
 
 // ── Media in message bubble ──
 function MessageMedia({ msg }: { msg: Message }) {
-  if (!msg.media_url || msg.media_type === 'text') return null;
-  if (msg.media_type === 'image') return <img src={msg.media_url} alt="" className="max-w-full rounded-md mb-1" style={{ maxHeight: 280 }} />;
-  if (msg.media_type === 'video') return <video src={msg.media_url} controls className="max-w-full rounded-md mb-1" style={{ maxHeight: 280 }} />;
-  if (msg.media_type === 'audio') return <audio src={msg.media_url} controls className="w-full mb-1" />;
-  return <div className="flex items-center gap-2 p-2 bg-black/5 rounded mb-1"><Paperclip className="h-4 w-4" /><span className="text-xs truncate">{msg.message}</span></div>;
+  return (
+    <WhatsAppMediaAttachment
+      mediaUrl={msg.media_url}
+      mediaType={msg.media_type}
+      message={msg.message}
+      imageClassName="max-w-full rounded-md mb-1"
+      imageStyle={{ maxHeight: 280 }}
+      videoClassName="max-w-full rounded-md mb-1"
+      videoStyle={{ maxHeight: 280 }}
+      audioClassName="w-full mb-1"
+      documentClassName="mb-1 rounded-md bg-black/5 p-2"
+      pdfClassName="w-full h-72 rounded-md border border-border bg-background mb-2"
+    />
+  );
 }
 
 // ── Format helpers ──

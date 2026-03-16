@@ -15,6 +15,7 @@ import { WhatsAppNumberSelector } from '../WhatsAppNumberSelector';
 import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MessageStatusIcon } from '../chat/MessageStatusIcon';
+import { WhatsAppMediaAttachment } from '../chat/WhatsAppMediaAttachment';
 
 interface Message {
   id: string;
@@ -184,9 +185,17 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
           ) : messages.map(msg => (
             <div key={msg.id} className={cn('flex', msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
               <div className={cn('max-w-[80%] rounded-lg px-3 py-2 text-sm', msg.direction === 'outgoing' ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-foreground' : 'bg-white dark:bg-[#202c33] text-foreground')}>
-                {msg.media_url && msg.media_type === 'image' && <img src={msg.media_url} alt="" className="max-w-full rounded mb-1" style={{ maxHeight: 200 }} />}
-                {msg.media_url && msg.media_type === 'audio' && <audio src={msg.media_url} controls className="w-full mb-1" />}
-                {msg.media_url && msg.media_type === 'video' && <video src={msg.media_url} controls className="max-w-full rounded mb-1" style={{ maxHeight: 200 }} />}
+                <WhatsAppMediaAttachment
+                  mediaUrl={msg.media_url}
+                  mediaType={msg.media_type}
+                  message={msg.message}
+                  imageClassName="max-w-full rounded mb-1"
+                  imageStyle={{ maxHeight: 200 }}
+                  videoClassName="max-w-full rounded mb-1"
+                  videoStyle={{ maxHeight: 200 }}
+                  audioClassName="w-full mb-1"
+                  pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
+                />
                 {msg.message && <p className="whitespace-pre-wrap break-words">{msg.message}</p>}
                 <p className="text-[10px] text-muted-foreground text-right mt-1 flex items-center justify-end gap-0.5">
                   {format(new Date(msg.created_at), 'HH:mm', { locale: ptBR })}

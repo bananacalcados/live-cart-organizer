@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { MessageStatusIcon } from "@/components/chat/MessageStatusIcon";
+import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 
 interface LiveWhatsAppChatDialogProps {
   open: boolean;
@@ -579,20 +580,15 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
                     ? "bg-[#d9fdd3] dark:bg-[#005c4b] text-foreground"
                     : "bg-white dark:bg-[#202c33] text-foreground"
                 }`}>
-                  {msg.media_url && msg.media_type === "image" && (
-                    <img src={msg.media_url} className="max-w-full rounded mb-1" alt="" />
-                  )}
-                  {msg.media_url && msg.media_type === "video" && (
-                    <video src={msg.media_url} controls className="max-w-full rounded mb-1" />
-                  )}
-                  {msg.media_url && msg.media_type === "audio" && (
-                    <audio src={msg.media_url} controls className="max-w-full mb-1" />
-                  )}
-                  {msg.media_url && msg.media_type === "document" && (
-                    <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary underline text-xs mb-1">
-                      <Paperclip className="h-3 w-3" /> Documento
-                    </a>
-                  )}
+                  <WhatsAppMediaAttachment
+                    mediaUrl={msg.media_url}
+                    mediaType={msg.media_type}
+                    message={msg.message}
+                    imageClassName="max-w-full rounded mb-1"
+                    videoClassName="max-w-full rounded mb-1"
+                    audioClassName="max-w-full mb-1"
+                    pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
+                  />
                   <p className="whitespace-pre-wrap break-words text-[13px]">{msg.message}</p>
                   <p className={`text-[10px] mt-0.5 text-right flex items-center justify-end ${msg.direction === "outgoing" ? "text-[#667781]" : "text-muted-foreground"}`}>
                     {formatTime(msg.created_at)}

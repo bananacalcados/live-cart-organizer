@@ -12,6 +12,7 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
+import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 
 interface LeadWhatsAppDialogProps {
   open: boolean;
@@ -164,12 +165,14 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted'
                   )}>
-                    {msg.media_url && msg.media_type?.startsWith('image') && (
-                      <img src={msg.media_url} alt="media" className="rounded max-w-full max-h-48 mb-1" />
-                    )}
-                    {msg.media_url && msg.media_type === 'audio' && (
-                      <audio controls src={msg.media_url} className="max-w-full mb-1" />
-                    )}
+                    <WhatsAppMediaAttachment
+                      mediaUrl={msg.media_url}
+                      mediaType={msg.media_type}
+                      message={msg.message}
+                      imageClassName="rounded max-w-full max-h-48 mb-1"
+                      audioClassName="max-w-full mb-1"
+                      pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
+                    />
                     <p className="whitespace-pre-wrap break-words">{msg.message}</p>
                     <div className={cn("flex items-center gap-1 mt-0.5", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
                       <span className="text-[10px] opacity-60">
