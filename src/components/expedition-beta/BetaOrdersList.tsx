@@ -324,7 +324,7 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
   filtered.forEach(o => {
     const s = o.expedition_status || 'approved';
     statusCounts[s] = (statusCounts[s] || 0) + 1;
-    if (s !== 'dispatched' && s !== 'cancelled') statusCounts['nao_despachados']++;
+    if (!['dispatched', 'delivered', 'cancelled'].includes(s)) statusCounts['nao_despachados']++;
   });
 
   return (
