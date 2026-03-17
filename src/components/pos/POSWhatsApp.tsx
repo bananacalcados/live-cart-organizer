@@ -953,8 +953,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         <POSProductCatalogSender
           storeId={storeId}
           phone={selectedPhone}
-          sendVia={sendVia}
-          selectedNumberId={selectedNumberId}
+          sendVia={selectedSendNumber?.provider === 'meta' ? 'meta' : 'zapi'}
+          selectedNumberId={selectedSendNumberId}
           open={showCatalog}
           onOpenChange={setShowCatalog}
         />
@@ -968,8 +968,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           storeId={storeId}
           phone={selectedPhone}
           customerName={selectedConversation?.customerName}
-          sendVia={sendVia}
-          selectedNumberId={selectedNumberId}
+          sendVia={selectedSendNumber?.provider === 'meta' ? 'meta' : 'zapi'}
+          selectedNumberId={selectedSendNumberId}
         />
       )}
 
@@ -981,8 +981,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           storeId={storeId}
           phone={selectedPhone}
           customerName={selectedConversation?.customerName}
-          sendVia={sendVia}
-          selectedNumberId={selectedNumberId}
+          sendVia={selectedSendNumber?.provider === 'meta' ? 'meta' : 'zapi'}
+          selectedNumberId={selectedSendNumberId}
         />
       )}
 
@@ -990,8 +990,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       <NewConversationDialog
         open={showNewConversation}
         onOpenChange={setShowNewConversation}
-        onConversationCreated={(phone) => {
-          handleSelectConversation(phone);
+        onConversationCreated={(phone, whatsappNumberId) => {
+          handleSelectConversation(phone, whatsappNumberId);
         }}
       />
 
