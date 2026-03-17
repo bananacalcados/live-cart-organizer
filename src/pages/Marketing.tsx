@@ -312,7 +312,7 @@ export default function Marketing() {
     const excludedPresetKeys = savedPresets.filter(p => excludedPresetIds.includes(p.id)).map(p => p.key);
     const includedPresetKeys = savedPresets.filter(p => includedPresetIds.includes(p.id)).map(p => p.key);
     const preset = {
-      rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter,
+      rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter, recencyFilter,
       dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, sortField, sortDir,
       excludedPresetKeys: excludedPresetKeys.length > 0 ? excludedPresetKeys : undefined,
       includedPresetKeys: includedPresetKeys.length > 0 ? includedPresetKeys : undefined,
