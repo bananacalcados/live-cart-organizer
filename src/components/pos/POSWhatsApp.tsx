@@ -123,6 +123,28 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     return metaNumbers.filter(n => storeNumberIds.includes(n.id));
   }, [metaNumbers, storeNumberIds]);
 
+  const selectedSendNumber = useMemo(
+    () => storeNumbers.find((number) => number.id === selectedSendNumberId) ?? null,
+    [storeNumbers, selectedSendNumberId]
+  );
+
+  useEffect(() => {
+    if (storeNumbers.length === 0) {
+      setSelectedSendNumberId(null);
+      return;
+    }
+
+    if (selectedSendNumberId && storeNumbers.some((number) => number.id === selectedSendNumberId)) {
+      return;
+    }
+
+    const fallbackNumber = storeNumbers.find((number) => number.provider === sendVia) ?? storeNumbers[0] ?? null;
+    setSelectedSendNumberId(fallbackNumber?.id ?? null);
+    if (fallbackNumber) {
+      setSendVia(fallbackNumber.provider === "meta" ? "meta" : "zapi");
+    }
+  }, [storeNumbers, selectedSendNumberId, sendVia]);
+
   // Load chat contacts + photos + group names
   useEffect(() => {
     const load = async () => {
