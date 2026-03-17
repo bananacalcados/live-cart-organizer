@@ -8710,6 +8710,7 @@ export type Database = {
           whatsapp: string
         }[]
       }
+      mark_lead_as_paid: { Args: { p_whatsapp: string }; Returns: undefined }
       search_products_unaccent: {
         Args: { p_store_id: string; search_term: string }
         Returns: {
