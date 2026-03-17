@@ -200,10 +200,12 @@ export default function ExpeditionBeta() {
     total: orders.length,
     approved: approvedOrders.length,
     pending: pendingOrders.length,
-    awaiting: orders.filter(o => o.expedition_status === 'awaiting_stock').length,
-    picking: orders.filter(o => o.expedition_status === 'picking' || o.expedition_status === 'picked').length,
-    packed: orders.filter(o => o.expedition_status === 'packed' || o.expedition_status === 'packing').length,
+    preparing: orders.filter(o => o.expedition_status === 'preparing').length,
+    invoiced: orders.filter(o => o.expedition_status === 'invoiced').length,
+    ready: orders.filter(o => o.expedition_status === 'ready_to_ship').length,
     dispatched: orders.filter(o => o.expedition_status === 'dispatched').length,
+    delivered: orders.filter(o => o.expedition_status === 'delivered').length,
+    notDelivered: orders.filter(o => o.expedition_status === 'not_delivered').length,
   };
 
   return (
