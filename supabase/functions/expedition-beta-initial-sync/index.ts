@@ -8,6 +8,44 @@ const corsHeaders = {
 
 const TINY_V2_BASE = 'https://api.tiny.com.br/api2';
 
+// Map Tiny situacao -> expedition_status
+const TINY_STATUS_MAP: Record<string, string> = {
+  'Em Aberto': 'pending',
+  'Aprovado': 'approved',
+  'Preparando Envio': 'preparing',
+  'Faturado': 'invoiced',
+  'Pronto para Envio': 'ready_to_ship',
+  'Enviado': 'dispatched',
+  'Entregue': 'delivered',
+  'Não Entregue': 'not_delivered',
+  'Cancelado': 'cancelled',
+};
+
+// Map Tiny situacao -> financial_status
+const TINY_FINANCIAL_MAP: Record<string, string> = {
+  'Em Aberto': 'pending',
+  'Aprovado': 'paid',
+  'Preparando Envio': 'paid',
+  'Faturado': 'paid',
+  'Pronto para Envio': 'paid',
+  'Enviado': 'paid',
+  'Entregue': 'paid',
+  'Não Entregue': 'paid',
+  'Cancelado': 'cancelled',
+};
+
+// All situações to sync (order matters for priority)
+const TINY_SITUACOES = [
+  'Aprovado',
+  'Preparando Envio',
+  'Faturado',
+  'Pronto para Envio',
+  'Enviado',
+  'Entregue',
+  'Não Entregue',
+  'Cancelado',
+];
+
 async function tinyV2Post(token: string, endpoint: string, params: Record<string, string>, maxRetries = 3): Promise<any> {
   const url = `${TINY_V2_BASE}/${endpoint}`;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -32,7 +70,6 @@ async function tinyV2Post(token: string, endpoint: string, params: Record<string
     const json = await resp.json();
     if (json.retorno?.status === 'Erro') {
       const errMsg = json.retorno?.erros?.[0]?.erro || JSON.stringify(json.retorno?.erros);
-      // "página não existe" means we've gone past the last page - return empty
       if (typeof errMsg === 'string' && errMsg.toLowerCase().includes('gina')) {
         return { pedidos: [] };
       }
@@ -42,12 +79,9 @@ async function tinyV2Post(token: string, endpoint: string, params: Record<string
   }
 }
 
-// Convert BR date (DD/MM/YYYY) to ISO (YYYY-MM-DD)
 function brDateToISO(dateStr: string | undefined | null): string {
   if (!dateStr) return new Date().toISOString();
-  // Already ISO format
   if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
-  // BR format DD/MM/YYYY
   const match = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
   if (match) return `${match[3]}-${match[2]}-${match[1]}`;
   return new Date().toISOString();
@@ -59,7 +93,6 @@ function extractItemsV2(pedido: any): any[] {
   return itens.map((i: any) => i.item).filter(Boolean);
 }
 
-// Pre-load all existing tiny_order_ids to avoid per-order DB lookups
 async function loadExistingOrders(supabase: any): Promise<Map<string, { id: string; expedition_status: string; tracking_code: string | null; has_items: boolean }>> {
   const map = new Map();
   let from = 0;
@@ -80,14 +113,18 @@ async function loadExistingOrders(supabase: any): Promise<Map<string, { id: stri
 
   const orderIds = Array.from(map.values()).map((v: any) => v.id);
   if (orderIds.length > 0) {
-    const { data: withItems } = await supabase
-      .from('expedition_beta_order_items')
-      .select('expedition_order_id')
-      .in('expedition_order_id', orderIds);
-    if (withItems) {
-      const hasItemsSet = new Set(withItems.map((r: any) => r.expedition_order_id));
-      for (const [key, val] of map.entries()) {
-        (val as any).has_items = hasItemsSet.has(val.id);
+    // batch check in chunks of 500
+    for (let i = 0; i < orderIds.length; i += 500) {
+      const chunk = orderIds.slice(i, i + 500);
+      const { data: withItems } = await supabase
+        .from('expedition_beta_order_items')
+        .select('expedition_order_id')
+        .in('expedition_order_id', chunk);
+      if (withItems) {
+        const hasItemsSet = new Set(withItems.map((r: any) => r.expedition_order_id));
+        for (const [key, val] of map.entries()) {
+          if (hasItemsSet.has(val.id)) (val as any).has_items = true;
+        }
       }
     }
   }
@@ -95,46 +132,99 @@ async function loadExistingOrders(supabase: any): Promise<Map<string, { id: stri
   return map;
 }
 
-// === PASS 1: Import approved orders (situacao=Aprovado) ===
-async function passApproved(token: string, supabase: any, existingMap: Map<string, any>, startTime: number) {
-  let synced = 0, skipped = 0, page = 1, hasMore = true;
+// === Universal pass: import orders for a given Tiny situacao ===
+async function passSituacao(
+  token: string,
+  supabase: any,
+  existingMap: Map<string, any>,
+  situacao: string,
+  startTime: number,
+  timeoutMs: number,
+): Promise<{ synced: number; skipped: number; updated: number }> {
+  let synced = 0, skipped = 0, updated = 0;
+  let page = 1, hasMore = true;
+  const expeditionStatus = TINY_STATUS_MAP[situacao] || 'approved';
+  const financialStatus = TINY_FINANCIAL_MAP[situacao] || 'paid';
+  const needsDetail = ['Aprovado', 'Preparando Envio', 'Faturado', 'Pronto para Envio'].includes(situacao);
+  const isShipped = ['Enviado', 'Entregue', 'Não Entregue'].includes(situacao);
 
   while (hasMore) {
-    if (Date.now() - startTime > 40000) { console.log('Pass1 timeout'); break; }
+    if (Date.now() - startTime > timeoutMs) { console.log(`[${situacao}] timeout at page ${page}`); break; }
 
-    console.log(`[Pass1-Approved] page ${page}`);
-    const data = await tinyV2Post(token, 'pedidos.pesquisa.php', { situacao: 'Aprovado', pagina: String(page) });
+    console.log(`[Sync-${situacao}] page ${page}`);
+    let data: any;
+    try {
+      data = await tinyV2Post(token, 'pedidos.pesquisa.php', { situacao, pagina: String(page) });
+    } catch (err: any) {
+      console.error(`[${situacao}] search error page ${page}: ${err.message}`);
+      break;
+    }
     const pedidos = data.pedidos || [];
     if (pedidos.length === 0) { hasMore = false; break; }
 
-    const needDetail: any[] = [];
-    const existingNeedBackfill: any[] = [];
-
     for (const wrapper of pedidos) {
+      if (Date.now() - startTime > timeoutMs) break;
       const item = wrapper.pedido;
       if (!item) continue;
       const tinyId = String(item.id);
       const existing = existingMap.get(tinyId);
 
       if (existing) {
-        if (!existing.has_items) {
-          existingNeedBackfill.push({ item, existing });
+        // Update status if changed
+        if (existing.expedition_status !== expeditionStatus && existing.expedition_status !== 'cancelled') {
+          const updateData: any = { expedition_status: expeditionStatus };
+          
+          // For shipped orders, try to get tracking from detail
+          if (isShipped && !existing.tracking_code) {
+            try {
+              await new Promise(r => setTimeout(r, 300));
+              const detail = await tinyV2Post(token, 'pedido.obter.php', { id: tinyId });
+              const pedido = detail.pedido;
+              if (pedido?.codigo_rastreamento) {
+                updateData.tracking_code = pedido.codigo_rastreamento;
+              }
+            } catch (e: any) {
+              console.error(`Detail fail for tracking ${tinyId}: ${e.message}`);
+            }
+          }
+
+          await supabase.from('expedition_beta_orders').update(updateData).eq('id', existing.id);
+          existing.expedition_status = expeditionStatus;
+          updated++;
         }
+        
+        // Backfill items if missing
+        if (!existing.has_items && needsDetail) {
+          try {
+            await new Promise(r => setTimeout(r, 300));
+            const detail = await tinyV2Post(token, 'pedido.obter.php', { id: tinyId });
+            const pedido = detail.pedido;
+            if (pedido) {
+              const rawItems = extractItemsV2(pedido);
+              if (rawItems.length > 0) {
+                const itemsToInsert = rawItems.map((prod: any) => ({
+                  expedition_order_id: existing.id,
+                  product_name: prod.descricao || prod.nome || 'Produto',
+                  variant_name: null,
+                  sku: prod.codigo || null,
+                  quantity: parseFloat(prod.quantidade || 1),
+                  unit_price: parseFloat(prod.valor_unitario || 0),
+                  weight_grams: 0,
+                }));
+                await supabase.from('expedition_beta_order_items').insert(itemsToInsert);
+                existing.has_items = true;
+              }
+            }
+          } catch (e: any) {
+            console.error(`Backfill fail ${tinyId}: ${e.message}`);
+          }
+        }
+        
         skipped++;
-      } else {
-        needDetail.push(item);
+        continue;
       }
-    }
 
-    const allNeedingDetail = [
-      ...needDetail.map(item => ({ item, existing: null, isNew: true })),
-      ...existingNeedBackfill.map(({ item, existing }) => ({ item, existing, isNew: false })),
-    ];
-
-    for (const { item, existing, isNew } of allNeedingDetail) {
-      if (Date.now() - startTime > 40000) break;
-      const tinyId = String(item.id);
-
+      // New order - need detail to get full info
       let pedido: any;
       try {
         await new Promise(r => setTimeout(r, 300));
@@ -146,45 +236,12 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
         continue;
       }
 
-      // Check if detail shows dispatched/cancelled
-      const situacao = pedido.situacao || '';
-      if (['Enviado', 'Entregue'].includes(situacao)) {
-        if (existing && existing.expedition_status !== 'dispatched') {
-          await supabase.from('expedition_beta_orders').update({
-            expedition_status: 'dispatched',
-            tracking_code: pedido.codigo_rastreamento || existing.tracking_code,
-          }).eq('id', existing.id);
-          synced++;
-        }
-        continue;
-      }
-
-      if (!isNew && existing) {
-        // Backfill items
-        const rawItems = extractItemsV2(pedido);
-        if (rawItems.length > 0) {
-          const itemsToInsert = rawItems.map((prod: any) => ({
-            expedition_order_id: existing.id,
-            product_name: prod.descricao || prod.nome || 'Produto',
-            variant_name: null,
-            sku: prod.codigo || null,
-            quantity: parseFloat(prod.quantidade || 1),
-            unit_price: parseFloat(prod.valor_unitario || 0),
-            weight_grams: 0,
-          }));
-          await supabase.from('expedition_beta_order_items').insert(itemsToInsert);
-          console.log(`Backfilled ${itemsToInsert.length} items for ${tinyId}`);
-          synced++;
-        }
-        continue;
-      }
-
-      // Insert new order
       const ecomNum = pedido.numero_ecommerce || '';
       const orderNum = String(pedido.numero || '');
       const finalShopifyId = ecomNum ? String(ecomNum) : `tiny-${tinyId}`;
       const cliente = pedido.cliente || {};
       const customerName = cliente.nome || cliente.fantasia || "Cliente Tiny";
+      const trackingCode = pedido.codigo_rastreamento || null;
 
       const { data: inserted, error: insertError } = await supabase
         .from("expedition_beta_orders")
@@ -209,9 +266,9 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
             neighborhood: pedido.endereco_entrega.bairro || '',
             phone: cliente.fone || cliente.celular || ''
           } : null,
-          financial_status: 'paid',
-          fulfillment_status: 'unfulfilled',
-          expedition_status: 'approved',
+          financial_status: financialStatus,
+          fulfillment_status: isShipped ? 'fulfilled' : 'unfulfilled',
+          expedition_status: expeditionStatus,
           subtotal_price: parseFloat(pedido.totalProdutos || pedido.total_produtos || 0),
           total_price: parseFloat(pedido.totalPedido || pedido.total_pedido || 0),
           total_discount: parseFloat(pedido.desconto || 0),
@@ -220,7 +277,8 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
           has_gift: (pedido.obs || pedido.observacoes || '').toLowerCase().includes("brinde"),
           notes: pedido.obs || pedido.observacoes || null,
           tiny_order_id: tinyId,
-          tiny_order_number: orderNum
+          tiny_order_number: orderNum,
+          tracking_code: trackingCode,
         }).select().single();
 
       if (insertError) { console.error(`Insert error ${tinyId}:`, insertError.message); continue; }
@@ -239,7 +297,7 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
         await supabase.from("expedition_beta_order_items").insert(itemsToInsert);
       }
 
-      existingMap.set(tinyId, { id: inserted.id, expedition_status: 'approved', tracking_code: null, has_items: rawItems.length > 0 });
+      existingMap.set(tinyId, { id: inserted.id, expedition_status: expeditionStatus, tracking_code: trackingCode, has_items: rawItems.length > 0 });
       synced++;
     }
 
@@ -247,94 +305,10 @@ async function passApproved(token: string, supabase: any, existingMap: Map<strin
     if (page > 10) hasMore = false;
   }
 
-  return { synced, skipped };
+  return { synced, skipped, updated };
 }
 
-// === PASS 2: Update dispatched orders (Enviado/Entregue) ===
-async function passDispatched(token: string, supabase: any, existingMap: Map<string, any>, startTime: number) {
-  let updated = 0;
-
-  for (const sit of ['Enviado', 'Entregue']) {
-    let page = 1, hasMore = true;
-    while (hasMore) {
-      if (Date.now() - startTime > 50000) { console.log('Pass2 timeout'); return updated; }
-
-      console.log(`[Pass2-Dispatched] sit=${sit} p${page}`);
-      const data = await tinyV2Post(token, 'pedidos.pesquisa.php', { situacao: sit, pagina: String(page) });
-      const pedidos = data.pedidos || [];
-      if (pedidos.length === 0) { hasMore = false; break; }
-
-      const updates: { id: string }[] = [];
-      for (const wrapper of pedidos) {
-        const item = wrapper.pedido;
-        if (!item) continue;
-        const tinyId = String(item.id);
-        const existing = existingMap.get(tinyId);
-
-        if (existing && existing.expedition_status !== 'dispatched' && existing.expedition_status !== 'cancelled') {
-          updates.push({ id: existing.id });
-          existing.expedition_status = 'dispatched';
-        }
-      }
-
-      if (updates.length > 0) {
-        const ids = updates.map(u => u.id);
-        await supabase.from('expedition_beta_orders')
-          .update({ expedition_status: 'dispatched' })
-          .in('id', ids);
-        updated += updates.length;
-        console.log(`Batch dispatched ${updates.length} orders`);
-      }
-
-      page++;
-      if (page > 5) hasMore = false;
-    }
-  }
-
-  return updated;
-}
-
-// === PASS 3: Update cancelled orders (Cancelado) ===
-async function passCancelled(token: string, supabase: any, existingMap: Map<string, any>, startTime: number) {
-  let updated = 0;
-  let page = 1, hasMore = true;
-
-  while (hasMore) {
-    if (Date.now() - startTime > 55000) { console.log('Pass3 timeout'); return updated; }
-
-    console.log(`[Pass3-Cancelled] p${page}`);
-    const data = await tinyV2Post(token, 'pedidos.pesquisa.php', { situacao: 'Cancelado', pagina: String(page) });
-    const pedidos = data.pedidos || [];
-    if (pedidos.length === 0) { hasMore = false; break; }
-
-    const ids: string[] = [];
-    for (const wrapper of pedidos) {
-      const item = wrapper.pedido;
-      if (!item) continue;
-      const tinyId = String(item.id);
-      const existing = existingMap.get(tinyId);
-      if (existing && existing.expedition_status !== 'cancelled') {
-        ids.push(existing.id);
-        existing.expedition_status = 'cancelled';
-      }
-    }
-
-    if (ids.length > 0) {
-      await supabase.from('expedition_beta_orders')
-        .update({ expedition_status: 'cancelled' })
-        .in('id', ids);
-      updated += ids.length;
-      console.log(`Batch cancelled ${ids.length} orders`);
-    }
-
-    page++;
-    if (page > 5) hasMore = false;
-  }
-
-  return updated;
-}
-
-// === PASS 0: Cleanup - fetch approved from Tiny, delete locals not in that set ===
+// === Cleanup: remove local approved orders no longer approved in Tiny ===
 async function passCleanup(token: string, supabase: any, startTime: number, timeoutMs = 30000) {
   const tinyApprovedIds = new Set<string>();
   let page = 1, hasMore = true;
@@ -406,16 +380,27 @@ serve(async (req) => {
     console.log(`Loaded ${existingMap.size} existing orders in ${Date.now() - startTime}ms`);
 
     console.log("=== PASS 0: Cleanup ===");
-    const cleaned = await passCleanup(token, supabase, startTime, 30000);
+    const cleaned = await passCleanup(token, supabase, startTime, 25000);
 
-    console.log("=== PASS 1: Approved ===");
-    const { synced, skipped } = await passApproved(token, supabase, existingMap, startTime);
+    let totalSynced = 0, totalSkipped = 0, totalUpdated = 0;
+    const results: Record<string, any> = {};
 
-    console.log("=== PASS 2: Dispatched ===");
-    const dispatched = await passDispatched(token, supabase, existingMap, startTime);
-
-    console.log("=== PASS 3: Cancelled ===");
-    const cancelled = await passCancelled(token, supabase, existingMap, startTime);
+    // Sync each Tiny situacao with progressive timeouts
+    for (const sit of TINY_SITUACOES) {
+      if (Date.now() - startTime > 100000) {
+        console.log(`Global timeout reached, skipping ${sit}`);
+        break;
+      }
+      
+      console.log(`=== Syncing: ${sit} ===`);
+      const timeoutForSit = startTime + 110000; // 110s total budget
+      const result = await passSituacao(token, supabase, existingMap, sit, startTime, 110000);
+      results[sit] = result;
+      totalSynced += result.synced;
+      totalSkipped += result.skipped;
+      totalUpdated += result.updated;
+      console.log(`[${sit}] synced=${result.synced} updated=${result.updated} skipped=${result.skipped}`);
+    }
 
     // Auto-enrich shipping info from Shopify
     let enrichResult = null;
@@ -436,9 +421,18 @@ serve(async (req) => {
     }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`Done in ${elapsed}s: ${cleaned} cleaned, ${synced} synced, ${skipped} skipped, ${dispatched} dispatched, ${cancelled} cancelled`);
+    console.log(`Done in ${elapsed}s: ${cleaned} cleaned, ${totalSynced} synced, ${totalUpdated} updated, ${totalSkipped} skipped`);
 
-    return new Response(JSON.stringify({ success: true, synced, skipped, dispatched, cancelled, cleaned, elapsed, enrichResult }), {
+    return new Response(JSON.stringify({
+      success: true,
+      synced: totalSynced,
+      updated: totalUpdated,
+      skipped: totalSkipped,
+      cleaned,
+      elapsed,
+      results,
+      enrichResult,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
