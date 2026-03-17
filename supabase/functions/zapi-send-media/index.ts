@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
+import { prepareZApiImagePayload } from "../_shared/zapi-media.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,24 +36,26 @@ serve(async (req) => {
     }
 
     let endpoint: string;
-    let body: Record<string, unknown>;
+    let payload: Record<string, unknown>;
 
     switch (mediaType) {
-      case 'image':
+      case 'image': {
         endpoint = 'send-image';
-        body = { phone: formattedPhone, image: mediaUrl, caption: caption || '' };
+        const preparedImage = await prepareZApiImagePayload(mediaUrl);
+        payload = { phone: formattedPhone, image: preparedImage.image, caption: caption || '' };
         break;
+      }
       case 'audio':
         endpoint = 'send-audio';
-        body = { phone: formattedPhone, audio: mediaUrl };
+        payload = { phone: formattedPhone, audio: mediaUrl };
         break;
       case 'video':
         endpoint = 'send-video';
-        body = { phone: formattedPhone, video: mediaUrl, caption: caption || '' };
+        payload = { phone: formattedPhone, video: mediaUrl, caption: caption || '' };
         break;
       case 'document':
         endpoint = 'send-document';
-        body = { phone: formattedPhone, document: mediaUrl, fileName: filename || 'document' };
+        payload = { phone: formattedPhone, document: mediaUrl, fileName: filename || 'document' };
         break;
       default:
         return new Response(
@@ -70,7 +73,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
         'Client-Token': clientToken,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json();

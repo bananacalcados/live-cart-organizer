@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { prepareZApiImagePayload } from "../_shared/zapi-media.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -92,7 +93,8 @@ serve(async (req) => {
       };
     } else if (type === 'image' && mediaUrl) {
       endpoint = `${baseUrl}/send-image`;
-      body = { phone: groupId, image: mediaUrl, caption: caption || message || '' };
+      const preparedImage = await prepareZApiImagePayload(mediaUrl);
+      body = { phone: groupId, image: preparedImage.image, caption: caption || message || '' };
       if (mentionedPhones.length > 0) {
         body.mentioned = mentionedPhones;
       }
