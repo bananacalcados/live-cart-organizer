@@ -191,6 +191,7 @@ export default function Marketing() {
   const [ordersMin, setOrdersMin] = useState("");
   const [ordersMax, setOrdersMax] = useState("");
    const [topN, setTopN] = useState<string>("all");
+   const [recencyFilter, setRecencyFilter] = useState<string>("all");
    const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
    const [storesList, setStoresList] = useState<{ id: string; name: string }[]>([]);
    const [sellersList, setSellersList] = useState<{ id: string; name: string }[]>([]);
