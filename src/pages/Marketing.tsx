@@ -191,6 +191,7 @@ export default function Marketing() {
   const [ordersMin, setOrdersMin] = useState("");
   const [ordersMax, setOrdersMax] = useState("");
    const [topN, setTopN] = useState<string>("all");
+   const [recencyFilter, setRecencyFilter] = useState<string>("all");
    const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
    const [storesList, setStoresList] = useState<{ id: string; name: string }[]>([]);
    const [sellersList, setSellersList] = useState<{ id: string; name: string }[]>([]);
@@ -311,7 +312,7 @@ export default function Marketing() {
     const excludedPresetKeys = savedPresets.filter(p => excludedPresetIds.includes(p.id)).map(p => p.key);
     const includedPresetKeys = savedPresets.filter(p => includedPresetIds.includes(p.id)).map(p => p.key);
     const preset = {
-      rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter,
+      rfmFilter, regionFilter, dddFilter, storeFilter, sellerFilter, recencyFilter,
       dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, sortField, sortDir,
       excludedPresetKeys: excludedPresetKeys.length > 0 ? excludedPresetKeys : undefined,
       includedPresetKeys: includedPresetKeys.length > 0 ? includedPresetKeys : undefined,
@@ -337,6 +338,7 @@ export default function Marketing() {
     setTicketMax(f.ticketMax || "");
     setOrdersMin(f.ordersMin || "");
     setOrdersMax(f.ordersMax || "");
+    if (f.recencyFilter) setRecencyFilter(f.recencyFilter);
     if (f.topN) setTopN(f.topN);
     if (f.sortField) setSortField(f.sortField);
     if (f.sortDir) setSortDir(f.sortDir);
@@ -702,6 +704,7 @@ export default function Marketing() {
   const customerMatchesPreset = useCallback((c: ZoppyCustomer, presetValue: any): boolean => {
     const f = presetValue?.filters || presetValue;
     if (f.rfmFilter && f.rfmFilter !== "all" && c.rfm_segment !== f.rfmFilter) return false;
+    if (f.recencyFilter && f.recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(f.recencyFilter)) return false;
     if (f.regionFilter && f.regionFilter !== "all" && c.region_type !== f.regionFilter) return false;
     if (f.dddFilter && f.dddFilter !== "all" && c.ddd !== f.dddFilter) return false;
     if (f.dateFrom && c.last_purchase_at && c.last_purchase_at < f.dateFrom) return false;
@@ -725,6 +728,7 @@ export default function Marketing() {
     if (regionFilter !== "all" && c.region_type !== regionFilter) return false;
     if (rfmFilter !== "all" && c.rfm_segment !== rfmFilter) return false;
     if (dddFilter !== "all" && c.ddd !== dddFilter) return false;
+    if (recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(recencyFilter)) return false;
     if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) return false;
     if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo + 'T23:59:59') return false;
     if ((dateFrom || dateTo) && !c.last_purchase_at) return false;
@@ -958,6 +962,17 @@ export default function Marketing() {
                   <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9 text-xs" title="Comprou antes de" />
                   <span className="absolute -top-2 left-2 text-[10px] bg-background px-1 text-muted-foreground">Comprou antes de</span>
                 </div>
+                <Select value={recencyFilter} onValueChange={setRecencyFilter}>
+                  <SelectTrigger className="h-9"><Clock className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Recência: Todos</SelectItem>
+                    <SelectItem value="5">⭐ R5 — Mais recentes</SelectItem>
+                    <SelectItem value="4">R4 — Recentes</SelectItem>
+                    <SelectItem value="3">R3 — Moderados</SelectItem>
+                    <SelectItem value="2">R2 — Distantes</SelectItem>
+                    <SelectItem value="1">💤 R1 — Mais antigos</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select value={topN} onValueChange={setTopN}>
                   <SelectTrigger className="h-9"><Crown className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1225,7 +1240,7 @@ export default function Marketing() {
                     <TableHead className="cursor-pointer" onClick={() => toggleSort('rfm_total_score')}>
                       <div className="flex items-center gap-1">Segmento RFM<ArrowUpDown className="h-3 w-3" /></div>
                     </TableHead>
-                    <TableHead className="text-center">R</TableHead>
+                    <TableHead className="text-center cursor-pointer" onClick={() => toggleSort('rfm_recency_score')}><div className="flex items-center gap-1">R<ArrowUpDown className="h-3 w-3" /></div></TableHead>
                     <TableHead className="text-center">F</TableHead>
                     <TableHead className="text-center">M</TableHead>
                     <TableHead className="cursor-pointer text-right" onClick={() => toggleSort('total_orders')}>
@@ -1234,7 +1249,7 @@ export default function Marketing() {
                     <TableHead className="cursor-pointer text-right" onClick={() => toggleSort('total_spent')}>
                       <div className="flex items-center justify-end gap-1">Total Gasto<ArrowUpDown className="h-3 w-3" /></div>
                     </TableHead>
-                    <TableHead className="text-right">Última Compra</TableHead>
+                    <TableHead className="text-right cursor-pointer" onClick={() => toggleSort('last_purchase_at')}><div className="flex items-center justify-end gap-1">Última Compra<ArrowUpDown className="h-3 w-3" /></div></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

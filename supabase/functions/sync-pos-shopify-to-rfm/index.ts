@@ -26,24 +26,42 @@ serve(async (req) => {
     // ── 1. Sync POS completed sales ──
     if (mode === 'pos' || mode === 'all') {
       // Get all completed POS sales with customer data
-      const { data: sales, error: salesErr } = await supabase
-        .from('pos_sales')
-        .select('id, customer_id, total, created_at, status')
-        .in('status', ['completed', 'paid']);
-
-      if (salesErr) throw salesErr;
+      let allSales: any[] = [];
+      let salesFrom = 0;
+      const salesBatch = 1000;
+      while (true) {
+        const { data, error: salesErr } = await supabase
+          .from('pos_sales')
+          .select('id, customer_id, total, created_at, status')
+          .in('status', ['completed', 'paid'])
+          .range(salesFrom, salesFrom + salesBatch - 1);
+        if (salesErr) throw salesErr;
+        if (!data || data.length === 0) break;
+        allSales = allSales.concat(data);
+        if (data.length < salesBatch) break;
+        salesFrom += salesBatch;
+      }
+      const sales = allSales;
+      console.log(`POS: fetched ${sales.length} sales`);
 
       if (sales && sales.length > 0) {
         // Get unique customer IDs
         const customerIds = [...new Set(sales.filter(s => s.customer_id).map(s => s.customer_id))];
+        console.log(`POS: ${customerIds.length} unique customers from sales`);
 
-        // Fetch customer details
-        const { data: customers } = await supabase
-          .from('pos_customers')
-          .select('id, name, email, whatsapp, city, state, gender')
-          .in('id', customerIds);
+        // Fetch customer details in batches (avoid URL length limit with .in())
+        let allCustomers: any[] = [];
+        for (let ci = 0; ci < customerIds.length; ci += 50) {
+          const idChunk = customerIds.slice(ci, ci + 50);
+          const { data: custChunk } = await supabase
+            .from('pos_customers')
+            .select('id, name, email, whatsapp, city, state, gender')
+            .in('id', idChunk);
+          if (custChunk) allCustomers = allCustomers.concat(custChunk);
+        }
+        console.log(`POS: fetched ${allCustomers.length} customer records`);
 
-        const customerMap = new Map((customers || []).map(c => [c.id, c]));
+        const customerMap = new Map(allCustomers.map(c => [c.id, c]));
 
         // Aggregate sales per customer
         const customerSales = new Map<string, { total: number; count: number; first: string; last: string }>();
