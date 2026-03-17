@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +59,34 @@ interface ChatMsg {
   created_at: string;
 }
 
+interface DuplicateReviewOrder {
+  shopifyOrderId: string;
+  shopifyOrderName: string;
+  createdAt: string;
+  cancelledAt: string | null;
+  customerName: string;
+  customerPhoneNormalized: string | null;
+  customerEmailNormalized: string | null;
+  customerCpfNormalized: string | null;
+  lineSignature: string;
+  lineItems: Array<{ title: string; variantId: string | null; quantity: number; price: string }>;
+  source: string | null;
+  isPrimary: boolean;
+  canCancel: boolean;
+}
+
+interface DuplicateReviewGroup {
+  duplicateGroupKey: string;
+  matchReason: string;
+  customerName: string;
+  customerPhoneNormalized: string | null;
+  customerEmailNormalized: string | null;
+  customerCpfNormalized: string | null;
+  lineSignature: string;
+  primaryOrderId: string;
+  orders: DuplicateReviewOrder[];
+}
+
 // ---- TEST SIMULATION HELPERS ----
 const FAKE_NAMES = ["Ana Silva", "Bruno Costa", "Camila Santos", "Diego Oliveira", "Fernanda Lima", "Gabriel Rocha", "Helena Souza", "Igor Mendes"];
 const FAKE_MESSAGES = ["Amei! 😍", "Quanto custa?", "Tem na cor preta?", "Quero!", "Lindo demais!", "Qual tamanho?", "Entrega pra SP?", "Pix tem desconto?", "Quero 2!", "Esse é perfeito ❤️"];
@@ -70,6 +99,26 @@ function generateUsername(name: string, phone: string): string {
   const firstName = name.trim().split(/\s+/)[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const suffix = phone.slice(-4);
   return `@${firstName}${suffix}`;
+}
+
+function buildLiveShopifyDedupeKey(sessionId: string | null, phone: string, cartItems: any[]) {
+  const normalizedPhone = (phone || "").replace(/\D/g, "");
+  const itemSignature = (cartItems || [])
+    .map((item: any) => {
+      const variantId = (item.variantId || "").trim();
+      const title = (item.title || item.productTitle || "produto").trim().toLowerCase();
+      const quantity = Number(item.quantity || 1);
+      const price = Number(item.price || 0).toFixed(2);
+      return `${variantId || title}:${quantity}:${price}`;
+    })
+    .sort()
+    .join("|");
+
+  return [sessionId || "live", normalizedPhone || "sem-telefone", itemSignature || "sem-itens"].join("::");
+}
+
+function formatDuplicateLineItems(items: DuplicateReviewOrder["lineItems"]) {
+  return items.map((item) => `${item.quantity}x ${item.title}${item.variantId ? ` • ${item.variantId}` : ""} • R$ ${item.price}`).join(" · ");
 }
 
 export function LiveSessionManager() {
@@ -121,6 +170,9 @@ export function LiveSessionManager() {
   // Payment link dialog
   const [paymentLinkViewer, setPaymentLinkViewer] = useState<LiveViewer | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [duplicateReviewGroups, setDuplicateReviewGroups] = useState<DuplicateReviewGroup[]>([]);
+  const [loadingDuplicateReview, setLoadingDuplicateReview] = useState(false);
+  const [cancellingDuplicateOrderId, setCancellingDuplicateOrderId] = useState<string | null>(null);
 
   // WhatsApp send dialog (legacy one-shot)
   const [whatsappSendViewer, setWhatsappSendViewer] = useState<LiveViewer | null>(null);
@@ -237,6 +289,7 @@ export function LiveSessionManager() {
     setOverlayConfig((s as any).overlay_config || { banner_text: "", coupon_code: "", countdown_end: "", promo_text: "", show_banner: false, show_coupon: false, show_countdown: false, show_promo: false });
     loadProducts();
     loadAdminData(s.id);
+    loadDuplicateReview(s.id);
   };
 
   const loadAdminData = async (sessionId: string) => {
@@ -246,6 +299,55 @@ export function LiveSessionManager() {
     ]);
     setViewers((viewersRes.data as any[]) || []);
     setChatMessages((chatRes.data as any[]) || []);
+  };
+
+  const loadDuplicateReview = async (sessionId: string) => {
+    setLoadingDuplicateReview(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-live-duplicate-review", {
+        body: { sessionId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setDuplicateReviewGroups((data?.groups as DuplicateReviewGroup[]) || []);
+    } catch (error: any) {
+      console.error("Error loading duplicate review:", error);
+      toast.error(error?.message || "Erro ao carregar revisão de duplicados");
+      setDuplicateReviewGroups([]);
+    } finally {
+      setLoadingDuplicateReview(false);
+    }
+  };
+
+  const handleCancelDuplicateOrder = async (group: DuplicateReviewGroup, order: DuplicateReviewOrder) => {
+    if (!adminSessionId) return;
+    setCancellingDuplicateOrderId(order.shopifyOrderId);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-cancel-live-order", {
+        body: {
+          sessionId: adminSessionId,
+          shopifyOrderId: order.shopifyOrderId,
+          shopifyOrderName: order.shopifyOrderName,
+          duplicateGroupKey: group.duplicateGroupKey,
+          customerName: order.customerName,
+          customerPhoneNormalized: order.customerPhoneNormalized,
+          customerEmailNormalized: order.customerEmailNormalized,
+          customerCpfNormalized: order.customerCpfNormalized,
+          lineSignature: order.lineSignature,
+          lineItems: order.lineItems,
+          resolutionNotes: "Cancelado manualmente após revisão de duplicidade na live.",
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Pedido ${order.shopifyOrderName} cancelado com sucesso.`);
+      await loadDuplicateReview(adminSessionId);
+    } catch (error: any) {
+      console.error("Error cancelling duplicate Shopify order:", error);
+      toast.error(error?.message || "Erro ao cancelar pedido duplicado");
+    } finally {
+      setCancellingDuplicateOrderId(null);
+    }
   };
 
   // ---- WHATSAPP SEND (legacy one-shot for quick message) ----
@@ -612,6 +714,7 @@ export function LiveSessionManager() {
   const adminSession = sessions.find(s => s.id === adminSessionId);
   const onlineViewers = viewers.filter(v => isViewerOnlineNow(v));
   const stats = getRevenueStats();
+  const duplicateCandidatesCount = duplicateReviewGroups.reduce((sum, group) => sum + group.orders.filter((order) => order.canCancel).length, 0);
 
   const addCartFilteredProducts = allProducts.filter(p => p.node.title.toLowerCase().includes(addCartSearch.toLowerCase()));
 
@@ -706,13 +809,17 @@ export function LiveSessionManager() {
         </div>
 
         <Tabs value={adminTab} onValueChange={setAdminTab}>
-          <TabsList className="w-full grid grid-cols-8">
+          <TabsList className="w-full grid grid-cols-9">
             <TabsTrigger value="dashboard" className="gap-1 text-xs"><BarChart3 className="w-3 h-3" /> Dashboard</TabsTrigger>
             <TabsTrigger value="chat" className="gap-1 text-xs"><MessageCircle className="w-3 h-3" /> Chat</TabsTrigger>
             <TabsTrigger value="products" className="gap-1 text-xs"><Star className="w-3 h-3" /> Produtos</TabsTrigger>
             <TabsTrigger value="viewers" className="gap-1 text-xs"><Users className="w-3 h-3" /> Viewers</TabsTrigger>
             <TabsTrigger value="carts" className="gap-1 text-xs"><ShoppingCart className="w-3 h-3" /> Carrinhos</TabsTrigger>
             <TabsTrigger value="orders" className="gap-1 text-xs"><CheckCircle2 className="w-3 h-3" /> Pedidos</TabsTrigger>
+            <TabsTrigger value="duplicates" className="gap-1 text-xs">
+              <Ban className="w-3 h-3" /> Duplicados
+              {duplicateCandidatesCount > 0 && <span className="ml-1">({duplicateCandidatesCount})</span>}
+            </TabsTrigger>
             <TabsTrigger value="messages" className="gap-1 text-xs"><Send className="w-3 h-3" /> Mensagens</TabsTrigger>
             <TabsTrigger value="config" className="gap-1 text-xs"><Settings className="w-3 h-3" /> Config</TabsTrigger>
           </TabsList>
@@ -1108,6 +1215,7 @@ export function LiveSessionManager() {
                           const cartItems = Array.isArray(v.cart_items) ? v.cart_items : [];
                           if (cartItems.length === 0) { toast.error("Carrinho vazio"); return; }
                           try {
+                            const dedupeKey = buildLiveShopifyDedupeKey(adminSessionId, v.phone, cartItems);
                             toast.loading("Criando pedido na Shopify...", { id: "force-shopify" });
                             const { data, error } = await supabase.functions.invoke("shopify-create-live-order", {
                               body: {
@@ -1118,10 +1226,21 @@ export function LiveSessionManager() {
                                   quantity: item.quantity || 1,
                                 })),
                                 customer: { name: v.name, phone: v.phone },
+                                sessionId: adminSessionId,
+                                liveViewerId: v.id,
+                                source: "live-admin-manual",
+                                dedupeKey,
                               },
                             });
                             if (error) throw error;
-                            toast.success(`Pedido Shopify criado: ${data?.shopifyOrderName || "OK"}`, { id: "force-shopify" });
+                            if (data?.processing) {
+                              toast.message("Esse pedido já está em processamento.", { id: "force-shopify" });
+                            } else if (data?.deduped) {
+                              toast.success(`Duplicado evitado: ${data?.shopifyOrderName || "pedido existente"}`, { id: "force-shopify" });
+                            } else {
+                              toast.success(`Pedido Shopify criado: ${data?.shopifyOrderName || "OK"}`, { id: "force-shopify" });
+                            }
+                            if (adminSessionId) await loadDuplicateReview(adminSessionId);
                           } catch (err: any) {
                             console.error(err);
                             toast.error("Erro ao criar pedido Shopify", { id: "force-shopify" });
@@ -1144,6 +1263,80 @@ export function LiveSessionManager() {
                     </div>
                   );
                 })}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="duplicates" className="mt-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-sm flex items-center gap-2"><Ban className="w-4 h-4 text-destructive" /> Revisão manual de duplicados</CardTitle>
+                    <p className="text-xs text-muted-foreground">Só marca pedidos do mesmo cliente com itens, quantidades e preços idênticos.</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => adminSessionId && loadDuplicateReview(adminSessionId)} disabled={loadingDuplicateReview}>
+                    {loadingDuplicateReview ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Atualizar"}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Alert>
+                  <Ban className="h-4 w-4" />
+                  <AlertTitle>Revisão antes do cancelamento</AlertTitle>
+                  <AlertDescription>
+                    O primeiro pedido do grupo é mantido e só os demais podem ser cancelados manualmente.
+                  </AlertDescription>
+                </Alert>
+
+                {loadingDuplicateReview ? (
+                  <div className="flex items-center justify-center py-8 text-sm text-muted-foreground gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Carregando análise...
+                  </div>
+                ) : duplicateReviewGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">Nenhum duplicado forte encontrado nesta live.</p>
+                ) : (
+                  <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                    {duplicateReviewGroups.map((group) => (
+                      <div key={group.duplicateGroupKey} className="rounded-lg border p-3 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">{group.customerName}</Badge>
+                          {group.customerPhoneNormalized && <Badge variant="outline">{group.customerPhoneNormalized}</Badge>}
+                          {group.customerEmailNormalized && <Badge variant="outline">{group.customerEmailNormalized}</Badge>}
+                          {group.customerCpfNormalized && <Badge variant="outline">CPF {group.customerCpfNormalized}</Badge>}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{group.matchReason}</p>
+                        <div className="space-y-2">
+                          {group.orders.map((order) => (
+                            <div key={order.shopifyOrderId} className="rounded-md border p-3 space-y-2">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="space-y-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-medium">{order.shopifyOrderName}</span>
+                                    {order.isPrimary && <Badge variant="secondary">Principal</Badge>}
+                                    {order.cancelledAt && <Badge variant="destructive">Cancelado</Badge>}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString("pt-BR")}</p>
+                                  <p className="text-xs text-muted-foreground break-words">{formatDuplicateLineItems(order.lineItems)}</p>
+                                </div>
+                                {order.canCancel && (
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleCancelDuplicateOrder(group, order)}
+                                    disabled={cancellingDuplicateOrderId === order.shopifyOrderId}
+                                  >
+                                    {cancellingDuplicateOrderId === order.shopifyOrderId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Cancelar"}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
