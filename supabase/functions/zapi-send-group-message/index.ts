@@ -93,7 +93,8 @@ serve(async (req) => {
       };
     } else if (type === 'image' && mediaUrl) {
       endpoint = `${baseUrl}/send-image`;
-      body = { phone: groupId, image: mediaUrl, caption: caption || message || '' };
+      const preparedImage = await prepareZApiImagePayload(mediaUrl);
+      body = { phone: groupId, image: preparedImage.image, caption: caption || message || '' };
       if (mentionedPhones.length > 0) {
         body.mentioned = mentionedPhones;
       }
