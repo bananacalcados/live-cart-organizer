@@ -447,10 +447,10 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">
-        {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && shopifyOrderName && (
+        {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && (
           <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
             <ShoppingBag className="h-3 w-3 mr-1" />
-            Shopify {shopifyOrderName}
+            {shopifyOrderName ? `Shopify ${shopifyOrderName}` : 'Na Shopify'}
           </Badge>
         )}
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === false && (
