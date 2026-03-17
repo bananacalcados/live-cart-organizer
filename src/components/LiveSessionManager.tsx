@@ -714,6 +714,7 @@ export function LiveSessionManager() {
   const adminSession = sessions.find(s => s.id === adminSessionId);
   const onlineViewers = viewers.filter(v => isViewerOnlineNow(v));
   const stats = getRevenueStats();
+  const duplicateCandidatesCount = duplicateReviewGroups.reduce((sum, group) => sum + group.orders.filter((order) => order.canCancel).length, 0);
 
   const addCartFilteredProducts = allProducts.filter(p => p.node.title.toLowerCase().includes(addCartSearch.toLowerCase()));
 
@@ -808,13 +809,17 @@ export function LiveSessionManager() {
         </div>
 
         <Tabs value={adminTab} onValueChange={setAdminTab}>
-          <TabsList className="w-full grid grid-cols-8">
+          <TabsList className="w-full grid grid-cols-9">
             <TabsTrigger value="dashboard" className="gap-1 text-xs"><BarChart3 className="w-3 h-3" /> Dashboard</TabsTrigger>
             <TabsTrigger value="chat" className="gap-1 text-xs"><MessageCircle className="w-3 h-3" /> Chat</TabsTrigger>
             <TabsTrigger value="products" className="gap-1 text-xs"><Star className="w-3 h-3" /> Produtos</TabsTrigger>
             <TabsTrigger value="viewers" className="gap-1 text-xs"><Users className="w-3 h-3" /> Viewers</TabsTrigger>
             <TabsTrigger value="carts" className="gap-1 text-xs"><ShoppingCart className="w-3 h-3" /> Carrinhos</TabsTrigger>
             <TabsTrigger value="orders" className="gap-1 text-xs"><CheckCircle2 className="w-3 h-3" /> Pedidos</TabsTrigger>
+            <TabsTrigger value="duplicates" className="gap-1 text-xs">
+              <Ban className="w-3 h-3" /> Duplicados
+              {duplicateCandidatesCount > 0 && <span className="ml-1">({duplicateCandidatesCount})</span>}
+            </TabsTrigger>
             <TabsTrigger value="messages" className="gap-1 text-xs"><Send className="w-3 h-3" /> Mensagens</TabsTrigger>
             <TabsTrigger value="config" className="gap-1 text-xs"><Settings className="w-3 h-3" /> Config</TabsTrigger>
           </TabsList>
