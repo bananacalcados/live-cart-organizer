@@ -156,6 +156,22 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     void refreshShopifyStatus();
   }, [refreshShopifyStatus]);
 
+  useEffect(() => {
+    const handleShopifyOrderCreated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ orderId?: string; shopifyOrderName?: string | null }>;
+      if (customEvent.detail?.orderId !== order.id) return;
+      applyShopifyVerification(true, customEvent.detail?.shopifyOrderName || null);
+      window.setTimeout(() => {
+        void refreshShopifyStatus();
+      }, 1500);
+    };
+
+    window.addEventListener('shopify-order-created', handleShopifyOrderCreated as EventListener);
+    return () => {
+      window.removeEventListener('shopify-order-created', handleShopifyOrderCreated as EventListener);
+    };
+  }, [applyShopifyVerification, order.id, refreshShopifyStatus]);
+
   // Fetch live messages the customer sent (for awaiting_confirmation display)
   useEffect(() => {
     if (order.stage !== 'awaiting_confirmation' && order.stage !== 'incomplete_order') return;
