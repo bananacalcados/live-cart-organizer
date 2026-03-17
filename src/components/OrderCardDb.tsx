@@ -285,7 +285,14 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(`Pedido criado na Shopify! ${data?.shopifyOrderName || ""}`);
+
+      const createdOrderName = data?.shopifyOrderName || null;
+      applyShopifyVerification(true, createdOrderName);
+      toast.success(`Pedido criado na Shopify! ${createdOrderName || ""}`);
+
+      window.setTimeout(() => {
+        void refreshShopifyStatus();
+      }, 1500);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Erro ao criar pedido";
       toast.error(msg);
