@@ -338,6 +338,7 @@ export default function Marketing() {
     setTicketMax(f.ticketMax || "");
     setOrdersMin(f.ordersMin || "");
     setOrdersMax(f.ordersMax || "");
+    if (f.recencyFilter) setRecencyFilter(f.recencyFilter);
     if (f.topN) setTopN(f.topN);
     if (f.sortField) setSortField(f.sortField);
     if (f.sortDir) setSortDir(f.sortDir);
