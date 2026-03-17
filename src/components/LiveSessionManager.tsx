@@ -170,6 +170,9 @@ export function LiveSessionManager() {
   // Payment link dialog
   const [paymentLinkViewer, setPaymentLinkViewer] = useState<LiveViewer | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [duplicateReviewGroups, setDuplicateReviewGroups] = useState<DuplicateReviewGroup[]>([]);
+  const [loadingDuplicateReview, setLoadingDuplicateReview] = useState(false);
+  const [cancellingDuplicateOrderId, setCancellingDuplicateOrderId] = useState<string | null>(null);
 
   // WhatsApp send dialog (legacy one-shot)
   const [whatsappSendViewer, setWhatsappSendViewer] = useState<LiveViewer | null>(null);
