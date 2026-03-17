@@ -412,10 +412,18 @@ function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onTogg
                 <span className="text-xs text-muted-foreground font-mono">T:{order.tiny_order_number}</span>
               )}
               <Badge className={`text-[10px] ${statusColor}`}>{statusLabel}</Badge>
-              {order.tracking_code && (
-                <Badge variant="outline" className="text-[10px] gap-1 font-mono">
-                  🚚 {order.tracking_code}
-                </Badge>
+              {(order.tracking_code || order.freight_tracking_code) && (
+                <a
+                  href={`https://www.linkcorreios.com.br/?id=${order.tracking_code || order.freight_tracking_code}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex"
+                >
+                  <Badge variant="outline" className="text-[10px] gap-1 font-mono cursor-pointer hover:bg-primary/10 transition-colors">
+                    🚚 {order.tracking_code || order.freight_tracking_code}
+                  </Badge>
+                </a>
               )}
               {order.has_gift && <Gift className="h-3.5 w-3.5 text-pink-500" />}
               {order.is_from_live && <Radio className="h-3.5 w-3.5 text-red-500" />}
