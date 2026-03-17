@@ -1249,7 +1249,7 @@ export default function Marketing() {
                     <TableHead className="cursor-pointer text-right" onClick={() => toggleSort('total_spent')}>
                       <div className="flex items-center justify-end gap-1">Total Gasto<ArrowUpDown className="h-3 w-3" /></div>
                     </TableHead>
-                    <TableHead className="text-right">Última Compra</TableHead>
+                    <TableHead className="text-right cursor-pointer" onClick={() => toggleSort('last_purchase_at')}><div className="flex items-center justify-end gap-1">Última Compra<ArrowUpDown className="h-3 w-3" /></div></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
