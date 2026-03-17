@@ -408,22 +408,17 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     setSelectedConvNumberId(whatsappNumberId ?? null);
     setSelectedConvKey(`${phone}__${whatsappNumberId || 'none'}`);
     loadMessages(phone, whatsappNumberId);
-    const conv = conversations.find(c => c.conversationKey === `${phone}__${whatsappNumberId || 'none'}`);
-    // Auto-route: detect the instance of the conversation
+
     if (whatsappNumberId) {
-      const matchedNumber = storeNumbers.find(n => n.id === whatsappNumberId);
-      if (matchedNumber) {
-        setSendVia(matchedNumber.provider === 'meta' ? 'meta' : 'zapi');
-        setSelectedNumberId(matchedNumber.id);
-      } else {
-        setSendVia('zapi');
-        setSelectedNumberId(whatsappNumberId);
-      }
+      const matchedNumber = storeNumbers.find((number) => number.id === whatsappNumberId);
+      setSelectedSendNumberId(whatsappNumberId);
+      setSendVia(matchedNumber?.provider === 'meta' ? 'meta' : 'zapi');
     } else {
-      setSendVia('zapi');
-      const firstZapi = storeNumbers.find(n => n.provider === 'zapi');
-      if (firstZapi) setSelectedNumberId(firstZapi.id);
+      const firstZapi = storeNumbers.find((number) => number.provider === 'zapi') ?? storeNumbers[0] ?? null;
+      setSelectedSendNumberId(firstZapi?.id ?? null);
+      setSendVia(firstZapi?.provider === 'meta' ? 'meta' : 'zapi');
     }
+
     // Track seller assignment (opened_at)
     if (selectedSellerId) {
       await supabase.from("chat_seller_assignments").upsert({
