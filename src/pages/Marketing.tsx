@@ -704,6 +704,7 @@ export default function Marketing() {
   const customerMatchesPreset = useCallback((c: ZoppyCustomer, presetValue: any): boolean => {
     const f = presetValue?.filters || presetValue;
     if (f.rfmFilter && f.rfmFilter !== "all" && c.rfm_segment !== f.rfmFilter) return false;
+    if (f.recencyFilter && f.recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(f.recencyFilter)) return false;
     if (f.regionFilter && f.regionFilter !== "all" && c.region_type !== f.regionFilter) return false;
     if (f.dddFilter && f.dddFilter !== "all" && c.ddd !== f.dddFilter) return false;
     if (f.dateFrom && c.last_purchase_at && c.last_purchase_at < f.dateFrom) return false;
