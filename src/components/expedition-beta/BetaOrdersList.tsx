@@ -44,18 +44,24 @@ interface Props {
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  pending: 'Em Aberto',
   approved: 'Aprovado',
   grouped: 'Agrupado',
   awaiting_stock: 'Aguardando Estoque',
+  preparing: 'Preparando Envio',
   picking: 'Separando',
   picked: 'Separado',
+  invoiced: 'Faturado',
   packing: 'Bipando',
   packed: 'Embalado',
-  dispatched: 'Despachado',
+  ready_to_ship: 'Pronto p/ Envio',
+  dispatched: 'Enviado',
+  delivered: 'Entregue',
+  not_delivered: 'Não Entregue',
   cancelled: 'Cancelado',
 };
 
-type StatusFilter = 'todos' | 'nao_despachados' | 'atrasados' | 'approved' | 'grouped' | 'awaiting_stock' | 'picking' | 'picked' | 'packing' | 'packed' | 'dispatched' | 'cancelled';
+type StatusFilter = 'todos' | 'nao_despachados' | 'atrasados' | 'pending' | 'approved' | 'grouped' | 'awaiting_stock' | 'preparing' | 'picking' | 'picked' | 'invoiced' | 'packing' | 'packed' | 'ready_to_ship' | 'dispatched' | 'delivered' | 'not_delivered' | 'cancelled';
 
 const DELAY_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48h
 
@@ -63,14 +69,20 @@ const STATUS_TABS: { key: StatusFilter; label: string; color: string }[] = [
   { key: 'todos', label: 'Todos', color: 'text-foreground' },
   { key: 'nao_despachados', label: 'Não despachados', color: 'text-orange-500' },
   { key: 'atrasados', label: '⚠️ Atrasados', color: 'text-red-500' },
+  { key: 'pending', label: 'Em Aberto', color: 'text-gray-500' },
   { key: 'approved', label: 'Aprovado', color: 'text-green-500' },
   { key: 'grouped', label: 'Agrupado', color: 'text-blue-500' },
   { key: 'awaiting_stock', label: 'Aguardando', color: 'text-amber-500' },
+  { key: 'preparing', label: 'Prep. Envio', color: 'text-sky-500' },
   { key: 'picking', label: 'Separando', color: 'text-cyan-500' },
   { key: 'picked', label: 'Separado', color: 'text-indigo-500' },
+  { key: 'invoiced', label: 'Faturado', color: 'text-teal-500' },
   { key: 'packing', label: 'Bipando', color: 'text-purple-500' },
   { key: 'packed', label: 'Embalado', color: 'text-violet-500' },
-  { key: 'dispatched', label: 'Despachado', color: 'text-emerald-500' },
+  { key: 'ready_to_ship', label: 'Pronto Envio', color: 'text-lime-500' },
+  { key: 'dispatched', label: 'Enviado', color: 'text-emerald-500' },
+  { key: 'delivered', label: 'Entregue', color: 'text-green-600' },
+  { key: 'not_delivered', label: 'Não Entregue', color: 'text-red-600' },
   { key: 'cancelled', label: 'Cancelado', color: 'text-red-500' },
 ];
 
