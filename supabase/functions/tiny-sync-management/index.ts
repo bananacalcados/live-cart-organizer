@@ -50,11 +50,22 @@ serve(async (req) => {
     if (store_id) {
       const { data, error } = await supabase
         .from('pos_stores').select('id, name, tiny_token').eq('id', store_id).single();
-      if (error || !data?.tiny_token) throw new Error('Store not found');
-      stores = [data];
+
+      if (error || !data) throw new Error('Store not found');
+
+      if (!data.tiny_token) {
+        return new Response(JSON.stringify({
+          success: true,
+          results: [{ store_id: data.id, store_name: data.name, status: 'skipped_no_token' }],
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      stores = [data as { id: string; name: string; tiny_token: string }];
     } else {
       const { data } = await supabase.from('pos_stores').select('id, name, tiny_token').not('tiny_token', 'is', null).eq('is_active', true);
-      stores = data || [];
+      stores = (data || []) as { id: string; name: string; tiny_token: string }[];
     }
 
     // Build deposit-to-store mapping: maps Tiny "deposito" names to correct store IDs

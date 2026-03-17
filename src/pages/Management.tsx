@@ -73,6 +73,7 @@ interface StoreRow {
   name: string;
   revenue_target?: number;
   is_simulation?: boolean;
+  tiny_token?: string | null;
 }
 
 interface InventorySummaryRow {
