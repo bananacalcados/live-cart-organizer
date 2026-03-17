@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil, Bot } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES, getMissingFields } from "@/types/order";
@@ -57,82 +57,120 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [togglingAiPause, setTogglingAiPause] = useState(false);
   const { moveOrder: storeMove, updateOrder } = useDbOrderStore();
 
-  // Check registration + Shopify status directly from DB
-  useEffect(() => {
+  const persistShopifyVerification = useCallback((verified: boolean, orderName: string | null) => {
+    if (!order.event_id) return;
+
+    try {
+      const storageKey = `shopify-verify-${order.event_id}`;
+      const cached = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
+      const next = Array.isArray(cached)
+        ? cached.filter((entry: any) => entry?.orderId !== order.id)
+        : [];
+
+      next.push({
+        orderId: order.id,
+        hasShopify: verified,
+        shopifyOrderName: orderName || undefined,
+      });
+
+      sessionStorage.setItem(storageKey, JSON.stringify(next));
+    } catch (error) {
+      console.warn('Erro ao persistir verificação Shopify em cache:', error);
+    }
+  }, [order.event_id, order.id]);
+
+  const applyShopifyVerification = useCallback((verified: boolean, orderName: string | null) => {
+    setHasShopifyOrder(verified);
+    setShopifyOrderName(orderName);
+    persistShopifyVerification(verified, orderName);
+  }, [persistShopifyVerification]);
+
+  const refreshShopifyStatus = useCallback(async () => {
     if (!order.customer_id) return;
-    const checkRegistration = async () => {
-      const { data } = await supabase
-        .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
-        .maybeSingle();
-      setHasRegistration(!!data);
-      
-      // If registration has shopify_draft_order_id, it's matched
-      if (data?.shopify_draft_order_id) {
-        setHasShopifyOrder(true);
-        setShopifyOrderName(data.shopify_draft_order_name || null);
-        return;
-      }
-      
-      // For paid orders, also check expedition_orders by phone
-      if (order.is_paid || order.paid_externally) {
-        const phone = order.customer?.whatsapp?.replace(/\D/g, "") || "";
-        if (phone.length >= 8) {
-          const phoneSuffix = phone.slice(-8);
-          const { data: expeditions } = await supabase
-            .from("expedition_orders")
-            .select("shopify_order_name, customer_phone")
-            .or(`customer_phone.ilike.%${phoneSuffix}`)
-            .limit(20);
-          
-          if (expeditions && expeditions.length > 0) {
-            // Check if any expedition order has matching products (by variant ID)
-            const crmVariantIds = new Set<string>();
-            for (const p of order.products) {
-              if (p.shopifyId) {
-                const match = p.shopifyId.match(/ProductVariant\/(\d+)/);
-                if (match) crmVariantIds.add(match[1]);
-              }
+
+    const { data } = await supabase
+      .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
+      .maybeSingle();
+
+    setHasRegistration(!!data);
+
+    if (data?.shopify_draft_order_id) {
+      applyShopifyVerification(true, data.shopify_draft_order_name || null);
+      return;
+    }
+
+    if (order.is_paid || order.paid_externally) {
+      const phone = order.customer?.whatsapp?.replace(/\D/g, "") || "";
+
+      if (phone.length >= 8) {
+        const phoneSuffix = phone.slice(-8);
+        const { data: expeditions } = await supabase
+          .from("expedition_orders")
+          .select("shopify_order_name, customer_phone")
+          .or(`customer_phone.ilike.%${phoneSuffix}`)
+          .limit(20);
+
+        if (expeditions && expeditions.length > 0) {
+          const crmVariantIds = new Set<string>();
+          for (const p of order.products) {
+            if (p.shopifyId) {
+              const match = p.shopifyId.match(/ProductVariant\/(\d+)/);
+              if (match) crmVariantIds.add(match[1]);
             }
-            
-            if (crmVariantIds.size > 0) {
-              // Check expedition_order_items for matching variants
-              for (const exp of expeditions) {
-                // Simple phone match is enough since we also matched by phone suffix
-                setHasShopifyOrder(true);
-                setShopifyOrderName(exp.shopify_order_name || null);
-                return;
-              }
-            } else {
-              // No variant IDs to cross-check, phone match is sufficient
-              setHasShopifyOrder(true);
-              setShopifyOrderName(expeditions[0].shopify_order_name || null);
+          }
+
+          if (crmVariantIds.size > 0) {
+            applyShopifyVerification(true, expeditions[0].shopify_order_name || null);
+            return;
+          }
+
+          applyShopifyVerification(true, expeditions[0].shopify_order_name || null);
+          return;
+        }
+      }
+
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith('shopify-verify-')) {
+          try {
+            const results = JSON.parse(sessionStorage.getItem(key) || '[]');
+            const match = results.find((r: any) => r.orderId === order.id);
+            if (match) {
+              setHasShopifyOrder(!!match.hasShopify);
+              setShopifyOrderName(match.shopifyOrderName || null);
               return;
             }
-          }
+          } catch {}
         }
-        
-        // Also check sessionStorage for event-level verification results
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const key = sessionStorage.key(i);
-          if (key?.startsWith('shopify-verify-')) {
-            try {
-              const results = JSON.parse(sessionStorage.getItem(key) || '[]');
-              const match = results.find((r: any) => r.orderId === order.id);
-              if (match) {
-                setHasShopifyOrder(match.hasShopify);
-                setShopifyOrderName(match.shopifyOrderName || null);
-                return;
-              }
-            } catch {}
-          }
-        }
-        
-        // No match found
-        setHasShopifyOrder(false);
       }
+
+      applyShopifyVerification(false, null);
+      return;
+    }
+
+    setHasShopifyOrder(null);
+    setShopifyOrderName(null);
+  }, [applyShopifyVerification, order.customer?.whatsapp, order.customer_id, order.id, order.is_paid, order.paid_externally, order.products]);
+
+  useEffect(() => {
+    void refreshShopifyStatus();
+  }, [refreshShopifyStatus]);
+
+  useEffect(() => {
+    const handleShopifyOrderCreated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ orderId?: string; shopifyOrderName?: string | null }>;
+      if (customEvent.detail?.orderId !== order.id) return;
+      applyShopifyVerification(true, customEvent.detail?.shopifyOrderName || null);
+      window.setTimeout(() => {
+        void refreshShopifyStatus();
+      }, 1500);
     };
-    checkRegistration();
-  }, [order.customer_id, order.is_paid, order.paid_externally, order.customer?.whatsapp]);
+
+    window.addEventListener('shopify-order-created', handleShopifyOrderCreated as EventListener);
+    return () => {
+      window.removeEventListener('shopify-order-created', handleShopifyOrderCreated as EventListener);
+    };
+  }, [applyShopifyVerification, order.id, refreshShopifyStatus]);
 
   // Fetch live messages the customer sent (for awaiting_confirmation display)
   useEffect(() => {
@@ -263,7 +301,14 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(`Pedido criado na Shopify! ${data?.shopifyOrderName || ""}`);
+
+      const createdOrderName = data?.shopifyOrderName || null;
+      applyShopifyVerification(true, createdOrderName);
+      toast.success(`Pedido criado na Shopify! ${createdOrderName || ""}`);
+
+      window.setTimeout(() => {
+        void refreshShopifyStatus();
+      }, 1500);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Erro ao criar pedido";
       toast.error(msg);
@@ -418,10 +463,10 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">
-        {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && shopifyOrderName && (
+        {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && (
           <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
             <ShoppingBag className="h-3 w-3 mr-1" />
-            Shopify {shopifyOrderName}
+            {shopifyOrderName ? `Shopify ${shopifyOrderName}` : 'Na Shopify'}
           </Badge>
         )}
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === false && (

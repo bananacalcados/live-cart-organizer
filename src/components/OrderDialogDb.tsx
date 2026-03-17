@@ -347,7 +347,35 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(`Pedido criado na Shopify! ${data?.shopifyOrderName || ""}`, { duration: 6000 });
+
+      const createdOrderName = data?.shopifyOrderName || null;
+
+      try {
+        const storageKey = `shopify-verify-${eventId}`;
+        const cached = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
+        const next = Array.isArray(cached)
+          ? cached.filter((entry: any) => entry?.orderId !== editingOrder.id)
+          : [];
+
+        next.push({
+          orderId: editingOrder.id,
+          hasShopify: true,
+          shopifyOrderName: createdOrderName || undefined,
+        });
+
+        sessionStorage.setItem(storageKey, JSON.stringify(next));
+      } catch (storageError) {
+        console.warn('Erro ao atualizar cache da Shopify:', storageError);
+      }
+
+      window.dispatchEvent(new CustomEvent('shopify-order-created', {
+        detail: {
+          orderId: editingOrder.id,
+          shopifyOrderName: createdOrderName,
+        },
+      }));
+
+      toast.success(`Pedido criado na Shopify! ${createdOrderName || ""}`, { duration: 6000 });
     } catch (error) {
       console.error("Error creating Shopify order:", error);
       const msg = error instanceof Error ? error.message : "Erro ao criar pedido na Shopify";
@@ -355,7 +383,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
     } finally {
       setIsCreatingShopifyOrder(false);
     }
-  }, [editingOrder]);
+  }, [editingOrder, eventId]);
 
   const handleSubmit = async () => {
     if (!instagramHandle.trim()) {
