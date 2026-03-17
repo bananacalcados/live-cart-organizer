@@ -534,23 +534,31 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     if (!selectedPhone) return;
     setIsSending(true);
     try {
+      const numberIdToUse = selectedSendNumberId || storeNumbers.find((number) => number.provider === sendVia)?.id || storeNumbers[0]?.id || null;
+      const numberToUse = storeNumbers.find((number) => number.id === numberIdToUse) ?? null;
+      const effectiveSendVia = numberToUse?.provider === "meta" ? "meta" : "zapi";
       const msgText = caption || `[${mediaType}]`;
       let mediaMsgId: string | null = null;
-      if (sendVia === "meta" && selectedNumberId) {
+
+      if (effectiveSendVia === "meta") {
+        if (!numberIdToUse) throw new Error("Nenhum número Meta configurado para esta loja");
         const res = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: selectedPhone, message: msgText, whatsapp_number_id: selectedNumberId, media_url: mediaUrl, media_type: mediaType },
+          body: { phone: selectedPhone, message: msgText, whatsapp_number_id: numberIdToUse, media_url: mediaUrl, media_type: mediaType },
         });
+        if (res.error) throw res.error;
         mediaMsgId = res.data?.messageId || null;
       } else {
-        await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: selectedNumberId },
+        if (!numberIdToUse) throw new Error("Nenhuma instância Z-API configurada para esta loja");
+        const { error } = await supabase.functions.invoke("zapi-send-media", {
+          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: numberIdToUse },
         });
+        if (error) throw error;
       }
-      const numberIdForMedia = selectedNumberId || storeNumbers.find(n => n.provider === 'zapi')?.id || null;
+
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
         message_id: mediaMsgId,
-        whatsapp_number_id: numberIdForMedia,
+        whatsapp_number_id: numberIdToUse,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Mídia enviada!");
