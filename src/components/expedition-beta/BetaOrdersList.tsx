@@ -44,18 +44,24 @@ interface Props {
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  pending: 'Em Aberto',
   approved: 'Aprovado',
   grouped: 'Agrupado',
   awaiting_stock: 'Aguardando Estoque',
+  preparing: 'Preparando Envio',
   picking: 'Separando',
   picked: 'Separado',
+  invoiced: 'Faturado',
   packing: 'Bipando',
   packed: 'Embalado',
-  dispatched: 'Despachado',
+  ready_to_ship: 'Pronto p/ Envio',
+  dispatched: 'Enviado',
+  delivered: 'Entregue',
+  not_delivered: 'Não Entregue',
   cancelled: 'Cancelado',
 };
 
-type StatusFilter = 'todos' | 'nao_despachados' | 'atrasados' | 'approved' | 'grouped' | 'awaiting_stock' | 'picking' | 'picked' | 'packing' | 'packed' | 'dispatched' | 'cancelled';
+type StatusFilter = 'todos' | 'nao_despachados' | 'atrasados' | 'pending' | 'approved' | 'grouped' | 'awaiting_stock' | 'preparing' | 'picking' | 'picked' | 'invoiced' | 'packing' | 'packed' | 'ready_to_ship' | 'dispatched' | 'delivered' | 'not_delivered' | 'cancelled';
 
 const DELAY_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48h
 
@@ -63,14 +69,20 @@ const STATUS_TABS: { key: StatusFilter; label: string; color: string }[] = [
   { key: 'todos', label: 'Todos', color: 'text-foreground' },
   { key: 'nao_despachados', label: 'Não despachados', color: 'text-orange-500' },
   { key: 'atrasados', label: '⚠️ Atrasados', color: 'text-red-500' },
+  { key: 'pending', label: 'Em Aberto', color: 'text-gray-500' },
   { key: 'approved', label: 'Aprovado', color: 'text-green-500' },
   { key: 'grouped', label: 'Agrupado', color: 'text-blue-500' },
   { key: 'awaiting_stock', label: 'Aguardando', color: 'text-amber-500' },
+  { key: 'preparing', label: 'Prep. Envio', color: 'text-sky-500' },
   { key: 'picking', label: 'Separando', color: 'text-cyan-500' },
   { key: 'picked', label: 'Separado', color: 'text-indigo-500' },
+  { key: 'invoiced', label: 'Faturado', color: 'text-teal-500' },
   { key: 'packing', label: 'Bipando', color: 'text-purple-500' },
   { key: 'packed', label: 'Embalado', color: 'text-violet-500' },
-  { key: 'dispatched', label: 'Despachado', color: 'text-emerald-500' },
+  { key: 'ready_to_ship', label: 'Pronto Envio', color: 'text-lime-500' },
+  { key: 'dispatched', label: 'Enviado', color: 'text-emerald-500' },
+  { key: 'delivered', label: 'Entregue', color: 'text-green-600' },
+  { key: 'not_delivered', label: 'Não Entregue', color: 'text-red-600' },
   { key: 'cancelled', label: 'Cancelado', color: 'text-red-500' },
 ];
 
@@ -287,7 +299,7 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
   // Delayed orders detection
   const now = Date.now();
   const delayedOrders = filtered.filter(o => {
-    if (o.expedition_status === 'dispatched' || o.expedition_status === 'cancelled') return false;
+    if (['dispatched', 'delivered', 'cancelled'].includes(o.expedition_status)) return false;
     const created = new Date(o.shopify_created_at).getTime();
     return (now - created) > DELAY_THRESHOLD_MS;
   });
@@ -299,9 +311,9 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
   // Apply status filter
   const statusFiltered = filtered.filter(o => {
     if (statusFilter === 'todos') return true;
-    if (statusFilter === 'nao_despachados') return o.expedition_status !== 'dispatched' && o.expedition_status !== 'cancelled';
+    if (statusFilter === 'nao_despachados') return !['dispatched', 'delivered', 'cancelled'].includes(o.expedition_status);
     if (statusFilter === 'atrasados') {
-      if (o.expedition_status === 'dispatched' || o.expedition_status === 'cancelled') return false;
+      if (['dispatched', 'delivered', 'cancelled'].includes(o.expedition_status)) return false;
       return (now - new Date(o.shopify_created_at).getTime()) > DELAY_THRESHOLD_MS;
     }
     return o.expedition_status === statusFilter;
@@ -312,7 +324,7 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
   filtered.forEach(o => {
     const s = o.expedition_status || 'approved';
     statusCounts[s] = (statusCounts[s] || 0) + 1;
-    if (s !== 'dispatched' && s !== 'cancelled') statusCounts['nao_despachados']++;
+    if (!['dispatched', 'delivered', 'cancelled'].includes(s)) statusCounts['nao_despachados']++;
   });
 
   return (
@@ -390,14 +402,20 @@ function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onTogg
   const statusLabel = STATUS_LABELS[order.expedition_status] || order.expedition_status;
 
   const statusColor = {
+    pending: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
     approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     grouped: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
     awaiting_stock: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+    preparing: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400',
     picking: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
     picked: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
+    invoiced: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
     packing: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
     packed: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
+    ready_to_ship: 'bg-lime-100 text-lime-800 dark:bg-lime-900/30 dark:text-lime-400',
     dispatched: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+    delivered: 'bg-green-200 text-green-900 dark:bg-green-900/40 dark:text-green-300',
+    not_delivered: 'bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-300',
     cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   }[order.expedition_status] || '';
 

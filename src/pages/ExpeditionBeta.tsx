@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import {
   Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search,
   ScanBarcode, Users, ClipboardList, CalendarIcon, HeadphonesIcon,
-  MessageCircle, Clock, PackageCheck, RotateCcw
+  MessageCircle, Clock, PackageCheck, RotateCcw, FileText, Send, PackageX
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -200,10 +200,12 @@ export default function ExpeditionBeta() {
     total: orders.length,
     approved: approvedOrders.length,
     pending: pendingOrders.length,
-    awaiting: orders.filter(o => o.expedition_status === 'awaiting_stock').length,
-    picking: orders.filter(o => o.expedition_status === 'picking' || o.expedition_status === 'picked').length,
-    packed: orders.filter(o => o.expedition_status === 'packed' || o.expedition_status === 'packing').length,
+    preparing: orders.filter(o => o.expedition_status === 'preparing').length,
+    invoiced: orders.filter(o => o.expedition_status === 'invoiced').length,
+    ready: orders.filter(o => o.expedition_status === 'ready_to_ship').length,
     dispatched: orders.filter(o => o.expedition_status === 'dispatched').length,
+    delivered: orders.filter(o => o.expedition_status === 'delivered').length,
+    notDelivered: orders.filter(o => o.expedition_status === 'not_delivered').length,
   };
 
   return (
@@ -245,14 +247,16 @@ export default function ExpeditionBeta() {
       {/* Stats Bar */}
       <div className="border-b border-border/40 bg-card">
         <div className="container py-2 md:py-3 px-3 md:px-6">
-          <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5 md:gap-3">
+          <div className="grid grid-cols-4 md:grid-cols-10 gap-1.5 md:gap-3">
             <StatCard label="Total" value={stats.total} icon={<Package className="h-3 w-3 md:h-4 md:w-4" />} />
             <StatCard label="Aprovados" value={stats.approved} icon={<CheckCircle2 className="h-3 w-3 md:h-4 md:w-4 text-green-500" />} />
             <StatCard label="Pendentes" value={stats.pending} icon={<AlertTriangle className="h-3 w-3 md:h-4 md:w-4 text-orange-500" />} />
-            <StatCard label="Aguardando" value={stats.awaiting} icon={<Clock className="h-3 w-3 md:h-4 md:w-4 text-amber-500" />} highlight={stats.awaiting > 0} />
-            <StatCard label="Separando" value={stats.picking} icon={<ClipboardList className="h-3 w-3 md:h-4 md:w-4 text-blue-500" />} />
-            <StatCard label="Embalados" value={stats.packed} icon={<PackageCheck className="h-3 w-3 md:h-4 md:w-4 text-purple-500" />} />
-            <StatCard label="Despachados" value={stats.dispatched} icon={<Truck className="h-3 w-3 md:h-4 md:w-4 text-primary" />} />
+            <StatCard label="Prep. Envio" value={stats.preparing} icon={<ClipboardList className="h-3 w-3 md:h-4 md:w-4 text-sky-500" />} />
+            <StatCard label="Faturados" value={stats.invoiced} icon={<FileText className="h-3 w-3 md:h-4 md:w-4 text-teal-500" />} />
+            <StatCard label="Pronto Envio" value={stats.ready} icon={<PackageCheck className="h-3 w-3 md:h-4 md:w-4 text-lime-500" />} />
+            <StatCard label="Enviados" value={stats.dispatched} icon={<Truck className="h-3 w-3 md:h-4 md:w-4 text-primary" />} />
+            <StatCard label="Entregues" value={stats.delivered} icon={<Send className="h-3 w-3 md:h-4 md:w-4 text-green-600" />} />
+            <StatCard label="Não Entregue" value={stats.notDelivered} icon={<PackageX className="h-3 w-3 md:h-4 md:w-4 text-red-600" />} highlight={stats.notDelivered > 0} />
             <StatCard label="Suportes" value={openSupportCount} icon={<HeadphonesIcon className="h-3 w-3 md:h-4 md:w-4 text-destructive" />} highlight={openSupportCount > 0} />
           </div>
         </div>
