@@ -750,9 +750,6 @@ export default function Management() {
 
     const APPROVED_STATUSES = ['Faturado', 'Aprovado', 'Preparando envio', 'Pronto para envio', 'Enviado', 'Entregue', 'Não entregue'];
 
-    // Only fetch Tiny orders for online stores
-    const onlineStoreIds = ['2bd2c08d-321c-47ee-98a9-e27e936818ab', '04408292-fc70-4f04-822b-349cbd4f6b09'];
-
     const [tinyData, posData, storesRes, invRes, apRes, stockRes] = await Promise.all([
       fetchAllTinyOrders(startDate, endDate, APPROVED_STATUSES),
       fetchPosSales(startISO, endISO),
@@ -762,10 +759,10 @@ export default function Management() {
       supabase.from("pos_products").select("name, variant, sku, stock, price, cost_price, store_id").eq("is_active", true).gt("stock", 0),
     ]);
 
-    // Filter tiny orders to only online stores
-    const onlineTinyOrders = (tinyData as TinySyncedOrder[]).filter(o => onlineStoreIds.includes(o.store_id));
-
-    setTinyOrders(onlineTinyOrders);
+    // Keep every valid Tiny order for the selected period.
+    // Store attribution can vary by depósito (ex.: Site, Centro, Perola),
+    // so filtering by a fixed online store ID list undercounts online revenue.
+    setTinyOrders((tinyData as TinySyncedOrder[]) || []);
     setPosSales(posData.sales);
     setPosSaleItems(posData.items);
     setStores(storesRes.data || []);
