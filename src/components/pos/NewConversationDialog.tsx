@@ -16,7 +16,7 @@ import { toast } from "sonner";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConversationCreated: (phone: string) => void;
+  onConversationCreated: (phone: string, whatsappNumberId?: string | null) => void;
 }
 
 interface MetaTemplate {
