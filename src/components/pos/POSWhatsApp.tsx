@@ -496,22 +496,30 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     if (!selectedPhone) return;
     setIsSending(true);
     try {
+      const numberIdToUse = selectedSendNumberId || storeNumbers.find((number) => number.provider === sendVia)?.id || storeNumbers[0]?.id || null;
+      const numberToUse = storeNumbers.find((number) => number.id === numberIdToUse) ?? null;
+      const effectiveSendVia = numberToUse?.provider === "meta" ? "meta" : "zapi";
+
       let audioMsgId: string | null = null;
-      if (sendVia === "meta" && selectedNumberId) {
+      if (effectiveSendVia === "meta") {
+        if (!numberIdToUse) throw new Error("Nenhum número Meta configurado para esta loja");
         const res = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: selectedPhone, message: "[áudio]", whatsapp_number_id: selectedNumberId, media_url: audioUrl, media_type: "audio" },
+          body: { phone: selectedPhone, message: "[áudio]", whatsapp_number_id: numberIdToUse, media_url: audioUrl, media_type: "audio" },
         });
+        if (res.error) throw res.error;
         audioMsgId = res.data?.messageId || null;
       } else {
-        await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: selectedNumberId },
+        if (!numberIdToUse) throw new Error("Nenhuma instância Z-API configurada para esta loja");
+        const { error } = await supabase.functions.invoke("zapi-send-media", {
+          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: numberIdToUse },
         });
+        if (error) throw error;
       }
-      const numberIdForAudio = selectedNumberId || storeNumbers.find(n => n.provider === 'zapi')?.id || null;
+
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
         message_id: audioMsgId,
-        whatsapp_number_id: numberIdForAudio,
+        whatsapp_number_id: numberIdToUse,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Áudio enviado!");
