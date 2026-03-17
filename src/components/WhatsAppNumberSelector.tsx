@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Phone } from "lucide-react";
 import {
   Select,
@@ -13,9 +13,11 @@ interface WhatsAppNumberSelectorProps {
   className?: string;
   /** Filter numbers by provider (e.g. 'zapi' or 'meta'). Shows all if omitted. */
   filterProvider?: string;
+  value?: string | null;
+  onValueChange?: (id: string) => void;
 }
 
-export function WhatsAppNumberSelector({ className, filterProvider }: WhatsAppNumberSelectorProps) {
+export function WhatsAppNumberSelector({ className, filterProvider, value, onValueChange }: WhatsAppNumberSelectorProps) {
   const { numbers, selectedNumberId, isLoading, fetchNumbers, setSelectedNumberId } = useWhatsAppNumberStore();
 
   useEffect(() => {
@@ -29,14 +31,30 @@ export function WhatsAppNumberSelector({ className, filterProvider }: WhatsAppNu
     return numbers.filter(n => (n.provider || 'meta') === filterProvider);
   }, [numbers, filterProvider]);
 
+  const currentValue = value ?? selectedNumberId;
+
+  const handleValueChange = useCallback((id: string) => {
+    if (onValueChange) {
+      onValueChange(id);
+      return;
+    }
+    setSelectedNumberId(id);
+  }, [onValueChange, setSelectedNumberId]);
+
+  useEffect(() => {
+    if (filtered.length === 0) return;
+    if (currentValue && filtered.some(n => n.id === currentValue)) return;
+    handleValueChange(filtered[0].id);
+  }, [filtered, currentValue, handleValueChange]);
+
   if (isLoading || filtered.length <= 1) return null;
 
-  // If selectedNumberId is not in filtered list, auto-select first filtered
-  const currentInFiltered = filtered.some(n => n.id === selectedNumberId);
-  const effectiveId = currentInFiltered ? selectedNumberId : filtered[0]?.id || '';
+  const effectiveId = currentValue && filtered.some(n => n.id === currentValue)
+    ? currentValue
+    : filtered[0]?.id || '';
 
   return (
-    <Select value={effectiveId || ''} onValueChange={setSelectedNumberId}>
+    <Select value={effectiveId || ''} onValueChange={handleValueChange}>
       <SelectTrigger className={className}>
         <Phone className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
         <SelectValue placeholder="Selecionar número" />
