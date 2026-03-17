@@ -16,7 +16,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { phone, name, email, campaignTag, recoveryUrl, cartSummary, totalAmount } = await req.json();
+    const { phone, name, email, campaignTag, recoveryUrl, cartSummary, totalAmount, chosen_payment_method, pix_code, pix_expires_at } = await req.json();
 
     if (!phone) {
       return new Response(
