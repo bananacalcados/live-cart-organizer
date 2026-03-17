@@ -1240,7 +1240,7 @@ export default function Marketing() {
                     <TableHead className="cursor-pointer" onClick={() => toggleSort('rfm_total_score')}>
                       <div className="flex items-center gap-1">Segmento RFM<ArrowUpDown className="h-3 w-3" /></div>
                     </TableHead>
-                    <TableHead className="text-center">R</TableHead>
+                    <TableHead className="text-center cursor-pointer" onClick={() => toggleSort('rfm_recency_score')}><div className="flex items-center gap-1">R<ArrowUpDown className="h-3 w-3" /></div></TableHead>
                     <TableHead className="text-center">F</TableHead>
                     <TableHead className="text-center">M</TableHead>
                     <TableHead className="cursor-pointer text-right" onClick={() => toggleSort('total_orders')}>
