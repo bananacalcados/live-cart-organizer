@@ -958,8 +958,15 @@ export default function Management() {
     const periodIncludesToday = dateRange.end >= startOfDay(now);
     if (!periodIncludesToday) return;
 
-    const rangeKey = `${startOfDay(dateRange.start).toISOString()}::${startOfDay(dateRange.end).toISOString()}`;
-    if (autoSyncKeyRef.current === rangeKey) return;
+    const latestOrderDate = tinyOrders.reduce<Date | null>((latest, order) => {
+      if (!order.order_date) return latest;
+      const orderDate = new Date(`${order.order_date}T12:00:00`);
+      if (Number.isNaN(orderDate.getTime())) return latest;
+      return !latest || orderDate > latest ? orderDate : latest;
+    }, null);
+
+    const todayStart = startOfDay(now);
+    const hasCurrentMonthGap = period === "month" && (!latestOrderDate || latestOrderDate < todayStart);
 
     const latestSyncedAt = tinyOrders.reduce<Date | null>((latest, order) => {
       if (!order.synced_at) return latest;
@@ -969,7 +976,10 @@ export default function Management() {
     }, null);
 
     const syncIsStale = !latestSyncedAt || latestSyncedAt < startOfDay(now);
-    if (!syncIsStale) return;
+    if (!syncIsStale && !hasCurrentMonthGap) return;
+
+    const rangeKey = `${startOfDay(dateRange.start).toISOString()}::${startOfDay(dateRange.end).toISOString()}::${hasCurrentMonthGap ? 'gap' : 'stale'}`;
+    if (autoSyncKeyRef.current === rangeKey) return;
 
     autoSyncKeyRef.current = rangeKey;
     toast.info("Atualizando vendas online do Tiny para completar o período atual...");
