@@ -960,6 +960,17 @@ export default function Marketing() {
                   <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9 text-xs" title="Comprou antes de" />
                   <span className="absolute -top-2 left-2 text-[10px] bg-background px-1 text-muted-foreground">Comprou antes de</span>
                 </div>
+                <Select value={recencyFilter} onValueChange={setRecencyFilter}>
+                  <SelectTrigger className="h-9"><Clock className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Recência: Todos</SelectItem>
+                    <SelectItem value="5">⭐ R5 — Mais recentes</SelectItem>
+                    <SelectItem value="4">R4 — Recentes</SelectItem>
+                    <SelectItem value="3">R3 — Moderados</SelectItem>
+                    <SelectItem value="2">R2 — Distantes</SelectItem>
+                    <SelectItem value="1">💤 R1 — Mais antigos</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select value={topN} onValueChange={setTopN}>
                   <SelectTrigger className="h-9"><Crown className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
                   <SelectContent>
