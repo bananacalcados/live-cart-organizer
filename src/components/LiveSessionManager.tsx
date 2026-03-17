@@ -1267,6 +1267,80 @@ export function LiveSessionManager() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="duplicates" className="mt-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-sm flex items-center gap-2"><Ban className="w-4 h-4 text-destructive" /> Revisão manual de duplicados</CardTitle>
+                    <p className="text-xs text-muted-foreground">Só marca pedidos do mesmo cliente com itens, quantidades e preços idênticos.</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => adminSessionId && loadDuplicateReview(adminSessionId)} disabled={loadingDuplicateReview}>
+                    {loadingDuplicateReview ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Atualizar"}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Alert>
+                  <Ban className="h-4 w-4" />
+                  <AlertTitle>Revisão antes do cancelamento</AlertTitle>
+                  <AlertDescription>
+                    O primeiro pedido do grupo é mantido e só os demais podem ser cancelados manualmente.
+                  </AlertDescription>
+                </Alert>
+
+                {loadingDuplicateReview ? (
+                  <div className="flex items-center justify-center py-8 text-sm text-muted-foreground gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Carregando análise...
+                  </div>
+                ) : duplicateReviewGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">Nenhum duplicado forte encontrado nesta live.</p>
+                ) : (
+                  <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                    {duplicateReviewGroups.map((group) => (
+                      <div key={group.duplicateGroupKey} className="rounded-lg border p-3 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">{group.customerName}</Badge>
+                          {group.customerPhoneNormalized && <Badge variant="outline">{group.customerPhoneNormalized}</Badge>}
+                          {group.customerEmailNormalized && <Badge variant="outline">{group.customerEmailNormalized}</Badge>}
+                          {group.customerCpfNormalized && <Badge variant="outline">CPF {group.customerCpfNormalized}</Badge>}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{group.matchReason}</p>
+                        <div className="space-y-2">
+                          {group.orders.map((order) => (
+                            <div key={order.shopifyOrderId} className="rounded-md border p-3 space-y-2">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="space-y-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-medium">{order.shopifyOrderName}</span>
+                                    {order.isPrimary && <Badge variant="secondary">Principal</Badge>}
+                                    {order.cancelledAt && <Badge variant="destructive">Cancelado</Badge>}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString("pt-BR")}</p>
+                                  <p className="text-xs text-muted-foreground break-words">{formatDuplicateLineItems(order.lineItems)}</p>
+                                </div>
+                                {order.canCancel && (
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleCancelDuplicateOrder(group, order)}
+                                    disabled={cancellingDuplicateOrderId === order.shopifyOrderId}
+                                  >
+                                    {cancellingDuplicateOrderId === order.shopifyOrderId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Cancelar"}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="messages" className="mt-3">
             <Card>
               <CardHeader className="pb-2">
