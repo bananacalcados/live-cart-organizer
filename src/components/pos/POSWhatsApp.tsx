@@ -895,21 +895,29 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               </div>
             </div>
 
-             {/* Auto-routed instance indicator (locked) */}
             <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] bg-white dark:bg-[#202c33] text-xs flex-shrink-0">
-              {(() => {
-                const activeNum = storeNumbers.find(n => n.id === selectedNumberId);
-                return activeNum ? (
-                  <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium gap-1">
-                    🔒 {activeNum.label}
-                    <span className="opacity-70 ml-1">{activeNum.phone_display}</span>
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground">Nenhuma instância detectada</span>
-                );
-              })()}
+              {storeNumbers.length > 1 ? (
+                <WhatsAppNumberSelector
+                  className="h-7 min-w-[220px] text-xs"
+                  value={selectedSendNumberId}
+                  onValueChange={(id) => {
+                    setSelectedSendNumberId(id);
+                    const matchedNumber = storeNumbers.find((number) => number.id === id);
+                    if (matchedNumber) {
+                      setSendVia(matchedNumber.provider === 'meta' ? 'meta' : 'zapi');
+                    }
+                  }}
+                />
+              ) : selectedSendNumber ? (
+                <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium gap-1">
+                  {selectedSendNumber.label}
+                  <span className="opacity-70 ml-1">{selectedSendNumber.phone_display}</span>
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground">Nenhuma instância disponível</span>
+              )}
               <span className="text-muted-foreground ml-auto">
-                {sendVia === 'meta' ? 'Meta API' : 'Z-API'}
+                {selectedSendNumber?.provider === 'meta' ? 'Meta API' : 'Z-API'}
               </span>
             </div>
 
