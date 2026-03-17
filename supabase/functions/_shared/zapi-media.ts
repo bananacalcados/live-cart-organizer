@@ -1,4 +1,14 @@
-import { encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+}
 
 /**
  * Z-API aceita imagem por URL ou base64. Para preservar a mídia original e evitar
@@ -22,7 +32,7 @@ export async function prepareZApiImagePayload(mediaUrl: string): Promise<{
   }
 
   const bytes = new Uint8Array(await response.arrayBuffer());
-  const base64 = encodeBase64(bytes);
+  const base64 = uint8ToBase64(bytes);
 
   return {
     image: `data:${mimeType};base64,${base64}`,
