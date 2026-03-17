@@ -436,11 +436,15 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     setIsSending(true);
     setNewMessage("");
     try {
-      // Resolve the number ID to use - ensure we always have one for Z-API
-      const numberIdToUse = selectedNumberId || storeNumbers.find(n => n.provider === 'zapi')?.id || null;
-      
+      const numberIdToUse = selectedSendNumberId || storeNumbers.find((number) => number.provider === sendVia)?.id || storeNumbers[0]?.id || null;
+      const numberToUse = storeNumbers.find((number) => number.id === numberIdToUse) ?? null;
+      const effectiveSendVia = numberToUse?.provider === "meta" ? "meta" : "zapi";
+
       let metaMessageId: string | null = null;
-      if (sendVia === "meta" && numberIdToUse) {
+      if (effectiveSendVia === "meta") {
+        if (!numberIdToUse) {
+          throw new Error("Nenhum número Meta configurado para esta loja");
+        }
         const res = await supabase.functions.invoke("meta-whatsapp-send", {
           body: { phone: selectedPhone, message: messageText, whatsapp_number_id: numberIdToUse },
         });
@@ -465,14 +469,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message_id: metaMessageId,
       });
 
-      // Deactivate any active AI session for this phone so AI doesn't respond while operator is chatting
       await supabase
         .from("automation_ai_sessions")
         .update({ is_active: false })
         .eq("phone", selectedPhone)
         .eq("is_active", true);
 
-      // Track seller first reply
       if (selectedSellerId) {
         await supabase.from("chat_seller_assignments")
           .update({ first_reply_at: new Date().toISOString() } as any)
