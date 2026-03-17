@@ -885,7 +885,7 @@ export default function Management() {
     }, 1500);
 
     try {
-      const storesToSync = stores.map(s => s.id);
+      const storesToSync = stores.filter(s => Boolean(s.tiny_token)).map(s => s.id);
       for (const sid of storesToSync) {
         let currentBody: any = { stock_only: true, store_id: sid };
         let attempts = 0;
