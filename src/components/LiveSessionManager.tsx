@@ -59,6 +59,34 @@ interface ChatMsg {
   created_at: string;
 }
 
+interface DuplicateReviewOrder {
+  shopifyOrderId: string;
+  shopifyOrderName: string;
+  createdAt: string;
+  cancelledAt: string | null;
+  customerName: string;
+  customerPhoneNormalized: string | null;
+  customerEmailNormalized: string | null;
+  customerCpfNormalized: string | null;
+  lineSignature: string;
+  lineItems: Array<{ title: string; variantId: string | null; quantity: number; price: string }>;
+  source: string | null;
+  isPrimary: boolean;
+  canCancel: boolean;
+}
+
+interface DuplicateReviewGroup {
+  duplicateGroupKey: string;
+  matchReason: string;
+  customerName: string;
+  customerPhoneNormalized: string | null;
+  customerEmailNormalized: string | null;
+  customerCpfNormalized: string | null;
+  lineSignature: string;
+  primaryOrderId: string;
+  orders: DuplicateReviewOrder[];
+}
+
 // ---- TEST SIMULATION HELPERS ----
 const FAKE_NAMES = ["Ana Silva", "Bruno Costa", "Camila Santos", "Diego Oliveira", "Fernanda Lima", "Gabriel Rocha", "Helena Souza", "Igor Mendes"];
 const FAKE_MESSAGES = ["Amei! 😍", "Quanto custa?", "Tem na cor preta?", "Quero!", "Lindo demais!", "Qual tamanho?", "Entrega pra SP?", "Pix tem desconto?", "Quero 2!", "Esse é perfeito ❤️"];
@@ -71,6 +99,26 @@ function generateUsername(name: string, phone: string): string {
   const firstName = name.trim().split(/\s+/)[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const suffix = phone.slice(-4);
   return `@${firstName}${suffix}`;
+}
+
+function buildLiveShopifyDedupeKey(sessionId: string | null, phone: string, cartItems: any[]) {
+  const normalizedPhone = (phone || "").replace(/\D/g, "");
+  const itemSignature = (cartItems || [])
+    .map((item: any) => {
+      const variantId = (item.variantId || "").trim();
+      const title = (item.title || item.productTitle || "produto").trim().toLowerCase();
+      const quantity = Number(item.quantity || 1);
+      const price = Number(item.price || 0).toFixed(2);
+      return `${variantId || title}:${quantity}:${price}`;
+    })
+    .sort()
+    .join("|");
+
+  return [sessionId || "live", normalizedPhone || "sem-telefone", itemSignature || "sem-itens"].join("::");
+}
+
+function formatDuplicateLineItems(items: DuplicateReviewOrder["lineItems"]) {
+  return items.map((item) => `${item.quantity}x ${item.title}${item.variantId ? ` • ${item.variantId}` : ""} • R$ ${item.price}`).join(" · ");
 }
 
 export function LiveSessionManager() {
