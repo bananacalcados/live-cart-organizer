@@ -73,6 +73,7 @@ interface StoreRow {
   name: string;
   revenue_target?: number;
   is_simulation?: boolean;
+  tiny_token?: string | null;
 }
 
 interface InventorySummaryRow {
@@ -755,7 +756,7 @@ export default function Management() {
     const [tinyData, posData, storesRes, invRes, apRes, stockRes] = await Promise.all([
       fetchAllTinyOrders(startDate, endDate, APPROVED_STATUSES),
       fetchPosSales(startISO, endISO),
-      supabase.from("pos_stores").select("id, name, revenue_target, is_simulation").eq("is_active", true),
+      supabase.from("pos_stores").select("id, name, revenue_target, is_simulation, tiny_token").eq("is_active", true),
       supabase.rpc("get_inventory_summary"),
       supabase.from("tiny_accounts_payable").select("*").order("data_vencimento", { ascending: true }),
       supabase.from("pos_products").select("name, variant, sku, stock, price, cost_price, store_id").eq("is_active", true).gt("stock", 0),
@@ -795,8 +796,9 @@ export default function Management() {
     try {
       let totalSynced = 0;
 
-      // Sync each store separately to avoid timeout
-      const storesToSync = body.store_id ? [body.store_id] : stores.map(s => s.id);
+      const storesToSync = body.store_id
+        ? [body.store_id]
+        : stores.filter(s => Boolean(s.tiny_token)).map(s => s.id);
 
       for (const sid of storesToSync) {
         let currentBody = { ...body, store_id: sid };
@@ -883,7 +885,7 @@ export default function Management() {
     }, 1500);
 
     try {
-      const storesToSync = stores.map(s => s.id);
+      const storesToSync = stores.filter(s => Boolean(s.tiny_token)).map(s => s.id);
       for (const sid of storesToSync) {
         let currentBody: any = { stock_only: true, store_id: sid };
         let attempts = 0;
@@ -956,8 +958,15 @@ export default function Management() {
     const periodIncludesToday = dateRange.end >= startOfDay(now);
     if (!periodIncludesToday) return;
 
-    const rangeKey = `${startOfDay(dateRange.start).toISOString()}::${startOfDay(dateRange.end).toISOString()}`;
-    if (autoSyncKeyRef.current === rangeKey) return;
+    const latestOrderDate = tinyOrders.reduce<Date | null>((latest, order) => {
+      if (!order.order_date) return latest;
+      const orderDate = new Date(`${order.order_date}T12:00:00`);
+      if (Number.isNaN(orderDate.getTime())) return latest;
+      return !latest || orderDate > latest ? orderDate : latest;
+    }, null);
+
+    const todayStart = startOfDay(now);
+    const hasCurrentMonthGap = period === "month" && (!latestOrderDate || latestOrderDate < todayStart);
 
     const latestSyncedAt = tinyOrders.reduce<Date | null>((latest, order) => {
       if (!order.synced_at) return latest;
@@ -967,7 +976,10 @@ export default function Management() {
     }, null);
 
     const syncIsStale = !latestSyncedAt || latestSyncedAt < startOfDay(now);
-    if (!syncIsStale) return;
+    if (!syncIsStale && !hasCurrentMonthGap) return;
+
+    const rangeKey = `${startOfDay(dateRange.start).toISOString()}::${startOfDay(dateRange.end).toISOString()}::${hasCurrentMonthGap ? 'gap' : 'stale'}`;
+    if (autoSyncKeyRef.current === rangeKey) return;
 
     autoSyncKeyRef.current = rangeKey;
     toast.info("Atualizando vendas online do Tiny para completar o período atual...");
