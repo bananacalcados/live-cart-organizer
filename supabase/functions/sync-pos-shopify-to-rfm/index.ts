@@ -47,6 +47,7 @@ serve(async (req) => {
       if (sales && sales.length > 0) {
         // Get unique customer IDs
         const customerIds = [...new Set(sales.filter(s => s.customer_id).map(s => s.customer_id))];
+        console.log(`POS: ${customerIds.length} unique customers from sales`);
 
         // Fetch customer details
         const { data: customers } = await supabase
