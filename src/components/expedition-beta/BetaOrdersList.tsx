@@ -299,7 +299,7 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
   // Delayed orders detection
   const now = Date.now();
   const delayedOrders = filtered.filter(o => {
-    if (o.expedition_status === 'dispatched' || o.expedition_status === 'cancelled') return false;
+    if (['dispatched', 'delivered', 'cancelled'].includes(o.expedition_status)) return false;
     const created = new Date(o.shopify_created_at).getTime();
     return (now - created) > DELAY_THRESHOLD_MS;
   });
