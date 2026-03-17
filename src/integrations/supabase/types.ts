@@ -820,9 +820,15 @@ export type Database = {
           cart_total: number | null
           catalog_page_id: string
           checkout_sale_id: string | null
+          chosen_payment_method: string | null
           created_at: string
           id: string
           instagram_handle: string
+          pix_code: string | null
+          pix_expires_at: string | null
+          recovery_disparo: number | null
+          recovery_session_id: string | null
+          recovery_ultimo_disparo_at: string | null
           status: string
           updated_at: string
           whatsapp: string
@@ -832,9 +838,15 @@ export type Database = {
           cart_total?: number | null
           catalog_page_id: string
           checkout_sale_id?: string | null
+          chosen_payment_method?: string | null
           created_at?: string
           id?: string
           instagram_handle: string
+          pix_code?: string | null
+          pix_expires_at?: string | null
+          recovery_disparo?: number | null
+          recovery_session_id?: string | null
+          recovery_ultimo_disparo_at?: string | null
           status?: string
           updated_at?: string
           whatsapp: string
@@ -844,9 +856,15 @@ export type Database = {
           cart_total?: number | null
           catalog_page_id?: string
           checkout_sale_id?: string | null
+          chosen_payment_method?: string | null
           created_at?: string
           id?: string
           instagram_handle?: string
+          pix_code?: string | null
+          pix_expires_at?: string | null
+          recovery_disparo?: number | null
+          recovery_session_id?: string | null
+          recovery_ultimo_disparo_at?: string | null
           status?: string
           updated_at?: string
           whatsapp?: string
@@ -4376,6 +4394,9 @@ export type Database = {
           metadata: Json | null
           name: string | null
           phone: string | null
+          recovery_disparo: number | null
+          recovery_session_id: string | null
+          recovery_ultimo_disparo_at: string | null
           source: string | null
         }
         Insert: {
@@ -4389,6 +4410,9 @@ export type Database = {
           metadata?: Json | null
           name?: string | null
           phone?: string | null
+          recovery_disparo?: number | null
+          recovery_session_id?: string | null
+          recovery_ultimo_disparo_at?: string | null
           source?: string | null
         }
         Update: {
@@ -4402,6 +4426,9 @@ export type Database = {
           metadata?: Json | null
           name?: string | null
           phone?: string | null
+          recovery_disparo?: number | null
+          recovery_session_id?: string | null
+          recovery_ultimo_disparo_at?: string | null
           source?: string | null
         }
         Relationships: []
@@ -8592,6 +8619,25 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_leads_for_recovery: {
+        Args: never
+        Returns: {
+          cart_items: Json
+          cart_total: number
+          chosen_payment_method: string
+          created_at: string
+          id: string
+          name: string
+          phone: string
+          pix_code: string
+          pix_expires_at: string
+          recovery_disparo: number
+          recovery_session_id: string
+          recovery_ultimo_disparo_at: string
+          source_table: string
+          status: string
+        }[]
+      }
       get_orders_by_customer: {
         Args: { p_customer_id: string }
         Returns: {
@@ -8695,7 +8741,25 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sync_lead_pix_data: {
+        Args: {
+          p_chosen_payment_method: string
+          p_pix_code: string
+          p_pix_expires_at: string
+          p_whatsapp: string
+        }
+        Returns: undefined
+      }
       unaccent: { Args: { "": string }; Returns: string }
+      update_lead_recovery: {
+        Args: {
+          p_disparo: number
+          p_lead_id: string
+          p_session_id: string
+          p_source_table: string
+        }
+        Returns: undefined
+      }
       upsert_landing_customer: {
         Args: { p_instagram: string; p_phone: string; p_tag: string }
         Returns: undefined
