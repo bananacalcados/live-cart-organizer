@@ -402,14 +402,20 @@ function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onTogg
   const statusLabel = STATUS_LABELS[order.expedition_status] || order.expedition_status;
 
   const statusColor = {
+    pending: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
     approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     grouped: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
     awaiting_stock: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+    preparing: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400',
     picking: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
     picked: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
+    invoiced: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
     packing: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
     packed: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
+    ready_to_ship: 'bg-lime-100 text-lime-800 dark:bg-lime-900/30 dark:text-lime-400',
     dispatched: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+    delivered: 'bg-green-200 text-green-900 dark:bg-green-900/40 dark:text-green-300',
+    not_delivered: 'bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-300',
     cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   }[order.expedition_status] || '';
 
