@@ -26,12 +26,23 @@ serve(async (req) => {
     // ── 1. Sync POS completed sales ──
     if (mode === 'pos' || mode === 'all') {
       // Get all completed POS sales with customer data
-      const { data: sales, error: salesErr } = await supabase
-        .from('pos_sales')
-        .select('id, customer_id, total, created_at, status')
-        .in('status', ['completed', 'paid']);
-
-      if (salesErr) throw salesErr;
+      let allSales: any[] = [];
+      let salesFrom = 0;
+      const salesBatch = 1000;
+      while (true) {
+        const { data, error: salesErr } = await supabase
+          .from('pos_sales')
+          .select('id, customer_id, total, created_at, status')
+          .in('status', ['completed', 'paid'])
+          .range(salesFrom, salesFrom + salesBatch - 1);
+        if (salesErr) throw salesErr;
+        if (!data || data.length === 0) break;
+        allSales = allSales.concat(data);
+        if (data.length < salesBatch) break;
+        salesFrom += salesBatch;
+      }
+      const sales = allSales;
+      console.log(`POS: fetched ${sales.length} sales`);
 
       if (sales && sales.length > 0) {
         // Get unique customer IDs
