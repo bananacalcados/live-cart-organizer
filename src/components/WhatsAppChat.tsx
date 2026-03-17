@@ -133,7 +133,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     setTogglingAiPause(true);
     try {
       const newPaused = !aiPaused;
-      const customerPhone = order.customer || '';
+      const customerPhone = order.whatsapp || '';
       
       // Call external API
       try {
