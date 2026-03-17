@@ -311,9 +311,9 @@ export function BetaOrdersList({ orders, searchTerm, showGrouping, onRefresh }: 
   // Apply status filter
   const statusFiltered = filtered.filter(o => {
     if (statusFilter === 'todos') return true;
-    if (statusFilter === 'nao_despachados') return o.expedition_status !== 'dispatched' && o.expedition_status !== 'cancelled';
+    if (statusFilter === 'nao_despachados') return !['dispatched', 'delivered', 'cancelled'].includes(o.expedition_status);
     if (statusFilter === 'atrasados') {
-      if (o.expedition_status === 'dispatched' || o.expedition_status === 'cancelled') return false;
+      if (['dispatched', 'delivered', 'cancelled'].includes(o.expedition_status)) return false;
       return (now - new Date(o.shopify_created_at).getTime()) > DELAY_THRESHOLD_MS;
     }
     return o.expedition_status === statusFilter;
