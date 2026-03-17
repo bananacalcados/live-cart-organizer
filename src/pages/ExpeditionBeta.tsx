@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import {
   Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search,
   ScanBarcode, Users, ClipboardList, CalendarIcon, HeadphonesIcon,
-  MessageCircle, Clock, PackageCheck, RotateCcw
+  MessageCircle, Clock, PackageCheck, RotateCcw, FileText, Send, PackageX
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { ThemeToggle } from '@/components/ThemeToggle';
