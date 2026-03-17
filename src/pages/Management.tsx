@@ -633,6 +633,7 @@ export default function Management() {
   const [syncingAP, setSyncingAP] = useState(false);
   const [stockItems, setStockItems] = useState<any[]>([]);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoSyncKeyRef = useRef<string | null>(null);
 
   const dateRange = useMemo(() => {
     const now = new Date();
