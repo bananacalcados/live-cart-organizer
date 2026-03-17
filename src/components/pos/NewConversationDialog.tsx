@@ -246,7 +246,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
       );
 
       toast.success("Mensagem enviada!");
-      onConversationCreated(cleanPhone);
+      onConversationCreated(cleanPhone, selectedNumberId || null);
       onOpenChange(false);
       resetForm();
     } catch (error) {
