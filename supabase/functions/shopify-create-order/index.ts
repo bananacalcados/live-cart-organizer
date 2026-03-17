@@ -6,6 +6,73 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+type ShopifyCustomerSearchResult = {
+  customers?: Array<{ id?: number | string | null }>;
+};
+
+function formatPhone(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  const full = digits.startsWith("55") ? digits : `55${digits}`;
+  if (full.length < 12 || full.length > 13) return null;
+  return `+${full}`;
+}
+
+async function createShopifyOrderRequest(
+  shopifyDomain: string,
+  shopifyToken: string,
+  payload: Record<string, unknown>,
+) {
+  const response = await fetch(`https://${shopifyDomain}/admin/api/2025-01/orders.json`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": shopifyToken,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseText = await response.text();
+  const responseJson = responseText ? JSON.parse(responseText) : null;
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    bodyText: responseText,
+    bodyJson: responseJson,
+  };
+}
+
+async function findExistingCustomerIdByField(
+  shopifyDomain: string,
+  shopifyToken: string,
+  field: "phone" | "email",
+  value: string | null,
+): Promise<number | null> {
+  if (!value) return null;
+
+  const query = `${field}:${value}`;
+  const response = await fetch(
+    `https://${shopifyDomain}/admin/api/2025-01/customers/search.json?query=${encodeURIComponent(query)}`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": shopifyToken,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    console.warn(`Customer search failed for ${field}:`, await response.text());
+    return null;
+  }
+
+  const result = await response.json() as ShopifyCustomerSearchResult;
+  const customerId = result.customers?.[0]?.id;
+  return customerId ? Number(customerId) : null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -26,7 +93,6 @@ serve(async (req) => {
     const { orderId } = await req.json();
     if (!orderId) throw new Error("orderId is required");
 
-    // Fetch order + customer
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("*, customer:customers(*)")
@@ -35,7 +101,6 @@ serve(async (req) => {
 
     if (orderError || !order) throw new Error("Order not found");
 
-    // Try to find customer registration for richer data (address, CPF, email, full name)
     const { data: registration } = await supabase
       .from("customer_registrations")
       .select("*")
@@ -53,7 +118,6 @@ serve(async (req) => {
       sku?: string;
     }>;
 
-    // Build line items
     const lineItems = products.map((p) => {
       const variantIdMatch = p.shopifyId?.match(/gid:\/\/shopify\/ProductVariant\/(\d+)/);
       if (variantIdMatch) {
@@ -62,7 +126,6 @@ serve(async (req) => {
       return { title: p.title, quantity: p.quantity, price: p.price.toFixed(2) };
     });
 
-    // Calculate discount
     let discountAmount = 0;
     const subtotal = products.reduce((sum, p) => sum + p.price * p.quantity, 0);
     if (order.discount_type && order.discount_value) {
@@ -71,36 +134,22 @@ serve(async (req) => {
         : order.discount_value;
     }
 
-    // Format phone to +55... (must be 11 digits local for Shopify to accept)
-    function formatPhone(raw: string | null | undefined): string | null {
-      if (!raw) return null;
-      const digits = raw.replace(/\D/g, "");
-      if (digits.length < 10) return null;
-      const full = digits.startsWith("55") ? digits : `55${digits}`;
-      // Shopify requires valid E.164 - Brazilian mobile must be 13 digits total (+55 + 2-digit DDD + 9-digit number)
-      if (full.length < 12 || full.length > 13) return null;
-      return `+${full}`;
-    }
-
-    // Build customer & address from registration or CRM customer
     const customer = order.customer;
     const phone = formatPhone(registration?.whatsapp || customer?.whatsapp);
+    const email = registration?.email?.trim() || null;
 
-    // Determine name
     const fullName = (registration?.full_name || customer?.instagram_handle || "Cliente").trim();
     const nameParts = fullName.split(" ");
     const firstName = nameParts[0];
     const lastName = nameParts.slice(1).join(" ").trim() || "-";
 
-    // Build Shopify customer object
     const shopifyCustomer: Record<string, unknown> = {
       first_name: firstName,
       last_name: lastName,
     };
-    if (registration?.email) shopifyCustomer.email = registration.email;
+    if (email) shopifyCustomer.email = email;
     if (phone) shopifyCustomer.phone = phone;
 
-    // Build shipping/billing address if registration exists
     let shippingAddress: Record<string, unknown> | null = null;
     if (registration) {
       shippingAddress = {
@@ -116,51 +165,66 @@ serve(async (req) => {
       };
     }
 
-    // Build note_attributes with CPF so Tiny ERP can import it
     const noteAttributes: Array<{ name: string; value: string }> = [];
     if (registration?.cpf) {
       noteAttributes.push({ name: "cpf", value: registration.cpf });
     }
 
-    const shopifyOrder: Record<string, unknown> = {
+    const buildShopifyOrderPayload = (customerPayload: Record<string, unknown>) => ({
       order: {
         line_items: lineItems,
         financial_status: "paid",
         note: `Pedido criado manualmente via CRM - Order #${orderId.substring(0, 8)}${registration?.cpf ? ` | CPF: ${registration.cpf}` : ""}`,
         tags: "crm,manual-sync",
-        customer: shopifyCustomer,
+        customer: customerPayload,
         ...(noteAttributes.length > 0 ? { note_attributes: noteAttributes } : {}),
-        ...(registration?.email ? { email: registration.email } : {}),
+        ...(email ? { email } : {}),
         ...(phone ? { phone } : {}),
         ...(shippingAddress ? { shipping_address: shippingAddress, billing_address: shippingAddress } : {}),
         ...(discountAmount > 0
           ? { discount_codes: [{ code: "CRM-DISCOUNT", amount: discountAmount.toFixed(2), type: "fixed_amount" }] }
           : {}),
       },
-    };
+    });
 
     console.log("Creating Shopify order for:", orderId, "with customer:", JSON.stringify(shopifyCustomer));
 
-    const response = await fetch(`https://${shopifyDomain}/admin/api/2025-01/orders.json`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": shopifyToken },
-      body: JSON.stringify(shopifyOrder),
-    });
+    let result = await createShopifyOrderRequest(
+      shopifyDomain,
+      shopifyToken,
+      buildShopifyOrderPayload(shopifyCustomer),
+    );
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error("Shopify error:", errorBody);
-      throw new Error(`Shopify API error ${response.status}: ${errorBody}`);
+    if (!result.ok && result.status === 422 && result.bodyText.includes("customer.phone_number")) {
+      console.warn("Phone already belongs to an existing Shopify customer, retrying with existing customer id");
+
+      const existingCustomerId =
+        await findExistingCustomerIdByField(shopifyDomain, shopifyToken, "phone", phone) ||
+        await findExistingCustomerIdByField(shopifyDomain, shopifyToken, "email", email);
+
+      const fallbackCustomerPayload = existingCustomerId
+        ? { id: existingCustomerId }
+        : Object.fromEntries(Object.entries(shopifyCustomer).filter(([key]) => key !== "phone"));
+
+      result = await createShopifyOrderRequest(
+        shopifyDomain,
+        shopifyToken,
+        buildShopifyOrderPayload(fallbackCustomerPayload),
+      );
     }
 
-    const result = await response.json();
-    console.log("Shopify order created:", result.order?.id, result.order?.name);
+    if (!result.ok) {
+      console.error("Shopify error:", result.bodyText);
+      throw new Error(`Shopify API error ${result.status}: ${result.bodyText}`);
+    }
+
+    console.log("Shopify order created:", result.bodyJson?.order?.id, result.bodyJson?.order?.name);
 
     return new Response(
       JSON.stringify({
         success: true,
-        shopifyOrderId: result.order?.id,
-        shopifyOrderName: result.order?.name,
+        shopifyOrderId: result.bodyJson?.order?.id,
+        shopifyOrderName: result.bodyJson?.order?.name,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
