@@ -49,13 +49,19 @@ serve(async (req) => {
         const customerIds = [...new Set(sales.filter(s => s.customer_id).map(s => s.customer_id))];
         console.log(`POS: ${customerIds.length} unique customers from sales`);
 
-        // Fetch customer details
-        const { data: customers } = await supabase
-          .from('pos_customers')
-          .select('id, name, email, whatsapp, city, state, gender')
-          .in('id', customerIds);
+        // Fetch customer details in batches (avoid URL length limit with .in())
+        let allCustomers: any[] = [];
+        for (let ci = 0; ci < customerIds.length; ci += 50) {
+          const idChunk = customerIds.slice(ci, ci + 50);
+          const { data: custChunk } = await supabase
+            .from('pos_customers')
+            .select('id, name, email, whatsapp, city, state, gender')
+            .in('id', idChunk);
+          if (custChunk) allCustomers = allCustomers.concat(custChunk);
+        }
+        console.log(`POS: fetched ${allCustomers.length} customer records`);
 
-        const customerMap = new Map((customers || []).map(c => [c.id, c]));
+        const customerMap = new Map(allCustomers.map(c => [c.id, c]));
 
         // Aggregate sales per customer
         const customerSales = new Map<string, { total: number; count: number; first: string; last: string }>();
