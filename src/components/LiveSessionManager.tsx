@@ -1215,6 +1215,7 @@ export function LiveSessionManager() {
                           const cartItems = Array.isArray(v.cart_items) ? v.cart_items : [];
                           if (cartItems.length === 0) { toast.error("Carrinho vazio"); return; }
                           try {
+                            const dedupeKey = buildLiveShopifyDedupeKey(adminSessionId, v.phone, cartItems);
                             toast.loading("Criando pedido na Shopify...", { id: "force-shopify" });
                             const { data, error } = await supabase.functions.invoke("shopify-create-live-order", {
                               body: {
@@ -1225,10 +1226,21 @@ export function LiveSessionManager() {
                                   quantity: item.quantity || 1,
                                 })),
                                 customer: { name: v.name, phone: v.phone },
+                                sessionId: adminSessionId,
+                                liveViewerId: v.id,
+                                source: "live-admin-manual",
+                                dedupeKey,
                               },
                             });
                             if (error) throw error;
-                            toast.success(`Pedido Shopify criado: ${data?.shopifyOrderName || "OK"}`, { id: "force-shopify" });
+                            if (data?.processing) {
+                              toast.message("Esse pedido já está em processamento.", { id: "force-shopify" });
+                            } else if (data?.deduped) {
+                              toast.success(`Duplicado evitado: ${data?.shopifyOrderName || "pedido existente"}`, { id: "force-shopify" });
+                            } else {
+                              toast.success(`Pedido Shopify criado: ${data?.shopifyOrderName || "OK"}`, { id: "force-shopify" });
+                            }
+                            if (adminSessionId) await loadDuplicateReview(adminSessionId);
                           } catch (err: any) {
                             console.error(err);
                             toast.error("Erro ao criar pedido Shopify", { id: "force-shopify" });
