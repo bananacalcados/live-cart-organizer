@@ -65,6 +65,7 @@ interface TinySyncedOrder {
   shipping: number;
   total: number;
   items: any;
+  synced_at?: string;
 }
 
 interface StoreRow {
