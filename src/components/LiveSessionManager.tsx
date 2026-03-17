@@ -289,6 +289,7 @@ export function LiveSessionManager() {
     setOverlayConfig((s as any).overlay_config || { banner_text: "", coupon_code: "", countdown_end: "", promo_text: "", show_banner: false, show_coupon: false, show_countdown: false, show_promo: false });
     loadProducts();
     loadAdminData(s.id);
+    loadDuplicateReview(s.id);
   };
 
   const loadAdminData = async (sessionId: string) => {
@@ -298,6 +299,55 @@ export function LiveSessionManager() {
     ]);
     setViewers((viewersRes.data as any[]) || []);
     setChatMessages((chatRes.data as any[]) || []);
+  };
+
+  const loadDuplicateReview = async (sessionId: string) => {
+    setLoadingDuplicateReview(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-live-duplicate-review", {
+        body: { sessionId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setDuplicateReviewGroups((data?.groups as DuplicateReviewGroup[]) || []);
+    } catch (error: any) {
+      console.error("Error loading duplicate review:", error);
+      toast.error(error?.message || "Erro ao carregar revisão de duplicados");
+      setDuplicateReviewGroups([]);
+    } finally {
+      setLoadingDuplicateReview(false);
+    }
+  };
+
+  const handleCancelDuplicateOrder = async (group: DuplicateReviewGroup, order: DuplicateReviewOrder) => {
+    if (!adminSessionId) return;
+    setCancellingDuplicateOrderId(order.shopifyOrderId);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-cancel-live-order", {
+        body: {
+          sessionId: adminSessionId,
+          shopifyOrderId: order.shopifyOrderId,
+          shopifyOrderName: order.shopifyOrderName,
+          duplicateGroupKey: group.duplicateGroupKey,
+          customerName: order.customerName,
+          customerPhoneNormalized: order.customerPhoneNormalized,
+          customerEmailNormalized: order.customerEmailNormalized,
+          customerCpfNormalized: order.customerCpfNormalized,
+          lineSignature: order.lineSignature,
+          lineItems: order.lineItems,
+          resolutionNotes: "Cancelado manualmente após revisão de duplicidade na live.",
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Pedido ${order.shopifyOrderName} cancelado com sucesso.`);
+      await loadDuplicateReview(adminSessionId);
+    } catch (error: any) {
+      console.error("Error cancelling duplicate Shopify order:", error);
+      toast.error(error?.message || "Erro ao cancelar pedido duplicado");
+    } finally {
+      setCancellingDuplicateOrderId(null);
+    }
   };
 
   // ---- WHATSAPP SEND (legacy one-shot for quick message) ----
