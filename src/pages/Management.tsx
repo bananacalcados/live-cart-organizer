@@ -945,6 +945,39 @@ export default function Management() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  useEffect(() => {
+    autoSyncKeyRef.current = null;
+  }, [period, customFrom, customTo]);
+
+  useEffect(() => {
+    if (loading || syncing || stores.length === 0) return;
+
+    const now = new Date();
+    const periodIncludesToday = dateRange.end >= startOfDay(now);
+    if (!periodIncludesToday) return;
+
+    const rangeKey = `${startOfDay(dateRange.start).toISOString()}::${startOfDay(dateRange.end).toISOString()}`;
+    if (autoSyncKeyRef.current === rangeKey) return;
+
+    const latestSyncedAt = tinyOrders.reduce<Date | null>((latest, order) => {
+      if (!order.synced_at) return latest;
+      const syncedAt = new Date(order.synced_at);
+      if (Number.isNaN(syncedAt.getTime())) return latest;
+      return !latest || syncedAt > latest ? syncedAt : latest;
+    }, null);
+
+    const syncIsStale = !latestSyncedAt || latestSyncedAt < startOfDay(now);
+    if (!syncIsStale) return;
+
+    autoSyncKeyRef.current = rangeKey;
+    toast.info("Atualizando vendas online do Tiny para completar o período atual...");
+    runSyncWithResume({
+      date_from: format(dateRange.start, 'dd/MM/yyyy'),
+      date_to: format(dateRange.end, 'dd/MM/yyyy'),
+      sync_stock: false,
+    });
+  }, [loading, syncing, stores, tinyOrders, dateRange, period, customFrom, customTo]);
+
   // Auto-refresh every minute
   useEffect(() => {
     autoRefreshRef.current = setInterval(() => { fetchData(); }, AUTO_REFRESH_MS);
