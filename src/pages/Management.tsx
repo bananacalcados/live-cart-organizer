@@ -796,8 +796,9 @@ export default function Management() {
     try {
       let totalSynced = 0;
 
-      // Sync each store separately to avoid timeout
-      const storesToSync = body.store_id ? [body.store_id] : stores.map(s => s.id);
+      const storesToSync = body.store_id
+        ? [body.store_id]
+        : stores.filter(s => Boolean(s.tiny_token)).map(s => s.id);
 
       for (const sid of storesToSync) {
         let currentBody = { ...body, store_id: sid };
