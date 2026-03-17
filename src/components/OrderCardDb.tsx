@@ -405,6 +405,27 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               setTogglingAiPause(true);
               try {
                 const newPaused = !order.ai_paused;
+                const customerPhone = order.customer?.whatsapp || '';
+
+                // Call external API
+                try {
+                  if (newPaused) {
+                    await fetch('https://api.bananacalcados.com.br/ia/pausar', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ telefone: customerPhone, motivo: 'manual_vendedora', permanente: false }),
+                    });
+                  } else {
+                    await fetch('https://api.bananacalcados.com.br/ia/retomar', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ telefone: customerPhone }),
+                    });
+                  }
+                } catch (apiErr) {
+                  console.error('Erro ao chamar API externa de IA:', apiErr);
+                }
+
                 await updateOrder(order.id, {
                   ai_paused: newPaused,
                   ai_paused_at: newPaused ? new Date().toISOString() : null,
