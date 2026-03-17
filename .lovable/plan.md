@@ -1,158 +1,126 @@
 
 
-# Plano: Integração para Agente de IA de Recuperação de Carrinho
+## Melhorias no Sistema de Grupos VIP
 
-## Contexto
+### Resumo das Funcionalidades
 
-Existem **duas tabelas de leads** com dados complementares:
-- **`catalog_lead_registrations`** — leads do catálogo/checkout (tem `cart_items`, `cart_total`, `status`)
-- **`lp_leads`** — leads do marketing/automação (tem `metadata` JSONB, recebe dados do Shopify Growth Suite via `automation-trigger-new-lead`)
-
-O agente de IA precisa consultar leads de ambas as fontes.
-
----
-
-## Alterações
-
-### 1. Migration — Adicionar 6 colunas em `catalog_lead_registrations`
-
-```sql
-ALTER TABLE catalog_lead_registrations
-  ADD COLUMN IF NOT EXISTS chosen_payment_method TEXT,
-  ADD COLUMN IF NOT EXISTS pix_code TEXT,
-  ADD COLUMN IF NOT EXISTS pix_expires_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS recovery_disparo INTEGER DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS recovery_ultimo_disparo_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS recovery_session_id TEXT;
-```
-
-### 2. Migration — Adicionar colunas de recovery em `lp_leads`
-
-Para que o agente também rastreie disparos feitos para leads que só existem em `lp_leads`:
-
-```sql
-ALTER TABLE lp_leads
-  ADD COLUMN IF NOT EXISTS recovery_disparo INTEGER DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS recovery_ultimo_disparo_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS recovery_session_id TEXT;
-```
-
-### 3. Migration — RPC `get_leads_for_recovery`
-
-Usa **UNION** entre as duas tabelas para não perder leads de nenhuma rota:
-
-```sql
-CREATE OR REPLACE FUNCTION get_leads_for_recovery()
-RETURNS TABLE (
-    id TEXT, source_table TEXT, phone TEXT, name TEXT,
-    cart_items JSONB, cart_total DECIMAL,
-    status TEXT, chosen_payment_method TEXT,
-    pix_code TEXT, pix_expires_at TIMESTAMPTZ,
-    recovery_disparo INTEGER, recovery_ultimo_disparo_at TIMESTAMPTZ,
-    recovery_session_id TEXT, created_at TIMESTAMPTZ
-)
-LANGUAGE sql SECURITY DEFINER AS $$
-  -- catalog_lead_registrations
-  SELECT id::TEXT, 'catalog' as source_table,
-    whatsapp as phone, instagram_handle as name,
-    cart_items, cart_total, status,
-    chosen_payment_method, pix_code, pix_expires_at,
-    recovery_disparo, recovery_ultimo_disparo_at,
-    recovery_session_id, created_at
-  FROM catalog_lead_registrations
-  WHERE status IN ('browsing','checkout_started')
-    AND whatsapp IS NOT NULL AND cart_items IS NOT NULL
-  UNION ALL
-  -- lp_leads com dados de carrinho abandonado
-  SELECT id::TEXT, 'lp_leads' as source_table,
-    phone, name,
-    (metadata->>'cartSummary')::jsonb as cart_items,
-    (metadata->>'totalAmount')::decimal as cart_total,
-    CASE WHEN metadata->>'chosen_payment_method' IS NOT NULL
-         THEN 'checkout_started' ELSE 'browsing' END as status,
-    metadata->>'chosen_payment_method',
-    metadata->>'pix_code',
-    (metadata->>'pix_expires_at')::timestamptz,
-    recovery_disparo, recovery_ultimo_disparo_at,
-    recovery_session_id, created_at
-  FROM lp_leads
-  WHERE source = 'abandoned_cart'
-    AND phone IS NOT NULL
-    AND converted = false
-  ORDER BY created_at DESC LIMIT 500;
-$$;
-```
-
-### 4. Migration — RPC `update_lead_recovery`
-
-Aceita `source_table` para saber em qual tabela atualizar:
-
-```sql
-CREATE OR REPLACE FUNCTION update_lead_recovery(
-    p_lead_id TEXT, p_source_table TEXT,
-    p_disparo INTEGER, p_session_id TEXT
-) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  IF p_source_table = 'catalog' THEN
-    UPDATE catalog_lead_registrations
-    SET recovery_disparo = p_disparo,
-        recovery_ultimo_disparo_at = NOW(),
-        recovery_session_id = p_session_id
-    WHERE id::TEXT = p_lead_id;
-  ELSE
-    UPDATE lp_leads
-    SET recovery_disparo = p_disparo,
-        recovery_ultimo_disparo_at = NOW(),
-        recovery_session_id = p_session_id
-    WHERE id::TEXT = p_lead_id;
-  END IF;
-END; $$;
-```
-
-### 5. Migration — RPC `sync_lead_pix_data`
-
-Para o agente sincronizar dados de PIX do `lp_leads` para `catalog_lead_registrations`:
-
-```sql
-CREATE OR REPLACE FUNCTION sync_lead_pix_data(
-    p_whatsapp TEXT, p_chosen_payment_method TEXT,
-    p_pix_code TEXT, p_pix_expires_at TIMESTAMPTZ
-) RETURNS VOID LANGUAGE sql SECURITY DEFINER AS $$
-  UPDATE catalog_lead_registrations
-  SET chosen_payment_method = p_chosen_payment_method,
-      pix_code = p_pix_code,
-      pix_expires_at = p_pix_expires_at
-  WHERE whatsapp = p_whatsapp
-    AND status IN ('browsing','checkout_started')
-    AND created_at > NOW() - INTERVAL '24 hours';
-$$;
-```
-
-### 6. Edge Function — Atualizar `automation-trigger-new-lead`
-
-Na seção que monta o `metadata` (linhas 30-33), adicionar os 3 campos novos do payload:
-
-```typescript
-const { phone, name, email, campaignTag, recoveryUrl,
-        cartSummary, totalAmount,
-        chosen_payment_method, pix_code, pix_expires_at } = await req.json();
-
-// dentro do bloco metadata:
-if (chosen_payment_method) metadata.chosen_payment_method = chosen_payment_method;
-if (pix_code) metadata.pix_code = pix_code;
-if (pix_expires_at) metadata.pix_expires_at = pix_expires_at;
-```
-
-Nenhuma outra lógica é alterada.
+1. **Gerenciamento em massa de grupos dentro da campanha** - Alterar nome, foto, descricao e permissoes de todos os grupos vinculados a campanha de uma vez
+2. **Fotos de perfil dos grupos** - Buscar foto via Z-API durante sincronizacao (ja existe `imgUrl`/`profileThumbnail` mas pode nao estar vindo)
+3. **Upload local de arquivos** - Para audio, video e documentos na criacao de mensagens agendadas
+4. **Calendario de mensagens agendadas** - Visao mensal/semanal por campanha
+5. **Edicao de mensagens pendentes** - Editar mensagens que ainda nao foram enviadas
+6. **Modelos de mensagens** - Templates reutilizaveis salvos no banco
+7. **Variaveis dinamicas nas mensagens** - Ex: `{{link_live}}`, `{{nome_grupo}}`, substituidas no momento do envio
 
 ---
 
-## Resumo de arquivos
+### 1. Migracao de Banco de Dados
 
-| Arquivo | Ação |
+**Nova tabela `group_message_templates`:**
+- `id` (uuid PK)
+- `name` (text) - nome do modelo
+- `message_type` (text) - text/image/video/audio/document/poll
+- `message_content` (text) - conteudo com placeholders de variaveis
+- `media_url` (text, nullable)
+- `poll_options` (jsonb, nullable)
+- `created_at` (timestamptz)
+
+**Nova tabela `campaign_variables`:**
+- `id` (uuid PK)
+- `campaign_id` (uuid FK -> group_campaigns)
+- `variable_name` (text) - ex: `link_live`
+- `variable_value` (text) - valor atual
+- `updated_at` (timestamptz)
+- UNIQUE(campaign_id, variable_name)
+
+Isso permite programar mensagens com `{{link_live}}` e atualizar o valor da variavel separadamente. Na hora do envio, o edge function substitui as variaveis pelos valores atuais.
+
+---
+
+### 2. Upload Local de Arquivos
+
+Na `ScheduledMessageForm`, trocar o campo "URL da Midia" por um componente que oferece duas opcoes:
+- **URL externa** (campo de texto como hoje)
+- **Upload do computador** (input type="file" que faz upload para o bucket `marketing-attachments` do storage e obtem a URL publica)
+
+Isso ja funciona com o bucket existente `marketing-attachments` (publico).
+
+---
+
+### 3. Fotos dos Grupos
+
+A Z-API retorna `imgUrl` ou `profileThumbnail` nos dados do grupo. O `zapi-list-groups` ja faz `photo_url: g.imgUrl || g.profileThumbnail || null`. Se nao esta vindo, pode ser que a Z-API nao retorne por padrao. Vou adicionar uma chamada separada ao endpoint `profile-picture` da Z-API para cada grupo durante a sincronizacao, ou usar o endpoint `group-metadata` que retorna a foto.
+
+Alternativa mais eficiente: ao sincronizar, para grupos sem foto, fazer chamada ao endpoint `profile-picture` da Z-API em batch.
+
+---
+
+### 4. Gerenciamento em Massa na Campanha
+
+Adicionar uma secao no `CampaignDetailPanel` com:
+- Botao "Configurar Grupos" que abre painel com acoes em massa:
+  - Alterar foto de todos os grupos
+  - Alterar descricao de todos
+  - Alterar nome (com sufixo automatico ex: "#1", "#2")
+  - Toggle permissoes (admins enviam / admins adicionam) para todos
+
+Cada acao itera sobre os grupos da campanha e chama `zapi-group-settings` sequencialmente.
+
+---
+
+### 5. Calendario de Mensagens
+
+Adicionar uma aba/secao "Calendario" no `CampaignDetailPanel` usando um grid simples de calendario mensal, mostrando as mensagens agendadas em cada dia. Ao clicar no dia, mostra as mensagens daquela data.
+
+---
+
+### 6. Edicao de Mensagens Pendentes
+
+Na lista de mensagens do `CampaignDetailPanel`, adicionar botao de edicao para mensagens com status `pending`. Ao clicar, abre o `ScheduledMessageForm` pre-preenchido. Ao salvar, faz UPDATE em vez de INSERT.
+
+---
+
+### 7. Modelos de Mensagens
+
+Na `ScheduledMessageForm`:
+- Botao "Usar Modelo" que abre um select/dialog com templates salvos
+- Botao "Salvar como Modelo" que salva a mensagem atual como template reutilizavel
+- Templates ficam na tabela `group_message_templates`
+
+---
+
+### 8. Variaveis Dinamicas
+
+Na `ScheduledMessageForm`:
+- Botoes para inserir variaveis no cursor: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, etc.
+- Preview mostra como ficara a mensagem com os valores atuais
+
+No `CampaignDetailPanel`:
+- Secao "Variaveis" onde o usuario define/atualiza os valores das variaveis da campanha
+- Ex: campo "link_live" = "https://youtube.com/live/abc123"
+
+No `zapi-group-scheduled-send`:
+- Antes de enviar, buscar variaveis da campanha e fazer `replace` no conteudo da mensagem
+- `{{nome_grupo}}` substituido pelo nome real do grupo de destino
+
+---
+
+### Resumo de Arquivos
+
+| Arquivo | Acao |
 |---|---|
-| Migration SQL | 6 colunas em `catalog_lead_registrations`, 3 colunas em `lp_leads`, 3 RPCs |
-| `supabase/functions/automation-trigger-new-lead/index.ts` | Mapear 3 campos novos do payload para `metadata` |
+| Migracao SQL | Criar `group_message_templates`, `campaign_variables` |
+| `src/components/marketing/ScheduledMessageForm.tsx` | Upload local, variaveis, modelos, modo edicao |
+| `src/components/marketing/CampaignDetailPanel.tsx` | Calendario, edicao, gerenciamento em massa de grupos, secao de variaveis |
+| `supabase/functions/zapi-group-scheduled-send/index.ts` | Substituicao de variaveis antes do envio |
+| `supabase/functions/zapi-list-groups/index.ts` | Buscar fotos de perfil via endpoint `profile-picture` |
+| `src/components/marketing/GroupsVipManager.tsx` | Exibir fotos dos grupos nos cards |
 
-Sem alterações de frontend — as RPCs são para consumo pelo agente de IA externo via REST API.
+### Detalhes Tecnicos
+
+- Upload de arquivos: usa `supabase.storage.from('marketing-attachments').upload()` e `getPublicUrl()`
+- Variaveis suportadas inicialmente: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, `{{horario}}`, variaveis customizadas
+- Calendario: grid CSS simples (7 colunas x 5-6 linhas), sem dependencia externa
+- Edicao de mensagens: reutiliza `ScheduledMessageForm` com prop `editingMessage` para pre-preencher
+- Fotos de grupo: tenta `profile-picture/${groupId}` na Z-API durante sync
 

@@ -16,7 +16,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { phone, name, email, campaignTag, recoveryUrl, cartSummary, totalAmount } = await req.json();
+    const { phone, name, email, campaignTag, recoveryUrl, cartSummary, totalAmount, chosen_payment_method, pix_code, pix_expires_at } = await req.json();
 
     if (!phone) {
       return new Response(
@@ -31,6 +31,9 @@ serve(async (req) => {
       if (recoveryUrl) metadata.recoveryUrl = recoveryUrl;
       if (cartSummary) metadata.cartSummary = cartSummary;
       if (totalAmount) metadata.totalAmount = totalAmount;
+      if (chosen_payment_method) metadata.chosen_payment_method = chosen_payment_method;
+      if (pix_code) metadata.pix_code = pix_code;
+      if (pix_expires_at) metadata.pix_expires_at = pix_expires_at;
 
       await supabase.from('lp_leads').insert({
         phone: phone.replace(/\D/g, ''),
