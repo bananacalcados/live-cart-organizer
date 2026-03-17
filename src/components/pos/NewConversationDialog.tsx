@@ -16,7 +16,7 @@ import { toast } from "sonner";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConversationCreated: (phone: string) => void;
+  onConversationCreated: (phone: string, whatsappNumberId?: string | null) => void;
 }
 
 interface MetaTemplate {
@@ -246,7 +246,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
       );
 
       toast.success("Mensagem enviada!");
-      onConversationCreated(cleanPhone);
+      onConversationCreated(cleanPhone, selectedNumberId || null);
       onOpenChange(false);
       resetForm();
     } catch (error) {
