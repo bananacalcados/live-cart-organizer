@@ -756,7 +756,7 @@ export default function Management() {
     const [tinyData, posData, storesRes, invRes, apRes, stockRes] = await Promise.all([
       fetchAllTinyOrders(startDate, endDate, APPROVED_STATUSES),
       fetchPosSales(startISO, endISO),
-      supabase.from("pos_stores").select("id, name, revenue_target, is_simulation").eq("is_active", true),
+      supabase.from("pos_stores").select("id, name, revenue_target, is_simulation, tiny_token").eq("is_active", true),
       supabase.rpc("get_inventory_summary"),
       supabase.from("tiny_accounts_payable").select("*").order("data_vencimento", { ascending: true }),
       supabase.from("pos_products").select("name, variant, sku, stock, price, cost_price, store_id").eq("is_active", true).gt("stock", 0),
