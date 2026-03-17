@@ -7252,6 +7252,159 @@ export type Database = {
         }
         Relationships: []
       }
+      shopify_live_order_locks: {
+        Row: {
+          created_at: string
+          customer_cpf_normalized: string | null
+          customer_email_normalized: string | null
+          customer_phone_normalized: string | null
+          dedupe_key: string
+          error_message: string | null
+          id: string
+          last_seen_at: string
+          line_signature: string
+          locked_at: string
+          session_id: string | null
+          shopify_order_id: string | null
+          shopify_order_name: string | null
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_cpf_normalized?: string | null
+          customer_email_normalized?: string | null
+          customer_phone_normalized?: string | null
+          dedupe_key: string
+          error_message?: string | null
+          id?: string
+          last_seen_at?: string
+          line_signature: string
+          locked_at?: string
+          session_id?: string | null
+          shopify_order_id?: string | null
+          shopify_order_name?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_cpf_normalized?: string | null
+          customer_email_normalized?: string | null
+          customer_phone_normalized?: string | null
+          dedupe_key?: string
+          error_message?: string | null
+          id?: string
+          last_seen_at?: string
+          line_signature?: string
+          locked_at?: string
+          session_id?: string | null
+          shopify_order_id?: string | null
+          shopify_order_name?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shopify_live_order_syncs: {
+        Row: {
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          customer_cpf_normalized: string | null
+          customer_email_normalized: string | null
+          customer_name: string | null
+          customer_phone_normalized: string | null
+          dedupe_key: string
+          duplicate_group_key: string | null
+          duplicate_rank: number | null
+          duplicate_reason: string | null
+          id: string
+          is_duplicate_candidate: boolean
+          line_items: Json
+          line_signature: string
+          live_viewer_id: string | null
+          order_id: string | null
+          resolution_action: string | null
+          resolution_notes: string | null
+          review_status: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          session_id: string | null
+          shopify_order_created_at: string | null
+          shopify_order_id: string | null
+          shopify_order_name: string | null
+          source: string
+          sync_status: string
+          updated_at: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          customer_cpf_normalized?: string | null
+          customer_email_normalized?: string | null
+          customer_name?: string | null
+          customer_phone_normalized?: string | null
+          dedupe_key: string
+          duplicate_group_key?: string | null
+          duplicate_rank?: number | null
+          duplicate_reason?: string | null
+          id?: string
+          is_duplicate_candidate?: boolean
+          line_items?: Json
+          line_signature: string
+          live_viewer_id?: string | null
+          order_id?: string | null
+          resolution_action?: string | null
+          resolution_notes?: string | null
+          review_status?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          session_id?: string | null
+          shopify_order_created_at?: string | null
+          shopify_order_id?: string | null
+          shopify_order_name?: string | null
+          source?: string
+          sync_status?: string
+          updated_at?: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          customer_cpf_normalized?: string | null
+          customer_email_normalized?: string | null
+          customer_name?: string | null
+          customer_phone_normalized?: string | null
+          dedupe_key?: string
+          duplicate_group_key?: string | null
+          duplicate_rank?: number | null
+          duplicate_reason?: string | null
+          id?: string
+          is_duplicate_candidate?: boolean
+          line_items?: Json
+          line_signature?: string
+          live_viewer_id?: string | null
+          order_id?: string | null
+          resolution_action?: string | null
+          resolution_notes?: string | null
+          review_status?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          session_id?: string | null
+          shopify_order_created_at?: string | null
+          shopify_order_id?: string | null
+          shopify_order_name?: string | null
+          source?: string
+          sync_status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shopify_yampi_mapping: {
         Row: {
           created_at: string
