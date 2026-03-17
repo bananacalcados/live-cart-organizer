@@ -83,8 +83,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
   // Store-specific WhatsApp number IDs
   const [storeNumberIds, setStoreNumberIds] = useState<string[]>([]);
+  const [selectedSendNumberId, setSelectedSendNumberId] = useState<string | null>(null);
 
-  const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+  const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
 
