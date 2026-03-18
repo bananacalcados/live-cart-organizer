@@ -80,18 +80,21 @@ function mapPeriodToFilter(goal: Goal, dashPeriod: string): boolean {
 export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerSale, salesCount, period, sellerMetrics }: Props) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [goalProgress, setGoalProgress] = useState<GoalProgressRow[]>([]);
+  const [gamificationData, setGamificationData] = useState<GamificationRow[]>([]);
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     const load = async () => {
-      const [goalsRes, progressRes, sellersRes] = await Promise.all([
+      const [goalsRes, progressRes, sellersRes, gamRes] = await Promise.all([
         supabase.from("pos_goals").select("*").eq("store_id", storeId).eq("is_active", true),
         supabase.from("pos_goal_progress" as any).select("goal_id, seller_id, current_value"),
         supabase.from("pos_sellers").select("id, name").eq("store_id", storeId).eq("is_active", true),
+        supabase.from("pos_gamification").select("seller_id, weekly_points, total_points").eq("store_id", storeId),
       ]);
       setGoals(goalsRes.data || []);
       setGoalProgress((progressRes.data as any[]) || []);
       setSellers(sellersRes.data || []);
+      setGamificationData((gamRes.data as GamificationRow[]) || []);
     };
     load();
   }, [storeId]);
