@@ -1653,6 +1653,7 @@ export function POSConfig({ storeId }: Props) {
                     <SelectItem value="avg_ticket">Ticket Médio</SelectItem>
                     <SelectItem value="items_sold">Itens por Venda</SelectItem>
                     <SelectItem value="seller_revenue">Faturamento Vendedor</SelectItem>
+                    <SelectItem value="points">Pontos</SelectItem>
                     <SelectItem value="category_units">Pares por Categoria</SelectItem>
                     <SelectItem value="brand_units">Pares por Marca</SelectItem>
                   </SelectContent>
@@ -1739,7 +1740,7 @@ export function POSConfig({ storeId }: Props) {
               </div>
               <div>
                 <Label className="text-pos-white/70 text-xs">Valor da Meta</Label>
-                <Input type="number" value={newGoal.goal_value} onChange={e => setNewGoal(s => ({ ...s, goal_value: e.target.value }))} placeholder={newGoal.goal_type.includes('units') ? "Ex: 10 pares" : "Ex: 5000"} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                <Input type="number" value={newGoal.goal_value} onChange={e => setNewGoal(s => ({ ...s, goal_value: e.target.value }))} placeholder={newGoal.goal_type === 'points' ? "Ex: 100 pontos" : newGoal.goal_type.includes('units') ? "Ex: 10 pares" : "Ex: 5000"} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
               </div>
 
               {/* Prize/Commission section */}

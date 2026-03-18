@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { POSGoalProgress } from "./POSGoalProgress";
 import { POSSellerPrivatePanel } from "./POSSellerPrivatePanel";
+import { POSTaskWhatsAppDialog } from "./POSTaskWhatsAppDialog";
 import type { DateRange } from "react-day-picker";
 
 interface Props {
@@ -95,7 +96,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [completionNotes, setCompletionNotes] = useState<Record<string, string>>({});
   const [completionSeller, setCompletionSeller] = useState<Record<string, string>>({});
   const [storeSellers, setStoreSellers] = useState<{ id: string; name: string }[]>([]);
-
+  const [taskWhatsAppOpen, setTaskWhatsAppOpen] = useState(false);
   const loadAlerts = async () => {
     const [conversationRes, supportRes, interStoreRes, stockRes] = await Promise.all([
       supabase.rpc("get_conversation_counts"),
@@ -495,6 +496,15 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                 {contactTasks.length > 0 && (
                   <Badge className="bg-pos-orange/20 text-pos-orange border-0 text-[10px]">{contactTasks.length}</Badge>
                 )}
+                <div className="ml-auto">
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs"
+                    onClick={() => setTaskWhatsAppOpen(true)}
+                  >
+                    <Phone className="h-3.5 w-3.5" /> WhatsApp
+                  </Button>
+                </div>
               </h3>
               {loadingTasks ? (
                 <div className="flex items-center justify-center py-6 text-pos-white/50">
@@ -642,6 +652,12 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         periodStart={getPeriodRange(period, customRange).start}
         periodEnd={getPeriodRange(period, customRange).end}
         sellerMetrics={sellerMetrics}
+      />
+
+      <POSTaskWhatsAppDialog
+        open={taskWhatsAppOpen}
+        onOpenChange={setTaskWhatsAppOpen}
+        storeId={storeId}
       />
     </div>
   );

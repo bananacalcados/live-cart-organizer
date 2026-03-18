@@ -40,6 +40,7 @@ const goalTypeLabels: Record<string, string> = {
   avg_ticket: "Ticket Médio",
   items_sold: "Itens por Venda",
   seller_revenue: "Faturamento Vendedor",
+  points: "Pontos",
   category_units: "Meta por Categoria",
   brand_units: "Meta por Marca",
 };
@@ -49,6 +50,7 @@ const goalTypeIcons: Record<string, typeof DollarSign> = {
   avg_ticket: TrendingUp,
   items_sold: Package,
   seller_revenue: Users,
+  points: Trophy,
   category_units: Target,
   brand_units: Trophy,
 };
@@ -61,11 +63,11 @@ const periodLabels: Record<string, string> = {
 };
 
 function mapPeriodToFilter(goal: Goal, dashPeriod: string): boolean {
-  if (goal.period === "custom") return true; // Custom period goals always visible
-  if (goal.goal_type === "category_units" || goal.goal_type === "brand_units") return true; // Always visible
+  if (goal.period === "custom") return true;
+  if (goal.goal_type === "category_units" || goal.goal_type === "brand_units" || goal.goal_type === "points") return true;
   if (goal.period === "daily" && dashPeriod === "day") return true;
   if (goal.period === "weekly" && dashPeriod === "week") return true;
-  if (goal.period === "monthly") return true; // Monthly goals always visible
+  if (goal.period === "monthly") return true;
   return false;
 }
 
@@ -94,8 +96,8 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
   if (relevantGoals.length === 0) return null;
 
   const getCurrentValue = (goal: Goal): number => {
-    // For category/brand goals, use progress table
-    if (goal.goal_type === "category_units" || goal.goal_type === "brand_units") {
+    // For category/brand/points goals, use progress table
+    if (goal.goal_type === "category_units" || goal.goal_type === "brand_units" || goal.goal_type === "points") {
       const progress = goalProgress.filter(p => p.goal_id === goal.id);
       return progress.reduce((sum, p) => sum + (p.current_value || 0), 0);
     }
@@ -120,6 +122,7 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
 
   const formatValue = (type: string, value: number): string => {
     if (type === "items_sold") return value.toFixed(1);
+    if (type === "points") return `${Math.floor(value)} pts`;
     if (type === "category_units" || type === "brand_units") return `${Math.floor(value)} pares`;
     return `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
   };
