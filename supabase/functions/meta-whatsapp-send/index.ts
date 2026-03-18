@@ -104,6 +104,25 @@ function getFileName(url: string, mediaType: string): string {
   }
 }
 
+const MEDIA_PLACEHOLDER_REGEX = /^\s*[\[{(]?\s*(?:image|imagem|foto|photo|video|vídeo|audio|áudio|document|documento|file|arquivo)\s*[\]})]?\s*$/i;
+
+function normalizeMediaText(value?: string): string {
+  if (!value) return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return MEDIA_PLACEHOLDER_REGEX.test(trimmed) ? '' : trimmed;
+}
+
+function resolveMediaCaption(message?: string, caption?: string): string | undefined {
+  const normalizedCaption = normalizeMediaText(caption);
+  if (normalizedCaption) return normalizedCaption;
+
+  const normalizedMessage = normalizeMediaText(message);
+  if (normalizedMessage) return normalizedMessage;
+
+  return undefined;
+}
+
 async function uploadMediaToMeta(
   mediaUrl: string,
   mediaType: string,
@@ -169,6 +188,7 @@ serve(async (req) => {
       : (rawBody.mediaType || rawBody.media_type || rawBody.type || 'text');
     const interactiveData = rawBody.interactiveData || rawBody.interactive_data;
     const caption = rawBody.caption;
+    const resolvedCaption = resolveMediaCaption(message, caption);
 
     console.log('[meta-whatsapp-send] payload received:', {
       phone,
@@ -205,7 +225,7 @@ serve(async (req) => {
     let body: Record<string, unknown>;
 
     if (normalizedType === 'text') {
-      if (!message) {
+      if (!message.trim()) {
         return new Response(
           JSON.stringify({ error: 'Message is required for text type' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -220,19 +240,25 @@ serve(async (req) => {
       };
     } else if (normalizedType === 'image' && mediaUrl) {
       const mediaId = await uploadMediaToMeta(mediaUrl, 'image', phoneNumberId, accessToken);
+      const imagePayload: Record<string, unknown> = { id: mediaId };
+      if (resolvedCaption) imagePayload.caption = resolvedCaption;
+
       body = {
         messaging_product: 'whatsapp',
         to: formattedPhone,
         type: 'image',
-        image: { id: mediaId, caption: caption || message || '' },
+        image: imagePayload,
       };
     } else if (normalizedType === 'video' && mediaUrl) {
       const mediaId = await uploadMediaToMeta(mediaUrl, 'video', phoneNumberId, accessToken);
+      const videoPayload: Record<string, unknown> = { id: mediaId };
+      if (resolvedCaption) videoPayload.caption = resolvedCaption;
+
       body = {
         messaging_product: 'whatsapp',
         to: formattedPhone,
         type: 'video',
-        video: { id: mediaId, caption: caption || message || '' },
+        video: videoPayload,
       };
     } else if (normalizedType === 'audio' && mediaUrl) {
       const mediaId = await uploadMediaToMeta(mediaUrl, 'audio', phoneNumberId, accessToken);
@@ -244,11 +270,14 @@ serve(async (req) => {
       };
     } else if (normalizedType === 'document' && mediaUrl) {
       const mediaId = await uploadMediaToMeta(mediaUrl, 'document', phoneNumberId, accessToken);
+      const documentPayload: Record<string, unknown> = { id: mediaId };
+      if (resolvedCaption) documentPayload.caption = resolvedCaption;
+
       body = {
         messaging_product: 'whatsapp',
         to: formattedPhone,
         type: 'document',
-        document: { id: mediaId, caption: caption || message || '' },
+        document: documentPayload,
       };
     } else if (normalizedType === 'interactive' && interactiveData) {
       const interactive: Record<string, unknown> = {
