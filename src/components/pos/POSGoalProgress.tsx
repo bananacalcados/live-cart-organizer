@@ -40,6 +40,7 @@ const goalTypeLabels: Record<string, string> = {
   avg_ticket: "Ticket Médio",
   items_sold: "Itens por Venda",
   seller_revenue: "Faturamento Vendedor",
+  points: "Pontos",
   category_units: "Meta por Categoria",
   brand_units: "Meta por Marca",
 };
@@ -49,6 +50,7 @@ const goalTypeIcons: Record<string, typeof DollarSign> = {
   avg_ticket: TrendingUp,
   items_sold: Package,
   seller_revenue: Users,
+  points: Trophy,
   category_units: Target,
   brand_units: Trophy,
 };

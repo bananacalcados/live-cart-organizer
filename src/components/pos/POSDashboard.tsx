@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { POSGoalProgress } from "./POSGoalProgress";
 import { POSSellerPrivatePanel } from "./POSSellerPrivatePanel";
+import { POSTaskWhatsAppDialog } from "./POSTaskWhatsAppDialog";
 import type { DateRange } from "react-day-picker";
 
 interface Props {

@@ -1653,6 +1653,7 @@ export function POSConfig({ storeId }: Props) {
                     <SelectItem value="avg_ticket">Ticket Médio</SelectItem>
                     <SelectItem value="items_sold">Itens por Venda</SelectItem>
                     <SelectItem value="seller_revenue">Faturamento Vendedor</SelectItem>
+                    <SelectItem value="points">Pontos</SelectItem>
                     <SelectItem value="category_units">Pares por Categoria</SelectItem>
                     <SelectItem value="brand_units">Pares por Marca</SelectItem>
                   </SelectContent>
