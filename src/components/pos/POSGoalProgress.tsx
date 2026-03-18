@@ -122,6 +122,7 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
 
   const formatValue = (type: string, value: number): string => {
     if (type === "items_sold") return value.toFixed(1);
+    if (type === "points") return `${Math.floor(value)} pts`;
     if (type === "category_units" || type === "brand_units") return `${Math.floor(value)} pares`;
     return `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
   };
