@@ -64,7 +64,7 @@ serve(async (req) => {
         const customerMap = new Map(allCustomers.map(c => [c.id, c]));
 
         // Aggregate sales per customer
-        const customerSales = new Map<string, { total: number; count: number; first: string; last: string }>();
+        const customerSales = new Map<string, { total: number; count: number; first: string; last: string; storeId: string | null }>();
         for (const sale of sales) {
           if (!sale.customer_id) continue;
           const existing = customerSales.get(sale.customer_id);
@@ -72,13 +72,14 @@ serve(async (req) => {
             existing.total += Number(sale.total || 0);
             existing.count += 1;
             if (sale.created_at < existing.first) existing.first = sale.created_at;
-            if (sale.created_at > existing.last) existing.last = sale.created_at;
+            if (sale.created_at > existing.last) { existing.last = sale.created_at; existing.storeId = sale.store_id || existing.storeId; }
           } else {
             customerSales.set(sale.customer_id, {
               total: Number(sale.total || 0),
               count: 1,
               first: sale.created_at,
               last: sale.created_at,
+              storeId: sale.store_id || null,
             });
           }
         }
