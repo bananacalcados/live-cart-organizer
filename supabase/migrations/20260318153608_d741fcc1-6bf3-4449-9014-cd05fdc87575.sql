@@ -1,0 +1,2 @@
+ALTER TABLE pos_goals DROP CONSTRAINT pos_goals_goal_type_check;
+ALTER TABLE pos_goals ADD CONSTRAINT pos_goals_goal_type_check CHECK (goal_type = ANY (ARRAY['avg_ticket','revenue','seller_revenue','items_sold','points','category_units','brand_units']));
