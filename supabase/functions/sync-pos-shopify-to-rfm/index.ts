@@ -32,7 +32,7 @@ serve(async (req) => {
       while (true) {
         const { data, error: salesErr } = await supabase
           .from('pos_sales')
-          .select('id, customer_id, total, created_at, status')
+          .select('id, customer_id, total, created_at, status, store_id')
           .in('status', ['completed', 'paid'])
           .range(salesFrom, salesFrom + salesBatch - 1);
         if (salesErr) throw salesErr;
