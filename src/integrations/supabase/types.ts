@@ -8312,8 +8312,11 @@ export type Database = {
         Row: {
           address1: string | null
           address2: string | null
+          age_range: string | null
           avg_ticket: number | null
           birth_date: string | null
+          cashback_balance: number | null
+          cashback_expires_at: string | null
           city: string | null
           country: string | null
           coupon_amount: number | null
@@ -8323,6 +8326,7 @@ export type Database = {
           coupon_start_date: string | null
           coupon_type: string | null
           coupon_used: boolean | null
+          cpf: string | null
           created_at: string
           ddd: string | null
           email: string | null
@@ -8333,8 +8337,10 @@ export type Database = {
           id: string
           last_name: string | null
           last_purchase_at: string | null
+          lead_status: string | null
           phone: string | null
           postcode: string | null
+          preferred_style: string | null
           region_type: string | null
           rfm_calculated_at: string | null
           rfm_frequency_score: number | null
@@ -8342,7 +8348,10 @@ export type Database = {
           rfm_recency_score: number | null
           rfm_segment: string | null
           rfm_total_score: number | null
+          shoe_size: string | null
+          source: string | null
           state: string | null
+          store_id: string | null
           total_orders: number | null
           total_spent: number | null
           updated_at: string
@@ -8354,8 +8363,11 @@ export type Database = {
         Insert: {
           address1?: string | null
           address2?: string | null
+          age_range?: string | null
           avg_ticket?: number | null
           birth_date?: string | null
+          cashback_balance?: number | null
+          cashback_expires_at?: string | null
           city?: string | null
           country?: string | null
           coupon_amount?: number | null
@@ -8365,6 +8377,7 @@ export type Database = {
           coupon_start_date?: string | null
           coupon_type?: string | null
           coupon_used?: boolean | null
+          cpf?: string | null
           created_at?: string
           ddd?: string | null
           email?: string | null
@@ -8375,8 +8388,10 @@ export type Database = {
           id?: string
           last_name?: string | null
           last_purchase_at?: string | null
+          lead_status?: string | null
           phone?: string | null
           postcode?: string | null
+          preferred_style?: string | null
           region_type?: string | null
           rfm_calculated_at?: string | null
           rfm_frequency_score?: number | null
@@ -8384,7 +8399,10 @@ export type Database = {
           rfm_recency_score?: number | null
           rfm_segment?: string | null
           rfm_total_score?: number | null
+          shoe_size?: string | null
+          source?: string | null
           state?: string | null
+          store_id?: string | null
           total_orders?: number | null
           total_spent?: number | null
           updated_at?: string
@@ -8396,8 +8414,11 @@ export type Database = {
         Update: {
           address1?: string | null
           address2?: string | null
+          age_range?: string | null
           avg_ticket?: number | null
           birth_date?: string | null
+          cashback_balance?: number | null
+          cashback_expires_at?: string | null
           city?: string | null
           country?: string | null
           coupon_amount?: number | null
@@ -8407,6 +8428,7 @@ export type Database = {
           coupon_start_date?: string | null
           coupon_type?: string | null
           coupon_used?: boolean | null
+          cpf?: string | null
           created_at?: string
           ddd?: string | null
           email?: string | null
@@ -8417,8 +8439,10 @@ export type Database = {
           id?: string
           last_name?: string | null
           last_purchase_at?: string | null
+          lead_status?: string | null
           phone?: string | null
           postcode?: string | null
+          preferred_style?: string | null
           region_type?: string | null
           rfm_calculated_at?: string | null
           rfm_frequency_score?: number | null
@@ -8426,7 +8450,10 @@ export type Database = {
           rfm_recency_score?: number | null
           rfm_segment?: string | null
           rfm_total_score?: number | null
+          shoe_size?: string | null
+          source?: string | null
           state?: string | null
+          store_id?: string | null
           total_orders?: number | null
           total_spent?: number | null
           updated_at?: string
@@ -8576,6 +8603,30 @@ export type Database = {
           seller_name: string
           store_id: string
           store_name: string
+        }[]
+      }
+      get_customers_for_opportunities: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: {
+          age_range: string
+          avg_ticket: number
+          cashback_balance: number
+          cashback_expires_at: string
+          cpf: string
+          created_at: string
+          email: string
+          first_purchase_at: string
+          id: string
+          last_purchase_at: string
+          lead_status: string
+          name: string
+          preferred_style: string
+          shoe_size: string
+          source: string
+          store_id: string
+          total_orders: number
+          total_spent: number
+          whatsapp: string
         }[]
       }
       get_inventory_summary: {

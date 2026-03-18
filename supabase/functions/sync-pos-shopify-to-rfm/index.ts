@@ -32,7 +32,7 @@ serve(async (req) => {
       while (true) {
         const { data, error: salesErr } = await supabase
           .from('pos_sales')
-          .select('id, customer_id, total, created_at, status')
+          .select('id, customer_id, total, created_at, status, store_id')
           .in('status', ['completed', 'paid'])
           .range(salesFrom, salesFrom + salesBatch - 1);
         if (salesErr) throw salesErr;
@@ -55,7 +55,7 @@ serve(async (req) => {
           const idChunk = customerIds.slice(ci, ci + 50);
           const { data: custChunk } = await supabase
             .from('pos_customers')
-            .select('id, name, email, whatsapp, city, state, gender')
+            .select('id, name, email, whatsapp, city, state, gender, cpf, shoe_size, preferred_style, age_range')
             .in('id', idChunk);
           if (custChunk) allCustomers = allCustomers.concat(custChunk);
         }
@@ -64,7 +64,7 @@ serve(async (req) => {
         const customerMap = new Map(allCustomers.map(c => [c.id, c]));
 
         // Aggregate sales per customer
-        const customerSales = new Map<string, { total: number; count: number; first: string; last: string }>();
+        const customerSales = new Map<string, { total: number; count: number; first: string; last: string; storeId: string | null }>();
         for (const sale of sales) {
           if (!sale.customer_id) continue;
           const existing = customerSales.get(sale.customer_id);
@@ -72,13 +72,14 @@ serve(async (req) => {
             existing.total += Number(sale.total || 0);
             existing.count += 1;
             if (sale.created_at < existing.first) existing.first = sale.created_at;
-            if (sale.created_at > existing.last) existing.last = sale.created_at;
+            if (sale.created_at > existing.last) { existing.last = sale.created_at; existing.storeId = sale.store_id || existing.storeId; }
           } else {
             customerSales.set(sale.customer_id, {
               total: Number(sale.total || 0),
               count: 1,
               first: sale.created_at,
               last: sale.created_at,
+              storeId: sale.store_id || null,
             });
           }
         }
@@ -90,7 +91,9 @@ serve(async (req) => {
           if (!cust) continue;
 
           const phone = (cust.whatsapp || '').replace(/\D/g, '');
-          if (!phone && !cust.email) continue;
+          const cpf = (cust.cpf || '').replace(/\D/g, '') || null;
+          // Accept customers with at least one identifier: phone, email, or CPF
+          if (!phone && !cust.email && !cpf) continue;
 
           const nameParts = (cust.name || '').split(' ');
           const firstName = nameParts[0] || '';
@@ -104,11 +107,18 @@ serve(async (req) => {
             last_name: lastName,
             phone: phone || null,
             email: cust.email || null,
+            cpf,
             city: cust.city || null,
             state: cust.state || null,
             gender: cust.gender || null,
             region_type: 'local',
             ddd,
+            store_id: stats.storeId,
+            shoe_size: cust.shoe_size || null,
+            preferred_style: cust.preferred_style || null,
+            age_range: cust.age_range || null,
+            source: 'pos',
+            lead_status: 'customer',
             total_orders: stats.count,
             total_spent: stats.total,
             avg_ticket: stats.count > 0 ? stats.total / stats.count : 0,
