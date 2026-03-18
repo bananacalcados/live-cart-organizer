@@ -657,9 +657,10 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       />
 
       <POSTaskWhatsAppDialog
-        open={taskWhatsAppOpen}
-        onOpenChange={setTaskWhatsAppOpen}
+        open={!!taskWhatsAppPhone}
+        onOpenChange={(open) => { if (!open) setTaskWhatsAppPhone(null); }}
         storeId={storeId}
+        customerPhone={taskWhatsAppPhone || undefined}
       />
     </div>
   );
