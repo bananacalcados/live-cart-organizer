@@ -55,7 +55,7 @@ serve(async (req) => {
           const idChunk = customerIds.slice(ci, ci + 50);
           const { data: custChunk } = await supabase
             .from('pos_customers')
-            .select('id, name, email, whatsapp, city, state, gender')
+            .select('id, name, email, whatsapp, city, state, gender, cpf, shoe_size, preferred_style, age_range')
             .in('id', idChunk);
           if (custChunk) allCustomers = allCustomers.concat(custChunk);
         }
