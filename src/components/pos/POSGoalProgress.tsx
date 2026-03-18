@@ -105,8 +105,19 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
   if (relevantGoals.length === 0) return null;
 
   const getCurrentValue = (goal: Goal): number => {
-    // For category/brand/points goals, use progress table
-    if (goal.goal_type === "category_units" || goal.goal_type === "brand_units" || goal.goal_type === "points") {
+    // For points goals, read directly from pos_gamification (source of truth)
+    if (goal.goal_type === "points") {
+      if (goal.seller_id) {
+        // Per-seller points goal: use that seller's weekly_points
+        const sellerGam = gamificationData.find(g => g.seller_id === goal.seller_id);
+        return sellerGam?.weekly_points || 0;
+      }
+      // Global points goal: sum all sellers' weekly_points
+      return gamificationData.reduce((sum, g) => sum + (g.weekly_points || 0), 0);
+    }
+
+    // For category/brand goals, use progress table
+    if (goal.goal_type === "category_units" || goal.goal_type === "brand_units") {
       const progress = goalProgress.filter(p => p.goal_id === goal.id);
       return progress.reduce((sum, p) => sum + (p.current_value || 0), 0);
     }
