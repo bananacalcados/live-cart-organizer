@@ -1,9 +1,8 @@
-import { useState, useRef } from "react";
-import { Image, Mic, Video, Paperclip, X, Loader2 } from "lucide-react";
+import { useRef } from "react";
+import { Image, Mic, Video, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 type MediaType = 'image' | 'audio' | 'video' | 'document';
 
@@ -27,6 +26,35 @@ function getMediaType(file: File): MediaType {
   return 'document';
 }
 
+async function convertWebpToPng(file: File): Promise<File> {
+  if (file.type !== 'image/webp') return file;
+
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Não foi possível converter a imagem WEBP');
+  }
+
+  context.drawImage(bitmap, 0, 0);
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, 'image/png');
+  });
+
+  bitmap.close();
+
+  if (!blob) {
+    throw new Error('Falha ao converter WEBP para PNG');
+  }
+
+  const originalName = file.name.replace(/\.webp$/i, '');
+  return new File([blob], `${originalName}.png`, { type: 'image/png' });
+}
+
 export function MediaAttachmentPicker({
   onMediaSelect,
   onCancel,
@@ -37,57 +65,66 @@ export function MediaAttachmentPicker({
   const videoInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFile = event.target.files?.[0];
+    event.target.value = '';
+    if (!rawFile) return;
 
-    // Check file size (max 16MB for WhatsApp)
-    if (file.size > 16 * 1024 * 1024) {
+    if (rawFile.size > 16 * 1024 * 1024) {
       toast.error('Arquivo muito grande. Máximo 16MB.');
+      return;
+    }
+
+    let file = rawFile;
+
+    try {
+      if (rawFile.type === 'image/webp') {
+        toast.info('Convertendo imagem WEBP para PNG...');
+        file = await convertWebpToPng(rawFile);
+      }
+    } catch (error) {
+      console.error('WEBP conversion error:', error);
+      toast.error('Não foi possível converter a imagem WEBP');
       return;
     }
 
     const type = getMediaType(file);
     const previewUrl = URL.createObjectURL(file);
-
     onMediaSelect({ file, type, previewUrl });
-
-    // Reset input
-    event.target.value = '';
   };
 
   if (selectedMedia) {
     return (
-      <div className="p-3 bg-gray-100 border-t">
+      <div className="border-t bg-muted/40 p-3">
         <div className="flex items-center gap-3">
           <div className="relative">
             {selectedMedia.type === 'image' && (
               <img
                 src={selectedMedia.previewUrl}
                 alt="Preview"
-                className="h-16 w-16 object-cover rounded-lg"
+                className="h-16 w-16 rounded-lg object-cover"
               />
             )}
             {selectedMedia.type === 'video' && (
               <video
                 src={selectedMedia.previewUrl}
-                className="h-16 w-16 object-cover rounded-lg"
+                className="h-16 w-16 rounded-lg object-cover"
               />
             )}
             {selectedMedia.type === 'audio' && (
-              <div className="h-16 w-16 bg-gray-200 rounded-lg flex items-center justify-center">
-                <Mic className="h-6 w-6 text-gray-500" />
+              <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted">
+                <Mic className="h-6 w-6 text-muted-foreground" />
               </div>
             )}
             {isUploading && (
-              <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-white" />
+              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-foreground/40">
+                <Loader2 className="h-6 w-6 animate-spin text-background" />
               </div>
             )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{selectedMedia.file.name}</p>
-            <p className="text-xs text-gray-500">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">{selectedMedia.file.name}</p>
+            <p className="text-xs text-muted-foreground">
               {(selectedMedia.file.size / 1024 / 1024).toFixed(2)} MB
             </p>
           </div>
@@ -108,7 +145,6 @@ export function MediaAttachmentPicker({
 
   return (
     <div className="flex items-center gap-1 px-2">
-      {/* Image */}
       <input
         ref={imageInputRef}
         type="file"
@@ -123,10 +159,9 @@ export function MediaAttachmentPicker({
         className="h-9 w-9"
         onClick={() => imageInputRef.current?.click()}
       >
-        <Image className="h-5 w-5 text-gray-500" />
+        <Image className="h-5 w-5 text-muted-foreground" />
       </Button>
 
-      {/* Video */}
       <input
         ref={videoInputRef}
         type="file"
@@ -141,10 +176,9 @@ export function MediaAttachmentPicker({
         className="h-9 w-9"
         onClick={() => videoInputRef.current?.click()}
       >
-        <Video className="h-5 w-5 text-gray-500" />
+        <Video className="h-5 w-5 text-muted-foreground" />
       </Button>
 
-      {/* Audio */}
       <input
         ref={audioInputRef}
         type="file"
@@ -159,7 +193,7 @@ export function MediaAttachmentPicker({
         className="h-9 w-9"
         onClick={() => audioInputRef.current?.click()}
       >
-        <Mic className="h-5 w-5 text-gray-500" />
+        <Mic className="h-5 w-5 text-muted-foreground" />
       </Button>
     </div>
   );
@@ -167,13 +201,17 @@ export function MediaAttachmentPicker({
 
 export async function uploadMediaToStorage(file: File): Promise<string | null> {
   try {
-    const fileExt = file.name.split('.').pop();
+    const normalizedFile = file.type === 'image/webp' ? await convertWebpToPng(file) : file;
+    const fileExt = normalizedFile.name.split('.').pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `chat/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('whatsapp-media')
-      .upload(filePath, file);
+      .upload(filePath, normalizedFile, {
+        contentType: normalizedFile.type,
+        upsert: false,
+      });
 
     if (uploadError) {
       console.error('Upload error:', uploadError);
