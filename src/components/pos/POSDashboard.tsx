@@ -653,6 +653,12 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         periodEnd={getPeriodRange(period, customRange).end}
         sellerMetrics={sellerMetrics}
       />
+
+      <POSTaskWhatsAppDialog
+        open={taskWhatsAppOpen}
+        onOpenChange={setTaskWhatsAppOpen}
+        storeId={storeId}
+      />
     </div>
   );
 }
