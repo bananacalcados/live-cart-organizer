@@ -96,8 +96,8 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
   if (relevantGoals.length === 0) return null;
 
   const getCurrentValue = (goal: Goal): number => {
-    // For category/brand goals, use progress table
-    if (goal.goal_type === "category_units" || goal.goal_type === "brand_units") {
+    // For category/brand/points goals, use progress table
+    if (goal.goal_type === "category_units" || goal.goal_type === "brand_units" || goal.goal_type === "points") {
       const progress = goalProgress.filter(p => p.goal_id === goal.id);
       return progress.reduce((sum, p) => sum + (p.current_value || 0), 0);
     }
