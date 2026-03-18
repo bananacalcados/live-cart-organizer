@@ -529,8 +529,19 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                             </div>
                           </div>
                           {t.customer_name && (
-                            <p className="text-xs text-pos-white/50 mt-0.5">
+                            <p className="text-xs text-pos-white/50 mt-0.5 flex items-center gap-1.5 flex-wrap">
                               👤 {t.customer_name} {t.customer_phone ? `· 📞 ${t.customer_phone}` : ''}
+                              {t.customer_phone && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-2 gap-1 bg-green-600 hover:bg-green-700 text-white text-[10px] rounded-full"
+                                  onClick={() => setTaskWhatsAppPhone(t.customer_phone)}
+                                >
+                                  <Phone className="h-3 w-3" /> WhatsApp
+                                </Button>
+                              )}
+                            </p>
                             </p>
                           )}
                           {t.description && (
