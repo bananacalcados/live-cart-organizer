@@ -91,7 +91,9 @@ serve(async (req) => {
           if (!cust) continue;
 
           const phone = (cust.whatsapp || '').replace(/\D/g, '');
-          if (!phone && !cust.email) continue;
+          const cpf = (cust.cpf || '').replace(/\D/g, '') || null;
+          // Accept customers with at least one identifier: phone, email, or CPF
+          if (!phone && !cust.email && !cpf) continue;
 
           const nameParts = (cust.name || '').split(' ');
           const firstName = nameParts[0] || '';
@@ -105,11 +107,18 @@ serve(async (req) => {
             last_name: lastName,
             phone: phone || null,
             email: cust.email || null,
+            cpf,
             city: cust.city || null,
             state: cust.state || null,
             gender: cust.gender || null,
             region_type: 'local',
             ddd,
+            store_id: stats.storeId,
+            shoe_size: cust.shoe_size || null,
+            preferred_style: cust.preferred_style || null,
+            age_range: cust.age_range || null,
+            source: 'pos',
+            lead_status: 'customer',
             total_orders: stats.count,
             total_spent: stats.total,
             avg_ticket: stats.count > 0 ? stats.total / stats.count : 0,
