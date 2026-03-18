@@ -210,6 +210,17 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
             weekly_points: (gam.weekly_points || 0) + (task.points_reward || 0),
             total_points: (gam.total_points || 0) + (task.points_reward || 0),
           }).eq("id", gam.id);
+        } else {
+          await supabase.from("pos_gamification").insert({
+            seller_id: selectedSellerId,
+            store_id: storeId,
+            weekly_points: task.points_reward || 0,
+            total_points: task.points_reward || 0,
+            total_sales: 0,
+            complete_registrations: 0,
+            fast_requests_answered: 0,
+            returns_count: 0,
+          } as any);
         }
       }
 
