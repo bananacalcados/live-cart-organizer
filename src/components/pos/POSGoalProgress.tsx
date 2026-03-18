@@ -63,11 +63,11 @@ const periodLabels: Record<string, string> = {
 };
 
 function mapPeriodToFilter(goal: Goal, dashPeriod: string): boolean {
-  if (goal.period === "custom") return true; // Custom period goals always visible
-  if (goal.goal_type === "category_units" || goal.goal_type === "brand_units") return true; // Always visible
+  if (goal.period === "custom") return true;
+  if (goal.goal_type === "category_units" || goal.goal_type === "brand_units" || goal.goal_type === "points") return true;
   if (goal.period === "daily" && dashPeriod === "day") return true;
   if (goal.period === "weekly" && dashPeriod === "week") return true;
-  if (goal.period === "monthly") return true; // Monthly goals always visible
+  if (goal.period === "monthly") return true;
   return false;
 }
 
