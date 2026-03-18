@@ -96,7 +96,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [completionNotes, setCompletionNotes] = useState<Record<string, string>>({});
   const [completionSeller, setCompletionSeller] = useState<Record<string, string>>({});
   const [storeSellers, setStoreSellers] = useState<{ id: string; name: string }[]>([]);
-
+  const [taskWhatsAppOpen, setTaskWhatsAppOpen] = useState(false);
   const loadAlerts = async () => {
     const [conversationRes, supportRes, interStoreRes, stockRes] = await Promise.all([
       supabase.rpc("get_conversation_counts"),
