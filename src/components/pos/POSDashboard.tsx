@@ -496,15 +496,6 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                 {contactTasks.length > 0 && (
                   <Badge className="bg-pos-orange/20 text-pos-orange border-0 text-[10px]">{contactTasks.length}</Badge>
                 )}
-                <div className="ml-auto">
-                  <Button
-                    size="sm"
-                    className="gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs"
-                    onClick={() => setTaskWhatsAppOpen(true)}
-                  >
-                    <Phone className="h-3.5 w-3.5" /> WhatsApp
-                  </Button>
-                </div>
               </h3>
               {loadingTasks ? (
                 <div className="flex items-center justify-center py-6 text-pos-white/50">
