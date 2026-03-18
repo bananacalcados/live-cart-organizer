@@ -25,6 +25,12 @@ interface GoalProgressRow {
   current_value: number;
 }
 
+interface GamificationRow {
+  seller_id: string;
+  weekly_points: number;
+  total_points: number;
+}
+
 interface Props {
   storeId: string;
   totalRevenue: number;
