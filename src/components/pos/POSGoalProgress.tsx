@@ -25,6 +25,12 @@ interface GoalProgressRow {
   current_value: number;
 }
 
+interface GamificationRow {
+  seller_id: string;
+  weekly_points: number;
+  total_points: number;
+}
+
 interface Props {
   storeId: string;
   totalRevenue: number;
@@ -74,18 +80,21 @@ function mapPeriodToFilter(goal: Goal, dashPeriod: string): boolean {
 export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerSale, salesCount, period, sellerMetrics }: Props) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [goalProgress, setGoalProgress] = useState<GoalProgressRow[]>([]);
+  const [gamificationData, setGamificationData] = useState<GamificationRow[]>([]);
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     const load = async () => {
-      const [goalsRes, progressRes, sellersRes] = await Promise.all([
+      const [goalsRes, progressRes, sellersRes, gamRes] = await Promise.all([
         supabase.from("pos_goals").select("*").eq("store_id", storeId).eq("is_active", true),
         supabase.from("pos_goal_progress" as any).select("goal_id, seller_id, current_value"),
         supabase.from("pos_sellers").select("id, name").eq("store_id", storeId).eq("is_active", true),
+        supabase.from("pos_gamification").select("seller_id, weekly_points, total_points").eq("store_id", storeId),
       ]);
       setGoals(goalsRes.data || []);
       setGoalProgress((progressRes.data as any[]) || []);
       setSellers(sellersRes.data || []);
+      setGamificationData((gamRes.data as GamificationRow[]) || []);
     };
     load();
   }, [storeId]);
@@ -96,8 +105,19 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
   if (relevantGoals.length === 0) return null;
 
   const getCurrentValue = (goal: Goal): number => {
-    // For category/brand/points goals, use progress table
-    if (goal.goal_type === "category_units" || goal.goal_type === "brand_units" || goal.goal_type === "points") {
+    // For points goals, read directly from pos_gamification (source of truth)
+    if (goal.goal_type === "points") {
+      if (goal.seller_id) {
+        // Per-seller points goal: use that seller's weekly_points
+        const sellerGam = gamificationData.find(g => g.seller_id === goal.seller_id);
+        return sellerGam?.weekly_points || 0;
+      }
+      // Global points goal: sum all sellers' weekly_points
+      return gamificationData.reduce((sum, g) => sum + (g.weekly_points || 0), 0);
+    }
+
+    // For category/brand goals, use progress table
+    if (goal.goal_type === "category_units" || goal.goal_type === "brand_units") {
       const progress = goalProgress.filter(p => p.goal_id === goal.id);
       return progress.reduce((sum, p) => sum + (p.current_value || 0), 0);
     }
