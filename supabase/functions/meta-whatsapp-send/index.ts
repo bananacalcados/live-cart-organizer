@@ -52,6 +52,120 @@ async function getCredentials(supabase: ReturnType<typeof createClient>, whatsap
   };
 }
 
+/**
+ * Downloads a media file from a URL and uploads it to Meta's Media API.
+ * Returns the media ID to use in the message payload.
+ * This avoids the issue where Meta's servers can't fetch images from certain URLs.
+ */
+async function uploadMediaToMeta(
+  mediaUrl: string,
+  mediaType: string,
+  phoneNumberId: string,
+  accessToken: string,
+): Promise<string> {
+  // Step 1: Download the media from the URL
+  console.log(`Downloading media from: ${mediaUrl}`);
+  const downloadResponse = await fetch(mediaUrl);
+  if (!downloadResponse.ok) {
+    throw new Error(`Failed to download media (${downloadResponse.status}): ${mediaUrl}`);
+  }
+
+  const contentType = downloadResponse.headers.get('content-type') || getMimeType(mediaType, mediaUrl);
+  const mediaBytes = new Uint8Array(await downloadResponse.arrayBuffer());
+
+  console.log(`Downloaded media: ${mediaBytes.length} bytes, content-type: ${contentType}`);
+
+  // Step 2: Upload to Meta's Media API
+  const boundary = `----FormBoundary${Date.now()}`;
+  const fileName = getFileName(mediaUrl, mediaType);
+
+  // Build multipart form data manually (Deno edge functions)
+  const headerPart = [
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="messaging_product"`,
+    ``,
+    `whatsapp`,
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="type"`,
+    ``,
+    contentType,
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="file"; filename="${fileName}"`,
+    `Content-Type: ${contentType}`,
+    ``,
+    ``,
+  ].join('\r\n');
+
+  const footer = `\r\n--${boundary}--\r\n`;
+
+  const headerBytes = new TextEncoder().encode(headerPart);
+  const footerBytes = new TextEncoder().encode(footer);
+
+  const bodyBuffer = new Uint8Array(headerBytes.length + mediaBytes.length + footerBytes.length);
+  bodyBuffer.set(headerBytes, 0);
+  bodyBuffer.set(mediaBytes, headerBytes.length);
+  bodyBuffer.set(footerBytes, headerBytes.length + mediaBytes.length);
+
+  const uploadUrl = `https://graph.facebook.com/v21.0/${phoneNumberId}/media`;
+  console.log(`Uploading media to Meta: ${uploadUrl}`);
+
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    },
+    body: bodyBuffer,
+  });
+
+  const uploadData = await uploadResponse.json();
+
+  if (!uploadResponse.ok || !uploadData.id) {
+    console.error('Meta media upload failed:', uploadData);
+    throw new Error(`Meta media upload failed: ${JSON.stringify(uploadData)}`);
+  }
+
+  console.log(`Media uploaded to Meta successfully, media_id: ${uploadData.id}`);
+  return uploadData.id;
+}
+
+function getMimeType(mediaType: string, url: string): string {
+  const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
+  switch (mediaType) {
+    case 'image':
+      if (ext === 'png') return 'image/png';
+      if (ext === 'webp') return 'image/webp';
+      return 'image/jpeg';
+    case 'video':
+      return 'video/mp4';
+    case 'audio':
+      if (ext === 'ogg') return 'audio/ogg';
+      if (ext === 'webm') return 'audio/webm';
+      return 'audio/mpeg';
+    case 'document':
+      if (ext === 'pdf') return 'application/pdf';
+      return 'application/octet-stream';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+function getFileName(url: string, mediaType: string): string {
+  try {
+    const pathname = new URL(url).pathname;
+    const name = pathname.split('/').pop();
+    if (name && name.includes('.')) return name;
+  } catch { /* ignore */ }
+
+  switch (mediaType) {
+    case 'image': return 'image.jpg';
+    case 'video': return 'video.mp4';
+    case 'audio': return 'audio.webm';
+    case 'document': return 'document.pdf';
+    default: return 'file';
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -103,32 +217,37 @@ serve(async (req) => {
         text: { body: message },
       };
     } else if (type === 'image' && mediaUrl) {
+      // Upload media to Meta first, then reference by ID
+      const mediaId = await uploadMediaToMeta(mediaUrl, 'image', phoneNumberId, accessToken);
       body = {
         messaging_product: 'whatsapp',
         to: formattedPhone,
         type: 'image',
-        image: { link: mediaUrl, caption: caption || message || '' },
+        image: { id: mediaId, caption: caption || message || '' },
       };
     } else if (type === 'video' && mediaUrl) {
+      const mediaId = await uploadMediaToMeta(mediaUrl, 'video', phoneNumberId, accessToken);
       body = {
         messaging_product: 'whatsapp',
         to: formattedPhone,
         type: 'video',
-        video: { link: mediaUrl, caption: caption || message || '' },
+        video: { id: mediaId, caption: caption || message || '' },
       };
     } else if (type === 'audio' && mediaUrl) {
+      const mediaId = await uploadMediaToMeta(mediaUrl, 'audio', phoneNumberId, accessToken);
       body = {
         messaging_product: 'whatsapp',
         to: formattedPhone,
         type: 'audio',
-        audio: { link: mediaUrl },
+        audio: { id: mediaId },
       };
     } else if (type === 'document' && mediaUrl) {
+      const mediaId = await uploadMediaToMeta(mediaUrl, 'document', phoneNumberId, accessToken);
       body = {
         messaging_product: 'whatsapp',
         to: formattedPhone,
         type: 'document',
-        document: { link: mediaUrl, caption: caption || message || '' },
+        document: { id: mediaId, caption: caption || message || '' },
       };
     } else if (type === 'interactive' && interactiveData) {
       // Interactive message with reply buttons (session message, no template needed)
@@ -143,9 +262,10 @@ serve(async (req) => {
         },
       };
 
-      // Add image header if provided
+      // Add image header if provided — also upload to Meta first
       if (interactiveData.header?.type === 'image' && interactiveData.header.imageUrl) {
-        interactive.header = { type: 'image', image: { link: interactiveData.header.imageUrl } };
+        const headerMediaId = await uploadMediaToMeta(interactiveData.header.imageUrl, 'image', phoneNumberId, accessToken);
+        interactive.header = { type: 'image', image: { id: headerMediaId } };
       }
 
       body = {
