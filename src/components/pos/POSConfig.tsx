@@ -591,6 +591,17 @@ export function POSConfig({ storeId }: Props) {
           weekly_points: (gam.weekly_points || 0) + pointsReward,
           total_points: (gam.total_points || 0) + pointsReward,
         }).eq('id', gam.id);
+      } else {
+        await supabase.from('pos_gamification').insert({
+          seller_id: sellerId,
+          store_id: storeId,
+          weekly_points: pointsReward,
+          total_points: pointsReward,
+          total_sales: 0,
+          complete_registrations: 0,
+          fast_requests_answered: 0,
+          returns_count: 0,
+        } as any);
       }
       toast.success(`Tarefa concluída! +${pointsReward} pts`);
       loadTasks();
