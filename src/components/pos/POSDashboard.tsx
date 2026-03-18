@@ -542,7 +542,6 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                                 </Button>
                               )}
                             </p>
-                            </p>
                           )}
                           {t.description && (
                             <p className="text-[10px] text-pos-white/40 mt-0.5 whitespace-pre-line line-clamp-2">{t.description}</p>
