@@ -166,7 +166,7 @@ export default function POS() {
     <div className="h-screen flex flex-col md:flex-row bg-pos-black">
       {/* Desktop Sidebar */}
       {!isMobile && (
-        <div className="w-16 lg:w-52 border-r border-pos-white/10 bg-pos-white flex flex-col">
+        <div className="w-16 lg:w-52 border-r border-pos-white/10 bg-[hsl(0,0%,8%)] flex flex-col">
           {/* Logo */}
           <div className="p-3 border-b border-pos-white/10 flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-pos-yellow text-pos-black font-bold flex-shrink-0">
