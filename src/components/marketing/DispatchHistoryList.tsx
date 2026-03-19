@@ -371,48 +371,61 @@ export function DispatchHistoryList() {
 
               <div className="space-y-4">
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <Card className="p-3 text-center">
-                    <div className="text-2xl font-bold">{selectedDispatch.total_recipients}</div>
-                    <div className="text-xs text-muted-foreground">Total</div>
-                  </Card>
-                  <Card className="p-3 text-center">
-                    <div className="text-2xl font-bold text-amber-600">{selectedDispatch.stats?.sent || 0}</div>
-                    <div className="text-xs text-muted-foreground">Enviadas</div>
-                  </Card>
-                  <Card className="p-3 text-center">
-                    <div className="text-2xl font-bold text-emerald-600">{selectedDispatch.stats?.delivered || 0}</div>
-                    <div className="text-xs text-muted-foreground">Entregues</div>
-                  </Card>
-                  <Card className="p-3 text-center">
-                    <div className="text-2xl font-bold text-blue-600">{selectedDispatch.stats?.read || 0}</div>
-                    <div className="text-xs text-muted-foreground">Lidas</div>
-                  </Card>
-                  <Card className="p-3 text-center">
-                    <div className="text-2xl font-bold text-destructive">{selectedDispatch.stats?.failed || 0}</div>
-                    <div className="text-xs text-muted-foreground">Falhas</div>
-                  </Card>
-                </div>
+                {(() => {
+                  const s = selectedDispatch.stats;
+                  const dispatched = s?.dispatched || selectedDispatch.sent_count || 0;
+                  const webhookConfirmed = (s?.sent || 0) + (s?.delivered || 0) + (s?.read || 0);
+                  const readCount = s?.read || 0;
+                  const notRead = dispatched - readCount;
+                  const interactions = s?.interactions || 0;
+                  const failedCount = s?.failed || selectedDispatch.failed_count || 0;
 
-                {/* Rates */}
-                <div className="grid grid-cols-3 gap-2">
-                  <Card className="p-3 text-center bg-emerald-50 dark:bg-emerald-950/30">
-                    <div className="text-lg font-bold text-emerald-600">
-                      {calcRate((selectedDispatch.stats?.delivered || 0) + (selectedDispatch.stats?.read || 0), selectedDispatch.stats?.total || 0)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Taxa de Entrega</div>
-                  </Card>
-                  <Card className="p-3 text-center bg-blue-50 dark:bg-blue-950/30">
-                    <div className="text-lg font-bold text-blue-600">
-                      {calcRate(selectedDispatch.stats?.read || 0, selectedDispatch.stats?.total || 0)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Taxa de Leitura</div>
-                  </Card>
-                  <Card className="p-3 text-center bg-destructive/10">
-                    <div className="text-lg font-bold text-destructive">
-                      {calcRate(selectedDispatch.stats?.failed || 0, selectedDispatch.stats?.total || 0)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Taxa de Falha</div>
+                  return (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <Card className="p-3 text-center">
+                          <div className="text-2xl font-bold">{selectedDispatch.total_recipients}</div>
+                          <div className="text-xs text-muted-foreground">Lista</div>
+                        </Card>
+                        <Card className="p-3 text-center">
+                          <div className="text-2xl font-bold text-emerald-600">{dispatched}</div>
+                          <div className="text-xs text-muted-foreground">Disparados</div>
+                        </Card>
+                        <Card className="p-3 text-center">
+                          <div className="text-2xl font-bold text-blue-600">{readCount}</div>
+                          <div className="text-xs text-muted-foreground">Lidas</div>
+                        </Card>
+                        <Card className="p-3 text-center">
+                          <div className="text-2xl font-bold text-amber-600">{notRead > 0 ? notRead : 0}</div>
+                          <div className="text-xs text-muted-foreground">Não lidas</div>
+                        </Card>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-2">
+                        <Card className="p-3 text-center bg-emerald-50 dark:bg-emerald-950/30">
+                          <div className="text-lg font-bold text-emerald-600">
+                            {calcRate((s?.delivered || 0) + readCount, dispatched)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Taxa de Entrega</div>
+                        </Card>
+                        <Card className="p-3 text-center bg-blue-50 dark:bg-blue-950/30">
+                          <div className="text-lg font-bold text-blue-600">
+                            {calcRate(readCount, dispatched)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Taxa de Leitura</div>
+                        </Card>
+                        <Card className="p-3 text-center bg-purple-50 dark:bg-purple-950/30">
+                          <div className="text-lg font-bold text-purple-600">{interactions}</div>
+                          <div className="text-xs text-muted-foreground">Interações</div>
+                        </Card>
+                        <Card className="p-3 text-center bg-destructive/10">
+                          <div className="text-lg font-bold text-destructive">{failedCount}</div>
+                          <div className="text-xs text-muted-foreground">Falhas</div>
+                        </Card>
+                      </div>
+                    </>
+                  );
+                })()}
                   </Card>
                 </div>
 
