@@ -83,7 +83,7 @@ export function DispatchHistoryList() {
           .eq('dispatch_id', d.id);
 
         if (!recs || recs.length === 0) {
-          return { ...d, stats: { delivered: 0, read: 0, sent: 0, failed: 0, total: 0 } };
+          return { ...d, stats: { delivered: 0, read: 0, sent: 0, failed: 0, total: 0, dispatched: d.sent_count || 0, interactions: 0 } };
         }
 
         const phones = recs.map((r: any) => {
@@ -92,15 +92,16 @@ export function DispatchHistoryList() {
           return p;
         });
 
-        // Query message statuses for these phones around the dispatch time
-        const startTime = new Date(d.started_at);
+        // FIX: Use created_at (dispatch creation) instead of started_at (last lock timestamp)
+        const startTime = new Date(d.created_at);
         startTime.setMinutes(startTime.getMinutes() - 2);
         const endTime = d.completed_at
-          ? new Date(new Date(d.completed_at).getTime() + 60 * 60 * 1000)
+          ? new Date(new Date(d.completed_at).getTime() + 24 * 60 * 60 * 1000)
           : new Date();
 
         // Batch phones in groups of 100 for the IN query
         let allStatuses: { phone: string; status: string }[] = [];
+        let interactionCount = 0;
         for (let i = 0; i < phones.length; i += 100) {
           const batch = phones.slice(i, i + 100);
           const { data: msgs } = await supabase
@@ -111,6 +112,16 @@ export function DispatchHistoryList() {
             .gte('created_at', startTime.toISOString())
             .lte('created_at', endTime.toISOString());
           if (msgs) allStatuses.push(...msgs);
+
+          // Count interactions (incoming replies from these phones after dispatch)
+          const { count: replies } = await supabase
+            .from('whatsapp_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('direction', 'incoming')
+            .in('phone', batch)
+            .gte('created_at', startTime.toISOString())
+            .lte('created_at', endTime.toISOString());
+          interactionCount += replies || 0;
         }
 
         // Use best status per phone
@@ -123,7 +134,12 @@ export function DispatchHistoryList() {
           }
         }
 
-        const stats = { delivered: 0, read: 0, sent: 0, failed: 0, total: phones.length };
+        const stats = {
+          delivered: 0, read: 0, sent: 0, failed: 0,
+          total: phones.length,
+          dispatched: d.sent_count || 0,
+          interactions: interactionCount,
+        };
         for (const [, status] of phoneStatus) {
           if (status === 'delivered') stats.delivered++;
           else if (status === 'read') stats.read++;
