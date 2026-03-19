@@ -292,10 +292,10 @@ export function DispatchHistoryList() {
             <ScrollArea className="max-h-[500px]">
               <div className="space-y-2">
                 {dispatches.map((d) => {
-                  const s = d.stats || { delivered: 0, read: 0, sent: 0, failed: 0, total: 0 };
-                  const successTotal = s.delivered + s.read + s.sent;
-                  const deliveryRate = calcRate(s.delivered + s.read, s.total);
-                  const readRate = calcRate(s.read, s.total);
+                  const s = d.stats || { delivered: 0, read: 0, sent: 0, failed: 0, total: 0, dispatched: 0, interactions: 0 };
+                  const dispatched = s.dispatched || d.sent_count || 0;
+                  const deliveryRate = calcRate(s.delivered + s.read, dispatched);
+                  const readRate = calcRate(s.read, dispatched);
 
                   return (
                     <div
