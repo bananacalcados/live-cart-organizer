@@ -319,7 +319,7 @@ export function DispatchHistoryList() {
                             </span>
                             <span className="flex items-center gap-1">
                               <Users className="h-3 w-3" />
-                              {d.total_recipients} dest.
+                              {dispatched}/{d.total_recipients} disp.
                             </span>
                             <span className="truncate max-w-[200px]">
                               {getAudienceLabel(d.audience_source, d.audience_filters)}
