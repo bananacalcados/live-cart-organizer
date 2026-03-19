@@ -27,6 +27,7 @@ interface DispatchRecord {
   failed_count: number;
   rendered_message: string | null;
   force_resend: boolean;
+  created_at: string;
   started_at: string;
   completed_at: string | null;
   status: string;
@@ -37,6 +38,8 @@ interface DispatchRecord {
     sent: number;
     failed: number;
     total: number;
+    dispatched: number;
+    interactions: number;
   };
 }
 
@@ -80,7 +83,7 @@ export function DispatchHistoryList() {
           .eq('dispatch_id', d.id);
 
         if (!recs || recs.length === 0) {
-          return { ...d, stats: { delivered: 0, read: 0, sent: 0, failed: 0, total: 0 } };
+          return { ...d, stats: { delivered: 0, read: 0, sent: 0, failed: 0, total: 0, dispatched: d.sent_count || 0, interactions: 0 } };
         }
 
         const phones = recs.map((r: any) => {
@@ -89,15 +92,16 @@ export function DispatchHistoryList() {
           return p;
         });
 
-        // Query message statuses for these phones around the dispatch time
-        const startTime = new Date(d.started_at);
+        // FIX: Use created_at (dispatch creation) instead of started_at (last lock timestamp)
+        const startTime = new Date(d.created_at);
         startTime.setMinutes(startTime.getMinutes() - 2);
         const endTime = d.completed_at
-          ? new Date(new Date(d.completed_at).getTime() + 60 * 60 * 1000)
+          ? new Date(new Date(d.completed_at).getTime() + 24 * 60 * 60 * 1000)
           : new Date();
 
         // Batch phones in groups of 100 for the IN query
         let allStatuses: { phone: string; status: string }[] = [];
+        let interactionCount = 0;
         for (let i = 0; i < phones.length; i += 100) {
           const batch = phones.slice(i, i + 100);
           const { data: msgs } = await supabase
@@ -108,6 +112,16 @@ export function DispatchHistoryList() {
             .gte('created_at', startTime.toISOString())
             .lte('created_at', endTime.toISOString());
           if (msgs) allStatuses.push(...msgs);
+
+          // Count interactions (incoming replies from these phones after dispatch)
+          const { count: replies } = await supabase
+            .from('whatsapp_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('direction', 'incoming')
+            .in('phone', batch)
+            .gte('created_at', startTime.toISOString())
+            .lte('created_at', endTime.toISOString());
+          interactionCount += replies || 0;
         }
 
         // Use best status per phone
@@ -120,7 +134,12 @@ export function DispatchHistoryList() {
           }
         }
 
-        const stats = { delivered: 0, read: 0, sent: 0, failed: 0, total: phones.length };
+        const stats = {
+          delivered: 0, read: 0, sent: 0, failed: 0,
+          total: phones.length,
+          dispatched: d.sent_count || 0,
+          interactions: interactionCount,
+        };
         for (const [, status] of phoneStatus) {
           if (status === 'delivered') stats.delivered++;
           else if (status === 'read') stats.read++;
@@ -163,10 +182,11 @@ export function DispatchHistoryList() {
           return p;
         });
 
-        const startTime = new Date(dispatch.started_at);
+        // FIX: Use created_at instead of started_at for time window
+        const startTime = new Date(dispatch.created_at);
         startTime.setMinutes(startTime.getMinutes() - 2);
         const endTime = dispatch.completed_at
-          ? new Date(new Date(dispatch.completed_at).getTime() + 60 * 60 * 1000)
+          ? new Date(new Date(dispatch.completed_at).getTime() + 24 * 60 * 60 * 1000)
           : new Date();
 
         const statusMap: Record<string, string> = {};
@@ -272,10 +292,10 @@ export function DispatchHistoryList() {
             <ScrollArea className="max-h-[500px]">
               <div className="space-y-2">
                 {dispatches.map((d) => {
-                  const s = d.stats || { delivered: 0, read: 0, sent: 0, failed: 0, total: 0 };
-                  const successTotal = s.delivered + s.read + s.sent;
-                  const deliveryRate = calcRate(s.delivered + s.read, s.total);
-                  const readRate = calcRate(s.read, s.total);
+                  const s = d.stats || { delivered: 0, read: 0, sent: 0, failed: 0, total: 0, dispatched: 0, interactions: 0 };
+                  const dispatched = s.dispatched || d.sent_count || 0;
+                  const deliveryRate = calcRate(s.delivered + s.read, dispatched);
+                  const readRate = calcRate(s.read, dispatched);
 
                   return (
                     <div
@@ -295,11 +315,11 @@ export function DispatchHistoryList() {
                           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {format(new Date(d.started_at), "dd/MM HH:mm", { locale: ptBR })}
+                              {format(new Date(d.created_at), "dd/MM HH:mm", { locale: ptBR })}
                             </span>
                             <span className="flex items-center gap-1">
                               <Users className="h-3 w-3" />
-                              {d.total_recipients} dest.
+                              {dispatched}/{d.total_recipients} disp.
                             </span>
                             <span className="truncate max-w-[200px]">
                               {getAudienceLabel(d.audience_source, d.audience_filters)}
@@ -318,9 +338,9 @@ export function DispatchHistoryList() {
                           </div>
                           <div className="flex gap-1">
                             <div className="w-2 h-8 rounded-full bg-muted overflow-hidden flex flex-col-reverse">
-                              <div className="bg-blue-500 transition-all" style={{ height: `${s.total ? (s.read / s.total) * 100 : 0}%` }} />
-                              <div className="bg-emerald-500 transition-all" style={{ height: `${s.total ? (s.delivered / s.total) * 100 : 0}%` }} />
-                              <div className="bg-amber-500 transition-all" style={{ height: `${s.total ? (s.sent / s.total) * 100 : 0}%` }} />
+                              <div className="bg-blue-500 transition-all" style={{ height: `${dispatched ? (s.read / dispatched) * 100 : 0}%` }} />
+                              <div className="bg-emerald-500 transition-all" style={{ height: `${dispatched ? (s.delivered / dispatched) * 100 : 0}%` }} />
+                              <div className="bg-amber-500 transition-all" style={{ height: `${dispatched ? (s.sent / dispatched) * 100 : 0}%` }} />
                             </div>
                           </div>
                           <Button variant="ghost" size="sm" className="h-7 px-2">
@@ -351,54 +371,65 @@ export function DispatchHistoryList() {
 
               <div className="space-y-4">
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <Card className="p-3 text-center">
-                    <div className="text-2xl font-bold">{selectedDispatch.total_recipients}</div>
-                    <div className="text-xs text-muted-foreground">Total</div>
-                  </Card>
-                  <Card className="p-3 text-center">
-                    <div className="text-2xl font-bold text-amber-600">{selectedDispatch.stats?.sent || 0}</div>
-                    <div className="text-xs text-muted-foreground">Enviadas</div>
-                  </Card>
-                  <Card className="p-3 text-center">
-                    <div className="text-2xl font-bold text-emerald-600">{selectedDispatch.stats?.delivered || 0}</div>
-                    <div className="text-xs text-muted-foreground">Entregues</div>
-                  </Card>
-                  <Card className="p-3 text-center">
-                    <div className="text-2xl font-bold text-blue-600">{selectedDispatch.stats?.read || 0}</div>
-                    <div className="text-xs text-muted-foreground">Lidas</div>
-                  </Card>
-                  <Card className="p-3 text-center">
-                    <div className="text-2xl font-bold text-destructive">{selectedDispatch.stats?.failed || 0}</div>
-                    <div className="text-xs text-muted-foreground">Falhas</div>
-                  </Card>
-                </div>
+                {(() => {
+                  const s = selectedDispatch.stats;
+                  const dispatched = s?.dispatched || selectedDispatch.sent_count || 0;
+                  const webhookConfirmed = (s?.sent || 0) + (s?.delivered || 0) + (s?.read || 0);
+                  const readCount = s?.read || 0;
+                  const notRead = dispatched - readCount;
+                  const interactions = s?.interactions || 0;
+                  const failedCount = s?.failed || selectedDispatch.failed_count || 0;
 
-                {/* Rates */}
-                <div className="grid grid-cols-3 gap-2">
-                  <Card className="p-3 text-center bg-emerald-50 dark:bg-emerald-950/30">
-                    <div className="text-lg font-bold text-emerald-600">
-                      {calcRate((selectedDispatch.stats?.delivered || 0) + (selectedDispatch.stats?.read || 0), selectedDispatch.stats?.total || 0)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Taxa de Entrega</div>
-                  </Card>
-                  <Card className="p-3 text-center bg-blue-50 dark:bg-blue-950/30">
-                    <div className="text-lg font-bold text-blue-600">
-                      {calcRate(selectedDispatch.stats?.read || 0, selectedDispatch.stats?.total || 0)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Taxa de Leitura</div>
-                  </Card>
-                  <Card className="p-3 text-center bg-destructive/10">
-                    <div className="text-lg font-bold text-destructive">
-                      {calcRate(selectedDispatch.stats?.failed || 0, selectedDispatch.stats?.total || 0)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Taxa de Falha</div>
-                  </Card>
-                </div>
+                  return (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <Card className="p-3 text-center">
+                          <div className="text-2xl font-bold">{selectedDispatch.total_recipients}</div>
+                          <div className="text-xs text-muted-foreground">Lista</div>
+                        </Card>
+                        <Card className="p-3 text-center">
+                          <div className="text-2xl font-bold text-emerald-600">{dispatched}</div>
+                          <div className="text-xs text-muted-foreground">Disparados</div>
+                        </Card>
+                        <Card className="p-3 text-center">
+                          <div className="text-2xl font-bold text-blue-600">{readCount}</div>
+                          <div className="text-xs text-muted-foreground">Lidas</div>
+                        </Card>
+                        <Card className="p-3 text-center">
+                          <div className="text-2xl font-bold text-amber-600">{notRead > 0 ? notRead : 0}</div>
+                          <div className="text-xs text-muted-foreground">Não lidas</div>
+                        </Card>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-2">
+                        <Card className="p-3 text-center bg-emerald-50 dark:bg-emerald-950/30">
+                          <div className="text-lg font-bold text-emerald-600">
+                            {calcRate((s?.delivered || 0) + readCount, dispatched)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Taxa de Entrega</div>
+                        </Card>
+                        <Card className="p-3 text-center bg-blue-50 dark:bg-blue-950/30">
+                          <div className="text-lg font-bold text-blue-600">
+                            {calcRate(readCount, dispatched)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Taxa de Leitura</div>
+                        </Card>
+                        <Card className="p-3 text-center bg-purple-50 dark:bg-purple-950/30">
+                          <div className="text-lg font-bold text-purple-600">{interactions}</div>
+                          <div className="text-xs text-muted-foreground">Interações</div>
+                        </Card>
+                        <Card className="p-3 text-center bg-destructive/10">
+                          <div className="text-lg font-bold text-destructive">{failedCount}</div>
+                          <div className="text-xs text-muted-foreground">Falhas</div>
+                        </Card>
+                      </div>
+                    </>
+                  );
+                })()}
 
                 {/* Metadata */}
                 <Card className="p-3 space-y-1 text-sm">
-                  <div><strong>Início:</strong> {format(new Date(selectedDispatch.started_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
+                  <div><strong>Início:</strong> {format(new Date(selectedDispatch.created_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
                   {selectedDispatch.completed_at && (
                     <div><strong>Fim:</strong> {format(new Date(selectedDispatch.completed_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
                   )}
