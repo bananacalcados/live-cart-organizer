@@ -338,9 +338,9 @@ export function DispatchHistoryList() {
                           </div>
                           <div className="flex gap-1">
                             <div className="w-2 h-8 rounded-full bg-muted overflow-hidden flex flex-col-reverse">
-                              <div className="bg-blue-500 transition-all" style={{ height: `${s.total ? (s.read / s.total) * 100 : 0}%` }} />
-                              <div className="bg-emerald-500 transition-all" style={{ height: `${s.total ? (s.delivered / s.total) * 100 : 0}%` }} />
-                              <div className="bg-amber-500 transition-all" style={{ height: `${s.total ? (s.sent / s.total) * 100 : 0}%` }} />
+                              <div className="bg-blue-500 transition-all" style={{ height: `${dispatched ? (s.read / dispatched) * 100 : 0}%` }} />
+                              <div className="bg-emerald-500 transition-all" style={{ height: `${dispatched ? (s.delivered / dispatched) * 100 : 0}%` }} />
+                              <div className="bg-amber-500 transition-all" style={{ height: `${dispatched ? (s.sent / dispatched) * 100 : 0}%` }} />
                             </div>
                           </div>
                           <Button variant="ghost" size="sm" className="h-7 px-2">
