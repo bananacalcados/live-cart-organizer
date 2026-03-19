@@ -429,7 +429,7 @@ export function DispatchHistoryList() {
 
                 {/* Metadata */}
                 <Card className="p-3 space-y-1 text-sm">
-                  <div><strong>Início:</strong> {format(new Date(selectedDispatch.started_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
+                  <div><strong>Início:</strong> {format(new Date(selectedDispatch.created_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
                   {selectedDispatch.completed_at && (
                     <div><strong>Fim:</strong> {format(new Date(selectedDispatch.completed_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
                   )}
