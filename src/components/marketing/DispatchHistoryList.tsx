@@ -315,7 +315,7 @@ export function DispatchHistoryList() {
                           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {format(new Date(d.started_at), "dd/MM HH:mm", { locale: ptBR })}
+                              {format(new Date(d.created_at), "dd/MM HH:mm", { locale: ptBR })}
                             </span>
                             <span className="flex items-center gap-1">
                               <Users className="h-3 w-3" />
