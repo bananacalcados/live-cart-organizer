@@ -426,8 +426,6 @@ export function DispatchHistoryList() {
                     </>
                   );
                 })()}
-                  </Card>
-                </div>
 
                 {/* Metadata */}
                 <Card className="p-3 space-y-1 text-sm">
