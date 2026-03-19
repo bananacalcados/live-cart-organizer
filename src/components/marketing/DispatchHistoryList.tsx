@@ -182,10 +182,11 @@ export function DispatchHistoryList() {
           return p;
         });
 
-        const startTime = new Date(dispatch.started_at);
+        // FIX: Use created_at instead of started_at for time window
+        const startTime = new Date(dispatch.created_at);
         startTime.setMinutes(startTime.getMinutes() - 2);
         const endTime = dispatch.completed_at
-          ? new Date(new Date(dispatch.completed_at).getTime() + 60 * 60 * 1000)
+          ? new Date(new Date(dispatch.completed_at).getTime() + 24 * 60 * 60 * 1000)
           : new Date();
 
         const statusMap: Record<string, string> = {};
