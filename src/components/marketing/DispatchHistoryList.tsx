@@ -27,6 +27,7 @@ interface DispatchRecord {
   failed_count: number;
   rendered_message: string | null;
   force_resend: boolean;
+  created_at: string;
   started_at: string;
   completed_at: string | null;
   status: string;
@@ -37,6 +38,8 @@ interface DispatchRecord {
     sent: number;
     failed: number;
     total: number;
+    dispatched: number;
+    interactions: number;
   };
 }
 
