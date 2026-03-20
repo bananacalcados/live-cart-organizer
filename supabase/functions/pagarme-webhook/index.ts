@@ -18,10 +18,22 @@ async function autoCreateShopifyOrder(_supabase: any, orderId: string, source: s
   }
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const ALLOWED_ORIGINS = [
+  "https://www.bananacalcados.com.br",
+  "https://bananacalcados.com.br",
+  "https://live-cart-organizer.lovable.app",
+  "https://checkout.bananacalcados.com.br",
+  "https://tqxhcyuxgqbzqwoidpie.supabase.co",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  return {
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : "null",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  };
+}
 
 async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: string, supabaseKey: string) {
   try {
@@ -110,7 +122,7 @@ async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: s
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -125,7 +137,7 @@ serve(async (req) => {
     const orderData = payload.data;
     if (!orderData) {
       console.log("No data in payload, ignoring");
-      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const ourOrderId = orderData.code || orderData.metadata?.our_order_id;
@@ -138,7 +150,7 @@ serve(async (req) => {
 
     if (!ourOrderId) {
       console.log("No order code/metadata found, cannot map to internal order. Skipping.");
-      return new Response(JSON.stringify({ ok: true, skipped: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ ok: true, skipped: true }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const isPaid = status === "paid" || eventType === "order.paid" || eventType === "charge.paid";
@@ -146,7 +158,7 @@ serve(async (req) => {
 
     if (!isPaid && !isFailed) {
       console.log(`Status "${status}" / event "${eventType}" is not actionable, skipping.`);
-      return new Response(JSON.stringify({ ok: true, skipped: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ ok: true, skipped: true }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // Strategy 1: Search by pagarme_order_id (gateway link field)
@@ -213,7 +225,7 @@ serve(async (req) => {
       if (isPaid && order.is_paid === true) {
         console.log(`[pagarme] Pedido ${order.id} já confirmado — ignorando.`);
         return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
       if (isPaid && !order.is_paid) {
@@ -247,7 +259,7 @@ serve(async (req) => {
       if (isPaid && (sale.status === "paid" || sale.status === "completed")) {
         console.log(`[pagarme] pos_sale ${sale.id} já confirmado — ignorando.`);
         return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
       if (isPaid && sale.status !== "paid" && sale.status !== "completed") {
@@ -301,13 +313,13 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ ok: true, updated }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("pagarme-webhook error:", error);
     return new Response(
       JSON.stringify({ ok: true, error: error.message }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

@@ -1,14 +1,25 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const ALLOWED_ORIGINS = [
+  "https://www.bananacalcados.com.br",
+  "https://bananacalcados.com.br",
+  "https://live-cart-organizer.lovable.app",
+  "https://checkout.bananacalcados.com.br",
+  "https://tqxhcyuxgqbzqwoidpie.supabase.co",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  return {
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : "null",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  };
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   try {
@@ -16,7 +27,7 @@ Deno.serve(async (req) => {
     if (!session_id) {
       return new Response(JSON.stringify({ error: "session_id required" }), {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -35,7 +46,7 @@ Deno.serve(async (req) => {
     if (!captureItems || captureItems.length === 0) {
       return new Response(
         JSON.stringify({ error: "No items found for this session" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 404, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -49,7 +60,7 @@ Deno.serve(async (req) => {
     if (skuArray.length === 0) {
       return new Response(
         JSON.stringify({ sales: [], totals: { total_pairs: 0, total_value: 0 } }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -192,13 +203,13 @@ Deno.serve(async (req) => {
           total_captured_units: captureItems.reduce((s: number, i: any) => s + (i.quantity || 0), 0),
         },
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (err: any) {
     console.error("Error:", err);
     return new Response(
       JSON.stringify({ error: err.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

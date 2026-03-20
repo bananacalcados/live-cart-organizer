@@ -4,6 +4,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const AGENT_KEY = Deno.env.get("MCP_AGENT_KEY") || "";
 
+const ALLOWED_ORIGINS = [
+  "https://www.bananacalcados.com.br",
+  "https://bananacalcados.com.br",
+  "https://live-cart-organizer.lovable.app",
+  "https://checkout.bananacalcados.com.br",
+  "https://tqxhcyuxgqbzqwoidpie.supabase.co",
+];
+
+function getCorsOrigin(req: Request): string {
+  const origin = req.headers.get("origin") || "";
+  return ALLOWED_ORIGINS.includes(origin) ? origin : "null";
+}
+
 function getSupabase() {
   return createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -683,7 +696,7 @@ app.use("/*", async (c, next) => {
   if (c.req.method === "OPTIONS") {
     return new Response(null, {
       headers: {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": getCorsOrigin(c.req.raw),
         "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-agent-key, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
         "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       },
@@ -705,7 +718,7 @@ app.use("/*", async (c, next) => {
 app.all("/*", async (c) => {
   const response = await transport.handleRequest(c.req.raw, mcpServer);
   // Add CORS headers
-  response.headers.set("Access-Control-Allow-Origin", "*");
+  response.headers.set("Access-Control-Allow-Origin", getCorsOrigin(c.req.raw));
   return response;
 });
 

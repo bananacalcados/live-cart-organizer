@@ -18,10 +18,22 @@ async function autoCreateShopifyOrder(_supabase: any, orderId: string, source: s
   }
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const ALLOWED_ORIGINS = [
+  "https://www.bananacalcados.com.br",
+  "https://bananacalcados.com.br",
+  "https://live-cart-organizer.lovable.app",
+  "https://checkout.bananacalcados.com.br",
+  "https://tqxhcyuxgqbzqwoidpie.supabase.co",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  return {
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : "null",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  };
+}
 
 // VINDI/Yapay status mapping
 const VINDI_PAID_STATUSES = [6]; // Somente "Aprovada" é pagamento confirmado
@@ -113,7 +125,7 @@ async function autoCreateTinyOrder(supabase: any, saleId: string, supabaseUrl: s
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -127,7 +139,7 @@ serve(async (req) => {
   if (!ALLOWED_GATEWAYS.includes(gateway)) {
     return new Response(JSON.stringify({ error: "Invalid gateway" }), {
       status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -140,13 +152,13 @@ serve(async (req) => {
     // For pagarme/appmax, just acknowledge — they have dedicated webhooks
     console.log(`Gateway "${gateway}" has its own webhook. Acknowledging.`);
     return new Response(JSON.stringify({ ok: true, routed: false }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error("payment-webhook error:", error);
     return new Response(
       JSON.stringify({ ok: true, error: error.message }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });
@@ -184,7 +196,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   if (!tokenTransaction) {
     console.log("No token_transaction in payload. Skipping.");
     return new Response(JSON.stringify({ ok: true, skipped: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -212,7 +224,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   if (!statusId) {
     console.log("No status_id resolved. Skipping.");
     return new Response(JSON.stringify({ ok: true, skipped: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -223,14 +235,14 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   if (statusId === 87) {
     console.log(`VINDI: pedido em monitoramento (análise antifraude). Aguardando resultado. token=${tokenTransaction}`);
     return new Response(JSON.stringify({ ok: true, skipped: true, reason: "under_review" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
   if (!isPaid && !isFailed) {
     console.log(`VINDI status_id ${statusId} not actionable, skipping.`);
     return new Response(JSON.stringify({ ok: true, skipped: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -304,7 +316,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
     if (isPaid && order.is_paid === true) {
       console.log(`[vindi] Pedido ${order.id} já confirmado — ignorando.`);
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
     updated = await updateOrder(supabase, order, order.id, isPaid, isFailed, tokenTransaction, statusId);
@@ -313,7 +325,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
     if (isPaid && (sale.status === "paid" || sale.status === "completed")) {
       console.log(`[vindi] pos_sale ${sale.id} já confirmado — ignorando.`);
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
     updated = await updateSale(supabase, sale, sale.id, isPaid, isFailed, tokenTransaction, statusId, supabaseUrl, supabaseKey);
@@ -343,7 +355,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
 
   return new Response(
     JSON.stringify({ ok: true, updated, order_id: ourOrderId }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
   );
 }
 

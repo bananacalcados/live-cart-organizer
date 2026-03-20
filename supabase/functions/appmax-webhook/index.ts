@@ -18,10 +18,22 @@ async function autoCreateShopifyOrder(_supabase: any, orderId: string, source: s
   }
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const ALLOWED_ORIGINS = [
+  "https://www.bananacalcados.com.br",
+  "https://bananacalcados.com.br",
+  "https://live-cart-organizer.lovable.app",
+  "https://checkout.bananacalcados.com.br",
+  "https://tqxhcyuxgqbzqwoidpie.supabase.co",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  return {
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : "null",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  };
+}
 
 // Status da Appmax em português
 const APPMAX_PAID_STATUSES = ["aprovado", "integrado"];
@@ -228,7 +240,7 @@ async function findOrder(supabase: any, appmaxId: string | number, telephone: st
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -252,7 +264,7 @@ serve(async (req) => {
     if (IGNORED_EVENTS.includes(event)) {
       console.log(`AppMax: Event ${event} is ignored (non-payment event).`);
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: `ignored_event_${event}` }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -260,7 +272,7 @@ serve(async (req) => {
     if (APPMAX_AUTHORIZED_STATUSES.includes(status)) {
       console.log(`AppMax: pedido em status "${status}" (análise). Aguardando confirmação.`);
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "under_review" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -271,7 +283,7 @@ serve(async (req) => {
     if (!isPaid && !isFailed) {
       console.log(`AppMax status "${status}" / event "${event}" not actionable, skipping.`);
       return new Response(JSON.stringify({ ok: true, skipped: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -281,7 +293,7 @@ serve(async (req) => {
     if (!found) {
       console.error("AppMax: pedido não encontrado para o evento", JSON.stringify(payload));
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "order_not_found" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -296,7 +308,7 @@ serve(async (req) => {
       if (isPaid && record.is_paid === true) {
         console.log(`[appmax] Pedido ${ourOrderId} já confirmado — ignorando.`);
         return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
       if (isPaid && !record.is_paid) {
@@ -343,7 +355,7 @@ serve(async (req) => {
       if (isPaid && (record.status === "paid" || record.status === "completed")) {
         console.log(`[appmax] pos_sale ${ourOrderId} já confirmado — ignorando.`);
         return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
       if (isPaid && record.status !== "paid" && record.status !== "completed") {
@@ -396,13 +408,13 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ ok: true, updated, order_id: ourOrderId }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("appmax-webhook error:", error);
     return new Response(
       JSON.stringify({ ok: true, error: error.message }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });
