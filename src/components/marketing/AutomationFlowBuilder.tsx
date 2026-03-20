@@ -108,6 +108,9 @@ const CUSTOMER_VARIABLES = [
   { value: "{{produtos}}", label: "Lista de Produtos" },
   { value: "{{link_carrinho}}", label: "Link do Carrinho" },
   { value: "{{cupom}}", label: "Código do Cupom" },
+  { value: "{{numero_pedido}}", label: "Número do Pedido" },
+  { value: "{{codigo_rastreio}}", label: "Código de Rastreio" },
+  { value: "{{transportadora}}", label: "Transportadora" },
 ];
 
 // Dynamic field options (pulled from lead/customer data at send time)

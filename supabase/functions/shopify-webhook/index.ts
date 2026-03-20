@@ -227,6 +227,33 @@ serve(async (req) => {
       }
     }
 
+    if (topic === "orders/fulfilled" || topic === "fulfillments/create") {
+      const fulfillment = body.fulfillments?.[0] || body;
+      const trackingNumber = fulfillment.tracking_number || fulfillment.tracking_numbers?.[0];
+      const trackingCompany = fulfillment.tracking_company;
+
+      const customerPhone = body.phone || body.billing_address?.phone || body.shipping_address?.phone || body.customer?.phone;
+      const customerName = body.customer
+        ? `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim()
+        : body.billing_address?.name || "";
+      const customerEmail = body.customer?.email || body.email || "";
+
+      if (trackingNumber && customerPhone) {
+        supabase.functions.invoke("automation-trigger-shopify-purchase", {
+          body: {
+            phone: customerPhone,
+            name: customerName,
+            email: customerEmail,
+            shopifyOrderId: String(body.id || body.order_id),
+            shopifyOrderName: body.name,
+            rastreio: trackingNumber,
+            transportadora: trackingCompany || "",
+            trigger_type: "shopify_fulfilled"
+          }
+        }).catch((err: any) => console.error("automation fulfillment error:", err));
+      }
+    }
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });

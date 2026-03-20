@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       phone, name, email,
-      products, orderTotal, shopifyOrderId, shopifyOrderName
+      products, orderTotal, shopifyOrderId, shopifyOrderName, rastreio, transportadora
     } = body;
 
     if (!phone) return new Response(JSON.stringify({ error: "phone required" }), { status: 400, headers: corsHeaders });
@@ -56,7 +56,10 @@ Deno.serve(async (req) => {
           ?.replace(/{{email}}/g, email || "")
           ?.replace(/{{produtos}}/g, products || "")
           ?.replace(/{{total}}/g, orderTotal ? `R$ ${parseFloat(orderTotal).toFixed(2).replace(".", ",")}` : "")
-          ?.replace(/{{pedido}}/g, shopifyOrderName || shopifyOrderId || "");
+          ?.replace(/{{pedido}}/g, shopifyOrderName || shopifyOrderId || "")
+          ?.replace(/{{numero_pedido}}/g, shopifyOrderName || shopifyOrderId || "")
+          ?.replace(/{{codigo_rastreio}}/g, rastreio || "")
+          ?.replace(/{{transportadora}}/g, transportadora || "");
 
         if (step.action_type === "send_template") {
           const config = step.action_config || {};
