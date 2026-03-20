@@ -83,11 +83,11 @@ export default function LiveOrtopedicosLP() {
             <Sparkles className="h-3.5 w-3.5" /> Evento Exclusivo
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-black leading-tight text-foreground">
+          <h1 className="text-3xl sm:text-4xl font-black leading-tight text-white">
             Live Shopping<br />
             <span className="text-primary">Calçados Ortopédicos</span>
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto">
+          <p className="text-sm sm:text-base text-white/60 max-w-md mx-auto">
             Sábado às 15h — Lançamentos exclusivos com preços que você nunca viu. Cadastre-se e garanta acesso VIP.
           </p>
 
