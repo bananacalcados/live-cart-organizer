@@ -74,7 +74,7 @@ export default function LiveOrtopedicosLP() {
 
   /* ── shared wrapper ── */
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-[hsl(var(--primary)/0.06)] via-background to-background flex flex-col items-center justify-center px-4 py-8 selection:bg-primary/20">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-[#0a0a0a] via-[#111111] to-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8 selection:bg-primary/20 text-white">
       {/* ── STEP 0 — HERO ── */}
       {step === 0 && (
         <div className="w-full max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6 text-center">
