@@ -150,7 +150,7 @@ export default function LiveOrtopedicosLP() {
             placeholder="Seu primeiro nome"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="h-14 text-center text-lg rounded-xl"
+             className="h-14 text-center text-lg rounded-xl text-black bg-white placeholder:text-gray-400"
             onKeyDown={(e) => e.key === "Enter" && name.trim().length >= 2 && setStep(2)}
           />
 
