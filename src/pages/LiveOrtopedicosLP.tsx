@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, Clock, Gift, Truck, MessageCircle, ShieldCheck, ArrowRight, Sparkles } from "lucide-react";
+import { initMetaPixel, trackPageView, trackPixelEvent } from "@/lib/metaPixel";
 
 /* ── helpers ── */
 const TARGET_DATE = new Date("2026-03-21T15:00:00-03:00"); // sábado 15h BRT
@@ -44,6 +45,13 @@ export default function LiveOrtopedicosLP() {
   const [saving, setSaving] = useState(false);
   const countdown = useCountdown(TARGET_DATE);
 
+  // Meta Pixel
+  useEffect(() => {
+    initMetaPixel();
+    trackPageView();
+    trackPixelEvent('ViewContent', { content_name: 'Live Ortopédicos LP', content_category: 'landing_page' });
+  }, []);
+
   const formatPhone = (v: string) => {
     const d = v.replace(/\D/g, "").slice(0, 11);
     if (d.length <= 2) return d;
@@ -62,6 +70,9 @@ export default function LiveOrtopedicosLP() {
         source: "landing_page",
         metadata: { evento: "Live Ortopédicos", data: "2026-03-21 15h" } as any,
       });
+      // Track Lead event on Meta Pixel
+      trackPixelEvent('Lead', { content_name: 'Live Ortopédicos LP', content_category: 'vip_group' });
+      trackPixelEvent('CompleteRegistration', { content_name: 'Grupo VIP Live Ortopédicos', value: 0, currency: 'BRL' });
       // Redirect directly to VIP group
       window.location.href = "https://sndflw.com/i/gMEAoOFehNzA95GpXQVK";
     } catch {
