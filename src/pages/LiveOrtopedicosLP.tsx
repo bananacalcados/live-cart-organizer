@@ -184,7 +184,7 @@ export default function LiveOrtopedicosLP() {
             placeholder="(00) 00000-0000"
             value={whatsapp}
             onChange={(e) => setWhatsapp(formatPhone(e.target.value))}
-            className="h-14 text-center text-lg rounded-xl"
+            className="h-14 text-center text-lg rounded-xl text-black bg-white placeholder:text-gray-400"
             onKeyDown={(e) => e.key === "Enter" && phoneDigits.length >= 10 && saveLead()}
           />
 
