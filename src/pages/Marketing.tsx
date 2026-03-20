@@ -1348,6 +1348,7 @@ export default function Marketing() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {[
+                  { name: 'Live Ortopédicos', path: '/live-ortopedicos', description: 'Landing page da Live Shopping de Calçados Ortopédicos — Captação em etapas + Countdown' },
                   { name: 'Banana Verão', path: '/banana-verao', description: 'Funil interativo de captação de leads' },
                   { name: 'Banana Verão - GV', path: '/banana-verao-gv', description: 'Funil para público de Gov. Valadares (Centro e Jardim Pérola)' },
                 ].map(lp => {

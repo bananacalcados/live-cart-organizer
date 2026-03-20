@@ -233,7 +233,7 @@ export default function LiveOrtopedicosLP() {
           <Button
             size="lg"
             className="w-full h-14 rounded-xl text-base font-bold gap-2 bg-[#25D366] hover:bg-[#1ebe57] text-white"
-            onClick={() => window.open("https://chat.whatsapp.com/SEUGRUPO", "_blank")}
+            onClick={() => window.open("https://sndflw.com/i/gMEAoOFehNzA95GpXQVK", "_blank")}
           >
             <MessageCircle className="h-5 w-5" /> Entrar no Grupo VIP
           </Button>
