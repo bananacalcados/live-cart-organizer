@@ -1334,7 +1334,7 @@ export default function TransparentCheckout() {
 
       // Também salva full_name na tabela orders para exibição no dashboard
       if (payload.full_name && orderData?.id && !orderData.id.startsWith("live-")) {
-        await supabase.from("orders").update({ customer_name: payload.full_name }).eq("id", orderData.id);
+        await supabase.from("orders").update({ notes: `Cliente: ${payload.full_name}` } as any).eq("id", orderData.id);
       }
 
       return true;
