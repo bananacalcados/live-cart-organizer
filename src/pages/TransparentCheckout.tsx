@@ -623,7 +623,7 @@ function StepPayment({
       .eq("key", "pix_discount_percent")
       .single()
       .then(({ data }) => {
-        if (data?.value) setPixDiscountPercent(parseFloat(data.value) || 0);
+        if (data?.value) setPixDiscountPercent(parseFloat(String(data.value)) || 0);
       });
   }, []);
 
