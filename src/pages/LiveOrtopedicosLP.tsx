@@ -29,10 +29,10 @@ function useCountdown(target: Date) {
 
 const CountdownUnit = ({ value, label }: { value: number; label: string }) => (
   <div className="flex flex-col items-center">
-    <span className="text-3xl sm:text-5xl font-black tabular-nums text-primary leading-none">
+    <span className="text-3xl sm:text-5xl font-black tabular-nums text-primary leading-none drop-shadow-[0_0_12px_hsl(var(--primary)/0.4)]">
       {String(value).padStart(2, "0")}
     </span>
-    <span className="text-[10px] sm:text-xs uppercase tracking-widest text-muted-foreground mt-1">{label}</span>
+    <span className="text-[10px] sm:text-xs uppercase tracking-widest text-white/40 mt-1">{label}</span>
   </div>
 );
 
@@ -62,10 +62,10 @@ export default function LiveOrtopedicosLP() {
         source: "landing_page",
         metadata: { evento: "Live Ortopédicos", data: "2026-03-21 15h" } as any,
       });
-      setStep(3);
+      // Redirect directly to VIP group
+      window.location.href = "https://sndflw.com/i/gMEAoOFehNzA95GpXQVK";
     } catch {
       toast.error("Erro ao salvar. Tente novamente.");
-    } finally {
       setSaving(false);
     }
   };
@@ -74,7 +74,7 @@ export default function LiveOrtopedicosLP() {
 
   /* ── shared wrapper ── */
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-[hsl(var(--primary)/0.06)] via-background to-background flex flex-col items-center justify-center px-4 py-8 selection:bg-primary/20">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-[#0a0a0a] via-[#111111] to-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8 selection:bg-primary/20 text-white">
       {/* ── STEP 0 — HERO ── */}
       {step === 0 && (
         <div className="w-full max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6 text-center">
@@ -83,11 +83,11 @@ export default function LiveOrtopedicosLP() {
             <Sparkles className="h-3.5 w-3.5" /> Evento Exclusivo
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-black leading-tight text-foreground">
+          <h1 className="text-3xl sm:text-4xl font-black leading-tight text-white">
             Live Shopping<br />
             <span className="text-primary">Calçados Ortopédicos</span>
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto">
+          <p className="text-sm sm:text-base text-white/60 max-w-md mx-auto">
             Sábado às 15h — Lançamentos exclusivos com preços que você nunca viu. Cadastre-se e garanta acesso VIP.
           </p>
 
@@ -110,11 +110,11 @@ export default function LiveOrtopedicosLP() {
               { icon: MessageCircle, text: "Consultoria ao vivo para dores nos pés" },
               { icon: Gift, text: "Roleta de prêmios para quem pagar em até 20 min" },
             ].map(({ icon: Icon, text }, i) => (
-              <div key={i} className="flex items-start gap-3 rounded-xl border border-border/50 bg-card/50 p-3">
+              <div key={i} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
                 <div className="rounded-lg bg-primary/10 p-2 shrink-0">
                   <Icon className="h-4 w-4 text-primary" />
                 </div>
-                <span className="text-sm text-foreground/90 leading-snug">{text}</span>
+                <span className="text-sm text-white/90 leading-snug">{text}</span>
               </div>
             ))}
           </div>
@@ -124,7 +124,7 @@ export default function LiveOrtopedicosLP() {
             <Button size="lg" className="w-full max-w-sm text-base font-bold h-14 rounded-xl gap-2" onClick={() => setStep(1)}>
               Quero Participar <ArrowRight className="h-5 w-5" />
             </Button>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[11px] text-white/40">
               Cadastro rápido — leva menos de 30 segundos
             </p>
           </div>
@@ -141,8 +141,8 @@ export default function LiveOrtopedicosLP() {
           </div>
 
           <div>
-            <h2 className="text-2xl font-bold text-foreground">Como podemos te chamar?</h2>
-            <p className="text-sm text-muted-foreground mt-1">Informe seu primeiro nome</p>
+            <h2 className="text-2xl font-bold text-white">Como podemos te chamar?</h2>
+            <p className="text-sm text-white/60 mt-1">Informe seu primeiro nome</p>
           </div>
 
           <Input
@@ -174,8 +174,8 @@ export default function LiveOrtopedicosLP() {
           </div>
 
           <div>
-            <h2 className="text-2xl font-bold text-foreground">Olá, {name}! 👋</h2>
-            <p className="text-sm text-muted-foreground mt-1">Agora informe seu WhatsApp para entrar no grupo VIP</p>
+            <h2 className="text-2xl font-bold text-white">Olá, {name}! 👋</h2>
+            <p className="text-sm text-white/60 mt-1">Agora informe seu WhatsApp para entrar no grupo VIP</p>
           </div>
 
           <Input
@@ -194,10 +194,10 @@ export default function LiveOrtopedicosLP() {
             disabled={phoneDigits.length < 10 || saving}
             onClick={saveLead}
           >
-            {saving ? "Salvando..." : "Finalizar Cadastro"} {!saving && <ArrowRight className="h-5 w-5" />}
+            {saving ? "Entrando no grupo..." : "Finalizar Cadastro e Entrar no Grupo"} {!saving && <ArrowRight className="h-5 w-5" />}
           </Button>
 
-          <button onClick={() => setStep(1)} className="text-xs text-muted-foreground hover:text-foreground transition">
+          <button onClick={() => setStep(1)} className="text-xs text-white/40 hover:text-white transition">
             ← Voltar
           </button>
         </div>
