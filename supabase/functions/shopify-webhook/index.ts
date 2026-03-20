@@ -204,6 +204,24 @@ serve(async (req) => {
 
               console.log(`Automation flow "${flow.name}" triggered for shopify_purchase`);
             }
+
+            // Dispara executor de automações shopify_purchase
+            const customerFullName = body.customer
+              ? `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim()
+              : body.billing_address?.name || customerName;
+            const lineItemsSummary = lineItems.map((li: any) => `${li.quantity}x ${li.title || li.name}`).join(", ");
+
+            supabase.functions.invoke("automation-trigger-shopify-purchase", {
+              body: {
+                phone: customerPhone,
+                name: customerFullName,
+                email: customerEmail,
+                products: lineItemsSummary,
+                orderTotal: body.total_price,
+                shopifyOrderId: body.id?.toString(),
+                shopifyOrderName: body.name,
+              },
+            }).catch((err: any) => console.error("automation-trigger-shopify-purchase error:", err));
           }
         }
       }
