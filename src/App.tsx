@@ -75,6 +75,7 @@ const App = () => (
               <Route path="/evento/:slug" element={<EventCatalogPage />} />
               <Route path="/vip/:slug" element={<VipGroupRedirectPage />} />
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />
+              <Route path="/live-ortopedicos" element={<LiveOrtopedicosLP />} />
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
