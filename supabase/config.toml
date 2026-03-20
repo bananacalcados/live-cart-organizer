@@ -245,3 +245,6 @@ verify_jwt = false
 
 [functions.mcp-server]
 verify_jwt = false
+
+[functions.automation-trigger-shopify-purchase]
+verify_jwt = false
