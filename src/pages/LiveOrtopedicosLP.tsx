@@ -45,6 +45,13 @@ export default function LiveOrtopedicosLP() {
   const [saving, setSaving] = useState(false);
   const countdown = useCountdown(TARGET_DATE);
 
+  // Meta Pixel
+  useEffect(() => {
+    initMetaPixel();
+    trackPageView();
+    trackPixelEvent('ViewContent', { content_name: 'Live Ortopédicos LP', content_category: 'landing_page' });
+  }, []);
+
   const formatPhone = (v: string) => {
     const d = v.replace(/\D/g, "").slice(0, 11);
     if (d.length <= 2) return d;
