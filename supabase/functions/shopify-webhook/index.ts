@@ -168,19 +168,35 @@ serve(async (req) => {
           : body.billing_address?.name || customerName;
         const lineItemsSummary = lineItems.map((li: any) => `${li.quantity}x ${li.title || li.name}`).join(", ");
 
+        console.log("[AUTOMATION-DEBUG] Phone sources:", JSON.stringify({
+          body_phone: body.phone || null,
+          billing_phone: body.billing_address?.phone || null,
+          shipping_phone: body.shipping_address?.phone || null,
+          customer_phone: body.customer?.phone || null,
+          resolved: customerPhone || null,
+        }));
+
         if (customerPhone) {
-          // Dispara executor de automações shopify_purchase (ele mesmo verifica flows ativos)
+          const automationPayload = {
+            phone: customerPhone,
+            name: customerFullName,
+            email: customerEmail,
+            products: lineItemsSummary,
+            orderTotal: body.total_price,
+            shopifyOrderId: body.id?.toString(),
+            shopifyOrderName: body.name,
+          };
+          console.log("[AUTOMATION-DEBUG] Invoking automation-trigger-shopify-purchase with:", JSON.stringify(automationPayload));
+
           supabase.functions.invoke("automation-trigger-shopify-purchase", {
-            body: {
-              phone: customerPhone,
-              name: customerFullName,
-              email: customerEmail,
-              products: lineItemsSummary,
-              orderTotal: body.total_price,
-              shopifyOrderId: body.id?.toString(),
-              shopifyOrderName: body.name,
-            },
-          }).catch((err: any) => console.error("automation-trigger-shopify-purchase error:", err));
+            body: automationPayload,
+          }).then((res: any) => {
+            console.log("[AUTOMATION-DEBUG] automation-trigger-shopify-purchase response:", JSON.stringify({ data: res.data, error: res.error }));
+          }).catch((err: any) => {
+            console.error("[AUTOMATION-DEBUG] automation-trigger-shopify-purchase FAILED:", err?.message || err);
+          });
+        } else {
+          console.warn("[AUTOMATION-DEBUG] NO PHONE FOUND — automation NOT triggered for order:", body.name || body.id);
         }
       }
     }
