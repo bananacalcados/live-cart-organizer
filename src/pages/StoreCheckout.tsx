@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
@@ -863,6 +862,7 @@ export default function StoreCheckout() {
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
     max_installments: 12, interest_free_installments: 6, monthly_interest_rate: 2.49,
   });
+  const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | null>(null);
 
   useEffect(() => {
     if (!storeId || !saleId) { setLoading(false); return; }
@@ -1384,28 +1384,77 @@ export default function StoreCheckout() {
                       <h2 className="font-semibold text-lg">Pagamento</h2>
                       <Badge variant="secondary" className="text-[10px]">3 de 3</Badge>
                     </div>
-                    <Tabs defaultValue="card" className="w-full">
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="card" className="flex items-center gap-2"><CreditCard className="h-4 w-4" /> Cartão</TabsTrigger>
-                        <TabsTrigger value="pix" className="flex items-center gap-2"><QrCode className="h-4 w-4" /> PIX</TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="card" className="mt-4">
-                        {(() => {
-                          const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
-                          const netProduct = subtotal - saleData.discount_amount;
-                          const totalWithShipping = netProduct + (saleData.shipping_amount || 0);
-                          return <CardPaymentForm saleId={saleData.id} amount={totalWithShipping} form={customerForm} installmentConfig={installmentConfig} onPaid={handlePaymentConfirmed} />;
-                        })()}
-                      </TabsContent>
-                      <TabsContent value="pix" className="mt-4">
-                        {(() => {
-                          const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
-                          const netProduct = subtotal - saleData.discount_amount;
-                          const totalWithShipping = netProduct + (saleData.shipping_amount || 0);
-                          return <PixPaymentForm saleId={saleData.id} storeId={saleData.store_id} amount={totalWithShipping} form={customerForm} onPaid={handlePaymentConfirmed} />;
-                        })()}
-                      </TabsContent>
-                    </Tabs>
+                    {(() => {
+                      const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
+                      const netProduct = subtotal - saleData.discount_amount;
+                      const totalWithShipping = netProduct + (saleData.shipping_amount || 0);
+                      const pixDiscountPercent = 0;
+                      const pixAmount = Math.round(totalWithShipping * (1 - pixDiscountPercent / 100) * 100) / 100;
+                      return (
+                        <div className="space-y-2">
+                          {/* Cartão de crédito */}
+                          <button
+                            onClick={() => setSelectedMethod("card")}
+                            className={`w-full flex items-center gap-3 p-3.5 rounded-lg border transition-all text-left ${
+                              selectedMethod === "card"
+                                ? "border-foreground bg-card shadow-sm"
+                                : "border-border bg-card hover:border-muted-foreground"
+                            }`}
+                          >
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                              selectedMethod === "card" ? "border-foreground" : "border-muted-foreground"
+                            }`}>
+                              {selectedMethod === "card" && <div className="w-2.5 h-2.5 rounded-full bg-foreground" />}
+                            </div>
+                            <span className="text-sm font-semibold">Cartão de crédito</span>
+                          </button>
+
+                          {selectedMethod === "card" && (
+                            <div className="animate-in slide-in-from-top-2 duration-200 border border-border rounded-lg p-4 bg-card">
+                              <CardPaymentForm saleId={saleData.id} amount={totalWithShipping} form={customerForm} installmentConfig={installmentConfig} onPaid={handlePaymentConfirmed} />
+                            </div>
+                          )}
+
+                          {/* PIX */}
+                          <button
+                            onClick={() => setSelectedMethod("pix")}
+                            className={`w-full flex items-center justify-between p-3.5 rounded-lg border transition-all text-left ${
+                              selectedMethod === "pix"
+                                ? "border-foreground bg-card shadow-sm"
+                                : "border-border bg-card hover:border-muted-foreground"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                                selectedMethod === "pix" ? "border-foreground" : "border-muted-foreground"
+                              }`}>
+                                {selectedMethod === "pix" && <div className="w-2.5 h-2.5 rounded-full bg-foreground" />}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <QrCode className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-semibold">Pix</span>
+                              </div>
+                            </div>
+                            {pixDiscountPercent > 0 && (
+                              <Badge className="bg-green-600 text-white text-[8px] px-1.5 py-0.5 border-0 font-bold leading-none">
+                                {pixDiscountPercent}% OFF
+                              </Badge>
+                            )}
+                          </button>
+
+                          {selectedMethod === "pix" && (
+                            <div className="animate-in slide-in-from-top-2 duration-200 border border-border rounded-lg p-4 bg-card">
+                              {pixDiscountPercent > 0 && (
+                                <p className="text-base font-bold text-green-600 mb-3">
+                                  Valor no Pix: R$ {pixAmount.toFixed(2).replace(".", ",")}
+                                </p>
+                              )}
+                              <PixPaymentForm saleId={saleData.id} storeId={saleData.store_id} amount={pixAmount} form={customerForm} onPaid={handlePaymentConfirmed} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <Button variant="ghost" onClick={() => setCurrentStep(2)} className="w-full text-sm text-muted-foreground">← Voltar para Entrega</Button>
                   </div>
                 )}

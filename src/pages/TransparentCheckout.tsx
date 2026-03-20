@@ -288,11 +288,11 @@ function OrderSummary({ orderData, collapsed, onToggle }: { orderData: OrderData
 
 // ── Countdown Timer ─────────────────────────────────────────────
 function CountdownTimer({ checkoutStartedAt }: { checkoutStartedAt: string | null }) {
-  const [timeLeft, setTimeLeft] = useState(600);
+  const [timeLeft, setTimeLeft] = useState(1200);
 
   useEffect(() => {
     if (!checkoutStartedAt) return;
-    const endTime = new Date(checkoutStartedAt).getTime() + 10 * 60 * 1000;
+    const endTime = new Date(checkoutStartedAt).getTime() + 20 * 60 * 1000;
     const update = () => setTimeLeft(Math.max(0, Math.floor((endTime - Date.now()) / 1000)));
     update();
     const interval = setInterval(update, 1000);
@@ -315,7 +315,7 @@ function CountdownTimer({ checkoutStartedAt }: { checkoutStartedAt: string | nul
     <div className={`text-center p-3 rounded-lg border ${isUrgent ? 'border-destructive bg-destructive/10 animate-pulse' : 'border-primary/30 bg-primary/5'}`}>
       <div className="flex items-center justify-center gap-2 mb-1">
         <Trophy className="h-4 w-4 text-primary" />
-        <span className="text-xs font-medium">Pague em até 10 min e concorra a prêmios!</span>
+        <span className="text-xs font-medium">Pague em até 20 min e concorra a prêmios!</span>
       </div>
       <div className="flex items-center justify-center gap-1">
         <Clock className={`h-4 w-4 ${isUrgent ? 'text-destructive' : 'text-primary'}`} />
@@ -614,7 +614,19 @@ function StepPayment({
   onBack: () => void;
 }) {
   const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | null>(null);
-  const pixDiscountPercent = 0;
+  const [pixDiscountPercent, setPixDiscountPercent] = useState(0);
+
+  useEffect(() => {
+    supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "pix_discount_percent")
+      .single()
+      .then(({ data }) => {
+        if (data?.value) setPixDiscountPercent(parseFloat(data.value) || 0);
+      });
+  }, []);
+
   const pixDiscountAmount = pixDiscountPercent > 0 ? amount * (pixDiscountPercent / 100) : 0;
   const pixAmount = Math.round((amount - pixDiscountAmount) * 100) / 100;
 
