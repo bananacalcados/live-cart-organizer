@@ -1,6 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+function maskCard(card: any) {
+  if (!card) return card;
+  return {
+    ...card,
+    number: card.number ? `****${String(card.number).replace(/\s/g, "").slice(-4)}` : undefined,
+    cvv: card.cvv ? "***" : undefined,
+  };
+}
+
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
   "https://bananacalcados.com.br",
@@ -103,6 +112,7 @@ async function chargePagarme(
   products: Array<{ title: string; price: number; quantity: number }>,
   secretKey: string
 ): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  const safeParams = { ...params, card: maskCard(params.card) };
   const auth = btoa(`${secretKey}:`);
 
   // 1. Tokenize card server-side
@@ -261,6 +271,7 @@ async function chargeVindi(
   products: Array<{ title: string; price: number; quantity: number }>,
   tokenAccount: string
 ): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  const safeParams = { ...params, card: maskCard(params.card) };
   const cpf = params.customer.cpf.replace(/\D/g, "");
   const phone = params.customer.phone.replace(/\D/g, "");
 
@@ -342,6 +353,7 @@ async function chargeAppmax(
   products: Array<{ title: string; price: number; quantity: number }>,
   accessToken: string
 ): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  const safeParams = { ...params, card: maskCard(params.card) };
   const base = "https://admin.appmax.com.br/api/v3";
   const headers = { "Content-Type": "application/json" };
   const totalReais = params.totalAmountCents / 100;
