@@ -69,9 +69,21 @@ Deno.serve(async (req) => {
           const whatsappNumberId = config.whatsappNumberId || config.whatsapp_number_id;
           const language = config.language || "pt_BR";
 
-          // Monta components com variáveis substituídas
+          // Monta components: prioriza config.components, senão gera a partir de templateVars
           let components = config.components || [];
-          components = JSON.parse(replaceVars(JSON.stringify(components)));
+          if (components.length === 0 && config.templateVars) {
+            const vars = config.templateVars;
+            const sortedKeys = Object.keys(vars).sort((a, b) => Number(a) - Number(b));
+            const parameters = sortedKeys.map((key) => ({
+              type: "text",
+              text: replaceVars(vars[key]) || "",
+            }));
+            if (parameters.length > 0) {
+              components = [{ type: "body", parameters }];
+            }
+          } else {
+            components = JSON.parse(replaceVars(JSON.stringify(components)));
+          }
 
           const payload: any = { phone: formattedPhone, templateName, language, whatsappNumberId };
           if (components.length > 0) payload.components = components;
