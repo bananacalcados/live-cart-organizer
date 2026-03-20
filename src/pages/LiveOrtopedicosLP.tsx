@@ -194,7 +194,7 @@ export default function LiveOrtopedicosLP() {
             disabled={phoneDigits.length < 10 || saving}
             onClick={saveLead}
           >
-            {saving ? "Salvando..." : "Finalizar Cadastro"} {!saving && <ArrowRight className="h-5 w-5" />}
+            {saving ? "Entrando no grupo..." : "Finalizar Cadastro e Entrar no Grupo"} {!saving && <ArrowRight className="h-5 w-5" />}
           </Button>
 
           <button onClick={() => setStep(1)} className="text-xs text-muted-foreground hover:text-foreground transition">
