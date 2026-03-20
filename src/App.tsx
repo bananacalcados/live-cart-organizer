@@ -38,6 +38,7 @@ const LiveConsumidorLP = lazy(() => import("./pages/LiveConsumidorLP"));
 const CatalogLeadPage = lazy(() => import("./pages/CatalogLeadPage"));
 const EventCatalogPage = lazy(() => import("./pages/EventCatalogPage"));
 const EmailMarketing = lazy(() => import("./pages/EmailMarketing"));
+const LiveOrtopedicosLP = lazy(() => import("./pages/LiveOrtopedicosLP"));
 
 const queryClient = new QueryClient();
 
@@ -74,6 +75,7 @@ const App = () => (
               <Route path="/evento/:slug" element={<EventCatalogPage />} />
               <Route path="/vip/:slug" element={<VipGroupRedirectPage />} />
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />
+              <Route path="/live-ortopedicos" element={<LiveOrtopedicosLP />} />
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
