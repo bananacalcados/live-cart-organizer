@@ -44,8 +44,10 @@ Deno.serve(async (req) => {
 
     for (const flow of flows) {
       const steps = (flow.steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
+      console.log("Processing flow:", flow.id, "steps:", steps.length);
 
       for (const step of steps) {
+        console.log("Step config:", JSON.stringify(step));
         // Substitui variáveis
         const replaceVars = (text: string) => text
           ?.replace(/__first_name__/g, firstName)
@@ -74,9 +76,11 @@ Deno.serve(async (req) => {
           const payload: any = { phone: formattedPhone, templateName, language, whatsappNumberId };
           if (components.length > 0) payload.components = components;
 
+          console.log("Sending template:", JSON.stringify({ templateName, whatsappNumberId, language, phone: formattedPhone, components }));
           const { error: sendErr } = await supabase.functions.invoke("meta-whatsapp-send-template", {
             body: payload,
           });
+          console.log("Template send result:", JSON.stringify({ sendErr, success: !sendErr }));
 
           await supabase.from("automation_executions").insert({
             flow_id: flow.id,
