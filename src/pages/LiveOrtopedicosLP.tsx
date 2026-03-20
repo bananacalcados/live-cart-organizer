@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, Clock, Gift, Truck, MessageCircle, ShieldCheck, ArrowRight, Sparkles } from "lucide-react";
+import { initMetaPixel, trackPageView, trackPixelEvent } from "@/lib/metaPixel";
 
 /* ── helpers ── */
 const TARGET_DATE = new Date("2026-03-21T15:00:00-03:00"); // sábado 15h BRT
