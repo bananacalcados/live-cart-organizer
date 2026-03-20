@@ -110,11 +110,11 @@ export default function LiveOrtopedicosLP() {
               { icon: MessageCircle, text: "Consultoria ao vivo para dores nos pés" },
               { icon: Gift, text: "Roleta de prêmios para quem pagar em até 20 min" },
             ].map(({ icon: Icon, text }, i) => (
-              <div key={i} className="flex items-start gap-3 rounded-xl border border-border/50 bg-card/50 p-3">
+              <div key={i} className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
                 <div className="rounded-lg bg-primary/10 p-2 shrink-0">
                   <Icon className="h-4 w-4 text-primary" />
                 </div>
-                <span className="text-sm text-foreground/90 leading-snug">{text}</span>
+                <span className="text-sm text-white/90 leading-snug">{text}</span>
               </div>
             ))}
           </div>
