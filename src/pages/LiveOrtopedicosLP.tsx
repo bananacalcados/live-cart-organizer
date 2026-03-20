@@ -32,7 +32,7 @@ const CountdownUnit = ({ value, label }: { value: number; label: string }) => (
     <span className="text-3xl sm:text-5xl font-black tabular-nums text-primary leading-none drop-shadow-[0_0_12px_hsl(var(--primary)/0.4)]">
       {String(value).padStart(2, "0")}
     </span>
-    <span className="text-[10px] sm:text-xs uppercase tracking-widest text-muted-foreground mt-1">{label}</span>
+    <span className="text-[10px] sm:text-xs uppercase tracking-widest text-white/40 mt-1">{label}</span>
   </div>
 );
 
