@@ -124,7 +124,7 @@ export default function LiveOrtopedicosLP() {
             <Button size="lg" className="w-full max-w-sm text-base font-bold h-14 rounded-xl gap-2" onClick={() => setStep(1)}>
               Quero Participar <ArrowRight className="h-5 w-5" />
             </Button>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[11px] text-white/40">
               Cadastro rápido — leva menos de 30 segundos
             </p>
           </div>
