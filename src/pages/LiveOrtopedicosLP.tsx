@@ -62,10 +62,10 @@ export default function LiveOrtopedicosLP() {
         source: "landing_page",
         metadata: { evento: "Live Ortopédicos", data: "2026-03-21 15h" } as any,
       });
-      setStep(3);
+      // Redirect directly to VIP group
+      window.location.href = "https://sndflw.com/i/gMEAoOFehNzA95GpXQVK";
     } catch {
       toast.error("Erro ao salvar. Tente novamente.");
-    } finally {
       setSaving(false);
     }
   };
