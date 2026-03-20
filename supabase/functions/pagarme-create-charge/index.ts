@@ -212,11 +212,11 @@ async function chargePagarme(
   console.log("Pagar.me charge full response:", JSON.stringify(chargeData).substring(0, 2000));
 
   if (chargeData.status === "paid") {
-    return {
-      success: true,
-      gateway: "pagarme",
-      transactionId: chargeData.id,
-    };
+    return { success: true, gateway: "pagarme", transactionId: chargeData.id };
+  }
+
+  if (chargeData.status === "pending") {
+    return { success: false, pending: true, gateway: "pagarme", transactionId: chargeData.id, error: "Pagamento em análise" };
   }
 
   // Extract the REAL reason — Pagar.me anti-fraud may reject even when acquirer approves
@@ -429,12 +429,14 @@ async function chargeAppmax(
     const appmaxStatus = payData.data?.status;
     const appmaxText = payData.text || payData.message || "";
     const isPreAuth = appmaxText.toLowerCase().includes("pre autorização realizada com sucesso") || appmaxText.toLowerCase().includes("pré autorização realizada com sucesso");
-    if (payData.success && (appmaxStatus === "approved" || appmaxStatus === "paid" || appmaxStatus === "pre_authorized" || isPreAuth)) {
-      return {
-        success: true,
-        gateway: "appmax",
-        transactionId: String(payData.data?.id || appmaxOrderId),
-      };
+    const appmaxTxId = String(payData.data?.id || appmaxOrderId);
+
+    if (appmaxStatus === "approved") {
+      return { success: true, gateway: "appmax", transactionId: appmaxTxId };
+    }
+
+    if (payData.success && (appmaxStatus === "paid" || appmaxStatus === "pre_authorized" || isPreAuth) && appmaxStatus !== "recusado_por_risco") {
+      return { success: false, pending: true, gateway: "appmax", transactionId: appmaxTxId, error: `AppMax status: ${appmaxStatus}` };
     }
 
     return {

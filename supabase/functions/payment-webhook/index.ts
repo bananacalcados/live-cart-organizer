@@ -123,6 +123,14 @@ serve(async (req) => {
   const url = new URL(req.url);
   const gateway = url.searchParams.get("gateway") || "unknown";
 
+  const ALLOWED_GATEWAYS = ["mercadopago", "pagarme", "vindi", "appmax"];
+  if (!ALLOWED_GATEWAYS.includes(gateway)) {
+    return new Response(JSON.stringify({ error: "Invalid gateway" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     console.log(`payment-webhook received for gateway: ${gateway}`);
 

@@ -100,8 +100,11 @@ serve(async (req) => {
   try {
     const { paymentId, orderId } = await req.json();
 
-    if (!paymentId) {
-      throw new Error("paymentId is required");
+    if (!paymentId || !/^\d+$/.test(String(paymentId))) {
+      return new Response(JSON.stringify({ error: "Invalid paymentId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
