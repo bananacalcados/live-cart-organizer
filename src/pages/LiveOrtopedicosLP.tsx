@@ -141,8 +141,8 @@ export default function LiveOrtopedicosLP() {
           </div>
 
           <div>
-            <h2 className="text-2xl font-bold text-foreground">Como podemos te chamar?</h2>
-            <p className="text-sm text-muted-foreground mt-1">Informe seu primeiro nome</p>
+            <h2 className="text-2xl font-bold text-white">Como podemos te chamar?</h2>
+            <p className="text-sm text-white/60 mt-1">Informe seu primeiro nome</p>
           </div>
 
           <Input
