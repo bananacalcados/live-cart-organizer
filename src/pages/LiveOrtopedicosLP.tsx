@@ -70,6 +70,9 @@ export default function LiveOrtopedicosLP() {
         source: "landing_page",
         metadata: { evento: "Live Ortopédicos", data: "2026-03-21 15h" } as any,
       });
+      // Track Lead event on Meta Pixel
+      trackPixelEvent('Lead', { content_name: 'Live Ortopédicos LP', content_category: 'vip_group' });
+      trackPixelEvent('CompleteRegistration', { content_name: 'Grupo VIP Live Ortopédicos', value: 0, currency: 'BRL' });
       // Redirect directly to VIP group
       window.location.href = "https://sndflw.com/i/gMEAoOFehNzA95GpXQVK";
     } catch {
