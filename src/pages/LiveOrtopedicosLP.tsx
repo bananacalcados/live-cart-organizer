@@ -174,8 +174,8 @@ export default function LiveOrtopedicosLP() {
           </div>
 
           <div>
-            <h2 className="text-2xl font-bold text-foreground">Olá, {name}! 👋</h2>
-            <p className="text-sm text-muted-foreground mt-1">Agora informe seu WhatsApp para entrar no grupo VIP</p>
+            <h2 className="text-2xl font-bold text-white">Olá, {name}! 👋</h2>
+            <p className="text-sm text-white/60 mt-1">Agora informe seu WhatsApp para entrar no grupo VIP</p>
           </div>
 
           <Input
