@@ -163,66 +163,24 @@ serve(async (req) => {
         const customerName = body.customer?.first_name || body.billing_address?.first_name || "";
         const customerEmail = body.customer?.email || body.email || "";
         const lineItems = body.line_items || [];
-        const productNames = lineItems.map((li: any) => li.title || li.name).join(", ");
-        const productTags = lineItems.map((li: any) => li.vendor).filter(Boolean);
+        const customerFullName = body.customer
+          ? `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim()
+          : body.billing_address?.name || customerName;
+        const lineItemsSummary = lineItems.map((li: any) => `${li.quantity}x ${li.title || li.name}`).join(", ");
 
         if (customerPhone) {
-          // Find active automation flows with shopify_purchase trigger
-          const { data: flows } = await supabase
-            .from("automation_flows")
-            .select("*")
-            .eq("trigger_type", "shopify_purchase")
-            .eq("is_active", true);
-
-          if (flows && flows.length > 0) {
-            for (const flow of flows) {
-              const triggerConfig = flow.trigger_config || {};
-              
-              // Check product tag filter if configured
-              if (triggerConfig.product_tag) {
-                const hasMatchingTag = productTags.some((t: string) => 
-                  t.toLowerCase().includes(triggerConfig.product_tag.toLowerCase())
-                );
-                if (!hasMatchingTag) continue;
-              }
-
-              // Log the automation execution
-              await supabase.from("automation_executions").insert({
-                flow_id: flow.id,
-                status: "triggered",
-                result: {
-                  trigger: "shopify_purchase",
-                  customer_phone: customerPhone,
-                  customer_name: customerName,
-                  customer_email: customerEmail,
-                  products: productNames,
-                  order_total: body.total_price,
-                  shopify_order_id: body.id?.toString(),
-                  shopify_order_name: body.name,
-                },
-              });
-
-              console.log(`Automation flow "${flow.name}" triggered for shopify_purchase`);
-            }
-
-            // Dispara executor de automações shopify_purchase
-            const customerFullName = body.customer
-              ? `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim()
-              : body.billing_address?.name || customerName;
-            const lineItemsSummary = lineItems.map((li: any) => `${li.quantity}x ${li.title || li.name}`).join(", ");
-
-            supabase.functions.invoke("automation-trigger-shopify-purchase", {
-              body: {
-                phone: customerPhone,
-                name: customerFullName,
-                email: customerEmail,
-                products: lineItemsSummary,
-                orderTotal: body.total_price,
-                shopifyOrderId: body.id?.toString(),
-                shopifyOrderName: body.name,
-              },
-            }).catch((err: any) => console.error("automation-trigger-shopify-purchase error:", err));
-          }
+          // Dispara executor de automações shopify_purchase (ele mesmo verifica flows ativos)
+          supabase.functions.invoke("automation-trigger-shopify-purchase", {
+            body: {
+              phone: customerPhone,
+              name: customerFullName,
+              email: customerEmail,
+              products: lineItemsSummary,
+              orderTotal: body.total_price,
+              shopifyOrderId: body.id?.toString(),
+              shopifyOrderName: body.name,
+            },
+          }).catch((err: any) => console.error("automation-trigger-shopify-purchase error:", err));
         }
       }
     }
