@@ -1183,7 +1183,7 @@ export default function TransparentCheckout() {
 
       setOrderData({
         id: order.id,
-        customerName: (order.customer as any)?.instagram_handle || "Cliente",
+        customerName: (order.customer as any)?.full_name || (order.customer as any)?.instagram_handle || "Cliente",
         customerId: order.customer_id || undefined,
         products, subtotal, discountAmount, totalAmount,
         isPaid: order.is_paid, checkoutStartedAt: order.checkout_started_at,
@@ -1268,6 +1268,12 @@ export default function TransparentCheckout() {
 
       if (error) throw error;
       if (reg?.id) setRegistrationId(reg.id);
+
+      // Também salva full_name na tabela orders para exibição no dashboard
+      if (payload.full_name && orderData?.id && !orderData.id.startsWith("live-")) {
+        await supabase.from("orders").update({ customer_name: payload.full_name }).eq("id", orderData.id);
+      }
+
       return true;
     } catch (err) {
       console.error(`Error saving registration on step ${step}:`, err);

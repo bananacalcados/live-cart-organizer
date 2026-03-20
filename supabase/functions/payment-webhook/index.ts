@@ -237,7 +237,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   {
     const { data: orderByGateway } = await supabase
       .from("orders")
-      .select("id, is_paid, notes")
+      .select("id, is_paid, notes, store_id")
       .eq("vindi_transaction_id", String(tokenTransaction))
       .maybeSingle();
 
@@ -266,7 +266,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   if (!orderSource && ourOrderId) {
     const { data: orderById } = await supabase
       .from("orders")
-      .select("id, is_paid, notes")
+      .select("id, is_paid, notes, store_id")
       .eq("id", ourOrderId)
       .maybeSingle();
 
@@ -362,9 +362,26 @@ async function updateOrder(
     if (error) { console.error("Error updating orders:", error); return false; }
     console.log(`orders ${orderId} marked as paid via VINDI webhook`);
     console.log(`[vindi] Vinculado vindi_transaction_id=${tokenTransaction} ao pedido ${orderId}`);
+    // Busca store_id real do pedido
+    let lojaName = 'centro'; // fallback
+    if (sale?.store_id) {
+      const { data: storeData } = await supabase
+        .from('pos_stores')
+        .select('name')
+        .eq('id', sale.store_id)
+        .single();
+      if (storeData?.name) lojaName = storeData.name.toLowerCase();
+    } else if (order?.store_id) {
+      const { data: storeData } = await supabase
+        .from('pos_stores')
+        .select('name')
+        .eq('id', order.store_id)
+        .single();
+      if (storeData?.name) lojaName = storeData.name.toLowerCase();
+    }
     await notifyPaymentConfirmed({
       pedido_id: orderId,
-      loja: 'centro',
+      loja: lojaName,
       gateway: 'vindi',
       transaction_id: String(tokenTransaction),
       source: 'vindi-webhook',

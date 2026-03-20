@@ -680,6 +680,23 @@ serve(async (req) => {
       }
     }
 
+    // ── PERSIST CUSTOMER DATA (orders) BEFORE CHARGE ──
+    if (orderSource === "orders" && params.customer) {
+      try {
+        await supabase
+          .from("orders")
+          .update({
+            customer_name: params.customer.name,
+            customer_phone: params.customer.phone,
+            customer_email: params.customer.email,
+          })
+          .eq("id", params.orderId);
+        console.log(`Customer data persisted for order ${params.orderId} BEFORE charge`);
+      } catch (custErr) {
+        console.error("Error persisting customer data to orders (non-blocking):", custErr);
+      }
+    }
+
     // ── Insert "processing" record for idempotency ──
     if (paymentAttemptId) {
       await supabase.from("pos_checkout_attempts").insert({
