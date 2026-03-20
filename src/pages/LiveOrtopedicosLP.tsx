@@ -197,7 +197,7 @@ export default function LiveOrtopedicosLP() {
             {saving ? "Entrando no grupo..." : "Finalizar Cadastro e Entrar no Grupo"} {!saving && <ArrowRight className="h-5 w-5" />}
           </Button>
 
-          <button onClick={() => setStep(1)} className="text-xs text-muted-foreground hover:text-foreground transition">
+          <button onClick={() => setStep(1)} className="text-xs text-white/40 hover:text-white transition">
             ← Voltar
           </button>
         </div>
