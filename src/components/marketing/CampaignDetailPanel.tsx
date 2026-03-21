@@ -293,6 +293,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
     if (data.blocks && data.blocks.length > 0) {
       let offset = 0;
+      const messageGroupId = data.blocks.length > 1 ? crypto.randomUUID() : null;
+      const allInserted: string[] = [];
       for (const block of data.blocks) {
         if (multiMediaTypes.includes(block.type) && block.mediaItems.length > 0) {
           for (const item of block.mediaItems) {
@@ -301,13 +303,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               message_type: block.type,
               message_content: item.caption || null,
               media_url: item.url,
-              scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
+              scheduled_at: new Date(now.getTime()).toISOString(),
               send_speed: data.sendSpeed,
               mention_all: data.mentionAll,
               whatsapp_number_id: campaignNumberId,
+              message_group_id: messageGroupId,
+              block_order: offset,
+              status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
             } as any).select().single();
             if (error) throw error;
-            await sendMessage(inserted.id);
+            allInserted.push(inserted.id);
             offset++;
           }
         } else if (block.type === 'text') {
@@ -315,13 +320,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             campaign_id: campaignId,
             message_type: 'text',
             message_content: block.content,
-            scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
+            scheduled_at: new Date(now.getTime()).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
+            message_group_id: messageGroupId,
+            block_order: offset,
+            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
           } as any).select().single();
           if (error) throw error;
-          await sendMessage(inserted.id);
+          allInserted.push(inserted.id);
           offset++;
         } else if (block.type === 'poll') {
           const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
@@ -330,28 +338,38 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_content: block.content,
             poll_options: block.pollOptions.filter(o => o.trim()),
             poll_max_options: block.pollMaxOptions,
-            scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
+            scheduled_at: new Date(now.getTime()).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
+            message_group_id: messageGroupId,
+            block_order: offset,
+            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
           } as any).select().single();
           if (error) throw error;
-          await sendMessage(inserted.id);
+          allInserted.push(inserted.id);
           offset++;
         } else if (block.type === 'audio') {
           const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
             campaign_id: campaignId,
             message_type: 'audio',
             media_url: block.mediaUrl,
-            scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
+            scheduled_at: new Date(now.getTime()).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
             whatsapp_number_id: campaignNumberId,
+            message_group_id: messageGroupId,
+            block_order: offset,
+            status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
           } as any).select().single();
           if (error) throw error;
-          await sendMessage(inserted.id);
+          allInserted.push(inserted.id);
           offset++;
         }
+      }
+      // Send only the first block — edge function handles the rest via message_group_id
+      if (allInserted.length > 0) {
+        await sendMessage(allInserted[0]);
       }
     } else {
       // Legacy fallback

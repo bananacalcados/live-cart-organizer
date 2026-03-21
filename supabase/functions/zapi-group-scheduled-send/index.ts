@@ -12,6 +12,8 @@ const SPEED_DELAYS: Record<string, [number, number]> = {
   fast: [1000, 3000],
 };
 
+const INTER_BLOCK_DELAY = 1500; // 1.5s between blocks within same group
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -56,7 +58,6 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        // Reset to allow retry
         console.log(`Retrying stuck message ${scheduledMessageId} (stuck for ${minutesAgo.toFixed(1)} min)`);
       } else {
         return new Response(
@@ -114,65 +115,96 @@ serve(async (req) => {
     // Helper to replace variables in text
     const replaceVars = (text: string, groupName: string): string => {
       let result = text;
-      // Replace campaign variables
       for (const [key, value] of Object.entries(campaignVars)) {
         result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
       }
-      // Replace group-specific variables
       result = result.replace(/\{\{nome_grupo\}\}/g, groupName);
       return result;
     };
 
-    let sentCount = 0;
-    let failedCount = 0;
-
     // Resolve whatsapp_number_id from message or campaign
     const resolvedNumberId = msg.whatsapp_number_id || campaign.whatsapp_number_id || null;
 
+    // Determine if this is a multi-block message
+    let allBlocks: any[] = [msg];
+    const messageGroupId = msg.message_group_id;
+
+    if (messageGroupId) {
+      // Fetch all blocks in this message group
+      const { data: groupedBlocks, error: gbErr } = await supabase
+        .from('group_campaign_scheduled_messages')
+        .select('*')
+        .eq('message_group_id', messageGroupId)
+        .order('block_order', { ascending: true });
+
+      if (!gbErr && groupedBlocks && groupedBlocks.length > 0) {
+        allBlocks = groupedBlocks;
+        console.log(`Multi-block message: ${allBlocks.length} blocks for group_id ${messageGroupId}`);
+        // Mark all grouped blocks as sending
+        await supabase.from('group_campaign_scheduled_messages')
+          .update({ status: 'sending' })
+          .eq('message_group_id', messageGroupId);
+      }
+    }
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    // For each group, send ALL blocks before moving to next group
     for (const group of groups) {
-      try {
-        let endpoint = 'zapi-send-group-message';
-        const body: Record<string, unknown> = {
-          groupId: group.group_id,
-          mentionAll: msg.mention_all || false,
-          whatsapp_number_id: resolvedNumberId,
-        };
+      let groupSuccess = true;
+      for (let blockIdx = 0; blockIdx < allBlocks.length; blockIdx++) {
+        const block = allBlocks[blockIdx];
+        try {
+          const body: Record<string, unknown> = {
+            groupId: group.group_id,
+            mentionAll: block.mention_all || false,
+            whatsapp_number_id: resolvedNumberId,
+          };
 
-        // Apply variable substitution to message content
-        const messageContent = msg.message_content ? replaceVars(msg.message_content, group.name) : '';
+          const messageContent = block.message_content ? replaceVars(block.message_content, group.name) : '';
 
-        if (msg.message_type === 'poll' && msg.poll_options) {
-          endpoint = 'zapi-send-group-message';
-          body.type = 'poll';
-          body.pollOptions = msg.poll_options;
-          body.message = messageContent;
-          body.pollMaxOptions = msg.poll_max_options ?? 1;
-        } else if (msg.message_type !== 'text' && msg.media_url) {
-          body.type = msg.message_type;
-          body.mediaUrl = msg.media_url;
-          body.caption = messageContent;
-          body.message = messageContent;
-        } else {
-          body.type = 'text';
-          body.message = messageContent;
+          if (block.message_type === 'poll' && block.poll_options) {
+            body.type = 'poll';
+            body.pollOptions = block.poll_options;
+            body.message = messageContent;
+            body.pollMaxOptions = block.poll_max_options ?? 1;
+          } else if (block.message_type !== 'text' && block.media_url) {
+            body.type = block.message_type;
+            body.mediaUrl = block.media_url;
+            body.caption = messageContent;
+            body.message = messageContent;
+          } else {
+            body.type = 'text';
+            body.message = messageContent;
+          }
+
+          const sendRes = await fetch(`${supabaseUrl}/functions/v1/zapi-send-group-message`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          });
+
+          const sendData = await sendRes.json();
+          if (!sendRes.ok || !sendData.success) {
+            groupSuccess = false;
+          }
+        } catch {
+          groupSuccess = false;
         }
 
-        const sendRes = await fetch(`${supabaseUrl}/functions/v1/${endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${supabaseKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        });
-
-        const sendData = await sendRes.json();
-        if (sendRes.ok && sendData.success) {
-          sentCount++;
-        } else {
-          failedCount++;
+        // Delay between blocks within the same group (not after last block)
+        if (blockIdx < allBlocks.length - 1) {
+          await new Promise(r => setTimeout(r, INTER_BLOCK_DELAY));
         }
-      } catch {
+      }
+
+      if (groupSuccess) {
+        sentCount++;
+      } else {
         failedCount++;
       }
 
@@ -181,15 +213,24 @@ serve(async (req) => {
       await new Promise(r => setTimeout(r, delay));
     }
 
-    // Update scheduled message status
-    await supabase.from('group_campaign_scheduled_messages')
-      .update({
-        status: failedCount === groups.length ? 'failed' : 'sent',
-        sent_at: new Date().toISOString(),
-        sent_count: sentCount,
-        failed_count: failedCount,
-      })
-      .eq('id', scheduledMessageId);
+    // Update all blocks' status
+    const finalStatus = failedCount === groups.length ? 'failed' : 'sent';
+    const updatePayload = {
+      status: finalStatus,
+      sent_at: new Date().toISOString(),
+      sent_count: sentCount,
+      failed_count: failedCount,
+    };
+
+    if (messageGroupId) {
+      await supabase.from('group_campaign_scheduled_messages')
+        .update(updatePayload)
+        .eq('message_group_id', messageGroupId);
+    } else {
+      await supabase.from('group_campaign_scheduled_messages')
+        .update(updatePayload)
+        .eq('id', scheduledMessageId);
+    }
 
     return new Response(
       JSON.stringify({ success: true, sentCount, failedCount, total: groups.length }),
