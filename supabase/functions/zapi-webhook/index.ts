@@ -310,6 +310,62 @@ serve(async (req) => {
               { onConflict: 'phone', ignoreDuplicates: false }
             );
           if (contactError) console.error('Error upserting chat contact:', contactError);
+
+          // ========== [NOVO] Captura de lead de anúncio WhatsApp ==========
+          try {
+            const { data: adKeywords } = await supabase
+              .from('whatsapp_ad_keywords')
+              .select('keyword, campaign_label')
+              .eq('is_active', true);
+
+            if (adKeywords && adKeywords.length > 0 && messageText) {
+              const msgLower = messageText.toLowerCase();
+              const matchedKeyword = adKeywords.find(kw =>
+                msgLower.includes(kw.keyword.toLowerCase())
+              );
+
+              if (matchedKeyword) {
+                console.log(`[AD-LEAD] Keyword "${matchedKeyword.keyword}" detectada de ${phone}`);
+
+                let leadStatus = 'prospect';
+                const phoneSuffix = phone.slice(-8);
+
+                const { data: existingCustomer } = await supabase
+                  .from('pos_customers')
+                  .select('id')
+                  .or(`whatsapp.ilike.%${phoneSuffix}`)
+                  .limit(1)
+                  .maybeSingle();
+
+                if (existingCustomer) leadStatus = 'customer';
+
+                const { error: leadError } = await supabase
+                  .from('lp_leads')
+                  .insert({
+                    name: senderName || null,
+                    phone: phone,
+                    source: 'whatsapp_ad',
+                    converted: false,
+                    metadata: {
+                      campaign_label: matchedKeyword.campaign_label,
+                      keyword_matched: matchedKeyword.keyword,
+                      original_message: messageText.slice(0, 500),
+                      lead_status: leadStatus,
+                      captured_at: new Date().toISOString(),
+                    },
+                  });
+
+                if (leadError) {
+                  console.error('[AD-LEAD] Erro ao salvar lead:', leadError);
+                } else {
+                  console.log(`[AD-LEAD] Lead salvo: ${phone} | campanha: ${matchedKeyword.campaign_label}`);
+                }
+              }
+            }
+          } catch (adLeadErr) {
+            console.error('[AD-LEAD] Erro geral (não-crítico):', adLeadErr);
+          }
+          // ========== [FIM] Captura de lead de anúncio WhatsApp ==========
         }
 
         // For groups, save the group name
