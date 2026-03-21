@@ -913,6 +913,71 @@ export function MassTemplateDispatcher() {
     }
   };
 
+  // Handle duplicate from history
+  const handleDuplicate = useCallback((data: DuplicateDispatchData) => {
+    // Set WhatsApp number
+    if (data.whatsapp_number_id) {
+      setSelectedNumber(data.whatsapp_number_id);
+    }
+
+    // Set audience source & filters
+    if (data.audience_source) {
+      setAudienceSource(data.audience_source as 'crm' | 'leads' | 'both');
+    }
+    if (data.audience_filters) {
+      const f = data.audience_filters;
+      if (f.rfm) setRfmFilter(f.rfm);
+      if (f.state) setStateFilter(f.state);
+      if (f.city) setCityFilter(f.city);
+      if (f.ddd) setDddFilter(f.ddd);
+      if (f.region) setRegionFilter(f.region);
+      if (f.campaign) setLeadCampaignFilter(f.campaign);
+    }
+
+    // Set variables config
+    if (data.variables_config && typeof data.variables_config === 'object') {
+      setVariables(data.variables_config as Record<string, { mode: string; staticValue: string }>);
+    }
+
+    // Set other options
+    setForceResend(data.force_resend || false);
+    if (data.header_media_url) setHeaderMediaUrl(data.header_media_url);
+
+    // Pre-select recipients from the original dispatch
+    if (data.recipients && data.recipients.length > 0) {
+      const phones = new Set(data.recipients.map(r => r.phone.replace(/\D/g, '')));
+      setSelectedPhones(phones);
+      setSelectAll(false);
+    }
+
+    // Find and select the template by name (after templates are loaded)
+    if (data.template_name && templates.length > 0) {
+      const tpl = templates.find(t => t.name === data.template_name);
+      if (tpl) setSelectedTemplate(tpl);
+    }
+
+    // If templates haven't loaded yet, store the name to match later
+    if (data.template_name) {
+      pendingTemplateName.current = data.template_name;
+    }
+
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [templates]);
+
+  const pendingTemplateName = useRef<string | null>(null);
+
+  // Auto-select template when templates load and there's a pending duplicate
+  useEffect(() => {
+    if (pendingTemplateName.current && templates.length > 0) {
+      const tpl = templates.find(t => t.name === pendingTemplateName.current);
+      if (tpl) {
+        setSelectedTemplate(tpl);
+        pendingTemplateName.current = null;
+      }
+    }
+  }, [templates]);
+
   const selectedCount = selectedPhones.size;
 
   return (
