@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EventsDashboard } from "@/components/events/EventsDashboard";
+import { EventCheckoutMonitor } from "@/components/events/EventCheckoutMonitor";
 import { EventTeamManager } from "@/components/events/EventTeamManager";
 import { EventTeamSelector } from "@/components/events/EventTeamSelector";
 import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
