@@ -1510,6 +1510,7 @@ export default function Marketing() {
               );
             })()}
             <CatalogLeadPageCreator />
+            <WhatsAppAdKeywords />
           </TabsContent>
 
           {/* ── GRUPOS VIP ── */}
