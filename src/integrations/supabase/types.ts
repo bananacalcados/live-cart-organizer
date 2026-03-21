@@ -3291,6 +3291,7 @@ export type Database = {
       }
       group_campaign_scheduled_messages: {
         Row: {
+          block_order: number | null
           campaign_id: string
           created_at: string
           failed_count: number
@@ -3298,6 +3299,7 @@ export type Database = {
           media_url: string | null
           mention_all: boolean
           message_content: string | null
+          message_group_id: string | null
           message_type: string
           poll_max_options: number | null
           poll_options: Json | null
@@ -3309,6 +3311,7 @@ export type Database = {
           whatsapp_number_id: string | null
         }
         Insert: {
+          block_order?: number | null
           campaign_id: string
           created_at?: string
           failed_count?: number
@@ -3316,6 +3319,7 @@ export type Database = {
           media_url?: string | null
           mention_all?: boolean
           message_content?: string | null
+          message_group_id?: string | null
           message_type?: string
           poll_max_options?: number | null
           poll_options?: Json | null
@@ -3327,6 +3331,7 @@ export type Database = {
           whatsapp_number_id?: string | null
         }
         Update: {
+          block_order?: number | null
           campaign_id?: string
           created_at?: string
           failed_count?: number
@@ -3334,6 +3339,7 @@ export type Database = {
           media_url?: string | null
           mention_all?: boolean
           message_content?: string | null
+          message_group_id?: string | null
           message_type?: string
           poll_max_options?: number | null
           poll_options?: Json | null
