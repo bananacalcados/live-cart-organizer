@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { prepareZApiImagePayload } from "../_shared/zapi-media.ts";
+import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
