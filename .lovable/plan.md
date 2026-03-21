@@ -1,65 +1,73 @@
 
 
-# Diagnóstico: Erro ao Salvar Pedido + Dados Revertendo
+# Plano: Monitor de Checkout para Eventos
 
-## Problema Identificado
+## Problema
 
-Dois problemas combinados:
+Pedidos ficam em "Aguardando Pagamento" mas clientes dizem que pagaram. Não há visibilidade sobre as tentativas de pagamento (sucesso, falha, processando) dos pedidos de eventos.
 
-### 1. Sem tratamento de erro no `handleSubmit`
+## Solução
 
-O `handleSubmit` no `OrderDialogDb.tsx` (linha 388-463) **não tem try/catch**. Quando o `updateOrder` falha (ex: timeout do banco durante disparos em massa), ele lança uma exceção que interrompe todo o fluxo:
+Adicionar uma nova aba **"Pagamentos"** na página de Eventos (`/events`) que consulta a tabela `pos_checkout_attempts` filtrando pelos pedidos de cada evento, mostrando todas as tentativas de pagamento com status, gateway, valor, erro, etc.
 
-```text
-Fluxo atual quando updateOrder falha:
-  1. updateOrder → ERRO (toast "Erro ao atualizar pedido") → throw
-  2. fetchOrdersByEvent → NUNCA EXECUTA
-  3. toast.success → NUNCA EXECUTA  
-  4. onOpenChange(false) → NUNCA EXECUTA (dialog fica aberto)
-  5. resetForm → NUNCA EXECUTA
+---
+
+### Passo 1 — Novo componente: `EventCheckoutMonitor.tsx`
+
+**Arquivo**: `src/components/events/EventCheckoutMonitor.tsx`
+
+Componente que:
+1. Recebe a lista de eventos como prop (ou busca internamente)
+2. Permite filtrar por evento específico ou ver todos
+3. Consulta `pos_checkout_attempts` fazendo JOIN com `orders` para filtrar apenas pedidos de eventos:
+   - Busca os `order.id` dos eventos selecionados
+   - Filtra `pos_checkout_attempts.sale_id` por esses IDs
+4. Exibe uma tabela com:
+   - **Cliente** (nome, telefone)
+   - **Evento** (nome)
+   - **Valor**
+   - **Método** (PIX/Cartão)
+   - **Gateway** (Pagar.me, MercadoPago, AppMax)
+   - **Status** (badge colorido: sucesso/falha/processando)
+   - **Erro** (se houver)
+   - **Data/Hora**
+   - **Link do checkout** (botão para abrir `checkout.bananacalcados.com.br/checkout/order/{sale_id}`)
+5. Filtros: por status (todos/sucesso/falha/processando), por evento, busca por nome/telefone
+6. Botão de refresh manual
+7. Badge de contagem de falhas visível na aba
+
+---
+
+### Passo 2 — Integrar na página Events.tsx
+
+Adicionar uma terceira aba ao `TabsList`:
+
+```
+<TabsTrigger value="payments">
+  <CreditCard /> Pagamentos
+</TabsTrigger>
 ```
 
-O dialog fica aberto, mas o realtime subscription pode sobrescrever os dados locais com a versão anterior do banco.
-
-### 2. Atualização do cliente desvinculada do pedido
-
-Quando o usuário edita o telefone no pedido, a atualização do customer (linha 403-405) acontece ANTES do `updateOrder`. Se o `updateOrder` falha depois, o telefone pode ter sido salvo no customer mas o usuário vê o toast de erro e acha que nada foi salvo.
-
-## Correção Proposta
-
-### Arquivo: `src/components/OrderDialogDb.tsx`
-
-Envolver o `handleSubmit` em try/catch para que:
-- Se `updateOrder` falhar, o erro seja capturado mas o dialog permaneça funcional
-- O `fetchOrdersByEvent` execute em um bloco finally ou separado
-- Toast de erro mais claro indicando o que falhou
-
-```text
-handleSubmit:
-  try {
-    // atualizar customer (se mudou)
-    // atualizar order
-    // fetchOrdersByEvent
-    // toast.success
-    // fechar dialog
-  } catch (error) {
-    toast.error("Erro ao salvar pedido. Tente novamente.");
-    // NÃO fechar o dialog — deixar o usuário tentar de novo
-  }
+Com o conteúdo:
+```
+<TabsContent value="payments">
+  <EventCheckoutMonitor events={events} />
+</TabsContent>
 ```
 
-### Opcional: Retry automático
-
-Adicionar um retry simples no `updateOrder` do store para lidar com timeouts temporários.
+---
 
 ## Arquivos Alterados
 
 | Arquivo | Mudança |
 |---|---|
-| `OrderDialogDb.tsx` | Adicionar try/catch no handleSubmit |
+| `src/components/events/EventCheckoutMonitor.tsx` | Novo componente |
+| `src/pages/Events.tsx` | +1 aba "Pagamentos" |
 
 ## Garantias
 
-- Nenhum outro módulo é afetado
-- O fluxo de criação de pedido novo também ganha o try/catch
-- Nenhuma mudança no banco de dados
+- Nenhuma tabela nova — usa `pos_checkout_attempts` e `orders` existentes
+- Nenhuma Edge Function nova — consulta direta via SDK
+- Nenhum outro módulo afetado
+- Leitura apenas (SELECT) — sem modificar dados
+
