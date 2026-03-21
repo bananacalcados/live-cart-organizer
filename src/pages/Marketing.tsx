@@ -46,6 +46,7 @@ import * as XLSX from "@e965/xlsx";
 import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
 import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
 import { LeadImportDialog } from "@/components/marketing/LeadImportDialog";
+import WhatsAppAdKeywords from "@/components/marketing/WhatsAppAdKeywords";
 
 // ─── Types ──────────────────────────────────────
 
@@ -1509,6 +1510,7 @@ export default function Marketing() {
               );
             })()}
             <CatalogLeadPageCreator />
+            <WhatsAppAdKeywords />
           </TabsContent>
 
           {/* ── GRUPOS VIP ── */}
