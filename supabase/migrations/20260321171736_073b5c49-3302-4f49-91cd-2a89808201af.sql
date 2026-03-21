@@ -1,0 +1,1 @@
+ALTER TABLE dispatch_history ADD COLUMN IF NOT EXISTS scheduled_at timestamptz;

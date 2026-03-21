@@ -1820,6 +1820,7 @@ export type Database = {
           id: string
           processing_batch: boolean | null
           rendered_message: string | null
+          scheduled_at: string | null
           sent_count: number | null
           started_at: string
           status: string | null
@@ -1844,6 +1845,7 @@ export type Database = {
           id?: string
           processing_batch?: boolean | null
           rendered_message?: string | null
+          scheduled_at?: string | null
           sent_count?: number | null
           started_at?: string
           status?: string | null
@@ -1868,6 +1870,7 @@ export type Database = {
           id?: string
           processing_batch?: boolean | null
           rendered_message?: string | null
+          scheduled_at?: string | null
           sent_count?: number | null
           started_at?: string
           status?: string | null

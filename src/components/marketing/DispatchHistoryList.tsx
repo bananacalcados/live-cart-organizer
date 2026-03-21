@@ -13,9 +13,11 @@ import {
 import {
   History, Send, CheckCircle, XCircle, Eye, Clock, RefreshCw,
   MessageSquare, BarChart3, Users, ChevronDown, ChevronUp,
+  Pause, Play, CalendarClock, Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 interface DispatchRecord {
   id: string;
@@ -233,7 +235,30 @@ export function DispatchHistoryList() {
     if (d.status === 'sending') return <Badge className="bg-amber-500/20 text-amber-700 animate-pulse text-xs"><Clock className="h-3 w-3 mr-1" />Enviando</Badge>;
     if (d.status === 'completed') return <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs"><CheckCircle className="h-3 w-3 mr-1" />Concluído</Badge>;
     if (d.status === 'cancelled') return <Badge variant="outline" className="text-xs"><XCircle className="h-3 w-3 mr-1" />Cancelado</Badge>;
+    if (d.status === 'scheduled') return <Badge className="bg-blue-500/20 text-blue-700 dark:text-blue-300 text-xs"><CalendarClock className="h-3 w-3 mr-1" />Agendado</Badge>;
+    if (d.status === 'scheduled_paused') return <Badge className="bg-muted text-muted-foreground text-xs"><Pause className="h-3 w-3 mr-1" />Pausado</Badge>;
     return <Badge variant="outline" className="text-xs">{d.status}</Badge>;
+  };
+
+  const handleTriggerNow = async (dispatchId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await supabase.from('dispatch_history').update({ status: 'sending', started_at: new Date().toISOString() } as any).eq('id', dispatchId);
+      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dispatch-mass-send`, {
+        method: 'POST',
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dispatchId }),
+      });
+      toast.success("🚀 Disparo iniciado!");
+      loadHistory();
+    } catch { toast.error("Erro ao iniciar disparo"); }
+  };
+
+  const handleCancelScheduled = async (dispatchId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await supabase.from('dispatch_history').update({ status: 'cancelled' }).eq('id', dispatchId);
+    toast.info("Disparo cancelado");
+    loadHistory();
   };
 
   const calcRate = (value: number, total: number) => {
@@ -317,6 +342,12 @@ export function DispatchHistoryList() {
                               <Clock className="h-3 w-3" />
                               {format(new Date(d.created_at), "dd/MM HH:mm", { locale: ptBR })}
                             </span>
+                            {(d as any).scheduled_at && (d.status === 'scheduled' || d.status === 'scheduled_paused') && (
+                              <span className="flex items-center gap-1 text-blue-600">
+                                <CalendarClock className="h-3 w-3" />
+                                {format(new Date((d as any).scheduled_at), "dd/MM HH:mm", { locale: ptBR })}
+                              </span>
+                            )}
                             <span className="flex items-center gap-1">
                               <Users className="h-3 w-3" />
                               {dispatched}/{d.total_recipients} disp.
@@ -327,25 +358,48 @@ export function DispatchHistoryList() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs shrink-0">
-                          <div className="text-center">
-                            <div className="font-bold text-emerald-600">{deliveryRate}</div>
-                            <div className="text-muted-foreground">Entrega</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="font-bold text-blue-600">{readRate}</div>
-                            <div className="text-muted-foreground">Leitura</div>
-                          </div>
-                          <div className="flex gap-1">
-                            <div className="w-2 h-8 rounded-full bg-muted overflow-hidden flex flex-col-reverse">
-                              <div className="bg-blue-500 transition-all" style={{ height: `${dispatched ? (s.read / dispatched) * 100 : 0}%` }} />
-                              <div className="bg-emerald-500 transition-all" style={{ height: `${dispatched ? (s.delivered / dispatched) * 100 : 0}%` }} />
-                              <div className="bg-amber-500 transition-all" style={{ height: `${dispatched ? (s.sent / dispatched) * 100 : 0}%` }} />
-                            </div>
-                          </div>
-                          <Button variant="ghost" size="sm" className="h-7 px-2">
-                            <Eye className="h-3.5 w-3.5" />
-                          </Button>
+                        <div className="flex items-center gap-2 text-xs shrink-0">
+                          {(d.status === 'scheduled' || d.status === 'scheduled_paused') ? (
+                            <>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="h-7 px-2.5 gap-1 text-xs"
+                                onClick={(e) => handleTriggerNow(d.id, e)}
+                              >
+                                <Play className="h-3 w-3" />Disparar
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-destructive"
+                                onClick={(e) => handleCancelScheduled(d.id, e)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-center">
+                                <div className="font-bold text-emerald-600">{deliveryRate}</div>
+                                <div className="text-muted-foreground">Entrega</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="font-bold text-blue-600">{readRate}</div>
+                                <div className="text-muted-foreground">Leitura</div>
+                              </div>
+                              <div className="flex gap-1">
+                                <div className="w-2 h-8 rounded-full bg-muted overflow-hidden flex flex-col-reverse">
+                                  <div className="bg-blue-500 transition-all" style={{ height: `${dispatched ? (s.read / dispatched) * 100 : 0}%` }} />
+                                  <div className="bg-emerald-500 transition-all" style={{ height: `${dispatched ? (s.delivered / dispatched) * 100 : 0}%` }} />
+                                  <div className="bg-amber-500 transition-all" style={{ height: `${dispatched ? (s.sent / dispatched) * 100 : 0}%` }} />
+                                </div>
+                              </div>
+                              <Button variant="ghost" size="sm" className="h-7 px-2">
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

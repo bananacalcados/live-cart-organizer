@@ -142,6 +142,8 @@ export function MassTemplateDispatcher() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [forceResend, setForceResend] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+  const [scheduleMode, setScheduleMode] = useState<'none' | 'schedule' | 'paused'>('none');
+  const [scheduledDate, setScheduledDate] = useState("");
 
   // Check for active dispatches on mount (resume monitoring)
   useEffect(() => {
@@ -835,6 +837,82 @@ export function MassTemplateDispatcher() {
     toast.info("Solicitação de cancelamento enviada...");
   };
 
+  // Save as scheduled or paused (no immediate send)
+  const handleSaveScheduledOrPaused = async (mode: 'schedule' | 'paused') => {
+    if (!selectedTemplate || !selectedNumber) return;
+
+    if (mode === 'schedule' && !scheduledDate) {
+      toast.error("Defina a data e hora do agendamento");
+      return;
+    }
+
+    const allPhones = [...selectedPhones];
+    if (allPhones.length === 0) {
+      toast.error("Selecione pelo menos um destinatário");
+      return;
+    }
+
+    const status = mode === 'schedule' ? 'scheduled' : 'scheduled_paused';
+    const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
+
+    try {
+      const insertData: Record<string, any> = {
+        template_name: selectedTemplate.name,
+        template_language: selectedTemplate.language,
+        whatsapp_number_id: selectedNumber,
+        audience_source: audienceSource,
+        audience_filters: {
+          rfm: rfmFilter, state: stateFilter, city: cityFilter,
+          ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
+        } as any,
+        total_recipients: allPhones.length,
+        rendered_message: renderedMessage || null,
+        variables_config: variables as any,
+        force_resend: forceResend,
+        status,
+        template_components: selectedTemplate.components as any,
+        has_dynamic_vars: hasDynamicVars,
+        header_media_url: headerMediaUrl || null,
+      };
+
+      if (mode === 'schedule') {
+        insertData.scheduled_at = new Date(scheduledDate).toISOString();
+      }
+
+      const { data: dispatchData, error: dispErr } = await supabase
+        .from('dispatch_history')
+        .insert(insertData as any)
+        .select('id')
+        .single();
+
+      if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
+
+      // Save recipients
+      const recipientRows = allPhones.map(p => ({
+        dispatch_id: dispatchData.id,
+        phone: p,
+        recipient_name: recipientMap.get(p)?.name || null,
+        status: 'pending',
+      }));
+      for (let i = 0; i < recipientRows.length; i += 500) {
+        await supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 500));
+      }
+
+      if (mode === 'schedule') {
+        toast.success(`📅 Disparo agendado para ${new Date(scheduledDate).toLocaleString('pt-BR')}`);
+      } else {
+        toast.success("⏸️ Disparo salvo como pausado — dispare quando quiser pelo histórico");
+      }
+
+      setScheduleMode('none');
+      setScheduledDate('');
+      setHistoryKey(k => k + 1);
+    } catch (err) {
+      console.error('Error saving scheduled dispatch:', err);
+      toast.error("Erro ao salvar disparo");
+    }
+  };
+
   const selectedCount = selectedPhones.size;
 
   return (
@@ -1304,23 +1382,43 @@ export function MassTemplateDispatcher() {
                   </span>
                 )}
               </div>
-              <Button
-                className="gap-2"
-                disabled={isSending || selectedCount === 0 || !selectedTemplate}
-                onClick={() => setConfirmOpen(true)}
-              >
-                {isSending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Enviando {sendProgress.sent}/{sendProgress.total}...
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    Disparar para {selectedCount} contatos
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-1.5 text-xs"
+                  disabled={isSending || selectedCount === 0 || !selectedTemplate}
+                  onClick={() => setScheduleMode('paused')}
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Salvar Pausado
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-1.5 text-xs"
+                  disabled={isSending || selectedCount === 0 || !selectedTemplate}
+                  onClick={() => setScheduleMode('schedule')}
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  Agendar
+                </Button>
+                <Button
+                  className="gap-2"
+                  disabled={isSending || selectedCount === 0 || !selectedTemplate}
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  {isSending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Enviando {sendProgress.sent}/{sendProgress.total}...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Disparar Agora
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
 
             {/* Progress */}
@@ -1389,6 +1487,67 @@ export function MassTemplateDispatcher() {
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancelar</Button>
             <Button onClick={handleMassSend} className="gap-1">
               <Send className="h-4 w-4" />Confirmar Disparo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule/Pause Dialog */}
+      <Dialog open={scheduleMode !== 'none'} onOpenChange={(o) => !o && setScheduleMode('none')}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {scheduleMode === 'schedule' ? (
+                <><Calendar className="h-5 w-5 text-blue-500" />Agendar Disparo</>
+              ) : (
+                <><Save className="h-5 w-5 text-muted-foreground" />Salvar Disparo Pausado</>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+              <p className="text-sm font-medium">Template: <span className="font-mono">{selectedTemplate?.name}</span></p>
+              <p className="text-sm">Destinatários: <span className="font-bold">{selectedCount}</span></p>
+            </div>
+            {scheduleMode === 'schedule' && (
+              <div className="space-y-2">
+                <Label className="text-sm">Data e hora do disparo</Label>
+                <Input
+                  type="datetime-local"
+                  value={scheduledDate}
+                  onChange={e => setScheduledDate(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+            )}
+            {scheduleMode === 'paused' && (
+              <p className="text-sm text-muted-foreground">
+                O disparo será salvo com todos os dados configurados. Você poderá disparar manualmente a qualquer momento pelo histórico.
+              </p>
+            )}
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox
+                id="force-resend-schedule"
+                checked={forceResend}
+                onCheckedChange={(v) => setForceResend(!!v)}
+              />
+              <Label htmlFor="force-resend-schedule" className="text-sm font-medium text-amber-600 dark:text-amber-400 cursor-pointer">
+                ⚠️ Forçar reenvio (envia mesmo para quem já recebeu hoje)
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleMode('none')}>Cancelar</Button>
+            <Button
+              onClick={() => handleSaveScheduledOrPaused(scheduleMode as 'schedule' | 'paused')}
+              className="gap-1"
+              disabled={scheduleMode === 'schedule' && !scheduledDate}
+            >
+              {scheduleMode === 'schedule' ? (
+                <><Calendar className="h-4 w-4" />Agendar</>
+              ) : (
+                <><Save className="h-4 w-4" />Salvar Pausado</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
