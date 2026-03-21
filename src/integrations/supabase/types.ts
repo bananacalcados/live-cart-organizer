@@ -8097,6 +8097,33 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_ad_keywords: {
+        Row: {
+          campaign_label: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          keyword: string
+          updated_at: string | null
+        }
+        Insert: {
+          campaign_label: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          keyword: string
+          updated_at?: string | null
+        }
+        Update: {
+          campaign_label?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          keyword?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       whatsapp_group_snapshots: {
         Row: {
           group_id: string
