@@ -837,6 +837,82 @@ export function MassTemplateDispatcher() {
     toast.info("Solicitação de cancelamento enviada...");
   };
 
+  // Save as scheduled or paused (no immediate send)
+  const handleSaveScheduledOrPaused = async (mode: 'schedule' | 'paused') => {
+    if (!selectedTemplate || !selectedNumber) return;
+
+    if (mode === 'schedule' && !scheduledDate) {
+      toast.error("Defina a data e hora do agendamento");
+      return;
+    }
+
+    const allPhones = [...selectedPhones];
+    if (allPhones.length === 0) {
+      toast.error("Selecione pelo menos um destinatário");
+      return;
+    }
+
+    const status = mode === 'schedule' ? 'scheduled' : 'scheduled_paused';
+    const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
+
+    try {
+      const insertData: Record<string, any> = {
+        template_name: selectedTemplate.name,
+        template_language: selectedTemplate.language,
+        whatsapp_number_id: selectedNumber,
+        audience_source: audienceSource,
+        audience_filters: {
+          rfm: rfmFilter, state: stateFilter, city: cityFilter,
+          ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
+        } as any,
+        total_recipients: allPhones.length,
+        rendered_message: renderedMessage || null,
+        variables_config: variables as any,
+        force_resend: forceResend,
+        status,
+        template_components: selectedTemplate.components as any,
+        has_dynamic_vars: hasDynamicVars,
+        header_media_url: headerMediaUrl || null,
+      };
+
+      if (mode === 'schedule') {
+        insertData.scheduled_at = new Date(scheduledDate).toISOString();
+      }
+
+      const { data: dispatchData, error: dispErr } = await supabase
+        .from('dispatch_history')
+        .insert(insertData)
+        .select('id')
+        .single();
+
+      if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
+
+      // Save recipients
+      const recipientRows = allPhones.map(p => ({
+        dispatch_id: dispatchData.id,
+        phone: p,
+        recipient_name: recipientMap.get(p)?.name || null,
+        status: 'pending',
+      }));
+      for (let i = 0; i < recipientRows.length; i += 500) {
+        await supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 500));
+      }
+
+      if (mode === 'schedule') {
+        toast.success(`📅 Disparo agendado para ${new Date(scheduledDate).toLocaleString('pt-BR')}`);
+      } else {
+        toast.success("⏸️ Disparo salvo como pausado — dispare quando quiser pelo histórico");
+      }
+
+      setScheduleMode('none');
+      setScheduledDate('');
+      setHistoryKey(k => k + 1);
+    } catch (err) {
+      console.error('Error saving scheduled dispatch:', err);
+      toast.error("Erro ao salvar disparo");
+    }
+  };
+
   const selectedCount = selectedPhones.size;
 
   return (
