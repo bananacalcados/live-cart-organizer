@@ -1,126 +1,119 @@
 
 
-## Melhorias no Sistema de Grupos VIP
+# Plano: Seleção de Instância WhatsApp para Grupos VIP + Correção da Sincronização
 
-### Resumo das Funcionalidades
+## Diagnóstico
 
-1. **Gerenciamento em massa de grupos dentro da campanha** - Alterar nome, foto, descricao e permissoes de todos os grupos vinculados a campanha de uma vez
-2. **Fotos de perfil dos grupos** - Buscar foto via Z-API durante sincronizacao (ja existe `imgUrl`/`profileThumbnail` mas pode nao estar vindo)
-3. **Upload local de arquivos** - Para audio, video e documentos na criacao de mensagens agendadas
-4. **Calendario de mensagens agendadas** - Visao mensal/semanal por campanha
-5. **Edicao de mensagens pendentes** - Editar mensagens que ainda nao foram enviadas
-6. **Modelos de mensagens** - Templates reutilizaveis salvos no banco
-7. **Variaveis dinamicas nas mensagens** - Ex: `{{link_live}}`, `{{nome_grupo}}`, substituidas no momento do envio
+Dois problemas encontrados:
 
----
+1. **Disparo de campanhas usa credenciais fixas (env vars)**: A função `zapi-send-group-message` lê apenas `ZAPI_INSTANCE_ID/TOKEN/CLIENT_TOKEN` do ambiente. Não aceita `whatsapp_number_id` para resolver credenciais dinâmicas. Como a instância Perola está desconectada, todos os disparos falham silenciosamente.
 
-### 1. Migracao de Banco de Dados
+2. **Sincronização já funciona corretamente**: A função `zapi-list-groups` já usa `resolveZApiCredentials(whatsapp_number_id)` e o frontend já envia `selectedNumberId`. O erro 404 que apareceu antes pode ter sido temporário (a função existe e está deployada). Se persistir, basta redeployar.
 
-**Nova tabela `group_message_templates`:**
-- `id` (uuid PK)
-- `name` (text) - nome do modelo
-- `message_type` (text) - text/image/video/audio/document/poll
-- `message_content` (text) - conteudo com placeholders de variaveis
-- `media_url` (text, nullable)
-- `poll_options` (jsonb, nullable)
-- `created_at` (timestamptz)
+## Estratégia Cirúrgica
 
-**Nova tabela `campaign_variables`:**
-- `id` (uuid PK)
-- `campaign_id` (uuid FK -> group_campaigns)
-- `variable_name` (text) - ex: `link_live`
-- `variable_value` (text) - valor atual
-- `updated_at` (timestamptz)
-- UNIQUE(campaign_id, variable_name)
-
-Isso permite programar mensagens com `{{link_live}}` e atualizar o valor da variavel separadamente. Na hora do envio, o edge function substitui as variaveis pelos valores atuais.
+Alterações mínimas, isoladas, sem tocar em nenhum fluxo existente que funcione.
 
 ---
 
-### 2. Upload Local de Arquivos
+### Passo 1 — Banco de dados (1 migração)
 
-Na `ScheduledMessageForm`, trocar o campo "URL da Midia" por um componente que oferece duas opcoes:
-- **URL externa** (campo de texto como hoje)
-- **Upload do computador** (input type="file" que faz upload para o bucket `marketing-attachments` do storage e obtem a URL publica)
+Adicionar coluna `whatsapp_number_id` em **2 tabelas**:
 
-Isso ja funciona com o bucket existente `marketing-attachments` (publico).
+```sql
+ALTER TABLE group_campaigns 
+  ADD COLUMN IF NOT EXISTS whatsapp_number_id uuid REFERENCES whatsapp_numbers(id);
 
----
+ALTER TABLE group_campaign_scheduled_messages 
+  ADD COLUMN IF NOT EXISTS whatsapp_number_id uuid REFERENCES whatsapp_numbers(id);
+```
 
-### 3. Fotos dos Grupos
-
-A Z-API retorna `imgUrl` ou `profileThumbnail` nos dados do grupo. O `zapi-list-groups` ja faz `photo_url: g.imgUrl || g.profileThumbnail || null`. Se nao esta vindo, pode ser que a Z-API nao retorne por padrao. Vou adicionar uma chamada separada ao endpoint `profile-picture` da Z-API para cada grupo durante a sincronizacao, ou usar o endpoint `group-metadata` que retorna a foto.
-
-Alternativa mais eficiente: ao sincronizar, para grupos sem foto, fazer chamada ao endpoint `profile-picture` da Z-API em batch.
+Campos nullable, sem impacto em dados existentes.
 
 ---
 
-### 4. Gerenciamento em Massa na Campanha
+### Passo 2 — Edge Function: `zapi-send-group-message` (cirúrgico)
 
-Adicionar uma secao no `CampaignDetailPanel` com:
-- Botao "Configurar Grupos" que abre painel com acoes em massa:
-  - Alterar foto de todos os grupos
-  - Alterar descricao de todos
-  - Alterar nome (com sufixo automatico ex: "#1", "#2")
-  - Toggle permissoes (admins enviam / admins adicionam) para todos
+**Arquivo**: `supabase/functions/zapi-send-group-message/index.ts`
 
-Cada acao itera sobre os grupos da campanha e chama `zapi-group-settings` sequencialmente.
+**Mudança**: Substituir as 3 linhas que leem env vars fixas por uma chamada a `resolveZApiCredentials()` (que já existe em `_shared/zapi-credentials.ts`).
 
----
+```
+// ANTES (linhas 28-37):
+const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
+const token = Deno.env.get('ZAPI_TOKEN');
+const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
 
-### 5. Calendario de Mensagens
+// DEPOIS:
+import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
+// ...
+const { whatsapp_number_id } = reqBody;
+const { instanceId, token, clientToken } = await resolveZApiCredentials(whatsapp_number_id);
+```
 
-Adicionar uma aba/secao "Calendario" no `CampaignDetailPanel` usando um grid simples de calendario mensal, mostrando as mensagens agendadas em cada dia. Ao clicar no dia, mostra as mensagens daquela data.
-
----
-
-### 6. Edicao de Mensagens Pendentes
-
-Na lista de mensagens do `CampaignDetailPanel`, adicionar botao de edicao para mensagens com status `pending`. Ao clicar, abre o `ScheduledMessageForm` pre-preenchido. Ao salvar, faz UPDATE em vez de INSERT.
+Adicionar `whatsapp_number_id` à interface `SendGroupRequest`. O campo é opcional — se não vier, o fallback para env vars continua funcionando exatamente como antes.
 
 ---
 
-### 7. Modelos de Mensagens
+### Passo 3 — Edge Function: `zapi-group-scheduled-send` (cirúrgico)
 
-Na `ScheduledMessageForm`:
-- Botao "Usar Modelo" que abre um select/dialog com templates salvos
-- Botao "Salvar como Modelo" que salva a mensagem atual como template reutilizavel
-- Templates ficam na tabela `group_message_templates`
+**Arquivo**: `supabase/functions/zapi-group-scheduled-send/index.ts`
 
----
+**Mudança**: Na hora de montar o `body` para chamar `zapi-send-group-message` (linha ~132), incluir o `whatsapp_number_id` da mensagem agendada ou da campanha:
 
-### 8. Variaveis Dinamicas
+```typescript
+// Adicionar ao body (linha ~132):
+body.whatsapp_number_id = msg.whatsapp_number_id || null;
+```
 
-Na `ScheduledMessageForm`:
-- Botoes para inserir variaveis no cursor: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, etc.
-- Preview mostra como ficara a mensagem com os valores atuais
-
-No `CampaignDetailPanel`:
-- Secao "Variaveis" onde o usuario define/atualiza os valores das variaveis da campanha
-- Ex: campo "link_live" = "https://youtube.com/live/abc123"
-
-No `zapi-group-scheduled-send`:
-- Antes de enviar, buscar variaveis da campanha e fazer `replace` no conteudo da mensagem
-- `{{nome_grupo}}` substituido pelo nome real do grupo de destino
+Também alterar o select da mensagem agendada para incluir o novo campo (já vem automaticamente com `select('*')`).
 
 ---
 
-### Resumo de Arquivos
+### Passo 4 — Frontend: `GroupsVipManager.tsx` (cirúrgico)
 
-| Arquivo | Acao |
+**Arquivo**: `src/components/marketing/GroupsVipManager.tsx`
+
+**Mudança**: No momento de criar a campanha (função que faz insert em `group_campaigns`), salvar o `selectedNumberId` como `whatsapp_number_id`.
+
+Localizar o insert/create da campanha e adicionar:
+```typescript
+whatsapp_number_id: selectedNumberId || null,
+```
+
+---
+
+### Passo 5 — Frontend: `CampaignDetailPanel.tsx` (cirúrgico)
+
+**Arquivo**: `src/components/marketing/CampaignDetailPanel.tsx`
+
+**Mudança**: Ao criar mensagens agendadas (insert em `group_campaign_scheduled_messages`), propagar o `whatsapp_number_id` da campanha para a mensagem.
+
+---
+
+### Passo 6 — Redeploy
+
+Redeployar as 3 edge functions alteradas:
+- `zapi-send-group-message`
+- `zapi-group-scheduled-send`
+- `zapi-list-groups` (preventivo, para garantir que não dê 404)
+
+---
+
+## Arquivos Alterados (resumo)
+
+| Arquivo | Tipo de mudança |
 |---|---|
-| Migracao SQL | Criar `group_message_templates`, `campaign_variables` |
-| `src/components/marketing/ScheduledMessageForm.tsx` | Upload local, variaveis, modelos, modo edicao |
-| `src/components/marketing/CampaignDetailPanel.tsx` | Calendario, edicao, gerenciamento em massa de grupos, secao de variaveis |
-| `supabase/functions/zapi-group-scheduled-send/index.ts` | Substituicao de variaveis antes do envio |
-| `supabase/functions/zapi-list-groups/index.ts` | Buscar fotos de perfil via endpoint `profile-picture` |
-| `src/components/marketing/GroupsVipManager.tsx` | Exibir fotos dos grupos nos cards |
+| Migração SQL | +2 colunas nullable |
+| `zapi-send-group-message/index.ts` | Trocar env vars por `resolveZApiCredentials()` (+3 linhas, -6 linhas) |
+| `zapi-group-scheduled-send/index.ts` | +1 linha no body |
+| `GroupsVipManager.tsx` | +1 linha no insert da campanha |
+| `CampaignDetailPanel.tsx` | +1 linha no insert da mensagem agendada |
 
-### Detalhes Tecnicos
+## Garantias de Segurança
 
-- Upload de arquivos: usa `supabase.storage.from('marketing-attachments').upload()` e `getPublicUrl()`
-- Variaveis suportadas inicialmente: `{{link_live}}`, `{{nome_grupo}}`, `{{data_hoje}}`, `{{horario}}`, variaveis customizadas
-- Calendario: grid CSS simples (7 colunas x 5-6 linhas), sem dependencia externa
-- Edicao de mensagens: reutiliza `ScheduledMessageForm` com prop `editingMessage` para pre-preencher
-- Fotos de grupo: tenta `profile-picture/${groupId}` na Z-API durante sync
+- `resolveZApiCredentials` já tem fallback para env vars — se `whatsapp_number_id` for null, comportamento idêntico ao atual
+- Colunas novas são nullable — dados existentes não são afetados
+- Nenhum outro módulo (Chat, Expedição, PDV, Eventos) é tocado
+- Bloco try/catch existente em todas as functions garante que erros não propagam
 
