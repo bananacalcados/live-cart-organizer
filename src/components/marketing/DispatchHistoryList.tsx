@@ -52,7 +52,25 @@ interface RecipientRow {
   message_wamid: string | null;
 }
 
-export function DispatchHistoryList() {
+export interface DuplicateDispatchData {
+  template_name: string;
+  template_language: string | null;
+  whatsapp_number_id: string | null;
+  audience_source: string | null;
+  audience_filters: any;
+  variables_config: any;
+  force_resend: boolean;
+  header_media_url: string | null;
+  template_components: any;
+  has_dynamic_vars: boolean;
+  recipients: { phone: string; name: string | null }[];
+}
+
+interface DispatchHistoryListProps {
+  onDuplicate?: (data: DuplicateDispatchData) => void;
+}
+
+export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = {}) {
   const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchRecord | null>(null);
