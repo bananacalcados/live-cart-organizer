@@ -398,68 +398,74 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       return;
     }
 
-    if (editingOrder) {
-      // Update customer whatsapp if changed
-      if (editingOrder.customer && whatsapp !== editingOrder.customer.whatsapp) {
-        await createOrUpdateCustomer(editingOrder.customer.instagram_handle, whatsapp || undefined);
-      }
-
-      // Update existing order
-      const orderUpdates: Partial<DbOrder> = {
-        cart_link: cartLink || null,
-        notes: notes || null,
-        stage,
-        products: localProducts,
-        discount_type: discountType || null,
-        discount_value: discountType ? (discountValue ?? 0) : 0,
-        free_shipping: freeShipping,
-        has_gift: hasGift,
-        coupon_code: couponCode || null,
-        paid_externally: paidExternally,
-        is_pickup: isPickup,
-        pickup_store_id: isPickup && pickupStoreId ? pickupStoreId : null,
-        is_delivery: isDelivery,
-      } as any;
-      
-      // If marking as paid externally, also mark as paid
-      if (paidExternally && !editingOrder.is_paid) {
-        orderUpdates.is_paid = true;
-        orderUpdates.paid_at = new Date().toISOString();
-      }
-      
-      await updateOrder(editingOrder.id, orderUpdates);
-
-      // Refresh orders to reflect updated joined customer data
-      await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
-
-      toast.success("Pedido atualizado!");
-    } else {
-      // Create or get customer
-      const newCustomer = await createOrUpdateCustomer(instagramHandle, whatsapp || undefined);
-      if (!newCustomer) {
-        toast.error("Erro ao criar cliente");
-        return;
-      }
-
-      // Check for existing active order in this event
-      const activeOrder = findActiveOrderByCustomer(eventId, newCustomer.id);
-      if (activeOrder) {
-        for (const product of localProducts) {
-          await useDbOrderStore.getState().addProductToOrder(activeOrder.id, product);
+    try {
+      if (editingOrder) {
+        // Update customer whatsapp if changed
+        if (editingOrder.customer && whatsapp !== editingOrder.customer.whatsapp) {
+          await createOrUpdateCustomer(editingOrder.customer.instagram_handle, whatsapp || undefined);
         }
-        if (notes) {
-          await updateOrder(activeOrder.id, { 
-            notes: activeOrder.notes ? `${activeOrder.notes}\n${notes}` : notes 
-          });
+
+        // Update existing order
+        const orderUpdates: Partial<DbOrder> = {
+          cart_link: cartLink || null,
+          notes: notes || null,
+          stage,
+          products: localProducts,
+          discount_type: discountType || null,
+          discount_value: discountType ? (discountValue ?? 0) : 0,
+          free_shipping: freeShipping,
+          has_gift: hasGift,
+          coupon_code: couponCode || null,
+          paid_externally: paidExternally,
+          is_pickup: isPickup,
+          pickup_store_id: isPickup && pickupStoreId ? pickupStoreId : null,
+          is_delivery: isDelivery,
+        } as any;
+        
+        // If marking as paid externally, also mark as paid
+        if (paidExternally && !editingOrder.is_paid) {
+          orderUpdates.is_paid = true;
+          orderUpdates.paid_at = new Date().toISOString();
         }
-        toast.success("Produtos adicionados ao pedido existente!");
+        
+        await updateOrder(editingOrder.id, orderUpdates);
+
+        // Refresh orders to reflect updated joined customer data
+        await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
+
+        toast.success("Pedido atualizado!");
       } else {
-        await createOrder(eventId, newCustomer, localProducts);
-      }
-    }
+        // Create or get customer
+        const newCustomer = await createOrUpdateCustomer(instagramHandle, whatsapp || undefined);
+        if (!newCustomer) {
+          toast.error("Erro ao criar cliente");
+          return;
+        }
 
-    onOpenChange(false);
-    resetForm();
+        // Check for existing active order in this event
+        const activeOrder = findActiveOrderByCustomer(eventId, newCustomer.id);
+        if (activeOrder) {
+          for (const product of localProducts) {
+            await useDbOrderStore.getState().addProductToOrder(activeOrder.id, product);
+          }
+          if (notes) {
+            await updateOrder(activeOrder.id, { 
+              notes: activeOrder.notes ? `${activeOrder.notes}\n${notes}` : notes 
+            });
+          }
+          toast.success("Produtos adicionados ao pedido existente!");
+        } else {
+          await createOrder(eventId, newCustomer, localProducts);
+        }
+      }
+
+      onOpenChange(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving order:', error);
+      toast.error("Erro ao salvar pedido. Tente novamente.");
+      // Dialog stays open so the user can retry
+    }
   };
 
   const totalValue = localProducts.reduce(
