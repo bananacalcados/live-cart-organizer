@@ -5,7 +5,7 @@ import {
   AlertTriangle, Eye, Zap, RefreshCw, Image, Paperclip, Store,
   Calendar, ShoppingBag, Bookmark, Trash2, Save, X
 } from "lucide-react";
-import { DispatchHistoryList } from "./DispatchHistoryList";
+import { DispatchHistoryList, DuplicateDispatchData } from "./DispatchHistoryList";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
