@@ -143,13 +143,15 @@ export function GroupsVipManager() {
     setIsCreatingCampaign(true);
     try {
       const groupsToUse = selectedGroups.length > 0 ? selectedGroups : [];
+      const { selectedNumberId } = useWhatsAppNumberStore.getState();
       const { data, error } = await supabase.from('group_campaigns').insert({
         name: newCampaignName,
         target_groups: groupsToUse,
         total_groups: groupsToUse.length,
         send_speed: newCampaignSpeed,
         status: 'active',
-      }).select().single();
+        whatsapp_number_id: selectedNumberId || null,
+      } as any).select().single();
       if (error) throw error;
       toast.success("Campanha criada!");
       setShowCreateCampaign(false);

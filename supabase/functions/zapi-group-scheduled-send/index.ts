@@ -34,7 +34,7 @@ serve(async (req) => {
     // Fetch scheduled message
     const { data: msg, error: msgErr } = await supabase
       .from('group_campaign_scheduled_messages')
-      .select('*, group_campaigns!inner(id, target_groups, send_speed)')
+      .select('*, group_campaigns!inner(id, target_groups, send_speed, whatsapp_number_id)')
       .eq('id', scheduledMessageId)
       .single();
 

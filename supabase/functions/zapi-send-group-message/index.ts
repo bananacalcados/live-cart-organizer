@@ -27,19 +27,21 @@ serve(async (req) => {
   }
 
   try {
-    const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const token = Deno.env.get('ZAPI_TOKEN');
-    const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+    const reqBody = await req.json();
+    const { groupId, message, type = 'text', mediaUrl, caption, campaignId, groupDbId, mentionAll, whatsapp_number_id }: SendGroupRequest = reqBody;
 
-    if (!instanceId || !token || !clientToken) {
+    let instanceId: string, token: string, clientToken: string;
+    try {
+      const creds = await resolveZApiCredentials(whatsapp_number_id);
+      instanceId = creds.instanceId;
+      token = creds.token;
+      clientToken = creds.clientToken;
+    } catch (e) {
       return new Response(
-        JSON.stringify({ error: 'Z-API credentials not configured' }),
+        JSON.stringify({ error: 'Z-API credentials not configured', details: e.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    const reqBody = await req.json();
-    const { groupId, message, type = 'text', mediaUrl, caption, campaignId, groupDbId, mentionAll }: SendGroupRequest = reqBody;
 
     if (!groupId) {
       return new Response(
