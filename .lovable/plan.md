@@ -1,77 +1,77 @@
 
 
-# Plano: Reordenar Disparo — Todos os Blocos por Grupo (não por bloco)
+# Plano: Agendar e Pausar Disparos de Templates em Massa
 
-## Problema Atual
+## O que muda
 
-Quando você cria uma mensagem com múltiplos blocos (ex: imagem + texto), o sistema salva cada bloco como uma **linha separada** na tabela `group_campaign_scheduled_messages`, cada uma com 5 segundos de diferença no `scheduled_at`.
+Adicionar duas opções ao botão de disparo existente:
+1. **Agendar** — configura template + audiência e define data/hora para disparo automático
+2. **Salvar Pausado** — salva tudo configurado com status `scheduled_paused`, pronto para disparar manualmente quando quiser
 
-O cron pega a primeira linha (bloco imagem), envia para os 20 grupos, depois pega a segunda linha (bloco texto) e envia para os 20 grupos. Resultado: Grupo 1 recebe a imagem, depois Grupo 2, 3... 20, e só então Grupo 1 recebe o texto.
+## Estratégia Cirúrgica
 
-## Solução Proposta
-
-Agrupar os blocos de uma mesma mensagem e enviar **todos os blocos para cada grupo antes de avançar** para o próximo grupo.
-
-### Estratégia: Vincular blocos com um `message_group_id`
-
-Em vez de mudar a arquitetura inteira, adicionamos um campo `message_group_id` (UUID) que conecta blocos da mesma mensagem. A Edge Function `zapi-group-scheduled-send` passa a buscar todos os blocos do mesmo grupo e enviá-los sequencialmente para cada grupo VIP.
+O fluxo atual de "Disparar agora" permanece 100% intocado. As novas opções são caminhos alternativos que criam o registro em `dispatch_history` com status diferente.
 
 ---
 
 ### Passo 1 — Migração SQL
 
-Adicionar coluna `message_group_id` e `block_order` na tabela:
+Adicionar coluna `scheduled_at` na tabela `dispatch_history`:
 
 ```sql
-ALTER TABLE group_campaign_scheduled_messages 
-  ADD COLUMN IF NOT EXISTS message_group_id uuid,
-  ADD COLUMN IF NOT EXISTS block_order integer DEFAULT 0;
+ALTER TABLE dispatch_history 
+  ADD COLUMN IF NOT EXISTS scheduled_at timestamptz;
 ```
 
-Nullable — mensagens existentes (bloco único) continuam funcionando sem mudança.
+Nullable — disparos existentes não são afetados.
 
 ---
 
-### Passo 2 — Frontend: `CampaignDetailPanel.tsx`
+### Passo 2 — Edge Function: `cron-scheduled-dispatches` (NOVO)
 
-Nas funções `handleAddMessage` e `handleSendNow`, quando houver múltiplos blocos:
-- Gerar um UUID único (`message_group_id`) para todos os blocos da mesma mensagem
-- Salvar `block_order` (0, 1, 2...) em cada linha
-- O **primeiro bloco** mantém o `scheduled_at` original; os demais recebem o **mesmo horário** (em vez de +5s) — porque agora a ordenação será por `block_order`, não por tempo
-- Apenas o **primeiro bloco** fica com `status: 'pending'`; os demais ficam com `status: 'grouped'` (novo status que o cron ignora)
+Nova Edge Function que roda via cron (a cada minuto). Busca registros em `dispatch_history` com:
+- `status = 'scheduled'`
+- `scheduled_at <= now()`
 
----
-
-### Passo 3 — Edge Function: `zapi-group-scheduled-send`
-
-Mudança na lógica do loop de grupos:
-
-```
-ANTES:
-  Para cada grupo → enviar 1 bloco → delay → próximo grupo
-
-DEPOIS:
-  1. Ao receber um scheduledMessageId, verificar se tem message_group_id
-  2. Se SIM: buscar TODOS os blocos com mesmo message_group_id, ordenados por block_order
-  3. Para cada grupo:
-     - Enviar bloco 1 → pequeno delay (1-2s) → bloco 2 → delay → bloco 3...
-     - Depois delay normal entre grupos → próximo grupo
-  4. Ao final, marcar TODOS os blocos como 'sent'
-  
-  Se NÃO tem message_group_id: comportamento idêntico ao atual (bloco único)
-```
+Para cada um encontrado, atualiza o status para `sending` e chama `dispatch-mass-send` com o `dispatchId` — exatamente como o botão "Disparar" já faz hoje.
 
 ---
 
-### Passo 4 — Edge Function: `cron-scheduled-group-messages`
+### Passo 3 — Cron Job SQL
 
-Adicionar filtro para não pegar blocos com `status: 'grouped'`:
+Registrar o cron job para chamar a nova Edge Function a cada minuto (via `pg_cron` + `pg_net`).
 
-```sql
-.eq('status', 'pending')  -- já existe, 'grouped' não será pego
-```
+---
 
-Nenhuma mudança necessária — o filtro `.eq('status', 'pending')` já exclui blocos com status 'grouped'.
+### Passo 4 — Frontend: `MassTemplateDispatcher.tsx`
+
+Mudanças cirúrgicas no componente:
+
+1. **Novo state**: `scheduledDate` (string datetime-local)
+2. **Botão de disparo**: Trocar o botão único por um grupo com 3 opções:
+   - **Disparar Agora** (comportamento atual, sem mudança)
+   - **Agendar Disparo** — abre um campo de data/hora, salva com `status: 'scheduled'` e `scheduled_at`
+   - **Salvar Pausado** — salva com `status: 'scheduled_paused'`, sem `scheduled_at`
+
+   Ao salvar como agendado ou pausado, o insert em `dispatch_history` é feito com os mesmos dados de hoje (template, variáveis, audiência, recipients), mas SEM chamar `dispatch-mass-send`.
+
+3. **Toast de confirmação** ajustado para cada caso.
+
+---
+
+### Passo 5 — Frontend: `DispatchHistoryList.tsx`
+
+Mudanças cirúrgicas:
+
+1. **Badges de status**: Adicionar tratamento para `scheduled` e `scheduled_paused`:
+   - `scheduled` → Badge azul com ícone de relógio + data/hora
+   - `scheduled_paused` → Badge cinza "Pausado"
+
+2. **Botão "Disparar Agora"**: Para registros com status `scheduled` ou `scheduled_paused`, exibir um botão que:
+   - Atualiza o status para `sending`
+   - Chama `dispatch-mass-send` (mesmo fluxo do disparo normal)
+
+3. **Botão "Cancelar"**: Para agendados, permitir cancelar antes do envio.
 
 ---
 
@@ -79,19 +79,16 @@ Nenhuma mudança necessária — o filtro `.eq('status', 'pending')` já exclui 
 
 | Arquivo | Mudança |
 |---|---|
-| Migração SQL | +2 colunas (`message_group_id`, `block_order`) |
-| `CampaignDetailPanel.tsx` | Gerar `message_group_id` + `block_order` ao salvar blocos |
-| `zapi-group-scheduled-send/index.ts` | Buscar blocos agrupados e enviar todos por grupo |
-| `cron-scheduled-group-messages/index.ts` | Nenhuma mudança (filtro já exclui 'grouped') |
+| Migração SQL | +1 coluna `scheduled_at` |
+| `cron-scheduled-dispatches/index.ts` | Nova Edge Function (cron) |
+| Cron Job SQL | Registro do cron |
+| `MassTemplateDispatcher.tsx` | +3 opções no botão de disparo, +1 state |
+| `DispatchHistoryList.tsx` | +2 badges, +2 botões (disparar/cancelar) |
 
 ## Garantias de Segurança
 
-- Mensagens existentes (sem `message_group_id`) continuam sendo processadas exatamente como hoje — lógica antiga intocada
-- O novo fluxo só ativa quando `message_group_id` está presente
-- Nenhum outro módulo é afetado
-- Fallback total: se algo falhar na busca dos blocos agrupados, envia só o bloco individual
-
-## Risco
-
-**Baixo.** A mudança é aditiva — novas colunas opcionais, novo branch condicional na Edge Function. O caminho existente (bloco único sem `message_group_id`) permanece 100% inalterado.
+- O fluxo "Disparar Agora" não é alterado — mesmo código, mesmo caminho
+- `dispatch-mass-send` não é tocado — o cron e o botão manual chamam ele da mesma forma
+- Coluna nova é nullable — dados existentes intactos
+- Nenhum outro módulo afetado
 
