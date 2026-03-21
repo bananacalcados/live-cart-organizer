@@ -168,6 +168,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     const [hours, minutes] = data.scheduledTime.split(':').map(Number);
     const scheduledAt = new Date(data.scheduledAt);
     scheduledAt.setHours(hours, minutes, 0, 0);
+    const campaignNumberId = (campaign as any)?.whatsapp_number_id || selectedNumberId || null;
 
     const multiMediaTypes = ['image', 'video', 'document'];
 
@@ -187,7 +188,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               scheduled_at: itemTime.toISOString(),
               send_speed: data.sendSpeed,
               mention_all: data.mentionAll,
-            });
+              whatsapp_number_id: campaignNumberId,
+            } as any);
             if (error) throw error;
             offset++;
           }
@@ -199,7 +201,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(scheduledAt.getTime() + offset * 5000).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          });
+            whatsapp_number_id: campaignNumberId,
+          } as any);
           if (error) throw error;
           offset++;
         } else if (block.type === 'poll') {
@@ -212,7 +215,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(scheduledAt.getTime() + offset * 5000).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          });
+            whatsapp_number_id: campaignNumberId,
+          } as any);
           if (error) throw error;
           offset++;
         } else if (block.type === 'audio') {
@@ -223,7 +227,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(scheduledAt.getTime() + offset * 5000).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          });
+            whatsapp_number_id: campaignNumberId,
+          } as any);
           if (error) throw error;
           offset++;
         }
@@ -243,7 +248,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: itemTime.toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          });
+            whatsapp_number_id: campaignNumberId,
+          } as any);
           if (error) throw error;
         }
         toast.success(`${data.mediaItems.length} arquivo(s) agendado(s)!`);
@@ -258,7 +264,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           scheduled_at: scheduledAt.toISOString(),
           send_speed: data.sendSpeed,
           mention_all: data.mentionAll,
-        });
+          whatsapp_number_id: campaignNumberId,
+        } as any);
         if (error) throw error;
         toast.success("Mensagem agendada!");
       }
@@ -269,6 +276,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const handleSendNow = async (data: ScheduledMessageData) => {
     const now = new Date();
     const multiMediaTypes = ['image', 'video', 'document'];
+    const campaignNumberId = (campaign as any)?.whatsapp_number_id || selectedNumberId || null;
 
     if (data.blocks && data.blocks.length > 0) {
       let offset = 0;
@@ -283,7 +291,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
               send_speed: data.sendSpeed,
               mention_all: data.mentionAll,
-            }).select().single();
+              whatsapp_number_id: campaignNumberId,
+            } as any).select().single();
             if (error) throw error;
             await sendMessage(inserted.id);
             offset++;
@@ -296,7 +305,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          }).select().single();
+            whatsapp_number_id: campaignNumberId,
+          } as any).select().single();
           if (error) throw error;
           await sendMessage(inserted.id);
           offset++;
@@ -310,7 +320,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          }).select().single();
+            whatsapp_number_id: campaignNumberId,
+          } as any).select().single();
           if (error) throw error;
           await sendMessage(inserted.id);
           offset++;
@@ -322,7 +333,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          }).select().single();
+            whatsapp_number_id: campaignNumberId,
+          } as any).select().single();
           if (error) throw error;
           await sendMessage(inserted.id);
           offset++;
@@ -340,7 +352,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: now.toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          }).select().single();
+            whatsapp_number_id: campaignNumberId,
+          } as any).select().single();
           if (error) throw error;
           await sendMessage(inserted.id);
         }
@@ -355,7 +368,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           scheduled_at: now.toISOString(),
           send_speed: data.sendSpeed,
           mention_all: data.mentionAll,
-        }).select().single();
+          whatsapp_number_id: campaignNumberId,
+        } as any).select().single();
         if (error) throw error;
         await sendMessage(inserted.id);
       }
@@ -382,6 +396,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
+      whatsapp_number_id: (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
     };
 
     if (isDuplicate) {
@@ -551,7 +566,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           scheduled_at: scheduledAt.toISOString(),
           send_speed: msg.send_speed || 'normal',
           status: 'pending',
-        });
+          whatsapp_number_id: (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
+        } as any);
       }
       toast.success(`${msgsToImport.length} mensagem(ns) importada(s)!`);
       setShowImportMessages(false);
