@@ -13,7 +13,7 @@ import {
 import {
   History, Send, CheckCircle, XCircle, Eye, Clock, RefreshCw,
   MessageSquare, BarChart3, Users, ChevronDown, ChevronUp,
-  Pause, Play, CalendarClock, Trash2,
+  Pause, Play, CalendarClock, Trash2, Copy,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
