@@ -560,13 +560,15 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
               </Label>
               <Input
                 id="whatsapp"
-                placeholder="(11) 99999-9999"
+                placeholder="5511999999999"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
                 onBlur={() => {
                   if (whatsapp.trim()) {
                     const digits = whatsapp.replace(/\D/g, '');
-                    const normalized = digits.startsWith('55') ? digits : '55' + digits;
+                    // Only auto-prefix 55 if number looks like a Brazilian number (10-11 digits without country code)
+                    // If it already starts with a country code (e.g. 1, 34, 351, etc.), leave it as-is
+                    const normalized = (digits.length <= 11 && !digits.startsWith('55')) ? '55' + digits : digits;
                     setWhatsapp(normalized);
                   }
                 }}
@@ -574,11 +576,18 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
               />
               {whatsapp.trim() && (() => {
                 const digits = whatsapp.replace(/\D/g, '');
-                const normalized = digits.startsWith('55') ? digits : '55' + digits;
-                if (normalized !== whatsapp) {
+                const wouldNormalize = (digits.length <= 11 && !digits.startsWith('55')) ? '55' + digits : digits;
+                if (wouldNormalize !== whatsapp) {
                   return (
                     <p className="text-xs text-muted-foreground mt-1">
-                      📱 Será salvo como: <strong>{normalized}</strong>
+                      📱 Será salvo como: <strong>{wouldNormalize}</strong>
+                    </p>
+                  );
+                }
+                if (digits.length > 11 && !digits.startsWith('55')) {
+                  return (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      🌍 Número internacional detectado: <strong>+{digits}</strong>
                     </p>
                   );
                 }
