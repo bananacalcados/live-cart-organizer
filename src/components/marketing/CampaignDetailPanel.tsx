@@ -566,7 +566,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           scheduled_at: scheduledAt.toISOString(),
           send_speed: msg.send_speed || 'normal',
           status: 'pending',
-        });
+          whatsapp_number_id: (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
+        } as any);
       }
       toast.success(`${msgsToImport.length} mensagem(ns) importada(s)!`);
       setShowImportMessages(false);
