@@ -398,7 +398,8 @@ serve(async (req) => {
       }
     }
 
-    // 2) MessageStatusCallback
+    // 2) MessageStatusCallback — only update for delivery-critical statuses
+    // Skip "read" updates to reduce DB load (they are cosmetic and very high volume)
     const statusRaw = asString(payload.status);
     const ids = Array.isArray(payload.ids) ? (payload.ids as unknown[]).map(asString).filter(Boolean) as string[] : [];
     const singleId = asString(payload.id);
@@ -406,13 +407,18 @@ serve(async (req) => {
 
     if (statusRaw && allIds.length > 0) {
       const newStatus = statusRaw.toLowerCase();
-      const { error } = await supabase
-        .from('whatsapp_messages')
-        .update({ status: newStatus })
-        .in('message_id', allIds);
+      // Skip "read" status — it's high volume and not critical
+      if (newStatus !== 'read') {
+        // Limit batch size to avoid long queries
+        const batchIds = allIds.slice(0, 10);
+        const { error } = await supabase
+          .from('whatsapp_messages')
+          .update({ status: newStatus })
+          .in('message_id', batchIds);
 
-      if (error) {
-        console.error('Error updating status:', error);
+        if (error) {
+          console.error('Error updating status:', error);
+        }
       }
     }
 
