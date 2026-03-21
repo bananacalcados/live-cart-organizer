@@ -333,7 +333,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(now.getTime() + offset * 5000).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          }).select().single();
+            whatsapp_number_id: campaignNumberId,
+          } as any).select().single();
           if (error) throw error;
           await sendMessage(inserted.id);
           offset++;
