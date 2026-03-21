@@ -724,6 +724,75 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         </p>
       )}
 
+      {/* Action buttons: IA, Editar, Excluir */}
+      <div className="mt-3 flex gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className={`flex-1 text-xs gap-1 ${order.ai_paused ? 'border-destructive/50 text-destructive hover:bg-destructive/10' : ''}`}
+          title={order.ai_paused ? 'Retomar IA' : 'Pausar IA'}
+          disabled={togglingAiPause}
+          onClick={async (e) => {
+            e.stopPropagation();
+            setTogglingAiPause(true);
+            try {
+              const newPaused = !order.ai_paused;
+              const customerPhone = order.customer?.whatsapp || '';
+              try {
+                if (newPaused) {
+                  await fetch('https://api.bananacalcados.com.br/ia/pausar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telefone: customerPhone, motivo: 'manual_vendedora', permanente: false }),
+                  });
+                } else {
+                  await fetch('https://api.bananacalcados.com.br/ia/retomar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telefone: customerPhone }),
+                  });
+                }
+              } catch (apiErr) {
+                console.error('Erro ao chamar API externa de IA:', apiErr);
+              }
+              await updateOrder(order.id, {
+                ai_paused: newPaused,
+                ai_paused_at: newPaused ? new Date().toISOString() : null,
+              } as any);
+              toast.success(newPaused ? 'IA pausada para este pedido' : 'IA retomada');
+            } catch { toast.error('Erro ao alterar pausa da IA'); }
+            setTogglingAiPause(false);
+          }}
+        >
+          <Bot className="h-3.5 w-3.5" />
+          {order.ai_paused ? 'Retomar IA' : 'Pausar IA'}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1 text-xs gap-1"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(order);
+          }}
+        >
+          <Edit2 className="h-3.5 w-3.5" />
+          Editar
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1 text-xs gap-1 text-destructive hover:bg-destructive/10 border-destructive/30"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(order.id);
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Excluir
+        </Button>
+      </div>
+
       <SendWhatsAppDialog
         open={showWhatsAppDialog}
         onOpenChange={setShowWhatsAppDialog}
