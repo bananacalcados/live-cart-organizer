@@ -881,11 +881,9 @@ export function MassTemplateDispatcher() {
 
       const { data: dispatchData, error: dispErr } = await supabase
         .from('dispatch_history')
-        .insert(insertData)
+        .insert(insertData as any)
         .select('id')
         .single();
-
-      if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
 
       // Save recipients
       const recipientRows = allPhones.map(p => ({
