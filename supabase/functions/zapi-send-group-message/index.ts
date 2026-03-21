@@ -18,6 +18,7 @@ interface SendGroupRequest {
   // For campaign bulk sends
   campaignId?: string;
   groupDbId?: string; // UUID from whatsapp_groups table
+  whatsapp_number_id?: string; // UUID to resolve Z-API credentials dynamically
 }
 
 serve(async (req) => {
