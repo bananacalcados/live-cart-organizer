@@ -342,6 +342,12 @@ export function DispatchHistoryList() {
                               <Clock className="h-3 w-3" />
                               {format(new Date(d.created_at), "dd/MM HH:mm", { locale: ptBR })}
                             </span>
+                            {(d as any).scheduled_at && (d.status === 'scheduled' || d.status === 'scheduled_paused') && (
+                              <span className="flex items-center gap-1 text-blue-600">
+                                <CalendarClock className="h-3 w-3" />
+                                {format(new Date((d as any).scheduled_at), "dd/MM HH:mm", { locale: ptBR })}
+                              </span>
+                            )}
                             <span className="flex items-center gap-1">
                               <Users className="h-3 w-3" />
                               {dispatched}/{d.total_recipients} disp.
@@ -352,25 +358,48 @@ export function DispatchHistoryList() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs shrink-0">
-                          <div className="text-center">
-                            <div className="font-bold text-emerald-600">{deliveryRate}</div>
-                            <div className="text-muted-foreground">Entrega</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="font-bold text-blue-600">{readRate}</div>
-                            <div className="text-muted-foreground">Leitura</div>
-                          </div>
-                          <div className="flex gap-1">
-                            <div className="w-2 h-8 rounded-full bg-muted overflow-hidden flex flex-col-reverse">
-                              <div className="bg-blue-500 transition-all" style={{ height: `${dispatched ? (s.read / dispatched) * 100 : 0}%` }} />
-                              <div className="bg-emerald-500 transition-all" style={{ height: `${dispatched ? (s.delivered / dispatched) * 100 : 0}%` }} />
-                              <div className="bg-amber-500 transition-all" style={{ height: `${dispatched ? (s.sent / dispatched) * 100 : 0}%` }} />
-                            </div>
-                          </div>
-                          <Button variant="ghost" size="sm" className="h-7 px-2">
-                            <Eye className="h-3.5 w-3.5" />
-                          </Button>
+                        <div className="flex items-center gap-2 text-xs shrink-0">
+                          {(d.status === 'scheduled' || d.status === 'scheduled_paused') ? (
+                            <>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="h-7 px-2.5 gap-1 text-xs"
+                                onClick={(e) => handleTriggerNow(d.id, e)}
+                              >
+                                <Play className="h-3 w-3" />Disparar
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-destructive"
+                                onClick={(e) => handleCancelScheduled(d.id, e)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-center">
+                                <div className="font-bold text-emerald-600">{deliveryRate}</div>
+                                <div className="text-muted-foreground">Entrega</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="font-bold text-blue-600">{readRate}</div>
+                                <div className="text-muted-foreground">Leitura</div>
+                              </div>
+                              <div className="flex gap-1">
+                                <div className="w-2 h-8 rounded-full bg-muted overflow-hidden flex flex-col-reverse">
+                                  <div className="bg-blue-500 transition-all" style={{ height: `${dispatched ? (s.read / dispatched) * 100 : 0}%` }} />
+                                  <div className="bg-emerald-500 transition-all" style={{ height: `${dispatched ? (s.delivered / dispatched) * 100 : 0}%` }} />
+                                  <div className="bg-amber-500 transition-all" style={{ height: `${dispatched ? (s.sent / dispatched) * 100 : 0}%` }} />
+                                </div>
+                              </div>
+                              <Button variant="ghost" size="sm" className="h-7 px-2">
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
