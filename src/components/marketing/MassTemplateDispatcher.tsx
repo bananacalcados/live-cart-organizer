@@ -142,6 +142,8 @@ export function MassTemplateDispatcher() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [forceResend, setForceResend] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+  const [scheduleMode, setScheduleMode] = useState<'none' | 'schedule' | 'paused'>('none');
+  const [scheduledDate, setScheduledDate] = useState("");
 
   // Check for active dispatches on mount (resume monitoring)
   useEffect(() => {
