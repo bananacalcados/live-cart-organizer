@@ -1492,6 +1492,67 @@ export function MassTemplateDispatcher() {
         </DialogContent>
       </Dialog>
 
+      {/* Schedule/Pause Dialog */}
+      <Dialog open={scheduleMode !== 'none'} onOpenChange={(o) => !o && setScheduleMode('none')}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {scheduleMode === 'schedule' ? (
+                <><Calendar className="h-5 w-5 text-blue-500" />Agendar Disparo</>
+              ) : (
+                <><Save className="h-5 w-5 text-muted-foreground" />Salvar Disparo Pausado</>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+              <p className="text-sm font-medium">Template: <span className="font-mono">{selectedTemplate?.name}</span></p>
+              <p className="text-sm">Destinatários: <span className="font-bold">{selectedCount}</span></p>
+            </div>
+            {scheduleMode === 'schedule' && (
+              <div className="space-y-2">
+                <Label className="text-sm">Data e hora do disparo</Label>
+                <Input
+                  type="datetime-local"
+                  value={scheduledDate}
+                  onChange={e => setScheduledDate(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+            )}
+            {scheduleMode === 'paused' && (
+              <p className="text-sm text-muted-foreground">
+                O disparo será salvo com todos os dados configurados. Você poderá disparar manualmente a qualquer momento pelo histórico.
+              </p>
+            )}
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox
+                id="force-resend-schedule"
+                checked={forceResend}
+                onCheckedChange={(v) => setForceResend(!!v)}
+              />
+              <Label htmlFor="force-resend-schedule" className="text-sm font-medium text-amber-600 dark:text-amber-400 cursor-pointer">
+                ⚠️ Forçar reenvio (envia mesmo para quem já recebeu hoje)
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleMode('none')}>Cancelar</Button>
+            <Button
+              onClick={() => handleSaveScheduledOrPaused(scheduleMode as 'schedule' | 'paused')}
+              className="gap-1"
+              disabled={scheduleMode === 'schedule' && !scheduledDate}
+            >
+              {scheduleMode === 'schedule' ? (
+                <><Calendar className="h-4 w-4" />Agendar</>
+              ) : (
+                <><Save className="h-4 w-4" />Salvar Pausado</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dispatch History */}
       <DispatchHistoryList key={historyKey} />
     </div>
