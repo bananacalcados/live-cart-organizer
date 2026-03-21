@@ -3306,6 +3306,7 @@ export type Database = {
           sent_at: string | null
           sent_count: number
           status: string
+          whatsapp_number_id: string | null
         }
         Insert: {
           campaign_id: string
@@ -3323,6 +3324,7 @@ export type Database = {
           sent_at?: string | null
           sent_count?: number
           status?: string
+          whatsapp_number_id?: string | null
         }
         Update: {
           campaign_id?: string
@@ -3340,6 +3342,7 @@ export type Database = {
           sent_at?: string | null
           sent_count?: number
           status?: string
+          whatsapp_number_id?: string | null
         }
         Relationships: [
           {
@@ -3347,6 +3350,13 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "group_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_campaign_scheduled_messages_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
         ]
@@ -3386,6 +3396,7 @@ export type Database = {
           target_groups: string[] | null
           total_groups: number | null
           updated_at: string
+          whatsapp_number_id: string | null
         }
         Insert: {
           ai_generated_content?: string | null
@@ -3421,6 +3432,7 @@ export type Database = {
           target_groups?: string[] | null
           total_groups?: number | null
           updated_at?: string
+          whatsapp_number_id?: string | null
         }
         Update: {
           ai_generated_content?: string | null
@@ -3456,8 +3468,17 @@ export type Database = {
           target_groups?: string[] | null
           total_groups?: number | null
           updated_at?: string
+          whatsapp_number_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "group_campaigns_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       group_message_templates: {
         Row: {

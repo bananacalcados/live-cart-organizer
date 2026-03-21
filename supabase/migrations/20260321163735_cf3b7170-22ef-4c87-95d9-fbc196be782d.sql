@@ -1,0 +1,2 @@
+ALTER TABLE group_campaigns ADD COLUMN IF NOT EXISTS whatsapp_number_id uuid REFERENCES whatsapp_numbers(id);
+ALTER TABLE group_campaign_scheduled_messages ADD COLUMN IF NOT EXISTS whatsapp_number_id uuid REFERENCES whatsapp_numbers(id);
