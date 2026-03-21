@@ -279,6 +279,36 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     loadHistory();
   };
 
+  const handleDuplicate = async (dispatch: DispatchRecord, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onDuplicate) return;
+    try {
+      // Fetch recipients from this dispatch
+      const { data: recs } = await supabase
+        .from('dispatch_recipients')
+        .select('phone, recipient_name')
+        .eq('dispatch_id', dispatch.id);
+
+      const d = dispatch as any;
+      onDuplicate({
+        template_name: d.template_name,
+        template_language: d.template_language || null,
+        whatsapp_number_id: d.whatsapp_number_id || null,
+        audience_source: d.audience_source || null,
+        audience_filters: d.audience_filters || {},
+        variables_config: d.variables_config || {},
+        force_resend: d.force_resend || false,
+        header_media_url: d.header_media_url || null,
+        template_components: d.template_components || null,
+        has_dynamic_vars: d.has_dynamic_vars || false,
+        recipients: (recs || []).map((r: any) => ({ phone: r.phone, name: r.recipient_name })),
+      });
+      toast.success("Disparo duplicado — edite as configurações e dispare quando quiser");
+    } catch {
+      toast.error("Erro ao duplicar disparo");
+    }
+  };
+
   const calcRate = (value: number, total: number) => {
     if (total === 0) return '0%';
     return `${((value / total) * 100).toFixed(1)}%`;
