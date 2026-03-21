@@ -227,7 +227,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: new Date(scheduledAt.getTime() + offset * 5000).toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          });
+            whatsapp_number_id: campaignNumberId,
+          } as any);
           if (error) throw error;
           offset++;
         }
