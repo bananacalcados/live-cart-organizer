@@ -276,6 +276,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const handleSendNow = async (data: ScheduledMessageData) => {
     const now = new Date();
     const multiMediaTypes = ['image', 'video', 'document'];
+    const campaignNumberId = (campaign as any)?.whatsapp_number_id || selectedNumberId || null;
 
     if (data.blocks && data.blocks.length > 0) {
       let offset = 0;
