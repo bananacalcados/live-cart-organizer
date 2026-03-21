@@ -1,119 +1,97 @@
 
 
-# Plano: Seleção de Instância WhatsApp para Grupos VIP + Correção da Sincronização
+# Plano: Reordenar Disparo — Todos os Blocos por Grupo (não por bloco)
 
-## Diagnóstico
+## Problema Atual
 
-Dois problemas encontrados:
+Quando você cria uma mensagem com múltiplos blocos (ex: imagem + texto), o sistema salva cada bloco como uma **linha separada** na tabela `group_campaign_scheduled_messages`, cada uma com 5 segundos de diferença no `scheduled_at`.
 
-1. **Disparo de campanhas usa credenciais fixas (env vars)**: A função `zapi-send-group-message` lê apenas `ZAPI_INSTANCE_ID/TOKEN/CLIENT_TOKEN` do ambiente. Não aceita `whatsapp_number_id` para resolver credenciais dinâmicas. Como a instância Perola está desconectada, todos os disparos falham silenciosamente.
+O cron pega a primeira linha (bloco imagem), envia para os 20 grupos, depois pega a segunda linha (bloco texto) e envia para os 20 grupos. Resultado: Grupo 1 recebe a imagem, depois Grupo 2, 3... 20, e só então Grupo 1 recebe o texto.
 
-2. **Sincronização já funciona corretamente**: A função `zapi-list-groups` já usa `resolveZApiCredentials(whatsapp_number_id)` e o frontend já envia `selectedNumberId`. O erro 404 que apareceu antes pode ter sido temporário (a função existe e está deployada). Se persistir, basta redeployar.
+## Solução Proposta
 
-## Estratégia Cirúrgica
+Agrupar os blocos de uma mesma mensagem e enviar **todos os blocos para cada grupo antes de avançar** para o próximo grupo.
 
-Alterações mínimas, isoladas, sem tocar em nenhum fluxo existente que funcione.
+### Estratégia: Vincular blocos com um `message_group_id`
+
+Em vez de mudar a arquitetura inteira, adicionamos um campo `message_group_id` (UUID) que conecta blocos da mesma mensagem. A Edge Function `zapi-group-scheduled-send` passa a buscar todos os blocos do mesmo grupo e enviá-los sequencialmente para cada grupo VIP.
 
 ---
 
-### Passo 1 — Banco de dados (1 migração)
+### Passo 1 — Migração SQL
 
-Adicionar coluna `whatsapp_number_id` em **2 tabelas**:
+Adicionar coluna `message_group_id` e `block_order` na tabela:
 
 ```sql
-ALTER TABLE group_campaigns 
-  ADD COLUMN IF NOT EXISTS whatsapp_number_id uuid REFERENCES whatsapp_numbers(id);
-
 ALTER TABLE group_campaign_scheduled_messages 
-  ADD COLUMN IF NOT EXISTS whatsapp_number_id uuid REFERENCES whatsapp_numbers(id);
+  ADD COLUMN IF NOT EXISTS message_group_id uuid,
+  ADD COLUMN IF NOT EXISTS block_order integer DEFAULT 0;
 ```
 
-Campos nullable, sem impacto em dados existentes.
+Nullable — mensagens existentes (bloco único) continuam funcionando sem mudança.
 
 ---
 
-### Passo 2 — Edge Function: `zapi-send-group-message` (cirúrgico)
+### Passo 2 — Frontend: `CampaignDetailPanel.tsx`
 
-**Arquivo**: `supabase/functions/zapi-send-group-message/index.ts`
-
-**Mudança**: Substituir as 3 linhas que leem env vars fixas por uma chamada a `resolveZApiCredentials()` (que já existe em `_shared/zapi-credentials.ts`).
-
-```
-// ANTES (linhas 28-37):
-const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-const token = Deno.env.get('ZAPI_TOKEN');
-const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
-
-// DEPOIS:
-import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
-// ...
-const { whatsapp_number_id } = reqBody;
-const { instanceId, token, clientToken } = await resolveZApiCredentials(whatsapp_number_id);
-```
-
-Adicionar `whatsapp_number_id` à interface `SendGroupRequest`. O campo é opcional — se não vier, o fallback para env vars continua funcionando exatamente como antes.
+Nas funções `handleAddMessage` e `handleSendNow`, quando houver múltiplos blocos:
+- Gerar um UUID único (`message_group_id`) para todos os blocos da mesma mensagem
+- Salvar `block_order` (0, 1, 2...) em cada linha
+- O **primeiro bloco** mantém o `scheduled_at` original; os demais recebem o **mesmo horário** (em vez de +5s) — porque agora a ordenação será por `block_order`, não por tempo
+- Apenas o **primeiro bloco** fica com `status: 'pending'`; os demais ficam com `status: 'grouped'` (novo status que o cron ignora)
 
 ---
 
-### Passo 3 — Edge Function: `zapi-group-scheduled-send` (cirúrgico)
+### Passo 3 — Edge Function: `zapi-group-scheduled-send`
 
-**Arquivo**: `supabase/functions/zapi-group-scheduled-send/index.ts`
+Mudança na lógica do loop de grupos:
 
-**Mudança**: Na hora de montar o `body` para chamar `zapi-send-group-message` (linha ~132), incluir o `whatsapp_number_id` da mensagem agendada ou da campanha:
-
-```typescript
-// Adicionar ao body (linha ~132):
-body.whatsapp_number_id = msg.whatsapp_number_id || null;
 ```
+ANTES:
+  Para cada grupo → enviar 1 bloco → delay → próximo grupo
 
-Também alterar o select da mensagem agendada para incluir o novo campo (já vem automaticamente com `select('*')`).
-
----
-
-### Passo 4 — Frontend: `GroupsVipManager.tsx` (cirúrgico)
-
-**Arquivo**: `src/components/marketing/GroupsVipManager.tsx`
-
-**Mudança**: No momento de criar a campanha (função que faz insert em `group_campaigns`), salvar o `selectedNumberId` como `whatsapp_number_id`.
-
-Localizar o insert/create da campanha e adicionar:
-```typescript
-whatsapp_number_id: selectedNumberId || null,
+DEPOIS:
+  1. Ao receber um scheduledMessageId, verificar se tem message_group_id
+  2. Se SIM: buscar TODOS os blocos com mesmo message_group_id, ordenados por block_order
+  3. Para cada grupo:
+     - Enviar bloco 1 → pequeno delay (1-2s) → bloco 2 → delay → bloco 3...
+     - Depois delay normal entre grupos → próximo grupo
+  4. Ao final, marcar TODOS os blocos como 'sent'
+  
+  Se NÃO tem message_group_id: comportamento idêntico ao atual (bloco único)
 ```
 
 ---
 
-### Passo 5 — Frontend: `CampaignDetailPanel.tsx` (cirúrgico)
+### Passo 4 — Edge Function: `cron-scheduled-group-messages`
 
-**Arquivo**: `src/components/marketing/CampaignDetailPanel.tsx`
+Adicionar filtro para não pegar blocos com `status: 'grouped'`:
 
-**Mudança**: Ao criar mensagens agendadas (insert em `group_campaign_scheduled_messages`), propagar o `whatsapp_number_id` da campanha para a mensagem.
+```sql
+.eq('status', 'pending')  -- já existe, 'grouped' não será pego
+```
 
----
-
-### Passo 6 — Redeploy
-
-Redeployar as 3 edge functions alteradas:
-- `zapi-send-group-message`
-- `zapi-group-scheduled-send`
-- `zapi-list-groups` (preventivo, para garantir que não dê 404)
+Nenhuma mudança necessária — o filtro `.eq('status', 'pending')` já exclui blocos com status 'grouped'.
 
 ---
 
-## Arquivos Alterados (resumo)
+## Arquivos Alterados
 
-| Arquivo | Tipo de mudança |
+| Arquivo | Mudança |
 |---|---|
-| Migração SQL | +2 colunas nullable |
-| `zapi-send-group-message/index.ts` | Trocar env vars por `resolveZApiCredentials()` (+3 linhas, -6 linhas) |
-| `zapi-group-scheduled-send/index.ts` | +1 linha no body |
-| `GroupsVipManager.tsx` | +1 linha no insert da campanha |
-| `CampaignDetailPanel.tsx` | +1 linha no insert da mensagem agendada |
+| Migração SQL | +2 colunas (`message_group_id`, `block_order`) |
+| `CampaignDetailPanel.tsx` | Gerar `message_group_id` + `block_order` ao salvar blocos |
+| `zapi-group-scheduled-send/index.ts` | Buscar blocos agrupados e enviar todos por grupo |
+| `cron-scheduled-group-messages/index.ts` | Nenhuma mudança (filtro já exclui 'grouped') |
 
 ## Garantias de Segurança
 
-- `resolveZApiCredentials` já tem fallback para env vars — se `whatsapp_number_id` for null, comportamento idêntico ao atual
-- Colunas novas são nullable — dados existentes não são afetados
-- Nenhum outro módulo (Chat, Expedição, PDV, Eventos) é tocado
-- Bloco try/catch existente em todas as functions garante que erros não propagam
+- Mensagens existentes (sem `message_group_id`) continuam sendo processadas exatamente como hoje — lógica antiga intocada
+- O novo fluxo só ativa quando `message_group_id` está presente
+- Nenhum outro módulo é afetado
+- Fallback total: se algo falhar na busca dos blocos agrupados, envia só o bloco individual
+
+## Risco
+
+**Baixo.** A mudança é aditiva — novas colunas opcionais, novo branch condicional na Edge Function. O caminho existente (bloco único sem `message_group_id`) permanece 100% inalterado.
 
