@@ -248,7 +248,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             scheduled_at: itemTime.toISOString(),
             send_speed: data.sendSpeed,
             mention_all: data.mentionAll,
-          });
+            whatsapp_number_id: campaignNumberId,
+          } as any);
           if (error) throw error;
         }
         toast.success(`${data.mediaItems.length} arquivo(s) agendado(s)!`);
