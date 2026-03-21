@@ -220,8 +220,8 @@ export function TeamChat() {
       .eq('id', msgId);
   };
 
-  // Hide on POS page (has its own chat) and landing pages
-  if (location.pathname === '/pos' || location.pathname === '/live' || location.pathname === '/live-consumidor' || location.pathname.startsWith('/banana-') || location.pathname.startsWith('/lp/') || location.pathname.startsWith('/cat/') || location.pathname.startsWith('/evento/')) return null;
+  // Hide on POS page (has its own chat), landing pages, and checkout pages
+  if (location.pathname === '/pos' || location.pathname === '/live' || location.pathname === '/live-consumidor' || location.pathname.startsWith('/banana-') || location.pathname.startsWith('/lp/') || location.pathname.startsWith('/cat/') || location.pathname.startsWith('/evento/') || location.pathname.startsWith('/checkout') || location.pathname.startsWith('/checkout-loja/')) return null;
 
   if (!isOpen) {
     return (
