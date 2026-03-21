@@ -126,12 +126,16 @@ serve(async (req) => {
     let sentCount = 0;
     let failedCount = 0;
 
+    // Resolve whatsapp_number_id from message or campaign
+    const resolvedNumberId = msg.whatsapp_number_id || campaign.whatsapp_number_id || null;
+
     for (const group of groups) {
       try {
         let endpoint = 'zapi-send-group-message';
         const body: Record<string, unknown> = {
           groupId: group.group_id,
           mentionAll: msg.mention_all || false,
+          whatsapp_number_id: resolvedNumberId,
         };
 
         // Apply variable substitution to message content
