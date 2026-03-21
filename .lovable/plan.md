@@ -1,94 +1,65 @@
 
 
-# Plano: Agendar e Pausar Disparos de Templates em Massa
+# Diagnóstico: Erro ao Salvar Pedido + Dados Revertendo
 
-## O que muda
+## Problema Identificado
 
-Adicionar duas opções ao botão de disparo existente:
-1. **Agendar** — configura template + audiência e define data/hora para disparo automático
-2. **Salvar Pausado** — salva tudo configurado com status `scheduled_paused`, pronto para disparar manualmente quando quiser
+Dois problemas combinados:
 
-## Estratégia Cirúrgica
+### 1. Sem tratamento de erro no `handleSubmit`
 
-O fluxo atual de "Disparar agora" permanece 100% intocado. As novas opções são caminhos alternativos que criam o registro em `dispatch_history` com status diferente.
+O `handleSubmit` no `OrderDialogDb.tsx` (linha 388-463) **não tem try/catch**. Quando o `updateOrder` falha (ex: timeout do banco durante disparos em massa), ele lança uma exceção que interrompe todo o fluxo:
 
----
-
-### Passo 1 — Migração SQL
-
-Adicionar coluna `scheduled_at` na tabela `dispatch_history`:
-
-```sql
-ALTER TABLE dispatch_history 
-  ADD COLUMN IF NOT EXISTS scheduled_at timestamptz;
+```text
+Fluxo atual quando updateOrder falha:
+  1. updateOrder → ERRO (toast "Erro ao atualizar pedido") → throw
+  2. fetchOrdersByEvent → NUNCA EXECUTA
+  3. toast.success → NUNCA EXECUTA  
+  4. onOpenChange(false) → NUNCA EXECUTA (dialog fica aberto)
+  5. resetForm → NUNCA EXECUTA
 ```
 
-Nullable — disparos existentes não são afetados.
+O dialog fica aberto, mas o realtime subscription pode sobrescrever os dados locais com a versão anterior do banco.
 
----
+### 2. Atualização do cliente desvinculada do pedido
 
-### Passo 2 — Edge Function: `cron-scheduled-dispatches` (NOVO)
+Quando o usuário edita o telefone no pedido, a atualização do customer (linha 403-405) acontece ANTES do `updateOrder`. Se o `updateOrder` falha depois, o telefone pode ter sido salvo no customer mas o usuário vê o toast de erro e acha que nada foi salvo.
 
-Nova Edge Function que roda via cron (a cada minuto). Busca registros em `dispatch_history` com:
-- `status = 'scheduled'`
-- `scheduled_at <= now()`
+## Correção Proposta
 
-Para cada um encontrado, atualiza o status para `sending` e chama `dispatch-mass-send` com o `dispatchId` — exatamente como o botão "Disparar" já faz hoje.
+### Arquivo: `src/components/OrderDialogDb.tsx`
 
----
+Envolver o `handleSubmit` em try/catch para que:
+- Se `updateOrder` falhar, o erro seja capturado mas o dialog permaneça funcional
+- O `fetchOrdersByEvent` execute em um bloco finally ou separado
+- Toast de erro mais claro indicando o que falhou
 
-### Passo 3 — Cron Job SQL
+```text
+handleSubmit:
+  try {
+    // atualizar customer (se mudou)
+    // atualizar order
+    // fetchOrdersByEvent
+    // toast.success
+    // fechar dialog
+  } catch (error) {
+    toast.error("Erro ao salvar pedido. Tente novamente.");
+    // NÃO fechar o dialog — deixar o usuário tentar de novo
+  }
+```
 
-Registrar o cron job para chamar a nova Edge Function a cada minuto (via `pg_cron` + `pg_net`).
+### Opcional: Retry automático
 
----
-
-### Passo 4 — Frontend: `MassTemplateDispatcher.tsx`
-
-Mudanças cirúrgicas no componente:
-
-1. **Novo state**: `scheduledDate` (string datetime-local)
-2. **Botão de disparo**: Trocar o botão único por um grupo com 3 opções:
-   - **Disparar Agora** (comportamento atual, sem mudança)
-   - **Agendar Disparo** — abre um campo de data/hora, salva com `status: 'scheduled'` e `scheduled_at`
-   - **Salvar Pausado** — salva com `status: 'scheduled_paused'`, sem `scheduled_at`
-
-   Ao salvar como agendado ou pausado, o insert em `dispatch_history` é feito com os mesmos dados de hoje (template, variáveis, audiência, recipients), mas SEM chamar `dispatch-mass-send`.
-
-3. **Toast de confirmação** ajustado para cada caso.
-
----
-
-### Passo 5 — Frontend: `DispatchHistoryList.tsx`
-
-Mudanças cirúrgicas:
-
-1. **Badges de status**: Adicionar tratamento para `scheduled` e `scheduled_paused`:
-   - `scheduled` → Badge azul com ícone de relógio + data/hora
-   - `scheduled_paused` → Badge cinza "Pausado"
-
-2. **Botão "Disparar Agora"**: Para registros com status `scheduled` ou `scheduled_paused`, exibir um botão que:
-   - Atualiza o status para `sending`
-   - Chama `dispatch-mass-send` (mesmo fluxo do disparo normal)
-
-3. **Botão "Cancelar"**: Para agendados, permitir cancelar antes do envio.
-
----
+Adicionar um retry simples no `updateOrder` do store para lidar com timeouts temporários.
 
 ## Arquivos Alterados
 
 | Arquivo | Mudança |
 |---|---|
-| Migração SQL | +1 coluna `scheduled_at` |
-| `cron-scheduled-dispatches/index.ts` | Nova Edge Function (cron) |
-| Cron Job SQL | Registro do cron |
-| `MassTemplateDispatcher.tsx` | +3 opções no botão de disparo, +1 state |
-| `DispatchHistoryList.tsx` | +2 badges, +2 botões (disparar/cancelar) |
+| `OrderDialogDb.tsx` | Adicionar try/catch no handleSubmit |
 
-## Garantias de Segurança
+## Garantias
 
-- O fluxo "Disparar Agora" não é alterado — mesmo código, mesmo caminho
-- `dispatch-mass-send` não é tocado — o cron e o botão manual chamam ele da mesma forma
-- Coluna nova é nullable — dados existentes intactos
-- Nenhum outro módulo afetado
-
+- Nenhum outro módulo é afetado
+- O fluxo de criação de pedido novo também ganha o try/catch
+- Nenhuma mudança no banco de dados
