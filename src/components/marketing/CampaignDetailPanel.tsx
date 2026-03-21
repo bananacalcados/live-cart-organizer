@@ -703,20 +703,35 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
-        <div className="flex-1">
-          <h3 className="text-sm font-semibold">{campaign?.name || "Campanha"}</h3>
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Users className="h-3 w-3" /> {groupCount} grupos
-          </p>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold">{campaign?.name || "Campanha"}</h3>
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Users className="h-3 w-3" /> {groupCount} grupos
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setShowBulkSettings(true)} className="gap-1">
+            <Settings className="h-3.5 w-3.5" /> Configurar Grupos
+          </Button>
+          <Button size="sm" onClick={() => { setEditingMessage(null); setShowMessageForm(true); }} className="gap-1">
+            <Plus className="h-3.5 w-3.5" /> Enviar Mensagem
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setShowBulkSettings(true)} className="gap-1">
-          <Settings className="h-3.5 w-3.5" /> Configurar Grupos
-        </Button>
-        <Button size="sm" onClick={() => { setEditingMessage(null); setShowMessageForm(true); }} className="gap-1">
-          <Plus className="h-3.5 w-3.5" /> Enviar Mensagem
-        </Button>
+        <div className="flex items-center gap-2 pl-10">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Instância WhatsApp:</span>
+          <WhatsAppNumberSelector
+            className="w-56"
+            filterProvider="zapi"
+            value={(campaign as any)?.whatsapp_number_id || selectedNumberId || undefined}
+            onValueChange={async (id) => {
+              await supabase.from('group_campaigns').update({ whatsapp_number_id: id } as any).eq('id', campaignId);
+              setCampaign((prev: any) => prev ? { ...prev, whatsapp_number_id: id } : prev);
+              toast.success('Instância WhatsApp atualizada');
+            }}
+          />
+        </div>
       </div>
 
       <ScrollArea className="h-[calc(100vh-300px)]">
