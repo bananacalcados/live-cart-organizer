@@ -1304,23 +1304,43 @@ export function MassTemplateDispatcher() {
                   </span>
                 )}
               </div>
-              <Button
-                className="gap-2"
-                disabled={isSending || selectedCount === 0 || !selectedTemplate}
-                onClick={() => setConfirmOpen(true)}
-              >
-                {isSending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Enviando {sendProgress.sent}/{sendProgress.total}...
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    Disparar para {selectedCount} contatos
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-1.5 text-xs"
+                  disabled={isSending || selectedCount === 0 || !selectedTemplate}
+                  onClick={() => setScheduleMode('paused')}
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Salvar Pausado
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-1.5 text-xs"
+                  disabled={isSending || selectedCount === 0 || !selectedTemplate}
+                  onClick={() => setScheduleMode('schedule')}
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  Agendar
+                </Button>
+                <Button
+                  className="gap-2"
+                  disabled={isSending || selectedCount === 0 || !selectedTemplate}
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  {isSending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Enviando {sendProgress.sent}/{sendProgress.total}...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Disparar Agora
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
 
             {/* Progress */}
