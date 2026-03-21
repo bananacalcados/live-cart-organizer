@@ -1619,7 +1619,7 @@ export function MassTemplateDispatcher() {
       </Dialog>
 
       {/* Dispatch History */}
-      <DispatchHistoryList key={historyKey} />
+      <DispatchHistoryList key={historyKey} onDuplicate={handleDuplicate} />
     </div>
   );
 }
