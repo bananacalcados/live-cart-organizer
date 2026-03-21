@@ -885,6 +885,8 @@ export function MassTemplateDispatcher() {
         .select('id')
         .single();
 
+      if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
+
       // Save recipients
       const recipientRows = allPhones.map(p => ({
         dispatch_id: dispatchData.id,
