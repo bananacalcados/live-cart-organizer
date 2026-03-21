@@ -13,7 +13,7 @@ import {
 import {
   History, Send, CheckCircle, XCircle, Eye, Clock, RefreshCw,
   MessageSquare, BarChart3, Users, ChevronDown, ChevronUp,
-  Pause, Play, CalendarClock, Trash2,
+  Pause, Play, CalendarClock, Trash2, Copy,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -52,7 +52,25 @@ interface RecipientRow {
   message_wamid: string | null;
 }
 
-export function DispatchHistoryList() {
+export interface DuplicateDispatchData {
+  template_name: string;
+  template_language: string | null;
+  whatsapp_number_id: string | null;
+  audience_source: string | null;
+  audience_filters: any;
+  variables_config: any;
+  force_resend: boolean;
+  header_media_url: string | null;
+  template_components: any;
+  has_dynamic_vars: boolean;
+  recipients: { phone: string; name: string | null }[];
+}
+
+interface DispatchHistoryListProps {
+  onDuplicate?: (data: DuplicateDispatchData) => void;
+}
+
+export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = {}) {
   const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchRecord | null>(null);
@@ -261,6 +279,36 @@ export function DispatchHistoryList() {
     loadHistory();
   };
 
+  const handleDuplicate = async (dispatch: DispatchRecord, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onDuplicate) return;
+    try {
+      // Fetch recipients from this dispatch
+      const { data: recs } = await supabase
+        .from('dispatch_recipients')
+        .select('phone, recipient_name')
+        .eq('dispatch_id', dispatch.id);
+
+      const d = dispatch as any;
+      onDuplicate({
+        template_name: d.template_name,
+        template_language: d.template_language || null,
+        whatsapp_number_id: d.whatsapp_number_id || null,
+        audience_source: d.audience_source || null,
+        audience_filters: d.audience_filters || {},
+        variables_config: d.variables_config || {},
+        force_resend: d.force_resend || false,
+        header_media_url: d.header_media_url || null,
+        template_components: d.template_components || null,
+        has_dynamic_vars: d.has_dynamic_vars || false,
+        recipients: (recs || []).map((r: any) => ({ phone: r.phone, name: r.recipient_name })),
+      });
+      toast.success("Disparo duplicado — edite as configurações e dispare quando quiser");
+    } catch {
+      toast.error("Erro ao duplicar disparo");
+    }
+  };
+
   const calcRate = (value: number, total: number) => {
     if (total === 0) return '0%';
     return `${((value / total) * 100).toFixed(1)}%`;
@@ -359,6 +407,17 @@ export function DispatchHistoryList() {
                         </div>
 
                         <div className="flex items-center gap-2 text-xs shrink-0">
+                          {onDuplicate && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 gap-1 text-xs"
+                              onClick={(e) => handleDuplicate(d, e)}
+                              title="Duplicar disparo"
+                            >
+                              <Copy className="h-3 w-3" />Duplicar
+                            </Button>
+                          )}
                           {(d.status === 'scheduled' || d.status === 'scheduled_paused') ? (
                             <>
                               <Button
