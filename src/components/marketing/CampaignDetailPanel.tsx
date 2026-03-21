@@ -396,6 +396,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       scheduled_at: scheduledAt.toISOString(),
       send_speed: data.sendSpeed,
       mention_all: data.mentionAll,
+      whatsapp_number_id: (campaign as any)?.whatsapp_number_id || selectedNumberId || null,
     };
 
     if (isDuplicate) {
