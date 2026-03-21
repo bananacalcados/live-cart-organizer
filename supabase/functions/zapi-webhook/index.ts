@@ -344,6 +344,7 @@ serve(async (req) => {
                   .insert({
                     name: senderName || null,
                     phone: phone,
+                    campaign_tag: matchedKeyword.campaign_label,
                     source: 'whatsapp_ad',
                     converted: false,
                     metadata: {
