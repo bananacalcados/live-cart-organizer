@@ -387,10 +387,12 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   }, [editingOrder, eventId]);
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!instagramHandle.trim()) {
       toast.error("Informe o @ do Instagram");
       return;
     }
+    setIsSubmitting(true);
 
     // Check if customer is banned
     const customer = findCustomerByInstagram(instagramHandle);
