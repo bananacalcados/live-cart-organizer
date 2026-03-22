@@ -261,15 +261,33 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
   const handleTriggerNow = async (dispatchId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await supabase.from('dispatch_history').update({ status: 'sending', started_at: new Date().toISOString() } as any).eq('id', dispatchId);
-      await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/vps-dispatch-proxy`, {
+      await supabase
+        .from('dispatch_history')
+        .update({ status: 'sending', started_at: new Date().toISOString(), completed_at: null } as any)
+        .eq('id', dispatchId);
+
+      const res = await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/dispatch-mass-send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-        body: JSON.stringify({ dispatch_id: dispatchId }),
+        body: JSON.stringify({ dispatchId }),
       });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data?.error) {
+        await supabase
+          .from('dispatch_history')
+          .update({ status: 'scheduled_paused', processing_batch: false, started_at: null } as any)
+          .eq('id', dispatchId);
+        throw new Error(data?.error || 'Falha ao iniciar disparo');
+      }
+
       toast.success("🚀 Disparo iniciado!");
       loadHistory();
-    } catch { toast.error("Erro ao iniciar disparo"); }
+    } catch (error) {
+      console.error('Error triggering dispatch:', error);
+      toast.error("Erro ao iniciar disparo");
+      loadHistory();
+    }
   };
 
   const handleCancelScheduled = async (dispatchId: string, e: React.MouseEvent) => {

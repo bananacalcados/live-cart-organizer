@@ -810,22 +810,32 @@ export function MassTemplateDispatcher() {
       setActiveDispatchId(dispatchId);
       startPolling(dispatchId);
 
-      const res = await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/vps-dispatch-proxy`, {
+      const res = await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/dispatch-mass-send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ dispatch_id: dispatchId }),
+        body: JSON.stringify({ dispatchId }),
       });
-      const data = await res.json();
-      if (!data.success && data.error) {
-        toast.error(`Erro ao iniciar disparo: ${data.error}`);
-      } else {
-        toast.success("🚀 Disparo iniciado em background! Você pode fechar esta aba.");
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data?.error) {
+        await supabase
+          .from('dispatch_history')
+          .update({ status: 'failed', processing_batch: false } as any)
+          .eq('id', dispatchId);
+        toast.error(`Erro ao iniciar disparo: ${data?.error || 'falha no backend'}`);
+        return;
       }
+
+      toast.success("🚀 Disparo iniciado em background! Você pode fechar esta aba.");
     } catch (err) {
       console.error('Error triggering dispatch:', err);
+      await supabase
+        .from('dispatch_history')
+        .update({ status: 'failed', processing_batch: false } as any)
+        .eq('id', dispatchId);
       toast.error("Erro ao iniciar disparo em background");
     }
   };
