@@ -262,10 +262,10 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     e.stopPropagation();
     try {
       await supabase.from('dispatch_history').update({ status: 'sending', started_at: new Date().toISOString() } as any).eq('id', dispatchId);
-      await fetch('http://31.97.23.119:3333/dispatch', {
+      await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/vps-dispatch-proxy`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dispatch_id: dispatchId, secret: 'banana2025dispatcher' }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+        body: JSON.stringify({ dispatch_id: dispatchId }),
       });
       toast.success("🚀 Disparo iniciado!");
       loadHistory();

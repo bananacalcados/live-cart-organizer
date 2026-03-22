@@ -52,11 +52,11 @@ serve(async (req) => {
         continue;
       }
 
-      // Trigger VPS dispatcher
-      fetch('http://31.97.23.119:3333/dispatch', {
+      // Trigger VPS dispatcher via proxy
+      fetch(`${supabaseUrl}/functions/v1/vps-dispatch-proxy`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dispatch_id: dispatch.id, secret: 'banana2025dispatcher' }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+        body: JSON.stringify({ dispatch_id: dispatch.id }),
       }).catch(err => console.error(`Failed to trigger dispatch ${dispatch.id}:`, err));
 
       triggered.push(dispatch.id);
