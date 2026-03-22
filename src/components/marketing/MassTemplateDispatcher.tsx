@@ -810,12 +810,13 @@ export function MassTemplateDispatcher() {
       setActiveDispatchId(dispatchId);
       startPolling(dispatchId);
 
-      const res = await fetch('http://31.97.23.119:3333/dispatch', {
+      const res = await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/vps-dispatch-proxy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ dispatch_id: dispatchId, secret: 'banana2025dispatcher' }),
+        body: JSON.stringify({ dispatch_id: dispatchId }),
       });
       const data = await res.json();
       if (!data.success && data.error) {
