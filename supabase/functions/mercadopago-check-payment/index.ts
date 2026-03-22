@@ -171,15 +171,8 @@ serve(async (req) => {
           source: 'mercadopago-check-payment',
         });
 
-        const { data: fullOrder } = await supabase
-          .from("orders")
-          .select("*, customer:customers(*)")
-          .eq("id", orderId)
-          .maybeSingle();
-
-        if (fullOrder) {
-          await createShopifyOrder(fullOrder, fullOrder.customer);
-        }
+        // Shopify order creation is handled by TransparentCheckout (with dedupe lock).
+        // Removed duplicate inline createShopifyOrder call to prevent double orders.
       } else if (!existingOrder) {
         // Fallback: try pos_sales
         const { data: sale } = await supabase

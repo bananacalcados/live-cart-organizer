@@ -1,0 +1,1 @@
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS shopify_order_name TEXT DEFAULT NULL;

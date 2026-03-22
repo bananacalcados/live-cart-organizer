@@ -54,6 +54,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
 
   const [instagramHandle, setInstagramHandle] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [cartLink, setCartLink] = useState("");
   const [notes, setNotes] = useState("");
   const [stage, setStage] = useState<OrderStage>("new");
@@ -386,10 +387,12 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
   }, [editingOrder, eventId]);
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!instagramHandle.trim()) {
       toast.error("Informe o @ do Instagram");
       return;
     }
+    setIsSubmitting(true);
 
     // Check if customer is banned
     const customer = findCustomerByInstagram(instagramHandle);
@@ -465,6 +468,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       console.error('Error saving order:', error);
       toast.error("Erro ao salvar pedido. Tente novamente.");
       // Dialog stays open so the user can retry
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1081,9 +1086,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
             <Button 
               className="flex-1 btn-accent" 
               onClick={handleSubmit}
-              disabled={isBanned}
+              disabled={isBanned || isSubmitting}
             >
-              {editingOrder ? "Salvar Alterações" : "Criar Pedido"}
+              {isSubmitting ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingOrder ? "Salvando..." : "Criando..."}</>
+              ) : (
+                editingOrder ? "Salvar Alterações" : "Criar Pedido"
+              )}
             </Button>
           </div>
         </div>

@@ -194,6 +194,15 @@ serve(async (req) => {
         shopifyOrderName: matched ? matchedOrderName : undefined,
         matchMethod: matched ? matchMethod : undefined,
       });
+
+      // Persist shopify_order_name to orders table for matched orders
+      if (matched && matchedOrderName) {
+        await supabase
+          .from("orders")
+          .update({ shopify_order_name: matchedOrderName })
+          .eq("id", order.id)
+          .is("shopify_order_name", null);
+      }
     }
 
     const missing = results.filter(r => !r.hasShopify).length;
