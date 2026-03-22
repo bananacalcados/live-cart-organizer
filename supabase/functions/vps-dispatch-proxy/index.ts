@@ -7,6 +7,7 @@ const corsHeaders = {
 
 const VPS_URL = 'https://dispatcher.bananacalcados.com.br';
 const VPS_SECRET = 'banana2025dispatcher';
+const VPS_TIMEOUT_MS = 8000;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -14,33 +15,90 @@ serve(async (req) => {
   }
 
   try {
-    const { dispatch_id, action } = await req.json();
+    const body = await req.json();
+    const { dispatch_id, dispatchId, action } = body;
+    const id = dispatch_id || dispatchId;
 
-    if (!dispatch_id) {
+    if (!id) {
       return new Response(JSON.stringify({ error: 'dispatch_id required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const endpoint = action === 'status' ? `/status/${dispatch_id}` : '/dispatch';
-    const method = action === 'status' ? 'GET' : 'POST';
-
-    const fetchOptions: RequestInit = { method };
-    if (method === 'POST') {
-      fetchOptions.headers = { 'Content-Type': 'application/json' };
-      fetchOptions.body = JSON.stringify({ dispatch_id, secret: VPS_SECRET });
+    // Status check — only VPS
+    if (action === 'status') {
+      try {
+        const res = await fetch(`${VPS_URL}/status/${id}`, { method: 'GET' });
+        const data = await res.json();
+        return new Response(JSON.stringify(data), {
+          status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'VPS unreachable', details: String(err) }), {
+          status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
-    console.log(`[vps-proxy] ${method} ${VPS_URL}${endpoint}`);
+    // Dispatch — try VPS first, fallback to Edge Function
+    let vpsSuccess = false;
+    let vpsData: any = null;
 
-    const res = await fetch(`${VPS_URL}${endpoint}`, fetchOptions);
-    const data = await res.json();
+    try {
+      console.log(`[vps-proxy] Trying VPS: POST ${VPS_URL}/dispatch`);
 
-    console.log(`[vps-proxy] Response:`, JSON.stringify(data));
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), VPS_TIMEOUT_MS);
 
-    return new Response(JSON.stringify(data), {
-      status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      const res = await fetch(`${VPS_URL}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dispatch_id: id, secret: VPS_SECRET }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+      vpsData = await res.json();
+
+      if (res.ok && !vpsData.error) {
+        vpsSuccess = true;
+        console.log(`[vps-proxy] VPS accepted dispatch ${id}`);
+      } else {
+        console.warn(`[vps-proxy] VPS rejected: ${JSON.stringify(vpsData)}`);
+      }
+    } catch (vpsErr) {
+      console.warn(`[vps-proxy] VPS failed: ${String(vpsErr)}`);
+    }
+
+    if (vpsSuccess) {
+      return new Response(JSON.stringify({ ...vpsData, via: 'vps' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Fallback: invoke dispatch-mass-send Edge Function
+    console.log(`[vps-proxy] Falling back to Edge Function for dispatch ${id}`);
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    const efRes = await fetch(`${supabaseUrl}/functions/v1/dispatch-mass-send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey': serviceKey,
+      },
+      body: JSON.stringify({ dispatchId: id }),
     });
+
+    const efData = await efRes.json().catch(() => ({}));
+    console.log(`[vps-proxy] Edge Function fallback result:`, JSON.stringify(efData));
+
+    return new Response(JSON.stringify({ ...efData, via: 'edge-function-fallback' }), {
+      status: efRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
   } catch (err) {
     console.error('[vps-proxy] Error:', err);
     return new Response(JSON.stringify({ error: String(err), success: false }), {
