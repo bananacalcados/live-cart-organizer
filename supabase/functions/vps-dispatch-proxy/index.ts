@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const VPS_URL = 'http://31.97.23.119:3333';
+const VPS_URL = 'https://dispatcher.bananacalcados.com.br';
 const VPS_SECRET = 'banana2025dispatcher';
 
 serve(async (req) => {
