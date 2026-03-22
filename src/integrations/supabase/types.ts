@@ -5028,6 +5028,7 @@ export type Database = {
           pos_sale_id: string | null
           products: Json
           shipping_cost: number | null
+          shopify_order_name: string | null
           stage: string
           updated_at: string
           vindi_transaction_id: string | null
@@ -5065,6 +5066,7 @@ export type Database = {
           pos_sale_id?: string | null
           products?: Json
           shipping_cost?: number | null
+          shopify_order_name?: string | null
           stage?: string
           updated_at?: string
           vindi_transaction_id?: string | null
@@ -5102,6 +5104,7 @@ export type Database = {
           pos_sale_id?: string | null
           products?: Json
           shipping_cost?: number | null
+          shopify_order_name?: string | null
           stage?: string
           updated_at?: string
           vindi_transaction_id?: string | null
