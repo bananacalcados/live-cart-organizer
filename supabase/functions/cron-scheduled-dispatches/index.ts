@@ -52,16 +52,11 @@ serve(async (req) => {
         continue;
       }
 
-      // Trigger dispatch-mass-send
-      const dispatchUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
-      fetch(dispatchUrl, {
+      // Trigger VPS dispatcher
+      fetch('http://31.97.23.119:3333/dispatch', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseKey}`,
-          'apikey': supabaseKey,
-        },
-        body: JSON.stringify({ dispatchId: dispatch.id }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dispatch_id: dispatch.id, secret: 'banana2025dispatcher' }),
       }).catch(err => console.error(`Failed to trigger dispatch ${dispatch.id}:`, err));
 
       triggered.push(dispatch.id);
