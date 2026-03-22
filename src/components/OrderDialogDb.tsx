@@ -54,6 +54,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
 
   const [instagramHandle, setInstagramHandle] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [cartLink, setCartLink] = useState("");
   const [notes, setNotes] = useState("");
   const [stage, setStage] = useState<OrderStage>("new");
