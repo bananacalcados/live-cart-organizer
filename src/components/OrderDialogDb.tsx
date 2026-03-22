@@ -468,6 +468,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       console.error('Error saving order:', error);
       toast.error("Erro ao salvar pedido. Tente novamente.");
       // Dialog stays open so the user can retry
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
