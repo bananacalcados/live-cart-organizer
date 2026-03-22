@@ -1086,9 +1086,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
             <Button 
               className="flex-1 btn-accent" 
               onClick={handleSubmit}
-              disabled={isBanned}
+              disabled={isBanned || isSubmitting}
             >
-              {editingOrder ? "Salvar Alterações" : "Criar Pedido"}
+              {isSubmitting ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingOrder ? "Salvando..." : "Criando..."}</>
+              ) : (
+                editingOrder ? "Salvar Alterações" : "Criar Pedido"
+              )}
             </Button>
           </div>
         </div>
