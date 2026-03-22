@@ -409,6 +409,7 @@ serve(async (req) => {
         status: 'sent',
         media_type: 'text',
         whatsapp_number_id: dispatch.whatsapp_number_id,
+        is_mass_dispatch: true,
       }).then(() => {});
     }
 
