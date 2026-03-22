@@ -266,7 +266,7 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
         .update({ status: 'sending', started_at: new Date().toISOString(), completed_at: null } as any)
         .eq('id', dispatchId);
 
-      const res = await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/vps-dispatch-proxy`, {
+      const res = await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/dispatch-mass-send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
         body: JSON.stringify({ dispatchId }),
