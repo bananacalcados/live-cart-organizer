@@ -52,11 +52,11 @@ serve(async (req) => {
         continue;
       }
 
-      // Trigger VPS dispatcher via proxy
-      fetch(`${supabaseUrl}/functions/v1/vps-dispatch-proxy`, {
+      // Trigger internal dispatch processor
+      fetch(`${supabaseUrl}/functions/v1/dispatch-mass-send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-        body: JSON.stringify({ dispatch_id: dispatch.id }),
+        body: JSON.stringify({ dispatchId: dispatch.id }),
       }).catch(err => console.error(`Failed to trigger dispatch ${dispatch.id}:`, err));
 
       triggered.push(dispatch.id);
