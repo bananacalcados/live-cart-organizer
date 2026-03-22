@@ -8261,6 +8261,7 @@ export type Database = {
           error_message: string | null
           id: string
           is_group: boolean | null
+          is_mass_dispatch: boolean
           media_type: string | null
           media_url: string | null
           message: string
@@ -8278,6 +8279,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           is_group?: boolean | null
+          is_mass_dispatch?: boolean
           media_type?: string | null
           media_url?: string | null
           message: string
@@ -8295,6 +8297,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           is_group?: boolean | null
+          is_mass_dispatch?: boolean
           media_type?: string | null
           media_url?: string | null
           message?: string
