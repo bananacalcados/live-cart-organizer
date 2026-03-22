@@ -88,6 +88,12 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const refreshShopifyStatus = useCallback(async () => {
     if (!order.customer_id) return;
 
+    // Check if shopify_order_name is already persisted on the order itself
+    if ((order as any).shopify_order_name) {
+      applyShopifyVerification(true, (order as any).shopify_order_name);
+      return;
+    }
+
     const { data } = await supabase
       .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
       .maybeSingle();
