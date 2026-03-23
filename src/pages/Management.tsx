@@ -635,6 +635,8 @@ export default function Management() {
   const [stockItems, setStockItems] = useState<any[]>([]);
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoSyncKeyRef = useRef<string | null>(null);
+  const userInteractingRef = useRef(false);
+  const interactionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dateRange = useMemo(() => {
     const now = new Date();
@@ -990,10 +992,25 @@ export default function Management() {
     });
   }, [loading, syncing, stores, tinyOrders, dateRange, period, customFrom, customTo]);
 
-  // Auto-refresh every minute
+  // Auto-refresh every minute — pauses while user is interacting (typing, clicking forms, etc.)
   useEffect(() => {
-    autoRefreshRef.current = setInterval(() => { fetchData(); }, AUTO_REFRESH_MS);
-    return () => { if (autoRefreshRef.current) clearInterval(autoRefreshRef.current); };
+    const markInteracting = () => {
+      userInteractingRef.current = true;
+      if (interactionTimerRef.current) clearTimeout(interactionTimerRef.current);
+      interactionTimerRef.current = setTimeout(() => { userInteractingRef.current = false; }, 120_000);
+    };
+    const events = ['mousedown', 'keydown', 'focusin', 'input', 'change'] as const;
+    events.forEach(e => document.addEventListener(e, markInteracting));
+
+    autoRefreshRef.current = setInterval(() => {
+      if (!userInteractingRef.current) fetchData();
+    }, AUTO_REFRESH_MS);
+
+    return () => {
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+      if (interactionTimerRef.current) clearTimeout(interactionTimerRef.current);
+      events.forEach(e => document.removeEventListener(e, markInteracting));
+    };
   }, [fetchData]);
 
   // --- Computed ---
