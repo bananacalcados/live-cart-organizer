@@ -14,8 +14,8 @@ serve(async (req) => {
 
   // WABAs to subscribe
   const wabaIds = [
-    { id: '124036876111264', label: 'Centro' },
-    { id: '129700141901757', label: 'Pérola' },
+    { id: '1240368761111264', label: 'Centro' },
+    { id: '1297001419017577', label: 'Pérola' },
     { id: '1250450643617667', label: 'Banana Online' },
   ];
 
