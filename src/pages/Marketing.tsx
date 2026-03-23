@@ -1037,9 +1037,57 @@ export default function Marketing() {
                   XLSX.utils.book_append_sheet(wb, ws, "Clientes RFM");
                   const filterLabel = rfmFilter !== "all" ? `_${rfmFilter}` : regionFilter !== "all" ? `_${regionFilter}` : "";
                   XLSX.writeFile(wb, `clientes_rfm${filterLabel}_${new Date().toISOString().slice(0,10)}.xlsx`);
-                  toast.success(`${exportData.length} clientes exportados`);
+                  toast.success(`${exportData.length} clientes exportados — arquivo Excel baixado`);
                 }}>
-                  <FileSpreadsheet className="h-3.5 w-3.5" />Exportar ({filtered.length})
+                  <FileSpreadsheet className="h-3.5 w-3.5" />Excel ({filtered.length})
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => {
+                  const exportData = filtered.map(c => {
+                    const suffix = (c.phone || '').replace(/\D/g, '').slice(-8);
+                    const mapping = suffix ? customerStoreMap.get(suffix) : undefined;
+                    return {
+                      nome: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+                      telefone: c.phone || '',
+                      email: c.email || '',
+                      regiao: c.region_type === 'local' ? 'Loja Física' : c.region_type === 'online' ? 'Online' : 'Indefinido',
+                      loja: mapping?.store_name || '',
+                      vendedora: mapping?.seller_name || '',
+                      segmento: c.rfm_segment || '',
+                      pedidos: c.total_orders,
+                      totalGasto: c.total_spent,
+                      ticketMedio: c.avg_ticket,
+                      ultimaCompra: c.last_purchase_at ? new Date(c.last_purchase_at).toLocaleDateString('pt-BR') : '',
+                    };
+                  });
+                  // Build HTML table for PDF
+                  const rows = exportData.map(d =>
+                    `<tr><td>${d.nome}</td><td>${d.telefone}</td><td>${d.loja}</td><td>${d.vendedora}</td><td>${d.segmento}</td><td>${d.pedidos}</td><td>R$${Number(d.totalGasto||0).toFixed(2)}</td><td>R$${Number(d.ticketMedio||0).toFixed(2)}</td><td>${d.ultimaCompra}</td></tr>`
+                  ).join('');
+                  const html = `<html><head><meta charset="utf-8"><title>Clientes RFM</title><style>
+                    body{font-family:Arial,sans-serif;margin:20px;font-size:11px}
+                    h1{color:#7c3aed;font-size:18px;margin-bottom:4px}
+                    p{color:#666;margin-bottom:12px;font-size:12px}
+                    table{width:100%;border-collapse:collapse}
+                    th{background:#7c3aed;color:#fff;padding:6px 4px;text-align:left;font-size:10px}
+                    td{padding:4px;border-bottom:1px solid #e5e7eb;font-size:10px}
+                    tr:nth-child(even){background:#f9fafb}
+                    @media print{body{margin:10px}}
+                  </style></head><body>
+                  <h1>Relatório de Clientes RFM</h1>
+                  <p>Exportado em ${new Date().toLocaleDateString('pt-BR')} • ${exportData.length} clientes</p>
+                  <table><thead><tr><th>Nome</th><th>Telefone</th><th>Loja</th><th>Vendedora</th><th>Segmento</th><th>Pedidos</th><th>Total</th><th>Ticket</th><th>Última Compra</th></tr></thead><tbody>${rows}</tbody></table>
+                  </body></html>`;
+                  const printWin = window.open('', '_blank');
+                  if (printWin) {
+                    printWin.document.write(html);
+                    printWin.document.close();
+                    setTimeout(() => { printWin.print(); }, 500);
+                    toast.success(`PDF pronto para impressão — ${exportData.length} clientes`);
+                  } else {
+                    toast.error('Popup bloqueado. Permita popups para exportar PDF.');
+                  }
+                }}>
+                  <Download className="h-3.5 w-3.5" />PDF ({filtered.length})
                 </Button>
                 <Button variant="outline" size="sm" className="gap-1 relative overflow-hidden text-xs">
                   <Upload className="h-3.5 w-3.5" /><span className="hidden sm:inline">Upload </span>Excel
