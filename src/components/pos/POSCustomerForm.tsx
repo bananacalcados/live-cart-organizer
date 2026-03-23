@@ -37,9 +37,24 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
   });
   const [form, setForm] = useState(initForm);
 
-  // Reset form when existingCustomer changes
+  // Reset form and load previous numbers when existingCustomer changes
   useEffect(() => {
-    if (open) setForm(initForm());
+    if (open) {
+      setForm(initForm());
+      if (existingCustomer?.id) {
+        // Load previous numbers from DB
+        supabase
+          .from("pos_customers")
+          .select("previous_whatsapp_numbers")
+          .eq("id", existingCustomer.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            setPreviousNumbers((data as any)?.previous_whatsapp_numbers || []);
+          });
+      } else {
+        setPreviousNumbers([]);
+      }
+    }
   }, [open, existingCustomer?.id]);
 
   const update = (field: string, value: string | boolean) => setForm(f => ({ ...f, [field]: value }));
