@@ -22,7 +22,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: (customer: { id: string; name: string; cpf?: string }) => void;
-  existingCustomer?: { id: string; name?: string; email?: string; whatsapp?: string; cpf?: string; cep?: string; address?: string; address_number?: string; complement?: string; neighborhood?: string; city?: string; state?: string; age_range?: string; preferred_style?: string; shoe_size?: string; gender?: string } | null;
+  existingCustomer?: { id: string; name?: string; email?: string; whatsapp?: string; cpf?: string; cep?: string; address?: string; address_number?: string; complement?: string; neighborhood?: string; city?: string; state?: string; age_range?: string; preferred_style?: string; shoe_size?: string; gender?: string; previous_whatsapp_numbers?: string[] } | null;
 }
 
 export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer }: Props) {
