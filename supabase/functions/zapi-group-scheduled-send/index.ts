@@ -161,7 +161,8 @@ serve(async (req) => {
       return result;
     };
 
-    const resolvedNumberId = msg.whatsapp_number_id || campaign.whatsapp_number_id || null;
+    const resolvedNumberId = campaign.whatsapp_number_id || msg.whatsapp_number_id || null;
+    console.log(`Using WhatsApp number ${resolvedNumberId ?? 'none'} for campaign ${campaignId}`);
 
     let batchSentCount = 0;
     let batchFailedCount = 0;
