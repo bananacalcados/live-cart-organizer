@@ -121,25 +121,6 @@ serve(async (req) => {
       );
     }
 
-    // Dynamically calculate batch size based on block count to stay under timeout
-    const blockCount = allBlocks.length;
-    const estimatedTimePerGroup = (blockCount * (INTER_BLOCK_DELAY + ESTIMATED_API_CALL_MS));
-    const dynamicBatchSize = Math.max(1, Math.min(BASE_MAX_GROUPS_PER_BATCH, Math.floor(MAX_FUNCTION_TIME_MS / estimatedTimePerGroup)));
-    
-    const batch = pendingGroups.slice(0, dynamicBatchSize);
-    console.log(`Processing batch: ${batch.length} groups (${pendingGroups.length} remaining of ${allGroups.length} total, ${blockCount} blocks, ~${Math.round(estimatedTimePerGroup/1000)}s/group)`);
-
-    const replaceVars = (text: string, groupName: string): string => {
-      let result = text;
-      for (const [key, value] of Object.entries(campaignVars)) {
-        result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-      }
-      result = result.replace(/\{\{nome_grupo\}\}/g, groupName);
-      return result;
-    };
-
-    const resolvedNumberId = msg.whatsapp_number_id || campaign.whatsapp_number_id || null;
-
     // Determine multi-block messages
     let allBlocks: any[] = [msg];
     const messageGroupId = msg.message_group_id;
@@ -159,6 +140,28 @@ serve(async (req) => {
           .eq('message_group_id', messageGroupId);
       }
     }
+
+    // Dynamically calculate batch size based on block count to stay under timeout
+    const blockCount = allBlocks.length;
+    const estimatedTimePerGroup = blockCount * (INTER_BLOCK_DELAY + ESTIMATED_API_CALL_MS);
+    const dynamicBatchSize = Math.max(
+      1,
+      Math.min(BASE_MAX_GROUPS_PER_BATCH, Math.floor(MAX_FUNCTION_TIME_MS / estimatedTimePerGroup)),
+    );
+
+    const batch = pendingGroups.slice(0, dynamicBatchSize);
+    console.log(`Processing batch: ${batch.length} groups (${pendingGroups.length} remaining of ${allGroups.length} total, ${blockCount} blocks, ~${Math.round(estimatedTimePerGroup / 1000)}s/group)`);
+
+    const replaceVars = (text: string, groupName: string): string => {
+      let result = text;
+      for (const [key, value] of Object.entries(campaignVars)) {
+        result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+      }
+      result = result.replace(/\{\{nome_grupo\}\}/g, groupName);
+      return result;
+    };
+
+    const resolvedNumberId = msg.whatsapp_number_id || campaign.whatsapp_number_id || null;
 
     let batchSentCount = 0;
     let batchFailedCount = 0;
