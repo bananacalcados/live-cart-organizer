@@ -1,0 +1,2 @@
+UPDATE whatsapp_numbers SET business_account_id = '1297001419017577' WHERE id = 'ae453235-50e1-4ef6-8a87-8c8a77b2b440';
+UPDATE whatsapp_numbers SET business_account_id = '1240368761111264' WHERE id = 'c01d2777-df4c-4746-9433-d8c97c57d529';
