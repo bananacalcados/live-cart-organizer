@@ -8,9 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { User, Star, Save } from "lucide-react";
+import { User, Star, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { savePosCustomer } from "./customerFormUtils";
+import { savePosCustomer, removePreviousWhatsApp } from "./customerFormUtils";
 
 const AGE_RANGES = ["18-24", "25-34", "35-44", "45-54", "55+"];
 const STYLES = ["Casual", "Esportivo", "Clássico", "Streetwear", "Romântico", "Minimalista", "Boho", "Fashion"];
