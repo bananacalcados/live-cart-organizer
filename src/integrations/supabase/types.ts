@@ -3310,6 +3310,7 @@ export type Database = {
           send_speed: string
           sent_at: string | null
           sent_count: number
+          sent_group_ids: string[] | null
           status: string
           whatsapp_number_id: string | null
         }
@@ -3330,6 +3331,7 @@ export type Database = {
           send_speed?: string
           sent_at?: string | null
           sent_count?: number
+          sent_group_ids?: string[] | null
           status?: string
           whatsapp_number_id?: string | null
         }
@@ -3350,6 +3352,7 @@ export type Database = {
           send_speed?: string
           sent_at?: string | null
           sent_count?: number
+          sent_group_ids?: string[] | null
           status?: string
           whatsapp_number_id?: string | null
         }
