@@ -45,12 +45,22 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Found ${pendingMessages.length} messages to dispatch (pending + sending batches)`);
+    // Deduplicate: for grouped messages, only dispatch the first block
+    const seenGroupIds = new Set<string>();
+    const deduped = pendingMessages.filter(msg => {
+      if (msg.message_group_id) {
+        if (seenGroupIds.has(msg.message_group_id)) return false;
+        seenGroupIds.add(msg.message_group_id);
+      }
+      return true;
+    }).slice(0, 5);
+
+    console.log(`Found ${pendingMessages.length} raw, ${deduped.length} deduplicated messages to dispatch`);
 
     let dispatched = 0;
     let failed = 0;
 
-    for (const msg of pendingMessages) {
+    for (const msg of deduped) {
       try {
         const sendRes = await fetch(`${supabaseUrl}/functions/v1/zapi-group-scheduled-send`, {
           method: 'POST',
