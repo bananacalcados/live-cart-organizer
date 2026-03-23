@@ -16,39 +16,40 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Find all pending messages whose scheduled_at has passed
     const now = new Date().toISOString();
+
+    // Pick up PENDING messages whose scheduled_at has passed
+    // AND SENDING messages that need continuation (batch processing)
     const { data: pendingMessages, error: fetchErr } = await supabase
       .from('group_campaign_scheduled_messages')
-      .select('id, scheduled_at, campaign_id')
-      .eq('status', 'pending')
-      .lte('scheduled_at', now)
+      .select('id, scheduled_at, campaign_id, status')
+      .or(`and(status.eq.pending,scheduled_at.lte.${now}),status.eq.sending`)
+      .neq('status', 'grouped') // skip grouped blocks
       .order('scheduled_at', { ascending: true })
-      .limit(10); // Process up to 10 per invocation to stay within timeout
+      .limit(5);
 
     if (fetchErr) {
-      console.error('Error fetching pending messages:', fetchErr);
+      console.error('Error fetching messages:', fetchErr);
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch pending messages', details: fetchErr.message }),
+        JSON.stringify({ error: 'Failed to fetch', details: fetchErr.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (!pendingMessages || pendingMessages.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, message: 'No pending messages to send', processed: 0 }),
+        JSON.stringify({ success: true, message: 'No messages to process', processed: 0 }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Found ${pendingMessages.length} pending messages to dispatch`);
+    console.log(`Found ${pendingMessages.length} messages to dispatch (pending + sending batches)`);
 
     let dispatched = 0;
     let failed = 0;
 
     for (const msg of pendingMessages) {
       try {
-        // Call the existing scheduled send function
         const sendRes = await fetch(`${supabaseUrl}/functions/v1/zapi-group-scheduled-send`, {
           method: 'POST',
           headers: {
@@ -62,28 +63,23 @@ serve(async (req) => {
 
         if (sendRes.ok && sendData.success) {
           dispatched++;
-          console.log(`Dispatched message ${msg.id}: ${sendData.sentCount} sent, ${sendData.failedCount} failed`);
+          console.log(`Dispatched ${msg.id}: batch ${sendData.batchSent}/${sendData.total}, complete=${sendData.complete}`);
         } else {
           failed++;
-          console.error(`Failed to dispatch message ${msg.id}:`, sendData.error || 'Unknown error');
+          console.error(`Failed ${msg.id}:`, sendData.error || 'Unknown');
         }
       } catch (err) {
         failed++;
-        console.error(`Error dispatching message ${msg.id}:`, err.message);
+        console.error(`Error dispatching ${msg.id}:`, err.message);
       }
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        processed: pendingMessages.length,
-        dispatched,
-        failed,
-      }),
+      JSON.stringify({ success: true, processed: pendingMessages.length, dispatched, failed }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Cron scheduled messages error:', error);
+    console.error('Cron error:', error);
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

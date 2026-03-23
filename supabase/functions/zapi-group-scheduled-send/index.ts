@@ -12,7 +12,8 @@ const SPEED_DELAYS: Record<string, [number, number]> = {
   fast: [1000, 3000],
 };
 
-const INTER_BLOCK_DELAY = 1500; // 1.5s between blocks within same group
+const INTER_BLOCK_DELAY = 1500;
+const MAX_GROUPS_PER_BATCH = 5; // Process max 5 groups per invocation to stay under 60s
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -47,24 +48,12 @@ serve(async (req) => {
       );
     }
 
-    // Allow retrying messages stuck in 'sending' for more than 2 minutes
-    if (msg.status !== 'pending') {
-      if (msg.status === 'sending') {
-        const updatedAt = new Date(msg.updated_at || msg.created_at);
-        const minutesAgo = (Date.now() - updatedAt.getTime()) / 60000;
-        if (minutesAgo < 2) {
-          return new Response(
-            JSON.stringify({ error: 'Message is currently being sent, please wait', status: msg.status }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        console.log(`Retrying stuck message ${scheduledMessageId} (stuck for ${minutesAgo.toFixed(1)} min)`);
-      } else {
-        return new Response(
-          JSON.stringify({ error: 'Message already processed', status: msg.status }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    // Allow pending and sending (for batch continuation)
+    if (msg.status !== 'pending' && msg.status !== 'sending') {
+      return new Response(
+        JSON.stringify({ error: 'Message already processed', status: msg.status }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Mark as sending
@@ -74,11 +63,14 @@ serve(async (req) => {
 
     const campaign = msg.group_campaigns;
     const campaignId = campaign.id;
-    const targetGroupIds = campaign.target_groups || [];
+    const targetGroupIds: string[] = campaign.target_groups || [];
     const speed = msg.send_speed || campaign.send_speed || 'normal';
     const [minDelay, maxDelay] = SPEED_DELAYS[speed] || SPEED_DELAYS.normal;
 
-    // Fetch campaign variables for substitution
+    // Track already sent groups
+    const alreadySentGroupIds: string[] = msg.sent_group_ids || [];
+
+    // Fetch campaign variables
     const { data: varsData } = await supabase
       .from('campaign_variables')
       .select('variable_name, variable_value')
@@ -91,18 +83,17 @@ serve(async (req) => {
       }
     }
 
-    // Add built-in variables
     const now = new Date();
     campaignVars['data_hoje'] = now.toLocaleDateString('pt-BR');
     campaignVars['horario'] = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-    // Fetch groups
-    const { data: groups } = await supabase
+    // Fetch ALL groups, then filter out already sent
+    const { data: allGroups } = await supabase
       .from('whatsapp_groups')
       .select('id, group_id, name')
       .in('id', targetGroupIds);
 
-    if (!groups || groups.length === 0) {
+    if (!allGroups || allGroups.length === 0) {
       await supabase.from('group_campaign_scheduled_messages')
         .update({ status: 'failed' })
         .eq('id', scheduledMessageId);
@@ -112,7 +103,25 @@ serve(async (req) => {
       );
     }
 
-    // Helper to replace variables in text
+    // Filter out already sent groups
+    const pendingGroups = allGroups.filter(g => !alreadySentGroupIds.includes(g.id));
+
+    if (pendingGroups.length === 0) {
+      // All groups already processed - finalize
+      const totalSent = msg.sent_count || alreadySentGroupIds.length;
+      await supabase.from('group_campaign_scheduled_messages')
+        .update({ status: 'sent', sent_at: new Date().toISOString(), sent_count: totalSent, failed_count: msg.failed_count || 0 })
+        .eq('id', scheduledMessageId);
+      return new Response(
+        JSON.stringify({ success: true, complete: true, sentCount: totalSent, failedCount: 0, total: allGroups.length }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Take only a batch
+    const batch = pendingGroups.slice(0, MAX_GROUPS_PER_BATCH);
+    console.log(`Processing batch: ${batch.length} groups (${pendingGroups.length} remaining of ${allGroups.length} total)`);
+
     const replaceVars = (text: string, groupName: string): string => {
       let result = text;
       for (const [key, value] of Object.entries(campaignVars)) {
@@ -122,15 +131,13 @@ serve(async (req) => {
       return result;
     };
 
-    // Resolve whatsapp_number_id from message or campaign
     const resolvedNumberId = msg.whatsapp_number_id || campaign.whatsapp_number_id || null;
 
-    // Determine if this is a multi-block message
+    // Determine multi-block messages
     let allBlocks: any[] = [msg];
     const messageGroupId = msg.message_group_id;
 
     if (messageGroupId) {
-      // Fetch all blocks in this message group
       const { data: groupedBlocks, error: gbErr } = await supabase
         .from('group_campaign_scheduled_messages')
         .select('*')
@@ -139,19 +146,18 @@ serve(async (req) => {
 
       if (!gbErr && groupedBlocks && groupedBlocks.length > 0) {
         allBlocks = groupedBlocks;
-        console.log(`Multi-block message: ${allBlocks.length} blocks for group_id ${messageGroupId}`);
-        // Mark all grouped blocks as sending
+        console.log(`Multi-block message: ${allBlocks.length} blocks`);
         await supabase.from('group_campaign_scheduled_messages')
           .update({ status: 'sending' })
           .eq('message_group_id', messageGroupId);
       }
     }
 
-    let sentCount = 0;
-    let failedCount = 0;
+    let batchSentCount = 0;
+    let batchFailedCount = 0;
+    const newlySentIds: string[] = [];
 
-    // For each group, send ALL blocks before moving to next group
-    for (const group of groups) {
+    for (const group of batch) {
       let groupSuccess = true;
       for (let blockIdx = 0; blockIdx < allBlocks.length; blockIdx++) {
         const block = allBlocks[blockIdx];
@@ -196,31 +202,46 @@ serve(async (req) => {
           groupSuccess = false;
         }
 
-        // Delay between blocks within the same group (not after last block)
         if (blockIdx < allBlocks.length - 1) {
           await new Promise(r => setTimeout(r, INTER_BLOCK_DELAY));
         }
       }
 
       if (groupSuccess) {
-        sentCount++;
+        batchSentCount++;
       } else {
-        failedCount++;
+        batchFailedCount++;
       }
+      newlySentIds.push(group.id);
 
-      // Delay between groups
-      const delay = minDelay + Math.random() * (maxDelay - minDelay);
-      await new Promise(r => setTimeout(r, delay));
+      // Delay between groups (skip after last in batch)
+      if (group !== batch[batch.length - 1]) {
+        const delay = minDelay + Math.random() * (maxDelay - minDelay);
+        await new Promise(r => setTimeout(r, delay));
+      }
     }
 
-    // Update all blocks' status
-    const finalStatus = failedCount === groups.length ? 'failed' : 'sent';
-    const updatePayload = {
-      status: finalStatus,
-      sent_at: new Date().toISOString(),
-      sent_count: sentCount,
-      failed_count: failedCount,
+    // Update progress
+    const updatedSentIds = [...alreadySentGroupIds, ...newlySentIds];
+    const totalSent = (msg.sent_count || 0) + batchSentCount;
+    const totalFailed = (msg.failed_count || 0) + batchFailedCount;
+    const isComplete = updatedSentIds.length >= allGroups.length;
+
+    const updatePayload: Record<string, unknown> = {
+      sent_group_ids: updatedSentIds,
+      sent_count: totalSent,
+      failed_count: totalFailed,
     };
+
+    if (isComplete) {
+      updatePayload.status = totalFailed === allGroups.length ? 'failed' : 'sent';
+      updatePayload.sent_at = new Date().toISOString();
+      console.log(`Complete! ${totalSent} sent, ${totalFailed} failed out of ${allGroups.length}`);
+    } else {
+      // Keep as 'sending' — cron will pick it up again
+      updatePayload.status = 'sending';
+      console.log(`Batch done. ${updatedSentIds.length}/${allGroups.length} groups processed so far`);
+    }
 
     if (messageGroupId) {
       await supabase.from('group_campaign_scheduled_messages')
@@ -233,7 +254,16 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, sentCount, failedCount, total: groups.length }),
+      JSON.stringify({ 
+        success: true, 
+        complete: isComplete,
+        batchSent: batchSentCount,
+        batchFailed: batchFailedCount,
+        sentCount: totalSent, 
+        failedCount: totalFailed, 
+        total: allGroups.length,
+        processed: updatedSentIds.length,
+      }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {

@@ -451,6 +451,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const sendMessage = async (messageId: string, auto = false) => {
     if (!auto) setIsSending(messageId);
     try {
+      // Trigger first batch — cron will continue remaining batches automatically
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-scheduled-send`, {
         method: 'POST',
         headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
@@ -458,7 +459,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       });
       const result = await res.json();
       if (result.success) {
-        toast.success(`Enviada! ${result.sentCount}/${result.total} grupos`);
+        if (result.complete) {
+          toast.success(`Enviada! ${result.sentCount}/${result.total} grupos`);
+        } else {
+          toast.success(`Iniciado! ${result.processed}/${result.total} grupos enviados, restante será processado automaticamente`);
+        }
       } else {
         toast.error(result.error || "Erro ao enviar");
       }
