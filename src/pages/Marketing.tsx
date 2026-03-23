@@ -955,14 +955,28 @@ export default function Marketing() {
                 </Select>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <div className="relative">
-                  <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9 text-xs" title="Comprou depois de" />
-                  <span className="absolute -top-2 left-2 text-[10px] bg-background px-1 text-muted-foreground">Comprou depois de</span>
-                </div>
-                <div className="relative">
-                  <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9 text-xs" title="Comprou antes de" />
-                  <span className="absolute -top-2 left-2 text-[10px] bg-background px-1 text-muted-foreground">Comprou antes de</span>
-                </div>
+                {!(dateFrom || dateTo) ? (
+                  <Button variant="outline" size="sm" className="h-9 text-xs gap-1 col-span-2 sm:col-span-2" onClick={() => {
+                    const today = new Date().toISOString().split('T')[0];
+                    setDateFrom(today);
+                  }}>
+                    <Calendar className="h-3.5 w-3.5" /> Filtrar por data de compra
+                  </Button>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9 text-xs" title="Comprou depois de" />
+                      <span className="absolute -top-2 left-2 text-[10px] bg-background px-1 text-muted-foreground">Comprou depois de</span>
+                    </div>
+                    <div className="relative flex gap-1">
+                      <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9 text-xs flex-1" title="Comprou antes de" />
+                      <span className="absolute -top-2 left-2 text-[10px] bg-background px-1 text-muted-foreground">Comprou antes de</span>
+                      <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setDateFrom(""); setDateTo(""); }} title="Remover filtro de data">
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </>
+                )}
                 <Select value={recencyFilter} onValueChange={setRecencyFilter}>
                   <SelectTrigger className="h-9"><Clock className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
                   <SelectContent>
