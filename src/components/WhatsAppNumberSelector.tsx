@@ -15,9 +15,18 @@ interface WhatsAppNumberSelectorProps {
   filterProvider?: string;
   value?: string | null;
   onValueChange?: (id: string) => void;
+  autoSelect?: boolean;
+  disabled?: boolean;
 }
 
-export function WhatsAppNumberSelector({ className, filterProvider, value, onValueChange }: WhatsAppNumberSelectorProps) {
+export function WhatsAppNumberSelector({
+  className,
+  filterProvider,
+  value,
+  onValueChange,
+  autoSelect = true,
+  disabled = false,
+}: WhatsAppNumberSelectorProps) {
   const { numbers, selectedNumberId, isLoading, fetchNumbers, setSelectedNumberId } = useWhatsAppNumberStore();
 
   useEffect(() => {
@@ -42,19 +51,20 @@ export function WhatsAppNumberSelector({ className, filterProvider, value, onVal
   }, [onValueChange, setSelectedNumberId]);
 
   useEffect(() => {
+    if (!autoSelect) return;
     if (filtered.length === 0) return;
     if (currentValue && filtered.some(n => n.id === currentValue)) return;
     handleValueChange(filtered[0].id);
-  }, [filtered, currentValue, handleValueChange]);
+  }, [autoSelect, filtered, currentValue, handleValueChange]);
 
   if (isLoading || filtered.length <= 1) return null;
 
   const effectiveId = currentValue && filtered.some(n => n.id === currentValue)
     ? currentValue
-    : filtered[0]?.id || '';
+    : (autoSelect ? filtered[0]?.id : undefined);
 
   return (
-    <Select value={effectiveId || ''} onValueChange={handleValueChange}>
+    <Select value={effectiveId} onValueChange={handleValueChange} disabled={disabled}>
       <SelectTrigger className={className}>
         <Phone className="h-3.5 w-3.5 mr-2 flex-shrink-0" />
         <SelectValue placeholder="Selecionar número" />

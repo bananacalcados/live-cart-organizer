@@ -117,9 +117,25 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [importFilterDateTo, setImportFilterDateTo] = useState<Date | undefined>(undefined);
   const [isSyncingFromZapi, setIsSyncingFromZapi] = useState(false);
   const { selectedNumberId } = useWhatsAppNumberStore();
+
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
     setCampaign(data);
+  }, [campaignId]);
+
+  const handleCampaignNumberChange = useCallback(async (id: string) => {
+    const { error } = await supabase
+      .from('group_campaigns')
+      .update({ whatsapp_number_id: id } as any)
+      .eq('id', campaignId);
+
+    if (error) {
+      toast.error('Erro ao atualizar instância WhatsApp');
+      return;
+    }
+
+    setCampaign((prev: any) => prev ? { ...prev, whatsapp_number_id: id } : prev);
+    toast.success('Instância WhatsApp atualizada');
   }, [campaignId]);
 
   const fetchMessages = useCallback(async () => {
@@ -760,12 +776,10 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           <WhatsAppNumberSelector
             className="w-56"
             filterProvider="zapi"
-            value={(campaign as any)?.whatsapp_number_id || selectedNumberId || undefined}
-            onValueChange={async (id) => {
-              await supabase.from('group_campaigns').update({ whatsapp_number_id: id } as any).eq('id', campaignId);
-              setCampaign((prev: any) => prev ? { ...prev, whatsapp_number_id: id } : prev);
-              toast.success('Instância WhatsApp atualizada');
-            }}
+            value={(campaign as any)?.whatsapp_number_id ?? undefined}
+            autoSelect={false}
+            disabled={!campaign}
+            onValueChange={handleCampaignNumberChange}
           />
         </div>
       </div>
