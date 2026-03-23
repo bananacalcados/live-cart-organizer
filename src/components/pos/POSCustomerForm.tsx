@@ -27,6 +27,7 @@ interface Props {
 
 export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer }: Props) {
   const [saving, setSaving] = useState(false);
+  const [previousNumbers, setPreviousNumbers] = useState<string[]>([]);
   const initForm = () => ({
     name: existingCustomer?.name || "", email: existingCustomer?.email || "", whatsapp: existingCustomer?.whatsapp || "", cpf: existingCustomer?.cpf || "",
     cep: existingCustomer?.cep || "", address: existingCustomer?.address || "", address_number: existingCustomer?.address_number || "", complement: existingCustomer?.complement || "",
