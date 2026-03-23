@@ -96,6 +96,22 @@ export const savePosCustomer = async (
   const payload = buildPosCustomerPayload(form);
 
   const updateById = async (id: string) => {
+    // Check if whatsapp changed — if so, preserve old number
+    if (payload.whatsapp) {
+      const { data: current } = await supabase
+        .from("pos_customers")
+        .select("whatsapp, previous_whatsapp_numbers")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (current?.whatsapp && current.whatsapp !== payload.whatsapp) {
+        const prev: string[] = (current as any).previous_whatsapp_numbers || [];
+        if (!prev.includes(current.whatsapp)) {
+          (payload as any).previous_whatsapp_numbers = [...prev, current.whatsapp];
+        }
+      }
+    }
+
     const { data, error } = await supabase
       .from("pos_customers")
       .update(payload)
@@ -126,4 +142,24 @@ export const savePosCustomer = async (
 
   if (error) throw error;
   return data;
+};
+
+/** Remove a previous whatsapp number from the history */
+export const removePreviousWhatsApp = async (customerId: string, phoneToRemove: string) => {
+  const { data: current } = await supabase
+    .from("pos_customers")
+    .select("previous_whatsapp_numbers")
+    .eq("id", customerId)
+    .maybeSingle();
+
+  if (!current) return;
+  const prev: string[] = (current as any).previous_whatsapp_numbers || [];
+  const updated = prev.filter(p => p !== phoneToRemove);
+
+  const { error } = await supabase
+    .from("pos_customers")
+    .update({ previous_whatsapp_numbers: updated } as any)
+    .eq("id", customerId);
+
+  if (error) throw error;
 };

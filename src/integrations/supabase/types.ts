@@ -5401,6 +5401,7 @@ export type Database = {
           neighborhood: string | null
           notes: string | null
           preferred_style: string | null
+          previous_whatsapp_numbers: string[] | null
           shoe_size: string | null
           state: string | null
           updated_at: string
@@ -5424,6 +5425,7 @@ export type Database = {
           neighborhood?: string | null
           notes?: string | null
           preferred_style?: string | null
+          previous_whatsapp_numbers?: string[] | null
           shoe_size?: string | null
           state?: string | null
           updated_at?: string
@@ -5447,6 +5449,7 @@ export type Database = {
           neighborhood?: string | null
           notes?: string | null
           preferred_style?: string | null
+          previous_whatsapp_numbers?: string[] | null
           shoe_size?: string | null
           state?: string | null
           updated_at?: string

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,9 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { User, Star, Save } from "lucide-react";
+import { User, Star, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { savePosCustomer } from "./customerFormUtils";
+import { savePosCustomer, removePreviousWhatsApp } from "./customerFormUtils";
 
 const AGE_RANGES = ["18-24", "25-34", "35-44", "45-54", "55+"];
 const STYLES = ["Casual", "Esportivo", "Clássico", "Streetwear", "Romântico", "Minimalista", "Boho", "Fashion"];
@@ -21,11 +22,12 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: (customer: { id: string; name: string; cpf?: string }) => void;
-  existingCustomer?: { id: string; name?: string; email?: string; whatsapp?: string; cpf?: string; cep?: string; address?: string; address_number?: string; complement?: string; neighborhood?: string; city?: string; state?: string; age_range?: string; preferred_style?: string; shoe_size?: string; gender?: string } | null;
+  existingCustomer?: { id: string; name?: string; email?: string; whatsapp?: string; cpf?: string; cep?: string; address?: string; address_number?: string; complement?: string; neighborhood?: string; city?: string; state?: string; age_range?: string; preferred_style?: string; shoe_size?: string; gender?: string; previous_whatsapp_numbers?: string[] } | null;
 }
 
 export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer }: Props) {
   const [saving, setSaving] = useState(false);
+  const [previousNumbers, setPreviousNumbers] = useState<string[]>([]);
   const initForm = () => ({
     name: existingCustomer?.name || "", email: existingCustomer?.email || "", whatsapp: existingCustomer?.whatsapp || "", cpf: existingCustomer?.cpf || "",
     cep: existingCustomer?.cep || "", address: existingCustomer?.address || "", address_number: existingCustomer?.address_number || "", complement: existingCustomer?.complement || "",
@@ -35,9 +37,24 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
   });
   const [form, setForm] = useState(initForm);
 
-  // Reset form when existingCustomer changes
+  // Reset form and load previous numbers when existingCustomer changes
   useEffect(() => {
-    if (open) setForm(initForm());
+    if (open) {
+      setForm(initForm());
+      if (existingCustomer?.id) {
+        // Load previous numbers from DB
+        supabase
+          .from("pos_customers")
+          .select("previous_whatsapp_numbers")
+          .eq("id", existingCustomer.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            setPreviousNumbers((data as any)?.previous_whatsapp_numbers || []);
+          });
+      } else {
+        setPreviousNumbers([]);
+      }
+    }
   }, [open, existingCustomer?.id]);
 
   const update = (field: string, value: string | boolean) => setForm(f => ({ ...f, [field]: value }));
@@ -122,6 +139,33 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
                   <Label className="text-pos-white/70 text-xs">WhatsApp</Label>
                   <Input value={form.whatsapp} onChange={e => update('whatsapp', e.target.value)} placeholder="(11) 99999-9999" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
+                {previousNumbers.length > 0 && (
+                  <div className="col-span-2">
+                    <Label className="text-pos-white/70 text-xs">Números anteriores</Label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {previousNumbers.map((num) => (
+                        <div key={num} className="flex items-center gap-1 bg-pos-white/5 border border-pos-orange/20 rounded px-2 py-1">
+                          <span className="text-xs text-pos-white/70">{num}</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!existingCustomer?.id) return;
+                              try {
+                                await removePreviousWhatsApp(existingCustomer.id, num);
+                                setPreviousNumbers(prev => prev.filter(p => p !== num));
+                                toast.success("Número removido");
+                              } catch { toast.error("Erro ao remover"); }
+                            }}
+                            className="text-red-400 hover:text-red-300 ml-1"
+                            title="Remover número antigo"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="col-span-2">
                   <Label className="text-pos-white/70 text-xs">E-mail</Label>
                   <Input value={form.email} onChange={e => update('email', e.target.value)} placeholder="email@exemplo.com" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
