@@ -20,13 +20,15 @@ serve(async (req) => {
 
     // Pick up PENDING messages whose scheduled_at has passed
     // AND SENDING messages that need continuation (batch processing)
+    // For grouped blocks, only pick the first block (block_order = 0 or lowest)
     const { data: pendingMessages, error: fetchErr } = await supabase
       .from('group_campaign_scheduled_messages')
-      .select('id, scheduled_at, campaign_id, status')
+      .select('id, scheduled_at, campaign_id, status, message_group_id, block_order')
       .or(`and(status.eq.pending,scheduled_at.lte.${now}),status.eq.sending`)
       .neq('status', 'grouped') // skip grouped blocks
+      .order('block_order', { ascending: true })
       .order('scheduled_at', { ascending: true })
-      .limit(5);
+      .limit(20);
 
     if (fetchErr) {
       console.error('Error fetching messages:', fetchErr);
@@ -43,12 +45,22 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Found ${pendingMessages.length} messages to dispatch (pending + sending batches)`);
+    // Deduplicate: for grouped messages, only dispatch the first block
+    const seenGroupIds = new Set<string>();
+    const deduped = pendingMessages.filter(msg => {
+      if (msg.message_group_id) {
+        if (seenGroupIds.has(msg.message_group_id)) return false;
+        seenGroupIds.add(msg.message_group_id);
+      }
+      return true;
+    }).slice(0, 5);
+
+    console.log(`Found ${pendingMessages.length} raw, ${deduped.length} deduplicated messages to dispatch`);
 
     let dispatched = 0;
     let failed = 0;
 
-    for (const msg of pendingMessages) {
+    for (const msg of deduped) {
       try {
         const sendRes = await fetch(`${supabaseUrl}/functions/v1/zapi-group-scheduled-send`, {
           method: 'POST',
@@ -75,7 +87,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, processed: pendingMessages.length, dispatched, failed }),
+      JSON.stringify({ success: true, processed: deduped.length, dispatched, failed }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {

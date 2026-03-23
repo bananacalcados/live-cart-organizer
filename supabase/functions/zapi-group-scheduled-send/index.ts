@@ -13,7 +13,10 @@ const SPEED_DELAYS: Record<string, [number, number]> = {
 };
 
 const INTER_BLOCK_DELAY = 1500;
-const MAX_GROUPS_PER_BATCH = 5; // Process max 5 groups per invocation to stay under 60s
+const BASE_MAX_GROUPS_PER_BATCH = 5;
+const MAX_FUNCTION_TIME_MS = 50000; // 50s safety margin (limit is 60s)
+const ESTIMATED_API_CALL_MS = 2000; // ~2s per API call
+
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -118,9 +121,13 @@ serve(async (req) => {
       );
     }
 
-    // Take only a batch
-    const batch = pendingGroups.slice(0, MAX_GROUPS_PER_BATCH);
-    console.log(`Processing batch: ${batch.length} groups (${pendingGroups.length} remaining of ${allGroups.length} total)`);
+    // Dynamically calculate batch size based on block count to stay under timeout
+    const blockCount = allBlocks.length;
+    const estimatedTimePerGroup = (blockCount * (INTER_BLOCK_DELAY + ESTIMATED_API_CALL_MS));
+    const dynamicBatchSize = Math.max(1, Math.min(BASE_MAX_GROUPS_PER_BATCH, Math.floor(MAX_FUNCTION_TIME_MS / estimatedTimePerGroup)));
+    
+    const batch = pendingGroups.slice(0, dynamicBatchSize);
+    console.log(`Processing batch: ${batch.length} groups (${pendingGroups.length} remaining of ${allGroups.length} total, ${blockCount} blocks, ~${Math.round(estimatedTimePerGroup/1000)}s/group)`);
 
     const replaceVars = (text: string, groupName: string): string => {
       let result = text;
