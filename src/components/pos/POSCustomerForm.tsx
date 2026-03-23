@@ -139,6 +139,33 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
                   <Label className="text-pos-white/70 text-xs">WhatsApp</Label>
                   <Input value={form.whatsapp} onChange={e => update('whatsapp', e.target.value)} placeholder="(11) 99999-9999" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
                 </div>
+                {previousNumbers.length > 0 && (
+                  <div className="col-span-2">
+                    <Label className="text-pos-white/70 text-xs">Números anteriores</Label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {previousNumbers.map((num) => (
+                        <div key={num} className="flex items-center gap-1 bg-pos-white/5 border border-pos-orange/20 rounded px-2 py-1">
+                          <span className="text-xs text-pos-white/70">{num}</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!existingCustomer?.id) return;
+                              try {
+                                await removePreviousWhatsApp(existingCustomer.id, num);
+                                setPreviousNumbers(prev => prev.filter(p => p !== num));
+                                toast.success("Número removido");
+                              } catch { toast.error("Erro ao remover"); }
+                            }}
+                            className="text-red-400 hover:text-red-300 ml-1"
+                            title="Remover número antigo"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="col-span-2">
                   <Label className="text-pos-white/70 text-xs">E-mail</Label>
                   <Input value={form.email} onChange={e => update('email', e.target.value)} placeholder="email@exemplo.com" className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange" />
