@@ -20,13 +20,15 @@ serve(async (req) => {
 
     // Pick up PENDING messages whose scheduled_at has passed
     // AND SENDING messages that need continuation (batch processing)
+    // For grouped blocks, only pick the first block (block_order = 0 or lowest)
     const { data: pendingMessages, error: fetchErr } = await supabase
       .from('group_campaign_scheduled_messages')
-      .select('id, scheduled_at, campaign_id, status')
+      .select('id, scheduled_at, campaign_id, status, message_group_id, block_order')
       .or(`and(status.eq.pending,scheduled_at.lte.${now}),status.eq.sending`)
       .neq('status', 'grouped') // skip grouped blocks
+      .order('block_order', { ascending: true })
       .order('scheduled_at', { ascending: true })
-      .limit(5);
+      .limit(20);
 
     if (fetchErr) {
       console.error('Error fetching messages:', fetchErr);
