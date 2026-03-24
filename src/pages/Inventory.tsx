@@ -223,7 +223,67 @@ export default function Inventory() {
         loadCountItems(count.id);
         loadUnresolvedBarcodes(count.id);
 
-        // Auto-resume correction if status is 'correcting' — handled by separate useEffect
+      } else {
+        setActiveCount(null);
+        setCountItems([]);
+        setUnresolvedBarcodes([]);
+      }
+
+      // Load past counts
+      const { data: past } = await supabase
+        .from('inventory_counts')
+        .select('*')
+        .eq('store_id', selectedStoreId)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+        .limit(10);
+      if (past) setPastCounts(past as unknown as InventoryCount[]);
+    };
+    loadActiveCount();
+  }, [selectedStoreId]);
+
+  // Auto-resume correction when page loads with a 'correcting' count
+  useEffect(() => {
+    if (!activeCount || activeCount.status !== 'correcting' || isCorrecting) return;
+    const resumeCorrection = async () => {
+      const { count: pendingCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id)
+        .in('status', ['pending', 'error']);
+      const totalPending = pendingCount || 0;
+      if (totalPending > 0) {
+        const { count: totalCount } = await supabase
+          .from('inventory_correction_queue')
+          .select('id', { count: 'exact', head: true })
+          .eq('count_id', activeCount.id);
+        setCorrectionProgress({ processed: (totalCount || 0) - totalPending, total: totalCount || 0, errors: 0 });
+        setIsCorrecting(true);
+        setActiveTab('correction');
+        runCorrectionBatch(activeCount.id, totalCount || 0);
+      }
+    };
+    resumeCorrection();
+  }, [activeCount]);
+
+  const handleFinishVerification = async () => {
+    if (!activeCount || !selectedStoreId) return;
+    setIsVerifying(true);
+    setVerifyProgress({ current: 0, total: 0 });
+
+    let done = false;
+    while (!done) {
+      try {
+        const { data } = await supabase.functions.invoke('inventory-verify-and-correct', {
+          body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
+        });
+        if (data?.done) done = true;
+        setVerifyProgress({ current: (data?.total || 0) - (data?.remaining || 0), total: data?.total || countItems.length });
+      } catch (e) {
+        console.error('Verify batch error:', e);
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    }
 
     setIsVerifying(false);
     loadCountItems(activeCount.id);
