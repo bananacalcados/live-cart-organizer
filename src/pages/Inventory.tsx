@@ -1458,9 +1458,57 @@ export default function Inventory() {
                   </Card>
                 )}
 
+                {/* Error items section */}
+                {(() => {
+                  const errorItems = countItems.filter(i => i.correction_status === 'error');
+                  if (errorItems.length === 0) return null;
+                  return (
+                    <Card className="border-destructive/30 bg-destructive/5">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-destructive flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4" />
+                            {errorItems.length} produto(s) com erro
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={handleRetryErrors}
+                            disabled={isCorrecting}
+                            className="gap-1"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Retentar com Erro
+                          </Button>
+                        </div>
+                        <ScrollArea className="max-h-[250px]">
+                          <div className="space-y-1">
+                            {errorItems.map(item => (
+                              <div key={item.id} className="flex items-start gap-3 p-2 rounded-lg bg-background border text-sm">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium truncate">{item.product_name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    SKU: {item.sku || '—'} · ID: {item.product_id} · Estoque: {item.current_stock ?? '?'} → {item.counted_quantity}
+                                  </p>
+                                  {item.correction_error && (
+                                    <p className="text-xs text-destructive mt-0.5">
+                                      ❌ {item.correction_error}
+                                    </p>
+                                  )}
+                                </div>
+                                <Badge variant="destructive" className="text-xs shrink-0">Erro</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+
                 <ScrollArea className="h-[400px]">
                   <div className="space-y-1">
-                    {countItems.filter(i => i.correction_status !== 'pending' || i.divergence !== 0).map(item => (
+                    {countItems.filter(i => i.correction_status === 'corrected' || (i.correction_status === 'pending' && i.divergence !== 0)).map(item => (
                       <div key={item.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{item.product_name}</p>
@@ -1470,11 +1518,6 @@ export default function Inventory() {
                         </div>
                         {item.correction_status === 'corrected' && (
                           <Badge className="bg-green-500 text-xs">✓ Corrigido</Badge>
-                        )}
-                        {item.correction_status === 'error' && (
-                          <Badge variant="destructive" className="text-xs" title={item.correction_error || ''}>
-                            Erro
-                          </Badge>
                         )}
                         {item.correction_status === 'pending' && item.divergence !== 0 && (
                           <Badge variant="secondary" className="text-xs">Pendente</Badge>
