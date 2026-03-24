@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getPausedGroupSendUntil } from "../_shared/group-send-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -48,6 +49,26 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Scheduled message not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const pausedBeforeStart = await getPausedGroupSendUntil(supabase);
+    if (pausedBeforeStart) {
+      if (msg.message_group_id) {
+        await supabase.from('group_campaign_scheduled_messages')
+          .update({ status: 'cancelled' })
+          .eq('message_group_id', msg.message_group_id)
+          .in('status', ['pending', 'sending']);
+      } else {
+        await supabase.from('group_campaign_scheduled_messages')
+          .update({ status: 'cancelled' })
+          .eq('id', scheduledMessageId)
+          .in('status', ['pending', 'sending']);
+      }
+
+      return new Response(
+        JSON.stringify({ error: 'Group sends temporarily paused', pausedUntil: pausedBeforeStart }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -166,8 +187,15 @@ serve(async (req) => {
     let batchSentCount = 0;
     let batchFailedCount = 0;
     const newlySentIds: string[] = [];
+    let pausedDuringRun: string | null = null;
 
     for (const group of batch) {
+      pausedDuringRun = await getPausedGroupSendUntil(supabase);
+      if (pausedDuringRun) {
+        console.log(`Stopping batch early because group sends are paused until ${pausedDuringRun}`);
+        break;
+      }
+
       let groupSuccess = true;
       for (let blockIdx = 0; blockIdx < allBlocks.length; blockIdx++) {
         const block = allBlocks[blockIdx];
@@ -243,7 +271,10 @@ serve(async (req) => {
       failed_count: totalFailed,
     };
 
-    if (isComplete) {
+    if (pausedDuringRun) {
+      updatePayload.status = 'cancelled';
+      console.log(`Batch cancelled after ${updatedSentIds.length}/${allGroups.length} groups`);
+    } else if (isComplete) {
       updatePayload.status = totalFailed === allGroups.length ? 'failed' : 'sent';
       updatePayload.sent_at = new Date().toISOString();
       console.log(`Complete! ${totalSent} sent, ${totalFailed} failed out of ${allGroups.length}`);
