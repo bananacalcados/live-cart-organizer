@@ -1278,11 +1278,54 @@ export default function Inventory() {
                             {okItems.length} produtos OK • {pendingStockItems.length} pendentes de consulta
                           </p>
                         </div>
-                        <Button onClick={handleStartCorrection} className="gap-2" disabled={divergentItems.length === 0}>
-                          <Play className="h-4 w-4" />
-                          Corrigir Estoque
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {pendingStockItems.length > 0 && (
+                            <Button
+                              variant="outline"
+                              onClick={async () => {
+                                setIsVerifying(true);
+                                toast.info('Re-verificando saldos no Tiny (server-side)...');
+                                let done = false;
+                                let totalVerified = 0;
+                                while (!done) {
+                                  try {
+                                    const { data } = await supabase.functions.invoke('inventory-verify-and-correct', {
+                                      body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
+                                    });
+                                    if (data?.done) done = true;
+                                    totalVerified += (data?.verified || 0);
+                                    const remaining = data?.remaining || 0;
+                                    setVerifyProgress({ current: totalVerified, total: totalVerified + remaining });
+                                  } catch (e) {
+                                    console.error('Verify batch error:', e);
+                                    await new Promise(r => setTimeout(r, 5000));
+                                  }
+                                }
+                                setIsVerifying(false);
+                                loadCountItems(activeCount.id);
+                                toast.success('Verificação de saldos concluída!');
+                              }}
+                              className="gap-2"
+                              disabled={isVerifying}
+                            >
+                              {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                              Re-verificar saldos ({pendingStockItems.length})
+                            </Button>
+                          )}
+                          <Button onClick={handleStartCorrection} className="gap-2" disabled={divergentItems.length === 0 || pendingStockItems.length > 0}>
+                            <Play className="h-4 w-4" />
+                            Corrigir Estoque
+                          </Button>
+                        </div>
                       </div>
+                      {isVerifying && (
+                        <div className="mt-3 space-y-2">
+                          <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} />
+                          <p className="text-xs text-muted-foreground">
+                            {verifyProgress.current}/{verifyProgress.total} produtos verificados • Não feche esta página
+                          </p>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
