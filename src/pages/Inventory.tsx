@@ -241,12 +241,23 @@ export default function Inventory() {
   }, [selectedStoreId]);
 
   const loadCountItems = async (countId: string) => {
-    const { data } = await supabase
-      .from('inventory_count_items')
-      .select('*')
-      .eq('count_id', countId)
-      .order('created_at', { ascending: false });
-    if (data) setCountItems(data as unknown as CountItem[]);
+    // Load all items in batches to bypass the 1000-row default limit
+    let allData: CountItem[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data } = await supabase
+        .from('inventory_count_items')
+        .select('*')
+        .eq('count_id', countId)
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data as unknown as CountItem[]);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+    setCountItems(allData);
   };
 
   const loadUnresolvedBarcodes = async (countId: string) => {
@@ -608,71 +619,73 @@ export default function Inventory() {
     if (!activeCount) return;
     setShowFinishDialog(false);
     setIsVerifying(true);
-    setVerifyProgress({ current: 0, total: countItems.length });
-    toast.info('Consultando saldos no Tiny...');
-    for (let idx = 0; idx < countItems.length; idx++) {
-      const item = countItems[idx];
-      setVerifyProgress({ current: idx + 1, total: countItems.length });
-      try {
-        const { data } = await supabase.functions.invoke('inventory-get-stock', {
-          body: { store_id: selectedStoreId, product_id: item.product_id }
-        });
-        if (data?.success) {
-          const currentStock = data.stock;
-          const divergence = item.counted_quantity - currentStock;
-          await supabase.from('inventory_count_items').update({
-            current_stock: currentStock,
-            divergence: divergence,
-          }).eq('id', item.id);
-        }
-        await new Promise(r => setTimeout(r, 2100));
-      } catch (e) {
-        console.error('Error getting stock:', e);
-      }
-    }
 
-    setIsVerifying(false);
-
+    // Step 1: If total scope, insert uncounted products with qty=0
     if (activeCount.scope === 'total') {
-      const { data: allProducts } = await supabase
-        .from('pos_products')
-        .select('tiny_id, name, variant, sku, barcode')
-        .eq('store_id', selectedStoreId);
+      toast.info('Inserindo produtos não bipados (balanço total)...');
+      let allProducts: any[] = [];
+      let prodFrom = 0;
+      const prodPageSize = 1000;
+      while (true) {
+        const { data: batch } = await supabase
+          .from('pos_products')
+          .select('tiny_id, name, variant, sku, barcode')
+          .eq('store_id', selectedStoreId)
+          .range(prodFrom, prodFrom + prodPageSize - 1);
+        if (!batch || batch.length === 0) break;
+        allProducts = allProducts.concat(batch);
+        if (batch.length < prodPageSize) break;
+        prodFrom += prodPageSize;
+      }
 
       const countedProductIds = new Set(countItems.map(i => i.product_id));
-      const uncounted = (allProducts || []).filter(p => !countedProductIds.has(String(p.tiny_id)));
+      const uncounted = allProducts.filter(p => !countedProductIds.has(String(p.tiny_id)));
 
-      for (const p of uncounted) {
-        const productName = p.name + (p.variant ? ` - ${p.variant}` : '');
-        await supabase.from('inventory_count_items').insert({
+      // Batch insert uncounted products
+      const batchSize = 50;
+      for (let i = 0; i < uncounted.length; i += batchSize) {
+        const batch = uncounted.slice(i, i + batchSize).map(p => ({
           count_id: activeCount.id,
           product_id: String(p.tiny_id),
-          product_name: productName,
+          product_name: p.name + (p.variant ? ` - ${p.variant}` : ''),
           sku: p.sku,
           barcode: p.barcode,
           counted_quantity: 0,
           current_stock: null,
           divergence: null,
+        }));
+        await supabase.from('inventory_count_items').insert(batch);
+      }
+
+      toast.success(`${uncounted.length} produtos não bipados adicionados com qty=0`);
+    }
+
+    // Step 2: Use server-side Edge Function to verify stock in batches
+    toast.info('Verificando saldos no Tiny (server-side)... Isso pode levar alguns minutos.');
+    let done = false;
+    let totalVerified = 0;
+    
+    while (!done) {
+      try {
+        const { data } = await supabase.functions.invoke('inventory-verify-and-correct', {
+          body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
         });
+        if (data?.done) {
+          done = true;
+        }
+        totalVerified += (data?.verified || 0);
+        const remaining = data?.remaining || 0;
+        setVerifyProgress({ current: totalVerified, total: totalVerified + remaining });
+      } catch (e) {
+        console.error('Verify batch error:', e);
+        await new Promise(r => setTimeout(r, 5000));
       }
     }
 
-    const { data: allItems } = await supabase
-      .from('inventory_count_items')
-      .select('divergence')
-      .eq('count_id', activeCount.id);
-
-    const divergent = allItems?.filter(i => i.divergence !== null && i.divergence !== 0).length || 0;
-
-    await supabase.from('inventory_counts').update({
-      status: 'reviewing',
-      total_products: allItems?.length || 0,
-      divergent_products: divergent,
-    }).eq('id', activeCount.id);
-
+    setIsVerifying(false);
     loadCountItems(activeCount.id);
     setActiveTab('review');
-    toast.success(`Contagem finalizada! ${divergent} divergências encontradas.`);
+    toast.success('Verificação de saldos finalizada! Confira as divergências.');
   };
 
   const handleStartCorrection = async () => {
@@ -1265,11 +1278,54 @@ export default function Inventory() {
                             {okItems.length} produtos OK • {pendingStockItems.length} pendentes de consulta
                           </p>
                         </div>
-                        <Button onClick={handleStartCorrection} className="gap-2" disabled={divergentItems.length === 0}>
-                          <Play className="h-4 w-4" />
-                          Corrigir Estoque
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {pendingStockItems.length > 0 && (
+                            <Button
+                              variant="outline"
+                              onClick={async () => {
+                                setIsVerifying(true);
+                                toast.info('Re-verificando saldos no Tiny (server-side)...');
+                                let done = false;
+                                let totalVerified = 0;
+                                while (!done) {
+                                  try {
+                                    const { data } = await supabase.functions.invoke('inventory-verify-and-correct', {
+                                      body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
+                                    });
+                                    if (data?.done) done = true;
+                                    totalVerified += (data?.verified || 0);
+                                    const remaining = data?.remaining || 0;
+                                    setVerifyProgress({ current: totalVerified, total: totalVerified + remaining });
+                                  } catch (e) {
+                                    console.error('Verify batch error:', e);
+                                    await new Promise(r => setTimeout(r, 5000));
+                                  }
+                                }
+                                setIsVerifying(false);
+                                loadCountItems(activeCount.id);
+                                toast.success('Verificação de saldos concluída!');
+                              }}
+                              className="gap-2"
+                              disabled={isVerifying}
+                            >
+                              {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                              Re-verificar saldos ({pendingStockItems.length})
+                            </Button>
+                          )}
+                          <Button onClick={handleStartCorrection} className="gap-2" disabled={divergentItems.length === 0 || pendingStockItems.length > 0}>
+                            <Play className="h-4 w-4" />
+                            Corrigir Estoque
+                          </Button>
+                        </div>
                       </div>
+                      {isVerifying && (
+                        <div className="mt-3 space-y-2">
+                          <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} />
+                          <p className="text-xs text-muted-foreground">
+                            {verifyProgress.current}/{verifyProgress.total} produtos verificados • Não feche esta página
+                          </p>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
