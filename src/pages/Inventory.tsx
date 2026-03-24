@@ -761,7 +761,44 @@ export default function Inventory() {
     }
 
     setIsCorrecting(false);
+    loadCountItems(countId);
     toast.success('Correção de estoque finalizada!');
+  };
+
+  const handleRetryErrors = async () => {
+    if (!activeCount) return;
+
+    // Reset attempts and status for error items in the queue
+    const { error } = await supabase
+      .from('inventory_correction_queue')
+      .update({ status: 'pending', attempts: 0 })
+      .eq('count_id', activeCount.id)
+      .eq('status', 'error');
+
+    if (error) { toast.error('Erro ao resetar itens'); return; }
+
+    // Also reset correction_status on count items
+    const errorItems = countItems.filter(i => i.correction_status === 'error');
+    for (const item of errorItems) {
+      await supabase.from('inventory_count_items').update({
+        correction_status: 'pending', correction_error: null
+      }).eq('id', item.id);
+    }
+
+    // Get total pending
+    const { count: totalCount } = await supabase
+      .from('inventory_correction_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('count_id', activeCount.id)
+      .in('status', ['pending']);
+
+    const total = totalCount || errorItems.length;
+    setCorrectionProgress({ processed: 0, total, errors: 0 });
+    setIsCorrecting(true);
+
+    await supabase.from('inventory_counts').update({ status: 'correcting' }).eq('id', activeCount.id);
+    runCorrectionBatch(activeCount.id, total);
+    toast.info(`Retentando ${errorItems.length} itens com erro...`);
   };
 
   const handleDeleteItem = async (itemId: string) => {
