@@ -645,10 +645,21 @@ export default function Inventory() {
     setIsVerifying(false);
 
     if (activeCount.scope === 'total') {
-      const { data: allProducts } = await supabase
-        .from('pos_products')
-        .select('tiny_id, name, variant, sku, barcode')
-        .eq('store_id', selectedStoreId);
+    // Load all products in batches to handle stores with 5000+ products
+      let allProducts: any[] = [];
+      let prodFrom = 0;
+      const prodPageSize = 1000;
+      while (true) {
+        const { data: batch } = await supabase
+          .from('pos_products')
+          .select('tiny_id, name, variant, sku, barcode')
+          .eq('store_id', selectedStoreId)
+          .range(prodFrom, prodFrom + prodPageSize - 1);
+        if (!batch || batch.length === 0) break;
+        allProducts = allProducts.concat(batch);
+        if (batch.length < prodPageSize) break;
+        prodFrom += prodPageSize;
+      }
 
       const countedProductIds = new Set(countItems.map(i => i.product_id));
       const uncounted = (allProducts || []).filter(p => !countedProductIds.has(String(p.tiny_id)));
