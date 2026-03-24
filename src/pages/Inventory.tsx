@@ -619,33 +619,10 @@ export default function Inventory() {
     if (!activeCount) return;
     setShowFinishDialog(false);
     setIsVerifying(true);
-    setVerifyProgress({ current: 0, total: countItems.length });
-    toast.info('Consultando saldos no Tiny...');
-    for (let idx = 0; idx < countItems.length; idx++) {
-      const item = countItems[idx];
-      setVerifyProgress({ current: idx + 1, total: countItems.length });
-      try {
-        const { data } = await supabase.functions.invoke('inventory-get-stock', {
-          body: { store_id: selectedStoreId, product_id: item.product_id }
-        });
-        if (data?.success) {
-          const currentStock = data.stock;
-          const divergence = item.counted_quantity - currentStock;
-          await supabase.from('inventory_count_items').update({
-            current_stock: currentStock,
-            divergence: divergence,
-          }).eq('id', item.id);
-        }
-        await new Promise(r => setTimeout(r, 2100));
-      } catch (e) {
-        console.error('Error getting stock:', e);
-      }
-    }
 
-    setIsVerifying(false);
-
+    // Step 1: If total scope, insert uncounted products with qty=0
     if (activeCount.scope === 'total') {
-    // Load all products in batches to handle stores with 5000+ products
+      toast.info('Inserindo produtos não bipados (balanço total)...');
       let allProducts: any[] = [];
       let prodFrom = 0;
       const prodPageSize = 1000;
@@ -664,37 +641,51 @@ export default function Inventory() {
       const countedProductIds = new Set(countItems.map(i => i.product_id));
       const uncounted = allProducts.filter(p => !countedProductIds.has(String(p.tiny_id)));
 
-      for (const p of uncounted) {
-        const productName = p.name + (p.variant ? ` - ${p.variant}` : '');
-        await supabase.from('inventory_count_items').insert({
+      // Batch insert uncounted products
+      const batchSize = 50;
+      for (let i = 0; i < uncounted.length; i += batchSize) {
+        const batch = uncounted.slice(i, i + batchSize).map(p => ({
           count_id: activeCount.id,
           product_id: String(p.tiny_id),
-          product_name: productName,
+          product_name: p.name + (p.variant ? ` - ${p.variant}` : ''),
           sku: p.sku,
           barcode: p.barcode,
           counted_quantity: 0,
           current_stock: null,
           divergence: null,
+        }));
+        await supabase.from('inventory_count_items').insert(batch);
+      }
+
+      toast.success(`${uncounted.length} produtos não bipados adicionados com qty=0`);
+    }
+
+    // Step 2: Use server-side Edge Function to verify stock in batches
+    toast.info('Verificando saldos no Tiny (server-side)... Isso pode levar alguns minutos.');
+    let done = false;
+    let totalVerified = 0;
+    
+    while (!done) {
+      try {
+        const { data } = await supabase.functions.invoke('inventory-verify-and-correct', {
+          body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
         });
+        if (data?.done) {
+          done = true;
+        }
+        totalVerified += (data?.verified || 0);
+        const remaining = data?.remaining || 0;
+        setVerifyProgress({ current: totalVerified, total: totalVerified + remaining });
+      } catch (e) {
+        console.error('Verify batch error:', e);
+        await new Promise(r => setTimeout(r, 5000));
       }
     }
 
-    const { data: allItems } = await supabase
-      .from('inventory_count_items')
-      .select('divergence')
-      .eq('count_id', activeCount.id);
-
-    const divergent = allItems?.filter(i => i.divergence !== null && i.divergence !== 0).length || 0;
-
-    await supabase.from('inventory_counts').update({
-      status: 'reviewing',
-      total_products: allItems?.length || 0,
-      divergent_products: divergent,
-    }).eq('id', activeCount.id);
-
+    setIsVerifying(false);
     loadCountItems(activeCount.id);
     setActiveTab('review');
-    toast.success(`Contagem finalizada! ${divergent} divergências encontradas.`);
+    toast.success('Verificação de saldos finalizada! Confira as divergências.');
   };
 
   const handleStartCorrection = async () => {
