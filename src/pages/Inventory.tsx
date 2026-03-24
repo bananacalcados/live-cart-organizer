@@ -218,9 +218,30 @@ export default function Inventory() {
         .order('created_at', { ascending: false })
         .limit(1);
       if (data && data.length > 0) {
-        setActiveCount(data[0] as unknown as InventoryCount);
-        loadCountItems(data[0].id);
-        loadUnresolvedBarcodes(data[0].id);
+        const count = data[0] as unknown as InventoryCount;
+        setActiveCount(count);
+        loadCountItems(count.id);
+        loadUnresolvedBarcodes(count.id);
+
+        // Auto-resume correction if status is 'correcting'
+        if (count.status === 'correcting') {
+          const { count: pendingCount } = await supabase
+            .from('inventory_correction_queue')
+            .select('id', { count: 'exact', head: true })
+            .eq('count_id', count.id)
+            .in('status', ['pending', 'error']);
+          const totalPending = pendingCount || 0;
+          if (totalPending > 0) {
+            const { count: totalCount } = await supabase
+              .from('inventory_correction_queue')
+              .select('id', { count: 'exact', head: true })
+              .eq('count_id', count.id);
+            setCorrectionProgress({ processed: (totalCount || 0) - totalPending, total: totalCount || 0, errors: 0 });
+            setIsCorrecting(true);
+            setActiveTab('correction');
+            runCorrectionBatch(count.id, totalCount || 0);
+          }
+        }
       } else {
         setActiveCount(null);
         setCountItems([]);
