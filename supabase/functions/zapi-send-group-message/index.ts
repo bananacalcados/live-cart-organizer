@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { prepareZApiImagePayload } from "../_shared/zapi-media.ts";
 import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
+import { getPausedGroupSendUntil, isLikelyGroupId } from "../_shared/group-send-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,6 +31,8 @@ serve(async (req) => {
     const reqBody = await req.json();
     const { groupId, message, type = 'text', mediaUrl, caption, campaignId, groupDbId, mentionAll, whatsapp_number_id }: SendGroupRequest = reqBody;
 
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
     let instanceId: string, token: string, clientToken: string;
     try {
       const creds = await resolveZApiCredentials(whatsapp_number_id);
@@ -48,6 +51,16 @@ serve(async (req) => {
         JSON.stringify({ error: 'groupId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    if (isLikelyGroupId(groupId)) {
+      const pausedUntil = await getPausedGroupSendUntil(supabase);
+      if (pausedUntil) {
+        return new Response(
+          JSON.stringify({ error: 'Group sends temporarily paused', pausedUntil }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     const baseUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}`;
@@ -144,7 +157,6 @@ serve(async (req) => {
 
       // Log failure if campaign
       if (campaignId && groupDbId) {
-        const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
         await supabase.from('group_campaign_messages').update({
           status: 'failed',
           error_message: JSON.stringify(data),
@@ -159,7 +171,6 @@ serve(async (req) => {
 
     // Log success if campaign
     if (campaignId && groupDbId) {
-      const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
       await supabase.from('group_campaign_messages').update({
         status: 'sent',
         sent_at: new Date().toISOString(),
