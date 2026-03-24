@@ -240,7 +240,31 @@ export default function Inventory() {
     loadActiveCount();
   }, [selectedStoreId]);
 
-  const loadCountItems = async (countId: string) => {
+  // Auto-resume correction when page loads with a 'correcting' count
+  useEffect(() => {
+    if (!activeCount || activeCount.status !== 'correcting' || isCorrecting) return;
+    const resumeCorrection = async () => {
+      const { count: pendingCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id)
+        .in('status', ['pending', 'error']);
+      const totalPending = pendingCount || 0;
+      if (totalPending > 0) {
+        const { count: totalCount } = await supabase
+          .from('inventory_correction_queue')
+          .select('id', { count: 'exact', head: true })
+          .eq('count_id', activeCount.id);
+        setCorrectionProgress({ processed: (totalCount || 0) - totalPending, total: totalCount || 0, errors: 0 });
+        setIsCorrecting(true);
+        setActiveTab('correction');
+        runCorrectionBatch(activeCount.id, totalCount || 0);
+      }
+    };
+    resumeCorrection();
+  }, [activeCount]);
+
+
     // Load all items in batches to bypass the 1000-row default limit
     let allData: CountItem[] = [];
     let from = 0;
