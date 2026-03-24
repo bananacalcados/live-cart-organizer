@@ -241,12 +241,23 @@ export default function Inventory() {
   }, [selectedStoreId]);
 
   const loadCountItems = async (countId: string) => {
-    const { data } = await supabase
-      .from('inventory_count_items')
-      .select('*')
-      .eq('count_id', countId)
-      .order('created_at', { ascending: false });
-    if (data) setCountItems(data as unknown as CountItem[]);
+    // Load all items in batches to bypass the 1000-row default limit
+    let allData: CountItem[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data } = await supabase
+        .from('inventory_count_items')
+        .select('*')
+        .eq('count_id', countId)
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data as unknown as CountItem[]);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+    setCountItems(allData);
   };
 
   const loadUnresolvedBarcodes = async (countId: string) => {
