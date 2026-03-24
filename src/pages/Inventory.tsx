@@ -662,7 +662,7 @@ export default function Inventory() {
       }
 
       const countedProductIds = new Set(countItems.map(i => i.product_id));
-      const uncounted = (allProducts || []).filter(p => !countedProductIds.has(String(p.tiny_id)));
+      const uncounted = allProducts.filter(p => !countedProductIds.has(String(p.tiny_id)));
 
       for (const p of uncounted) {
         const productName = p.name + (p.variant ? ` - ${p.variant}` : '');
