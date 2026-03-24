@@ -264,7 +264,7 @@ export default function Inventory() {
     resumeCorrection();
   }, [activeCount]);
 
-
+  const loadCountItems = async (countId: string) => {
     // Load all items in batches to bypass the 1000-row default limit
     let allData: CountItem[] = [];
     let from = 0;
