@@ -111,14 +111,7 @@ async function resolveWhatsappNumberId(
   url: URL,
   payload: AnyPayload
 ): Promise<string | null> {
-  // 1. Query param (highest priority)
-  const fromParam = url.searchParams.get('number_id');
-  if (fromParam) {
-    console.log(`Resolved whatsapp_number_id from query param: ${fromParam}`);
-    return fromParam;
-  }
-
-  // 2. instanceId lookup
+  // 1. instanceId lookup (highest priority — the payload always carries the real source instance)
   const instanceId = asString(payload.instanceId);
   if (instanceId) {
     const { data: numRow } = await supabase
@@ -135,7 +128,7 @@ async function resolveWhatsappNumberId(
     console.warn(`instanceId ${instanceId} not found in whatsapp_numbers table`);
   }
 
-  // 3. connectedPhone lookup (fallback)
+  // 2. connectedPhone lookup (fallback)
   const connectedPhone = asString(payload.connectedPhone);
   if (connectedPhone) {
     const cleanPhone = connectedPhone.replace(/\D/g, '');
@@ -151,6 +144,13 @@ async function resolveWhatsappNumberId(
       return numRow.id;
     }
     console.warn(`connectedPhone ${connectedPhone} not found in whatsapp_numbers table`);
+  }
+
+  // 3. Query param (last resort — proxy may share the same param for all instances)
+  const fromParam = url.searchParams.get('number_id');
+  if (fromParam) {
+    console.log(`Resolved whatsapp_number_id from query param (fallback): ${fromParam}`);
+    return fromParam;
   }
 
   console.error('FAILED to resolve whatsapp_number_id from any source');
@@ -252,21 +252,44 @@ serve(async (req) => {
       } else {
         // Incoming message
         const senderName = asString(payload.senderName) || asString(payload.chatName) || asString(payload.pushName) || null;
-        
-        const { error } = await supabase.from('whatsapp_messages').insert({
-          phone,
-          message: displayMessage,
-          direction: 'incoming',
-          message_id: messageId,
-          status,
-          is_group: isGroup,
-          sender_name: senderName,
-          whatsapp_number_id: whatsappNumberId,
-          ...(mediaInfo ? { media_type: mediaInfo.mediaType, media_url: mediaInfo.mediaUrl } : {}),
-        });
+
+        // Dedup incoming: skip if same message_id + whatsapp_number_id already exists
+        let skipInsert = false;
+        if (messageId) {
+          const { data: existingIncoming } = await supabase
+            .from('whatsapp_messages')
+            .select('id')
+            .eq('message_id', messageId)
+            .eq('phone', phone)
+            .eq('direction', 'incoming')
+            .eq('whatsapp_number_id', whatsappNumberId)
+            .limit(1);
+          if (existingIncoming && existingIncoming.length > 0) {
+            console.log(`Incoming dedup: message_id ${messageId} already exists for number ${whatsappNumberId}, skipping`);
+            skipInsert = true;
+          }
+        }
+
+        if (!skipInsert) {
+          const { error } = await supabase.from('whatsapp_messages').insert({
+            phone,
+            message: displayMessage,
+            direction: 'incoming',
+            message_id: messageId,
+            status,
+            is_group: isGroup,
+            sender_name: senderName,
+            whatsapp_number_id: whatsappNumberId,
+            ...(mediaInfo ? { media_type: mediaInfo.mediaType, media_url: mediaInfo.mediaUrl } : {}),
+          });
+
+          if (error) {
+            console.error('Error saving incoming message:', error);
+          }
+        }
 
         // Reopen conversations that were auto-closed by dispatch
-        if (!isGroup) {
+        if (!isGroup && !skipInsert) {
           const { data: finished } = await supabase
             .from('chat_finished_conversations')
             .select('id, finish_reason')
