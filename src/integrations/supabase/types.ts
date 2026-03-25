@@ -8845,6 +8845,24 @@ export type Database = {
         }[]
       }
       mark_lead_as_paid: { Args: { p_whatsapp: string }; Returns: undefined }
+      save_customer_registration: {
+        Args: {
+          p_address: string
+          p_address_number: string
+          p_cep: string
+          p_city?: string
+          p_complement?: string
+          p_cpf: string
+          p_customer_id?: string
+          p_email: string
+          p_full_name: string
+          p_neighborhood?: string
+          p_order_id: string
+          p_state?: string
+          p_whatsapp: string
+        }
+        Returns: string
+      }
       search_products_unaccent: {
         Args: { p_store_id: string; search_term: string }
         Returns: {
