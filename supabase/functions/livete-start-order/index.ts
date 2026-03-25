@@ -26,7 +26,7 @@ serve(async (req) => {
     // 1. Fetch order with customer
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('id, event_id, customer_id, products, stage, shipping_cost, free_shipping, delivery_method, cart_link')
+      .select('id, event_id, customer_id, products, stage, shipping_cost, free_shipping, delivery_method, cart_link, discount_type, discount_value')
       .eq('id', orderId)
       .single();
 
