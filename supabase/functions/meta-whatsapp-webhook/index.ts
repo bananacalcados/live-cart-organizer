@@ -357,6 +357,15 @@ serve(async (req) => {
                   .maybeSingle();
 
                 if (aiSession && messageText && msg.type === 'text') {
+                  // Route to Livete if this is a checkout session
+                  if (aiSession.prompt?.startsWith('livete_checkout:')) {
+                    console.log(`[META] Livete checkout session for ${phone}, routing to livete-respond`);
+                    fetch(`${supabaseUrl}/functions/v1/livete-respond`, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ phone, messageText, whatsappNumberId: whatsappNumberDbId }),
+                    }).catch(err => console.error('livete-respond trigger error:', err));
+                  } else {
                   // Check if an operator sent a manual message in the last 10 minutes — if so, skip AI
                   const cooldownMinutes = 10;
                   const cooldownCutoff = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
@@ -435,6 +444,7 @@ serve(async (req) => {
                     console.log(`AI auto-reply sent to ${phone}: ${aiData.reply.slice(0, 50)}...`);
                   }
                   } // end of cooldown else
+                  } // end of non-livete else
                 }
               } catch (aiErr) {
                 console.error('AI auto-respond error:', aiErr);

@@ -411,6 +411,15 @@ serve(async (req) => {
         } else {
           console.log(`Saved incoming ${mediaInfo ? mediaInfo.mediaType : 'text'} message from ${phone}`);
           
+          // Trigger Livete AI respond (fire-and-forget) - only for individual text messages
+          if (!isGroup && messageText) {
+            fetch(`${supabaseUrl}/functions/v1/livete-respond`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone, messageText, whatsappNumberId }),
+            }).catch(err => console.error('livete-respond trigger error:', err));
+          }
+
           // Trigger incoming_message automations (fire-and-forget) - skip groups
           fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
             method: 'POST',
