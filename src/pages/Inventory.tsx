@@ -565,6 +565,79 @@ export default function Inventory() {
     setResolvingBarcode(null);
   };
 
+  // Auto re-lookup all pending unresolved barcodes against updated pos_products cache
+  const handleAutoRelookup = async () => {
+    if (!activeCount) return;
+    const pending = unresolvedBarcodes.filter(u => u.status === 'pending');
+    if (pending.length === 0) { toast.info('Nenhum pendente para buscar.'); return; }
+
+    setIsAutoRelooking(true);
+    setRelookupProgress({ done: 0, total: pending.length, found: 0 });
+    let found = 0;
+
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i];
+      try {
+        // Search by barcode in pos_products
+        const { data: products } = await supabase
+          .from('pos_products')
+          .select('id, tiny_id, name, variant, sku, barcode, category')
+          .eq('store_id', selectedStoreId)
+          .eq('barcode', item.barcode)
+          .limit(1);
+
+        if (products && products.length > 0) {
+          const product = products[0] as unknown as PosProduct;
+          const productName = product.name + (product.variant ? ` - ${product.variant}` : '');
+
+          // Create alias
+          await supabase.from('inventory_barcode_aliases').upsert({
+            store_id: selectedStoreId,
+            original_barcode: item.barcode,
+            product_tiny_id: product.tiny_id,
+            product_name: productName,
+            product_sku: product.sku,
+            notes: 'Re-busca automática após sync',
+          }, { onConflict: 'store_id,original_barcode' });
+
+          // Add/update count item
+          const existingByProduct = countItems.find(ci => ci.product_id === String(product.tiny_id));
+          if (existingByProduct) {
+            const newQty = existingByProduct.counted_quantity + item.scanned_quantity;
+            await supabase.from('inventory_count_items').update({ counted_quantity: newQty }).eq('id', existingByProduct.id);
+          } else {
+            await supabase.from('inventory_count_items').insert({
+              count_id: activeCount.id,
+              product_id: String(product.tiny_id),
+              product_name: productName,
+              sku: product.sku,
+              barcode: item.barcode,
+              counted_quantity: item.scanned_quantity,
+            });
+          }
+
+          // Mark as resolved
+          await supabase.from('inventory_unresolved_barcodes').update({
+            status: 'resolved',
+            resolved_product_tiny_id: product.tiny_id,
+            resolved_product_name: productName,
+            resolved_at: new Date().toISOString(),
+          }).eq('id', item.id);
+
+          found++;
+        }
+      } catch (e) {
+        console.error(`Error re-looking up barcode ${item.barcode}:`, e);
+      }
+      setRelookupProgress({ done: i + 1, total: pending.length, found });
+    }
+
+    setIsAutoRelooking(false);
+    loadCountItems(activeCount.id);
+    loadUnresolvedBarcodes(activeCount.id);
+    toast.success(`Re-busca concluída! ${found} de ${pending.length} produtos encontrados.`);
+  };
+
   // Generate GTIN and prepare labels
   const handleGenerateGTIN = async (unresolvedIds: string[]) => {
     const items: typeof labelItems = [];
