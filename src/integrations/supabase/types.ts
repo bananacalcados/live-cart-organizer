@@ -8677,6 +8677,22 @@ export type Database = {
           whatsapp_number_id: string
         }[]
       }
+      get_customer_chat_history: {
+        Args: { p_phone: string }
+        Returns: {
+          created_at: string
+          direction: string
+          id: string
+          is_group: boolean
+          media_type: string
+          media_url: string
+          message: string
+          phone: string
+          sender_name: string
+          status: string
+          whatsapp_number_id: string
+        }[]
+      }
       get_customer_last_address: {
         Args: { p_customer_id: string }
         Returns: Json
