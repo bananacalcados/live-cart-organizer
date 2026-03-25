@@ -146,6 +146,7 @@ const Index = () => {
                   </span>
                 </div>
               </div>
+              <div className="flex items-center gap-2">
                 <OrderReportDialog orders={orders} />
                 <Button
                   variant="ghost"
