@@ -82,11 +82,11 @@ serve(async (req) => {
 
     const data = await response.json();
 
-    if (!response.ok) {
+    if (!response.ok || data?.error) {
       console.error('Z-API error:', data);
       return new Response(
         JSON.stringify({ error: 'Failed to send media', details: data }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: response.ok ? 422 : response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
