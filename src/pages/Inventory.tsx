@@ -963,8 +963,14 @@ export default function Inventory() {
     setIsCorrecting(true);
 
     await supabase.from('inventory_counts').update({ status: 'correcting' }).eq('id', activeCount.id);
-    runCorrectionBatch(activeCount.id, total);
-    toast.info(`Retentando ${errorItems.length} itens com erro...`);
+    setActiveCount({ ...activeCount, status: 'correcting' } as unknown as InventoryCount);
+    
+    // Fire-and-forget: server self-invokes
+    supabase.functions.invoke('inventory-correct-stock', {
+      body: { count_id: activeCount.id, batch_size: 10 }
+    }).catch(e => console.error('Retry invoke error:', e));
+    
+    toast.info(`Retentando ${errorItems.length} itens com erro... Processamento continua no servidor.`);
   };
 
   const handleDeleteItem = async (itemId: string) => {
