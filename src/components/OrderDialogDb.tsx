@@ -406,7 +406,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       if (editingOrder) {
         // Update customer whatsapp if changed
         if (editingOrder.customer && whatsapp !== editingOrder.customer.whatsapp) {
-          await createOrUpdateCustomer(editingOrder.customer.instagram_handle, whatsapp || undefined);
+          const normalizedWa = whatsapp ? normalizeBRPhone(whatsapp) : undefined;
+          await createOrUpdateCustomer(editingOrder.customer.instagram_handle, normalizedWa);
         }
 
         // Update existing order
