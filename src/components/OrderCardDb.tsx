@@ -278,22 +278,38 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         instagram_handle: order.customer?.instagram_handle || '',
       };
 
-      console.log('🚀 [WEBHOOK] Disparando webhook novo-pedido para pedido:', order.id);
-      console.log('🚀 [WEBHOOK] Payload:', JSON.stringify(payload, null, 2));
-      
-      try {
-        const webhookUrl = import.meta.env.VITE_AGENTE2_NOVO_PEDIDO || 'https://api.bananacalcados.com.br/webhook/novo-pedido';
-        console.log('🚀 [WEBHOOK] URL:', webhookUrl);
-        const webhookResp = await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        console.log('🚀 [WEBHOOK] Response status:', webhookResp.status);
-        const webhookBody = await webhookResp.text();
-        console.log('🚀 [WEBHOOK] Response body:', webhookBody);
-      } catch (webhookErr) {
-        console.error('🚀 [WEBHOOK] Fetch falhou (CORS/rede):', webhookErr);
+      console.log('🚀 [WEBHOOK] Disparando para pedido:', order.id, 'automationEnabled:', automationEnabled);
+
+      if (automationEnabled) {
+        // Use internal Livete AI instead of VPS webhook
+        try {
+          const { data: liveteResp, error: liveteErr } = await supabase.functions.invoke('livete-start-order', {
+            body: { orderId: order.id },
+          });
+          if (liveteErr) {
+            console.error('🤖 [LIVETE] Error:', liveteErr);
+          } else {
+            console.log('🤖 [LIVETE] Success:', liveteResp);
+          }
+        } catch (liveteErr) {
+          console.error('🤖 [LIVETE] Exception:', liveteErr);
+        }
+      } else {
+        // Fallback: send to VPS webhook (legacy)
+        try {
+          const webhookUrl = import.meta.env.VITE_AGENTE2_NOVO_PEDIDO || 'https://api.bananacalcados.com.br/webhook/novo-pedido';
+          console.log('🚀 [WEBHOOK] URL:', webhookUrl);
+          const webhookResp = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          console.log('🚀 [WEBHOOK] Response status:', webhookResp.status);
+          const webhookBody = await webhookResp.text();
+          console.log('🚀 [WEBHOOK] Response body:', webhookBody);
+        } catch (webhookErr) {
+          console.error('🚀 [WEBHOOK] Fetch falhou (CORS/rede):', webhookErr);
+        }
       }
 
       toast.success('Pedido confirmado! Link de pagamento gerado e enviado ao Agente.');
