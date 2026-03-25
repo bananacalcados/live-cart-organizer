@@ -2048,36 +2048,31 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* Verification Progress Overlay */}
+      {/* Verification Progress Overlay - non-blocking */}
       {isVerifying && (
-        <div className="fixed inset-0 z-50 bg-background/95 flex flex-col items-center justify-center p-6">
-          <div className="w-full max-w-md space-y-6 text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-            <div>
-              <h3 className="text-xl font-bold text-foreground">Verificando saldos no Tiny</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                {verifyProgress.current === 0 && verifyProgress.total > 0
-                  ? `Preparando verificação de ${verifyProgress.total} produtos...`
-                  : 'Consultando estoque de cada produto. Por favor, aguarde...'}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} className="h-4" />
-              <p className="text-sm font-medium text-foreground">
-                {verifyProgress.current} de {verifyProgress.total} produtos verificados
+        <div className="fixed bottom-4 right-4 z-50 w-96 max-w-[calc(100vw-2rem)]">
+          <Card className="border-primary/30 shadow-lg">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-primary flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="font-semibold text-sm">Verificando saldos no servidor</p>
+                  <p className="text-xs text-muted-foreground">
+                    {verifyProgress.current === 0 && verifyProgress.total > 0
+                      ? `Preparando ${verifyProgress.total} produtos...`
+                      : '✅ Você pode fechar esta página'}
+                  </p>
+                </div>
+              </div>
+              <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} className="h-3" />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{verifyProgress.current}/{verifyProgress.total} verificados</span>
                 {verifyProgress.total > 0 && verifyProgress.current > 0 && (
-                  <span className="text-muted-foreground ml-2">
-                    ({Math.round((verifyProgress.current / verifyProgress.total) * 100)}%)
-                  </span>
+                  <span>~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 1.5) / 60)} min restantes</span>
                 )}
-              </p>
-              {verifyProgress.total > 0 && verifyProgress.current > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Tempo estimado restante: ~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 1.5) / 60)} min
-                </p>
-              )}
-            </div>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>
