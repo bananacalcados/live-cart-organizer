@@ -294,6 +294,52 @@ export default function Inventory() {
     return () => clearInterval(interval);
   }, [activeCount?.id, activeCount?.status]);
 
+  // Poll verification progress when status is 'verifying'
+  useEffect(() => {
+    if (!activeCount || activeCount.status !== 'verifying') return;
+
+    setIsVerifying(true);
+
+    const pollVerify = async () => {
+      const { count: totalCount } = await supabase
+        .from('inventory_count_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id);
+
+      const { count: pendingCount } = await supabase
+        .from('inventory_count_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id)
+        .is('current_stock', null);
+
+      const total = totalCount || 0;
+      const verified = total - (pendingCount || 0);
+      setVerifyProgress({ current: verified, total });
+
+      // Check if verification finished (status changed to 'reviewing' by the edge function)
+      if (pendingCount === 0 && total > 0) {
+        const { data: refreshed } = await supabase
+          .from('inventory_counts')
+          .select('*')
+          .eq('id', activeCount.id)
+          .single();
+        if (refreshed) {
+          setActiveCount(refreshed as unknown as InventoryCount);
+          if (refreshed.status !== 'verifying') {
+            setIsVerifying(false);
+            loadCountItems(activeCount.id);
+            setActiveTab('review');
+            toast.success('Verificação de saldos finalizada! Confira as divergências.');
+          }
+        }
+      }
+    };
+
+    pollVerify();
+    const interval = setInterval(pollVerify, 5000);
+    return () => clearInterval(interval);
+  }, [activeCount?.id, activeCount?.status]);
+
   const loadCountItems = async (countId: string) => {
     // Load all items in batches to bypass the 1000-row default limit
     let allData: CountItem[] = [];
