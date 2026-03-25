@@ -185,6 +185,10 @@ export default function Inventory() {
   const [resolveSearchResults, setResolveSearchResults] = useState<PosProduct[]>([]);
   const [isResolveSearching, setIsResolveSearching] = useState(false);
 
+  // Auto re-lookup
+  const [isAutoRelooking, setIsAutoRelooking] = useState(false);
+  const [relookupProgress, setRelookupProgress] = useState({ done: 0, total: 0, found: 0 });
+
   // Label printing
   const [showLabelDialog, setShowLabelDialog] = useState(false);
   const [labelItems, setLabelItems] = useState<Array<{ barcode: string; productName: string; sku: string; qty: number }>>([]);
