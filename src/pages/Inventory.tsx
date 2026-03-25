@@ -827,8 +827,19 @@ export default function Inventory() {
       toast.success(`${uncounted.length} produtos não bipados adicionados com qty=0`);
     }
 
-    // Step 2: Use server-side Edge Function to verify stock in batches
-    toast.info('Verificando saldos no Tiny (server-side)... Isso pode levar alguns minutos.');
+    // Step 2: Count total items to verify and show immediate progress
+    const { count: totalToVerify } = await supabase
+      .from('inventory_count_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('count_id', activeCount.id)
+      .is('current_stock', null);
+
+    const totalItems = totalToVerify || 0;
+    setVerifyProgress({ current: 0, total: totalItems });
+    
+    const estimatedMinutes = Math.ceil((totalItems * 1.5) / 60);
+    toast.info(`Verificando saldos de ${totalItems} produtos no Tiny... Estimativa: ~${estimatedMinutes} min. Não feche a página.`);
+    
     let done = false;
     let totalVerified = 0;
     
