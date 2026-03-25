@@ -60,15 +60,32 @@ export const useCustomerStore = create<CustomerStore>()((set, get) => ({
   },
 
   createOrUpdateCustomer: async (instagramHandle, whatsapp) => {
-    const normalized = normalizeInstagram(instagramHandle);
     const formattedHandle = instagramHandle.startsWith('@') 
       ? instagramHandle 
       : `@${instagramHandle}`;
 
     try {
-      // Check if customer exists
-      const existing = get().findCustomerByInstagram(instagramHandle);
+      // Check local cache first
+      let existing = get().findCustomerByInstagram(instagramHandle);
       
+      // If not in cache, try DB lookup
+      if (!existing) {
+        const { data: dbCustomer } = await supabase
+          .from('customers')
+          .select('*')
+          .ilike('instagram_handle', formattedHandle)
+          .maybeSingle();
+        
+        if (dbCustomer) {
+          existing = dbCustomer;
+          // Add to local cache
+          set((state) => {
+            const exists = state.customers.some(c => c.id === dbCustomer.id);
+            return exists ? state : { customers: [dbCustomer, ...state.customers] };
+          });
+        }
+      }
+
       if (existing) {
         // Update whatsapp if provided and different
         if (whatsapp && whatsapp !== existing.whatsapp) {
@@ -83,7 +100,7 @@ export const useCustomerStore = create<CustomerStore>()((set, get) => ({
           
           set((state) => ({
             customers: state.customers.map((c) => 
-              c.id === existing.id ? data : c
+              c.id === existing!.id ? data : c
             )
           }));
           
@@ -102,7 +119,29 @@ export const useCustomerStore = create<CustomerStore>()((set, get) => ({
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Handle unique constraint violation - customer exists but wasn't found
+        if (error.code === '23505') {
+          const { data: existingData } = await supabase
+            .from('customers')
+            .select('*')
+            .ilike('instagram_handle', formattedHandle)
+            .maybeSingle();
+          
+          if (existingData) {
+            set((state) => {
+              const exists = state.customers.some(c => c.id === existingData.id);
+              return exists ? state : { customers: [existingData, ...state.customers] };
+            });
+            if (whatsapp && whatsapp !== existingData.whatsapp) {
+              await supabase.from('customers').update({ whatsapp }).eq('id', existingData.id);
+              return { ...existingData, whatsapp };
+            }
+            return existingData;
+          }
+        }
+        throw error;
+      }
       
       set((state) => ({ customers: [data, ...state.customers] }));
       return data;
