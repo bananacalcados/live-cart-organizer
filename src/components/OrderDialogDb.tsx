@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode, Lock, Store, MapPin, Package } from "lucide-react";
+import { normalizeBRPhone } from "@/lib/phoneUtils";
 import {
   Dialog,
   DialogContent,
@@ -405,7 +406,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       if (editingOrder) {
         // Update customer whatsapp if changed
         if (editingOrder.customer && whatsapp !== editingOrder.customer.whatsapp) {
-          await createOrUpdateCustomer(editingOrder.customer.instagram_handle, whatsapp || undefined);
+          const normalizedWa = whatsapp ? normalizeBRPhone(whatsapp) : undefined;
+          await createOrUpdateCustomer(editingOrder.customer.instagram_handle, normalizedWa);
         }
 
         // Update existing order
@@ -439,7 +441,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         toast.success("Pedido atualizado!");
       } else {
         // Create or get customer
-        const newCustomer = await createOrUpdateCustomer(instagramHandle, whatsapp || undefined);
+        const normalizedWa = whatsapp ? normalizeBRPhone(whatsapp) : undefined;
+        const newCustomer = await createOrUpdateCustomer(instagramHandle, normalizedWa);
         if (!newCustomer) {
           toast.error("Erro ao criar cliente");
           return;

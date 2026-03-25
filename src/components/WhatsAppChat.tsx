@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useZapi } from "@/hooks/useZapi";
+import { normalizeBRPhone, buildPhoneVariations } from "@/lib/phoneUtils";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -255,26 +256,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     : 'Sem identificação';
   const currentStage = STAGES.find(s => s.id === order.stage);
 
-  // Normalize phone for database queries - create all possible variations
-  const rawPhone = phone.replace(/\D/g, '');
-  
-  // Create normalized versions for storage and querying
-  const normalizedPhone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone;
-  const phoneWithoutCountry = rawPhone.startsWith('55') ? rawPhone.slice(2) : rawPhone;
-  
-  // For 9-digit mobile numbers, also try without the 9
-  const phoneWithout9 = phoneWithoutCountry.length === 11 && phoneWithoutCountry.charAt(2) === '9'
-    ? phoneWithoutCountry.slice(0, 2) + phoneWithoutCountry.slice(3)
-    : null;
-  
-  // Build all phone variations for matching
-  const phoneVariations = [
-    normalizedPhone,
-    rawPhone,
-    phoneWithoutCountry,
-    phoneWithout9,
-    phoneWithout9 ? '55' + phoneWithout9 : null,
-  ].filter(Boolean) as string[];
+  // Normalize phone for database queries - ensures 9th digit is present
+  const normalizedPhone = normalizeBRPhone(phone);
+  const phoneVariations = buildPhoneVariations(phone);
 
   const getTemplateVariables = () => {
     const totalValue = order.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
