@@ -5037,6 +5037,7 @@ export type Database = {
           shipping_cost: number | null
           shopify_order_name: string | null
           stage: string
+          stage_atendimento: string | null
           updated_at: string
           vindi_transaction_id: string | null
         }
@@ -5076,6 +5077,7 @@ export type Database = {
           shipping_cost?: number | null
           shopify_order_name?: string | null
           stage?: string
+          stage_atendimento?: string | null
           updated_at?: string
           vindi_transaction_id?: string | null
         }
@@ -5115,6 +5117,7 @@ export type Database = {
           shipping_cost?: number | null
           shopify_order_name?: string | null
           stage?: string
+          stage_atendimento?: string | null
           updated_at?: string
           vindi_transaction_id?: string | null
         }
@@ -8890,6 +8893,10 @@ export type Database = {
           p_session_id: string
           p_source_table: string
         }
+        Returns: undefined
+      }
+      update_order_stage: {
+        Args: { p_order_id: string; p_stage: string }
         Returns: undefined
       }
       upsert_landing_customer: {
