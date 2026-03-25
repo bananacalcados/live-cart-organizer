@@ -592,7 +592,7 @@ export default function Inventory() {
         if (!product) {
           try {
             const isBarcode = /^\d{8,14}$/.test(item.barcode);
-            const { data: tinyData } = await supabase.functions.invoke('pos-tiny-search-product', {
+            const { data: tinyData, error: invokeError } = await supabase.functions.invoke('pos-tiny-search-product', {
               body: {
                 store_id: selectedStoreId,
                 query: isBarcode ? undefined : item.barcode,
@@ -600,12 +600,16 @@ export default function Inventory() {
               },
             });
 
-            if (tinyData?.products && tinyData.products.length > 0) {
+            console.log(`[Re-buscar] Barcode ${item.barcode}: invokeError=${invokeError}, tinyData=`, tinyData);
+
+            if (!invokeError && tinyData?.products && tinyData.products.length > 0) {
               const tp = tinyData.products[0];
+              console.log(`[Re-buscar] Found in Tiny: ${tp.name}, tiny_id=${tp.tiny_id}, sku=${tp.sku}`);
+
               // Save to pos_products cache so future lookups are instant
               const nameInfo = tp.name || '';
               const variantInfo = tp.variant || '';
-              const { data: upserted } = await supabase
+              const { data: upserted, error: upsertError } = await supabase
                 .from('pos_products')
                 .upsert({
                   store_id: selectedStoreId,
@@ -622,17 +626,30 @@ export default function Inventory() {
                   is_active: true,
                   synced_at: new Date().toISOString(),
                 }, { onConflict: 'store_id,sku,variant', ignoreDuplicates: false })
-                .select('id, tiny_id, name, variant, sku, barcode, category')
-                .single();
+                .select('id, tiny_id, name, variant, sku, barcode, category');
 
-              if (upserted) {
-                product = upserted as unknown as PosProduct;
+              console.log(`[Re-buscar] Upsert result: error=${JSON.stringify(upsertError)}, data=`, upserted);
+
+              if (!upsertError && upserted && upserted.length > 0) {
+                product = upserted[0] as unknown as PosProduct;
+              } else if (upsertError) {
+                console.error(`[Re-buscar] Upsert failed for ${item.barcode}:`, upsertError);
+                // Even if upsert fails, try to resolve directly with Tiny data
+                product = {
+                  id: '',
+                  tiny_id: Number(tp.tiny_id),
+                  name: nameInfo,
+                  variant: variantInfo,
+                  sku: tp.sku || item.barcode,
+                  barcode: tp.barcode || item.barcode,
+                  category: tp.category || null,
+                } as unknown as PosProduct;
               }
             }
             // Small delay to respect Tiny API rate limits
-            await new Promise(r => setTimeout(r, 1500));
+            await new Promise(r => setTimeout(r, 2000));
           } catch (tinyErr) {
-            console.error(`Tiny API fallback error for ${item.barcode}:`, tinyErr);
+            console.error(`[Re-buscar] Tiny API fallback error for ${item.barcode}:`, tinyErr);
           }
         }
 
