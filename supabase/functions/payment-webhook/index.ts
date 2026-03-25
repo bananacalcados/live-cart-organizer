@@ -149,6 +149,9 @@ serve(async (req) => {
     if (gateway === "vindi") {
       return await handleVindi(req, supabase, supabaseUrl, supabaseKey);
     }
+    if (gateway === "mercadopago") {
+      return await handleMercadoPago(req, supabase, supabaseUrl, supabaseKey);
+    }
     // For pagarme/appmax, just acknowledge — they have dedicated webhooks
     console.log(`Gateway "${gateway}" has its own webhook. Acknowledging.`);
     return new Response(JSON.stringify({ ok: true, routed: false }), {
