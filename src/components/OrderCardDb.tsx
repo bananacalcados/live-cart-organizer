@@ -738,6 +738,45 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             <Store className="h-3 w-3" />
             Enviar ao PDV (Retirada)
           </Button>
+
+          {/* Fulfillment buttons for paid orders */}
+          {(order.is_paid || order.paid_externally) && order.stage === 'paid' && (
+            <div className="flex gap-1.5 mt-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs gap-1 border-stage-awaiting-mototaxi/50 text-stage-awaiting-mototaxi hover:bg-stage-awaiting-mototaxi/10"
+                onClick={handleMototaxi}
+              >
+                <Bike className="h-3 w-3" />
+                Mototaxista
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs gap-1 border-stage-awaiting-pickup/50 text-stage-awaiting-pickup hover:bg-stage-awaiting-pickup/10"
+                onClick={handlePickup}
+              >
+                <MapPin className="h-3 w-3" />
+                Retirar Loja
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Mark as delivered/picked up for awaiting stages */}
+      {(order.stage === 'awaiting_mototaxi' || order.stage === 'awaiting_pickup') && (
+        <div className="mt-2">
+          <Button
+            variant="default"
+            size="sm"
+            className="w-full text-xs gap-1 bg-stage-completed hover:bg-stage-completed/90 text-white"
+            onClick={handleMarkDelivered}
+          >
+            <Check className="h-3 w-3" />
+            {order.stage === 'awaiting_pickup' ? 'Confirmar Retirada' : 'Confirmar Entrega'}
+          </Button>
         </div>
       )}
 
