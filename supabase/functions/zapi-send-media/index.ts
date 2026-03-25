@@ -53,10 +53,14 @@ serve(async (req) => {
         endpoint = 'send-video';
         payload = { phone: formattedPhone, video: mediaUrl, caption: caption || '' };
         break;
-      case 'document':
-        endpoint = 'send-document';
-        payload = { phone: formattedPhone, document: mediaUrl, fileName: filename || 'document' };
+      case 'document': {
+        // Z-API requires the file extension in the endpoint path, e.g. send-document/pdf
+        const docFilename = filename || 'document';
+        const ext = mediaUrl.split('?')[0].split('.').pop()?.toLowerCase() || docFilename.split('.').pop()?.toLowerCase() || 'pdf';
+        endpoint = `send-document/${ext}`;
+        payload = { phone: formattedPhone, document: mediaUrl, fileName: docFilename };
         break;
+      }
       default:
         return new Response(
           JSON.stringify({ error: 'Invalid media type' }),
