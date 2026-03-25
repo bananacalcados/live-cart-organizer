@@ -1650,11 +1650,30 @@ export default function Inventory() {
 
                 {activeCount.status === 'completed' && (
                   <Card className="border-green-200 dark:border-green-800">
-                    <CardContent className="p-4 text-center space-y-2">
-                      <CheckCircle2 className="h-12 w-12 mx-auto text-green-500" />
-                      <p className="font-semibold text-lg">Balanço Concluído!</p>
-                      <p className="text-sm text-muted-foreground">
-                        {activeCount.corrected_products} corrigidos • {activeCount.correction_errors} erros
+                    <CardContent className="p-4 space-y-4">
+                      <div className="text-center space-y-2">
+                        <CheckCircle2 className="h-12 w-12 mx-auto text-green-500" />
+                        <p className="font-semibold text-lg">Balanço Concluído!</p>
+                        <p className="text-sm text-muted-foreground">
+                          {activeCount.corrected_products} corrigidos • {activeCount.correction_errors} erros
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="rounded-lg bg-muted p-3">
+                          <p className="text-2xl font-bold">{countItems.length}</p>
+                          <p className="text-xs text-muted-foreground">Total de itens</p>
+                        </div>
+                        <div className="rounded-lg bg-green-500/10 p-3">
+                          <p className="text-2xl font-bold text-green-600">{countItems.filter(i => i.correction_status === 'corrected').length}</p>
+                          <p className="text-xs text-muted-foreground">Corrigidos</p>
+                        </div>
+                        <div className="rounded-lg bg-destructive/10 p-3">
+                          <p className="text-2xl font-bold text-destructive">{countItems.filter(i => i.correction_status === 'error').length}</p>
+                          <p className="text-xs text-muted-foreground">Com erro</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center">
+                        Concluído em: {activeCount.completed_at ? new Date(activeCount.completed_at).toLocaleString('pt-BR') : '—'}
                       </p>
                     </CardContent>
                   </Card>
