@@ -1568,27 +1568,19 @@ export default function Inventory() {
                             <Button
                               variant="outline"
                               onClick={async () => {
+                                // Reset pending items to have null current_stock so they get re-verified
+                                const pendingIds = countItems.filter(i => i.current_stock === null || i.current_stock === -999).map(i => i.id);
+                                // Set status to verifying
+                                await supabase.from('inventory_counts').update({ status: 'verifying' }).eq('id', activeCount.id);
+                                setActiveCount({ ...activeCount, status: 'verifying' } as unknown as InventoryCount);
                                 setIsVerifying(true);
-                                toast.info('Re-verificando saldos no Tiny (server-side)...');
-                                let done = false;
-                                let totalVerified = 0;
-                                while (!done) {
-                                  try {
-                                    const { data } = await supabase.functions.invoke('inventory-verify-and-correct', {
-                                      body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
-                                    });
-                                    if (data?.done) done = true;
-                                    totalVerified += (data?.verified || 0);
-                                    const remaining = data?.remaining || 0;
-                                    setVerifyProgress({ current: totalVerified, total: totalVerified + remaining });
-                                  } catch (e) {
-                                    console.error('Verify batch error:', e);
-                                    await new Promise(r => setTimeout(r, 5000));
-                                  }
-                                }
-                                setIsVerifying(false);
-                                loadCountItems(activeCount.id);
-                                toast.success('Verificação de saldos concluída!');
+                                
+                                // Fire-and-forget
+                                supabase.functions.invoke('inventory-verify-and-correct', {
+                                  body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
+                                }).catch(e => console.error('Re-verify invoke error:', e));
+                                
+                                toast.success('Re-verificação iniciada! Você pode fechar a página.');
                               }}
                               className="gap-2"
                               disabled={isVerifying}
