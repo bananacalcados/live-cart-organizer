@@ -53,10 +53,14 @@ serve(async (req) => {
         endpoint = 'send-video';
         payload = { phone: formattedPhone, video: mediaUrl, caption: caption || '' };
         break;
-      case 'document':
-        endpoint = 'send-document';
-        payload = { phone: formattedPhone, document: mediaUrl, fileName: filename || 'document' };
+      case 'document': {
+        // Z-API requires the file extension in the endpoint path, e.g. send-document/pdf
+        const docFilename = filename || 'document';
+        const ext = mediaUrl.split('?')[0].split('.').pop()?.toLowerCase() || docFilename.split('.').pop()?.toLowerCase() || 'pdf';
+        endpoint = `send-document/${ext}`;
+        payload = { phone: formattedPhone, document: mediaUrl, fileName: docFilename };
         break;
+      }
       default:
         return new Response(
           JSON.stringify({ error: 'Invalid media type' }),
@@ -65,7 +69,7 @@ serve(async (req) => {
     }
 
     const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/${endpoint}`;
-    console.log(`Sending ${mediaType} to ${formattedPhone}:`, mediaUrl);
+    console.log(`Sending ${mediaType} to ${formattedPhone} via endpoint=${endpoint}:`, mediaUrl);
 
     const response = await fetch(zapiUrl, {
       method: 'POST',
@@ -78,11 +82,11 @@ serve(async (req) => {
 
     const data = await response.json();
 
-    if (!response.ok) {
+    if (!response.ok || data?.error) {
       console.error('Z-API error:', data);
       return new Response(
         JSON.stringify({ error: 'Failed to send media', details: data }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: response.ok ? 422 : response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
