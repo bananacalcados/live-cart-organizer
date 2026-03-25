@@ -278,7 +278,13 @@ export default function Inventory() {
       // If all done, refresh count status & items
       if (processed + errors >= total && total > 0) {
         setIsCorrecting(false);
-        loadActiveCount();
+        // Refresh count status
+        const { data: refreshed } = await supabase
+          .from('inventory_counts')
+          .select('*')
+          .eq('id', activeCount.id)
+          .single();
+        if (refreshed) setActiveCount(refreshed as unknown as InventoryCount);
         loadCountItems(activeCount.id);
       }
     };
