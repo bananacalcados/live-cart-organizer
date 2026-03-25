@@ -69,15 +69,15 @@ serve(async (req) => {
       if (eventData?.whatsapp_number_id) {
         whatsappNumberId = eventData.whatsapp_number_id;
 
-        // Check if this is a Meta instance (has meta_phone_number_id)
+        // Check if this is a Meta instance (has phone_number_id) or Z-API (provider=zapi)
         const { data: wnData } = await supabase
           .from('whatsapp_numbers')
-          .select('id, label, meta_phone_number_id')
+          .select('id, label, provider, phone_number_id')
           .eq('id', whatsappNumberId)
           .single();
 
-        if (wnData?.meta_phone_number_id) {
-          metaPhoneNumberId = wnData.meta_phone_number_id;
+        if (wnData?.provider === 'meta' && wnData?.phone_number_id) {
+          metaPhoneNumberId = wnData.phone_number_id;
         }
       }
     }
