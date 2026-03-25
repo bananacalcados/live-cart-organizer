@@ -119,7 +119,7 @@ const Index = () => {
         {currentEvent && (
           <div className="container py-2">
             <div className="flex items-center justify-between bg-secondary/50 rounded-lg px-4 py-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Calendar className="h-4 w-4 text-accent" />
                 <span className="font-medium">{currentEvent.name}</span>
                 {unpaidCount > 0 && (
@@ -128,19 +128,25 @@ const Index = () => {
                   </span>
                 )}
                 <EventTeamDisplay eventId={currentEventId} />
+                <div 
+                  className={`flex items-center gap-2 rounded-full px-4 py-1.5 cursor-pointer transition-colors ${
+                    currentEvent.automation_enabled 
+                      ? 'bg-green-100 dark:bg-green-900/40 border-2 border-green-500' 
+                      : 'bg-muted border-2 border-border'
+                  }`}
+                  onClick={async () => {
+                    const newVal = !currentEvent.automation_enabled;
+                    await updateEvent(currentEventId, { automation_enabled: newVal } as any);
+                    toast.success(newVal ? 'Modo automatizado ativado!' : 'Modo automatizado desativado');
+                  }}
+                >
+                  <Zap className={`h-5 w-5 ${currentEvent.automation_enabled ? 'text-green-600' : 'text-muted-foreground'}`} />
+                  <span className={`text-sm font-bold ${currentEvent.automation_enabled ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'}`}>
+                    {currentEvent.automation_enabled ? '⚡ AUTOMAÇÃO ATIVADA' : 'AUTOMAÇÃO DESATIVADA'}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 border-l border-border/50 pl-3 ml-2">
-                  <Zap className={`h-4 w-4 ${currentEvent.automation_enabled ? 'text-stage-paid' : 'text-muted-foreground'}`} />
-                  <span className="text-xs font-medium">Auto</span>
-                  <Switch
-                    checked={!!currentEvent.automation_enabled}
-                    onCheckedChange={async (checked) => {
-                      await updateEvent(currentEventId, { automation_enabled: checked } as any);
-                      toast.success(checked ? 'Modo automatizado ativado!' : 'Modo automatizado desativado');
-                    }}
-                  />
-                </div>
                 <OrderReportDialog orders={orders} />
                 <Button
                   variant="ghost"
