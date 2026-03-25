@@ -14,8 +14,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ZApiInstanceManager } from "@/components/admin/ZApiInstanceManager";
+import { AiKnowledgeBase } from "@/components/admin/AiKnowledgeBase";
 import {
-  Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft,
+  Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone,
 } from "lucide-react";
 
