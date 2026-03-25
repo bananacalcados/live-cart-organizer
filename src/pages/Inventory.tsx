@@ -1626,13 +1626,13 @@ export default function Inventory() {
 
               {/* Correction Tab */}
               <TabsContent value="correction" className="space-y-4">
-                {isCorrecting && (
+                {(isCorrecting || activeCount.status === 'correcting') && (
                   <Card>
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <p className="font-semibold flex items-center gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" />
-                          Corrigindo estoque...
+                          Corrigindo estoque no servidor...
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {correctionProgress.processed}/{correctionProgress.total}
@@ -1640,8 +1640,9 @@ export default function Inventory() {
                       </div>
                       <Progress value={correctionProgress.total > 0 ? (correctionProgress.processed / correctionProgress.total) * 100 : 0} />
                       <p className="text-xs text-muted-foreground">
-                        {correctionProgress.errors > 0 && `${correctionProgress.errors} erros (serão retentados)`}
-                        {' • '}Não feche esta página
+                        {correctionProgress.errors > 0 && `${correctionProgress.errors} erros • `}
+                        ✅ Você pode fechar esta página — o processamento continua automaticamente no servidor.
+                        {correctionProgress.total > 0 && ` • Tempo estimado: ~${Math.ceil(((correctionProgress.total - correctionProgress.processed) * 2) / 60)} min`}
                       </p>
                     </CardContent>
                   </Card>
