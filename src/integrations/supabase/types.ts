@@ -3809,6 +3809,7 @@ export type Database = {
           created_at: string
           divergent_products: number | null
           id: string
+          last_batch_at: string | null
           scope: string
           started_at: string
           status: string
@@ -3825,6 +3826,7 @@ export type Database = {
           created_at?: string
           divergent_products?: number | null
           id?: string
+          last_batch_at?: string | null
           scope?: string
           started_at?: string
           status?: string
@@ -3841,6 +3843,7 @@ export type Database = {
           created_at?: string
           divergent_products?: number | null
           id?: string
+          last_batch_at?: string | null
           scope?: string
           started_at?: string
           status?: string
