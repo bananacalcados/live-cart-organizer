@@ -903,7 +903,7 @@ export default function Inventory() {
       toast.success(`${uncounted.length} produtos não bipados adicionados com qty=0`);
     }
 
-    // Step 2: Count total items to verify and show immediate progress
+    // Step 2: Set status to 'verifying' and fire-and-forget
     const { count: totalToVerify } = await supabase
       .from('inventory_count_items')
       .select('id', { count: 'exact', head: true })
@@ -912,34 +912,18 @@ export default function Inventory() {
 
     const totalItems = totalToVerify || 0;
     setVerifyProgress({ current: 0, total: totalItems });
-    
-    const estimatedMinutes = Math.ceil((totalItems * 1.5) / 60);
-    toast.info(`Verificando saldos de ${totalItems} produtos no Tiny... Estimativa: ~${estimatedMinutes} min. Não feche a página.`);
-    
-    let done = false;
-    let totalVerified = 0;
-    
-    while (!done) {
-      try {
-        const { data } = await supabase.functions.invoke('inventory-verify-and-correct', {
-          body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
-        });
-        if (data?.done) {
-          done = true;
-        }
-        totalVerified += (data?.verified || 0);
-        const remaining = data?.remaining || 0;
-        setVerifyProgress({ current: totalVerified, total: totalVerified + remaining });
-      } catch (e) {
-        console.error('Verify batch error:', e);
-        await new Promise(r => setTimeout(r, 5000));
-      }
-    }
 
-    setIsVerifying(false);
-    loadCountItems(activeCount.id);
-    setActiveTab('review');
-    toast.success('Verificação de saldos finalizada! Confira as divergências.');
+    // Mark count as 'verifying'
+    await supabase.from('inventory_counts').update({ status: 'verifying' }).eq('id', activeCount.id);
+    setActiveCount({ ...activeCount, status: 'verifying' } as unknown as InventoryCount);
+
+    const estimatedMinutes = Math.ceil((totalItems * 1.5) / 60);
+    toast.success(`Verificação iniciada! ~${estimatedMinutes} min. Você pode fechar a página — o processamento continua no servidor.`);
+
+    // Fire-and-forget: the edge function self-invokes until done
+    supabase.functions.invoke('inventory-verify-and-correct', {
+      body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
+    }).catch(e => console.error('Initial verify invoke error:', e));
   };
 
   const handleStartCorrection = async () => {
