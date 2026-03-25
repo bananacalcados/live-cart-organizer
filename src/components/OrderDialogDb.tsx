@@ -458,7 +458,35 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
           }
           toast.success("Produtos adicionados ao pedido existente!");
         } else {
-          await createOrder(eventId, newCustomer, localProducts);
+          const newOrder = await createOrder(eventId, newCustomer, localProducts);
+          
+          // Apply discount, shipping, and extras if set during creation
+          if (newOrder) {
+            const extraUpdates: Record<string, unknown> = {};
+            if (discountType) {
+              extraUpdates.discount_type = discountType;
+              extraUpdates.discount_value = discountValue ?? 0;
+            }
+            if (freeShipping) extraUpdates.free_shipping = true;
+            if (hasGift) extraUpdates.has_gift = true;
+            if (couponCode) extraUpdates.coupon_code = couponCode;
+            if (notes) extraUpdates.notes = notes;
+            if (paidExternally) {
+              extraUpdates.paid_externally = true;
+              extraUpdates.is_paid = true;
+              extraUpdates.paid_at = new Date().toISOString();
+            }
+            if (isPickup) {
+              extraUpdates.is_pickup = true;
+              if (pickupStoreId) extraUpdates.pickup_store_id = pickupStoreId;
+            }
+            if (isDelivery) extraUpdates.is_delivery = true;
+            if (customShippingCost) extraUpdates.shipping_cost = parseFloat(customShippingCost);
+
+            if (Object.keys(extraUpdates).length > 0) {
+              await updateOrder(newOrder.id, extraUpdates as Partial<DbOrder>);
+            }
+          }
         }
       }
 
