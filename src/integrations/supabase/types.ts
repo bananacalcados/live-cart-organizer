@@ -2299,6 +2299,7 @@ export type Database = {
       events: {
         Row: {
           active_product_delay_seconds: number
+          automation_enabled: boolean
           catalog_lead_page_id: string | null
           created_at: string
           default_shipping_cost: number | null
@@ -2311,6 +2312,7 @@ export type Database = {
         }
         Insert: {
           active_product_delay_seconds?: number
+          automation_enabled?: boolean
           catalog_lead_page_id?: string | null
           created_at?: string
           default_shipping_cost?: number | null
@@ -2323,6 +2325,7 @@ export type Database = {
         }
         Update: {
           active_product_delay_seconds?: number
+          automation_enabled?: boolean
           catalog_lead_page_id?: string | null
           created_at?: string
           default_shipping_cost?: number | null
@@ -5009,6 +5012,7 @@ export type Database = {
           created_at: string
           custom_shipping_cost: number | null
           customer_id: string
+          delivery_method: string | null
           discount_type: string | null
           discount_value: number | null
           eligible_for_prize: boolean | null
@@ -5047,6 +5051,7 @@ export type Database = {
           created_at?: string
           custom_shipping_cost?: number | null
           customer_id: string
+          delivery_method?: string | null
           discount_type?: string | null
           discount_value?: number | null
           eligible_for_prize?: boolean | null
@@ -5085,6 +5090,7 @@ export type Database = {
           created_at?: string
           custom_shipping_cost?: number | null
           customer_id?: string
+          delivery_method?: string | null
           discount_type?: string | null
           discount_value?: number | null
           eligible_for_prize?: boolean | null
