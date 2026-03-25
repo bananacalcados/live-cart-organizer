@@ -90,9 +90,29 @@ export function POSTinyProductPicker({ storeId, label = "Produto", value, onSele
       const { data, error } = await supabase.functions.invoke("pos-tiny-search-product", {
         body: { store_id: storeId, query: isBarcode ? undefined : term, gtin: isBarcode ? term : undefined },
       });
-      if (!error && data?.products) {
+      if (!error && data?.products && data.products.length > 0) {
         setResults(data.products);
         setShowDropdown(true);
+        // Auto-cache found products into pos_products for future instant lookups
+        for (const tp of data.products) {
+          try {
+            await supabase.from('pos_products').upsert({
+              store_id: storeId,
+              tiny_id: Number(tp.tiny_id),
+              sku: tp.sku || '',
+              name: tp.name || '',
+              variant: tp.variant || '',
+              size: tp.size || null,
+              color: null,
+              price: tp.price || 0,
+              barcode: tp.barcode || '',
+              stock: tp.stock || 0,
+              category: tp.category || null,
+              is_active: true,
+              synced_at: new Date().toISOString(),
+            }, { onConflict: 'store_id,sku,variant', ignoreDuplicates: false });
+          } catch { /* ignore cache errors */ }
+        }
       }
     } catch {
       // ignore
