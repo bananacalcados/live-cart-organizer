@@ -244,29 +244,49 @@ export default function Inventory() {
     loadActiveCount();
   }, [selectedStoreId]);
 
-  // Auto-resume correction when page loads with a 'correcting' count
+  // Poll correction progress when status is 'correcting'
   useEffect(() => {
-    if (!activeCount || activeCount.status !== 'correcting' || isCorrecting) return;
-    const resumeCorrection = async () => {
-      const { count: pendingCount } = await supabase
+    if (!activeCount || activeCount.status !== 'correcting') return;
+
+    setActiveTab('correction');
+
+    const pollProgress = async () => {
+      const { count: totalCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id);
+
+      const { count: completedCount } = await supabase
         .from('inventory_correction_queue')
         .select('id', { count: 'exact', head: true })
         .eq('count_id', activeCount.id)
-        .in('status', ['pending', 'error']);
-      const totalPending = pendingCount || 0;
-      if (totalPending > 0) {
-        const { count: totalCount } = await supabase
-          .from('inventory_correction_queue')
-          .select('id', { count: 'exact', head: true })
-          .eq('count_id', activeCount.id);
-        setCorrectionProgress({ processed: (totalCount || 0) - totalPending, total: totalCount || 0, errors: 0 });
-        setIsCorrecting(true);
-        setActiveTab('correction');
-        runCorrectionBatch(activeCount.id, totalCount || 0);
+        .eq('status', 'completed');
+
+      const { count: errorCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id)
+        .eq('status', 'error');
+
+      const total = totalCount || 0;
+      const processed = completedCount || 0;
+      const errors = errorCount || 0;
+
+      setCorrectionProgress({ processed, total, errors });
+      setIsCorrecting(processed + errors < total);
+
+      // If all done, refresh count status & items
+      if (processed + errors >= total && total > 0) {
+        setIsCorrecting(false);
+        loadActiveCount();
+        loadCountItems(activeCount.id);
       }
     };
-    resumeCorrection();
-  }, [activeCount]);
+
+    pollProgress();
+    const interval = setInterval(pollProgress, 5000);
+    return () => clearInterval(interval);
+  }, [activeCount?.id, activeCount?.status]);
 
   const loadCountItems = async (countId: string) => {
     // Load all items in batches to bypass the 1000-row default limit
