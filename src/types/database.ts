@@ -69,6 +69,8 @@ export interface DbOrder {
   // AI pause
   ai_paused?: boolean;
   ai_paused_at?: string | null;
+  // Delivery method
+  delivery_method?: string | null;
   // Joined data
   customer?: DbCustomer;
 }
