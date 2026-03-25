@@ -185,6 +185,10 @@ export default function Inventory() {
   const [resolveSearchResults, setResolveSearchResults] = useState<PosProduct[]>([]);
   const [isResolveSearching, setIsResolveSearching] = useState(false);
 
+  // Auto re-lookup
+  const [isAutoRelooking, setIsAutoRelooking] = useState(false);
+  const [relookupProgress, setRelookupProgress] = useState({ done: 0, total: 0, found: 0 });
+
   // Label printing
   const [showLabelDialog, setShowLabelDialog] = useState(false);
   const [labelItems, setLabelItems] = useState<Array<{ barcode: string; productName: string; sku: string; qty: number }>>([]);
@@ -559,6 +563,79 @@ export default function Inventory() {
     toast.success(`${productName} vinculado ao código ${resolvingBarcode.barcode}!`);
     setShowResolveDialog(false);
     setResolvingBarcode(null);
+  };
+
+  // Auto re-lookup all pending unresolved barcodes against updated pos_products cache
+  const handleAutoRelookup = async () => {
+    if (!activeCount) return;
+    const pending = unresolvedBarcodes.filter(u => u.status === 'pending');
+    if (pending.length === 0) { toast.info('Nenhum pendente para buscar.'); return; }
+
+    setIsAutoRelooking(true);
+    setRelookupProgress({ done: 0, total: pending.length, found: 0 });
+    let found = 0;
+
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i];
+      try {
+        // Search by barcode in pos_products
+        const { data: products } = await supabase
+          .from('pos_products')
+          .select('id, tiny_id, name, variant, sku, barcode, category')
+          .eq('store_id', selectedStoreId)
+          .eq('barcode', item.barcode)
+          .limit(1);
+
+        if (products && products.length > 0) {
+          const product = products[0] as unknown as PosProduct;
+          const productName = product.name + (product.variant ? ` - ${product.variant}` : '');
+
+          // Create alias
+          await supabase.from('inventory_barcode_aliases').upsert({
+            store_id: selectedStoreId,
+            original_barcode: item.barcode,
+            product_tiny_id: product.tiny_id,
+            product_name: productName,
+            product_sku: product.sku,
+            notes: 'Re-busca automática após sync',
+          }, { onConflict: 'store_id,original_barcode' });
+
+          // Add/update count item
+          const existingByProduct = countItems.find(ci => ci.product_id === String(product.tiny_id));
+          if (existingByProduct) {
+            const newQty = existingByProduct.counted_quantity + item.scanned_quantity;
+            await supabase.from('inventory_count_items').update({ counted_quantity: newQty }).eq('id', existingByProduct.id);
+          } else {
+            await supabase.from('inventory_count_items').insert({
+              count_id: activeCount.id,
+              product_id: String(product.tiny_id),
+              product_name: productName,
+              sku: product.sku,
+              barcode: item.barcode,
+              counted_quantity: item.scanned_quantity,
+            });
+          }
+
+          // Mark as resolved
+          await supabase.from('inventory_unresolved_barcodes').update({
+            status: 'resolved',
+            resolved_product_tiny_id: product.tiny_id,
+            resolved_product_name: productName,
+            resolved_at: new Date().toISOString(),
+          }).eq('id', item.id);
+
+          found++;
+        }
+      } catch (e) {
+        console.error(`Error re-looking up barcode ${item.barcode}:`, e);
+      }
+      setRelookupProgress({ done: i + 1, total: pending.length, found });
+    }
+
+    setIsAutoRelooking(false);
+    loadCountItems(activeCount.id);
+    loadUnresolvedBarcodes(activeCount.id);
+    toast.success(`Re-busca concluída! ${found} de ${pending.length} produtos encontrados.`);
   };
 
   // Generate GTIN and prepare labels
@@ -1269,13 +1346,35 @@ export default function Inventory() {
                   </div>
                 ) : (
                   <>
-                    {resolvedUnresolved.length > 0 && (
-                      <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {pendingUnresolved.length > 0 && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="gap-2"
+                          onClick={handleAutoRelookup}
+                          disabled={isAutoRelooking}
+                        >
+                          {isAutoRelooking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                          Re-buscar Pendentes ({pendingUnresolved.length})
+                        </Button>
+                      )}
+                      {resolvedUnresolved.length > 0 && (
                         <Button variant="outline" size="sm" className="gap-2" onClick={handleGenerateAllGTINs}>
                           <Tag className="h-4 w-4" />
                           Gerar GTIN para resolvidos ({resolvedUnresolved.length})
                         </Button>
-                      </div>
+                      )}
+                    </div>
+                    {isAutoRelooking && (
+                      <Card>
+                        <CardContent className="p-3 space-y-2">
+                          <Progress value={relookupProgress.total > 0 ? (relookupProgress.done / relookupProgress.total) * 100 : 0} />
+                          <p className="text-xs text-muted-foreground">
+                            {relookupProgress.done}/{relookupProgress.total} verificados • {relookupProgress.found} encontrados
+                          </p>
+                        </CardContent>
+                      </Card>
                     )}
                     <ScrollArea className="h-[450px]">
                       <div className="space-y-2">
