@@ -295,8 +295,11 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       notifyPaymentConfirmed(orderId, 'events-kanban-drag');
     }
 
-    // If moving away from paid manually, keep payment flags aligned
-    if (newStage !== 'paid' && order.is_paid && order.stage === 'paid') {
+    // Post-paid stages should keep payment flags
+    const postPaidStages = ['awaiting_shipping', 'awaiting_mototaxi', 'awaiting_pickup', 'completed'];
+    
+    // If moving away from paid manually to a pre-paid stage, clear payment flags
+    if (newStage !== 'paid' && !postPaidStages.includes(newStage) && order.is_paid && order.stage === 'paid') {
       updates.is_paid = false;
       updates.paid_at = null;
       stateUpdates.is_paid = false;
