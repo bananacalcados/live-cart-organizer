@@ -216,12 +216,15 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       let zapiToken = '';
       let zapiClientToken = '';
       
+      let automationEnabled = false;
       if (order.event_id) {
         const { data: eventData } = await supabase
           .from('events')
-          .select('whatsapp_number_id')
+          .select('whatsapp_number_id, automation_enabled')
           .eq('id', order.event_id)
           .single();
+        
+        automationEnabled = eventData?.automation_enabled === true;
         
         if (eventData?.whatsapp_number_id) {
           const { data: whatsappData } = await supabase
@@ -270,6 +273,9 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           zapi_token: zapiToken,
           zapi_client_token: zapiClientToken,
         },
+        automation_enabled: automationEnabled,
+        customer_id: order.customer_id || '',
+        instagram_handle: order.customer?.instagram_handle || '',
       };
 
       console.log('🚀 [WEBHOOK] Disparando webhook novo-pedido para pedido:', order.id);
