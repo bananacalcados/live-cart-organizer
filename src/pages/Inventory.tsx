@@ -591,12 +591,12 @@ export default function Inventory() {
         // Step 2: If not found locally, search Tiny API directly
         if (!product) {
           try {
-            const isBarcode = /^\d{8,14}$/.test(item.barcode);
+            const isNumeric = /^\d+$/.test(item.barcode);
             const { data: tinyData, error: invokeError } = await supabase.functions.invoke('pos-tiny-search-product', {
               body: {
                 store_id: selectedStoreId,
-                query: isBarcode ? undefined : item.barcode,
-                gtin: isBarcode ? item.barcode : undefined,
+                // Always try pesquisa (text search) with the barcode as query - this finds by codigo/gtin
+                query: item.barcode,
               },
             });
 
