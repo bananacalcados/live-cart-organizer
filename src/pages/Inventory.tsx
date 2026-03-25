@@ -789,7 +789,7 @@ export default function Inventory() {
 
     // Step 1: If total scope, insert uncounted products with qty=0
     if (activeCount.scope === 'total') {
-      toast.info('Inserindo produtos não bipados (balanço total)...');
+      toast.info('Buscando todos os produtos da loja...');
       let allProducts: any[] = [];
       let prodFrom = 0;
       const prodPageSize = 1000;
@@ -808,8 +808,11 @@ export default function Inventory() {
       const countedProductIds = new Set(countItems.map(i => i.product_id));
       const uncounted = allProducts.filter(p => !countedProductIds.has(String(p.tiny_id)));
 
+      toast.info(`Inserindo ${uncounted.length} produtos não bipados...`);
+      setVerifyProgress({ current: 0, total: uncounted.length });
+
       // Batch insert uncounted products
-      const batchSize = 50;
+      const batchSize = 100;
       for (let i = 0; i < uncounted.length; i += batchSize) {
         const batch = uncounted.slice(i, i + batchSize).map(p => ({
           count_id: activeCount.id,
@@ -822,13 +825,25 @@ export default function Inventory() {
           divergence: null,
         }));
         await supabase.from('inventory_count_items').insert(batch);
+        setVerifyProgress({ current: Math.min(i + batchSize, uncounted.length), total: uncounted.length });
       }
 
       toast.success(`${uncounted.length} produtos não bipados adicionados com qty=0`);
     }
 
-    // Step 2: Use server-side Edge Function to verify stock in batches
-    toast.info('Verificando saldos no Tiny (server-side)... Isso pode levar alguns minutos.');
+    // Step 2: Count total items to verify and show immediate progress
+    const { count: totalToVerify } = await supabase
+      .from('inventory_count_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('count_id', activeCount.id)
+      .is('current_stock', null);
+
+    const totalItems = totalToVerify || 0;
+    setVerifyProgress({ current: 0, total: totalItems });
+    
+    const estimatedMinutes = Math.ceil((totalItems * 1.5) / 60);
+    toast.info(`Verificando saldos de ${totalItems} produtos no Tiny... Estimativa: ~${estimatedMinutes} min. Não feche a página.`);
+    
     let done = false;
     let totalVerified = 0;
     
@@ -1548,7 +1563,14 @@ export default function Inventory() {
                         <div className="mt-3 space-y-2">
                           <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} />
                           <p className="text-xs text-muted-foreground">
-                            {verifyProgress.current}/{verifyProgress.total} produtos verificados • Não feche esta página
+                            {verifyProgress.current}/{verifyProgress.total} produtos verificados
+                            {verifyProgress.total > 0 && verifyProgress.current > 0 && (
+                              <> • ~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 1.5) / 60)} min restantes</>
+                            )}
+                            {verifyProgress.total > 0 && verifyProgress.current === 0 && (
+                              <> • Iniciando verificação...</>
+                            )}
+                            {' '}• Não feche esta página
                           </p>
                         </div>
                       )}
@@ -1978,22 +2000,24 @@ export default function Inventory() {
             <div>
               <h3 className="text-xl font-bold text-foreground">Verificando saldos no Tiny</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Consultando estoque de cada produto. Por favor, aguarde...
+                {verifyProgress.current === 0 && verifyProgress.total > 0
+                  ? `Preparando verificação de ${verifyProgress.total} produtos...`
+                  : 'Consultando estoque de cada produto. Por favor, aguarde...'}
               </p>
             </div>
             <div className="space-y-2">
               <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} className="h-4" />
               <p className="text-sm font-medium text-foreground">
                 {verifyProgress.current} de {verifyProgress.total} produtos verificados
-                {verifyProgress.total > 0 && (
+                {verifyProgress.total > 0 && verifyProgress.current > 0 && (
                   <span className="text-muted-foreground ml-2">
                     ({Math.round((verifyProgress.current / verifyProgress.total) * 100)}%)
                   </span>
                 )}
               </p>
-              {verifyProgress.total > 0 && (
+              {verifyProgress.total > 0 && verifyProgress.current > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Tempo estimado restante: ~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 2.5) / 60)} min
+                  Tempo estimado restante: ~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 1.5) / 60)} min
                 </p>
               )}
             </div>
