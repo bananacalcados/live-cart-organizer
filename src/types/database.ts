@@ -6,6 +6,7 @@ export interface DbEvent {
   default_shipping_cost?: number;
   catalog_lead_page_id?: string;
   active_product_delay_seconds?: number;
+  automation_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }
