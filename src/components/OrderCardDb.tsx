@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil, Bot } from "lucide-react";
+import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil, Bot, Bike, MapPin, Check } from "lucide-react";
 import { DbOrder } from "@/types/database";
 import { STAGES, getMissingFields } from "@/types/order";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -312,6 +312,14 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       applyShopifyVerification(true, createdOrderName);
       toast.success(`Pedido criado na Shopify! ${createdOrderName || ""}`);
 
+      // Auto-move to "Aguardando Envio" and set delivery_method
+      await storeMove(order.id, 'awaiting_shipping');
+      await supabase.from('orders').update({ delivery_method: 'shipping' }).eq('id', order.id);
+
+      window.dispatchEvent(new CustomEvent('shopify-order-created', {
+        detail: { orderId: order.id, shopifyOrderName: createdOrderName }
+      }));
+
       window.setTimeout(() => {
         void refreshShopifyStatus();
       }, 1500);
@@ -320,6 +328,52 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       toast.error(msg);
     } finally {
       setIsCreatingShopifyOrder(false);
+    }
+  };
+
+  const handleMototaxi = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await storeMove(order.id, 'awaiting_mototaxi');
+      await supabase.from('orders').update({ delivery_method: 'mototaxi' }).eq('id', order.id);
+      toast.success('Pedido movido para Aguardando Mototaxista');
+    } catch {
+      toast.error('Erro ao mover pedido');
+    }
+  };
+
+  const handlePickup = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await storeMove(order.id, 'awaiting_pickup');
+      await supabase.from('orders').update({ delivery_method: 'pickup' }).eq('id', order.id);
+      toast.success('Pedido movido para Aguardando Retirada');
+    } catch {
+      toast.error('Erro ao mover pedido');
+    }
+  };
+
+  const handleMarkDelivered = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await storeMove(order.id, 'completed');
+      toast.success('Pedido concluído!');
+      // Send WhatsApp notification
+      const phone = order.customer?.whatsapp?.replace(/\D/g, '') || '';
+      if (phone) {
+        const msg = order.stage === 'awaiting_pickup'
+          ? `Olá ${order.customer?.instagram_handle || ''}! ✅ Seu pedido foi retirado com sucesso. Obrigado pela preferência! 🎉`
+          : `Olá ${order.customer?.instagram_handle || ''}! ✅ Seu pedido foi entregue com sucesso. Obrigado pela preferência! 🎉`;
+        try {
+          await supabase.functions.invoke('zapi-send-message', {
+            body: { phone, message: msg },
+          });
+        } catch (whatsErr) {
+          console.error('Erro ao enviar WhatsApp de conclusão:', whatsErr);
+        }
+      }
+    } catch {
+      toast.error('Erro ao concluir pedido');
     }
   };
   
@@ -683,6 +737,45 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           >
             <Store className="h-3 w-3" />
             Enviar ao PDV (Retirada)
+          </Button>
+
+          {/* Fulfillment buttons for paid orders */}
+          {(order.is_paid || order.paid_externally) && order.stage === 'paid' && (
+            <div className="flex gap-1.5 mt-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs gap-1 border-stage-awaiting-mototaxi/50 text-stage-awaiting-mototaxi hover:bg-stage-awaiting-mototaxi/10"
+                onClick={handleMototaxi}
+              >
+                <Bike className="h-3 w-3" />
+                Mototaxista
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs gap-1 border-stage-awaiting-pickup/50 text-stage-awaiting-pickup hover:bg-stage-awaiting-pickup/10"
+                onClick={handlePickup}
+              >
+                <MapPin className="h-3 w-3" />
+                Retirar Loja
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Mark as delivered/picked up for awaiting stages */}
+      {(order.stage === 'awaiting_mototaxi' || order.stage === 'awaiting_pickup') && (
+        <div className="mt-2">
+          <Button
+            variant="default"
+            size="sm"
+            className="w-full text-xs gap-1 bg-stage-completed hover:bg-stage-completed/90 text-white"
+            onClick={handleMarkDelivered}
+          >
+            <Check className="h-3 w-3" />
+            {order.stage === 'awaiting_pickup' ? 'Confirmar Retirada' : 'Confirmar Entrega'}
           </Button>
         </div>
       )}

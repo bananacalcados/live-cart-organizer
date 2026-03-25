@@ -79,6 +79,10 @@ export default {
           shipped: "hsl(var(--stage-shipped))",
           cancelled: "hsl(var(--stage-cancelled))",
           "collect-next-day": "hsl(var(--stage-collect-next-day))",
+          "awaiting-shipping": "hsl(var(--stage-awaiting-shipping))",
+          "awaiting-mototaxi": "hsl(var(--stage-awaiting-mototaxi))",
+          "awaiting-pickup": "hsl(var(--stage-awaiting-pickup))",
+          completed: "hsl(var(--stage-completed))",
         },
       },
       borderRadius: {

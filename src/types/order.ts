@@ -6,6 +6,10 @@ export type OrderStage =
   | 'no_response'
   | 'awaiting_payment'
   | 'paid'
+  | 'awaiting_shipping'
+  | 'awaiting_mototaxi'
+  | 'awaiting_pickup'
+  | 'completed'
   | 'shipped'
   | 'cancelled'
   | 'collect_next_day';
@@ -50,6 +54,10 @@ export const STAGES: Stage[] = [
   { id: 'no_response', title: 'Sem Resposta', color: 'bg-stage-no-response' },
   { id: 'awaiting_payment', title: 'Aguardando Pagamento', color: 'bg-stage-awaiting' },
   { id: 'paid', title: 'Pago', color: 'bg-stage-paid' },
+  { id: 'awaiting_shipping', title: 'Aguardando Envio', color: 'bg-stage-awaiting-shipping' },
+  { id: 'awaiting_mototaxi', title: 'Aguardando Mototaxista', color: 'bg-stage-awaiting-mototaxi' },
+  { id: 'awaiting_pickup', title: 'Aguardando Retirada', color: 'bg-stage-awaiting-pickup' },
+  { id: 'completed', title: 'Concluído', color: 'bg-stage-completed' },
   { id: 'shipped', title: 'Enviado', color: 'bg-stage-shipped' },
   { id: 'collect_next_day', title: 'Cobrar Dia Seguinte', color: 'bg-stage-collect-next-day' },
   { id: 'cancelled', title: 'Cancelado', color: 'bg-stage-cancelled' },
