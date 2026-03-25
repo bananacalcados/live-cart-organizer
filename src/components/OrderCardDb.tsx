@@ -216,12 +216,15 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       let zapiToken = '';
       let zapiClientToken = '';
       
+      let automationEnabled = false;
       if (order.event_id) {
         const { data: eventData } = await supabase
           .from('events')
-          .select('whatsapp_number_id')
+          .select('whatsapp_number_id, automation_enabled')
           .eq('id', order.event_id)
           .single();
+        
+        automationEnabled = eventData?.automation_enabled === true;
         
         if (eventData?.whatsapp_number_id) {
           const { data: whatsappData } = await supabase
