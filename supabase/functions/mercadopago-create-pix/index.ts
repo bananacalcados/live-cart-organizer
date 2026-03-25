@@ -175,6 +175,7 @@ serve(async (req) => {
         description: `Pedido #${orderId.substring(0, 8)}`,
         payment_method_id: "pix",
         payer: payerObj,
+        notification_url: `${supabaseUrl}/functions/v1/payment-webhook?gateway=mercadopago`,
       }),
     });
 

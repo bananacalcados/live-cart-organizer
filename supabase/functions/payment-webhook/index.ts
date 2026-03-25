@@ -149,6 +149,9 @@ serve(async (req) => {
     if (gateway === "vindi") {
       return await handleVindi(req, supabase, supabaseUrl, supabaseKey);
     }
+    if (gateway === "mercadopago") {
+      return await handleMercadoPago(req, supabase, supabaseUrl, supabaseKey);
+    }
     // For pagarme/appmax, just acknowledge — they have dedicated webhooks
     console.log(`Gateway "${gateway}" has its own webhook. Acknowledging.`);
     return new Response(JSON.stringify({ ok: true, routed: false }), {
@@ -162,6 +165,179 @@ serve(async (req) => {
     );
   }
 });
+
+async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: string, supabaseKey: string) {
+  const body = await req.json();
+  console.log("MercadoPago webhook:", JSON.stringify(body).substring(0, 500));
+
+  // MercadoPago IPN sends { action, type, data: { id } }
+  const action = body.action || body.type;
+  const paymentId = body.data?.id;
+
+  if (!paymentId) {
+    console.log("No payment ID in MercadoPago webhook, skipping.");
+    return new Response(JSON.stringify({ ok: true, skipped: true }), {
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
+
+  // Only process payment updates
+  if (body.type !== "payment") {
+    console.log(`MercadoPago webhook type=${body.type}, not payment. Skipping.`);
+    return new Response(JSON.stringify({ ok: true, skipped: true }), {
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
+
+  // Fetch real payment status from MercadoPago API
+  const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+  if (!accessToken) {
+    console.error("MERCADOPAGO_ACCESS_TOKEN not configured");
+    return new Response(JSON.stringify({ ok: true, error: "no_token" }), {
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
+
+  const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!mpRes.ok) {
+    console.error(`MercadoPago API error ${mpRes.status} for payment ${paymentId}`);
+    return new Response(JSON.stringify({ ok: true, error: "api_error" }), {
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
+
+  const mpPayment = await mpRes.json();
+  const status = mpPayment.status; // approved, pending, rejected, etc.
+  const mpIdStr = String(paymentId);
+
+  console.log(`MercadoPago payment ${paymentId} status=${status}`);
+
+  if (status !== "approved") {
+    console.log(`MercadoPago status ${status} not actionable, skipping.`);
+    return new Response(JSON.stringify({ ok: true, skipped: true, status }), {
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
+
+  // Find the order by mercadopago_payment_id
+  let updated = false;
+  let orderId: string | null = null;
+
+  // Try orders first
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, is_paid, store_id")
+    .eq("mercadopago_payment_id", mpIdStr)
+    .maybeSingle();
+
+  if (order) {
+    orderId = order.id;
+    if (order.is_paid) {
+      console.log(`[mercadopago] Order ${order.id} already paid, skipping.`);
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        is_paid: true,
+        paid_at: new Date().toISOString(),
+        stage: "paid",
+        notes: `🔔 Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
+      })
+      .eq("id", order.id);
+
+    if (error) {
+      console.error("Error updating order:", error);
+    } else {
+      console.log(`[mercadopago] Order ${order.id} marked as paid via webhook`);
+      updated = true;
+
+      // Notify payment confirmed
+      let lojaName = "centro";
+      if (order.store_id) {
+        const { data: storeData } = await supabase
+          .from("pos_stores")
+          .select("name")
+          .eq("id", order.store_id)
+          .single();
+        if (storeData?.name) lojaName = storeData.name.toLowerCase();
+      }
+      await notifyPaymentConfirmed({
+        pedido_id: order.id,
+        loja: lojaName,
+        gateway: "mercadopago",
+        transaction_id: mpIdStr,
+        source: "mercadopago-webhook",
+      });
+
+      // Auto-create Shopify order
+      await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
+    }
+  } else {
+    // Try pos_sales
+    const { data: sale } = await supabase
+      .from("pos_sales")
+      .select("id, status, store_id")
+      .eq("mercadopago_payment_id", mpIdStr)
+      .maybeSingle();
+
+    if (sale) {
+      orderId = sale.id;
+      if (sale.status === "paid" || sale.status === "completed") {
+        console.log(`[mercadopago] pos_sale ${sale.id} already paid, skipping.`);
+        return new Response(JSON.stringify({ ok: true, skipped: true, reason: "already_paid" }), {
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      const { error } = await supabase
+        .from("pos_sales")
+        .update({
+          status: "paid",
+          paid_at: new Date().toISOString(),
+          payment_gateway: "mercadopago",
+          notes: `🔔 Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
+        })
+        .eq("id", sale.id);
+
+      if (error) {
+        console.error("Error updating pos_sales:", error);
+      } else {
+        console.log(`[mercadopago] pos_sale ${sale.id} marked as paid via webhook`);
+        updated = true;
+
+        // Auto-create Tiny order
+        await autoCreateTinyOrder(supabase, sale.id, supabaseUrl, supabaseKey);
+      }
+    } else {
+      console.log(`[mercadopago] No order found for mercadopago_payment_id=${mpIdStr}`);
+    }
+  }
+
+  // Log to pos_checkout_attempts
+  if (orderId) {
+    await supabase.from("pos_checkout_attempts").insert({
+      sale_id: orderId,
+      payment_method: "pix",
+      status: "success",
+      error_message: `Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
+      gateway: "mercadopago",
+      transaction_id: mpIdStr,
+      metadata: { source: "webhook", status, gateway: "mercadopago" },
+    });
+  }
+
+  return new Response(
+    JSON.stringify({ ok: true, updated, order_id: orderId }),
+    { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+  );
+}
 
 async function handleVindi(req: Request, supabase: any, supabaseUrl: string, supabaseKey: string) {
   // Yapay can send JSON or form-urlencoded
