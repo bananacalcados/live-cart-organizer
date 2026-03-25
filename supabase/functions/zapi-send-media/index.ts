@@ -69,7 +69,7 @@ serve(async (req) => {
     }
 
     const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/${endpoint}`;
-    console.log(`Sending ${mediaType} to ${formattedPhone}:`, mediaUrl);
+    console.log(`Sending ${mediaType} to ${formattedPhone} via endpoint=${endpoint}:`, mediaUrl);
 
     const response = await fetch(zapiUrl, {
       method: 'POST',
