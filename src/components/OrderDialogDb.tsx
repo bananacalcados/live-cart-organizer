@@ -441,7 +441,8 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
         toast.success("Pedido atualizado!");
       } else {
         // Create or get customer
-        const newCustomer = await createOrUpdateCustomer(instagramHandle, whatsapp || undefined);
+        const normalizedWa = whatsapp ? normalizeBRPhone(whatsapp) : undefined;
+        const newCustomer = await createOrUpdateCustomer(instagramHandle, normalizedWa);
         if (!newCustomer) {
           toast.error("Erro ao criar cliente");
           return;
