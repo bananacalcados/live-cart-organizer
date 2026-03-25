@@ -282,6 +282,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     const order = get().orders.find((o) => o.id === orderId);
     if (!order) return;
 
+    const previousStage = order.stage;
     const updates: Record<string, unknown> = { stage: newStage };
     const stateUpdates: Partial<DbOrder> = { stage: newStage };
     
@@ -319,6 +320,31 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           o.id === orderId ? { ...o, ...stateUpdates } : o
         )
       }));
+
+      // Trigger Livete AI when order moves to 'new' (from any stage)
+      if (newStage === 'new' && previousStage !== 'new' && order.event_id) {
+        try {
+          const { data: eventData } = await supabase
+            .from('events')
+            .select('automation_enabled')
+            .eq('id', order.event_id)
+            .single();
+
+          if (eventData?.automation_enabled) {
+            console.log('🤖 [LIVETE] Triggering livete-start-order for order:', orderId);
+            const { data: liveteResp, error: liveteErr } = await supabase.functions.invoke('livete-start-order', {
+              body: { orderId },
+            });
+            if (liveteErr) {
+              console.error('🤖 [LIVETE] Error:', liveteErr);
+            } else {
+              console.log('🤖 [LIVETE] Success:', liveteResp);
+            }
+          }
+        } catch (liveteErr) {
+          console.error('🤖 [LIVETE] Exception:', liveteErr);
+        }
+      }
     } catch (error) {
       console.error('Error moving order:', error);
       toast.error('Erro ao mover pedido');
