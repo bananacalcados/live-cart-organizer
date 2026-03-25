@@ -1346,13 +1346,35 @@ export default function Inventory() {
                   </div>
                 ) : (
                   <>
-                    {resolvedUnresolved.length > 0 && (
-                      <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {pendingUnresolved.length > 0 && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="gap-2"
+                          onClick={handleAutoRelookup}
+                          disabled={isAutoRelooking}
+                        >
+                          {isAutoRelooking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                          Re-buscar Pendentes ({pendingUnresolved.length})
+                        </Button>
+                      )}
+                      {resolvedUnresolved.length > 0 && (
                         <Button variant="outline" size="sm" className="gap-2" onClick={handleGenerateAllGTINs}>
                           <Tag className="h-4 w-4" />
                           Gerar GTIN para resolvidos ({resolvedUnresolved.length})
                         </Button>
-                      </div>
+                      )}
+                    </div>
+                    {isAutoRelooking && (
+                      <Card>
+                        <CardContent className="p-3 space-y-2">
+                          <Progress value={relookupProgress.total > 0 ? (relookupProgress.done / relookupProgress.total) * 100 : 0} />
+                          <p className="text-xs text-muted-foreground">
+                            {relookupProgress.done}/{relookupProgress.total} verificados • {relookupProgress.found} encontrados
+                          </p>
+                        </CardContent>
+                      </Card>
                     )}
                     <ScrollArea className="h-[450px]">
                       <div className="space-y-2">
