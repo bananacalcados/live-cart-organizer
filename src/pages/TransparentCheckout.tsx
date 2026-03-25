@@ -1451,20 +1451,8 @@ export default function TransparentCheckout() {
               };
             }
 
-            await supabase.functions.invoke("shopify-create-live-order", {
-              body: {
-                items: liveCartRaw.items.map((item: any) => ({
-                  variantId: item.variantId,
-                  title: item.title || item.productTitle,
-                  price: item.price,
-                  quantity: item.quantity || 1,
-                })),
-                customer: enrichedCustomer,
-                sessionId: livePayload?.sessionId || null,
-                source: "live-checkout",
-                dedupeKey: dedupeKey || null,
-              },
-            });
+            // Shopify auto-create DISABLED — user wants manual control
+            // await supabase.functions.invoke("shopify-create-live-order", { ... });
 
             if (syncStorageKey) sessionStorage.setItem(syncStorageKey, "done");
           } catch (err) {
@@ -1496,13 +1484,10 @@ export default function TransparentCheckout() {
         }
       }
 
-      if (orderId && !liveCartRaw) {
-        try {
-          await supabase.functions.invoke("shopify-create-order", { body: { orderId } });
-        } catch (err) {
-          console.error("Error creating Shopify order:", err);
-        }
-      }
+      // Shopify auto-create DISABLED — user wants manual control
+      // if (orderId && !liveCartRaw) {
+      //   await supabase.functions.invoke("shopify-create-order", { body: { orderId } });
+      // }
     } catch (error) {
       paymentConfirmedRef.current = false;
       console.error("Error confirming checkout payment:", error);
