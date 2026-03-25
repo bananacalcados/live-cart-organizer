@@ -565,7 +565,7 @@ export default function Inventory() {
     setResolvingBarcode(null);
   };
 
-  // Auto re-lookup all pending unresolved barcodes against updated pos_products cache
+  // Auto re-lookup all pending unresolved barcodes against updated pos_products cache + Tiny API fallback
   const handleAutoRelookup = async () => {
     if (!activeCount) return;
     const pending = unresolvedBarcodes.filter(u => u.status === 'pending');
@@ -578,7 +578,7 @@ export default function Inventory() {
     for (let i = 0; i < pending.length; i++) {
       const item = pending[i];
       try {
-        // Search by barcode in pos_products
+        // Step 1: Search by barcode in local pos_products cache
         const { data: products } = await supabase
           .from('pos_products')
           .select('id, tiny_id, name, variant, sku, barcode, category')
@@ -586,8 +586,57 @@ export default function Inventory() {
           .eq('barcode', item.barcode)
           .limit(1);
 
-        if (products && products.length > 0) {
-          const product = products[0] as unknown as PosProduct;
+        let product: PosProduct | null = (products && products.length > 0) ? products[0] as unknown as PosProduct : null;
+
+        // Step 2: If not found locally, search Tiny API directly
+        if (!product) {
+          try {
+            const isBarcode = /^\d{8,14}$/.test(item.barcode);
+            const { data: tinyData } = await supabase.functions.invoke('pos-tiny-search-product', {
+              body: {
+                store_id: selectedStoreId,
+                query: isBarcode ? undefined : item.barcode,
+                gtin: isBarcode ? item.barcode : undefined,
+              },
+            });
+
+            if (tinyData?.products && tinyData.products.length > 0) {
+              const tp = tinyData.products[0];
+              // Save to pos_products cache so future lookups are instant
+              const nameInfo = tp.name || '';
+              const variantInfo = tp.variant || '';
+              const { data: upserted } = await supabase
+                .from('pos_products')
+                .upsert({
+                  store_id: selectedStoreId,
+                  tiny_id: Number(tp.tiny_id),
+                  sku: tp.sku || item.barcode,
+                  name: nameInfo,
+                  variant: variantInfo,
+                  size: tp.size || null,
+                  color: null,
+                  price: tp.price || 0,
+                  barcode: tp.barcode || item.barcode,
+                  stock: tp.stock || 0,
+                  category: tp.category || null,
+                  is_active: true,
+                  synced_at: new Date().toISOString(),
+                }, { onConflict: 'store_id,sku,variant', ignoreDuplicates: false })
+                .select('id, tiny_id, name, variant, sku, barcode, category')
+                .single();
+
+              if (upserted) {
+                product = upserted as unknown as PosProduct;
+              }
+            }
+            // Small delay to respect Tiny API rate limits
+            await new Promise(r => setTimeout(r, 1500));
+          } catch (tinyErr) {
+            console.error(`Tiny API fallback error for ${item.barcode}:`, tinyErr);
+          }
+        }
+
+        if (product) {
           const productName = product.name + (product.variant ? ` - ${product.variant}` : '');
 
           // Create alias
@@ -597,11 +646,11 @@ export default function Inventory() {
             product_tiny_id: product.tiny_id,
             product_name: productName,
             product_sku: product.sku,
-            notes: 'Re-busca automática após sync',
+            notes: 'Re-busca automática (cache + Tiny API)',
           }, { onConflict: 'store_id,original_barcode' });
 
           // Add/update count item
-          const existingByProduct = countItems.find(ci => ci.product_id === String(product.tiny_id));
+          const existingByProduct = countItems.find(ci => ci.product_id === String(product!.tiny_id));
           if (existingByProduct) {
             const newQty = existingByProduct.counted_quantity + item.scanned_quantity;
             await supabase.from('inventory_count_items').update({ counted_quantity: newQty }).eq('id', existingByProduct.id);
