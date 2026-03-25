@@ -22,6 +22,9 @@ function queueNextBatch(
       'Authorization': `Bearer ${authKey}`,
     },
     body: JSON.stringify(payload),
+  }).then(async (r) => {
+    // Consume body to avoid resource leak
+    await r.text();
   }).catch(e => console.error('Self-invoke failed:', e));
 
   const edgeRuntime = (globalThis as typeof globalThis & {
@@ -36,6 +39,7 @@ function queueNextBatch(
 /**
  * Server-side batch verification of Tiny stock.
  * Self-invokes until all items are verified — no browser needed.
+ * A watchdog cron re-triggers if stalled for >3 min.
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -52,6 +56,11 @@ serve(async (req) => {
     const safeBatchSize = Math.max(1, Math.min(Number(batch_size) || DEFAULT_BATCH_SIZE, MAX_SAFE_BATCH_SIZE));
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    // ── Heartbeat: record that this batch is running ──
+    await supabase.from('inventory_counts').update({
+      last_batch_at: new Date().toISOString(),
+    }).eq('id', count_id);
 
     // Get store config
     const { data: store } = await supabase
@@ -99,6 +108,7 @@ serve(async (req) => {
         status: 'reviewing',
         total_products: allItems?.length || 0,
         divergent_products: divergent.length,
+        last_batch_at: new Date().toISOString(),
       }).eq('id', count_id);
 
       // If also_correct, enqueue all divergent items
@@ -208,6 +218,11 @@ serve(async (req) => {
 
     const newRemaining = totalRemaining - items.length;
     console.log(`[inventory-verify-and-correct] Verified ${verified}, errors ${errors}, remaining ~${newRemaining}`);
+
+    // ── Heartbeat after batch ──
+    await supabase.from('inventory_counts').update({
+      last_batch_at: new Date().toISOString(),
+    }).eq('id', count_id);
 
     const isDone = newRemaining <= 0;
 

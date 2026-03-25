@@ -6,9 +6,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+function queueNextBatch(
+  supabaseUrl: string,
+  authKey: string,
+  payload: { count_id: string; batch_size: number },
+) {
+  const nextRun = fetch(`${supabaseUrl}/functions/v1/inventory-correct-stock`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authKey}`,
+    },
+    body: JSON.stringify(payload),
+  }).then(async (r) => {
+    await r.text(); // consume body
+  }).catch(e => console.error('Self-invoke failed:', e));
+
+  const edgeRuntime = (globalThis as typeof globalThis & {
+    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+  }).EdgeRuntime;
+
+  if (edgeRuntime?.waitUntil) {
+    edgeRuntime.waitUntil(nextRun);
+  }
+}
+
 /**
  * Processes pending items from inventory_correction_queue one by one with throttling.
  * Self-invokes to continue processing until all items are done — no browser needed.
+ * A watchdog cron re-triggers if stalled for >3 min.
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -21,8 +47,14 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || serviceRoleKey;
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    // ── Heartbeat: record that this batch is running ──
+    await supabase.from('inventory_counts').update({
+      last_batch_at: new Date().toISOString(),
+    }).eq('id', count_id);
 
     // Get pending items
     const { data: items, error: fetchError } = await supabase
@@ -40,6 +72,7 @@ serve(async (req) => {
       await supabase.from('inventory_counts').update({
         status: 'completed',
         completed_at: new Date().toISOString(),
+        last_batch_at: new Date().toISOString(),
       }).eq('id', count_id);
 
       return new Response(JSON.stringify({ success: true, processed: 0, remaining: 0, done: true }), {
@@ -130,23 +163,15 @@ serve(async (req) => {
     await supabase.from('inventory_counts').update({
       corrected_products: completedCount,
       correction_errors: errorCount,
+      last_batch_at: new Date().toISOString(),
     }).eq('id', count_id);
 
     const isDone = remaining - processed <= 0;
 
-    // Self-invoke if there are more items to process
+    // Self-invoke if there are more items to process (with waitUntil!)
     if (!isDone) {
       try {
-        const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || serviceRoleKey;
-        fetch(`${supabaseUrl}/functions/v1/inventory-correct-stock`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${anonKey}`,
-          },
-          body: JSON.stringify({ count_id, batch_size }),
-        }).catch(e => console.error('Self-invoke failed:', e));
-        // Don't await — fire and forget so this response returns immediately
+        queueNextBatch(supabaseUrl, anonKey, { count_id, batch_size });
         console.log(`Self-invoked for count_id=${count_id}, remaining ~${remaining - processed}`);
       } catch (e) {
         console.error('Self-invoke error:', e);

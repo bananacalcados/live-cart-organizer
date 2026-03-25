@@ -1,0 +1,1 @@
+ALTER TABLE public.inventory_counts ADD COLUMN IF NOT EXISTS last_batch_at timestamptz;
