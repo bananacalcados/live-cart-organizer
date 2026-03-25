@@ -34,7 +34,7 @@ const Index = () => {
   const [selectedStage, setSelectedStage] = useState<OrderStage | "all" | "unpaid">("all");
   const [searchQuery, setSearchQuery] = useState("");
   
-  const { currentEventId, getCurrentEvent, fetchEvents } = useEventStore();
+  const { currentEventId, getCurrentEvent, fetchEvents, updateEvent } = useEventStore();
   const { fetchCustomers } = useCustomerStore();
   const { orders, isLoading, fetchOrdersByEvent, checkNoResponseOrders, getUnpaidOrdersCount, subscribeToEventOrders } = useDbOrderStore();
 
