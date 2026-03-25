@@ -2000,22 +2000,24 @@ export default function Inventory() {
             <div>
               <h3 className="text-xl font-bold text-foreground">Verificando saldos no Tiny</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Consultando estoque de cada produto. Por favor, aguarde...
+                {verifyProgress.current === 0 && verifyProgress.total > 0
+                  ? `Preparando verificação de ${verifyProgress.total} produtos...`
+                  : 'Consultando estoque de cada produto. Por favor, aguarde...'}
               </p>
             </div>
             <div className="space-y-2">
               <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} className="h-4" />
               <p className="text-sm font-medium text-foreground">
                 {verifyProgress.current} de {verifyProgress.total} produtos verificados
-                {verifyProgress.total > 0 && (
+                {verifyProgress.total > 0 && verifyProgress.current > 0 && (
                   <span className="text-muted-foreground ml-2">
                     ({Math.round((verifyProgress.current / verifyProgress.total) * 100)}%)
                   </span>
                 )}
               </p>
-              {verifyProgress.total > 0 && (
+              {verifyProgress.total > 0 && verifyProgress.current > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Tempo estimado restante: ~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 2.5) / 60)} min
+                  Tempo estimado restante: ~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 1.5) / 60)} min
                 </p>
               )}
             </div>
