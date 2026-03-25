@@ -166,8 +166,82 @@ serve(async (req) => {
   }
 });
 
+async function validateMercadoPagoSignature(req: Request, body: string): Promise<boolean> {
+  const webhookSecret = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
+  if (!webhookSecret) {
+    console.log("[mercadopago] MERCADOPAGO_WEBHOOK_SECRET not set, skipping signature validation");
+    return true; // Allow if secret not configured (graceful degradation)
+  }
+
+  const xSignature = req.headers.get("x-signature");
+  const xRequestId = req.headers.get("x-request-id");
+
+  if (!xSignature || !xRequestId) {
+    console.warn("[mercadopago] Missing x-signature or x-request-id headers");
+    return false;
+  }
+
+  try {
+    // Parse x-signature: "ts=...,v1=..."
+    const parts: Record<string, string> = {};
+    for (const part of xSignature.split(",")) {
+      const [key, ...vals] = part.split("=");
+      parts[key.trim()] = vals.join("=").trim();
+    }
+
+    const ts = parts["ts"];
+    const v1 = parts["v1"];
+    if (!ts || !v1) {
+      console.warn("[mercadopago] Invalid x-signature format");
+      return false;
+    }
+
+    // Extract data.id from body
+    const parsed = JSON.parse(body);
+    const dataId = parsed?.data?.id;
+
+    // Build the manifest string as per MP docs
+    const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+
+    // Compute HMAC-SHA256
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(webhookSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(manifest));
+    const computed = Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, "0")).join("");
+
+    if (computed !== v1) {
+      console.error(`[mercadopago] Signature mismatch: computed=${computed.substring(0, 16)}... expected=${v1.substring(0, 16)}...`);
+      return false;
+    }
+
+    console.log("[mercadopago] Signature validated successfully");
+    return true;
+  } catch (err) {
+    console.error("[mercadopago] Signature validation error:", err);
+    return false;
+  }
+}
+
 async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: string, supabaseKey: string) {
-  const body = await req.json();
+  const rawBody = await req.text();
+  
+  // Validate webhook signature
+  const isValid = await validateMercadoPagoSignature(req, rawBody);
+  if (!isValid) {
+    console.error("[mercadopago] Invalid webhook signature, rejecting");
+    return new Response(JSON.stringify({ ok: false, error: "invalid_signature" }), {
+      status: 401,
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
+
+  const body = JSON.parse(rawBody);
   console.log("MercadoPago webhook:", JSON.stringify(body).substring(0, 500));
 
   // MercadoPago IPN sends { action, type, data: { id } }
