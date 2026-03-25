@@ -1606,7 +1606,7 @@ export default function Inventory() {
                             {verifyProgress.total > 0 && verifyProgress.current === 0 && (
                               <> • Iniciando verificação...</>
                             )}
-                            {' '}• Não feche esta página
+                            {' '}• ✅ Você pode fechar esta página
                           </p>
                         </div>
                       )}
