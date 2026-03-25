@@ -656,8 +656,8 @@ async function updateOrder(
       transaction_id: String(tokenTransaction),
       source: 'vindi-webhook',
     });
-    // Auto-create Shopify order
-    await autoCreateShopifyOrder(supabase, orderId, "orders", supabaseUrl, supabaseKey);
+    // Auto-create Shopify order DISABLED — user wants manual control
+    // await autoCreateShopifyOrder(supabase, orderId, "orders", supabaseUrl, supabaseKey);
     return true;
   }
   // Reverter pagamento se já estava pago e veio status de falha (ex: antifraude reprovou)

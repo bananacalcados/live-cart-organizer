@@ -1484,13 +1484,10 @@ export default function TransparentCheckout() {
         }
       }
 
-      if (orderId && !liveCartRaw) {
-        try {
-          await supabase.functions.invoke("shopify-create-order", { body: { orderId } });
-        } catch (err) {
-          console.error("Error creating Shopify order:", err);
-        }
-      }
+      // Shopify auto-create DISABLED — user wants manual control
+      // if (orderId && !liveCartRaw) {
+      //   await supabase.functions.invoke("shopify-create-order", { body: { orderId } });
+      // }
     } catch (error) {
       paymentConfirmedRef.current = false;
       console.error("Error confirming checkout payment:", error);
