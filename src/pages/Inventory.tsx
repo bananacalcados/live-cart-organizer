@@ -218,7 +218,7 @@ export default function Inventory() {
         .from('inventory_counts')
         .select('*')
         .eq('store_id', selectedStoreId)
-        .in('status', ['counting', 'reviewing', 'correcting'])
+        .in('status', ['counting', 'reviewing', 'correcting', 'verifying'])
         .order('created_at', { ascending: false })
         .limit(1);
       if (data && data.length > 0) {
@@ -291,6 +291,52 @@ export default function Inventory() {
 
     pollProgress();
     const interval = setInterval(pollProgress, 5000);
+    return () => clearInterval(interval);
+  }, [activeCount?.id, activeCount?.status]);
+
+  // Poll verification progress when status is 'verifying'
+  useEffect(() => {
+    if (!activeCount || activeCount.status !== 'verifying') return;
+
+    setIsVerifying(true);
+
+    const pollVerify = async () => {
+      const { count: totalCount } = await supabase
+        .from('inventory_count_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id);
+
+      const { count: pendingCount } = await supabase
+        .from('inventory_count_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id)
+        .is('current_stock', null);
+
+      const total = totalCount || 0;
+      const verified = total - (pendingCount || 0);
+      setVerifyProgress({ current: verified, total });
+
+      // Check if verification finished (status changed to 'reviewing' by the edge function)
+      if (pendingCount === 0 && total > 0) {
+        const { data: refreshed } = await supabase
+          .from('inventory_counts')
+          .select('*')
+          .eq('id', activeCount.id)
+          .single();
+        if (refreshed) {
+          setActiveCount(refreshed as unknown as InventoryCount);
+          if (refreshed.status !== 'verifying') {
+            setIsVerifying(false);
+            loadCountItems(activeCount.id);
+            setActiveTab('review');
+            toast.success('Verificação de saldos finalizada! Confira as divergências.');
+          }
+        }
+      }
+    };
+
+    pollVerify();
+    const interval = setInterval(pollVerify, 5000);
     return () => clearInterval(interval);
   }, [activeCount?.id, activeCount?.status]);
 
@@ -857,7 +903,7 @@ export default function Inventory() {
       toast.success(`${uncounted.length} produtos não bipados adicionados com qty=0`);
     }
 
-    // Step 2: Count total items to verify and show immediate progress
+    // Step 2: Set status to 'verifying' and fire-and-forget
     const { count: totalToVerify } = await supabase
       .from('inventory_count_items')
       .select('id', { count: 'exact', head: true })
@@ -866,34 +912,18 @@ export default function Inventory() {
 
     const totalItems = totalToVerify || 0;
     setVerifyProgress({ current: 0, total: totalItems });
-    
-    const estimatedMinutes = Math.ceil((totalItems * 1.5) / 60);
-    toast.info(`Verificando saldos de ${totalItems} produtos no Tiny... Estimativa: ~${estimatedMinutes} min. Não feche a página.`);
-    
-    let done = false;
-    let totalVerified = 0;
-    
-    while (!done) {
-      try {
-        const { data } = await supabase.functions.invoke('inventory-verify-and-correct', {
-          body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
-        });
-        if (data?.done) {
-          done = true;
-        }
-        totalVerified += (data?.verified || 0);
-        const remaining = data?.remaining || 0;
-        setVerifyProgress({ current: totalVerified, total: totalVerified + remaining });
-      } catch (e) {
-        console.error('Verify batch error:', e);
-        await new Promise(r => setTimeout(r, 5000));
-      }
-    }
 
-    setIsVerifying(false);
-    loadCountItems(activeCount.id);
-    setActiveTab('review');
-    toast.success('Verificação de saldos finalizada! Confira as divergências.');
+    // Mark count as 'verifying'
+    await supabase.from('inventory_counts').update({ status: 'verifying' }).eq('id', activeCount.id);
+    setActiveCount({ ...activeCount, status: 'verifying' } as unknown as InventoryCount);
+
+    const estimatedMinutes = Math.ceil((totalItems * 1.5) / 60);
+    toast.success(`Verificação iniciada! ~${estimatedMinutes} min. Você pode fechar a página — o processamento continua no servidor.`);
+
+    // Fire-and-forget: the edge function self-invokes until done
+    supabase.functions.invoke('inventory-verify-and-correct', {
+      body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
+    }).catch(e => console.error('Initial verify invoke error:', e));
   };
 
   const handleStartCorrection = async () => {
@@ -1538,27 +1568,19 @@ export default function Inventory() {
                             <Button
                               variant="outline"
                               onClick={async () => {
+                                // Reset pending items to have null current_stock so they get re-verified
+                                const pendingIds = countItems.filter(i => i.current_stock === null || i.current_stock === -999).map(i => i.id);
+                                // Set status to verifying
+                                await supabase.from('inventory_counts').update({ status: 'verifying' }).eq('id', activeCount.id);
+                                setActiveCount({ ...activeCount, status: 'verifying' } as unknown as InventoryCount);
                                 setIsVerifying(true);
-                                toast.info('Re-verificando saldos no Tiny (server-side)...');
-                                let done = false;
-                                let totalVerified = 0;
-                                while (!done) {
-                                  try {
-                                    const { data } = await supabase.functions.invoke('inventory-verify-and-correct', {
-                                      body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
-                                    });
-                                    if (data?.done) done = true;
-                                    totalVerified += (data?.verified || 0);
-                                    const remaining = data?.remaining || 0;
-                                    setVerifyProgress({ current: totalVerified, total: totalVerified + remaining });
-                                  } catch (e) {
-                                    console.error('Verify batch error:', e);
-                                    await new Promise(r => setTimeout(r, 5000));
-                                  }
-                                }
-                                setIsVerifying(false);
-                                loadCountItems(activeCount.id);
-                                toast.success('Verificação de saldos concluída!');
+                                
+                                // Fire-and-forget
+                                supabase.functions.invoke('inventory-verify-and-correct', {
+                                  body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
+                                }).catch(e => console.error('Re-verify invoke error:', e));
+                                
+                                toast.success('Re-verificação iniciada! Você pode fechar a página.');
                               }}
                               className="gap-2"
                               disabled={isVerifying}
@@ -1584,7 +1606,7 @@ export default function Inventory() {
                             {verifyProgress.total > 0 && verifyProgress.current === 0 && (
                               <> • Iniciando verificação...</>
                             )}
-                            {' '}• Não feche esta página
+                            {' '}• ✅ Você pode fechar esta página
                           </p>
                         </div>
                       )}
@@ -2026,36 +2048,31 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* Verification Progress Overlay */}
+      {/* Verification Progress Overlay - non-blocking */}
       {isVerifying && (
-        <div className="fixed inset-0 z-50 bg-background/95 flex flex-col items-center justify-center p-6">
-          <div className="w-full max-w-md space-y-6 text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-            <div>
-              <h3 className="text-xl font-bold text-foreground">Verificando saldos no Tiny</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                {verifyProgress.current === 0 && verifyProgress.total > 0
-                  ? `Preparando verificação de ${verifyProgress.total} produtos...`
-                  : 'Consultando estoque de cada produto. Por favor, aguarde...'}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} className="h-4" />
-              <p className="text-sm font-medium text-foreground">
-                {verifyProgress.current} de {verifyProgress.total} produtos verificados
+        <div className="fixed bottom-4 right-4 z-50 w-96 max-w-[calc(100vw-2rem)]">
+          <Card className="border-primary/30 shadow-lg">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-primary flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="font-semibold text-sm">Verificando saldos no servidor</p>
+                  <p className="text-xs text-muted-foreground">
+                    {verifyProgress.current === 0 && verifyProgress.total > 0
+                      ? `Preparando ${verifyProgress.total} produtos...`
+                      : '✅ Você pode fechar esta página'}
+                  </p>
+                </div>
+              </div>
+              <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} className="h-3" />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{verifyProgress.current}/{verifyProgress.total} verificados</span>
                 {verifyProgress.total > 0 && verifyProgress.current > 0 && (
-                  <span className="text-muted-foreground ml-2">
-                    ({Math.round((verifyProgress.current / verifyProgress.total) * 100)}%)
-                  </span>
+                  <span>~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 1.5) / 60)} min restantes</span>
                 )}
-              </p>
-              {verifyProgress.total > 0 && verifyProgress.current > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Tempo estimado restante: ~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 1.5) / 60)} min
-                </p>
-              )}
-            </div>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>
