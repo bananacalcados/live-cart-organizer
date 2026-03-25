@@ -397,6 +397,10 @@ export default function Admin() {
           <TabsContent value="zapi" className="mt-4">
             <ZApiInstanceManager />
           </TabsContent>
+
+          <TabsContent value="knowledge" className="mt-4">
+            <AiKnowledgeBase />
+          </TabsContent>
         </Tabs>
       </main>
     </div>
