@@ -7,13 +7,8 @@ const corsHeaders = {
 };
 
 /**
- * Server-side batch verification of Tiny stock + optional correction queueing.
- * Processes items that still have current_stock = NULL in inventory_count_items.
- * Designed to be called repeatedly until all items are verified.
- * 
- * Input: { count_id, store_id, batch_size?, also_correct? }
- * - batch_size: how many items to verify per call (default 20, max ~25 to fit in 50s)
- * - also_correct: if true, after all items are verified, enqueue divergent items for correction
+ * Server-side batch verification of Tiny stock.
+ * Self-invokes until all items are verified — no browser needed.
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -24,10 +19,10 @@ serve(async (req) => {
     const { count_id, store_id, batch_size = 20, also_correct = false } = await req.json();
     if (!count_id || !store_id) throw new Error('count_id and store_id are required');
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // Get store config
     const { data: store } = await supabase
@@ -79,7 +74,6 @@ serve(async (req) => {
 
       // If also_correct, enqueue all divergent items
       if (also_correct && divergent.length > 0) {
-        // Check if queue already exists
         const { count: existingQueue } = await supabase
           .from('inventory_correction_queue')
           .select('id', { count: 'exact', head: true })
@@ -104,7 +98,6 @@ serve(async (req) => {
           }
 
           await supabase.from('inventory_counts').update({ status: 'correcting' }).eq('id', count_id);
-
           console.log(`[inventory-verify-and-correct] Enqueued ${toCorrect.length} items for correction`);
         }
       }
@@ -136,7 +129,6 @@ serve(async (req) => {
         const data = await resp.json();
 
         if (data.retorno?.status === 'Erro') {
-          // Product might not exist in Tiny — set stock to 0
           const errMsg = data.retorno?.erros?.[0]?.erro || 'Unknown';
           console.warn(`[verify] product ${item.product_id}: Tiny error: ${errMsg}, setting stock=0`);
           const divergence = item.counted_quantity - 0;
@@ -174,7 +166,6 @@ serve(async (req) => {
         }
       } catch (e) {
         console.error(`[verify] Error for product ${item.product_id}:`, e);
-        // Set stock to -999 as error marker so we don't retry forever
         await supabase.from('inventory_count_items').update({
           current_stock: -999,
           divergence: null,
@@ -182,19 +173,39 @@ serve(async (req) => {
         errors++;
       }
 
-      // Throttle: ~1.5s between calls to respect Tiny rate limits (~40 req/min)
+      // Throttle: ~1.5s between calls
       await new Promise(r => setTimeout(r, 1500));
     }
 
     const newRemaining = totalRemaining - items.length;
     console.log(`[inventory-verify-and-correct] Verified ${verified}, errors ${errors}, remaining ~${newRemaining}`);
 
+    const isDone = newRemaining <= 0;
+
+    // Self-invoke if there are more items to process
+    if (!isDone) {
+      try {
+        const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || serviceRoleKey;
+        fetch(`${supabaseUrl}/functions/v1/inventory-verify-and-correct`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${anonKey}`,
+          },
+          body: JSON.stringify({ count_id, store_id, batch_size, also_correct }),
+        }).catch(e => console.error('Self-invoke failed:', e));
+        console.log(`Self-invoked for count_id=${count_id}, remaining ~${newRemaining}`);
+      } catch (e) {
+        console.error('Self-invoke error:', e);
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
       verified,
       errors,
       remaining: Math.max(0, newRemaining),
-      done: newRemaining <= 0,
+      done: isDone,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
