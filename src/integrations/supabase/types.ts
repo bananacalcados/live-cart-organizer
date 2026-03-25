@@ -8647,6 +8647,7 @@ export type Database = {
           order_id: string
         }[]
       }
+      check_order_paid: { Args: { p_order_id: string }; Returns: boolean }
       generate_ean13_barcode: { Args: never; Returns: string }
       get_conversation_counts: {
         Args: never
