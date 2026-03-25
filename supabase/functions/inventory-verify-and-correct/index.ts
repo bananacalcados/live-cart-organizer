@@ -6,6 +6,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const VERIFY_DELAY_MS = 1500;
+const DEFAULT_BATCH_SIZE = 8;
+const MAX_SAFE_BATCH_SIZE = 8;
+
+function queueNextBatch(
+  supabaseUrl: string,
+  authKey: string,
+  payload: { count_id: string; store_id: string; batch_size: number; also_correct: boolean },
+) {
+  const nextRun = fetch(`${supabaseUrl}/functions/v1/inventory-verify-and-correct`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authKey}`,
+    },
+    body: JSON.stringify(payload),
+  }).catch(e => console.error('Self-invoke failed:', e));
+
+  const edgeRuntime = (globalThis as typeof globalThis & {
+    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+  }).EdgeRuntime;
+
+  if (edgeRuntime?.waitUntil) {
+    edgeRuntime.waitUntil(nextRun);
+  }
+}
+
 /**
  * Server-side batch verification of Tiny stock.
  * Self-invokes until all items are verified — no browser needed.
@@ -16,11 +43,13 @@ serve(async (req) => {
   }
 
   try {
-    const { count_id, store_id, batch_size = 20, also_correct = false } = await req.json();
+    const { count_id, store_id, batch_size = DEFAULT_BATCH_SIZE, also_correct = false } = await req.json();
     if (!count_id || !store_id) throw new Error('count_id and store_id are required');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const functionAuthKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || serviceRoleKey;
+    const safeBatchSize = Math.max(1, Math.min(Number(batch_size) || DEFAULT_BATCH_SIZE, MAX_SAFE_BATCH_SIZE));
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -43,7 +72,7 @@ serve(async (req) => {
       .eq('count_id', count_id)
       .is('current_stock', null)
       .order('created_at', { ascending: true })
-      .limit(Math.min(batch_size, 25));
+      .limit(safeBatchSize);
 
     if (fetchErr) throw fetchErr;
 
@@ -174,7 +203,7 @@ serve(async (req) => {
       }
 
       // Throttle: ~1.5s between calls
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, VERIFY_DELAY_MS));
     }
 
     const newRemaining = totalRemaining - items.length;
@@ -185,16 +214,13 @@ serve(async (req) => {
     // Self-invoke if there are more items to process
     if (!isDone) {
       try {
-        const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || serviceRoleKey;
-        fetch(`${supabaseUrl}/functions/v1/inventory-verify-and-correct`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${anonKey}`,
-          },
-          body: JSON.stringify({ count_id, store_id, batch_size, also_correct }),
-        }).catch(e => console.error('Self-invoke failed:', e));
-        console.log(`Self-invoked for count_id=${count_id}, remaining ~${newRemaining}`);
+        queueNextBatch(supabaseUrl, functionAuthKey, {
+          count_id,
+          store_id,
+          batch_size: safeBatchSize,
+          also_correct,
+        });
+        console.log(`Self-invoked for count_id=${count_id}, remaining ~${newRemaining}, batch_size=${safeBatchSize}`);
       } catch (e) {
         console.error('Self-invoke error:', e);
       }
