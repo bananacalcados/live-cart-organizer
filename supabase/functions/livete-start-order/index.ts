@@ -152,7 +152,7 @@ serve(async (req) => {
       initialStage = 'endereco';
     }
 
-    // 7. Send message via Meta WhatsApp
+    // 7. Send message via Meta or Z-API
     if (metaPhoneNumberId) {
       await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
         method: 'POST',
@@ -164,26 +164,16 @@ serve(async (req) => {
         }),
       });
     } else {
-      // Fallback to Z-API
-      const { data: wnData } = await supabase
-        .from('whatsapp_numbers')
-        .select('zapi_instance_id, zapi_token, zapi_client_token')
-        .eq('id', whatsappNumberId)
-        .single();
-
-      if (wnData) {
-        await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone,
-            message: firstMessage,
-            instanceId: (wnData as any).zapi_instance_id,
-            token: (wnData as any).zapi_token,
-            clientToken: (wnData as any).zapi_client_token,
-          }),
-        });
-      }
+      // Z-API — pass whatsapp_number_id so zapi-send-message resolves credentials from DB
+      await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone,
+          message: firstMessage,
+          whatsapp_number_id: whatsappNumberId,
+        }),
+      });
     }
 
     // 8. Save outgoing message to whatsapp_messages
