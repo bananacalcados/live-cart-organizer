@@ -93,7 +93,7 @@ serve(async (req) => {
       }
     }
 
-    // 5. Build product description
+    // 5. Build product description & pricing
     const products = (order.products as any[]) || [];
     const productLines = products.map((p: any) =>
       `${p.quantity || 1}x ${p.title}${p.variant ? ` (${p.variant})` : ''} — R$${Number(p.price || 0).toFixed(2)}`
@@ -103,7 +103,25 @@ serve(async (req) => {
       sum + (Number(p.price || 0) * Number(p.quantity || 1)), 0
     );
 
-    // 6. Build first message
+    // Calculate discount
+    let discountAmount = 0;
+    if (order.discount_value && Number(order.discount_value) > 0) {
+      if (order.discount_type === 'fixed') {
+        discountAmount = Number(order.discount_value);
+      } else if (order.discount_type === 'percentage') {
+        discountAmount = subtotal * (Number(order.discount_value) / 100);
+      }
+    }
+    const total = Math.max(0, subtotal - discountAmount);
+
+    // Build pricing lines
+    let pricingBlock = `💰 Subtotal: R$${subtotal.toFixed(2)}`;
+    if (discountAmount > 0) {
+      pricingBlock += `\n🏷️ Desconto: -R$${discountAmount.toFixed(2)}`;
+      pricingBlock += `\n✅ *Total: R$${total.toFixed(2)}*`;
+    }
+
+    // 6. Build first message (always ends with a question)
     const igHandle = customer.instagram_handle || 'Cliente';
     const igName = igHandle.startsWith('@') ? igHandle : `@${igHandle}`;
 
@@ -111,7 +129,6 @@ serve(async (req) => {
     let initialStage: string;
 
     if (savedAddress) {
-      // Customer has address — ask to confirm
       const addrStr = [
         savedAddress.address,
         savedAddress.address_number ? `nº ${savedAddress.address_number}` : '',
@@ -123,17 +140,15 @@ serve(async (req) => {
 
       firstMessage = `Olá ${igName}! 😊 Já separamos seu pedido:\n\n` +
         `${productLines}\n\n` +
-        `💰 Subtotal: R$${subtotal.toFixed(2)}\n\n` +
+        `${pricingBlock}\n\n` +
         `O endereço pra envio ainda é este?\n📍 ${addrStr}\n\n` +
-        `Responde *sim* pra confirmar ou me manda o novo endereço completo!`;
+        `Posso confirmar esse endereço ou prefere atualizar?`;
       initialStage = 'confirmar_endereco';
     } else {
-      // No address — ask for it
       firstMessage = `Olá ${igName}! 😊 Já separamos seu pedido:\n\n` +
         `${productLines}\n\n` +
-        `💰 Subtotal: R$${subtotal.toFixed(2)}\n\n` +
-        `Qual será o endereço completo pra envio? (Rua, número, bairro, cidade, estado e CEP)\n\n` +
-        `Se preferir *retirar na loja*, é só me avisar! 😉`;
+        `${pricingBlock}\n\n` +
+        `Pra onde devemos enviar? Me manda o endereço completo (Rua, número, bairro, cidade, estado e CEP) ou prefere *retirar na loja*?`;
       initialStage = 'endereco';
     }
 
