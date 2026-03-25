@@ -8671,6 +8671,10 @@ export type Database = {
           whatsapp_number_id: string
         }[]
       }
+      get_customer_last_address: {
+        Args: { p_customer_id: string }
+        Returns: Json
+      }
       get_customer_store_seller_map: {
         Args: never
         Returns: {
