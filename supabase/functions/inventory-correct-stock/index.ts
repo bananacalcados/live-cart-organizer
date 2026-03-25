@@ -8,7 +8,7 @@ const corsHeaders = {
 
 /**
  * Processes pending items from inventory_correction_queue one by one with throttling.
- * Designed to be called repeatedly until all items are processed.
+ * Self-invokes to continue processing until all items are done — no browser needed.
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -19,10 +19,10 @@ serve(async (req) => {
     const { count_id, batch_size = 10 } = await req.json();
     if (!count_id) throw new Error('count_id is required');
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // Get pending items
     const { data: items, error: fetchError } = await supabase
@@ -36,8 +36,12 @@ serve(async (req) => {
 
     if (fetchError) throw fetchError;
     if (!items || items.length === 0) {
-      // Update count status to completed
-      await supabase.from('inventory_counts').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', count_id);
+      // All done — update count status to completed
+      await supabase.from('inventory_counts').update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      }).eq('id', count_id);
+
       return new Response(JSON.stringify({ success: true, processed: 0, remaining: 0, done: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -62,7 +66,6 @@ serve(async (req) => {
       }).eq('id', item.id);
 
       try {
-        // Build estoque payload as JSON (Tiny expects {"estoque": {...}})
         const estoqueJson = JSON.stringify({
           estoque: {
             idProduto: Number(item.product_id),
@@ -86,24 +89,17 @@ serve(async (req) => {
           await supabase.from('inventory_correction_queue').update({
             status: 'error', error_message: errMsg
           }).eq('id', item.id);
-
-          // Also update count item
           await supabase.from('inventory_count_items').update({
             correction_status: 'error', correction_error: errMsg
           }).eq('id', item.count_item_id);
-
           errors++;
         } else {
-          const newStock = data.retorno?.registros?.[0]?.registro?.saldoEstoque;
           await supabase.from('inventory_correction_queue').update({
             status: 'completed', processed_at: new Date().toISOString()
           }).eq('id', item.id);
-
-          // Update count item
           await supabase.from('inventory_count_items').update({
             correction_status: 'corrected', corrected_at: new Date().toISOString()
           }).eq('id', item.count_item_id);
-
           processed++;
         }
       } catch (e) {
@@ -117,7 +113,7 @@ serve(async (req) => {
         errors++;
       }
 
-      // Throttle: wait 2s between API calls to respect rate limits (~30/min)
+      // Throttle: 2s between API calls
       await new Promise(r => setTimeout(r, 2000));
     }
 
@@ -127,18 +123,40 @@ serve(async (req) => {
       .select('status')
       .eq('count_id', count_id);
 
-    const completed = stats?.filter(s => s.status === 'completed').length || 0;
+    const completedCount = stats?.filter(s => s.status === 'completed').length || 0;
     const errorCount = stats?.filter(s => s.status === 'error' && (s as any).attempts >= 5).length || 0;
     const remaining = stats?.filter(s => ['pending', 'processing', 'error'].includes(s.status)).length || 0;
 
     await supabase.from('inventory_counts').update({
-      corrected_products: completed,
+      corrected_products: completedCount,
       correction_errors: errorCount,
     }).eq('id', count_id);
 
+    const isDone = remaining - processed <= 0;
+
+    // Self-invoke if there are more items to process
+    if (!isDone) {
+      try {
+        const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || serviceRoleKey;
+        fetch(`${supabaseUrl}/functions/v1/inventory-correct-stock`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${anonKey}`,
+          },
+          body: JSON.stringify({ count_id, batch_size }),
+        }).catch(e => console.error('Self-invoke failed:', e));
+        // Don't await — fire and forget so this response returns immediately
+        console.log(`Self-invoked for count_id=${count_id}, remaining ~${remaining - processed}`);
+      } catch (e) {
+        console.error('Self-invoke error:', e);
+      }
+    }
+
     return new Response(JSON.stringify({
-      success: true, processed, errors, remaining: remaining - processed,
-      done: remaining - processed <= 0
+      success: true, processed, errors,
+      remaining: remaining - processed,
+      done: isDone,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
