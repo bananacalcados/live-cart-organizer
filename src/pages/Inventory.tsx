@@ -244,29 +244,55 @@ export default function Inventory() {
     loadActiveCount();
   }, [selectedStoreId]);
 
-  // Auto-resume correction when page loads with a 'correcting' count
+  // Poll correction progress when status is 'correcting'
   useEffect(() => {
-    if (!activeCount || activeCount.status !== 'correcting' || isCorrecting) return;
-    const resumeCorrection = async () => {
-      const { count: pendingCount } = await supabase
+    if (!activeCount || activeCount.status !== 'correcting') return;
+
+    setActiveTab('correction');
+
+    const pollProgress = async () => {
+      const { count: totalCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id);
+
+      const { count: completedCount } = await supabase
         .from('inventory_correction_queue')
         .select('id', { count: 'exact', head: true })
         .eq('count_id', activeCount.id)
-        .in('status', ['pending', 'error']);
-      const totalPending = pendingCount || 0;
-      if (totalPending > 0) {
-        const { count: totalCount } = await supabase
-          .from('inventory_correction_queue')
-          .select('id', { count: 'exact', head: true })
-          .eq('count_id', activeCount.id);
-        setCorrectionProgress({ processed: (totalCount || 0) - totalPending, total: totalCount || 0, errors: 0 });
-        setIsCorrecting(true);
-        setActiveTab('correction');
-        runCorrectionBatch(activeCount.id, totalCount || 0);
+        .eq('status', 'completed');
+
+      const { count: errorCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id)
+        .eq('status', 'error');
+
+      const total = totalCount || 0;
+      const processed = completedCount || 0;
+      const errors = errorCount || 0;
+
+      setCorrectionProgress({ processed, total, errors });
+      setIsCorrecting(processed + errors < total);
+
+      // If all done, refresh count status & items
+      if (processed + errors >= total && total > 0) {
+        setIsCorrecting(false);
+        // Refresh count status
+        const { data: refreshed } = await supabase
+          .from('inventory_counts')
+          .select('*')
+          .eq('id', activeCount.id)
+          .single();
+        if (refreshed) setActiveCount(refreshed as unknown as InventoryCount);
+        loadCountItems(activeCount.id);
       }
     };
-    resumeCorrection();
-  }, [activeCount]);
+
+    pollProgress();
+    const interval = setInterval(pollProgress, 5000);
+    return () => clearInterval(interval);
+  }, [activeCount?.id, activeCount?.status]);
 
   const loadCountItems = async (countId: string) => {
     // Load all items in batches to bypass the 1000-row default limit
@@ -895,32 +921,14 @@ export default function Inventory() {
     setIsCorrecting(true);
     setActiveTab('correction');
 
-    runCorrectionBatch(activeCount.id, allDivergent.length);
-  };
+    // Fire-and-forget: the edge function self-invokes until done
+    supabase.functions.invoke('inventory-correct-stock', {
+      body: { count_id: activeCount.id, batch_size: 10 }
+    }).catch(e => console.error('Initial correction invoke error:', e));
 
-  const runCorrectionBatch = async (countId: string, total: number) => {
-    let done = false;
-    let processed = 0;
-    let errors = 0;
-
-    while (!done) {
-      try {
-        const { data } = await supabase.functions.invoke('inventory-correct-stock', {
-          body: { count_id: countId, batch_size: 10 }
-        });
-        if (data?.done) done = true;
-        processed += (data?.processed || 0);
-        errors += (data?.errors || 0);
-        setCorrectionProgress({ processed, total, errors });
-      } catch (e) {
-        console.error('Correction batch error:', e);
-        await new Promise(r => setTimeout(r, 5000));
-      }
-    }
-
-    setIsCorrecting(false);
-    loadCountItems(countId);
-    toast.success('Correção de estoque finalizada!');
+    // Refresh activeCount so polling useEffect kicks in
+    setActiveCount({ ...activeCount, status: 'correcting' } as unknown as InventoryCount);
+    toast.success('Correção iniciada! Você pode fechar a página — o processamento continua no servidor.');
   };
 
   const handleRetryErrors = async () => {
@@ -955,8 +963,14 @@ export default function Inventory() {
     setIsCorrecting(true);
 
     await supabase.from('inventory_counts').update({ status: 'correcting' }).eq('id', activeCount.id);
-    runCorrectionBatch(activeCount.id, total);
-    toast.info(`Retentando ${errorItems.length} itens com erro...`);
+    setActiveCount({ ...activeCount, status: 'correcting' } as unknown as InventoryCount);
+    
+    // Fire-and-forget: server self-invokes
+    supabase.functions.invoke('inventory-correct-stock', {
+      body: { count_id: activeCount.id, batch_size: 10 }
+    }).catch(e => console.error('Retry invoke error:', e));
+    
+    toast.info(`Retentando ${errorItems.length} itens com erro... Processamento continua no servidor.`);
   };
 
   const handleDeleteItem = async (itemId: string) => {
@@ -1612,13 +1626,13 @@ export default function Inventory() {
 
               {/* Correction Tab */}
               <TabsContent value="correction" className="space-y-4">
-                {isCorrecting && (
+                {(isCorrecting || activeCount.status === 'correcting') && (
                   <Card>
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <p className="font-semibold flex items-center gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" />
-                          Corrigindo estoque...
+                          Corrigindo estoque no servidor...
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {correctionProgress.processed}/{correctionProgress.total}
@@ -1626,8 +1640,9 @@ export default function Inventory() {
                       </div>
                       <Progress value={correctionProgress.total > 0 ? (correctionProgress.processed / correctionProgress.total) * 100 : 0} />
                       <p className="text-xs text-muted-foreground">
-                        {correctionProgress.errors > 0 && `${correctionProgress.errors} erros (serão retentados)`}
-                        {' • '}Não feche esta página
+                        {correctionProgress.errors > 0 && `${correctionProgress.errors} erros • `}
+                        ✅ Você pode fechar esta página — o processamento continua automaticamente no servidor.
+                        {correctionProgress.total > 0 && ` • Tempo estimado: ~${Math.ceil(((correctionProgress.total - correctionProgress.processed) * 2) / 60)} min`}
                       </p>
                     </CardContent>
                   </Card>
@@ -1635,11 +1650,30 @@ export default function Inventory() {
 
                 {activeCount.status === 'completed' && (
                   <Card className="border-green-200 dark:border-green-800">
-                    <CardContent className="p-4 text-center space-y-2">
-                      <CheckCircle2 className="h-12 w-12 mx-auto text-green-500" />
-                      <p className="font-semibold text-lg">Balanço Concluído!</p>
-                      <p className="text-sm text-muted-foreground">
-                        {activeCount.corrected_products} corrigidos • {activeCount.correction_errors} erros
+                    <CardContent className="p-4 space-y-4">
+                      <div className="text-center space-y-2">
+                        <CheckCircle2 className="h-12 w-12 mx-auto text-green-500" />
+                        <p className="font-semibold text-lg">Balanço Concluído!</p>
+                        <p className="text-sm text-muted-foreground">
+                          {activeCount.corrected_products} corrigidos • {activeCount.correction_errors} erros
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="rounded-lg bg-muted p-3">
+                          <p className="text-2xl font-bold">{countItems.length}</p>
+                          <p className="text-xs text-muted-foreground">Total de itens</p>
+                        </div>
+                        <div className="rounded-lg bg-green-500/10 p-3">
+                          <p className="text-2xl font-bold text-green-600">{countItems.filter(i => i.correction_status === 'corrected').length}</p>
+                          <p className="text-xs text-muted-foreground">Corrigidos</p>
+                        </div>
+                        <div className="rounded-lg bg-destructive/10 p-3">
+                          <p className="text-2xl font-bold text-destructive">{countItems.filter(i => i.correction_status === 'error').length}</p>
+                          <p className="text-xs text-muted-foreground">Com erro</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center">
+                        Concluído em: {activeCount.completed_at ? new Date(activeCount.completed_at).toLocaleString('pt-BR') : '—'}
                       </p>
                     </CardContent>
                   </Card>
