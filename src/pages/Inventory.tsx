@@ -921,32 +921,14 @@ export default function Inventory() {
     setIsCorrecting(true);
     setActiveTab('correction');
 
-    runCorrectionBatch(activeCount.id, allDivergent.length);
-  };
+    // Fire-and-forget: the edge function self-invokes until done
+    supabase.functions.invoke('inventory-correct-stock', {
+      body: { count_id: activeCount.id, batch_size: 10 }
+    }).catch(e => console.error('Initial correction invoke error:', e));
 
-  const runCorrectionBatch = async (countId: string, total: number) => {
-    let done = false;
-    let processed = 0;
-    let errors = 0;
-
-    while (!done) {
-      try {
-        const { data } = await supabase.functions.invoke('inventory-correct-stock', {
-          body: { count_id: countId, batch_size: 10 }
-        });
-        if (data?.done) done = true;
-        processed += (data?.processed || 0);
-        errors += (data?.errors || 0);
-        setCorrectionProgress({ processed, total, errors });
-      } catch (e) {
-        console.error('Correction batch error:', e);
-        await new Promise(r => setTimeout(r, 5000));
-      }
-    }
-
-    setIsCorrecting(false);
-    loadCountItems(countId);
-    toast.success('Correção de estoque finalizada!');
+    // Refresh activeCount so polling useEffect kicks in
+    setActiveCount({ ...activeCount, status: 'correcting' } as unknown as InventoryCount);
+    toast.success('Correção iniciada! Você pode fechar a página — o processamento continua no servidor.');
   };
 
   const handleRetryErrors = async () => {
