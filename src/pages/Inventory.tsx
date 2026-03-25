@@ -789,7 +789,7 @@ export default function Inventory() {
 
     // Step 1: If total scope, insert uncounted products with qty=0
     if (activeCount.scope === 'total') {
-      toast.info('Inserindo produtos não bipados (balanço total)...');
+      toast.info('Buscando todos os produtos da loja...');
       let allProducts: any[] = [];
       let prodFrom = 0;
       const prodPageSize = 1000;
@@ -808,8 +808,11 @@ export default function Inventory() {
       const countedProductIds = new Set(countItems.map(i => i.product_id));
       const uncounted = allProducts.filter(p => !countedProductIds.has(String(p.tiny_id)));
 
+      toast.info(`Inserindo ${uncounted.length} produtos não bipados...`);
+      setVerifyProgress({ current: 0, total: uncounted.length });
+
       // Batch insert uncounted products
-      const batchSize = 50;
+      const batchSize = 100;
       for (let i = 0; i < uncounted.length; i += batchSize) {
         const batch = uncounted.slice(i, i + batchSize).map(p => ({
           count_id: activeCount.id,
@@ -822,6 +825,7 @@ export default function Inventory() {
           divergence: null,
         }));
         await supabase.from('inventory_count_items').insert(batch);
+        setVerifyProgress({ current: Math.min(i + batchSize, uncounted.length), total: uncounted.length });
       }
 
       toast.success(`${uncounted.length} produtos não bipados adicionados com qty=0`);
