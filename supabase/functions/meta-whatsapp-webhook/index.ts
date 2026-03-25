@@ -444,6 +444,7 @@ serve(async (req) => {
                     console.log(`AI auto-reply sent to ${phone}: ${aiData.reply.slice(0, 50)}...`);
                   }
                   } // end of cooldown else
+                  } // end of non-livete else
                 }
               } catch (aiErr) {
                 console.error('AI auto-respond error:', aiErr);
