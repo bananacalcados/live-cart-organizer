@@ -14,6 +14,95 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_conversation_logs: {
+        Row: {
+          ai_decision: string | null
+          created_at: string
+          error: string | null
+          id: string
+          message_in: string | null
+          message_out: string | null
+          order_id: string | null
+          phone: string
+          provider: string | null
+          response_time_ms: number | null
+          stage: string | null
+          tool_called: string | null
+          tool_params: Json | null
+        }
+        Insert: {
+          ai_decision?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          message_in?: string | null
+          message_out?: string | null
+          order_id?: string | null
+          phone: string
+          provider?: string | null
+          response_time_ms?: number | null
+          stage?: string | null
+          tool_called?: string | null
+          tool_params?: Json | null
+        }
+        Update: {
+          ai_decision?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          message_in?: string | null
+          message_out?: string | null
+          order_id?: string | null
+          phone?: string
+          provider?: string | null
+          response_time_ms?: number | null
+          stage?: string | null
+          tool_called?: string | null
+          tool_params?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_conversation_logs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_knowledge_base: {
+        Row: {
+          category: string
+          content: string
+          created_at: string
+          id: string
+          is_active: boolean
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          content: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           created_at: string
