@@ -6,6 +6,10 @@ export type OrderStage =
   | 'no_response'
   | 'awaiting_payment'
   | 'paid'
+  | 'awaiting_shipping'
+  | 'awaiting_mototaxi'
+  | 'awaiting_pickup'
+  | 'completed'
   | 'shipped'
   | 'cancelled'
   | 'collect_next_day';
