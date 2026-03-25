@@ -130,6 +130,17 @@ const Index = () => {
                 <EventTeamDisplay eventId={currentEventId} />
               </div>
               <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 border-l border-border/50 pl-3 ml-2">
+                  <Zap className={`h-4 w-4 ${currentEvent.automation_enabled ? 'text-stage-paid' : 'text-muted-foreground'}`} />
+                  <span className="text-xs font-medium">Auto</span>
+                  <Switch
+                    checked={!!currentEvent.automation_enabled}
+                    onCheckedChange={async (checked) => {
+                      await updateEvent(currentEventId, { automation_enabled: checked } as any);
+                      toast.success(checked ? 'Modo automatizado ativado!' : 'Modo automatizado desativado');
+                    }}
+                  />
+                </div>
                 <OrderReportDialog orders={orders} />
                 <Button
                   variant="ghost"
