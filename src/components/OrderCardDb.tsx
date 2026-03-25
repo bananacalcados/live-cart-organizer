@@ -273,6 +273,9 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           zapi_token: zapiToken,
           zapi_client_token: zapiClientToken,
         },
+        automation_enabled: automationEnabled,
+        customer_id: order.customer_id || '',
+        instagram_handle: order.customer?.instagram_handle || '',
       };
 
       console.log('🚀 [WEBHOOK] Disparando webhook novo-pedido para pedido:', order.id);
