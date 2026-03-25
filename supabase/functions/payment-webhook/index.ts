@@ -350,8 +350,8 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
         source: "mercadopago-webhook",
       });
 
-      // Auto-create Shopify order
-      await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
+      // Auto-create Shopify order DISABLED — user wants manual control
+      // await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
     }
   } else {
     // Try pos_sales
