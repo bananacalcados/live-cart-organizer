@@ -312,6 +312,14 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       applyShopifyVerification(true, createdOrderName);
       toast.success(`Pedido criado na Shopify! ${createdOrderName || ""}`);
 
+      // Auto-move to "Aguardando Envio" and set delivery_method
+      await storeMove(order.id, 'awaiting_shipping');
+      await supabase.from('orders').update({ delivery_method: 'shipping' }).eq('id', order.id);
+
+      window.dispatchEvent(new CustomEvent('shopify-order-created', {
+        detail: { orderId: order.id, shopifyOrderName: createdOrderName }
+      }));
+
       window.setTimeout(() => {
         void refreshShopifyStatus();
       }, 1500);
@@ -320,6 +328,52 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       toast.error(msg);
     } finally {
       setIsCreatingShopifyOrder(false);
+    }
+  };
+
+  const handleMototaxi = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await storeMove(order.id, 'awaiting_mototaxi');
+      await supabase.from('orders').update({ delivery_method: 'mototaxi' }).eq('id', order.id);
+      toast.success('Pedido movido para Aguardando Mototaxista');
+    } catch {
+      toast.error('Erro ao mover pedido');
+    }
+  };
+
+  const handlePickup = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await storeMove(order.id, 'awaiting_pickup');
+      await supabase.from('orders').update({ delivery_method: 'pickup' }).eq('id', order.id);
+      toast.success('Pedido movido para Aguardando Retirada');
+    } catch {
+      toast.error('Erro ao mover pedido');
+    }
+  };
+
+  const handleMarkDelivered = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await storeMove(order.id, 'completed');
+      toast.success('Pedido concluído!');
+      // Send WhatsApp notification
+      const phone = order.customer?.whatsapp?.replace(/\D/g, '') || '';
+      if (phone) {
+        const msg = order.stage === 'awaiting_pickup'
+          ? `Olá ${order.customer?.instagram_handle || ''}! ✅ Seu pedido foi retirado com sucesso. Obrigado pela preferência! 🎉`
+          : `Olá ${order.customer?.instagram_handle || ''}! ✅ Seu pedido foi entregue com sucesso. Obrigado pela preferência! 🎉`;
+        try {
+          await supabase.functions.invoke('zapi-send-message', {
+            body: { phone, message: msg },
+          });
+        } catch (whatsErr) {
+          console.error('Erro ao enviar WhatsApp de conclusão:', whatsErr);
+        }
+      }
+    } catch {
+      toast.error('Erro ao concluir pedido');
     }
   };
   
