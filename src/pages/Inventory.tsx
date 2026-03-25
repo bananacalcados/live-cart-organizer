@@ -1559,7 +1559,14 @@ export default function Inventory() {
                         <div className="mt-3 space-y-2">
                           <Progress value={verifyProgress.total > 0 ? (verifyProgress.current / verifyProgress.total) * 100 : 0} />
                           <p className="text-xs text-muted-foreground">
-                            {verifyProgress.current}/{verifyProgress.total} produtos verificados • Não feche esta página
+                            {verifyProgress.current}/{verifyProgress.total} produtos verificados
+                            {verifyProgress.total > 0 && verifyProgress.current > 0 && (
+                              <> • ~{Math.ceil(((verifyProgress.total - verifyProgress.current) * 1.5) / 60)} min restantes</>
+                            )}
+                            {verifyProgress.total > 0 && verifyProgress.current === 0 && (
+                              <> • Iniciando verificação...</>
+                            )}
+                            {' '}• Não feche esta página
                           </p>
                         </div>
                       )}

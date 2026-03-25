@@ -182,8 +182,8 @@ serve(async (req) => {
         errors++;
       }
 
-      // Throttle: ~2s between calls to respect Tiny rate limits
-      await new Promise(r => setTimeout(r, 2000));
+      // Throttle: ~1.5s between calls to respect Tiny rate limits (~40 req/min)
+      await new Promise(r => setTimeout(r, 1500));
     }
 
     const newRemaining = totalRemaining - items.length;
