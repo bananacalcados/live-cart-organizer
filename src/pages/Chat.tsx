@@ -612,9 +612,13 @@ export default function ChatPage() {
       return true;
     })
     .filter(c => {
-      if (statusFilter === 'all') return true;
-      if (statusFilter === 'finished') return c.isFinished;
-      if (c.isFinished) return false;
+      if (statusFilter === 'all') {
+        // "Todas" hides finalizadas, arquivadas, and dispatch-only
+        return !c.isFinished && !c.isArchived && !c.isDispatchOnly;
+      }
+      if (statusFilter === 'dispatch') return c.isDispatchOnly && !c.isArchived;
+      if (statusFilter === 'finished') return c.isFinished && !c.isArchived;
+      if (c.isFinished || c.isArchived || c.isDispatchOnly) return false;
       return c.conversationStatus === statusFilter;
     })
     .filter(c => {
