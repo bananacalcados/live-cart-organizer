@@ -4235,6 +4235,72 @@ export type Database = {
           },
         ]
       }
+      live_comments: {
+        Row: {
+          ai_classification: string | null
+          ai_confidence: number | null
+          comment_id: string
+          comment_text: string
+          created_at: string
+          event_id: string
+          extracted_products: Json | null
+          id: string
+          is_order: boolean | null
+          order_id: string | null
+          profile_pic_url: string | null
+          raw_timestamp: string | null
+          source_pc: string | null
+          username: string
+        }
+        Insert: {
+          ai_classification?: string | null
+          ai_confidence?: number | null
+          comment_id: string
+          comment_text: string
+          created_at?: string
+          event_id: string
+          extracted_products?: Json | null
+          id?: string
+          is_order?: boolean | null
+          order_id?: string | null
+          profile_pic_url?: string | null
+          raw_timestamp?: string | null
+          source_pc?: string | null
+          username: string
+        }
+        Update: {
+          ai_classification?: string | null
+          ai_confidence?: number | null
+          comment_id?: string
+          comment_text?: string
+          created_at?: string
+          event_id?: string
+          extracted_products?: Json | null
+          id?: string
+          is_order?: boolean | null
+          order_id?: string | null
+          profile_pic_url?: string | null
+          raw_timestamp?: string | null
+          source_pc?: string | null
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_comments_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_comments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_phone_verifications: {
         Row: {
           code: string
