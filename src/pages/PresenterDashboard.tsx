@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bell, BellRing, DollarSign, ShoppingCart, Clock, AlertTriangle,
-  Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp
+  Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package
 } from "lucide-react";
+import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 
 interface PresenterAlert {
   id: string;
