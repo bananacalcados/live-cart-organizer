@@ -444,6 +444,12 @@ export default function PresenterDashboard() {
           </div>
         </TabsContent>
       </Tabs>
+      </div>
+
+      {/* Team Chat Sidebar - always visible */}
+      <div className="w-80 lg:w-96 border-l border-zinc-700 bg-zinc-900/50 flex flex-col min-h-screen">
+        <PresenterTeamChat eventId={eventId!} presenterMode={true} />
+      </div>
     </div>
   );
 }
