@@ -246,6 +246,7 @@ export default function ChatPage() {
         customerTags: customer?.tags,
         whatsapp_number_id: rowNumberId,
         isDispatchOnly: row.is_dispatch_only || false,
+        channel: (row as any).channel || null,
       });
     }
 
