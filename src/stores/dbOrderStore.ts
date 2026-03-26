@@ -358,10 +358,9 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         )
       }));
 
-      // Trigger Livete AI when card is moved to 'new' stage (drag-and-drop or manual)
-      if (newStage === 'new') {
+      // Trigger Livete AI only when the card actually re-enters 'new'
+      if (newStage === 'new' && previousStage !== 'new') {
         try {
-          // Check if event has automation enabled
           if (order.event_id) {
             const { data: eventData } = await supabase
               .from('events')

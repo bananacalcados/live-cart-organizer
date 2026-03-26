@@ -19,25 +19,25 @@ serve(async (req) => {
     const { orderId } = await req.json();
     if (!orderId) {
       return new Response(JSON.stringify({ error: 'orderId required' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // 1. Fetch order with customer
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('id, event_id, customer_id, products, stage, shipping_cost, free_shipping, delivery_method, cart_link, discount_type, discount_value')
+      .select('id, event_id, customer_id, products, stage, stage_atendimento, shipping_cost, free_shipping, delivery_method, cart_link, discount_type, discount_value')
       .eq('id', orderId)
       .single();
 
     if (orderErr || !order) {
       console.error('[livete-start] Order not found:', orderId, orderErr);
       return new Response(JSON.stringify({ error: 'Order not found' }), {
-        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // 2. Fetch customer
     const { data: customer } = await supabase
       .from('customers')
       .select('id, instagram_handle, whatsapp')
@@ -47,15 +47,14 @@ serve(async (req) => {
     if (!customer?.whatsapp) {
       console.error('[livete-start] Customer has no WhatsApp:', order.customer_id);
       return new Response(JSON.stringify({ error: 'Customer has no WhatsApp' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Normalize phone
     const rawPhone = customer.whatsapp.replace(/\D/g, '');
     const phone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone;
 
-    // 3. Fetch event config (whatsapp_number_id for sending)
     let whatsappNumberId: string | null = null;
     let metaPhoneNumberId: string | null = null;
 
@@ -69,7 +68,6 @@ serve(async (req) => {
       if (eventData?.whatsapp_number_id) {
         whatsappNumberId = eventData.whatsapp_number_id;
 
-        // Check if this is a Meta instance (has phone_number_id) or Z-API (provider=zapi)
         const { data: wnData } = await supabase
           .from('whatsapp_numbers')
           .select('id, label, provider, phone_number_id')
@@ -82,7 +80,6 @@ serve(async (req) => {
       }
     }
 
-    // 4. Check if customer has saved address
     let savedAddress: Record<string, string> | null = null;
     if (customer.id) {
       const { data: addrData } = await supabase.rpc('get_customer_last_address', {
@@ -93,7 +90,6 @@ serve(async (req) => {
       }
     }
 
-    // 5. Build product description & pricing
     const products = (order.products as any[]) || [];
     const productLines = products.map((p: any) =>
       `${p.quantity || 1}x ${p.title}${p.variant ? ` (${p.variant})` : ''} — R$${Number(p.price || 0).toFixed(2)}`
@@ -103,7 +99,6 @@ serve(async (req) => {
       sum + (Number(p.price || 0) * Number(p.quantity || 1)), 0
     );
 
-    // Calculate discount
     let discountAmount = 0;
     if (order.discount_value && Number(order.discount_value) > 0) {
       if (order.discount_type === 'fixed') {
@@ -114,14 +109,12 @@ serve(async (req) => {
     }
     const total = Math.max(0, subtotal - discountAmount);
 
-    // Build pricing lines
     let pricingBlock = `💰 Subtotal: R$${subtotal.toFixed(2)}`;
     if (discountAmount > 0) {
       pricingBlock += `\n🏷️ Desconto: -R$${discountAmount.toFixed(2)}`;
       pricingBlock += `\n✅ *Total: R$${total.toFixed(2)}*`;
     }
 
-    // 6. Build first message (always ends with a question)
     const igHandle = customer.instagram_handle || 'Cliente';
     const igName = igHandle.startsWith('@') ? igHandle : `@${igHandle}`;
 
@@ -152,58 +145,8 @@ serve(async (req) => {
       initialStage = 'endereco';
     }
 
-    // 7. Send message via Meta or Z-API
-    if (metaPhoneNumberId) {
-      await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone,
-          message: firstMessage,
-          whatsappNumberId: whatsappNumberId,
-        }),
-      });
-    } else {
-      // Z-API — pass whatsapp_number_id so zapi-send-message resolves credentials from DB
-      await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone,
-          message: firstMessage,
-          whatsapp_number_id: whatsappNumberId,
-        }),
-      });
-    }
-
-    // 8. Save outgoing message to whatsapp_messages
-    await supabase.from('whatsapp_messages').insert({
-      phone,
-      message: firstMessage,
-      direction: 'outgoing',
-      status: 'sent',
-      whatsapp_number_id: whatsappNumberId,
-    });
-
-    // 9. Set stage_atendimento + move Kanban card to 'contacted'
-    await supabase.rpc('update_order_stage', {
-      p_order_id: orderId,
-      p_stage: initialStage,
-    });
-    await supabase.from('orders').update({ stage: 'contacted' }).eq('id', orderId);
-
-    // 10. Deactivate ALL previous AI sessions for this phone (prevents duplicate conversations)
-    await supabase
-      .from('automation_ai_sessions')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('phone', phone)
-      .eq('is_active', true);
-
-    console.log(`[livete-start] Deactivated previous sessions for ${phone}`);
-
-    // 11. Create fresh AI session for this phone + order
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
-    await supabase.from('automation_ai_sessions').insert({
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const sessionPayload = {
       phone,
       flow_id: null,
       is_active: true,
@@ -212,37 +155,109 @@ serve(async (req) => {
       whatsapp_number_id: whatsappNumberId,
       max_messages: 50,
       messages_sent: 1,
-    });
+      updated_at: new Date().toISOString(),
+    };
 
-    // 12. Log
+    const { error: sessionErr } = await supabase
+      .from('automation_ai_sessions')
+      .upsert(sessionPayload, { onConflict: 'phone' });
+
+    if (sessionErr) {
+      console.error('[livete-start] Failed to upsert AI session:', sessionErr);
+      return new Response(JSON.stringify({ error: 'Failed to create AI session' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    await supabase.rpc('update_order_stage', {
+      p_order_id: orderId,
+      p_stage: initialStage,
+    });
+    await supabase.from('orders').update({ stage: 'contacted' }).eq('id', orderId);
+
+    const recentThreshold = new Date(Date.now() - 15000).toISOString();
+    let duplicateQuery = supabase
+      .from('whatsapp_messages')
+      .select('id, created_at')
+      .eq('phone', phone)
+      .eq('direction', 'outgoing')
+      .eq('message', firstMessage)
+      .gte('created_at', recentThreshold)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    duplicateQuery = whatsappNumberId
+      ? duplicateQuery.eq('whatsapp_number_id', whatsappNumberId)
+      : duplicateQuery.is('whatsapp_number_id', null);
+
+    const { data: recentDuplicate } = await duplicateQuery;
+    const shouldSkipSend = Boolean(recentDuplicate && recentDuplicate.length > 0);
+
+    if (shouldSkipSend) {
+      console.log(`[livete-start] Duplicate start skipped for order ${orderId} / ${phone}`);
+    } else {
+      if (metaPhoneNumberId) {
+        await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone,
+            message: firstMessage,
+            whatsappNumberId: whatsappNumberId,
+          }),
+        });
+      } else {
+        await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone,
+            message: firstMessage,
+            whatsapp_number_id: whatsappNumberId,
+          }),
+        });
+      }
+
+      await supabase.from('whatsapp_messages').insert({
+        phone,
+        message: firstMessage,
+        direction: 'outgoing',
+        status: 'sent',
+        whatsapp_number_id: whatsappNumberId,
+      });
+    }
+
     const responseTime = Date.now() - startTime;
     await supabase.from('ai_conversation_logs').insert({
       order_id: orderId,
       phone,
       stage: initialStage,
-      message_out: firstMessage,
-      ai_decision: savedAddress ? 'confirm_existing_address' : 'ask_new_address',
+      message_out: shouldSkipSend ? null : firstMessage,
+      ai_decision: shouldSkipSend ? 'start_skipped_duplicate' : (savedAddress ? 'confirm_existing_address' : 'ask_new_address'),
       tool_called: 'livete-start-order',
       response_time_ms: responseTime,
       provider: 'system',
     });
 
-    console.log(`[livete-start] Order ${orderId} → phone=${phone}, stage=${initialStage}, hasAddress=${!!savedAddress}, time=${responseTime}ms`);
+    console.log(`[livete-start] Order ${orderId} → phone=${phone}, stage=${initialStage}, hasAddress=${!!savedAddress}, duplicateSkipped=${shouldSkipSend}, time=${responseTime}ms`);
 
     return new Response(JSON.stringify({
       success: true,
       phone,
       stage: initialStage,
       hasAddress: !!savedAddress,
+      duplicateSkipped: shouldSkipSend,
       responseTime,
     }), {
-      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-
   } catch (error) {
     console.error('[livete-start] Error:', error);
     return new Response(JSON.stringify({ error: String(error) }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
