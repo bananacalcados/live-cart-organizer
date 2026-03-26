@@ -251,6 +251,24 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
             : o
         )
       }));
+
+      // Notify AI if discount, shipping or products changed (fire-and-forget)
+      try {
+        const prevOrder = get().orders.find((o) => o.id === orderId);
+        if (updates.discount_value !== undefined || updates.discount_type !== undefined) {
+          supabase.functions.invoke('livete-order-updated', {
+            body: { orderId, changeType: 'discount_changed' },
+          });
+        } else if (updates.shipping_cost !== undefined || updates.free_shipping !== undefined) {
+          supabase.functions.invoke('livete-order-updated', {
+            body: { orderId, changeType: 'shipping_changed' },
+          });
+        } else if (updates.products) {
+          supabase.functions.invoke('livete-order-updated', {
+            body: { orderId, changeType: 'products_changed' },
+          });
+        }
+      } catch {}
     } catch (error) {
       console.error('Error updating order:', error);
       toast.error('Erro ao atualizar pedido');
@@ -260,12 +278,31 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
 
   deleteOrder: async (orderId) => {
     try {
+      // Find order to get customer phone before deleting
+      const order = get().orders.find((o) => o.id === orderId);
+      
       const { error } = await supabase
         .from('orders')
         .delete()
         .eq('id', orderId);
 
       if (error) throw error;
+      
+      // Deactivate any AI session linked to this order
+      try {
+        if (order?.customer?.whatsapp) {
+          const rawPhone = order.customer.whatsapp.replace(/\D/g, '');
+          const phone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone;
+          await supabase
+            .from('automation_ai_sessions')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq('phone', phone)
+            .eq('is_active', true)
+            .like('prompt', `livete_checkout:${orderId}`);
+        }
+      } catch (sessionErr) {
+        console.error('[deleteOrder] Failed to deactivate AI session:', sessionErr);
+      }
       
       set((state) => ({
         orders: state.orders.filter((o) => o.id !== orderId)
@@ -357,6 +394,13 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           o.id === orderId ? { ...o, products: newProducts } : o
         )
       }));
+
+      // Notify AI about product change (fire-and-forget)
+      try {
+        supabase.functions.invoke('livete-order-updated', {
+          body: { orderId, changeType: 'products_changed' },
+        });
+      } catch {}
     } catch (error) {
       console.error('Error adding product:', error);
       toast.error('Erro ao adicionar produto');
@@ -382,6 +426,13 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           o.id === orderId ? { ...o, products: newProducts } : o
         )
       }));
+
+      // Notify AI about product removal (fire-and-forget)
+      try {
+        supabase.functions.invoke('livete-order-updated', {
+          body: { orderId, changeType: 'products_changed' },
+        });
+      } catch {}
     } catch (error) {
       console.error('Error removing product:', error);
       toast.error('Erro ao remover produto');
