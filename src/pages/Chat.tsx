@@ -451,6 +451,8 @@ export default function ChatPage() {
   const handleSend = async () => {
     if (isSending || isUploading || !selectedPhone) return;
     const useMeta = isMetaNumber();
+    const useMessenger = isInstagramOrMessenger();
+    const messengerChannel = (getSelectedChannel() as 'instagram' | 'messenger') || 'instagram';
     const numberId = getActiveNumberId();
 
     if (selectedMedia) {
@@ -459,7 +461,9 @@ export default function ChatPage() {
       if (!mediaUrl) { setIsUploading(false); return; }
 
       let sendResult: { success: boolean; messageId?: string } = { success: false };
-      if (useMeta) {
+      if (useMessenger) {
+        sendResult = await sendViaMessenger(selectedPhone, newMessage.trim() || '', messengerChannel, selectedMedia.type, mediaUrl);
+      } else if (useMeta) {
         sendResult = await sendViaMeta(selectedPhone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
       } else {
         const result = await zapiSendMedia(selectedPhone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined, numberId || undefined);
@@ -476,7 +480,8 @@ export default function ChatPage() {
           media_url: mediaUrl,
           whatsapp_number_id: numberId,
           message_id: sendResult.messageId || null,
-        });
+          channel: useMessenger ? messengerChannel : null,
+        } as any);
         loadMessages(selectedPhone, false, selectedConvNumberId);
       }
       URL.revokeObjectURL(selectedMedia.previewUrl);
@@ -492,7 +497,9 @@ export default function ChatPage() {
     setIsSending(true);
 
     let sendResult: { success: boolean; messageId?: string } = { success: false };
-    if (useMeta) {
+    if (useMessenger) {
+      sendResult = await sendViaMessenger(selectedPhone, text, messengerChannel);
+    } else if (useMeta) {
       sendResult = await sendViaMeta(selectedPhone, text);
     } else {
       const result = await zapiSend(selectedPhone, text, numberId || undefined);
@@ -507,7 +514,8 @@ export default function ChatPage() {
         status: 'sent',
         whatsapp_number_id: numberId,
         message_id: sendResult.messageId || null,
-      });
+        channel: useMessenger ? messengerChannel : null,
+      } as any);
       loadMessages(selectedPhone, false, selectedConvNumberId);
     }
     setIsSending(false);
