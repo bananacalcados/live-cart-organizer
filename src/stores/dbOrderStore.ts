@@ -251,6 +251,24 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
             : o
         )
       }));
+
+      // Notify AI if discount, shipping or products changed (fire-and-forget)
+      try {
+        const prevOrder = get().orders.find((o) => o.id === orderId);
+        if (updates.discount_value !== undefined || updates.discount_type !== undefined) {
+          supabase.functions.invoke('livete-order-updated', {
+            body: { orderId, changeType: 'discount_changed' },
+          });
+        } else if (updates.shipping_cost !== undefined || updates.free_shipping !== undefined) {
+          supabase.functions.invoke('livete-order-updated', {
+            body: { orderId, changeType: 'shipping_changed' },
+          });
+        } else if (updates.products) {
+          supabase.functions.invoke('livete-order-updated', {
+            body: { orderId, changeType: 'products_changed' },
+          });
+        }
+      } catch {}
     } catch (error) {
       console.error('Error updating order:', error);
       toast.error('Erro ao atualizar pedido');
