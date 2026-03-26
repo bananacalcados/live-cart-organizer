@@ -9065,6 +9065,7 @@ export type Database = {
         Returns: {
           direction: string
           has_outgoing: boolean
+          is_dispatch_only: boolean
           is_group: boolean
           last_message: string
           last_message_at: string
