@@ -488,6 +488,31 @@ const Events = () => {
                             <Play className="h-4 w-4 mr-2" />
                             Abrir Evento
                           </Button>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                title="Chat com Apresentadora"
+                              >
+                                <Send className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-md h-[70vh] p-0 flex flex-col">
+                              <DialogHeader className="px-4 pt-4 pb-0">
+                                <DialogTitle className="flex items-center gap-2">
+                                  <MessageCircle className="h-5 w-5 text-primary" />
+                                  Chat com Apresentadora
+                                </DialogTitle>
+                              </DialogHeader>
+                              <div className="flex-1 min-h-0">
+                                {(() => {
+                                  const PresenterTeamChat = require("@/components/events/PresenterTeamChat").PresenterTeamChat;
+                                  return <PresenterTeamChat eventId={event.id} presenterMode={false} />;
+                                })()}
+                              </div>
+                            </DialogContent>
+                          </Dialog>
                           <Button
                             variant="outline"
                             size="icon"
