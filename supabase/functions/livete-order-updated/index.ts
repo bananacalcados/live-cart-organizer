@@ -188,38 +188,41 @@ serve(async (req) => {
         const pixData = await pixResp.json();
 
         if (pixData?.qrCode && sendNumberId) {
-          const pixMessage = `💰 *Aqui está o novo PIX copia e cola!*\n\n` +
-            `Valor: *R$ ${total.toFixed(2)}*\n\n` +
-            `Copie o código abaixo e cole no app do seu banco:\n\n` +
-            `${pixData.qrCode}\n\n` +
-            `⏰ O código expira em 30 minutos. Assim que o pagamento for confirmado, te aviso aqui! 😊`;
+          const pixIntro = `💰 *Aqui está o novo PIX copia e cola!*\n\nValor: *R$ ${total.toFixed(2)}*\n\nCopie o código abaixo e cole no app do seu banco 👇`;
 
           await sleep(2000);
 
-          const { data: wnData } = await supabase
+          const { data: wnData2 } = await supabase
             .from('whatsapp_numbers')
             .select('provider, phone_number_id')
             .eq('id', sendNumberId)
             .single();
 
-          if (wnData?.provider === 'meta' && wnData?.phone_number_id) {
-            await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ phone: session.phone, message: pixMessage, whatsappNumberId: sendNumberId }),
-            });
-          } else {
-            await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ phone: session.phone, message: pixMessage, whatsapp_number_id: sendNumberId }),
+          async function sendMsg(msg: string) {
+            if (wnData2?.provider === 'meta' && wnData2?.phone_number_id) {
+              await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: session.phone, message: msg, whatsappNumberId: sendNumberId }),
+              });
+            } else {
+              await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: session.phone, message: msg, whatsapp_number_id: sendNumberId }),
+              });
+            }
+            await supabase.from('whatsapp_messages').insert({
+              phone: session.phone, message: msg, direction: 'outgoing', status: 'sent',
+              whatsapp_number_id: sendNumberId,
             });
           }
 
-          await supabase.from('whatsapp_messages').insert({
-            phone: session.phone, message: pixMessage, direction: 'outgoing', status: 'sent',
-            whatsapp_number_id: sendNumberId,
-          });
+          await sendMsg(pixIntro);
+          await sleep(1500);
+          await sendMsg(pixData.qrCode);
+          await sleep(1500);
+          await sendMsg(`⏰ O código expira em 30 minutos. Assim que o pagamento for confirmado, te aviso aqui! 😊`);
 
           console.log(`[livete-order-updated] New PIX sent for updated order ${orderId}`);
         }
