@@ -233,12 +233,13 @@ export default function ChatPage() {
       }
       phoneMessages.set(convKey, msgs);
 
+      const senderNameFromRPC = row.sender_name || null;
       convs.push({
         phone,
         lastMessage: row.last_message,
         lastMessageAt: new Date(row.last_message_at),
         unreadCount: Number(row.unread_count),
-        customerName: getContactName(phone) || crmMap.get(phone)?.name || order?.customer?.instagram_handle || customer?.instagram_handle,
+        customerName: getContactName(phone) || crmMap.get(phone)?.name || senderNameFromRPC || order?.customer?.instagram_handle || customer?.instagram_handle,
         isGroup,
         hasUnansweredMessage: row.direction === 'incoming',
         stage: order?.stage,

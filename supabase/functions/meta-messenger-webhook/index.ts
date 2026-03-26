@@ -34,7 +34,7 @@ serve(async (req) => {
     const pageAccessToken = Deno.env.get('META_PAGE_ACCESS_TOKEN') || '';
 
     const body = await req.json();
-    console.log('Messenger webhook received:', JSON.stringify(body).slice(0, 500));
+    console.log('Messenger webhook payload:', JSON.stringify(body).slice(0, 1000));
 
     if (body.object !== 'page' && body.object !== 'instagram') {
       return new Response(JSON.stringify({ success: true }), {
@@ -46,11 +46,12 @@ serve(async (req) => {
     const channel = body.object === 'instagram' ? 'instagram' : 'messenger';
 
     for (const entry of body.entry || []) {
+      // ── Handle messaging events (DMs) ──
       for (const event of entry.messaging || []) {
         const senderId = event.sender?.id;
         if (!senderId) continue;
 
-        // Skip read receipts — just update status
+        // Skip read receipts
         if (event.read) {
           const mid = event.read.mid;
           if (mid) {
@@ -62,16 +63,8 @@ serve(async (req) => {
           continue;
         }
 
-        // Skip message_edit events
-        if (event.message_edit) {
-          console.log(`Skipping message_edit event from ${senderId}`);
-          continue;
-        }
-
-        // Skip delivery events
-        if (event.delivery) {
-          continue;
-        }
+        // Skip message_edit and delivery events
+        if (event.message_edit || event.delivery) continue;
 
         // Skip echo messages (messages we sent)
         if (event.message?.is_echo) {
@@ -98,50 +91,70 @@ serve(async (req) => {
           // Handle attachments
           if (event.message.attachments?.length > 0) {
             const att = event.message.attachments[0];
-            // Map Instagram-specific types
             const rawType = att.type || 'text';
             if (rawType === 'ephemeral' || rawType === 'unsupported_type') {
-              // Stories/vanishing content or unsupported — log and save placeholder
               mediaType = rawType === 'ephemeral' ? 'story' : 'unsupported';
               mediaUrl = att.payload?.url || null;
               if (!messageText) {
                 messageText = rawType === 'ephemeral' ? '[story reply]' : '[unsupported media]';
               }
+            } else if (rawType === 'share') {
+              // Shared post/reel
+              mediaType = 'share';
+              mediaUrl = att.payload?.url || null;
+              if (!messageText) messageText = '[post compartilhado]';
+            } else if (rawType === 'story_mention') {
+              mediaType = 'story';
+              mediaUrl = att.payload?.url || null;
+              if (!messageText) messageText = '[menção no story]';
+            } else if (rawType === 'reel') {
+              mediaType = 'video';
+              mediaUrl = att.payload?.url || null;
+              if (!messageText) messageText = '[reel compartilhado]';
             } else {
               mediaType = rawType; // image, video, audio, file
               mediaUrl = att.payload?.url || null;
-              if (!messageText) {
-                messageText = `[${mediaType}]`;
-              }
+              if (!messageText) messageText = `[${mediaType}]`;
             }
+          }
+
+          // If still empty (Instagram sometimes sends empty text with story replies etc)
+          if (!messageText && !mediaUrl) {
+            messageText = '[mensagem sem conteúdo]';
           }
         } else if (event.postback) {
           messageText = event.postback.payload || event.postback.title || '[postback]';
         } else if (event.referral) {
           messageText = `[referral: ${event.referral.ref || ''}]`;
         } else {
-          // Unknown event type — skip
-          console.log(`Skipping unknown event type from ${senderId}:`, Object.keys(event).join(','));
+          console.log(`Skipping unknown event from ${senderId}:`, JSON.stringify(event).slice(0, 300));
           continue;
         }
 
-        // Get sender profile name
+        // Get sender profile name (use Instagram-specific fields)
         let senderName: string | null = null;
         if (pageAccessToken) {
           try {
+            const fields = channel === 'instagram' ? 'name,username,profile_pic' : 'name,profile_pic';
             const profileRes = await fetch(
-              `https://graph.facebook.com/v21.0/${senderId}?fields=name,profile_pic&access_token=${pageAccessToken}`
+              `https://graph.facebook.com/v21.0/${senderId}?fields=${fields}&access_token=${pageAccessToken}`
             );
             if (profileRes.ok) {
               const profile = await profileRes.json();
-              senderName = profile.name || null;
+              // Prefer username for Instagram (shows as @handle)
+              senderName = channel === 'instagram'
+                ? (profile.username ? `@${profile.username}` : profile.name || null)
+                : (profile.name || null);
+              console.log(`Profile for ${senderId}: username=${profile.username}, name=${profile.name}`);
+            } else {
+              console.log(`Profile fetch failed for ${senderId}: ${profileRes.status}`);
             }
           } catch (e) {
             console.error('Error fetching sender profile:', e);
           }
         }
 
-        // Save to whatsapp_messages with channel field
+        // Save message
         const { error } = await supabase.from('whatsapp_messages').insert({
           phone: senderId,
           message: messageText,
@@ -156,12 +169,12 @@ serve(async (req) => {
         });
 
         if (error) {
-          console.error('Error saving messenger message:', error);
+          console.error('Error saving message:', error);
         } else {
-          console.log(`Saved ${channel} message from ${senderId} (${senderName || 'unknown'}): ${messageText.slice(0, 50)}`);
+          console.log(`Saved ${channel} DM from ${senderId} (${senderName || 'unknown'}): ${messageText.slice(0, 80)}`);
         }
 
-        // Upsert chat_contacts
+        // Upsert chat_contacts with display_name
         if (senderName) {
           await supabase
             .from('chat_contacts')
@@ -169,6 +182,50 @@ serve(async (req) => {
               { phone: senderId, display_name: senderName },
               { onConflict: 'phone', ignoreDuplicates: false }
             );
+        }
+      }
+
+      // ── Handle changes events (comments, story mentions, etc.) ──
+      for (const change of entry.changes || []) {
+        if (change.field === 'comments' && change.value) {
+          const comment = change.value;
+          const fromId = comment.from?.id;
+          const username = comment.from?.username;
+          const text = comment.text || '[comentário]';
+          const mediaType = comment.media?.media_product_type || 'post';
+
+          if (!fromId) continue;
+
+          const senderName = username ? `@${username}` : null;
+          const messageText = `💬 Comentário no ${mediaType === 'REELS' ? 'Reel' : 'post'}: ${text}`;
+
+          const { error } = await supabase.from('whatsapp_messages').insert({
+            phone: fromId,
+            message: messageText,
+            direction: 'incoming',
+            message_id: comment.id || null,
+            status: 'received',
+            media_type: 'text',
+            is_group: false,
+            channel: 'instagram',
+            sender_name: senderName,
+          });
+
+          if (error) {
+            console.error('Error saving comment:', error);
+          } else {
+            console.log(`Saved Instagram comment from ${username || fromId}: ${text.slice(0, 50)}`);
+          }
+
+          // Upsert chat_contacts
+          if (senderName) {
+            await supabase
+              .from('chat_contacts')
+              .upsert(
+                { phone: fromId, display_name: senderName },
+                { onConflict: 'phone', ignoreDuplicates: false }
+              );
+          }
         }
       }
     }

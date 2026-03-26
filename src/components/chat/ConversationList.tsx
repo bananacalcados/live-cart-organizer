@@ -443,8 +443,18 @@ export function ConversationList({
                     <p className="text-sm text-[#667781] truncate flex-1">
                       {conv.lastMessage}
                     </p>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {conv.instanceLabel && (
+                     <div className="flex items-center gap-1 flex-shrink-0">
+                      {conv.channel === 'instagram' && (
+                        <Badge className="text-[8px] px-1 py-0 leading-tight bg-pink-500/20 text-pink-400 border-pink-400/30 hover:bg-pink-500/30">
+                          📷 Instagram
+                        </Badge>
+                      )}
+                      {conv.channel === 'messenger' && (
+                        <Badge className="text-[8px] px-1 py-0 leading-tight bg-blue-500/20 text-blue-400 border-blue-400/30 hover:bg-blue-500/30">
+                          💬 Messenger
+                        </Badge>
+                      )}
+                      {!conv.channel && conv.instanceLabel && (
                         <Badge variant="outline" className={cn(
                           "text-[8px] px-1 py-0 leading-tight",
                           conv.whatsapp_number_id 
