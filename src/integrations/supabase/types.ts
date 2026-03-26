@@ -7608,6 +7608,123 @@ export type Database = {
         }
         Relationships: []
       }
+      secretary_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          tool_calls: Json | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role?: string
+          tool_calls?: Json | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          tool_calls?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      secretary_reminders: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          is_completed: boolean
+          last_reminded_at: string | null
+          metadata: Json | null
+          phone: string
+          remind_at: string | null
+          reminder_type: string
+          title: string
+          updated_at: string
+          user_id: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_completed?: boolean
+          last_reminded_at?: string | null
+          metadata?: Json | null
+          phone: string
+          remind_at?: string | null
+          reminder_type?: string
+          title: string
+          updated_at?: string
+          user_id: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_completed?: boolean
+          last_reminded_at?: string | null
+          metadata?: Json | null
+          phone?: string
+          remind_at?: string | null
+          reminder_type?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
+      secretary_settings: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          reminder_phone: string | null
+          updated_at: string
+          user_id: string
+          weekly_reminder_day: number | null
+          weekly_reminder_hour: number | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          reminder_phone?: string | null
+          updated_at?: string
+          user_id: string
+          weekly_reminder_day?: number | null
+          weekly_reminder_hour?: number | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          reminder_phone?: string | null
+          updated_at?: string
+          user_id?: string
+          weekly_reminder_day?: number | null
+          weekly_reminder_hour?: number | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       shopify_live_order_locks: {
         Row: {
           created_at: string
