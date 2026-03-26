@@ -56,6 +56,8 @@ export interface Conversation {
   isArchived?: boolean;
   /** Whether this conversation has pending payment */
   isAwaitingPayment?: boolean;
+  /** Whether this conversation is dispatch-only (mass send, no reply yet) */
+  isDispatchOnly?: boolean;
 }
 
 export type ChatFilter = 'all' | 'contacts' | 'groups';
@@ -73,4 +75,4 @@ export type InstanceFilter = 'all' | 'zapi' | 'meta' | string;
  * - archived: hidden from main list
  */
 export type ConversationStatus = 'not_started' | 'awaiting_reply' | 'awaiting_customer' | 'finished';
-export type ConversationStatusFilter = 'all' | ConversationStatus | 'awaiting_payment' | 'archived';
+export type ConversationStatusFilter = 'all' | ConversationStatus | 'awaiting_payment' | 'archived' | 'dispatch';

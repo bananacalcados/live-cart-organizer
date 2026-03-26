@@ -245,6 +245,7 @@ export default function ChatPage() {
         customerId: order?.customer_id || customer?.id,
         customerTags: customer?.tags,
         whatsapp_number_id: rowNumberId,
+        isDispatchOnly: row.is_dispatch_only || false,
       });
     }
 
@@ -597,9 +598,10 @@ export default function ChatPage() {
   // ── Filter conversations ──
   const STATUS_TABS: { value: string; label: string }[] = [
     { value: 'all', label: 'Todas' },
-    { value: 'not_started', label: 'Não Iniciadas' },
-    { value: 'awaiting_reply', label: 'Aguard. Resposta' },
-    { value: 'awaiting_customer', label: 'Aguard. Cliente' },
+    { value: 'not_started', label: 'Novas' },
+    { value: 'awaiting_reply', label: 'Aguard.' },
+    { value: 'awaiting_customer', label: 'Follow Up' },
+    { value: 'dispatch', label: 'Disparos 📢' },
     { value: 'finished', label: 'Finalizadas' },
   ];
 
@@ -610,9 +612,13 @@ export default function ChatPage() {
       return true;
     })
     .filter(c => {
-      if (statusFilter === 'all') return true;
-      if (statusFilter === 'finished') return c.isFinished;
-      if (c.isFinished) return false;
+      if (statusFilter === 'all') {
+        // "Todas" hides finalizadas, arquivadas, and dispatch-only
+        return !c.isFinished && !c.isArchived && !c.isDispatchOnly;
+      }
+      if (statusFilter === 'dispatch') return c.isDispatchOnly && !c.isArchived;
+      if (statusFilter === 'finished') return c.isFinished && !c.isArchived;
+      if (c.isFinished || c.isArchived || c.isDispatchOnly) return false;
       return c.conversationStatus === statusFilter;
     })
     .filter(c => {

@@ -133,6 +133,7 @@ export function useConversationEnrichment() {
         isFinished,
         isArchived,
         isAwaitingPayment,
+        isDispatchOnly: conv.isDispatchOnly || false,
         instanceLabel,
         hasOtherInstances,
         otherInstanceLabels,

@@ -54,6 +54,7 @@ const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel:
   { value: 'not_started', label: 'Não Iniciadas', shortLabel: 'Novas' },
   { value: 'awaiting_reply', label: 'Aguardando Resposta', shortLabel: 'Aguard.' },
   { value: 'awaiting_customer', label: 'Follow Up', shortLabel: 'Follow Up 🔄' },
+  { value: 'dispatch', label: 'Disparos', shortLabel: 'Disparos 📢' },
   { value: 'awaiting_payment', label: 'Aguardando Pagamento', shortLabel: 'Pgto 💰' },
   { value: 'finished', label: 'Finalizadas', shortLabel: 'Finaliz.' },
   { value: 'archived', label: 'Arquivadas', shortLabel: 'Arquiv. 📦' },
@@ -115,13 +116,14 @@ export function ConversationList({
     })
     .filter(c => {
       if (statusFilter === 'all') {
-        // "Todas" hides archived and finished conversations
-        return !c.isArchived && !c.isFinished;
+        // "Todas" hides archived, finished, and dispatch-only conversations
+        return !c.isArchived && !c.isFinished && !c.isDispatchOnly;
       }
+      if (statusFilter === 'dispatch') return c.isDispatchOnly && !c.isArchived;
       if (statusFilter === 'archived') return c.isArchived;
       if (statusFilter === 'awaiting_payment') return c.isAwaitingPayment && !c.isArchived;
       if (statusFilter === 'finished') return c.isFinished && !c.isArchived;
-      if (c.isFinished || c.isArchived) return false;
+      if (c.isFinished || c.isArchived || c.isDispatchOnly) return false;
       return c.conversationStatus === statusFilter;
     })
     .filter(c => {
@@ -143,10 +145,11 @@ export function ConversationList({
 
   // Count per status
   const statusCounts: Record<ConversationStatusFilter, number> = {
-    all: conversations.filter(c => !c.isArchived && !c.isFinished).length,
-    not_started: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'not_started').length,
-    awaiting_reply: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'awaiting_reply').length,
-    awaiting_customer: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'awaiting_customer').length,
+    all: conversations.filter(c => !c.isArchived && !c.isFinished && !c.isDispatchOnly).length,
+    not_started: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'not_started').length,
+    awaiting_reply: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_reply').length,
+    awaiting_customer: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_customer').length,
+    dispatch: conversations.filter(c => c.isDispatchOnly && !c.isArchived).length,
     awaiting_payment: conversations.filter(c => c.isAwaitingPayment && !c.isArchived).length,
     finished: conversations.filter(c => c.isFinished && !c.isArchived).length,
     archived: conversations.filter(c => c.isArchived).length,
