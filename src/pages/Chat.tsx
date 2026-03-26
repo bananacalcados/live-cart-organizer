@@ -598,9 +598,10 @@ export default function ChatPage() {
   // ── Filter conversations ──
   const STATUS_TABS: { value: string; label: string }[] = [
     { value: 'all', label: 'Todas' },
-    { value: 'not_started', label: 'Não Iniciadas' },
-    { value: 'awaiting_reply', label: 'Aguard. Resposta' },
-    { value: 'awaiting_customer', label: 'Aguard. Cliente' },
+    { value: 'not_started', label: 'Novas' },
+    { value: 'awaiting_reply', label: 'Aguard.' },
+    { value: 'awaiting_customer', label: 'Follow Up' },
+    { value: 'dispatch', label: 'Disparos 📢' },
     { value: 'finished', label: 'Finalizadas' },
   ];
 
