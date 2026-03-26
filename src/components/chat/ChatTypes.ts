@@ -22,7 +22,7 @@ export interface Message {
   whatsapp_number_id?: string;
   sender_name?: string;
   message_id?: string;
-  referral?: MessageReferral | null;
+  referral?: MessageReferral | Record<string, unknown> | null;
 }
 
 export interface Conversation {
