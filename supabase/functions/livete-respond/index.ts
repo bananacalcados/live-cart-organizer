@@ -438,17 +438,21 @@ Retorne SOMENTE o JSON.`;
         const pixData = await pixResp.json();
 
         if (pixData?.qrCode) {
-          // Wait before sending the PIX code (human-like)
+          // Wait before sending the PIX intro
           await sleep(3000);
 
-          const pixMessage = `💰 *Aqui está o PIX copia e cola!*\n\n` +
-            `Valor: *R$ ${total.toFixed(2)}*\n\n` +
-            `Copie o código abaixo e cole no app do seu banco:\n\n` +
-            `${pixData.qrCode}\n\n` +
-            `⏰ O código expira em 30 minutos. Assim que o pagamento for confirmado, te aviso aqui! 😊`;
+          const pixIntro = `💰 *Aqui está o PIX copia e cola!*\n\nValor: *R$ ${total.toFixed(2)}*\n\nCopie o código abaixo e cole no app do seu banco 👇`;
+          await sendWhatsApp(pixIntro);
 
-          await sendWhatsApp(pixMessage);
-          console.log(`[livete-respond] PIX code sent inline to ${phone}`);
+          // Send the PIX code alone so the client can easily copy it
+          await sleep(1500);
+          await sendWhatsApp(pixData.qrCode);
+
+          // Send expiration notice
+          await sleep(1500);
+          await sendWhatsApp(`⏰ O código expira em 30 minutos. Assim que o pagamento for confirmado, te aviso aqui! 😊`);
+
+          console.log(`[livete-respond] PIX code sent in separate messages to ${phone}`);
         } else {
           console.error('[livete-respond] PIX generation failed:', pixData);
           await sleep(2000);
