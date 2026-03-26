@@ -506,10 +506,7 @@ const Events = () => {
                                 </DialogTitle>
                               </DialogHeader>
                               <div className="flex-1 min-h-0">
-                                {(() => {
-                                  const PresenterTeamChat = require("@/components/events/PresenterTeamChat").PresenterTeamChat;
-                                  return <PresenterTeamChat eventId={event.id} presenterMode={false} />;
-                                })()}
+                                <PresenterTeamChat eventId={event.id} presenterMode={false} />
                               </div>
                             </DialogContent>
                           </Dialog>
