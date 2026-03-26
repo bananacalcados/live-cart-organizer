@@ -158,6 +158,10 @@ export default function ChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const activeConversationRef = useRef<{ phone: string | null; numberId: string | null | undefined }>({
+    phone: null,
+    numberId: undefined,
+  });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -195,6 +199,13 @@ export default function ChatPage() {
     if (contact?.display_name) return contact.display_name;
     return null;
   }, [chatContacts]);
+
+  useEffect(() => {
+    activeConversationRef.current = {
+      phone: selectedPhone,
+      numberId: selectedConvNumberId,
+    };
+  }, [selectedPhone, selectedConvNumberId]);
 
   const saveContactName = async (phone: string, customName: string) => {
     const existing = chatContacts.find(c => c.phone === phone);
@@ -239,7 +250,7 @@ export default function ChatPage() {
         lastMessage: row.last_message,
         lastMessageAt: new Date(row.last_message_at),
         unreadCount: Number(row.unread_count),
-        customerName: getContactName(phone) || crmMap.get(phone)?.name || senderNameFromRPC || order?.customer?.instagram_handle || customer?.instagram_handle,
+        customerName: getContactName(phone) || senderNameFromRPC || crmMap.get(phone)?.name || order?.customer?.instagram_handle || customer?.instagram_handle,
         isGroup,
         hasUnansweredMessage: row.direction === 'incoming',
         stage: order?.stage,
@@ -260,14 +271,17 @@ export default function ChatPage() {
       .channel('chat-page-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' }, () => {
         loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone, false, selectedConvNumberId);
+        const active = activeConversationRef.current;
+        if (active.phone) loadMessages(active.phone, false, active.numberId);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_messages' }, () => {
         loadConversations();
+        const active = activeConversationRef.current;
+        if (active.phone) loadMessages(active.phone, false, active.numberId);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [loadConversations, selectedPhone]);
+  }, [loadConversations]);
 
   // ── Load messages for a phone (paginated) ──
   const PAGE_SIZE = 50;
@@ -310,11 +324,9 @@ export default function ChatPage() {
   };
 
   // ── Select conversation ──
-  const handleSelectConversation = (phone: string) => {
-    // Find the conversation to get its whatsapp_number_id
-    // Since Chat.tsx doesn't use ConversationList, we match by phone
-    const conv = conversations.find(c => c.phone === phone);
-    const numberId = conv?.whatsapp_number_id;
+  const handleSelectConversation = (conv: Conversation) => {
+    const phone = conv.phone;
+    const numberId = conv.whatsapp_number_id;
     setSelectedPhone(phone);
     setSelectedConvNumberId(numberId);
     setSelectedConvKey(conv?.conversationKey || `${phone}__${numberId || 'none'}`);
@@ -805,10 +817,10 @@ export default function ChatPage() {
               filteredConversations.map((conv) => (
                 <button
                   key={conv.conversationKey || conv.phone}
-                  onClick={() => handleSelectConversation(conv.phone)}
+                  onClick={() => handleSelectConversation(conv)}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-3 hover:bg-[#202c33] transition-colors",
-                    selectedPhone === conv.phone && "bg-[#2a3942]",
+                    selectedConvKey === conv.conversationKey && "bg-[#2a3942]",
                     conv.hasUnansweredMessage && "bg-[#1a2e1a] hover:bg-[#1e3520]"
                   )}
                 >
