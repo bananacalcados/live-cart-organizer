@@ -480,13 +480,23 @@ const Events = () => {
                           )}
                         </div>
 
-                        <Button
-                          className="w-full btn-accent"
-                          onClick={() => handleOpenEvent(event.id)}
-                        >
-                          <Play className="h-4 w-4 mr-2" />
-                          Abrir Evento
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            className="flex-1 btn-accent"
+                            onClick={() => handleOpenEvent(event.id)}
+                          >
+                            <Play className="h-4 w-4 mr-2" />
+                            Abrir Evento
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => navigate(`/presenter/${event.id}`)}
+                            title="Painel da Apresentadora"
+                          >
+                            <Monitor className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   );
