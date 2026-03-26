@@ -281,19 +281,8 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       console.log('🚀 [WEBHOOK] Disparando para pedido:', order.id, 'automationEnabled:', automationEnabled);
 
       if (automationEnabled) {
-        // Use internal Livete AI instead of VPS webhook
-        try {
-          const { data: liveteResp, error: liveteErr } = await supabase.functions.invoke('livete-start-order', {
-            body: { orderId: order.id },
-          });
-          if (liveteErr) {
-            console.error('🤖 [LIVETE] Error:', liveteErr);
-          } else {
-            console.log('🤖 [LIVETE] Success:', liveteResp);
-          }
-        } catch (liveteErr) {
-          console.error('🤖 [LIVETE] Exception:', liveteErr);
-        }
+        // O início da Livete já é disparado pelo move para "new".
+        console.log('🤖 [LIVETE] Start handled by moveOrder for', order.id);
       } else {
         // Fallback: send to VPS webhook (legacy)
         try {
