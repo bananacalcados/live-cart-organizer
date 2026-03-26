@@ -6,8 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Intervals per reminder level (in minutes)
-const LEVEL_INTERVALS = [5, 30, 120, 1440]; // 5min, 30min, 2h, 24h
+// Intervals per reminder level (in minutes) — level 3 is special: next day at 10am
+const LEVEL_INTERVALS = [5, 30, 120, -1]; // 5min, 30min, 2h, next-day-10am
+
+function getNextDay10am(fromDate: Date): Date {
+  const next = new Date(fromDate);
+  next.setDate(next.getDate() + 1);
+  // 10am Brasília (UTC-3) = 13:00 UTC
+  next.setUTCHours(13, 0, 0, 0);
+  return next;
+}
 
 // Contextual messages by stage_atendimento and level
 const STAGE_MESSAGES: Record<string, string[]> = {
