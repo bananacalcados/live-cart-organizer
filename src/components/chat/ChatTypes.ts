@@ -73,4 +73,4 @@ export type InstanceFilter = 'all' | 'zapi' | 'meta' | string;
  * - archived: hidden from main list
  */
 export type ConversationStatus = 'not_started' | 'awaiting_reply' | 'awaiting_customer' | 'finished';
-export type ConversationStatusFilter = 'all' | ConversationStatus | 'awaiting_payment' | 'archived';
+export type ConversationStatusFilter = 'all' | ConversationStatus | 'awaiting_payment' | 'archived' | 'dispatch';
