@@ -1,0 +1,1 @@
+UPDATE automation_ai_sessions SET is_active = false, updated_at = now() WHERE phone = '5533991955003' AND is_active = true;
