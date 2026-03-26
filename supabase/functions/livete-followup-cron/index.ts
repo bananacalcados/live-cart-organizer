@@ -6,8 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Intervals per reminder level (in minutes)
-const LEVEL_INTERVALS = [5, 30, 120, 1440]; // 5min, 30min, 2h, 24h
+// Intervals per reminder level (in minutes) — level 3 is special: next day at 10am
+const LEVEL_INTERVALS = [5, 30, 120, -1]; // 5min, 30min, 2h, next-day-10am
+
+function getNextDay10am(fromDate: Date): Date {
+  const next = new Date(fromDate);
+  next.setDate(next.getDate() + 1);
+  // 10am Brasília (UTC-3) = 13:00 UTC
+  next.setUTCHours(13, 0, 0, 0);
+  return next;
+}
 
 // Contextual messages by stage_atendimento and level
 const STAGE_MESSAGES: Record<string, string[]> = {
@@ -211,13 +219,36 @@ serve(async (req) => {
         }
       }
 
-      // Check max levels
+      // Check max levels — tag customer as non-responsive
       if (fu.reminder_level >= fu.max_levels) {
         await supabase.from('livete_followups').update({
           is_active: false, completed_at: now.toISOString(),
         }).eq('id', fu.id);
         deactivated++;
-        console.log(`[livete-followup] ${fu.phone} max levels reached`);
+
+        // Tag customer as non-responsive for future nurturing funnels
+        if (fu.order_id) {
+          const { data: orderForTag } = await supabase
+            .from('orders')
+            .select('customer_id')
+            .eq('id', fu.order_id)
+            .maybeSingle();
+          if (orderForTag?.customer_id) {
+            const { data: cust } = await supabase
+              .from('customers')
+              .select('tags')
+              .eq('id', orderForTag.customer_id)
+              .maybeSingle();
+            const tags: string[] = cust?.tags || [];
+            if (!tags.includes('followup_sem_resposta')) {
+              await supabase.from('customers').update({
+                tags: [...tags, 'followup_sem_resposta'],
+              }).eq('id', orderForTag.customer_id);
+            }
+          }
+        }
+
+        console.log(`[livete-followup] ${fu.phone} max levels reached, tagged`);
         continue;
       }
 
@@ -280,14 +311,14 @@ serve(async (req) => {
           whatsapp_number_id: sendNumberId || null,
         });
 
-        // Calculate next reminder interval
+        // Calculate next reminder
         const nextLevel = level + 1;
-        const nextIntervalMin = nextLevel < LEVEL_INTERVALS.length
-          ? LEVEL_INTERVALS[nextLevel]
-          : null; // No more levels
-
-        if (nextIntervalMin !== null) {
-          const nextReminder = new Date(now.getTime() + nextIntervalMin * 60000);
+        if (nextLevel < LEVEL_INTERVALS.length) {
+          const intervalVal = LEVEL_INTERVALS[nextLevel];
+          // -1 means "next day at 10am"
+          const nextReminder = intervalVal === -1
+            ? getNextDay10am(now)
+            : new Date(now.getTime() + intervalVal * 60000);
           await supabase.from('livete_followups').update({
             reminder_level: nextLevel,
             next_reminder_at: nextReminder.toISOString(),
@@ -295,7 +326,7 @@ serve(async (req) => {
             updated_at: now.toISOString(),
           }).eq('id', fu.id);
         } else {
-          // Max levels reached after this send
+          // Max levels reached after this send — tag will happen on next cron tick
           await supabase.from('livete_followups').update({
             reminder_level: nextLevel,
             is_active: false,
