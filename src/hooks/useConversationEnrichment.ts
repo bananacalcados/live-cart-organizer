@@ -133,7 +133,7 @@ export function useConversationEnrichment() {
         isFinished,
         isArchived,
         isAwaitingPayment,
-        isDispatchOnly: false, // will be set from RPC data
+        isDispatchOnly: conv.isDispatchOnly || false,
         instanceLabel,
         hasOtherInstances,
         otherInstanceLabels,
