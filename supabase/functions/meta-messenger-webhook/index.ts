@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchInstagramSenderUsername } from "../_shared/meta-instagram-profile.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -135,19 +136,20 @@ serve(async (req) => {
         let senderName: string | null = null;
         if (pageAccessToken) {
           try {
-            const fields = channel === 'instagram' ? 'name,username,profile_pic' : 'name,profile_pic';
-            const profileRes = await fetch(
-              `https://graph.facebook.com/v21.0/${senderId}?fields=${fields}&access_token=${pageAccessToken}`
-            );
-            if (profileRes.ok) {
-              const profile = await profileRes.json();
-              // Prefer username for Instagram (shows as @handle)
-              senderName = channel === 'instagram'
-                ? (profile.username ? `@${profile.username}` : profile.name || null)
-                : (profile.name || null);
-              console.log(`Profile for ${senderId}: username=${profile.username}, name=${profile.name}`);
+            if (channel === 'instagram') {
+              senderName = await fetchInstagramSenderUsername(pageAccessToken, senderId);
+              console.log(`Instagram profile for ${senderId}: username=${senderName}`);
             } else {
-              console.log(`Profile fetch failed for ${senderId}: ${profileRes.status}`);
+              const profileRes = await fetch(
+                `https://graph.facebook.com/v21.0/${senderId}?fields=name,profile_pic&access_token=${pageAccessToken}`
+              );
+              if (profileRes.ok) {
+                const profile = await profileRes.json();
+                senderName = profile.name || null;
+                console.log(`Profile for ${senderId}: name=${profile.name}`);
+              } else {
+                console.log(`Profile fetch failed for ${senderId}: ${profileRes.status}`);
+              }
             }
           } catch (e) {
             console.error('Error fetching sender profile:', e);
