@@ -1,3 +1,14 @@
+export interface MessageReferral {
+  source_url?: string | null;
+  source_type?: string | null;
+  source_id?: string | null;
+  headline?: string | null;
+  body?: string | null;
+  media_url?: string | null;
+  video_url?: string | null;
+  ctwa_clid?: string | null;
+}
+
 export interface Message {
   id: string;
   phone: string;
@@ -11,6 +22,7 @@ export interface Message {
   whatsapp_number_id?: string;
   sender_name?: string;
   message_id?: string;
+  referral?: MessageReferral | null;
 }
 
 export interface Conversation {

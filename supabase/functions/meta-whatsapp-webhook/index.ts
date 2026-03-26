@@ -225,6 +225,22 @@ serve(async (req) => {
             const contact = value.contacts?.find((c: any) => c.wa_id === msg.from);
             const senderName = contact?.profile?.name || null;
 
+            // Capture referral data from Meta ads (Click-to-WhatsApp)
+            const referralData = msg.referral ? {
+              source_url: msg.referral.source_url || null,
+              source_type: msg.referral.source_type || null,
+              source_id: msg.referral.source_id || null,
+              headline: msg.referral.headline || null,
+              body: msg.referral.body || null,
+              media_url: msg.referral.image_url || msg.referral.media_url || msg.referral.thumbnail_url || null,
+              video_url: msg.referral.video_url || null,
+              ctwa_clid: msg.referral.ctwa_clid || null,
+            } : null;
+
+            if (referralData) {
+              console.log(`Ad referral detected for ${phone}:`, JSON.stringify(referralData));
+            }
+
             const { error } = await supabase.from('whatsapp_messages').insert({
               phone,
               message: messageText,
@@ -236,6 +252,7 @@ serve(async (req) => {
               is_group: false,
               whatsapp_number_id: whatsappNumberDbId || null,
               sender_name: senderName,
+              referral: referralData,
             });
 
             if (error) {
