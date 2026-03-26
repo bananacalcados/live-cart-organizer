@@ -86,12 +86,17 @@ serve(async (req) => {
       });
     }
 
+    // ─── CROSS-INSTANCE DETECTION ───
+    // If the message came from a different WhatsApp number than the session's, flag it
+    const isCrossInstance = whatsappNumberId && session.whatsapp_number_id
+      && whatsappNumberId !== session.whatsapp_number_id;
+
     const orderId = session.prompt.replace('livete_checkout:', '');
 
     // 2. Load order
     const { data: order } = await supabase
       .from('orders')
-      .select('id, event_id, customer_id, products, stage, stage_atendimento, ai_paused, shipping_cost, free_shipping, discount_type, discount_value, cart_link, delivery_method')
+      .select('id, event_id, customer_id, products, stage, stage_atendimento, ai_paused, shipping_cost, free_shipping, discount_type, discount_value, cart_link, delivery_method, created_at')
       .eq('id', orderId)
       .single();
 
@@ -103,6 +108,29 @@ serve(async (req) => {
 
     if (order.ai_paused) {
       return new Response(JSON.stringify({ handled: false, reason: 'ai_paused' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ─── EVENT AGE CHECK ───
+    const orderAgeHours = (Date.now() - new Date(order.created_at).getTime()) / (1000 * 60 * 60);
+    const isOldOrder = orderAgeHours > 48;
+
+    // Load event date for more context
+    let eventDate: string | null = null;
+    if (order.event_id) {
+      const { data: evt } = await supabase.from('events').select('date').eq('id', order.event_id).single();
+      if (evt?.date) eventDate = evt.date;
+    }
+    const eventAgeHours = eventDate ? (Date.now() - new Date(eventDate).getTime()) / (1000 * 60 * 60) : orderAgeHours;
+
+    // Hard cutoff: if order is older than 5 days, deactivate session entirely
+    if (orderAgeHours > 120) {
+      console.log(`[livete-respond] Order ${orderId} is ${Math.round(orderAgeHours)}h old — deactivating session`);
+      await supabase.from('automation_ai_sessions').update({
+        is_active: false, updated_at: new Date().toISOString(),
+      }).eq('id', session.id);
+      return new Response(JSON.stringify({ handled: false, reason: 'order_too_old' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -175,6 +203,20 @@ serve(async (req) => {
 
     const systemPrompt = `Você é a Livete, atendente da Banana Calçados no WhatsApp durante uma live. Converse como uma pessoa real — simpática, leve e direta.
 
+${isCrossInstance ? `## ⚠️ ATENÇÃO: CONVERSA CROSS-INSTANCE
+O cliente está te respondendo por um OUTRO número de WhatsApp diferente do que o pedido foi iniciado.
+- NÃO comece cobrando pagamento ou falando do pedido diretamente.
+- Comece com algo suave como: "Oi [nome]! Vi que estávamos conversando no outro número 😊 É sobre o pedido da live?"
+- Deixe o cliente confirmar antes de prosseguir com o fluxo do pedido.
+- Se o cliente quiser falar de outro assunto, transfira para um atendente humano (use notify_presenter com alert_type "transfer_human").
+` : ''}
+${isOldOrder ? `## ⚠️ PEDIDO ANTIGO (${Math.round(orderAgeHours)}h atrás)
+Este pedido foi feito há mais de 2 dias. NÃO cobre pagamento automaticamente.
+- Aborde de forma suave: "Oi [nome]! Tudo bem? 😊 Posso te ajudar com alguma coisa?"
+- Se o cliente perguntar sobre o pedido, confirme se ele ainda tem interesse.
+- Se não demonstrar interesse, encerre educadamente e use cancel_order se necessário.
+- NÃO gere PIX nem envie links de pagamento sem o cliente confirmar que quer prosseguir.
+` : ''}
 ## Como falar
 - Frases CURTAS. Máximo 2-3 linhas por mensagem.
 - Mensagens maiores SÓ para listas (resumo do pedido, endereço).
@@ -182,6 +224,7 @@ serve(async (req) => {
 - SEMPRE termine com uma pergunta natural para manter o engajamento.
 - Nunca invente informação. Use só o que sabe.
 - Não repita perguntas já respondidas.
+- Na PRIMEIRA mensagem da conversa, NUNCA vá direto ao pagamento. Cumprimente e pergunte se o cliente precisa de ajuda.
 
 ## Base de Conhecimento
 ${knowledgeText}
