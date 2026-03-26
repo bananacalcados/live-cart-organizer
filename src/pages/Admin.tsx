@@ -403,6 +403,10 @@ export default function Admin() {
           <TabsContent value="knowledge" className="mt-4">
             <AiKnowledgeBase />
           </TabsContent>
+
+          <TabsContent value="secretary" className="mt-4">
+            <SecretaryChat />
+          </TabsContent>
         </Tabs>
       </main>
     </div>
