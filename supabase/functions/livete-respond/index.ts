@@ -113,7 +113,6 @@ serve(async (req) => {
     }
 
     // ─── EVENT AGE CHECK ───
-    // If the event/order is older than 2 days, Livete should NOT push for payment
     const orderAgeHours = (Date.now() - new Date(order.created_at).getTime()) / (1000 * 60 * 60);
     const isOldOrder = orderAgeHours > 48;
 
@@ -124,6 +123,17 @@ serve(async (req) => {
       if (evt?.date) eventDate = evt.date;
     }
     const eventAgeHours = eventDate ? (Date.now() - new Date(eventDate).getTime()) / (1000 * 60 * 60) : orderAgeHours;
+
+    // Hard cutoff: if order is older than 5 days, deactivate session entirely
+    if (orderAgeHours > 120) {
+      console.log(`[livete-respond] Order ${orderId} is ${Math.round(orderAgeHours)}h old — deactivating session`);
+      await supabase.from('automation_ai_sessions').update({
+        is_active: false, updated_at: new Date().toISOString(),
+      }).eq('id', session.id);
+      return new Response(JSON.stringify({ handled: false, reason: 'order_too_old' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // 3. Load customer, registration, history, knowledge base
     const { data: customer } = await supabase
