@@ -401,7 +401,7 @@ export default function PresenterDashboard() {
                     <Card key={order.id} className="bg-muted-foreground/5 border-muted-foreground/15 hover:bg-muted-foreground/10 transition-colors">
                       <CardContent className="p-3">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-sm">@{order.customer_name}</span>
+                          <span className="font-bold text-base text-yellow-400">@{order.customer_name}</span>
                           <span className="text-[10px] text-muted-foreground">{formatTime(order.created_at)}</span>
                         </div>
                         <div className="flex items-center justify-between">
