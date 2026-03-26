@@ -58,6 +58,8 @@ export interface Conversation {
   isAwaitingPayment?: boolean;
   /** Whether this conversation is dispatch-only (mass send, no reply yet) */
   isDispatchOnly?: boolean;
+  /** Channel: whatsapp, instagram, messenger */
+  channel?: string | null;
 }
 
 export type ChatFilter = 'all' | 'contacts' | 'groups';

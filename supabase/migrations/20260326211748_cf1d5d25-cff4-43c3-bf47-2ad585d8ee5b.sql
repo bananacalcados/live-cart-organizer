@@ -1,0 +1,1 @@
+ALTER TABLE public.whatsapp_messages ALTER COLUMN message_id TYPE text;

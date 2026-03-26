@@ -246,6 +246,7 @@ export default function ChatPage() {
         customerTags: customer?.tags,
         whatsapp_number_id: rowNumberId,
         isDispatchOnly: row.is_dispatch_only || false,
+        channel: (row as any).channel || null,
       });
     }
 
@@ -414,10 +415,44 @@ export default function ChatPage() {
     return { success: true, messageId: data.messageId };
   };
 
+  // ── Send via Messenger/Instagram API ──
+  const sendViaMessenger = async (recipientId: string, message: string, channel: 'messenger' | 'instagram' = 'instagram', type: string = 'text', mediaUrl?: string): Promise<{ success: boolean; messageId?: string }> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-messenger-send`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ recipientId, message, channel, type, mediaUrl }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      toast.error(data?.error || `Erro ao enviar mensagem via ${channel}`);
+      return { success: false };
+    }
+    toast.success('Mensagem enviada!');
+    return { success: true, messageId: data.messageId };
+  };
+
+  // ── Get selected conversation channel ──
+  const getSelectedChannel = (): string | null => {
+    if (!selectedPhone) return null;
+    const conv = conversations.find(c => c.phone === selectedPhone && c.conversationKey === selectedConvKey);
+    return conv?.channel || null;
+  };
+
+  const isInstagramOrMessenger = (): boolean => {
+    const ch = getSelectedChannel();
+    return ch === 'instagram' || ch === 'messenger';
+  };
+
   // ── Send message ──
   const handleSend = async () => {
     if (isSending || isUploading || !selectedPhone) return;
     const useMeta = isMetaNumber();
+    const useMessenger = isInstagramOrMessenger();
+    const messengerChannel = (getSelectedChannel() as 'instagram' | 'messenger') || 'instagram';
     const numberId = getActiveNumberId();
 
     if (selectedMedia) {
@@ -426,7 +461,9 @@ export default function ChatPage() {
       if (!mediaUrl) { setIsUploading(false); return; }
 
       let sendResult: { success: boolean; messageId?: string } = { success: false };
-      if (useMeta) {
+      if (useMessenger) {
+        sendResult = await sendViaMessenger(selectedPhone, newMessage.trim() || '', messengerChannel, selectedMedia.type, mediaUrl);
+      } else if (useMeta) {
         sendResult = await sendViaMeta(selectedPhone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
       } else {
         const result = await zapiSendMedia(selectedPhone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined, numberId || undefined);
@@ -443,7 +480,8 @@ export default function ChatPage() {
           media_url: mediaUrl,
           whatsapp_number_id: numberId,
           message_id: sendResult.messageId || null,
-        });
+          channel: useMessenger ? messengerChannel : null,
+        } as any);
         loadMessages(selectedPhone, false, selectedConvNumberId);
       }
       URL.revokeObjectURL(selectedMedia.previewUrl);
@@ -459,7 +497,9 @@ export default function ChatPage() {
     setIsSending(true);
 
     let sendResult: { success: boolean; messageId?: string } = { success: false };
-    if (useMeta) {
+    if (useMessenger) {
+      sendResult = await sendViaMessenger(selectedPhone, text, messengerChannel);
+    } else if (useMeta) {
       sendResult = await sendViaMeta(selectedPhone, text);
     } else {
       const result = await zapiSend(selectedPhone, text, numberId || undefined);
@@ -474,7 +514,8 @@ export default function ChatPage() {
         status: 'sent',
         whatsapp_number_id: numberId,
         message_id: sendResult.messageId || null,
-      });
+        channel: useMessenger ? messengerChannel : null,
+      } as any);
       loadMessages(selectedPhone, false, selectedConvNumberId);
     }
     setIsSending(false);
@@ -782,7 +823,17 @@ export default function ChatPage() {
                         <span className="text-[#e9edef] font-medium text-[15px] truncate">
                           {conv.customerName || conv.phone}
                         </span>
-                        {conv.instanceLabel && (
+                        {conv.channel === 'instagram' && (
+                          <span className="text-[8px] px-1 py-0 rounded flex-shrink-0 font-medium bg-pink-500/20 text-pink-400">
+                            📷 Instagram
+                          </span>
+                        )}
+                        {conv.channel === 'messenger' && (
+                          <span className="text-[8px] px-1 py-0 rounded flex-shrink-0 font-medium bg-blue-500/20 text-blue-400">
+                            💬 Messenger
+                          </span>
+                        )}
+                        {conv.instanceLabel && !conv.channel && (
                           <span className={cn(
                             "text-[8px] px-1 py-0 rounded flex-shrink-0 font-medium",
                             conv.whatsapp_number_id ? "bg-blue-500/20 text-blue-400" : "bg-green-500/20 text-green-400"
