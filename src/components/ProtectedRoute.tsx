@@ -15,32 +15,46 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [hasAccess, setHasAccess] = useState<boolean | undefined>(undefined);
-  
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    let settled = false;
+    // IMPORTANT: Set up the listener FIRST, then call getSession.
+    // The listener handles ongoing changes; getSession restores the initial session.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+      // Only update after initial session is resolved to avoid race conditions
+      if (isReady) {
+        setSession(sess);
+      }
+    });
+
+    // getSession restores from storage — this is the source of truth for initial load
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      setSession(initialSession);
+      setIsReady(true);
+    });
+
+    // Fallback timeout in case getSession hangs
     const timeout = setTimeout(() => {
-      if (!settled) { settled = true; setSession(null); }
+      setIsReady((prev) => {
+        if (!prev) {
+          setSession(null);
+          return true;
+        }
+        return prev;
+      });
     }, 10000);
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!settled || session) {
-        settled = true;
-        clearTimeout(timeout);
-        setSession(session);
-      }
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!settled || session) {
-        settled = true;
-        clearTimeout(timeout);
-        setSession(session);
-      }
-    });
 
     return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   }, []);
+
+  // Once ready, listen to auth changes normally
+  useEffect(() => {
+    if (!isReady) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess);
+    });
+    return () => subscription.unsubscribe();
+  }, [isReady]);
 
   useEffect(() => {
     if (!session || !requiredModule) {
@@ -99,7 +113,7 @@ export function ProtectedRoute({ children, requiredModule }: ProtectedRouteProps
     return () => { cancelled = true; };
   }, [session, requiredModule]);
 
-  if (session === undefined) {
+  if (!isReady || session === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
