@@ -15,8 +15,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ZApiInstanceManager } from "@/components/admin/ZApiInstanceManager";
 import { AiKnowledgeBase } from "@/components/admin/AiKnowledgeBase";
+import { SecretaryChat } from "@/components/admin/SecretaryChat";
 import {
-  Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain,
+  Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone,
 } from "lucide-react";
 
@@ -212,6 +213,7 @@ export default function Admin() {
             <TabsTrigger value="users" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Usuários</TabsTrigger>
             <TabsTrigger value="zapi" className="gap-1.5"><Smartphone className="h-3.5 w-3.5" /> Instâncias Z-API</TabsTrigger>
             <TabsTrigger value="knowledge" className="gap-1.5"><Brain className="h-3.5 w-3.5" /> Livete IA</TabsTrigger>
+            <TabsTrigger value="secretary" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Secretária IA</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-6 mt-4">
@@ -400,6 +402,10 @@ export default function Admin() {
 
           <TabsContent value="knowledge" className="mt-4">
             <AiKnowledgeBase />
+          </TabsContent>
+
+          <TabsContent value="secretary" className="mt-4">
+            <SecretaryChat />
           </TabsContent>
         </Tabs>
       </main>
