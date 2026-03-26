@@ -358,8 +358,30 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         )
       }));
 
-      // Note: Livete AI trigger is handled by OrderCardDb.tsx during order creation
-      // to avoid duplicate invocations when moving orders to 'new' stage.
+      // Trigger Livete AI when card is moved to 'new' stage (drag-and-drop or manual)
+      if (newStage === 'new') {
+        try {
+          // Check if event has automation enabled
+          if (order.event_id) {
+            const { data: eventData } = await supabase
+              .from('events')
+              .select('automation_enabled')
+              .eq('id', order.event_id)
+              .single();
+
+            if (eventData?.automation_enabled) {
+              supabase.functions.invoke('livete-start-order', {
+                body: { orderId },
+              }).then(({ error: liveteErr }) => {
+                if (liveteErr) console.error('🤖 [LIVETE] moveOrder error:', liveteErr);
+                else console.log('🤖 [LIVETE] Triggered via moveOrder for', orderId);
+              });
+            }
+          }
+        } catch (e) {
+          console.error('🤖 [LIVETE] moveOrder trigger error:', e);
+        }
+      }
     } catch (error) {
       console.error('Error moving order:', error);
       toast.error('Erro ao mover pedido');
