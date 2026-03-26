@@ -213,7 +213,7 @@ serve(async (req) => {
       messages_sent: 1,
     });
 
-    // 11. Log
+    // 12. Log
     const responseTime = Date.now() - startTime;
     await supabase.from('ai_conversation_logs').insert({
       order_id: orderId,
