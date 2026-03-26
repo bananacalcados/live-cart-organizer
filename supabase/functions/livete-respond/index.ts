@@ -6,6 +6,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+/** Calculate a human-like typing delay based on message length */
+function typingDelay(text: string): number {
+  // ~40 chars/sec typing speed, min 2s, max 12s
+  const chars = text.length;
+  const seconds = Math.max(2, Math.min(12, chars / 40));
+  // Add slight randomness (±20%)
+  return Math.round(seconds * (0.8 + Math.random() * 0.4) * 1000);
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -14,7 +27,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { phone, messageText, whatsappNumberId } = await req.json();
@@ -25,6 +37,47 @@ serve(async (req) => {
     }
 
     console.log(`[livete-respond] phone=${phone}, msg="${messageText.slice(0, 80)}"`);
+
+    // ─── DEBOUNCE: wait for customer to finish typing ───
+    // Wait 4 seconds, then check if more messages arrived
+    await sleep(4000);
+
+    // Check the latest incoming message for this phone
+    const { data: latestMsgs } = await supabase
+      .from('whatsapp_messages')
+      .select('message, created_at')
+      .eq('phone', phone)
+      .eq('direction', 'incoming')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const latestMsg = latestMsgs?.[0];
+    if (latestMsg && latestMsg.message !== messageText) {
+      // A newer message arrived — skip this one, the newer webhook will handle it
+      console.log(`[livete-respond] Skipping: newer message detected for ${phone}`);
+      return new Response(JSON.stringify({ handled: false, reason: 'debounced' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Collect all recent messages from customer in the last 30 seconds (fragmented messages)
+    const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
+    const { data: recentMsgs } = await supabase
+      .from('whatsapp_messages')
+      .select('message')
+      .eq('phone', phone)
+      .eq('direction', 'incoming')
+      .gte('created_at', thirtySecsAgo)
+      .order('created_at', { ascending: true });
+
+    // Combine fragmented messages into one
+    const combinedMessage = (recentMsgs && recentMsgs.length > 1)
+      ? recentMsgs.map(m => m.message).filter(Boolean).join('\n')
+      : messageText;
+
+    if (recentMsgs && recentMsgs.length > 1) {
+      console.log(`[livete-respond] Combined ${recentMsgs.length} fragmented messages for ${phone}`);
+    }
 
     // 1. Check for active AI session
     const { data: session } = await supabase
@@ -131,9 +184,10 @@ serve(async (req) => {
       estado: registration.state || '',
     } : {};
 
-    // 9. Call Anthropic Claude
-    if (!anthropicKey) {
-      console.error('[livete-respond] ANTHROPIC_API_KEY not set');
+    // 9. Call AI via Lovable Gateway
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      console.error('[livete-respond] LOVABLE_API_KEY not set');
       return new Response(JSON.stringify({ handled: false, reason: 'no_api_key' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -158,7 +212,6 @@ ${knowledgeText}
 ${discountAmount > 0 ? `- Desconto: -R$${discountAmount.toFixed(2)}` : ''}
 - Total a pagar: R$${total.toFixed(2)}
 - Frete grátis: ${order.free_shipping ? 'Sim' : 'Não'}
-- Link de pagamento: ${order.cart_link || 'Não gerado'}
 
 ## Dados já coletados
 ${JSON.stringify(regData, null, 2)}
@@ -170,7 +223,7 @@ ${JSON.stringify(regData, null, 2)}
 2. **confirmar_endereco** — Cliente tem endereço salvo, confirmar se está correto.
 3. **dados_pessoais** — Coletar Nome Completo, CPF e E-mail (pode pedir tudo de uma vez ou separado).
 4. **forma_pagamento** — Perguntar forma de pagamento: PIX ou Cartão de Crédito (até 3x sem juros).
-5. **aguardando_pix** — Se escolheu PIX, informar que o link de pagamento será enviado.
+5. **aguardando_pix** — Se escolheu PIX, o código PIX será gerado e enviado automaticamente. NÃO envie link de pagamento. Informe que o código copia-e-cola será enviado em seguida.
 6. **aguardando_cartao** — Se escolheu cartão, informar o link de pagamento.
 7. **pago** — Pagamento confirmado.
 
@@ -188,8 +241,11 @@ Se estiver em **dados_pessoais**:
 - Se faltar algo, pergunte o que falta.
 
 Se estiver em **forma_pagamento**:
-- Se disse PIX, avance para aguardando_pix.
+- Se disse PIX, avance para aguardando_pix. Diga que vai enviar o código PIX copia-e-cola em instantes.
 - Se disse cartão/crédito, avance para aguardando_cartao.
+
+Se estiver em **aguardando_pix**:
+- O PIX será gerado e enviado automaticamente em outra mensagem. Apenas confirme que está gerando.
 
 ## Formato de resposta (JSON obrigatório):
 Responda SEMPRE em JSON válido com esta estrutura:
@@ -207,54 +263,48 @@ Responda SEMPRE em JSON válido com esta estrutura:
     "neighborhood": "se extraído",
     "city": "se extraído",
     "state": "se extraído",
-    "delivery_method": "shipping ou pickup (se mencionado)"
+    "delivery_method": "shipping ou pickup (se mencionado)",
+    "payment_method": "pix ou cartao (se mencionado)"
   }
 }
 
 Retorne SOMENTE o JSON, sem markdown, sem texto antes ou depois.`;
 
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        system: systemPrompt,
+        model: 'google/gemini-2.5-flash',
         messages: [
-          {
-            role: 'user',
-            content: `Histórico da conversa:\n${conversationHistory}\n\nMensagem mais recente do cliente: "${messageText}"`,
-          },
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Histórico da conversa:\n${conversationHistory}\n\nMensagem mais recente do cliente: "${combinedMessage}"` },
         ],
       }),
     });
 
-    if (!claudeResponse.ok) {
-      const errBody = await claudeResponse.text();
-      console.error(`[livete-respond] Claude API error ${claudeResponse.status}: ${errBody}`);
+    if (!aiResponse.ok) {
+      const errBody = await aiResponse.text();
+      console.error(`[livete-respond] AI error ${aiResponse.status}: ${errBody}`);
       return new Response(JSON.stringify({ handled: false, reason: 'ai_error', detail: errBody }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const claudeData = await claudeResponse.json();
-    const aiText = claudeData.content?.[0]?.text || '';
-    console.log(`[livete-respond] Claude raw: ${aiText.slice(0, 200)}`);
+    const aiData = await aiResponse.json();
+    const aiText = aiData.choices?.[0]?.message?.content || '';
+    console.log(`[livete-respond] AI raw: ${aiText.slice(0, 200)}`);
 
     // Parse JSON response
     let parsed: { reply: string; next_stage: string; extracted_data: Record<string, string> };
     try {
-      // Try to extract JSON from the response (handle potential markdown wrapping)
       const jsonMatch = aiText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('No JSON found in response');
       parsed = JSON.parse(jsonMatch[0]);
     } catch (parseErr) {
       console.error('[livete-respond] Failed to parse AI response:', parseErr, aiText);
-      // Fallback: use the raw text as reply
       parsed = { reply: aiText, next_stage: currentStage, extracted_data: {} };
     }
 
@@ -280,7 +330,6 @@ Retorne SOMENTE o JSON, sem markdown, sem texto antes ou depois.`;
       if (extracted_data.state) upsertData.state = extracted_data.state;
 
       if (registration) {
-        // Update existing
         const updateFields: Record<string, any> = {};
         for (const [key, val] of Object.entries(upsertData)) {
           if (key !== 'order_id' && key !== 'whatsapp' && key !== 'instagram_handle' && val) {
@@ -293,7 +342,6 @@ Retorne SOMENTE o JSON, sem markdown, sem texto antes ou depois.`;
           console.log(`[livete-respond] Updated registration ${registration.id}:`, Object.keys(updateFields));
         }
       } else {
-        // Insert new — fill required fields with placeholders if not yet available
         const insertData = {
           order_id: orderId,
           customer_id: order.customer_id,
@@ -337,10 +385,16 @@ Retorne SOMENTE o JSON, sem markdown, sem texto antes ou depois.`;
       console.log(`[livete-respond] Stage: ${currentStage} → ${next_stage}`);
     }
 
+    // ─── HUMAN-LIKE TYPING DELAY ───
+    const delay = typingDelay(reply);
+    console.log(`[livete-respond] Typing delay: ${delay}ms for ${reply.length} chars`);
+    await sleep(delay);
+
     // 12. Send reply via WhatsApp
     const sendNumberId = whatsappNumberId || session.whatsapp_number_id;
-    if (sendNumberId) {
-      // Determine provider
+    
+    async function sendWhatsApp(message: string) {
+      if (!sendNumberId) return;
       const { data: wnData } = await supabase
         .from('whatsapp_numbers')
         .select('provider, phone_number_id')
@@ -351,33 +405,69 @@ Retorne SOMENTE o JSON, sem markdown, sem texto antes ou depois.`;
         await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone,
-            message: reply,
-            whatsappNumberId: sendNumberId,
-          }),
+          body: JSON.stringify({ phone, message, whatsappNumberId: sendNumberId }),
         });
       } else {
         await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone,
-            message: reply,
-            whatsapp_number_id: sendNumberId,
-          }),
+          body: JSON.stringify({ phone, message, whatsapp_number_id: sendNumberId }),
         });
       }
+
+      // Save outgoing message
+      await supabase.from('whatsapp_messages').insert({
+        phone, message, direction: 'outgoing', status: 'sent',
+        whatsapp_number_id: sendNumberId,
+      });
     }
 
-    // 13. Save outgoing message
-    await supabase.from('whatsapp_messages').insert({
-      phone,
-      message: reply,
-      direction: 'outgoing',
-      status: 'sent',
-      whatsapp_number_id: sendNumberId,
-    });
+    // Send the AI reply
+    await sendWhatsApp(reply);
+
+    // 13. If stage advanced to aguardando_pix, generate and send PIX inline
+    if (next_stage === 'aguardando_pix') {
+      console.log(`[livete-respond] Generating inline PIX for order ${orderId}, total R$${total.toFixed(2)}`);
+      
+      // Build payer data from registration
+      const reg = registration || extracted_data || {};
+      const payerData: Record<string, any> = {};
+      if (reg.email || extracted_data?.email) payerData.email = reg.email || extracted_data?.email;
+      if (reg.full_name || extracted_data?.full_name) payerData.firstName = (reg.full_name || extracted_data?.full_name || '').split(' ')[0];
+      if (reg.cpf || extracted_data?.cpf) payerData.cpf = reg.cpf || extracted_data?.cpf;
+
+      try {
+        const pixResp = await fetch(`${supabaseUrl}/functions/v1/mercadopago-create-pix`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, payer: payerData }),
+        });
+
+        const pixData = await pixResp.json();
+
+        if (pixData?.qrCode) {
+          // Wait before sending the PIX code (human-like)
+          await sleep(3000);
+
+          const pixMessage = `💰 *Aqui está o PIX copia e cola!*\n\n` +
+            `Valor: *R$ ${total.toFixed(2)}*\n\n` +
+            `Copie o código abaixo e cole no app do seu banco:\n\n` +
+            `${pixData.qrCode}\n\n` +
+            `⏰ O código expira em 30 minutos. Assim que o pagamento for confirmado, te aviso aqui! 😊`;
+
+          await sendWhatsApp(pixMessage);
+          console.log(`[livete-respond] PIX code sent inline to ${phone}`);
+        } else {
+          console.error('[livete-respond] PIX generation failed:', pixData);
+          await sleep(2000);
+          await sendWhatsApp(`Tive um probleminha ao gerar o PIX 😅 Mas não se preocupe, vou tentar novamente. Pode aguardar um instante?`);
+        }
+      } catch (pixErr) {
+        console.error('[livete-respond] PIX error:', pixErr);
+        await sleep(2000);
+        await sendWhatsApp(`Ops, tive uma dificuldade técnica ao gerar o PIX. Vou acionar nossa equipe pra resolver rapidinho! 🙏`);
+      }
+    }
 
     // 14. Update session message count
     await supabase.from('automation_ai_sessions').update({
@@ -391,13 +481,13 @@ Retorne SOMENTE o JSON, sem markdown, sem texto antes ou depois.`;
       order_id: orderId,
       phone,
       stage: next_stage || currentStage,
-      message_in: messageText,
+      message_in: combinedMessage,
       message_out: reply,
       ai_decision: `stage_${currentStage}_to_${next_stage}`,
       tool_called: 'livete-respond',
       tool_params: extracted_data && Object.keys(extracted_data).length > 0 ? extracted_data : null,
       response_time_ms: responseTime,
-      provider: 'anthropic',
+      provider: 'lovable-gateway',
     });
 
     console.log(`[livete-respond] Done: order=${orderId}, stage=${currentStage}→${next_stage}, time=${responseTime}ms`);
