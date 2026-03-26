@@ -116,13 +116,14 @@ export function ConversationList({
     })
     .filter(c => {
       if (statusFilter === 'all') {
-        // "Todas" hides archived and finished conversations
-        return !c.isArchived && !c.isFinished;
+        // "Todas" hides archived, finished, and dispatch-only conversations
+        return !c.isArchived && !c.isFinished && !c.isDispatchOnly;
       }
+      if (statusFilter === 'dispatch') return c.isDispatchOnly && !c.isArchived;
       if (statusFilter === 'archived') return c.isArchived;
       if (statusFilter === 'awaiting_payment') return c.isAwaitingPayment && !c.isArchived;
       if (statusFilter === 'finished') return c.isFinished && !c.isArchived;
-      if (c.isFinished || c.isArchived) return false;
+      if (c.isFinished || c.isArchived || c.isDispatchOnly) return false;
       return c.conversationStatus === statusFilter;
     })
     .filter(c => {
