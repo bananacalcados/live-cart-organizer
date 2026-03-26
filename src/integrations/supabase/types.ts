@@ -4438,6 +4438,72 @@ export type Database = {
           },
         ]
       }
+      livete_followups: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          event_id: string | null
+          id: string
+          is_active: boolean
+          last_client_message_at: string | null
+          max_levels: number
+          next_reminder_at: string | null
+          order_id: string | null
+          phone: string
+          reminder_level: number
+          stage_atendimento: string | null
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          is_active?: boolean
+          last_client_message_at?: string | null
+          max_levels?: number
+          next_reminder_at?: string | null
+          order_id?: string | null
+          phone: string
+          reminder_level?: number
+          stage_atendimento?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          is_active?: boolean
+          last_client_message_at?: string | null
+          max_levels?: number
+          next_reminder_at?: string | null
+          order_id?: string | null
+          phone?: string
+          reminder_level?: number
+          stage_atendimento?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "livete_followups_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "livete_followups_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       loyalty_config: {
         Row: {
           created_at: string
