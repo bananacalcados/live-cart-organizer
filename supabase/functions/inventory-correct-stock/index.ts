@@ -193,7 +193,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true, processed, errors,
-      remaining: remaining - processed,
+      remaining,
       done: isDone,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
