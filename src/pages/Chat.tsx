@@ -245,6 +245,7 @@ export default function ChatPage() {
         customerId: order?.customer_id || customer?.id,
         customerTags: customer?.tags,
         whatsapp_number_id: rowNumberId,
+        isDispatchOnly: row.is_dispatch_only || false,
       });
     }
 
