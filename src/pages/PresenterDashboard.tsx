@@ -11,6 +11,7 @@ import {
   Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package
 } from "lucide-react";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
+import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 
 interface PresenterAlert {
   id: string;
