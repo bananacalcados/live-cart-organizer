@@ -145,10 +145,11 @@ export function ConversationList({
 
   // Count per status
   const statusCounts: Record<ConversationStatusFilter, number> = {
-    all: conversations.filter(c => !c.isArchived && !c.isFinished).length,
-    not_started: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'not_started').length,
-    awaiting_reply: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'awaiting_reply').length,
-    awaiting_customer: conversations.filter(c => !c.isFinished && !c.isArchived && c.conversationStatus === 'awaiting_customer').length,
+    all: conversations.filter(c => !c.isArchived && !c.isFinished && !c.isDispatchOnly).length,
+    not_started: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'not_started').length,
+    awaiting_reply: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_reply').length,
+    awaiting_customer: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_customer').length,
+    dispatch: conversations.filter(c => c.isDispatchOnly && !c.isArchived).length,
     awaiting_payment: conversations.filter(c => c.isAwaitingPayment && !c.isArchived).length,
     finished: conversations.filter(c => c.isFinished && !c.isArchived).length,
     archived: conversations.filter(c => c.isArchived).length,
