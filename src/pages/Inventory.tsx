@@ -934,8 +934,19 @@ export default function Inventory() {
       (i.counted_quantity === 0 && i.current_stock && i.current_stock > 0)
     );
 
-    for (const item of allDivergent) {
-      await supabase.from('inventory_correction_queue').insert({
+    if (allDivergent.length === 0) {
+      toast.info('Nenhuma divergência para corrigir.');
+      return;
+    }
+
+    toast.loading('Preparando fila de correção...', { id: 'correction-prep' });
+
+    try {
+      // 1. Delete any existing queue items for this count to avoid duplicates
+      await supabase.from('inventory_correction_queue').delete().eq('count_id', activeCount.id);
+
+      // 2. Batch insert in chunks of 200
+      const rows = allDivergent.map(item => ({
         count_id: activeCount.id,
         count_item_id: item.id,
         store_id: selectedStoreId,
@@ -943,22 +954,36 @@ export default function Inventory() {
         product_name: item.product_name,
         new_quantity: item.counted_quantity,
         old_quantity: item.current_stock,
-      });
+      }));
+
+      const CHUNK = 200;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK);
+        const { error } = await supabase.from('inventory_correction_queue').insert(chunk);
+        if (error) {
+          console.error('Batch insert error at chunk', i, error);
+          throw error;
+        }
+      }
+
+      // 3. Update count status
+      await supabase.from('inventory_counts').update({ status: 'correcting' }).eq('id', activeCount.id);
+      setCorrectionProgress({ processed: 0, total: allDivergent.length, errors: 0 });
+      setIsCorrecting(true);
+      setActiveTab('correction');
+
+      // 4. Fire-and-forget: the edge function self-invokes until done
+      supabase.functions.invoke('inventory-correct-stock', {
+        body: { count_id: activeCount.id, batch_size: 10 }
+      }).catch(e => console.error('Initial correction invoke error:', e));
+
+      // Refresh activeCount so polling useEffect kicks in
+      setActiveCount({ ...activeCount, status: 'correcting' } as unknown as InventoryCount);
+      toast.success('Correção iniciada! Você pode fechar a página — o processamento continua no servidor.', { id: 'correction-prep' });
+    } catch (err: any) {
+      console.error('handleStartCorrection error:', err);
+      toast.error('Erro ao iniciar correção: ' + (err.message || 'Erro desconhecido'), { id: 'correction-prep' });
     }
-
-    await supabase.from('inventory_counts').update({ status: 'correcting' }).eq('id', activeCount.id);
-    setCorrectionProgress({ processed: 0, total: allDivergent.length, errors: 0 });
-    setIsCorrecting(true);
-    setActiveTab('correction');
-
-    // Fire-and-forget: the edge function self-invokes until done
-    supabase.functions.invoke('inventory-correct-stock', {
-      body: { count_id: activeCount.id, batch_size: 10 }
-    }).catch(e => console.error('Initial correction invoke error:', e));
-
-    // Refresh activeCount so polling useEffect kicks in
-    setActiveCount({ ...activeCount, status: 'correcting' } as unknown as InventoryCount);
-    toast.success('Correção iniciada! Você pode fechar a página — o processamento continua no servidor.');
   };
 
   const handleRetryErrors = async () => {
