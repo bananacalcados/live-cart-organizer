@@ -89,6 +89,56 @@ Deno.serve(async (req) => {
         })
         .eq("id", inserted.id);
 
+      // Check if this user has incomplete orders (missing WhatsApp)
+      try {
+        const usernameClean = comment.username.replace(/^@/, "").toLowerCase();
+        const { data: incompleteOrders } = await supabase
+          .from("orders")
+          .select("id, customer_id")
+          .eq("event_id", comment.event_id)
+          .eq("stage", "incomplete_order")
+          .limit(50);
+
+        if (incompleteOrders && incompleteOrders.length > 0) {
+          const customerIds = [...new Set(incompleteOrders.map((o: any) => o.customer_id))];
+          const { data: customers } = await supabase
+            .from("customers")
+            .select("id, instagram_handle, whatsapp")
+            .in("id", customerIds);
+
+          const matchingCustomer = (customers || []).find((c: any) => {
+            const handle = (c.instagram_handle || "").replace(/^@/, "").toLowerCase();
+            return handle === usernameClean && (!c.whatsapp || c.whatsapp.trim() === "");
+          });
+
+          if (matchingCustomer) {
+            // Check if we already sent this alert recently (last 10 min)
+            const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+            const { data: recentAlert } = await supabase
+              .from("livete_presenter_alerts")
+              .select("id")
+              .eq("event_id", comment.event_id)
+              .eq("alert_type", "missing_whatsapp")
+              .eq("customer_name", comment.username)
+              .gte("created_at", tenMinAgo)
+              .limit(1);
+
+            if (!recentAlert || recentAlert.length === 0) {
+              await supabase.from("livete_presenter_alerts").insert({
+                event_id: comment.event_id,
+                alert_type: "missing_whatsapp",
+                message: `@${usernameClean} comentou na live mas tem pedido sem WhatsApp! Solicite o número dela.`,
+                customer_name: comment.username,
+                phone: "",
+                product_title: null,
+              });
+            }
+          }
+        }
+      } catch (alertErr) {
+        console.error("Error checking incomplete orders:", alertErr);
+      }
+
       results.push({
         status: "inserted",
         id: inserted.id,
