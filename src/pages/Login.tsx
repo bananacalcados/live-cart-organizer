@@ -8,25 +8,21 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Banana, Mail, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthReady } from "@/hooks/useAuthReady";
 
 export default function Login() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { session, isReady } = useAuthReady();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) navigate("/", { replace: true });
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate("/", { replace: true });
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    if (isReady && session) {
+      navigate("/", { replace: true });
+    }
+  }, [isReady, session, navigate]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,14 +32,17 @@ export default function Login() {
     if (error) {
       toast({
         title: "Erro ao entrar",
-        description: error.message === "Invalid login credentials"
-          ? "Email ou senha incorretos."
-          : error.message === "Email not confirmed"
-          ? "Verifique seu email antes de entrar."
-          : error.message,
+        description:
+          error.message === "Invalid login credentials"
+            ? "Email ou senha incorretos."
+            : error.message === "Email not confirmed"
+              ? "Verifique seu email antes de entrar."
+              : error.message,
         variant: "destructive",
       });
+      return;
     }
+    navigate("/", { replace: true });
   };
 
   const handleGoogleLogin = async () => {
@@ -155,3 +154,4 @@ export default function Login() {
     </div>
   );
 }
+
