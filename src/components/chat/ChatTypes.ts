@@ -22,7 +22,8 @@ export interface Message {
   whatsapp_number_id?: string;
   sender_name?: string;
   message_id?: string;
-  referral?: MessageReferral | Record<string, unknown> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  referral?: any;
 }
 
 export interface Conversation {
