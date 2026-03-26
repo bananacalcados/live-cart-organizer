@@ -227,7 +227,9 @@ export default function PresenterDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-foreground text-card p-4 md:p-6">
+    <div className="min-h-screen bg-foreground text-card flex">
+      {/* Main content */}
+      <div className="flex-1 p-4 md:p-6 overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
