@@ -270,6 +270,7 @@ serve(async (req) => {
           }
         }
 
+        let insertError: unknown = null;
         if (!skipInsert) {
           const { error } = await supabase.from('whatsapp_messages').insert({
             phone,
@@ -282,6 +283,7 @@ serve(async (req) => {
             whatsapp_number_id: whatsappNumberId,
             ...(mediaInfo ? { media_type: mediaInfo.mediaType, media_url: mediaInfo.mediaUrl } : {}),
           });
+          insertError = error;
 
           if (error) {
             console.error('Error saving incoming message:', error);
