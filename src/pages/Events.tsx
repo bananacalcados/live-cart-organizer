@@ -35,6 +35,7 @@ import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { useEventStore } from "@/stores/eventStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
+import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone } from "lucide-react";
 import { format } from "date-fns";
