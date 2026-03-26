@@ -1868,6 +1868,7 @@ export type Database = {
           id: string
           instagram_handle: string
           is_banned: boolean
+          live_cancellation_count: number | null
           tags: string[] | null
           updated_at: string
           whatsapp: string | null
@@ -1878,6 +1879,7 @@ export type Database = {
           id?: string
           instagram_handle: string
           is_banned?: boolean
+          live_cancellation_count?: number | null
           tags?: string[] | null
           updated_at?: string
           whatsapp?: string | null
@@ -1888,6 +1890,7 @@ export type Database = {
           id?: string
           instagram_handle?: string
           is_banned?: boolean
+          live_cancellation_count?: number | null
           tags?: string[] | null
           updated_at?: string
           whatsapp?: string | null
@@ -4497,6 +4500,60 @@ export type Database = {
           },
           {
             foreignKeyName: "livete_followups_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      livete_presenter_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string | null
+          customer_name: string | null
+          event_id: string | null
+          id: string
+          is_read: boolean | null
+          message: string
+          order_id: string | null
+          phone: string
+          product_title: string | null
+        }
+        Insert: {
+          alert_type?: string
+          created_at?: string | null
+          customer_name?: string | null
+          event_id?: string | null
+          id?: string
+          is_read?: boolean | null
+          message: string
+          order_id?: string | null
+          phone: string
+          product_title?: string | null
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string | null
+          customer_name?: string | null
+          event_id?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          order_id?: string | null
+          phone?: string
+          product_title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "livete_presenter_alerts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "livete_presenter_alerts_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders"
