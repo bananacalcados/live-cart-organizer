@@ -77,7 +77,6 @@ const App = () => (
               <Route path="/vip/:slug" element={<VipGroupRedirectPage />} />
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />
               <Route path="/live-ortopedicos" element={<LiveOrtopedicosLP />} />
-              <Route path="/presenter/:eventId" element={<PresenterDashboard />} />
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
@@ -93,6 +92,7 @@ const App = () => (
               <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><Inventory /></ProtectedRoute>} />
               <Route path="/management" element={<ProtectedRoute requiredModule="management"><Management /></ProtectedRoute>} />
               <Route path="/admin" element={<ProtectedRoute requiredModule="admin"><Admin /></ProtectedRoute>} />
+              <Route path="/presenter/:eventId" element={<ProtectedRoute requiredModule="events"><PresenterDashboard /></ProtectedRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
 

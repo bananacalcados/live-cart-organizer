@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bell, BellRing, DollarSign, ShoppingCart, Clock, AlertTriangle,
-  Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp
+  Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package
 } from "lucide-react";
+import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 
 interface PresenterAlert {
   id: string;
@@ -293,126 +295,152 @@ export default function PresenterDashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Alerts Column */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Bell className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-bold">Alertas</h2>
-            {unreadCount > 0 && (
-              <Badge variant="destructive" className="animate-pulse">{unreadCount} novos</Badge>
-            )}
-          </div>
-          <ScrollArea className="h-[calc(100vh-320px)]">
-            <div className="space-y-3 pr-2">
-              {alerts.length === 0 && (
-                <Card className="bg-muted-foreground/10 border-muted-foreground/20">
-                  <CardContent className="p-6 text-center text-muted-foreground">
-                    Nenhum alerta ainda. Os alertas da IA aparecerão aqui em tempo real 🔔
-                  </CardContent>
-                </Card>
-              )}
-              {alerts.map(alert => {
-                const config = alertTypeConfig[alert.alert_type] || alertTypeConfig.general;
-                const Icon = config.icon;
-                return (
-                  <Card
-                    key={alert.id}
-                    className={`border transition-all ${
-                      !alert.is_read
-                        ? "bg-primary/10 border-primary/40 shadow-lg shadow-primary/10"
-                        : "bg-muted-foreground/5 border-muted-foreground/15"
-                    }`}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-2 flex-1">
-                          <div className={`p-1.5 rounded-lg border ${config.color} mt-0.5`}>
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="outline" className={`text-[10px] ${config.color}`}>
-                                {config.label}
-                              </Badge>
-                              <span className="text-[10px] text-muted-foreground">{formatTime(alert.created_at)}</span>
-                            </div>
-                            <p className="text-sm font-medium">{alert.message}</p>
-                            {alert.product_title && (
-                              <p className="text-xs text-muted-foreground mt-1">🏷️ {alert.product_title}</p>
-                            )}
-                            {alert.customer_name && (
-                              <p className="text-xs text-muted-foreground">👤 {alert.customer_name}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-1">
-                          {!alert.is_read && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/20" onClick={() => markAsRead(alert.id)}>
-                              <CheckCircle className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:bg-destructive/20 hover:text-destructive" onClick={() => dismissAlert(alert.id)}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        </div>
+      <Tabs defaultValue="live" className="flex-1">
+        <TabsList className="mb-4 bg-muted-foreground/10">
+          <TabsTrigger value="live" className="gap-1 data-[state=active]:bg-primary/20">
+            <Bell className="h-4 w-4" /> Alertas & Pedidos
+          </TabsTrigger>
+          <TabsTrigger value="catalog" className="gap-1 data-[state=active]:bg-primary/20">
+            <Package className="h-4 w-4" /> Catálogo da Live
+          </TabsTrigger>
+        </TabsList>
 
-        {/* Pending Orders Column */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Users className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-bold">Pedidos Pendentes</h2>
-            <Badge className="bg-yellow-600">{pendingPaymentOrders.length}</Badge>
-          </div>
-          <ScrollArea className="h-[calc(100vh-320px)]">
-            <div className="space-y-2 pr-2">
-              {pendingPaymentOrders.length === 0 && (
-                <Card className="bg-muted-foreground/10 border-muted-foreground/20">
-                  <CardContent className="p-6 text-center text-muted-foreground">
-                    Nenhum pedido pendente 🎉
-                  </CardContent>
-                </Card>
-              )}
-              {pendingPaymentOrders.map(order => (
-                <Card key={order.id} className="bg-muted-foreground/5 border-muted-foreground/15 hover:bg-muted-foreground/10 transition-colors">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm">@{order.customer_name}</span>
-                      <span className="text-[10px] text-muted-foreground">{formatTime(order.created_at)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-[10px]">
-                          {stageLabel(order.stage_atendimento || order.stage)}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {order.products.length} item(s)
-                        </span>
-                      </div>
-                      <span className="font-bold text-sm text-primary">
-                        R$ {order.total.toFixed(2)}
-                      </span>
-                    </div>
-                    {order.products.length > 0 && (
-                      <p className="text-[10px] text-muted-foreground mt-1 truncate">
-                        {order.products.map((p: any) => p.title).join(", ")}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+        <TabsContent value="live">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Alerts Column */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Bell className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-bold">Alertas</h2>
+                {unreadCount > 0 && (
+                  <Badge variant="destructive" className="animate-pulse">{unreadCount} novos</Badge>
+                )}
+              </div>
+              <ScrollArea className="h-[calc(100vh-380px)]">
+                <div className="space-y-3 pr-2">
+                  {alerts.length === 0 && (
+                    <Card className="bg-muted-foreground/10 border-muted-foreground/20">
+                      <CardContent className="p-6 text-center text-muted-foreground">
+                        Nenhum alerta ainda. Os alertas da IA aparecerão aqui em tempo real 🔔
+                      </CardContent>
+                    </Card>
+                  )}
+                  {alerts.map(alert => {
+                    const config = alertTypeConfig[alert.alert_type] || alertTypeConfig.general;
+                    const Icon = config.icon;
+                    return (
+                      <Card
+                        key={alert.id}
+                        className={`border transition-all ${
+                          !alert.is_read
+                            ? "bg-primary/10 border-primary/40 shadow-lg shadow-primary/10"
+                            : "bg-muted-foreground/5 border-muted-foreground/15"
+                        }`}
+                      >
+                        <CardContent className="p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2 flex-1">
+                              <div className={`p-1.5 rounded-lg border ${config.color} mt-0.5`}>
+                                <Icon className="h-4 w-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant="outline" className={`text-[10px] ${config.color}`}>
+                                    {config.label}
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground">{formatTime(alert.created_at)}</span>
+                                </div>
+                                <p className="text-sm font-medium">{alert.message}</p>
+                                {alert.product_title && (
+                                  <p className="text-xs text-muted-foreground mt-1">🏷️ {alert.product_title}</p>
+                                )}
+                                {alert.customer_name && (
+                                  <p className="text-xs text-muted-foreground">👤 {alert.customer_name}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              {!alert.is_read && (
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/20" onClick={() => markAsRead(alert.id)}>
+                                  <CheckCircle className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:bg-destructive/20 hover:text-destructive" onClick={() => dismissAlert(alert.id)}>
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             </div>
-          </ScrollArea>
-        </div>
-      </div>
+
+            {/* Pending Orders Column */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-bold">Pedidos Pendentes</h2>
+                <Badge className="bg-yellow-600">{pendingPaymentOrders.length}</Badge>
+              </div>
+              <ScrollArea className="h-[calc(100vh-380px)]">
+                <div className="space-y-2 pr-2">
+                  {pendingPaymentOrders.length === 0 && (
+                    <Card className="bg-muted-foreground/10 border-muted-foreground/20">
+                      <CardContent className="p-6 text-center text-muted-foreground">
+                        Nenhum pedido pendente 🎉
+                      </CardContent>
+                    </Card>
+                  )}
+                  {pendingPaymentOrders.map(order => (
+                    <Card key={order.id} className="bg-muted-foreground/5 border-muted-foreground/15 hover:bg-muted-foreground/10 transition-colors">
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-sm">@{order.customer_name}</span>
+                          <span className="text-[10px] text-muted-foreground">{formatTime(order.created_at)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px]">
+                              {stageLabel(order.stage_atendimento || order.stage)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {order.products.length} item(s)
+                            </span>
+                          </div>
+                          <span className="font-bold text-sm text-primary">
+                            R$ {order.total.toFixed(2)}
+                          </span>
+                        </div>
+                        {order.products.length > 0 && (
+                          <p className="text-[10px] text-muted-foreground mt-1 truncate">
+                            {order.products.map((p: any) => p.title).join(", ")}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="catalog">
+          <div className="space-y-4">
+            <Card className="bg-muted-foreground/5 border-muted-foreground/15">
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground mb-4">
+                  Gerencie os produtos do catálogo da live diretamente daqui. Adicione, remova e destaque produtos em tempo real.
+                </p>
+                <ActiveProductBar eventId={eventId!} eventName={eventName} />
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
