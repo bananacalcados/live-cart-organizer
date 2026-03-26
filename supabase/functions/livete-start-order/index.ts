@@ -185,11 +185,12 @@ serve(async (req) => {
       whatsapp_number_id: whatsappNumberId,
     });
 
-    // 9. Set stage_atendimento
+    // 9. Set stage_atendimento + move Kanban card to 'contacted'
     await supabase.rpc('update_order_stage', {
       p_order_id: orderId,
       p_stage: initialStage,
     });
+    await supabase.from('orders').update({ stage: 'contacted' }).eq('id', orderId);
 
     // 10. Deactivate ALL previous AI sessions for this phone (prevents duplicate conversations)
     await supabase

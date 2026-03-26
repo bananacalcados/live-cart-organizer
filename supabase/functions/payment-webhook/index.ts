@@ -332,6 +332,59 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       console.log(`[mercadopago] Order ${order.id} marked as paid via webhook`);
       updated = true;
 
+      // Deactivate AI session and send payment confirmation to customer
+      try {
+        const { data: sessions } = await supabase
+          .from('automation_ai_sessions')
+          .select('phone, whatsapp_number_id')
+          .eq('is_active', true)
+          .like('prompt', `livete_checkout:${order.id}`);
+
+        if (sessions && sessions.length > 0) {
+          const sess = sessions[0];
+          // Deactivate session
+          await supabase
+            .from('automation_ai_sessions')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq('is_active', true)
+            .like('prompt', `livete_checkout:${order.id}`);
+
+          // Send payment confirmed message
+          if (sess.phone && sess.whatsapp_number_id) {
+            const confirmMsg = `✅ *Pagamento confirmado!* 🎉\n\nRecebemos seu pagamento com sucesso! Seu pedido já está sendo preparado.\n\nMuito obrigada pela compra! 💛🍌`;
+            
+            const { data: wnData } = await supabase
+              .from('whatsapp_numbers')
+              .select('provider, phone_number_id')
+              .eq('id', sess.whatsapp_number_id)
+              .single();
+
+            if (wnData?.provider === 'meta' && wnData?.phone_number_id) {
+              await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: sess.phone, message: confirmMsg, whatsappNumberId: sess.whatsapp_number_id }),
+              });
+            } else {
+              await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: sess.phone, message: confirmMsg, whatsapp_number_id: sess.whatsapp_number_id }),
+              });
+            }
+
+            await supabase.from('whatsapp_messages').insert({
+              phone: sess.phone, message: confirmMsg, direction: 'outgoing', status: 'sent',
+              whatsapp_number_id: sess.whatsapp_number_id,
+            });
+
+            console.log(`[mercadopago] Payment confirmation sent to ${sess.phone}`);
+          }
+        }
+      } catch (aiErr) {
+        console.error('[mercadopago] AI session cleanup error (non-blocking):', aiErr);
+      }
+
       // Notify payment confirmed
       let lojaName = "centro";
       if (order.store_id) {
