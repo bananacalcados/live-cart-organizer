@@ -1,23 +1,24 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { 
-  LayoutDashboard, 
-  Calendar, 
-  MessageSquare, 
-  Megaphone, 
-  Truck, 
+import {
+  LayoutDashboard,
+  Calendar,
+  MessageSquare,
+  Megaphone,
+  Truck,
   LogOut,
   Store,
   Package,
   BarChart3,
   Banana,
-  Shield
+  Shield,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthReady } from "@/hooks/useAuthReady";
 
 const modules = [
   {
@@ -48,14 +49,6 @@ const modules = [
     path: "/marketing",
     module: "marketing",
   },
-  // Expedição v1 oculta temporariamente
-  // {
-  //   title: "Expedição",
-  //   description: "Picking, packing e despacho",
-  //   icon: Truck,
-  //   path: "/expedition",
-  //   module: "expedition",
-  // },
   {
     title: "Expedição Beta",
     description: "Auto-sync Shopify + código de barras",
@@ -96,9 +89,12 @@ const modules = [
 export default function Home() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { session, isReady } = useAuthReady();
   const [allowedModules, setAllowedModules] = useState<string[] | null>(null);
 
   useEffect(() => {
+    if (!isReady) return;
+
     let cancelled = false;
 
     const timeoutPromise = <T,>(ms: number, fallback: T) =>
@@ -121,14 +117,12 @@ export default function Home() {
       return result.data as string[];
     };
 
-    const checkPermissions = async (sessionOverride?: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]) => {
+    const checkPermissions = async () => {
       try {
-        const session = sessionOverride ?? (await supabase.auth.getSession()).data.session;
-
         if (!session) {
           if (!cancelled) {
             setAllowedModules([]);
-            navigate("/login");
+            navigate("/login", { replace: true });
           }
           return;
         }
@@ -150,17 +144,10 @@ export default function Home() {
 
     checkPermissions();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      checkPermissions(session);
-    });
-
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
     };
-  }, [navigate, toast]);
+  }, [isReady, session, navigate, toast]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -168,21 +155,19 @@ export default function Home() {
     navigate("/login");
   };
 
-  const visibleModules = allowedModules
-    ? modules.filter(m => allowedModules.includes(m.module))
-    : [];
+  const visibleModules = allowedModules ? modules.filter((m) => allowedModules.includes(m.module)) : [];
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'hsl(0 0% 6%)' }}>
-      <header className="sticky top-0 z-50 w-full border-b border-white/10" style={{ background: 'hsl(0 0% 4%)' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: "hsl(0 0% 6%)" }}>
+      <header className="sticky top-0 z-50 w-full border-b border-white/10" style={{ background: "hsl(0 0% 4%)" }}>
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: 'hsl(48 95% 50%)' }}>
-              <Banana className="h-5 w-5" style={{ color: 'hsl(0 0% 5%)' }} />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "hsl(48 95% 50%)" }}>
+              <Banana className="h-5 w-5" style={{ color: "hsl(0 0% 5%)" }} />
             </div>
             <div>
-              <h1 className="text-lg font-bold" style={{ color: 'hsl(48 95% 50%)' }}>GESTOR BANANA</h1>
-              <p className="text-xs" style={{ color: 'hsl(0 0% 55%)' }}>Painel de Controle</p>
+              <h1 className="text-lg font-bold" style={{ color: "hsl(48 95% 50%)" }}>GESTOR BANANA</h1>
+              <p className="text-xs" style={{ color: "hsl(0 0% 55%)" }}>Painel de Controle</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -196,32 +181,32 @@ export default function Home() {
 
       <main className="flex-1 container py-10">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold" style={{ color: 'hsl(0 0% 95%)' }}>Bem-vindo ao GESTOR BANANA</h2>
-          <p className="mt-1" style={{ color: 'hsl(0 0% 55%)' }}>Selecione um módulo para começar</p>
+          <h2 className="text-2xl font-bold" style={{ color: "hsl(0 0% 95%)" }}>Bem-vindo ao GESTOR BANANA</h2>
+          <p className="mt-1" style={{ color: "hsl(0 0% 55%)" }}>Selecione um módulo para começar</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {allowedModules === null ? (
             <div className="col-span-full flex justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'hsl(48 95% 50%)' }} />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: "hsl(48 95% 50%)" }} />
             </div>
           ) : visibleModules.map((mod) => (
             <Card
               key={mod.path}
               className="cursor-pointer transition-all group border-white/10 hover:border-[hsl(48,95%,50%)]/40"
-              style={{ background: 'hsl(0 0% 10%)' }}
+              style={{ background: "hsl(0 0% 10%)" }}
               onClick={() => navigate(mod.path)}
             >
               <CardContent className="flex items-center gap-4 p-6">
-                <div 
+                <div
                   className="p-3 rounded-xl transition-transform group-hover:scale-110"
-                  style={{ background: 'hsla(48, 95%, 50%, 0.15)', color: 'hsl(48 95% 50%)' }}
+                  style={{ background: "hsla(48, 95%, 50%, 0.15)", color: "hsl(48 95% 50%)" }}
                 >
                   <mod.icon className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="font-semibold" style={{ color: 'hsl(0 0% 95%)' }}>{mod.title}</h3>
-                  <p className="text-sm" style={{ color: 'hsl(0 0% 55%)' }}>{mod.description}</p>
+                  <h3 className="font-semibold" style={{ color: "hsl(0 0% 95%)" }}>{mod.title}</h3>
+                  <p className="text-sm" style={{ color: "hsl(0 0% 55%)" }}>{mod.description}</p>
                 </div>
               </CardContent>
             </Card>
@@ -231,3 +216,4 @@ export default function Home() {
     </div>
   );
 }
+
