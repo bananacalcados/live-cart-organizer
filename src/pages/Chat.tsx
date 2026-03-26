@@ -823,7 +823,17 @@ export default function ChatPage() {
                         <span className="text-[#e9edef] font-medium text-[15px] truncate">
                           {conv.customerName || conv.phone}
                         </span>
-                        {conv.instanceLabel && (
+                        {conv.channel === 'instagram' && (
+                          <span className="text-[8px] px-1 py-0 rounded flex-shrink-0 font-medium bg-pink-500/20 text-pink-400">
+                            📷 Instagram
+                          </span>
+                        )}
+                        {conv.channel === 'messenger' && (
+                          <span className="text-[8px] px-1 py-0 rounded flex-shrink-0 font-medium bg-blue-500/20 text-blue-400">
+                            💬 Messenger
+                          </span>
+                        )}
+                        {conv.instanceLabel && !conv.channel && (
                           <span className={cn(
                             "text-[8px] px-1 py-0 rounded flex-shrink-0 font-medium",
                             conv.whatsapp_number_id ? "bg-blue-500/20 text-blue-400" : "bg-green-500/20 text-green-400"
