@@ -150,23 +150,36 @@ serve(async (req) => {
       await new Promise(r => setTimeout(r, 2000));
     }
 
-    // Update count stats
-    const { data: stats } = await supabase
+    // Update count stats using aggregate queries to avoid 1000-row limit
+    const { count: completedCount } = await supabase
       .from('inventory_correction_queue')
-      .select('status')
-      .eq('count_id', count_id);
+      .select('*', { count: 'exact', head: true })
+      .eq('count_id', count_id)
+      .eq('status', 'completed');
 
-    const completedCount = stats?.filter(s => s.status === 'completed').length || 0;
-    const errorCount = stats?.filter(s => s.status === 'error' && (s as any).attempts >= 5).length || 0;
-    const remaining = stats?.filter(s => ['pending', 'processing', 'error'].includes(s.status)).length || 0;
+    const { count: errorCount } = await supabase
+      .from('inventory_correction_queue')
+      .select('*', { count: 'exact', head: true })
+      .eq('count_id', count_id)
+      .eq('status', 'error')
+      .gte('attempts', 5);
+
+    const { count: remainingCount } = await supabase
+      .from('inventory_correction_queue')
+      .select('*', { count: 'exact', head: true })
+      .eq('count_id', count_id)
+      .in('status', ['pending', 'processing', 'error'])
+      .lt('attempts', 5);
+
+    const remaining = remainingCount || 0;
 
     await supabase.from('inventory_counts').update({
-      corrected_products: completedCount,
-      correction_errors: errorCount,
+      corrected_products: completedCount || 0,
+      correction_errors: errorCount || 0,
       last_batch_at: new Date().toISOString(),
     }).eq('id', count_id);
 
-    const isDone = remaining - processed <= 0;
+    const isDone = remaining <= 0;
 
     // Self-invoke if there are more items to process (with waitUntil!)
     if (!isDone) {
