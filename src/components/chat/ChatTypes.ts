@@ -56,6 +56,8 @@ export interface Conversation {
   isArchived?: boolean;
   /** Whether this conversation has pending payment */
   isAwaitingPayment?: boolean;
+  /** Whether this conversation is dispatch-only (mass send, no reply yet) */
+  isDispatchOnly?: boolean;
 }
 
 export type ChatFilter = 'all' | 'contacts' | 'groups';
