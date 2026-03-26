@@ -39,6 +39,7 @@ const alertTypeConfig: Record<string, { label: string; color: string; icon: type
   new_order_unpaid: { label: "Novo Pedido", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: ShoppingCart },
   customer_issue: { label: "Problema", color: "bg-red-500/20 text-red-400 border-red-500/30", icon: AlertTriangle },
   returning_desistente: { label: "Desistente Retornou", color: "bg-orange-500/20 text-orange-400 border-orange-500/30", icon: AlertTriangle },
+  missing_whatsapp: { label: "📱 Sem WhatsApp", color: "bg-pink-500/20 text-pink-400 border-pink-500/30", icon: AlertTriangle },
   general: { label: "Geral", color: "bg-gray-500/20 text-gray-400 border-gray-500/30", icon: Bell },
 };
 
