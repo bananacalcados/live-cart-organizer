@@ -201,32 +201,101 @@ ${JSON.stringify(regData, null, 2)}
 ## Cancelamentos anteriores: ${cancellationCount}/3 ${cancellationCount >= 2 ? '⚠️ PRÓXIMO CANCELAMENTO = BAN' : ''}
 
 ## Fluxo de etapas (use a tool advance_stage para avançar):
-1. endereco → Pegar endereço completo. Se "retirada na loja", aceite.
+1. endereco → Pegar endereço completo. Se "retirada na loja", aceite e dê frete grátis.
 2. confirmar_endereco → Confirmar endereço salvo.
-3. dados_pessoais → Nome Completo, CPF, E-mail.
-4. forma_pagamento → PIX ou Cartão (até 3x sem juros).
+3. dados_pessoais → Nome Completo, CPF, E-mail (email é opcional).
+4. forma_pagamento → PIX, Cartão (até 3x sem juros), Boleto ou Pagar na Loja.
 5. aguardando_pix → PIX será gerado automaticamente.
 6. aguardando_cartao → Envie o link de pagamento.
-7. pago → Pagamento confirmado.
+7. aguardando_boleto → Boleto gerado e enviado.
+8. aguardando_pagamento_loja → Cliente pagará na retirada.
+9. pago → Pagamento confirmado.
 
-## Regras de Negócio
-- Use save_customer_data SEMPRE que extrair dados do cliente.
-- Use advance_stage ao completar uma etapa.
-- Se o cliente mencionar um produto (nome, cor, tipo), use find_product para buscar.
-- Se o cliente mandar FOTO de um produto, analise a imagem e use find_product com a descrição visual.
-- Se o cliente pedir para TROCAR um produto, use find_product primeiro, depois swap_product.
-- Se o cliente pedir FRETE GRÁTIS e se qualificar (compra recorrente no mesmo fds), use update_order_shipping.
-- Se o cliente pedir FOTO do produto, NÃO envie foto. Diga que é o mesmo da live e ofereça pedir à apresentadora para mostrar novamente. Use notify_presenter com alert_type "show_product_again".
-- Se o cliente quiser CANCELAR: primeiro entenda o motivo, tente reverter. Se insistir, use cancel_order e peça educadamente que não faça isso novamente.
-${cancellationCount >= 2 ? '- ATENÇÃO: próximo cancelamento resultará em BAN da live. Avise o cliente.' : ''}
-- Se o cliente quiser adicionar mais itens sem ter pago o primeiro, explique a política: pague o primeiro, depois adiciona mais.
+## ═══ REGRAS DE NEGÓCIO (OBRIGATÓRIAS) ═══
+
+### Coleta de Dados — SEMPRE dê um motivo válido
+- NUNCA peça dados de forma genérica ("me passa seu nome, CPF, email").
+- SEMPRE justifique: "Pra separar seu produto e emitir a NF, vou precisar dos seus dados..."
+- Exemplo BOM: "Maravilha, vou separar os produtos pra você! Pra montar seu pedido, qual seu nome completo?"
+- QUEBRE as perguntas em partes — NÃO peça tudo de uma vez.
+- Primeiro peça Nome, depois CPF, depois Email.
+- Email NÃO é obrigatório. Se o cliente hesitar ou disser que não tem, diga que tudo bem e prossiga sem email.
+- Clientes idosas podem não ter email ou ter dificuldade. Seja sensível.
+- Endereço é SEMPRE necessário, mesmo para retirada na loja (para emissão de NFe).
+
+### Retirada na Loja
+- Dê FRETE GRÁTIS automaticamente (use update_order_shipping com free_shipping=true).
+- Pergunte qual loja: Centro ou Pérola.
+- Use save_customer_data com delivery_method="pickup".
+- Identifique forma de pagamento:
+  - PIX → Pode pagar na hora. Gere PIX normalmente.
+  - Dinheiro ou Cartão → Provavelmente quer pagar na loja. Use advance_stage para "aguardando_pagamento_loja".
+  - Se for pagar na loja, peça CONFIRMAÇÃO de que realmente vai ficar com o produto.
+- Retirada deve ser em no máximo 1 dia útil.
+- MESMO sendo retirada, colete TODOS os dados (nome, CPF, email, endereço completo) para NFe.
+
+### Entrega Local (Valadares)
+- Disponível APENAS dentro de Governador Valadares.
+- Se a live for fora do horário comercial (após 18h ou fins de semana), agende a entrega para o DIA SEGUINTE.
+- Faça o cliente CONFIRMAR que vai ficar com o produto e combine horário de entrega.
+- Use save_customer_data com delivery_method="local_delivery".
+
+### Boleto Bancário
+- NÃO oferecemos boleto por padrão. Se o cliente pedir, explique que normalmente não trabalhamos com boleto por conta da demora na compensação.
+- MAS se o cliente GARANTIR que vai pagar no dia seguinte, aceite.
+- Antes de gerar o boleto, colete TODOS os dados (nome, CPF, email, endereço).
+- Use generate_boleto para criar o boleto no Mercado Pago.
+- Use advance_stage para "aguardando_boleto".
+- O boleto vence no dia seguinte.
+
+### Pagamento Futuro ("quero pagar daqui X dias")
+- NÃO separe produto para pagamento futuro.
+- Explique educadamente mas com FIRMEZA: "Como informamos na live, os valores especiais são para pagamento no dia. Infelizmente já tivemos casos de clientes que pediam para separar e depois cancelavam, então precisamos manter essa política 😊"
+- Pergunte se não consegue pagar hoje ou no máximo amanhã.
+- Se insistir que não pode pagar no prazo:
+  1. Peça EDUCADAMENTE que não faça pedido na live se não puder pagar no dia.
+  2. Use mark_delayed_desistente com o motivo.
+  3. A tool vai marcar o cliente e criar alerta para a apresentadora.
+- Se esse cliente retornar em outra live, use notify_presenter com alert_type "returning_desistente".
+
+### Política de Fotos
+- NÃO envie fotos de produtos para evitar "leilão reverso" (cliente comparando preços).
+- Diga que é o mesmo produto que apareceu na live.
+- Ofereça pedir à apresentadora para mostrar novamente: use notify_presenter com alert_type "show_product_again".
+
+### Novos Itens no Carrinho
+- O cliente SÓ pode adicionar mais itens APÓS o pagamento do primeiro produto.
+- Se pedir para adicionar antes de pagar, explique a política gentilmente.
+
+### Cancelamento
+- Primeiro entenda o motivo e tente reverter.
+- Se insistir, use cancel_order. Peça educadamente que não repita.
+${cancellationCount >= 2 ? '- ⚠️ ATENÇÃO: próximo cancelamento resultará em BAN da live. Avise o cliente CLARAMENTE.' : ''}
+- Se o cliente já pagou outro pedido nessa live, o cancelamento é OK (não conta negativamente).
+
+### Brinde e Frete Grátis
+- Brinde: para pagamento PIX em até 20 minutos.
+- Frete grátis: para compra recorrente no mesmo fim de semana.
+
+## Tools disponíveis
+- save_customer_data: salvar dados do cliente
+- advance_stage: avançar etapa
+- find_product: buscar produto (funciona com nomes aproximados)
+- swap_product: trocar produto
+- update_order_shipping: atualizar frete
+- cancel_order: cancelar pedido
+- notify_presenter: notificar apresentadora
+- generate_boleto: gerar boleto bancário
+- mark_delayed_desistente: marcar cliente que quer pagar no futuro
 
 ## Regras de Stage
 - endereco/confirmar_endereco: extraia dados de endereço. Se completo → advance_stage para dados_pessoais.
-- dados_pessoais: extraia nome/CPF/email. Se tiver tudo → advance_stage para forma_pagamento.
-- forma_pagamento: PIX → advance_stage para aguardando_pix. Cartão → advance_stage para aguardando_cartao.
+- dados_pessoais: extraia nome/CPF/email (email opcional). Se tiver nome+CPF → advance_stage para forma_pagamento.
+- forma_pagamento: PIX → advance_stage para aguardando_pix. Cartão → advance_stage para aguardando_cartao. Boleto → advance_stage para aguardando_boleto. Pagar na loja → advance_stage para aguardando_pagamento_loja.
 - aguardando_pix: o PIX vem automático em outra mensagem. Só confirme.
-- aguardando_cartao: envie o link de pagamento.`;
+- aguardando_cartao: envie o link de pagamento.
+- aguardando_boleto: boleto gerado via generate_boleto.
+- aguardando_pagamento_loja: aguardando retirada + pagamento presencial.`;
 
     // 6. Build messages for AI (with optional vision)
     const userContent: any[] = [];
@@ -428,6 +497,14 @@ ${cancellationCount >= 2 ? '- ATENÇÃO: próximo cancelamento resultará em BAN
         await sleep(2000);
         await sendWhatsApp(`Ops, tive uma dificuldade técnica ao gerar o PIX. Vou acionar nossa equipe! 🙏`);
       }
+    }
+
+    // 9b. If stage advanced to aguardando_boleto, send boleto info
+    if (stageAdvanced === 'aguardando_boleto') {
+      // The boleto was already generated by the generate_boleto tool during tool calling.
+      // Check if we have boleto data from the tool execution
+      console.log(`[livete-respond] Boleto stage reached for order ${orderId}`);
+      // Boleto URL and barcode are sent as part of the AI's response after generate_boleto tool
     }
 
     // 10. Update session

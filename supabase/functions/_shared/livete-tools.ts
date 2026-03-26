@@ -18,8 +18,8 @@ export const liveteTools = [
           neighborhood: { type: "string", description: "Bairro" },
           city: { type: "string", description: "Cidade" },
           state: { type: "string", description: "Estado (UF)" },
-          delivery_method: { type: "string", enum: ["shipping", "pickup"], description: "Envio ou retirada" },
-          payment_method: { type: "string", enum: ["pix", "cartao"], description: "Forma de pagamento escolhida" },
+          delivery_method: { type: "string", enum: ["shipping", "pickup", "local_delivery"], description: "Envio, retirada ou entrega local" },
+          payment_method: { type: "string", enum: ["pix", "cartao", "boleto", "dinheiro", "cartao_loja"], description: "Forma de pagamento escolhida" },
         },
       },
     },
@@ -34,7 +34,7 @@ export const liveteTools = [
         properties: {
           next_stage: {
             type: "string",
-            enum: ["endereco", "confirmar_endereco", "dados_pessoais", "forma_pagamento", "aguardando_pix", "aguardando_cartao", "pago", "cancelado"],
+            enum: ["endereco", "confirmar_endereco", "dados_pessoais", "forma_pagamento", "aguardando_pix", "aguardando_cartao", "aguardando_boleto", "aguardando_pagamento_loja", "pago", "cancelado"],
             description: "Próxima etapa do fluxo",
           },
         },
@@ -114,13 +114,38 @@ export const liveteTools = [
         properties: {
           alert_type: {
             type: "string",
-            enum: ["show_product_again", "new_order_unpaid", "customer_issue", "general"],
+            enum: ["show_product_again", "new_order_unpaid", "customer_issue", "general", "returning_desistente"],
             description: "Tipo do alerta",
           },
           message: { type: "string", description: "Mensagem do alerta para a apresentadora" },
           product_title: { type: "string", description: "Título do produto (se relevante)" },
         },
         required: ["alert_type", "message"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "generate_boleto",
+      description: "Gerar boleto bancário via Mercado Pago. Use APENAS quando o cliente confirmar que pagará o boleto no dia seguinte. Todos os dados pessoais (nome, CPF, email) devem já estar coletados antes de chamar esta tool.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "mark_delayed_desistente",
+      description: "Marcar cliente como desistente quando não pode pagar no dia ou dia seguinte. Aplica tag 'followup_pagamento_futuro' e registra motivo. Use após tentar negociar e o cliente confirmar que não pode pagar no prazo.",
+      parameters: {
+        type: "object",
+        properties: {
+          reason: { type: "string", description: "Motivo (ex: 'quer pagar daqui 5 dias')" },
+        },
+        required: ["reason"],
       },
     },
   },
@@ -187,6 +212,7 @@ export async function executeToolCall(
 
       if (args.delivery_method) {
         const isPickup = args.delivery_method === 'pickup';
+        const isLocalDelivery = args.delivery_method === 'local_delivery';
         await supabase.from('orders').update({
           delivery_method: args.delivery_method,
           is_pickup: isPickup,
@@ -202,7 +228,7 @@ export async function executeToolCall(
       const nextStage = args.next_stage;
       await supabase.rpc('update_order_stage', { p_order_id: orderId, p_stage: nextStage });
 
-      if (nextStage === 'aguardando_pix' || nextStage === 'aguardando_cartao') {
+      if (['aguardando_pix', 'aguardando_cartao', 'aguardando_boleto', 'aguardando_pagamento_loja'].includes(nextStage)) {
         await supabase.from('orders').update({ stage: 'awaiting_payment' }).eq('id', orderId);
       } else if (nextStage === 'cancelado') {
         await supabase.from('orders').update({ stage: 'cancelled' }).eq('id', orderId);
@@ -339,12 +365,8 @@ export async function executeToolCall(
 
     // ─── CANCEL ORDER ───
     case 'cancel_order': {
-      // Update order stage
       await supabase.rpc('update_order_stage', { p_order_id: orderId, p_stage: 'cancelado' });
       await supabase.from('orders').update({ stage: 'cancelled', updated_at: new Date().toISOString() }).eq('id', orderId);
-
-      // Increment cancellation counter
-      await supabase.rpc('update_order_stage', { p_order_id: orderId, p_stage: 'cancelado' });
 
       // Increment live_cancellation_count
       const { data: custData } = await supabase
@@ -397,6 +419,101 @@ export async function executeToolCall(
       return {
         success: true,
         data: { message: `Notificação enviada para a apresentadora: ${args.message}` },
+      };
+    }
+
+    // ─── GENERATE BOLETO ───
+    case 'generate_boleto': {
+      const reg = ctx.registration;
+      if (!reg || !reg.full_name || !reg.cpf) {
+        return { success: false, error: 'Dados pessoais incompletos. Colete nome completo e CPF antes de gerar o boleto.' };
+      }
+
+      const nameParts = (reg.full_name || '').trim().split(' ');
+      const payerData: any = {
+        email: reg.email || undefined,
+        firstName: nameParts[0],
+        lastName: nameParts.slice(1).join(' ') || nameParts[0],
+        cpf: reg.cpf,
+      };
+
+      try {
+        const boletoResp = await fetch(`${supabaseUrl}/functions/v1/mercadopago-create-boleto`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ orderId, payer: payerData }),
+        });
+
+        const boletoData = await boletoResp.json();
+
+        if (!boletoResp.ok || !boletoData.success) {
+          console.error('[generate_boleto] Failed:', boletoData);
+          return { success: false, error: boletoData.error || 'Erro ao gerar boleto' };
+        }
+
+        return {
+          success: true,
+          data: {
+            boletoUrl: boletoData.boletoUrl,
+            barcode: boletoData.barcode,
+            dueDate: boletoData.dueDate,
+            total: boletoData.total,
+            message: `Boleto gerado! Vencimento: ${boletoData.dueDate}. Valor: R$${boletoData.total.toFixed(2)}`,
+          },
+        };
+      } catch (err) {
+        console.error('[generate_boleto] Error:', err);
+        return { success: false, error: 'Erro técnico ao gerar boleto' };
+      }
+    }
+
+    // ─── MARK DELAYED DESISTENTE ───
+    case 'mark_delayed_desistente': {
+      // Tag the customer
+      const { data: custData } = await supabase
+        .from('customers')
+        .select('tags')
+        .eq('id', customerId)
+        .single();
+
+      const currentTags: string[] = custData?.tags || [];
+      const newTags = [...new Set([...currentTags, 'followup_pagamento_futuro', 'desistente_live'])];
+      await supabase.from('customers').update({ tags: newTags }).eq('id', customerId);
+
+      // Cancel order with specific reason
+      await supabase.rpc('update_order_stage', { p_order_id: orderId, p_stage: 'cancelado' });
+      await supabase.from('orders').update({
+        stage: 'cancelled',
+        notes: `Desistente: ${args.reason}`,
+        updated_at: new Date().toISOString(),
+      }).eq('id', orderId);
+
+      // Deactivate AI session
+      await supabase.from('automation_ai_sessions').update({ is_active: false }).eq('phone', phone);
+
+      // Deactivate follow-ups
+      await supabase.from('livete_followups').update({ is_active: false, completed_at: new Date().toISOString() }).eq('order_id', orderId);
+
+      // Create presenter alert for future lives
+      await supabase.from('livete_presenter_alerts').insert({
+        event_id: eventId,
+        order_id: orderId,
+        phone,
+        customer_name: ctx.customerInstagram,
+        alert_type: 'returning_desistente',
+        message: `Cliente desistiu: "${args.reason}". Se retornar em próximas lives, avaliar antes de aceitar pedido.`,
+      });
+
+      return {
+        success: true,
+        data: {
+          tagged: true,
+          tags_applied: ['followup_pagamento_futuro', 'desistente_live'],
+          message: `Cliente marcado como desistente. Motivo: ${args.reason}. Alerta criado para próximas lives.`,
+        },
       };
     }
 
