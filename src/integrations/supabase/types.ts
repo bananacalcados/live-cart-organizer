@@ -9063,6 +9063,7 @@ export type Database = {
       get_conversations: {
         Args: { p_number_id?: string }
         Returns: {
+          channel: string
           direction: string
           has_outgoing: boolean
           is_dispatch_only: boolean
