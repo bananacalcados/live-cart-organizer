@@ -17,7 +17,7 @@ serve(async (req) => {
     const mode = url.searchParams.get('hub.mode');
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
-    const verifyToken = Deno.env.get('META_WHATSAPP_VERIFY_TOKEN'); // reuse same verify token
+    const verifyToken = Deno.env.get('META_WHATSAPP_VERIFY_TOKEN');
 
     if (mode === 'subscribe' && token === verifyToken) {
       console.log('Messenger webhook verified');
@@ -48,16 +48,33 @@ serve(async (req) => {
     for (const entry of body.entry || []) {
       for (const event of entry.messaging || []) {
         const senderId = event.sender?.id;
-        const recipientId = event.recipient?.id;
-        const timestamp = event.timestamp
-          ? new Date(event.timestamp).toISOString()
-          : new Date().toISOString();
-
         if (!senderId) continue;
+
+        // Skip read receipts — just update status
+        if (event.read) {
+          const mid = event.read.mid;
+          if (mid) {
+            await supabase
+              .from('whatsapp_messages')
+              .update({ status: 'read' })
+              .eq('message_id', mid);
+          }
+          continue;
+        }
+
+        // Skip message_edit events
+        if (event.message_edit) {
+          console.log(`Skipping message_edit event from ${senderId}`);
+          continue;
+        }
+
+        // Skip delivery events
+        if (event.delivery) {
+          continue;
+        }
 
         // Skip echo messages (messages we sent)
         if (event.message?.is_echo) {
-          // Save outgoing message for tracking
           await supabase.from('whatsapp_messages').insert({
             phone: event.recipient?.id || '',
             message: event.message?.text || '[media]',
@@ -81,16 +98,31 @@ serve(async (req) => {
           // Handle attachments
           if (event.message.attachments?.length > 0) {
             const att = event.message.attachments[0];
-            mediaType = att.type || 'text'; // image, video, audio, file
-            mediaUrl = att.payload?.url || null;
-            if (!messageText) {
-              messageText = `[${mediaType}]`;
+            // Map Instagram-specific types
+            const rawType = att.type || 'text';
+            if (rawType === 'ephemeral' || rawType === 'unsupported_type') {
+              // Stories/vanishing content or unsupported — log and save placeholder
+              mediaType = rawType === 'ephemeral' ? 'story' : 'unsupported';
+              mediaUrl = att.payload?.url || null;
+              if (!messageText) {
+                messageText = rawType === 'ephemeral' ? '[story reply]' : '[unsupported media]';
+              }
+            } else {
+              mediaType = rawType; // image, video, audio, file
+              mediaUrl = att.payload?.url || null;
+              if (!messageText) {
+                messageText = `[${mediaType}]`;
+              }
             }
           }
         } else if (event.postback) {
           messageText = event.postback.payload || event.postback.title || '[postback]';
         } else if (event.referral) {
           messageText = `[referral: ${event.referral.ref || ''}]`;
+        } else {
+          // Unknown event type — skip
+          console.log(`Skipping unknown event type from ${senderId}:`, Object.keys(event).join(','));
+          continue;
         }
 
         // Get sender profile name
@@ -126,7 +158,7 @@ serve(async (req) => {
         if (error) {
           console.error('Error saving messenger message:', error);
         } else {
-          console.log(`Saved ${channel} message from ${senderId} (${senderName || 'unknown'})`);
+          console.log(`Saved ${channel} message from ${senderId} (${senderName || 'unknown'}): ${messageText.slice(0, 50)}`);
         }
 
         // Upsert chat_contacts
