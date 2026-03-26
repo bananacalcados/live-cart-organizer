@@ -2,10 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 serve(async () => {
   const secrets = {
-    SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
-    SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-    META_WHATSAPP_ACCESS_TOKEN: Deno.env.get("META_WHATSAPP_ACCESS_TOKEN"),
-    META_WHATSAPP_PHONE_NUMBER_ID: Deno.env.get("META_WHATSAPP_PHONE_NUMBER_ID"),
+    META_WHATSAPP_VERIFY_TOKEN: Deno.env.get("META_WHATSAPP_VERIFY_TOKEN"),
   };
 
   const html = `<!DOCTYPE html>
