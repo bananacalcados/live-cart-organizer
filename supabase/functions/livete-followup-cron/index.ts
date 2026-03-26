@@ -219,13 +219,36 @@ serve(async (req) => {
         }
       }
 
-      // Check max levels
+      // Check max levels — tag customer as non-responsive
       if (fu.reminder_level >= fu.max_levels) {
         await supabase.from('livete_followups').update({
           is_active: false, completed_at: now.toISOString(),
         }).eq('id', fu.id);
         deactivated++;
-        console.log(`[livete-followup] ${fu.phone} max levels reached`);
+
+        // Tag customer as non-responsive for future nurturing funnels
+        if (fu.order_id) {
+          const { data: orderForTag } = await supabase
+            .from('orders')
+            .select('customer_id')
+            .eq('id', fu.order_id)
+            .maybeSingle();
+          if (orderForTag?.customer_id) {
+            const { data: cust } = await supabase
+              .from('customers')
+              .select('tags')
+              .eq('id', orderForTag.customer_id)
+              .maybeSingle();
+            const tags: string[] = cust?.tags || [];
+            if (!tags.includes('followup_sem_resposta')) {
+              await supabase.from('customers').update({
+                tags: [...tags, 'followup_sem_resposta'],
+              }).eq('id', orderForTag.customer_id);
+            }
+          }
+        }
+
+        console.log(`[livete-followup] ${fu.phone} max levels reached, tagged`);
         continue;
       }
 
