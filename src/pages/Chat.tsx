@@ -415,6 +415,38 @@ export default function ChatPage() {
     return { success: true, messageId: data.messageId };
   };
 
+  // ── Send via Messenger/Instagram API ──
+  const sendViaMessenger = async (recipientId: string, message: string, channel: 'messenger' | 'instagram' = 'instagram', type: string = 'text', mediaUrl?: string): Promise<{ success: boolean; messageId?: string }> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-messenger-send`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ recipientId, message, channel, type, mediaUrl }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      toast.error(data?.error || `Erro ao enviar mensagem via ${channel}`);
+      return { success: false };
+    }
+    toast.success('Mensagem enviada!');
+    return { success: true, messageId: data.messageId };
+  };
+
+  // ── Get selected conversation channel ──
+  const getSelectedChannel = (): string | null => {
+    if (!selectedPhone) return null;
+    const conv = conversations.find(c => c.phone === selectedPhone && c.conversationKey === selectedConvKey);
+    return conv?.channel || null;
+  };
+
+  const isInstagramOrMessenger = (): boolean => {
+    const ch = getSelectedChannel();
+    return ch === 'instagram' || ch === 'messenger';
+  };
+
   // ── Send message ──
   const handleSend = async () => {
     if (isSending || isUploading || !selectedPhone) return;
