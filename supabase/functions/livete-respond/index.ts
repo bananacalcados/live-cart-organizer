@@ -376,13 +376,19 @@ Retorne SOMENTE o JSON, sem markdown, sem texto antes ou depois.`;
       }
     }
 
-    // 11. Update stage_atendimento
+    // 11. Update stage_atendimento + auto-move Kanban card
     if (next_stage && next_stage !== currentStage) {
       await supabase.rpc('update_order_stage', {
         p_order_id: orderId,
         p_stage: next_stage,
       });
       console.log(`[livete-respond] Stage: ${currentStage} → ${next_stage}`);
+
+      // Auto-move Kanban card based on AI stage
+      if (next_stage === 'aguardando_pix' || next_stage === 'aguardando_cartao') {
+        await supabase.from('orders').update({ stage: 'awaiting_payment' }).eq('id', orderId);
+        console.log(`[livete-respond] Kanban card moved to awaiting_payment`);
+      }
     }
 
     // ─── HUMAN-LIKE TYPING DELAY ───
