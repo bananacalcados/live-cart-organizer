@@ -8443,6 +8443,7 @@ export type Database = {
           message: string
           message_id: string | null
           phone: string
+          referral: Json | null
           sender_name: string | null
           status: string | null
           whatsapp_number_id: string | null
@@ -8461,6 +8462,7 @@ export type Database = {
           message: string
           message_id?: string | null
           phone: string
+          referral?: Json | null
           sender_name?: string | null
           status?: string | null
           whatsapp_number_id?: string | null
@@ -8479,6 +8481,7 @@ export type Database = {
           message?: string
           message_id?: string | null
           phone?: string
+          referral?: Json | null
           sender_name?: string | null
           status?: string | null
           whatsapp_number_id?: string | null
