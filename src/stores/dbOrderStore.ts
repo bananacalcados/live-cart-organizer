@@ -376,6 +376,13 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
           o.id === orderId ? { ...o, products: newProducts } : o
         )
       }));
+
+      // Notify AI about product change (fire-and-forget)
+      try {
+        supabase.functions.invoke('livete-order-updated', {
+          body: { orderId, changeType: 'products_changed' },
+        });
+      } catch {}
     } catch (error) {
       console.error('Error adding product:', error);
       toast.error('Erro ao adicionar produto');
