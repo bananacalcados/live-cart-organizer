@@ -191,9 +191,18 @@ serve(async (req) => {
       p_stage: initialStage,
     });
 
-    // 10. Create AI session for this phone
+    // 10. Deactivate ALL previous AI sessions for this phone (prevents duplicate conversations)
+    await supabase
+      .from('automation_ai_sessions')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('phone', phone)
+      .eq('is_active', true);
+
+    console.log(`[livete-start] Deactivated previous sessions for ${phone}`);
+
+    // 11. Create fresh AI session for this phone + order
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
-    await supabase.from('automation_ai_sessions').upsert({
+    await supabase.from('automation_ai_sessions').insert({
       phone,
       flow_id: null,
       is_active: true,
@@ -202,7 +211,7 @@ serve(async (req) => {
       whatsapp_number_id: whatsappNumberId,
       max_messages: 50,
       messages_sent: 1,
-    }, { onConflict: 'phone' });
+    });
 
     // 11. Log
     const responseTime = Date.now() - startTime;
