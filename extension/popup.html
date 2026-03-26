@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 340px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+    }
+    .header {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      padding: 16px;
+      text-align: center;
+    }
+    .header h1 { font-size: 18px; color: #000; font-weight: 800; }
+    .header p { font-size: 11px; color: #422006; margin-top: 2px; }
+    .body { padding: 16px; }
+    label { display: block; font-size: 12px; color: #a3a3a3; margin-bottom: 4px; font-weight: 600; }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: #171717;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      margin-bottom: 12px;
+    }
+    input:focus, select:focus { border-color: #f59e0b; }
+    .pc-row { display: flex; gap: 8px; }
+    .pc-row input { flex: 1; }
+    .pc-row select { width: 100px; flex: none; }
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #btn-start {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #000;
+    }
+    #btn-start:hover { opacity: 0.9; }
+    #btn-start:disabled { opacity: 0.4; cursor: not-allowed; }
+    #btn-stop {
+      background: #dc2626;
+      color: #fff;
+      display: none;
+      margin-top: 8px;
+    }
+    .status {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      text-align: center;
+      display: none;
+    }
+    .status.active { display: block; background: #052e16; color: #4ade80; border: 1px solid #166534; }
+    .status.inactive { display: block; background: #1c1917; color: #a3a3a3; border: 1px solid #292524; }
+    .status.error { display: block; background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
+    .stats {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 12px;
+      padding: 10px;
+      background: #171717;
+      border-radius: 8px;
+    }
+    .stat { text-align: center; }
+    .stat .num { font-size: 20px; font-weight: 800; color: #f59e0b; }
+    .stat .lbl { font-size: 10px; color: #737373; }
+    .footer { padding: 12px 16px; text-align: center; font-size: 10px; color: #525252; border-top: 1px solid #262626; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎥 Livete Anotador</h1>
+    <p>Captura automática de comentários da live</p>
+  </div>
+  <div class="body">
+    <label>Código do Evento</label>
+    <input type="text" id="event-id" placeholder="Cole o ID do evento aqui...">
+
+    <label>Identificação do PC</label>
+    <div class="pc-row">
+      <input type="text" id="pc-name" placeholder="Ex: PC da Ana">
+      <select id="pc-number">
+        <option value="PC1">PC 1</option>
+        <option value="PC2">PC 2</option>
+        <option value="PC3">PC 3</option>
+        <option value="PC4">PC 4</option>
+      </select>
+    </div>
+
+    <button id="btn-start">▶ Iniciar Captura</button>
+    <button id="btn-stop">⏹ Parar Captura</button>
+
+    <div id="status" class="status"></div>
+
+    <div class="stats" id="stats" style="display:none">
+      <div class="stat">
+        <div class="num" id="stat-total">0</div>
+        <div class="lbl">Capturados</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="stat-sent">0</div>
+        <div class="lbl">Enviados</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="stat-orders">0</div>
+        <div class="lbl">Pedidos</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="stat-dupes">0</div>
+        <div class="lbl">Duplicados</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer">Livete © 2026 — Anotador v1.0</div>
+  <script src="popup.js"></script>
+</body>
+</html>
