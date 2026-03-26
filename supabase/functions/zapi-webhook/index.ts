@@ -408,8 +408,8 @@ serve(async (req) => {
           }
         }
 
-        if (error) {
-          console.error('Error saving incoming message:', error);
+        if (insertError) {
+          console.error('Error saving incoming message (post):', insertError);
         } else {
           console.log(`Saved incoming ${mediaInfo ? mediaInfo.mediaType : 'text'} message from ${phone}`);
           
