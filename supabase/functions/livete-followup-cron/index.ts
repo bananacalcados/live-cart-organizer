@@ -311,14 +311,14 @@ serve(async (req) => {
           whatsapp_number_id: sendNumberId || null,
         });
 
-        // Calculate next reminder interval
+        // Calculate next reminder
         const nextLevel = level + 1;
-        const nextIntervalMin = nextLevel < LEVEL_INTERVALS.length
-          ? LEVEL_INTERVALS[nextLevel]
-          : null; // No more levels
-
-        if (nextIntervalMin !== null) {
-          const nextReminder = new Date(now.getTime() + nextIntervalMin * 60000);
+        if (nextLevel < LEVEL_INTERVALS.length) {
+          const intervalVal = LEVEL_INTERVALS[nextLevel];
+          // -1 means "next day at 10am"
+          const nextReminder = intervalVal === -1
+            ? getNextDay10am(now)
+            : new Date(now.getTime() + intervalVal * 60000);
           await supabase.from('livete_followups').update({
             reminder_level: nextLevel,
             next_reminder_at: nextReminder.toISOString(),
@@ -326,7 +326,7 @@ serve(async (req) => {
             updated_at: now.toISOString(),
           }).eq('id', fu.id);
         } else {
-          // Max levels reached after this send
+          // Max levels reached after this send — tag will happen on next cron tick
           await supabase.from('livete_followups').update({
             reminder_level: nextLevel,
             is_active: false,
