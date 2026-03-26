@@ -54,6 +54,7 @@ const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel:
   { value: 'not_started', label: 'Não Iniciadas', shortLabel: 'Novas' },
   { value: 'awaiting_reply', label: 'Aguardando Resposta', shortLabel: 'Aguard.' },
   { value: 'awaiting_customer', label: 'Follow Up', shortLabel: 'Follow Up 🔄' },
+  { value: 'dispatch', label: 'Disparos', shortLabel: 'Disparos 📢' },
   { value: 'awaiting_payment', label: 'Aguardando Pagamento', shortLabel: 'Pgto 💰' },
   { value: 'finished', label: 'Finalizadas', shortLabel: 'Finaliz.' },
   { value: 'archived', label: 'Arquivadas', shortLabel: 'Arquiv. 📦' },
