@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, CreditCard, Monitor } from "lucide-react";
+import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, CreditCard, Monitor, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +35,7 @@ import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { useEventStore } from "@/stores/eventStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
+import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone } from "lucide-react";
 import { format } from "date-fns";
@@ -488,6 +489,28 @@ const Events = () => {
                             <Play className="h-4 w-4 mr-2" />
                             Abrir Evento
                           </Button>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                title="Chat com Apresentadora"
+                              >
+                                <Send className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-md h-[70vh] p-0 flex flex-col">
+                              <DialogHeader className="px-4 pt-4 pb-0">
+                                <DialogTitle className="flex items-center gap-2">
+                                  <MessageCircle className="h-5 w-5 text-primary" />
+                                  Chat com Apresentadora
+                                </DialogTitle>
+                              </DialogHeader>
+                              <div className="flex-1 min-h-0">
+                                <PresenterTeamChat eventId={event.id} presenterMode={false} />
+                              </div>
+                            </DialogContent>
+                          </Dialog>
                           <Button
                             variant="outline"
                             size="icon"

@@ -11,6 +11,7 @@ import {
   Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package
 } from "lucide-react";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
+import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 
 interface PresenterAlert {
   id: string;
@@ -226,7 +227,9 @@ export default function PresenterDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-foreground text-card p-4 md:p-6">
+    <div className="min-h-screen bg-foreground text-card flex">
+      {/* Main content */}
+      <div className="flex-1 p-4 md:p-6 overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -441,6 +444,12 @@ export default function PresenterDashboard() {
           </div>
         </TabsContent>
       </Tabs>
+      </div>
+
+      {/* Team Chat Sidebar - always visible */}
+      <div className="w-80 lg:w-96 border-l border-zinc-700 bg-zinc-900/50 flex flex-col min-h-screen">
+        <PresenterTeamChat eventId={eventId!} presenterMode={true} />
+      </div>
     </div>
   );
 }
