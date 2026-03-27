@@ -169,8 +169,6 @@ export function SecretaryChat() {
         description: err.message || "Não foi possível obter resposta",
         variant: "destructive",
       });
-
-      setMessages(prev => prev.filter(message => message.id !== userMsg.id || message.role !== "user" ? true : true));
     } finally {
       setLoading(false);
     }

@@ -56,6 +56,47 @@ async function callAnthropicWithRetry(apiKey: string, body: Record<string, unkno
   throw new RetryableSecretaryError('A IA está temporariamente indisponível no momento.');
 }
 
+function buildToolFallbackReply(toolResults: Array<{ content: string }>) {
+  const parsedResults = toolResults
+    .map((result) => {
+      try {
+        return JSON.parse(result.content);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  if (parsedResults.length === 0) {
+    return 'Consegui processar sua solicitação, mas a resposta detalhada da IA ficou indisponível agora. Se quiser, me envie a próxima instrução que continuo daqui.';
+  }
+
+  const lines = parsedResults.map((result: any) => {
+    if (result.error) return `• ${result.error}`;
+    if (result.fornecedor && result.valor && result.vencimento) {
+      return `• Conta registrada para ${result.fornecedor} no valor de R$ ${Number(result.valor).toFixed(2)} com vencimento em ${result.vencimento}`;
+    }
+    if (result.title && result.remind_at) {
+      return `• Lembrete criado: ${result.title} para ${result.remind_at}`;
+    }
+    if (typeof result.total === 'number' && result.contas) {
+      return `• Consulta concluída: ${result.total} conta(s) encontrada(s)`;
+    }
+    if (typeof result.vendas === 'number') {
+      return `• Resumo de vendas gerado: ${result.vendas} venda(s), faturamento total de R$ ${Number(result.faturamento_total || 0).toFixed(2)}`;
+    }
+    if (typeof result.total === 'number' && result.envios) {
+      return `• Consulta de expedição concluída: ${result.total} envio(s) encontrado(s)`;
+    }
+    if (result.phone && result.success) {
+      return `• Mensagem enviada com sucesso para ${result.phone}`;
+    }
+    return '• Solicitação processada com sucesso';
+  });
+
+  return `Consegui executar sua solicitação, mas a IA ficou instável ao montar a resposta final.\n\n${lines.join('\n')}`;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -221,17 +262,25 @@ Regras:
         { role: 'user', content: toolResults },
       ];
 
-      const followUpData = await callAnthropicWithRetry(ANTHROPIC_API_KEY, {
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: followUpMessages,
-        tools,
-      });
+      try {
+        const followUpData = await callAnthropicWithRetry(ANTHROPIC_API_KEY, {
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: followUpMessages,
+          tools,
+        });
 
-      finalText = '';
-      for (const block of followUpData.content) {
-        if (block.type === 'text') finalText += block.text;
+        finalText = '';
+        for (const block of followUpData.content) {
+          if (block.type === 'text') finalText += block.text;
+        }
+      } catch (followUpError) {
+        if (followUpError instanceof RetryableSecretaryError) {
+          finalText = buildToolFallbackReply(toolResults);
+        } else {
+          throw followUpError;
+        }
       }
     }
 
