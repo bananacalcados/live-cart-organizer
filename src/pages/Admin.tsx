@@ -17,8 +17,9 @@ import { ZApiInstanceManager } from "@/components/admin/ZApiInstanceManager";
 import { AiKnowledgeBase } from "@/components/admin/AiKnowledgeBase";
 import { AiTestPanel } from "@/components/admin/AiTestPanel";
 import { SecretaryChat } from "@/components/admin/SecretaryChat";
+import { AiErrorLogs } from "@/components/admin/AiErrorLogs";
 import {
-  Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles,
+  Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone,
 } from "lucide-react";
 
