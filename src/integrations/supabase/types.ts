@@ -9065,6 +9065,7 @@ export type Database = {
         Returns: {
           channel: string
           direction: string
+          has_incoming: boolean
           has_outgoing: boolean
           is_dispatch_only: boolean
           is_group: boolean
