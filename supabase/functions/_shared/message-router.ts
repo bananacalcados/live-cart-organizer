@@ -124,7 +124,25 @@ export async function routeMessage(
     return { agent: 'none', reason: 'operator_cooldown' };
   }
 
-  // 5. Intent pre-classification for Concierge (Fase 1: Roteamento silencioso)
+  // 5. Check concierge test mode — only route to concierge if enabled + phone matches
+  let conciergeEnabled = false;
+  let conciergeTestPhone: string | null = null;
+  try {
+    const { data: settings } = await supabase
+      .from('app_settings')
+      .select('key, value')
+      .in('key', ['concierge_test_mode', 'concierge_test_phone']);
+    if (settings) {
+      for (const s of settings) {
+        if (s.key === 'concierge_test_mode') conciergeEnabled = s.value === true || s.value === 'true';
+        if (s.key === 'concierge_test_phone') conciergeTestPhone = String(s.value || '').replace(/"/g, '');
+      }
+    }
+  } catch (err) {
+    console.error('[router] Error checking concierge settings:', err);
+  }
+
+  // 6. Intent pre-classification for Concierge
   const msgLower = (input.messageText || '').toLowerCase().trim();
 
   // Sales-related keywords → legacy (human seller handles it)
@@ -158,8 +176,20 @@ export async function routeMessage(
 
   // Support intent takes priority; if both detected, route to concierge
   if (isSupportIntent) {
-    console.log(`[router] Support intent detected for ${phone}: "${msgLower.slice(0, 60)}"`);
-    return { agent: 'concierge', reason: 'support_intent' };
+    // Only route to concierge if test mode is on AND phone matches test phone
+    if (conciergeEnabled && conciergeTestPhone) {
+      const phoneSuffix = phone.replace(/\D/g, '').slice(-8);
+      const testSuffix = conciergeTestPhone.replace(/\D/g, '').slice(-8);
+      if (phoneSuffix === testSuffix) {
+        console.log(`[router] Support intent + test phone match for ${phone}`);
+        return { agent: 'concierge', reason: 'support_intent' };
+      }
+      console.log(`[router] Support intent for ${phone} but not test phone, routing to legacy`);
+      return { agent: 'legacy', reason: 'support_intent_not_test_phone' };
+    }
+    // Concierge disabled → legacy
+    console.log(`[router] Support intent for ${phone} but concierge disabled, routing to legacy`);
+    return { agent: 'legacy', reason: 'concierge_disabled' };
   }
 
   if (isSalesIntent) {

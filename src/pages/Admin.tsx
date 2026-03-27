@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ZApiInstanceManager } from "@/components/admin/ZApiInstanceManager";
 import { AiKnowledgeBase } from "@/components/admin/AiKnowledgeBase";
+import { AiTestPanel } from "@/components/admin/AiTestPanel";
 import { SecretaryChat } from "@/components/admin/SecretaryChat";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles,
@@ -400,7 +401,8 @@ export default function Admin() {
             <ZApiInstanceManager />
           </TabsContent>
 
-          <TabsContent value="knowledge" className="mt-4">
+          <TabsContent value="knowledge" className="mt-4 space-y-6">
+            <AiTestPanel />
             <AiKnowledgeBase />
           </TabsContent>
 
