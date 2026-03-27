@@ -65,6 +65,17 @@ function normalizeSearchTerm(raw: string): { normalized: string; digitsOnly: str
   };
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function firstNonEmptyString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
 async function getTinyOrderDetail(token: string, tinyOrderId: string): Promise<any | null> {
   try {
     const controller = new AbortController();
@@ -85,6 +96,53 @@ async function getTinyOrderDetail(token: string, tinyOrderId: string): Promise<a
     console.error('[concierge] Tiny detail error:', e);
     return null;
   }
+}
+
+async function resolveTinyOrderDetail(token: string, requestedOrderRef: string): Promise<any | null> {
+  const cleanedRef = String(requestedOrderRef || '').trim().replace(/^#/, '');
+  if (!cleanedRef) return null;
+
+  const directOrder = await getTinyOrderDetail(token, cleanedRef);
+  if (directOrder) return directOrder;
+
+  const searchResults = await searchTinyOrders(token, cleanedRef);
+  const matchedOrder = searchResults.find((order: any) => {
+    const orderId = String(order.id || '').replace(/\D/g, '');
+    const orderNumber = String(order.numero || '').replace(/\D/g, '');
+    const ecommerceNumber = String(order.numero_ecommerce || '').replace(/\D/g, '');
+    const refDigits = cleanedRef.replace(/\D/g, '');
+
+    return !!refDigits && (orderId === refDigits || orderNumber === refDigits || ecommerceNumber === refDigits);
+  });
+
+  if (!matchedOrder?.id) return null;
+  return await getTinyOrderDetail(token, String(matchedOrder.id));
+}
+
+function buildTrackingReplyFromToolResult(toolName: string, rawResult: string): string | null {
+  if (toolName !== 'get_order_tracking') return null;
+
+  try {
+    const result = JSON.parse(rawResult);
+    if (result?.tracking_code) {
+      const orderLabel = result.order_number ? `#${result.order_number}` : 'do seu pedido';
+      const parts = [
+        `Prontinho! Encontrei o rastreio ${orderLabel}.`,
+        `Código de rastreio: ${result.tracking_code}`,
+        result.tracking_link ? `Acompanhe aqui: ${result.tracking_link}` : null,
+      ].filter(Boolean);
+
+      return parts.join('\n');
+    }
+
+    if (!result?.error && result?.order_number) {
+      return `Encontrei o pedido #${result.order_number}, mas o código de rastreio ainda não aparece disponível no sistema.`;
+    }
+  } catch (_err) {
+    return null;
+  }
+
+  return null;
 }
 
 // ─── Tool definitions for AI ─────────────────────────────────────────────────
@@ -118,7 +176,7 @@ const TOOLS = [
         properties: {
           tiny_order_id: {
             type: "string",
-            description: "ID do pedido no Tiny ERP (obtido da busca anterior)"
+            description: "ID interno do pedido no Tiny ERP ou número visível do pedido (ex: 4809 ou #4809)"
           },
           store_name: {
             type: "string",
@@ -275,41 +333,52 @@ async function executeToolCall(
   }
 
   if (toolName === 'get_order_tracking') {
-    const tinyOrderId = args.tiny_order_id;
+    const requestedOrderRef = String(args.tiny_order_id || '').trim().replace(/^#/, '');
     const storeName = args.store_name;
     const store = stores.find(s => s.name.toLowerCase().includes(storeName.toLowerCase()));
     if (!store) {
       return JSON.stringify({ error: `Loja "${storeName}" não encontrada.` });
     }
 
-    const pedido = await getTinyOrderDetail(store.token, tinyOrderId);
+    const pedido = await resolveTinyOrderDetail(store.token, requestedOrderRef);
     if (!pedido) {
       return JSON.stringify({ error: "Não foi possível obter detalhes do pedido." });
     }
 
-    // Extract tracking info from obs_interna or codigo_rastreamento
-    const trackingCode = pedido.codigo_rastreamento || null;
-    const carrier = pedido.nome_transportador || pedido.forma_envio || null;
+    const trackingCode = firstNonEmptyString(
+      pedido.codigo_rastreamento,
+      pedido.codigoRastreamento,
+      pedido.objeto_postal,
+      pedido.codigo_objeto,
+      pedido?.expedicao?.codigo_rastreamento,
+    );
+    const carrier = firstNonEmptyString(pedido.nome_transportador, pedido.forma_envio, pedido.transportador);
     const items = (pedido.itens || []).map((i: any) => {
       const item = i.item || i;
       return `${item.descricao} (x${item.quantidade})`;
     });
 
     // Build tracking link
-    let trackingLink: string | null = null;
+    let trackingLink: string | null = firstNonEmptyString(
+      pedido.url_rastreamento,
+      pedido.urlRastreamento,
+      pedido.link_rastreamento,
+      pedido.linkRastreamento,
+    );
     if (trackingCode) {
       const codeLower = (trackingCode || '').toUpperCase();
       // Correios codes usually match pattern: 2 letters + 9 digits + 2 letters (e.g., AB123456789BR)
       const isCorreios = /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(codeLower);
-      if (isCorreios) {
+      if (!trackingLink && isCorreios) {
         trackingLink = `https://www.linkcorreios.com.br/?id=${trackingCode}`;
-      } else {
+      } else if (!trackingLink) {
         // For other carriers, try generic tracking
         trackingLink = `https://www.muambator.com.br/pacotes/${trackingCode}/detalhes/`;
       }
     }
 
     return JSON.stringify({
+      tiny_order_id: String(pedido.id || ''),
       order_number: String(pedido.numero),
       date: pedido.data_pedido,
       status: pedido.situacao,
@@ -318,6 +387,7 @@ async function executeToolCall(
       items: items,
       tracking_code: trackingCode,
       tracking_link: trackingLink,
+      tracking_available: !!trackingCode,
       carrier: carrier,
       store_name: store.name,
       obs: pedido.obs || null,
@@ -393,6 +463,52 @@ serve(async (req) => {
     if (!normalizedPhone.startsWith('55') && normalizedPhone.length <= 11) {
       normalizedPhone = '55' + normalizedPhone;
     }
+
+    const incomingMessageText = messageText.trim().slice(0, 500);
+    const aggregationCutoff = new Date(Date.now() - 30000).toISOString();
+
+    // ─── 0. Debounce + aggregate fragmented messages ───────────────────
+    await sleep(4000);
+
+    let latestIncomingQuery = supabase
+      .from('whatsapp_messages')
+      .select('message, created_at')
+      .eq('phone', normalizedPhone)
+      .eq('direction', 'incoming');
+
+    if (whatsappNumberId) {
+      latestIncomingQuery = latestIncomingQuery.eq('whatsapp_number_id', whatsappNumberId);
+    }
+
+    const { data: latestIncoming } = await latestIncomingQuery
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const latestIncomingText = latestIncoming?.[0]?.message?.trim() || '';
+    if (latestIncomingText && incomingMessageText && latestIncomingText !== incomingMessageText) {
+      console.log(`[concierge] Debounced fragmented message for ${normalizedPhone}; newer input detected.`);
+      return new Response(JSON.stringify({ success: true, handled: false, reason: 'debounced_newer_message' }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    let recentIncomingQuery = supabase
+      .from('whatsapp_messages')
+      .select('message, created_at')
+      .eq('phone', normalizedPhone)
+      .eq('direction', 'incoming')
+      .gte('created_at', aggregationCutoff)
+      .order('created_at', { ascending: true });
+
+    if (whatsappNumberId) {
+      recentIncomingQuery = recentIncomingQuery.eq('whatsapp_number_id', whatsappNumberId);
+    }
+
+    const { data: recentIncomingMessages } = await recentIncomingQuery;
+    const combinedMessage = (recentIncomingMessages && recentIncomingMessages.length > 0)
+      ? recentIncomingMessages.map((msg: any) => msg.message?.trim()).filter(Boolean).join('\n').slice(0, 500)
+      : incomingMessageText;
 
     // ─── 1. Load stores with Tiny tokens ────────────────────────────────
     const { data: storesData } = await supabase
@@ -499,6 +615,7 @@ REGRAS:
         if (/\[Template:\s/.test(text)) continue;
         if (text.length > 600) continue;
         if (msg.is_mass_dispatch) continue;
+        if (msg.direction === 'incoming' && msg.created_at >= aggregationCutoff) continue;
         chatMessages.push({
           role: msg.direction === 'incoming' ? 'user' : 'assistant',
           content: text.replace(/^\[IA\]\s*/i, '').slice(0, 500),
@@ -506,14 +623,14 @@ REGRAS:
       }
     }
 
-    // Always add the CURRENT incoming message (it may not be in DB yet)
+    // Always add the CURRENT incoming message (aggregated when fragmented)
     const lastHistoryMsg = chatMessages[chatMessages.length - 1];
-    const currentMsgText = messageText.trim().slice(0, 500);
+    const currentMsgText = combinedMessage;
     if (!lastHistoryMsg || lastHistoryMsg.role !== 'user' || lastHistoryMsg.content !== currentMsgText) {
       chatMessages.push({ role: 'user', content: currentMsgText });
     }
 
-    console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | latest_included=${dbMessages?.[0]?.created_at || 'none'} | kb=${kbEntries?.length || 0} | stores=${stores.length}`);
+    console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | combined=${currentMsgText.split('\n').length} parts | latest_included=${dbMessages?.[0]?.created_at || 'none'} | kb=${kbEntries?.length || 0} | stores=${stores.length}`);
 
     // ─── 6. AI Loop (with tool calling, max 3 turns) ────────────────────
     // Primary: Anthropic Claude | Fallback: Lovable AI (Gemini)
@@ -633,6 +750,8 @@ REGRAS:
             console.log(`[concierge][anthropic] tool: ${tu.name}(${JSON.stringify(tu.input)})`);
             const result = await executeToolCall(tu.name, tu.input || {}, stores, supabase, normalizedPhone);
             console.log(`[concierge][anthropic] result: ${result.slice(0, 200)}`);
+            const forcedReply = buildTrackingReplyFromToolResult(tu.name, result);
+            if (forcedReply) return forcedReply;
             toolResults.push({
               type: 'tool_result',
               tool_use_id: tu.id,
@@ -704,6 +823,8 @@ REGRAS:
             console.log(`[concierge][lovable] tool: ${fnName}(${JSON.stringify(fnArgs)})`);
             const result = await executeToolCall(fnName, fnArgs, stores, supabase, normalizedPhone);
             console.log(`[concierge][lovable] result: ${result.slice(0, 200)}`);
+            const forcedReply = buildTrackingReplyFromToolResult(fnName, result);
+            if (forcedReply) return forcedReply;
             currentMessages.push({ role: 'tool', content: result, tool_call_id: toolCall.id } as any);
           }
           if (message?.content?.trim()) finalReply = message.content.trim();
@@ -726,7 +847,7 @@ REGRAS:
           provider_attempted: providerAttempted,
           fallback_provider: fallbackProvider || null,
           fallback_success: fallbackSuccess ?? false,
-          customer_message: messageText,
+          customer_message: combinedMessage,
           ai_response: aiResponse || null,
           history_sent_count: chatMessages.length - 1,
           status: 'open',
@@ -803,7 +924,7 @@ REGRAS:
     // Log
     await supabase.from('ai_conversation_logs').insert({
       phone: normalizedPhone,
-      message_in: messageText,
+      message_in: combinedMessage,
       message_out: finalReply,
       ai_decision: sectorId ? `routed:${sectorId}` : 'responded',
       provider: usedProvider,
