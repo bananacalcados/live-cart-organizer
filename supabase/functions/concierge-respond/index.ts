@@ -688,11 +688,31 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { phone, messageText, whatsappNumberId, channel = 'whatsapp' } = await req.json();
+    const { phone, messageText, whatsappNumberId, channel = 'whatsapp', mediaUrl = null, mediaType = null } = await req.json();
 
-    if (!phone || !messageText) {
-      return new Response(JSON.stringify({ error: 'phone and messageText required' }), {
+    if (!phone || (!messageText && !mediaUrl)) {
+      return new Response(JSON.stringify({ error: 'phone and messageText or mediaUrl required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ─── Transcribe audio if present ───────────────────────────────────
+    let transcribedText: string | null = null;
+    if (mediaType === 'audio' && mediaUrl) {
+      console.log(`[concierge] Transcribing audio for ${phone}...`);
+      transcribedText = await transcribeAudio(mediaUrl);
+      if (transcribedText) {
+        console.log(`[concierge] Audio transcribed: "${transcribedText.slice(0, 100)}"`);
+      } else {
+        console.log(`[concierge] Audio transcription failed, will inform user`);
+      }
+    }
+
+    // Use transcribed text if original message is just a placeholder
+    const effectiveMessageText = transcribedText || messageText || '';
+    if (!effectiveMessageText.trim() && mediaType !== 'image') {
+      return new Response(JSON.stringify({ success: true, handled: false, reason: 'no_text_content' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
