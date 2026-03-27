@@ -490,13 +490,24 @@ async function executeToolCall(
             return termWords.some((word: string) => name.includes(word));
           });
 
-          for (const order of filtered.slice(0, 5)) {
+          for (const order of filtered.slice(0, 3)) {
+            let productNames: string[] = [];
+            try {
+              const detail = await getTinyOrderDetail(store.token, String(order.id));
+              if (detail?.itens) {
+                productNames = detail.itens.map((i: any) => {
+                  const item = i.item || i;
+                  return item.descricao || item.nome || '';
+                }).filter(Boolean).slice(0, 3);
+              }
+            } catch (e) { console.error('[concierge] detail fetch error:', e); }
+
             allResults.push({
               tiny_order_id: String(order.id),
               order_number: String(order.numero),
               date: order.data_pedido,
               customer_name: order.nome,
-              total: parseFloat(order.valor || '0'),
+              products: productNames.length > 0 ? productNames : ['(produtos não disponíveis)'],
               status: order.situacao,
               store_name: getCustomerFacingStoreName(store.name),
               searched_by: 'name',
