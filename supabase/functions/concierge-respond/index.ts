@@ -534,7 +534,7 @@ async function executeToolCall(
     });
   }
 
-  if (toolName === 'get_order_tracking') {
+  if (toolName === 'get_order_details') {
     const requestedOrderRef = String(args.tiny_order_id || '').trim().replace(/^#/, '');
     const storeName = args.store_name;
     const store = stores.find(s => storeMatchesReference(s.name, storeName));
