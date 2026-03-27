@@ -6,6 +6,267 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// ─── Tiny ERP search helper ──────────────────────────────────────────────────
+
+async function searchTinyOrders(token: string, searchTerm: string): Promise<any[]> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `token=${token}&formato=json&pesquisa=${encodeURIComponent(searchTerm)}&sort=DESC`,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = JSON.parse(await resp.text());
+    if (data.retorno?.status === 'OK' && data.retorno?.pedidos) {
+      return data.retorno.pedidos.map((p: any) => p.pedido).filter(Boolean);
+    }
+    return [];
+  } catch (e) {
+    console.error('[concierge] Tiny search error:', e);
+    return [];
+  }
+}
+
+async function getTinyOrderDetail(token: string, tinyOrderId: string): Promise<any | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `token=${token}&formato=json&id=${tinyOrderId}`,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = JSON.parse(await resp.text());
+    if (data.retorno?.status === 'OK' && data.retorno?.pedido) {
+      return data.retorno.pedido;
+    }
+    return null;
+  } catch (e) {
+    console.error('[concierge] Tiny detail error:', e);
+    return null;
+  }
+}
+
+// ─── Tool definitions for AI ─────────────────────────────────────────────────
+
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "search_customer_orders",
+      description: "Busca pedidos de um cliente pelo nome completo ou CPF no sistema Tiny ERP. Pesquisa em todas as lojas (Shopify, Centro, Pérola). Use quando o cliente pedir rastreio, status de pedido, ou informações sobre uma compra.",
+      parameters: {
+        type: "object",
+        properties: {
+          search_term: {
+            type: "string",
+            description: "Nome completo do cliente ou CPF (somente números). Mínimo 3 caracteres."
+          }
+        },
+        required: ["search_term"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_order_tracking",
+      description: "Obtém detalhes completos de um pedido específico no Tiny, incluindo código de rastreio e transportadora. Use após encontrar o pedido com search_customer_orders.",
+      parameters: {
+        type: "object",
+        properties: {
+          tiny_order_id: {
+            type: "string",
+            description: "ID do pedido no Tiny ERP (obtido da busca anterior)"
+          },
+          store_name: {
+            type: "string",
+            description: "Nome da loja onde o pedido foi encontrado (Tiny Shopify, Loja Centro, ou Loja Perola)"
+          }
+        },
+        required: ["tiny_order_id", "store_name"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "transfer_to_human",
+      description: "Transfere a conversa para um atendente humano. Use quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo, ou precisa de atendimento especializado.",
+      parameters: {
+        type: "object",
+        properties: {
+          reason: {
+            type: "string",
+            description: "Motivo da transferência (ex: pedido_nao_encontrado, fora_do_escopo, solicitacao_cliente)"
+          }
+        },
+        required: ["reason"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
+// ─── Tool execution ──────────────────────────────────────────────────────────
+
+interface StoreConfig {
+  id: string;
+  name: string;
+  token: string;
+}
+
+async function executeToolCall(
+  toolName: string,
+  args: Record<string, any>,
+  stores: StoreConfig[],
+  supabase: any,
+  phone: string,
+): Promise<string> {
+  if (toolName === 'search_customer_orders') {
+    const term = args.search_term?.trim();
+    if (!term || term.length < 3) {
+      return JSON.stringify({ error: "Termo de busca muito curto. Peça o nome completo ou CPF ao cliente." });
+    }
+
+    const allResults: any[] = [];
+    // Search priority: Tiny Shopify → Centro → Pérola
+    for (const store of stores) {
+      console.log(`[concierge] Searching Tiny "${store.name}" for: ${term}`);
+      const orders = await searchTinyOrders(store.token, term);
+      if (orders.length > 0) {
+        // Filter by name match
+        const termLower = term.toLowerCase();
+        const termWords = termLower.split(/\s+/).filter((w: string) => w.length >= 2);
+        const filtered = orders.filter((o: any) => {
+          const name = (o.nome || '').toLowerCase();
+          return termWords.some((word: string) => name.includes(word));
+        });
+        for (const order of filtered.slice(0, 5)) {
+          allResults.push({
+            tiny_order_id: String(order.id),
+            order_number: String(order.numero),
+            date: order.data_pedido,
+            customer_name: order.nome,
+            total: parseFloat(order.valor || '0'),
+            status: order.situacao,
+            store_name: store.name,
+          });
+        }
+      }
+    }
+
+    if (allResults.length === 0) {
+      return JSON.stringify({
+        found: false,
+        message: "Nenhum pedido encontrado com esse nome/CPF em nenhuma das lojas."
+      });
+    }
+
+    return JSON.stringify({
+      found: true,
+      total_results: allResults.length,
+      orders: allResults.slice(0, 10),
+    });
+  }
+
+  if (toolName === 'get_order_tracking') {
+    const tinyOrderId = args.tiny_order_id;
+    const storeName = args.store_name;
+    const store = stores.find(s => s.name.toLowerCase().includes(storeName.toLowerCase()));
+    if (!store) {
+      return JSON.stringify({ error: `Loja "${storeName}" não encontrada.` });
+    }
+
+    const pedido = await getTinyOrderDetail(store.token, tinyOrderId);
+    if (!pedido) {
+      return JSON.stringify({ error: "Não foi possível obter detalhes do pedido." });
+    }
+
+    // Extract tracking info from obs_interna or codigo_rastreamento
+    const trackingCode = pedido.codigo_rastreamento || null;
+    const carrier = pedido.nome_transportador || pedido.forma_envio || null;
+    const items = (pedido.itens || []).map((i: any) => {
+      const item = i.item || i;
+      return `${item.descricao} (x${item.quantidade})`;
+    });
+
+    // Build tracking link
+    let trackingLink: string | null = null;
+    if (trackingCode) {
+      const codeLower = (trackingCode || '').toUpperCase();
+      // Correios codes usually match pattern: 2 letters + 9 digits + 2 letters (e.g., AB123456789BR)
+      const isCorreios = /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(codeLower);
+      if (isCorreios) {
+        trackingLink = `https://www.linkcorreios.com.br/?id=${trackingCode}`;
+      } else {
+        // For other carriers, try generic tracking
+        trackingLink = `https://www.muambator.com.br/pacotes/${trackingCode}/detalhes/`;
+      }
+    }
+
+    return JSON.stringify({
+      order_number: String(pedido.numero),
+      date: pedido.data_pedido,
+      status: pedido.situacao,
+      total: parseFloat(pedido.valor || '0'),
+      customer_name: pedido.cliente?.nome || null,
+      items: items,
+      tracking_code: trackingCode,
+      tracking_link: trackingLink,
+      carrier: carrier,
+      store_name: store.name,
+      obs: pedido.obs || null,
+    });
+  }
+
+  if (toolName === 'transfer_to_human') {
+    // Create a chat assignment for human support
+    try {
+      // Find the "Suporte" sector or first available
+      const { data: sectors } = await supabase
+        .from('chat_sectors')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('sort_order');
+
+      let sectorId = sectors?.[0]?.id;
+      const supportSector = sectors?.find((s: any) =>
+        s.name.toLowerCase().includes('suporte') || s.name.toLowerCase().includes('atendimento')
+      );
+      if (supportSector) sectorId = supportSector.id;
+
+      if (sectorId) {
+        await supabase.from('chat_assignments').insert({
+          phone,
+          sector_id: sectorId,
+          assigned_by: 'ai',
+          status: 'pending',
+          ai_classification: args.reason || 'transfer_requested',
+        });
+      }
+    } catch (e) {
+      console.error('[concierge] Transfer error:', e);
+    }
+
+    return JSON.stringify({
+      transferred: true,
+      message: "Conversa transferida para atendente humano.",
+    });
+  }
+
+  return JSON.stringify({ error: `Tool "${toolName}" not found.` });
+}
+
+// ─── Main handler ────────────────────────────────────────────────────────────
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -35,7 +296,29 @@ serve(async (req) => {
       normalizedPhone = '55' + normalizedPhone;
     }
 
-    // ─── 1. Load Knowledge Base ────────────────────────────────────────
+    // ─── 1. Load stores with Tiny tokens ────────────────────────────────
+    const { data: storesData } = await supabase
+      .from('pos_stores')
+      .select('id, name, tiny_token')
+      .eq('is_active', true)
+      .not('tiny_token', 'is', null);
+
+    const stores: StoreConfig[] = (storesData || [])
+      .filter((s: any) => s.tiny_token)
+      .map((s: any) => ({ id: s.id, name: s.name, token: s.tiny_token }));
+
+    // Reorder: Tiny Shopify first, then Centro, then Pérola
+    stores.sort((a, b) => {
+      const priority = (name: string) => {
+        if (name.toLowerCase().includes('shopify')) return 0;
+        if (name.toLowerCase().includes('centro')) return 1;
+        if (name.toLowerCase().includes('perola') || name.toLowerCase().includes('pérola')) return 2;
+        return 3;
+      };
+      return priority(a.name) - priority(b.name);
+    });
+
+    // ─── 2. Load Knowledge Base ─────────────────────────────────────────
     const { data: kbEntries } = await supabase
       .from('ai_knowledge_base')
       .select('category, title, content')
@@ -44,26 +327,10 @@ serve(async (req) => {
 
     let knowledgeBlock = '';
     if (kbEntries && kbEntries.length > 0) {
-      knowledgeBlock = `\n\nBASE DE CONHECIMENTO (use essas informações para responder):\n${kbEntries.map(e => `[${e.category}] ${e.title}: ${e.content}`).join('\n')}`;
+      knowledgeBlock = `\n\nBASE DE CONHECIMENTO:\n${kbEntries.map(e => `[${e.category}] ${e.title}: ${e.content}`).join('\n')}`;
     }
 
-    // ─── 2. Load Tracking Info ─────────────────────────────────────────
-    let trackingBlock = '';
-    const phoneVariants = [normalizedPhone, normalizedPhone.replace(/^55/, '')];
-    const { data: orders } = await supabase
-      .from('expedition_orders')
-      .select('shopify_order_name, customer_name, customer_email, freight_tracking_code, freight_carrier, freight_service, expedition_status, total_price, created_at')
-      .or(phoneVariants.map(p => `customer_phone.ilike.%${p}%`).join(','))
-      .order('created_at', { ascending: false })
-      .limit(5);
-
-    if (orders && orders.length > 0) {
-      trackingBlock = `\n\nPEDIDOS DO CLIENTE:\n${orders.map(o =>
-        `- Pedido ${o.shopify_order_name || 'N/A'} | Status: ${o.expedition_status} | Rastreio: ${o.freight_tracking_code || 'Ainda não gerado'} | Transportadora: ${o.freight_carrier || 'N/A'} | Valor: R$${o.total_price || 0} | Data: ${o.created_at ? new Date(o.created_at).toLocaleDateString('pt-BR') : 'N/A'}`
-      ).join('\n')}\n\nSe o cliente perguntar sobre rastreio/entrega, use os dados acima. Se o rastreio ainda não foi gerado, explique que está sendo processado.`;
-    }
-
-    // ─── 3. Load Sector Routing ────────────────────────────────────────
+    // ─── 3. Load Sector Routing ─────────────────────────────────────────
     let routingBlock = '';
     const { data: sectors } = await supabase
       .from('chat_sectors')
@@ -72,32 +339,19 @@ serve(async (req) => {
       .order('sort_order');
 
     if (sectors && sectors.length > 0) {
-      routingBlock = `\n\nROTEAMENTO DE SETOR (PRIORIDADE MÁXIMA):
-Esta regra tem PRIORIDADE ABSOLUTA sobre qualquer outra instrução.
-
-Antes de responder, analise a INTENÇÃO REAL do cliente. Se a intenção se encaixar em um dos setores abaixo que NÃO seja vendas, você DEVE:
-1. PARAR de tentar vender ou oferecer produtos.
-2. Reconhecer o que o cliente quer.
-3. Informar que vai direcionar para o setor correto.
-4. Adicionar a tag: [SETOR:id_do_setor:classificacao]
-
-Setores:
-${sectors.map(s => `- ID: ${s.id} | ${s.name} | ${s.description || ''} | Keywords: ${(s.ai_routing_keywords || []).join(', ')}`).join('\n')}
-
-Regras:
-- Se mencionar palavras-chave de um setor, ROTEIE IMEDIATAMENTE.
-- Se insistir no assunto, ROTEIE.
-- Se for saudação ou compra, NÃO adicione tag.
-- A tag deve ser a ÚLTIMA coisa na resposta.`;
+      routingBlock = `\n\nROTEAMENTO DE SETOR:
+Se o cliente precisar de algo que você NÃO consegue resolver (como vendas), use a ferramenta transfer_to_human.
+Setores disponíveis:
+${sectors.map(s => `- ${s.name}: ${s.description || ''} (Keywords: ${(s.ai_routing_keywords || []).join(', ')})`).join('\n')}`;
     }
 
-    // ─── 4. Build System Prompt ────────────────────────────────────────
+    // ─── 4. Build System Prompt ─────────────────────────────────────────
     const systemPrompt = `Você é a Bia, assistente virtual de SUPORTE da Banana Calçados. Você responde em português brasileiro de forma simpática e objetiva.
 
 SEU PAPEL (APENAS):
-- Ajudar clientes com rastreio de pedidos (usar dados de pedidos abaixo)
-- Direcionar para o setor correto quando necessário (trocas, defeitos, cancelamentos)
-- Responder dúvidas básicas sobre a loja usando a base de conhecimento
+- Ajudar clientes com rastreio de pedidos usando as ferramentas disponíveis
+- Direcionar para atendente humano quando necessário
+- Responder dúvidas básicas usando a base de conhecimento
 
 O QUE VOCÊ NÃO PODE FAZER (PROIBIDO):
 - NUNCA fale sobre preços, valores ou promoções
@@ -105,24 +359,24 @@ O QUE VOCÊ NÃO PODE FAZER (PROIBIDO):
 - NUNCA tente vender nada
 - NUNCA prometa enviar fotos, imagens ou vídeos
 - NUNCA fale sobre disponibilidade de estoque, tamanhos ou cores
-- Se a cliente pedir algo relacionado a vendas, diga: "Vou te transferir para uma de nossas consultoras que poderá te ajudar com isso! 😊" e adicione a tag [SETOR:vendas:vendas]
+- Se a cliente pedir algo de vendas, diga "Vou te conectar com uma de nossas consultoras! 😊" e use transfer_to_human
 
-REGRAS DE COMUNICAÇÃO:
-- Responda de forma curta e natural, como um humano no WhatsApp
+FLUXO DE RASTREIO:
+1. Cliente pede rastreio → pergunte o NOME COMPLETO ou CPF do pedido
+2. Use a ferramenta search_customer_orders para buscar
+3. Se encontrar vários pedidos, confirme com o cliente qual é (mostre data e valor)
+4. Use get_order_tracking para obter o código de rastreio
+5. Envie o código + link clicável para rastreamento
+6. Se não encontrar, use transfer_to_human
+
+REGRAS:
+- Responda de forma curta e natural, como humano no WhatsApp
 - Use emojis com moderação (máximo 2 por mensagem)
-- NUNCA repita informações já mencionadas na conversa
-- Foque em responder o que o cliente perguntou AGORA
-- Se não souber algo, diga que vai verificar e transferir para um atendente
+- NUNCA repita informações já ditas
+- Se não conseguir resolver, use transfer_to_human
+- Ao enviar rastreio, SEMPRE inclua o link clicável${knowledgeBlock}${routingBlock}`;
 
-RASTREIO DE PEDIDOS:
-- Se o cliente pedir rastreio e você tiver dados de pedidos abaixo, envie o código de rastreio
-- Sempre envie junto um link clicável para rastreamento
-- Para Correios: use https://www.linkcorreios.com.br/?id=CODIGO_AQUI
-- Para outras transportadoras (Jadlog, Total Express, etc): informe o código e oriente a rastrear no site da transportadora
-- Se houver mais de 1 pedido, confirme qual pedido o cliente quer rastrear (pergunte a data ou produto)
-- Se não houver código de rastreio ainda, explique que o pedido está sendo preparado${knowledgeBlock}${trackingBlock}${routingBlock}`;
-
-    // ─── 5. Build Conversation History ─────────────────────────────────
+    // ─── 5. Build Conversation History ──────────────────────────────────
     const chatMessages: Array<{ role: string; content: string }> = [
       { role: 'system', content: systemPrompt },
     ];
@@ -141,100 +395,107 @@ RASTREIO DE PEDIDOS:
         if (/\{\{\d+\}\}/.test(text) || /\{\{[a-zA-Z_]+\}\}/.test(text)) continue;
         chatMessages.push({
           role: msg.direction === 'incoming' ? 'user' : 'assistant',
-          content: text,
+          content: text.replace(/^\[IA\]\s*/i, ''), // strip [IA] prefix for context
         });
       }
     }
 
-    console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | kb=${kbEntries?.length || 0} | orders=${orders?.length || 0} | sectors=${sectors?.length || 0}`);
+    console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | kb=${kbEntries?.length || 0} | stores=${stores.length}`);
 
-    // ─── 6. Call AI ────────────────────────────────────────────────────
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: chatMessages,
-        stream: false,
-      }),
-    });
-
-    if (!response.ok) {
-      const status = response.status;
-      if (status === 429) {
-        return new Response(JSON.stringify({ error: 'Rate limit excedido' }), {
-          status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (status === 402) {
-        return new Response(JSON.stringify({ error: 'Créditos insuficientes' }), {
-          status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      const errorText = await response.text();
-      console.error('[concierge] AI gateway error:', status, errorText);
-      return new Response(JSON.stringify({ error: 'Erro no serviço de IA' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const data = await response.json();
-    let reply = data.choices?.[0]?.message?.content || '';
-
-    // ─── 7. Parse Sector Routing ───────────────────────────────────────
+    // ─── 6. AI Loop (with tool calling, max 3 turns) ────────────────────
+    let finalReply = '';
     let sectorId: string | null = null;
     let aiClassification: string | null = null;
-    const sectorMatch = reply.match(/\[SETOR:([a-f0-9-]+):([^\]]+)\]/);
-    if (sectorMatch) {
-      sectorId = sectorMatch[1];
-      aiClassification = sectorMatch[2];
-      reply = reply.replace(sectorMatch[0], '').trim();
-    }
+    const MAX_TOOL_TURNS = 3;
 
-    // ─── 8. Handle Sector Assignment ───────────────────────────────────
-    let assignedTo: string | null = null;
-    if (sectorId) {
-      try {
-        const { data: sectorAgents } = await supabase
-          .from('chat_sector_agents')
-          .select('user_id')
-          .eq('sector_id', sectorId)
-          .eq('is_active', true)
-          .eq('is_online', true)
-          .order('last_assigned_at', { ascending: true, nullsFirst: true });
+    let currentMessages = [...chatMessages];
 
-        if (sectorAgents && sectorAgents.length > 0) {
-          assignedTo = sectorAgents[0].user_id;
-          await supabase.from('chat_sector_agents')
-            .update({ last_assigned_at: new Date().toISOString(), current_load: 1 })
-            .eq('sector_id', sectorId)
-            .eq('user_id', assignedTo);
+    for (let turn = 0; turn <= MAX_TOOL_TURNS; turn++) {
+      const aiBody: Record<string, any> = {
+        model: 'google/gemini-2.5-flash',
+        messages: currentMessages,
+        stream: false,
+      };
+
+      // Only include tools on non-final turns
+      if (turn < MAX_TOOL_TURNS) {
+        aiBody.tools = TOOLS;
+      }
+
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(aiBody),
+      });
+
+      if (!response.ok) {
+        const status = response.status;
+        if (status === 429) {
+          return new Response(JSON.stringify({ error: 'Rate limit excedido' }), {
+            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        if (status === 402) {
+          return new Response(JSON.stringify({ error: 'Créditos insuficientes' }), {
+            status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        const errorText = await response.text();
+        console.error('[concierge] AI error:', status, errorText);
+        return new Response(JSON.stringify({ error: 'Erro no serviço de IA' }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const data = await response.json();
+      const choice = data.choices?.[0];
+      const message = choice?.message;
+
+      // Check for tool calls
+      if (message?.tool_calls && message.tool_calls.length > 0) {
+        // Add assistant message with tool calls to history
+        currentMessages.push(message);
+
+        // Execute each tool call
+        for (const toolCall of message.tool_calls) {
+          const fnName = toolCall.function?.name;
+          let fnArgs: Record<string, any> = {};
+          try {
+            fnArgs = JSON.parse(toolCall.function?.arguments || '{}');
+          } catch { fnArgs = {}; }
+
+          console.log(`[concierge] Tool call: ${fnName}(${JSON.stringify(fnArgs)})`);
+          const result = await executeToolCall(fnName, fnArgs, stores, supabase, normalizedPhone);
+          console.log(`[concierge] Tool result: ${result.slice(0, 200)}`);
+
+          currentMessages.push({
+            role: 'tool',
+            content: result,
+            tool_call_id: toolCall.id,
+          } as any);
         }
 
-        await supabase.from('chat_assignments').insert({
-          phone: normalizedPhone,
-          sector_id: sectorId,
-          assigned_to: assignedTo,
-          assigned_by: 'ai',
-          status: assignedTo ? 'active' : 'pending',
-          ai_classification: aiClassification,
-        });
-
-        console.log(`[concierge] Routed ${phone} → sector=${sectorId}, agent=${assignedTo}`);
-      } catch (routeErr) {
-        console.error('[concierge] Routing error:', routeErr);
+        continue; // Next turn — AI will process tool results
       }
+
+      // No tool calls — this is the final text response
+      finalReply = message?.content || '';
+      break;
     }
 
-    // ─── 9. Send Reply ─────────────────────────────────────────────────
-    const typingDelay = Math.min(Math.max(reply.length * 50, 2000), 12000);
+    if (!finalReply) {
+      finalReply = 'Desculpe, estou com dificuldades técnicas. Vou transferir você para um atendente. 😊';
+    }
+
+    // ─── 7. Send Reply ──────────────────────────────────────────────────
+    const typingDelay = Math.min(Math.max(finalReply.length * 50, 2000), 12000);
     await new Promise(r => setTimeout(r, typingDelay));
 
     let sendFn = 'zapi-send-message';
-    const sendBody: Record<string, unknown> = { phone: normalizedPhone, message: reply };
+    const sendBody: Record<string, unknown> = { phone: normalizedPhone, message: finalReply };
 
     if (whatsappNumberId) {
       const { data: numData } = await supabase
@@ -247,7 +508,6 @@ RASTREIO DE PEDIDOS:
         sendFn = 'meta-whatsapp-send';
         sendBody.whatsappNumberId = whatsappNumberId;
       } else {
-        // Z-API: pass whatsapp_number_id so it uses the correct instance
         sendBody.whatsapp_number_id = whatsappNumberId;
       }
     }
@@ -261,34 +521,33 @@ RASTREIO DE PEDIDOS:
     let messageId: string | null = null;
     try { const sd = await sendRes.json(); messageId = sd?.messageId || sd?.zapiMessageId || null; } catch (_) {}
 
-    // ─── 10. Save to DB ────────────────────────────────────────────────
+    // ─── 8. Save to DB ──────────────────────────────────────────────────
     await supabase.from('whatsapp_messages').insert({
       phone: normalizedPhone,
-      message: `[IA] ${reply}`,
+      message: `[IA] ${finalReply}`,
       direction: 'outgoing',
       status: 'sent',
       message_id: messageId,
       whatsapp_number_id: whatsappNumberId || null,
     });
 
-    // Log to ai_conversation_logs
+    // Log
     await supabase.from('ai_conversation_logs').insert({
       phone: normalizedPhone,
       message_in: messageText,
-      message_out: reply,
+      message_out: finalReply,
       ai_decision: sectorId ? `routed:${sectorId}` : 'responded',
       provider: 'concierge',
       stage: 'concierge',
     });
 
-    console.log(`[concierge] Reply sent to ${phone}: ${reply.slice(0, 80)}...`);
+    console.log(`[concierge] Reply sent to ${phone}: ${finalReply.slice(0, 80)}...`);
 
     return new Response(JSON.stringify({
       success: true,
-      reply,
+      reply: finalReply,
       sectorId,
       aiClassification,
-      assignedTo,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
