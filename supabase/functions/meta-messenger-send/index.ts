@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +12,7 @@ interface SendMessengerRequest {
   channel?: 'messenger' | 'instagram';
   type?: 'text' | 'image' | 'video' | 'audio' | 'file';
   mediaUrl?: string;
+  whatsapp_number_id?: string;
 }
 
 serve(async (req) => {
@@ -19,20 +21,66 @@ serve(async (req) => {
   }
 
   try {
-    const pageAccessToken = Deno.env.get('META_PAGE_ACCESS_TOKEN');
-    if (!pageAccessToken) {
-      return new Response(
-        JSON.stringify({ error: 'META_PAGE_ACCESS_TOKEN not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { recipientId, message, channel = 'messenger', type = 'text', mediaUrl }: SendMessengerRequest = await req.json();
+    const { recipientId, message, channel = 'instagram', type = 'text', mediaUrl, whatsapp_number_id }: SendMessengerRequest = await req.json();
 
     if (!recipientId) {
       return new Response(
         JSON.stringify({ error: 'recipientId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Resolve access token: try DB first, then env var fallback
+    let pageAccessToken: string | null = null;
+
+    if (whatsapp_number_id) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, serviceKey);
+
+      const { data } = await supabase
+        .from('whatsapp_numbers')
+        .select('access_token')
+        .eq('id', whatsapp_number_id)
+        .eq('provider', 'meta')
+        .single();
+
+      if (data?.access_token) {
+        pageAccessToken = data.access_token;
+        console.log(`Using DB access_token for whatsapp_number_id=${whatsapp_number_id}`);
+      }
+    }
+
+    // If no DB token found, try all active Meta numbers
+    if (!pageAccessToken) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, serviceKey);
+
+      const { data: metaNumbers } = await supabase
+        .from('whatsapp_numbers')
+        .select('access_token')
+        .eq('provider', 'meta')
+        .eq('is_active', true)
+        .not('access_token', 'is', null)
+        .limit(1);
+
+      if (metaNumbers?.[0]?.access_token) {
+        pageAccessToken = metaNumbers[0].access_token;
+        console.log('Using first active Meta number access_token from DB');
+      }
+    }
+
+    // Final fallback to env var
+    if (!pageAccessToken) {
+      pageAccessToken = Deno.env.get('META_PAGE_ACCESS_TOKEN') || null;
+      if (pageAccessToken) console.log('Using META_PAGE_ACCESS_TOKEN env var fallback');
+    }
+
+    if (!pageAccessToken) {
+      return new Response(
+        JSON.stringify({ error: 'No Meta access token configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -56,10 +104,7 @@ serve(async (req) => {
       );
     }
 
-    // For Instagram, use the Instagram Messaging API endpoint
-    const apiUrl = channel === 'instagram'
-      ? `https://graph.facebook.com/v21.0/me/messages`
-      : `https://graph.facebook.com/v21.0/me/messages`;
+    const apiUrl = `https://graph.facebook.com/v21.0/me/messages`;
 
     const res = await fetch(apiUrl, {
       method: 'POST',

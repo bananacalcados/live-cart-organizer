@@ -465,7 +465,7 @@ export default function ChatPage() {
         'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ recipientId, message, channel, type, mediaUrl }),
+      body: JSON.stringify({ recipientId, message, channel, type, mediaUrl, whatsapp_number_id: numbers.find(n => n.provider === 'meta')?.id || null }),
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
