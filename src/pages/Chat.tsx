@@ -414,10 +414,14 @@ export default function ChatPage() {
 
   // ── Determine if using Meta API ──
   const getActiveNumberId = (): string | null => {
+    // If we have a selected conversation with a specific instance, use that
+    if (selectedConvNumberId) return selectedConvNumberId;
     return numberFilter !== 'all' ? numberFilter : (selectedNumberId || null);
   };
 
   const isMetaNumber = (): boolean => {
+    // Z-API conversations have null whatsapp_number_id — always use Z-API for them
+    if (selectedConvNumberId === null) return false;
     const numId = getActiveNumberId();
     if (!numId) return false;
     return numbers.some(n => n.id === numId);
