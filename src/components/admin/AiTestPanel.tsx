@@ -87,19 +87,24 @@ export function AiTestPanel() {
     }
     setResetting(true);
     try {
-      // Deactivate any active AI sessions for this phone
       const phoneVariants = [clean];
       if (clean.startsWith("55")) phoneVariants.push(clean.slice(2));
       else phoneVariants.push("55" + clean);
 
-      await supabase
-        .from("automation_ai_sessions")
-        .update({ is_active: false })
-        .in("phone", phoneVariants);
+      await Promise.all([
+        supabase
+          .from("automation_ai_sessions")
+          .update({ is_active: false })
+          .in("phone", phoneVariants),
+        supabase
+          .from("whatsapp_messages")
+          .delete()
+          .in("phone", phoneVariants)
+          .eq("direction", "outgoing")
+          .like("message", "[IA]%")
+      ]);
 
-      // Delete recent concierge messages (last 24h) to start fresh
-      // We won't delete messages — just deactivate sessions so the AI starts fresh
-      toast.success("Sessão da Bia resetada! Pode iniciar um novo teste.");
+      toast.success("Conversa da Bia resetada de verdade! Pode iniciar um novo cenário.");
     } catch (err) {
       console.error(err);
       toast.error("Erro ao resetar");
