@@ -99,12 +99,18 @@ export function AiTestPanel() {
         supabase
           .from("whatsapp_messages")
           .delete()
+          .in("phone", phoneVariants),
+        supabase
+          .from("ai_conversation_logs")
+          .delete()
+          .in("phone", phoneVariants),
+        supabase
+          .from("ai_error_logs")
+          .delete()
           .in("phone", phoneVariants)
-          .eq("direction", "outgoing")
-          .like("message", "[IA]%")
       ]);
 
-      toast.success("Conversa da Bia resetada de verdade! Pode iniciar um novo cenário.");
+      toast.success("Conversa da Bia resetada por completo! Pode iniciar um novo cenário.");
     } catch (err) {
       console.error(err);
       toast.error("Erro ao resetar");
