@@ -387,29 +387,26 @@ REGRAS:
       .from('whatsapp_messages')
       .select('message, direction, created_at, media_type, is_mass_dispatch')
       .eq('phone', normalizedPhone)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(30);
 
     if (dbMessages && dbMessages.length > 0) {
-      for (const msg of dbMessages) {
+      const recentMessages = [...dbMessages].reverse();
+      for (const msg of recentMessages) {
         const text = msg.message?.trim();
         if (!text) continue;
-        // Skip template placeholders
         if (/\{\{\d+\}\}/.test(text) || /\{\{[a-zA-Z_]+\}\}/.test(text)) continue;
-        // Skip template markers and spam
         if (/\[Template:\s/.test(text)) continue;
-        // Skip very long messages (likely old template dumps or concatenated spam)
         if (text.length > 600) continue;
-        // Skip mass dispatch content
         if (msg.is_mass_dispatch) continue;
         chatMessages.push({
           role: msg.direction === 'incoming' ? 'user' : 'assistant',
-          content: text.replace(/^\[IA\]\s*/i, '').slice(0, 500), // strip [IA] prefix, cap length
+          content: text.replace(/^\[IA\]\s*/i, '').slice(0, 500),
         });
       }
     }
 
-    console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | kb=${kbEntries?.length || 0} | stores=${stores.length}`);
+    console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | latest_included=${dbMessages?.[0]?.created_at || 'none'} | kb=${kbEntries?.length || 0} | stores=${stores.length}`);
 
     // ─── 6. AI Loop (with tool calling, max 3 turns) ────────────────────
     // Primary: Anthropic Claude | Fallback: Lovable AI (Gemini)
