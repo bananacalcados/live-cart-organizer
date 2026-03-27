@@ -355,6 +355,7 @@ export default function ChatPage() {
     setSelectedPhone(phone);
     setSelectedConvNumberId(numberId);
     setSelectedConvKey(conv?.conversationKey || `${phone}__${numberId || 'none'}`);
+    setSelectedConvChannel(conv.channel || null);
     loadMessages(phone, false, numberId);
     const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
     if (order) setHasUnreadMessages(order.id, false);
