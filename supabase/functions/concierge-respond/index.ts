@@ -495,6 +495,13 @@ REGRAS:
       }
     }
 
+    // Always add the CURRENT incoming message (it may not be in DB yet)
+    const lastHistoryMsg = chatMessages[chatMessages.length - 1];
+    const currentMsgText = messageText.trim().slice(0, 500);
+    if (!lastHistoryMsg || lastHistoryMsg.role !== 'user' || lastHistoryMsg.content !== currentMsgText) {
+      chatMessages.push({ role: 'user', content: currentMsgText });
+    }
+
     console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | latest_included=${dbMessages?.[0]?.created_at || 'none'} | kb=${kbEntries?.length || 0} | stores=${stores.length}`);
 
     // ─── 6. AI Loop (with tool calling, max 3 turns) ────────────────────
