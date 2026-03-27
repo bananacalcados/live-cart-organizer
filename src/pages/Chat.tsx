@@ -193,8 +193,18 @@ export default function ChatPage() {
   
   useEffect(() => {
     const loadContacts = async () => {
-      const { data } = await supabase.from('chat_contacts').select('*');
-      if (data) setChatContacts(data as ChatContact[]);
+      // Fetch all contacts (table may exceed default 1000-row limit)
+      let allContacts: ChatContact[] = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data } = await supabase.from('chat_contacts').select('*').range(from, from + PAGE - 1);
+        if (!data || data.length === 0) break;
+        allContacts = allContacts.concat(data as ChatContact[]);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      setChatContacts(allContacts);
     };
     loadContacts();
     const channel = supabase
