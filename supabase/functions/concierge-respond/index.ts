@@ -6,7 +6,30 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// ─── Tiny ERP search helper ──────────────────────────────────────────────────
+// ─── Tiny ERP search helpers ─────────────────────────────────────────────────
+
+async function searchTinyContactByCpf(token: string, cpf: string): Promise<{ name: string; id: string } | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch('https://api.tiny.com.br/api2/contatos.pesquisa.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `token=${token}&formato=json&cpf_cnpj=${encodeURIComponent(cpf)}`,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = JSON.parse(await resp.text());
+    if (data.retorno?.status === 'OK' && data.retorno?.contatos?.length > 0) {
+      const contato = data.retorno.contatos[0].contato;
+      return { name: contato.nome || '', id: String(contato.id || '') };
+    }
+    return null;
+  } catch (e) {
+    console.error('[concierge] Tiny contact search error:', e);
+    return null;
+  }
+}
 
 async function searchTinyOrders(token: string, searchTerm: string): Promise<any[]> {
   try {
@@ -62,25 +85,6 @@ async function getTinyOrderDetail(token: string, tinyOrderId: string): Promise<a
     console.error('[concierge] Tiny detail error:', e);
     return null;
   }
-}
-
-function extractTinyCpf(order: any): string {
-  const cliente = order?.cliente || {};
-  const directCpf = String(cliente.cpf_cnpj || cliente.cpf || '').replace(/\D/g, '');
-  if (directCpf.length >= 11) return directCpf;
-
-  const textSources = [order?.obs, order?.obs_interna, order?.observacoes, order?.observacao];
-  for (const source of textSources) {
-    if (!source) continue;
-    const match = String(source).match(/\b(?:cpf|cpf_cnpj)\b[^0-9]*([\d.\-\/]{11,18})/i)
-      || String(source).match(/\b([\d]{3}\.?[\d]{3}\.?[\d]{3}-?[\d]{2})\b/);
-    if (match?.[1]) {
-      const digits = match[1].replace(/\D/g, '');
-      if (digits.length >= 11) return digits;
-    }
-  }
-
-  return '';
 }
 
 // ─── Tool definitions for AI ─────────────────────────────────────────────────
