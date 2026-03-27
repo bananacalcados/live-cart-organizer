@@ -447,8 +447,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     type: "text" | "image" | "video" | "audio" | "file" = "text",
     mediaUrl?: string,
   ) => {
+    // Find a Meta number to get the access token from DB
+    const metaNumberId = storeNumbers.find((n) => n.provider === "meta")?.id || null;
     const { data, error } = await supabase.functions.invoke("meta-messenger-send", {
-      body: { recipientId, message, channel, type, mediaUrl },
+      body: { recipientId, message, channel, type, mediaUrl, whatsapp_number_id: metaNumberId },
     });
 
     if (error) throw error;
