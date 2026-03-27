@@ -1070,19 +1070,36 @@ REGRAS:
     async function runAnthropic(): Promise<string> {
       if (!ANTHROPIC_API_KEY) throw new Error('NO_KEY');
 
-      // Build Anthropic-format messages
-      let anthropicMsgs: Array<{ role: 'user' | 'assistant'; content: any }> = conversationMsgs.map(m => ({
-        role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
-        content: m.content,
-      }));
+      // Build Anthropic-format messages, converting image_url to Anthropic image format
+      let anthropicMsgs: Array<{ role: 'user' | 'assistant'; content: any }> = conversationMsgs.map(m => {
+        let content = m.content;
+        // Convert OpenAI-style multimodal content to Anthropic format
+        if (Array.isArray(content)) {
+          content = content.map((part: any) => {
+            if (part.type === 'image_url' && part.image_url?.url) {
+              return {
+                type: 'image',
+                source: { type: 'url', url: part.image_url.url },
+              };
+            }
+            return part;
+          });
+        }
+        return {
+          role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
+          content,
+        };
+      });
       // Anthropic requires first message to be 'user'
       if (anthropicMsgs.length === 0 || anthropicMsgs[0].role !== 'user') {
         anthropicMsgs = [{ role: 'user' as const, content: '(início da conversa)' }, ...anthropicMsgs];
       }
-      // Merge consecutive same-role messages
+      // Merge consecutive same-role messages (only merge string contents)
       const merged: Array<{ role: 'user' | 'assistant'; content: any }> = [];
       for (const m of anthropicMsgs) {
-        if (merged.length > 0 && merged[merged.length - 1].role === m.role) {
+        if (merged.length > 0 && merged[merged.length - 1].role === m.role && typeof m.content === 'string' && typeof merged[merged.length - 1].content === 'string') {
+          merged[merged.length - 1].content += '\n' + m.content;
+        } else {
           merged[merged.length - 1].content += '\n' + m.content;
         } else {
           merged.push({ ...m });
