@@ -360,6 +360,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
         phoneMessages.set(convKey, value.messages.map(m => ({ direction: m.direction })));
 
+        const isDispatchOnly = (value.lastIsMassDispatch && lastMsg.direction === 'outgoing') || (lastMsg.direction === 'outgoing' && !value.hasIncoming);
+
         convs.push({
           phone,
           lastMessage: lastMsg.message,
@@ -370,6 +372,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           hasUnansweredMessage: lastMsg.direction === "incoming",
           whatsapp_number_id: value.numberId,
           lastIncomingInstance,
+          isDispatchOnly,
         });
       });
 
