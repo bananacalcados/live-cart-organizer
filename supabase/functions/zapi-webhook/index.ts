@@ -501,24 +501,21 @@ serve(async (req) => {
 
     if (statusRaw && allIds.length > 0) {
       const newStatus = statusRaw.toLowerCase();
-      // Skip "read" status — it's high volume and not critical
-      if (newStatus !== 'read') {
-        // Limit batch size to avoid long queries
-        const batchIds = allIds.slice(0, 10);
-        // For delivered, skip mass dispatch messages to reduce DB load
-        let query = supabase
-          .from('whatsapp_messages')
-          .update({ status: newStatus })
-          .in('message_id', batchIds);
+      // Limit batch size to avoid long queries
+      const batchIds = allIds.slice(0, 10);
+      // For delivered, skip mass dispatch messages to reduce DB load
+      let query = supabase
+        .from('whatsapp_messages')
+        .update({ status: newStatus })
+        .in('message_id', batchIds);
 
-        if (newStatus === 'delivered') {
-          query = query.eq('is_mass_dispatch', false);
-        }
+      if (newStatus === 'delivered') {
+        query = query.eq('is_mass_dispatch', false);
+      }
 
-        const { error } = await query;
-        if (error) {
-          console.error('Error updating status:', error);
-        }
+      const { error } = await query;
+      if (error) {
+        console.error('Error updating status:', error);
       }
     }
 

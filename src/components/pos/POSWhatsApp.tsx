@@ -404,7 +404,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         loadConversations();
         if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "whatsapp_messages" }, () => loadConversations())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "whatsapp_messages" }, () => {
+        loadConversations();
+        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
