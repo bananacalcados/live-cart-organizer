@@ -803,7 +803,7 @@ serve(async (req) => {
     if (recentOrders.length === 0) {
       const fallbackCpf = extractCpfFromTexts((recentIncomingContext || []).map((msg: any) => msg.message));
       if (fallbackCpf) {
-        const fallbackSearchRaw = await executeToolCall('search_customer_orders', { search_term: fallbackCpf }, stores, supabase, normalizedPhone);
+        const fallbackSearchRaw = await executeToolCall('search_customer_orders', { search_term: fallbackCpf }, stores, supabase, normalizedPhone, whatsappNumberId);
         const fallbackSearch = parseToolResult(fallbackSearchRaw);
         recentOrders = Array.isArray(fallbackSearch?.orders) ? fallbackSearch.orders : [];
       }
