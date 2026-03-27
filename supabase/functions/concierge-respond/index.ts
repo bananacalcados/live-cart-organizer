@@ -605,20 +605,21 @@ async function executeToolCall(
     else if (ticketPriority === 'medium') deadline.setMinutes(deadline.getMinutes() + 60);
     else deadline.setMinutes(deadline.getMinutes() + 120);
 
-    // Resolve customer name from recent conversation context
+    // Try to get customer name from the AI's summary or from recent tool results
     let customerName: string | null = null;
     try {
       const { data: recentLogs } = await supabase
         .from('ai_conversation_logs')
-        .select('tool_params, tool_called')
+        .select('message_out, tool_called')
         .eq('phone', phone)
         .order('created_at', { ascending: false })
         .limit(10);
 
       for (const log of recentLogs || []) {
-        if (log.tool_called === 'search_customer_orders' && log.tool_params) {
-          const params = typeof log.tool_params === 'string' ? JSON.parse(log.tool_params) : log.tool_params;
-          if (params?.customer_name) { customerName = params.customer_name; break; }
+        if (log.message_out) {
+          // Extract customer name from Bia's messages like "*Cliente:* Helia Maria de Oliveira"
+          const nameMatch = log.message_out.match(/\*Cliente:\*\s*(.+)/i);
+          if (nameMatch) { customerName = nameMatch[1].trim(); break; }
         }
       }
     } catch (_e) { /* ignore */ }
