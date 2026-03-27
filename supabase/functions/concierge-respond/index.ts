@@ -1205,7 +1205,7 @@ REGRAS:
               ? resolveTrackingToolArgs(fnArgs, toolExecutions)
               : fnArgs;
             console.log(`[concierge][lovable] tool: ${fnName}(${JSON.stringify(resolvedFnArgs)})`);
-            const result = await executeToolCall(fnName, resolvedFnArgs, stores, supabase, normalizedPhone);
+            const result = await executeToolCall(fnName, resolvedFnArgs, stores, supabase, normalizedPhone, whatsappNumberId);
             console.log(`[concierge][lovable] result: ${result.slice(0, 200)}`);
             toolExecutions.push({ name: fnName, args: resolvedFnArgs, result: parseToolResult(result) });
             const forcedReply = buildTrackingReplyFromToolResult(fnName, result);
