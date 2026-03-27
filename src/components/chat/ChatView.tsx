@@ -410,35 +410,59 @@ export function ChatView({
                       : 'bg-white dark:bg-[#202c33] text-foreground'
                   )}
                 >
-                  {/* Ad referral card */}
-                  {msg.referral && typeof msg.referral === 'object' && (msg.referral as any).source_type === 'ad' && (
-                    <div className="mb-2 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 overflow-hidden">
-                      {(msg.referral as any).media_url && (
-                        <img
-                          src={(msg.referral as any).media_url}
-                          alt="Anúncio"
-                          className="w-full max-h-[120px] object-cover"
-                          loading="lazy"
-                        />
-                      )}
-                      <div className="px-2.5 py-1.5">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">📣 Via Anúncio</span>
+                  {/* Instagram/WhatsApp referral card (ads, stories, reels, shared posts) */}
+                  {msg.referral && typeof msg.referral === 'object' && (() => {
+                    const ref = msg.referral as any;
+                    const sourceType = ref.source_type || '';
+                    const isAd = sourceType === 'ad';
+                    const isStory = sourceType === 'story_reply' || sourceType === 'story_mention';
+                    const isReel = sourceType === 'reel';
+                    const isShare = sourceType === 'shared_post';
+                    const hasContent = isAd || isStory || isReel || isShare;
+                    if (!hasContent) return null;
+
+                    const labelMap: Record<string, { icon: string; label: string; color: string; border: string; bg: string }> = {
+                      ad: { icon: '📣', label: 'Via Anúncio', color: 'text-blue-600 dark:text-blue-400', border: 'border-blue-200 dark:border-blue-800', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+                      story_reply: { icon: '📷', label: 'Resposta ao Story', color: 'text-pink-600 dark:text-pink-400', border: 'border-pink-200 dark:border-pink-800', bg: 'bg-pink-50 dark:bg-pink-950/40' },
+                      story_mention: { icon: '📷', label: 'Menção no Story', color: 'text-pink-600 dark:text-pink-400', border: 'border-pink-200 dark:border-pink-800', bg: 'bg-pink-50 dark:bg-pink-950/40' },
+                      reel: { icon: '🎬', label: 'Reel', color: 'text-purple-600 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-800', bg: 'bg-purple-50 dark:bg-purple-950/40' },
+                      shared_post: { icon: '📮', label: 'Post Compartilhado', color: 'text-orange-600 dark:text-orange-400', border: 'border-orange-200 dark:border-orange-800', bg: 'bg-orange-50 dark:bg-orange-950/40' },
+                    };
+                    const style = labelMap[sourceType] || labelMap.ad;
+
+                    return (
+                      <div className={cn("mb-2 rounded-md border overflow-hidden", style.border, style.bg)}>
+                        {ref.media_url && (
+                          <img
+                            src={ref.media_url}
+                            alt={style.label}
+                            className="w-full max-h-[150px] object-cover"
+                            loading="lazy"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        )}
+                        {ref.video_url && !ref.media_url && (
+                          <video src={ref.video_url} className="w-full max-h-[150px] object-cover" muted />
+                        )}
+                        <div className="px-2.5 py-1.5">
+                          <span className={cn("text-[10px] font-semibold uppercase tracking-wide", style.color)}>
+                            {style.icon} {style.label}
+                          </span>
+                          {ref.headline && (
+                            <p className="text-xs font-medium text-foreground leading-tight mt-0.5">{ref.headline}</p>
+                          )}
+                          {ref.body && (
+                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{ref.body}</p>
+                          )}
+                          {ref.source_url && (
+                            <a href={ref.source_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:underline mt-1 block truncate">
+                              Ver original ↗
+                            </a>
+                          )}
                         </div>
-                        {(msg.referral as any).headline && (
-                          <p className="text-xs font-medium text-foreground leading-tight">{(msg.referral as any).headline}</p>
-                        )}
-                        {(msg.referral as any).body && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{(msg.referral as any).body}</p>
-                        )}
-                        {(msg.referral as any).source_url && (
-                          <a href={(msg.referral as any).source_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:underline mt-1 block truncate">
-                            Ver anúncio ↗
-                          </a>
-                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                   <WhatsAppMediaAttachment
                     mediaUrl={msg.media_url}
                     mediaType={msg.media_type}
