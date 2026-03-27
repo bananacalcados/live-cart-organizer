@@ -357,116 +357,89 @@ serve(async (req) => {
                 }
               }
 
-              // Trigger incoming_message automations (fire-and-forget)
-              fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, messageText, instance: whatsappNumberDbId || 'meta' }),
-              }).catch(err => console.error('automation-trigger-incoming error:', err));
+              // ===== CENTRAL ROUTER =====
+              if (messageText && msg.type === 'text') {
+                const referralInput = referralData || null;
+                const route = await routeMessage(supabase, {
+                  phone, messageText, isGroup: false,
+                  referral: referralInput,
+                  whatsappNumberId: whatsappNumberDbId,
+                });
+                console.log(`[meta-router] ${phone} → ${route.agent} (${route.reason})`);
 
-               // Check for active AI session and auto-respond
-              try {
-                const { data: aiSession } = await supabase
-                  .from('automation_ai_sessions')
-                  .select('*')
-                  .eq('phone', phone)
-                  .eq('is_active', true)
-                  .gt('expires_at', new Date().toISOString())
-                  .maybeSingle();
-
-                if (aiSession && messageText && msg.type === 'text') {
-                  // Route to Livete if this is a checkout session
-                  if (aiSession.prompt?.startsWith('livete_checkout:')) {
-                    console.log(`[META] Livete checkout session for ${phone}, routing to livete-respond`);
+                switch (route.agent) {
+                  case 'livete':
                     fetch(`${supabaseUrl}/functions/v1/livete-respond`, {
                       method: 'POST',
                       headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
                       body: JSON.stringify({ phone, messageText, whatsappNumberId: whatsappNumberDbId }),
                     }).catch(err => console.error('livete-respond trigger error:', err));
-                  } else {
-                  // Check if an operator sent a manual message in the last 10 minutes — if so, skip AI
-                  const cooldownMinutes = 10;
-                  const cooldownCutoff = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
-                  const { data: recentManual } = await supabase
-                    .from('whatsapp_messages')
-                    .select('id')
-                    .eq('phone', phone)
-                    .eq('direction', 'outgoing')
-                    .gt('created_at', cooldownCutoff)
-                    .not('message', 'ilike', '%[IA]%')
-                    .limit(1);
+                    break;
 
-                  // If there's a recent manual outgoing message, skip AI auto-respond
-                  if (recentManual && recentManual.length > 0) {
-                    console.log(`Operator cooldown active for ${phone}, skipping AI auto-respond`);
-                  } else {
-                  console.log(`Active AI session found for ${phone}, auto-responding...`);
+                  case 'continue_session': {
+                    const cooldownActive = await isOperatorCooldownActive(supabase, phone);
+                    if (!cooldownActive && route.session) {
+                      console.log(`Active AI session found for ${phone}, auto-responding...`);
+                      const aiRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-respond`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: route.session.prompt, phone }),
+                      });
+                      const aiData = await aiRes.json();
 
-                  // Call AI to generate response
-                  const aiRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-respond`, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${supabaseKey}`,
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      prompt: aiSession.prompt,
-                      phone: phone,
-                    }),
-                  });
-                  const aiData = await aiRes.json();
+                      if (aiRes.ok && aiData.reply) {
+                        const typingDelay = Math.min(Math.max(aiData.reply.length * 50, 2000), 12000);
+                        await new Promise(r => setTimeout(r, typingDelay));
 
-                  if (aiRes.ok && aiData.reply) {
-                    // Simulate human typing delay (30-70ms per char, min 2s, max 12s)
-                    const typingDelay = Math.min(Math.max(aiData.reply.length * 50, 2000), 12000);
-                    await new Promise(r => setTimeout(r, typingDelay));
+                        const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ phone, message: aiData.reply, whatsappNumberId: route.session.whatsapp_number_id }),
+                        });
 
-                    // Send AI reply via the same WhatsApp number
-                    const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-                      method: 'POST',
-                      headers: {
-                        'Authorization': `Bearer ${supabaseKey}`,
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        phone: phone,
-                        message: aiData.reply,
-                        whatsappNumberId: aiSession.whatsapp_number_id,
-                      }),
-                    });
+                        let aiMsgId: string | null = null;
+                        try { const sendData = await sendRes.json(); aiMsgId = sendData?.messageId || null; } catch (_) {}
 
-                    // Save AI outgoing message to DB with message_id for status tracking
-                    let aiMsgId: string | null = null;
-                    try {
-                      const sendData = await sendRes.json();
-                      aiMsgId = sendData?.messageId || null;
-                    } catch (_) {}
+                        await supabase.from('whatsapp_messages').insert({
+                          phone, message: `[IA] ${aiData.reply}`, direction: 'outgoing',
+                          status: 'sent', message_id: aiMsgId, whatsapp_number_id: whatsappNumberDbId || null,
+                        });
 
-                    await supabase.from('whatsapp_messages').insert({
-                      phone,
-                      message: `[IA] ${aiData.reply}`,
-                      direction: 'outgoing',
-                      status: 'sent',
-                      message_id: aiMsgId,
-                      whatsapp_number_id: whatsappNumberDbId || null,
-                    });
-                    
-                    // Update session counter
-                    const newCount = (aiSession.messages_sent || 0) + 1;
-                    if (newCount >= (aiSession.max_messages || 50)) {
-                      await supabase.from('automation_ai_sessions').update({ is_active: false, messages_sent: newCount }).eq('id', aiSession.id);
-                    } else {
-                      await supabase.from('automation_ai_sessions').update({ messages_sent: newCount, updated_at: new Date().toISOString() }).eq('id', aiSession.id);
+                        const newCount = (route.session.messages_sent || 0) + 1;
+                        if (newCount >= (route.session.max_messages || 50)) {
+                          await supabase.from('automation_ai_sessions').update({ is_active: false, messages_sent: newCount }).eq('id', route.session.id);
+                        } else {
+                          await supabase.from('automation_ai_sessions').update({ messages_sent: newCount, updated_at: new Date().toISOString() }).eq('id', route.session.id);
+                        }
+                        console.log(`AI auto-reply sent to ${phone}: ${aiData.reply.slice(0, 50)}...`);
+                      }
+                    } else if (cooldownActive) {
+                      console.log(`Operator cooldown active for ${phone}, skipping AI auto-respond`);
                     }
-                    
-                    console.log(`AI auto-reply sent to ${phone}: ${aiData.reply.slice(0, 50)}...`);
+                    break;
                   }
-                  } // end of cooldown else
-                  } // end of non-livete else
+
+                  case 'legacy':
+                  default:
+                    fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ phone, messageText, instance: whatsappNumberDbId || 'meta' }),
+                    }).catch(err => console.error('automation-trigger-incoming error:', err));
+                    break;
+
+                  case 'none':
+                    break;
                 }
-              } catch (aiErr) {
-                console.error('AI auto-respond error:', aiErr);
+              } else {
+                // Non-text messages — trigger automations
+                fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ phone, messageText: messageText || '', instance: whatsappNumberDbId || 'meta' }),
+                }).catch(err => console.error('automation-trigger-incoming error:', err));
               }
+              // ===== END CENTRAL ROUTER =====
             }
 
             // Upsert chat_contacts with display_name
