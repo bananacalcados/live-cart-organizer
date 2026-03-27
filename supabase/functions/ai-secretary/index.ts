@@ -7,65 +7,163 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-class RetryableSecretaryError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'RetryableSecretaryError';
-  }
-}
-
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function callAnthropicWithRetry(apiKey: string, body: Record<string, unknown>) {
-  const maxAttempts = 3;
+// Convert Anthropic tool schema to OpenAI function-calling format
+function anthropicToolsToOpenAI(tools: any[]) {
+  return tools.map((t) => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.input_schema,
+    },
+  }));
+}
+
+// Unified AI caller: tries Claude first, falls back to Lovable AI gateway
+async function callAI(
+  anthropicKey: string,
+  lovableKey: string | undefined,
+  systemPrompt: string,
+  messages: Array<{ role: string; content: any }>,
+  tools: any[],
+): Promise<{ text: string; toolCalls: Array<{ id: string; name: string; input: any }> }> {
+
+  // --- Attempt 1: Claude ---
+  try {
+    const claudeResult = await callClaude(anthropicKey, systemPrompt, messages, tools);
+    return claudeResult;
+  } catch (claudeErr: any) {
+    console.warn('Claude unavailable, falling back to Lovable AI:', claudeErr.message);
+  }
+
+  // --- Attempt 2: Lovable AI gateway ---
+  if (!lovableKey) {
+    throw new Error('Ambos os provedores de IA estão indisponíveis. Tente novamente em alguns minutos.');
+  }
+
+  return await callLovableAI(lovableKey, systemPrompt, messages, tools);
+}
+
+async function callClaude(
+  apiKey: string,
+  systemPrompt: string,
+  messages: Array<{ role: string; content: any }>,
+  tools: any[],
+): Promise<{ text: string; toolCalls: Array<{ id: string; name: string; input: any }> }> {
+  const maxAttempts = 2;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const response = await fetch(ANTHROPIC_API_URL, {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages,
+        tools,
+      }),
     });
 
     if (response.ok) {
-      return await response.json();
+      const data = await response.json();
+      let text = '';
+      const toolCalls: Array<{ id: string; name: string; input: any }> = [];
+      for (const block of data.content) {
+        if (block.type === 'text') text += block.text;
+        else if (block.type === 'tool_use') toolCalls.push({ id: block.id, name: block.name, input: block.input });
+      }
+      return { text, toolCalls };
     }
 
     const errText = await response.text();
     const isRetryable = response.status === 429 || response.status === 529 || /overloaded|rate.?limit/i.test(errText);
-
     console.error(`Claude error (attempt ${attempt}/${maxAttempts}):`, response.status, errText);
 
-    if (isRetryable) {
-      if (attempt < maxAttempts) {
-        await sleep(700 * attempt);
-        continue;
-      }
-
-      throw new RetryableSecretaryError('A IA está temporariamente sobrecarregada. Tente novamente em alguns segundos.');
+    if (isRetryable && attempt < maxAttempts) {
+      await sleep(800);
+      continue;
     }
 
-    throw new Error(`Claude API error: ${response.status}`);
+    throw new Error(`Claude ${response.status}: ${errText.slice(0, 120)}`);
   }
 
-  throw new RetryableSecretaryError('A IA está temporariamente indisponível no momento.');
+  throw new Error('Claude exhausted retries');
 }
 
-function buildToolFallbackReply(toolResults: Array<{ content: string }>) {
-  const parsedResults = toolResults
-    .map((result) => {
-      try {
-        return JSON.parse(result.content);
-      } catch {
-        return null;
+async function callLovableAI(
+  apiKey: string,
+  systemPrompt: string,
+  messages: Array<{ role: string; content: any }>,
+  anthropicTools: any[],
+): Promise<{ text: string; toolCalls: Array<{ id: string; name: string; input: any }> }> {
+  // Convert messages: flatten any Anthropic content arrays to plain strings
+  const openAIMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages.map((m) => {
+      if (typeof m.content === 'string') return { role: m.role, content: m.content };
+      if (Array.isArray(m.content)) {
+        // Anthropic tool_result or multi-block content → flatten to text
+        const text = m.content
+          .map((b: any) => b.text || b.content || JSON.stringify(b))
+          .join('\n');
+        return { role: m.role, content: text };
       }
-    })
-    .filter(Boolean);
+      return { role: m.role, content: JSON.stringify(m.content) };
+    }),
+  ];
+
+  const openAITools = anthropicToolsToOpenAI(anthropicTools);
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: openAIMessages,
+      tools: openAITools,
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error('Lovable AI error:', response.status, errText);
+    throw new Error(`Lovable AI error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const choice = data.choices?.[0]?.message;
+  const text = choice?.content || '';
+  const toolCalls: Array<{ id: string; name: string; input: any }> = [];
+
+  if (choice?.tool_calls) {
+    for (const tc of choice.tool_calls) {
+      try {
+        const args = typeof tc.function.arguments === 'string'
+          ? JSON.parse(tc.function.arguments)
+          : tc.function.arguments;
+        toolCalls.push({ id: tc.id, name: tc.function.name, input: args });
+      } catch (e) {
+        console.error('Failed to parse tool call args:', e);
+      }
+    }
+  }
+
+  return { text, toolCalls };
+}
+
+function buildToolFallbackReply(toolResults: Array<{ result: any }>) {
+  const parsedResults = toolResults.map((r) => r.result).filter(Boolean);
 
   if (parsedResults.length === 0) {
     return 'Consegui processar sua solicitação, mas a resposta detalhada da IA ficou indisponível agora. Se quiser, me envie a próxima instrução que continuo daqui.';
@@ -102,7 +200,8 @@ serve(async (req) => {
 
   try {
     const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not configured');
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!ANTHROPIC_API_KEY && !LOVABLE_API_KEY) throw new Error('No AI provider configured');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -229,72 +328,53 @@ Regras:
       content: m.content,
     }));
 
-    const claudeData = await callAnthropicWithRetry(ANTHROPIC_API_KEY, {
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: claudeMessages,
-      tools,
-    });
+    const aiResult = await callAI(ANTHROPIC_API_KEY!, LOVABLE_API_KEY, systemPrompt, claudeMessages, tools);
 
     // Process tool calls
-    const toolResults: any[] = [];
-    let finalText = '';
+    const executedTools: Array<{ id: string; name: string; result: any }> = [];
+    let finalText = aiResult.text;
 
-    for (const block of claudeData.content) {
-      if (block.type === 'text') {
-        finalText += block.text;
-      } else if (block.type === 'tool_use') {
-        const result = await executeToolCall(supabase, block.name, block.input, userId, settings);
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: JSON.stringify(result),
-        });
-      }
+    for (const tc of aiResult.toolCalls) {
+      const result = await executeToolCall(supabase, tc.name, tc.input, userId, settings);
+      executedTools.push({ id: tc.id, name: tc.name, result });
     }
 
     // If there were tool calls, send results back to Claude for final response
-    if (toolResults.length > 0) {
-      const followUpMessages = [
+    if (executedTools.length > 0) {
+      // Build follow-up messages in Anthropic format for Claude path
+      const anthropicFollowUp = [
         ...claudeMessages,
-        { role: 'assistant', content: claudeData.content },
-        { role: 'user', content: toolResults },
+        {
+          role: 'assistant',
+          content: [
+            ...(finalText ? [{ type: 'text', text: finalText }] : []),
+            ...executedTools.map((t) => ({ type: 'tool_use', id: t.id, name: t.name, input: {} })),
+          ],
+        },
+        {
+          role: 'user',
+          content: executedTools.map((t) => ({
+            type: 'tool_result',
+            tool_use_id: t.id,
+            content: JSON.stringify(t.result),
+          })),
+        },
       ];
 
       try {
-        const followUpData = await callAnthropicWithRetry(ANTHROPIC_API_KEY, {
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4096,
-          system: systemPrompt,
-          messages: followUpMessages,
-          tools,
-        });
-
-        finalText = '';
-        for (const block of followUpData.content) {
-          if (block.type === 'text') finalText += block.text;
-        }
-      } catch (followUpError) {
-        if (followUpError instanceof RetryableSecretaryError) {
-          finalText = buildToolFallbackReply(toolResults);
-        } else {
-          throw followUpError;
-        }
+        const followUpResult = await callAI(ANTHROPIC_API_KEY!, LOVABLE_API_KEY, systemPrompt, anthropicFollowUp, tools);
+        finalText = followUpResult.text || finalText;
+      } catch (_followUpError) {
+        console.warn('Follow-up AI call failed, using fallback reply');
+        finalText = buildToolFallbackReply(executedTools);
       }
     }
 
-    return new Response(JSON.stringify({ reply: finalText, toolCalls: toolResults.length }), {
+    return new Response(JSON.stringify({ reply: finalText, toolCalls: executedTools.length }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Secretary error:', error);
-
-    if (error instanceof RetryableSecretaryError) {
-      return new Response(JSON.stringify({ error: error.message, retryable: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
