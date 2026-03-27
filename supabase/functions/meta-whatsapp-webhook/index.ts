@@ -424,7 +424,7 @@ serve(async (req) => {
                     fetch(`${supabaseUrl}/functions/v1/concierge-respond`, {
                       method: 'POST',
                       headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ phone, messageText, whatsappNumberId: whatsappNumberDbId, channel: 'meta' }),
+                      body: JSON.stringify({ phone, messageText: routeText, whatsappNumberId: whatsappNumberDbId, channel: 'meta', mediaUrl, mediaType }),
                     }).catch(err => console.error('concierge-respond trigger error:', err));
                     break;
 
