@@ -26,6 +26,7 @@ import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { STAGES } from "@/types/order";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
+import { InstagramReferralCard } from "@/components/chat/InstagramReferralCard";
 import {
   Select,
   SelectContent,
@@ -1037,6 +1038,7 @@ export default function ChatPage() {
                                   </p>
                                 ) : null;
                               })()}
+                              <InstagramReferralCard referral={msg.referral} />
                               <MessageMedia msg={msg} />
                               {msg.message && <p className="whitespace-pre-wrap break-words pr-14 leading-[1.35]">{msg.message}</p>}
                               <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[11px] text-[#ffffff99]">

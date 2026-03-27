@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CreateSupportTicketDialog } from "../CreateSupportTicketDialog";
 import { MessageStatusIcon } from "./MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./WhatsAppMediaAttachment";
+import { InstagramReferralCard } from "./InstagramReferralCard";
 
 interface ChatViewProps {
   messages: Message[];
@@ -410,35 +411,7 @@ export function ChatView({
                       : 'bg-white dark:bg-[#202c33] text-foreground'
                   )}
                 >
-                  {/* Ad referral card */}
-                  {msg.referral && typeof msg.referral === 'object' && (msg.referral as any).source_type === 'ad' && (
-                    <div className="mb-2 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 overflow-hidden">
-                      {(msg.referral as any).media_url && (
-                        <img
-                          src={(msg.referral as any).media_url}
-                          alt="Anúncio"
-                          className="w-full max-h-[120px] object-cover"
-                          loading="lazy"
-                        />
-                      )}
-                      <div className="px-2.5 py-1.5">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">📣 Via Anúncio</span>
-                        </div>
-                        {(msg.referral as any).headline && (
-                          <p className="text-xs font-medium text-foreground leading-tight">{(msg.referral as any).headline}</p>
-                        )}
-                        {(msg.referral as any).body && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{(msg.referral as any).body}</p>
-                        )}
-                        {(msg.referral as any).source_url && (
-                          <a href={(msg.referral as any).source_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:underline mt-1 block truncate">
-                            Ver anúncio ↗
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  <InstagramReferralCard referral={msg.referral} />
                   <WhatsAppMediaAttachment
                     mediaUrl={msg.media_url}
                     mediaType={msg.media_type}
