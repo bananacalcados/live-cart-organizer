@@ -173,50 +173,77 @@ async function executeToolCall(
     }
 
     const allResults: any[] = [];
-    // Search priority: Tiny Shopify → Centro → Pérola
+
     for (const store of stores) {
-      console.log(`[concierge] Searching Tiny "${store.name}" for: ${term}`);
-      const orders = await searchTinyOrders(store.token, term);
-      if (orders.length > 0) {
-        let filtered = isCpf
-          ? orders
-          : orders.filter((o: any) => {
-              const termLower = term.toLowerCase();
-              const termWords = termLower.split(/\s+/).filter((w: string) => w.length >= 2);
-              const name = (o.nome || '').toLowerCase();
-              return termWords.some((word: string) => name.includes(word));
-            });
-
-        if (isCpf) {
-          const detailedMatches = await Promise.all(
-            filtered.slice(0, 12).map(async (order: any) => {
-              const detail = await getTinyOrderDetail(store.token, String(order.id));
-              const orderCpf = extractTinyCpf(detail);
-              if (orderCpf && orderCpf === digitsOnly) {
-                return { order, detail };
-              }
-              return null;
-            })
-          );
-
-          const exactCpfMatches = detailedMatches.filter(Boolean) as Array<{ order: any; detail: any }>;
-          if (exactCpfMatches.length > 0) {
-            filtered = exactCpfMatches.map(({ order }) => order);
-          }
+      if (isCpf) {
+        // ── TWO-STAGE CPF FLOW ──
+        // Stage 1: Find contact by CPF using contatos.pesquisa.php
+        console.log(`[concierge] Stage 1: Searching contact by CPF in "${store.name}"`);
+        const contact = await searchTinyContactByCpf(store.token, digitsOnly);
+        
+        if (!contact || !contact.name) {
+          console.log(`[concierge] No contact found by CPF in "${store.name}"`);
+          continue;
         }
 
-        for (const order of filtered.slice(0, 5)) {
+        console.log(`[concierge] Stage 2: Contact found "${contact.name}", searching orders in "${store.name}"`);
+        
+        // Stage 2: Search orders by the contact name returned from Tiny
+        const orders = await searchTinyOrders(store.token, contact.name);
+        if (orders.length === 0) {
+          console.log(`[concierge] No orders found for contact "${contact.name}" in "${store.name}"`);
+          continue;
+        }
+
+        // Filter orders that match the contact name (case-insensitive partial match)
+        const contactNameLower = contact.name.toLowerCase();
+        const contactWords = contactNameLower.split(/\s+/).filter((w: string) => w.length >= 2);
+        const filtered = orders.filter((o: any) => {
+          const orderName = (o.nome || '').toLowerCase();
+          // At least the first word of the contact name should match
+          return contactWords.length > 0 && orderName.includes(contactWords[0]);
+        });
+
+        const ordersToUse = filtered.length > 0 ? filtered : orders.slice(0, 5);
+
+        for (const order of ordersToUse.slice(0, 5)) {
           allResults.push({
             tiny_order_id: String(order.id),
             order_number: String(order.numero),
             date: order.data_pedido,
-            customer_name: order.nome,
+            customer_name: contact.name, // Use the verified contact name
             total: parseFloat(order.valor || '0'),
             status: order.situacao,
             store_name: store.name,
-            searched_by: isCpf ? 'cpf' : 'name',
-            cpf_suffix: isCpf ? digitsOnly.slice(-4) : null,
+            searched_by: 'cpf',
+            cpf_suffix: digitsOnly.slice(-4),
           });
+        }
+      } else {
+        // ── NAME SEARCH (fallback) ──
+        console.log(`[concierge] Searching orders by name "${term}" in "${store.name}"`);
+        const orders = await searchTinyOrders(store.token, term);
+        if (orders.length > 0) {
+          const termLower = term.toLowerCase();
+          const termWords = termLower.split(/\s+/).filter((w: string) => w.length >= 2);
+          const filtered = orders.filter((o: any) => {
+            const name = (o.nome || '').toLowerCase();
+            return termWords.some((word: string) => name.includes(word));
+          });
+
+          for (const order of filtered.slice(0, 5)) {
+            allResults.push({
+              tiny_order_id: String(order.id),
+              order_number: String(order.numero),
+              date: order.data_pedido,
+              customer_name: order.nome,
+              total: parseFloat(order.valor || '0'),
+              status: order.situacao,
+              store_name: store.name,
+              searched_by: 'name',
+              cpf_suffix: null,
+            });
+          }
         }
       }
     }
@@ -225,13 +252,16 @@ async function executeToolCall(
       return JSON.stringify({
         found: false,
         message: isCpf
-          ? "Nenhum pedido encontrado com esse CPF em nenhuma das lojas."
+          ? "Nenhum pedido encontrado com esse CPF em nenhuma das lojas. Confirme o CPF ou tente com o nome completo."
           : "Nenhum pedido encontrado com esse nome em nenhuma das lojas."
       });
     }
 
     return JSON.stringify({
       found: true,
+      total_results: allResults.length,
+      orders: allResults.slice(0, 10),
+    });
       total_results: allResults.length,
       orders: allResults.slice(0, 10),
     });
