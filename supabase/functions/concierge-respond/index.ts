@@ -30,6 +30,18 @@ async function searchTinyOrders(token: string, searchTerm: string): Promise<any[
   }
 }
 
+function normalizeSearchTerm(raw: string): { normalized: string; digitsOnly: string; isCpf: boolean } {
+  const normalized = raw.trim();
+  const digitsOnly = normalized.replace(/\D/g, '');
+  const isCpf = digitsOnly.length === 11;
+
+  return {
+    normalized: isCpf ? digitsOnly : normalized,
+    digitsOnly,
+    isCpf,
+  };
+}
+
 async function getTinyOrderDetail(token: string, tinyOrderId: string): Promise<any | null> {
   try {
     const controller = new AbortController();
@@ -131,7 +143,8 @@ async function executeToolCall(
   phone: string,
 ): Promise<string> {
   if (toolName === 'search_customer_orders') {
-    const term = args.search_term?.trim();
+    const originalTerm = args.search_term?.trim();
+    const { normalized: term, digitsOnly, isCpf } = normalizeSearchTerm(originalTerm || '');
     if (!term || term.length < 3) {
       return JSON.stringify({ error: "Termo de busca muito curto. Peça o nome completo ou CPF ao cliente." });
     }
@@ -142,13 +155,14 @@ async function executeToolCall(
       console.log(`[concierge] Searching Tiny "${store.name}" for: ${term}`);
       const orders = await searchTinyOrders(store.token, term);
       if (orders.length > 0) {
-        // Filter by name match
-        const termLower = term.toLowerCase();
-        const termWords = termLower.split(/\s+/).filter((w: string) => w.length >= 2);
-        const filtered = orders.filter((o: any) => {
-          const name = (o.nome || '').toLowerCase();
-          return termWords.some((word: string) => name.includes(word));
-        });
+        const filtered = isCpf
+          ? orders
+          : orders.filter((o: any) => {
+              const termLower = term.toLowerCase();
+              const termWords = termLower.split(/\s+/).filter((w: string) => w.length >= 2);
+              const name = (o.nome || '').toLowerCase();
+              return termWords.some((word: string) => name.includes(word));
+            });
         for (const order of filtered.slice(0, 5)) {
           allResults.push({
             tiny_order_id: String(order.id),
@@ -158,6 +172,8 @@ async function executeToolCall(
             total: parseFloat(order.valor || '0'),
             status: order.situacao,
             store_name: store.name,
+            searched_by: isCpf ? 'cpf' : 'name',
+            cpf_suffix: isCpf ? digitsOnly.slice(-4) : null,
           });
         }
       }
@@ -166,7 +182,9 @@ async function executeToolCall(
     if (allResults.length === 0) {
       return JSON.stringify({
         found: false,
-        message: "Nenhum pedido encontrado com esse nome/CPF em nenhuma das lojas."
+        message: isCpf
+          ? "Nenhum pedido encontrado com esse CPF em nenhuma das lojas."
+          : "Nenhum pedido encontrado com esse nome em nenhuma das lojas."
       });
     }
 
@@ -364,12 +382,14 @@ O QUE VOCÊ NÃO PODE FAZER (PROIBIDO):
 - Se a cliente pedir algo de vendas, diga "Vou te conectar com uma de nossas consultoras! 😊" e use transfer_to_human
 
 FLUXO DE RASTREIO:
-1. Cliente pede rastreio → pergunte o NOME COMPLETO ou CPF do pedido
-2. Use a ferramenta search_customer_orders para buscar
-3. Se encontrar vários pedidos, confirme com o cliente qual é (mostre data e valor)
-4. Use get_order_tracking para obter o código de rastreio
-5. Envie o código + link clicável para rastreamento
-6. Se não encontrar, use transfer_to_human
+1. Cliente pede rastreio → peça PRIMEIRO o CPF do pedido; aceite CPF com pontos e traços e trate isso normalmente removendo a máscara
+2. Só use nome como plano B quando a pessoa realmente não souber o CPF
+3. Use a ferramenta search_customer_orders para buscar
+4. Se encontrar pedido via CPF, antes de passar o rastreio confirme com o cliente: nome encontrado + data da compra
+5. Só depois da confirmação use get_order_tracking para obter o código de rastreio
+6. Se encontrar vários pedidos, confirme qual é mostrando nome, data e valor
+7. Envie o código + link clicável para rastreamento
+8. Se não encontrar pelo nome, peça o CPF antes de transferir; se não encontrar pelo CPF, use transfer_to_human
 
 REGRAS:
 - Responda de forma curta e natural, como humano no WhatsApp

@@ -52,6 +52,7 @@ export async function routeMessage(
   input: RouteInput
 ): Promise<RouteResult> {
   const { phone, isGroup, referral } = input;
+  const normalizedPhone = phone.replace(/\D/g, '');
 
   // 0. Groups → no agent routing (handled separately by group logic)
   if (isGroup) {
@@ -142,7 +143,38 @@ export async function routeMessage(
     console.error('[router] Error checking concierge settings:', err);
   }
 
-  // 6. Intent pre-classification for Concierge
+  const conciergeAvailableForPhone = (() => {
+    if (!conciergeEnabled || !conciergeTestPhone) return false;
+    const phoneSuffix = normalizedPhone.slice(-8);
+    const testSuffix = conciergeTestPhone.replace(/\D/g, '').slice(-8);
+    return phoneSuffix === testSuffix;
+  })();
+
+  // 6. Continue recent concierge conversations even when the follow-up message
+  // no longer contains support keywords (e.g. CPF, name, yes/no confirmation).
+  if (conciergeAvailableForPhone) {
+    try {
+      const recentCutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: recentConciergeLog } = await supabase
+        .from('ai_conversation_logs')
+        .select('created_at')
+        .eq('phone', phone)
+        .eq('stage', 'concierge')
+        .gt('created_at', recentCutoff)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (recentConciergeLog) {
+        console.log(`[router] Recent concierge context found for ${phone}`);
+        return { agent: 'concierge', reason: 'recent_concierge_context' };
+      }
+    } catch (err) {
+      console.error('[router] Error checking recent concierge context:', err);
+    }
+  }
+
+  // 7. Intent pre-classification for Concierge
   const msgLower = (input.messageText || '').toLowerCase().trim();
 
   // Sales-related keywords → legacy (human seller handles it)
@@ -197,7 +229,7 @@ export async function routeMessage(
     return { agent: 'legacy', reason: 'sales_intent' };
   }
 
-  // 6. Default: greetings and unclassified → legacy (human handles)
+  // 8. Default: greetings and unclassified → legacy (human handles)
   console.log(`[router] Unclassified message for ${phone}, routing to legacy`);
   return { agent: 'legacy', reason: 'default_unclassified' };
 }
