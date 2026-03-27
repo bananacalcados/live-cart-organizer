@@ -371,16 +371,25 @@ const TOOLS = [
     type: "function",
     function: {
       name: "transfer_to_human",
-      description: "Transfere a conversa para um atendente humano. Use APENAS quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo de suporte, ou precisa de atendimento especializado. NÃO use se ainda tem ferramentas que podem responder a pergunta.",
+      description: "Transfere a conversa para um atendente humano e cria um ticket de suporte. Use APENAS quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo de suporte, ou precisa de atendimento especializado. NÃO use se ainda tem ferramentas que podem responder a pergunta. Preencha summary com um resumo claro da situação do cliente.",
       parameters: {
         type: "object",
         properties: {
           reason: {
             type: "string",
-            description: "Motivo da transferência (ex: pedido_nao_encontrado, fora_do_escopo, solicitacao_cliente)"
+            description: "Motivo curto da transferência para uso como assunto do ticket (ex: 'Pedido parado na transportadora', 'Cliente quer trocar produto', 'Pedido não encontrado')"
+          },
+          summary: {
+            type: "string",
+            description: "Resumo detalhado da situação do cliente para a equipe de suporte. Inclua: o que o cliente pediu, o que foi encontrado, qual o problema. Ex: 'Cliente Hélia Maria, CPF 766.180.721-15, pedido #4809 enviado em 27/03 com rastreio AN754068518BR. Pedido está parado há muito tempo segundo a cliente.'"
+          },
+          priority: {
+            type: "string",
+            enum: ["low", "medium", "high"],
+            description: "Urgência do ticket: 'high' para problemas urgentes (pedido extraviado, defeito, reclamação grave), 'medium' para questões normais (dúvidas, atraso moderado), 'low' para questões simples (informações gerais)"
           }
         },
-        required: ["reason"],
+        required: ["reason", "summary", "priority"],
         additionalProperties: false,
       },
     },
