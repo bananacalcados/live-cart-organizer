@@ -452,7 +452,7 @@ REGRAS:
       if (!ANTHROPIC_API_KEY) throw new Error('NO_KEY');
 
       // Build Anthropic-format messages
-      let anthropicMsgs = conversationMsgs.map(m => ({
+      let anthropicMsgs: Array<{ role: 'user' | 'assistant'; content: any }> = conversationMsgs.map(m => ({
         role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
         content: m.content,
       }));
@@ -461,7 +461,7 @@ REGRAS:
         anthropicMsgs = [{ role: 'user' as const, content: '(início da conversa)' }, ...anthropicMsgs];
       }
       // Merge consecutive same-role messages
-      const merged: typeof anthropicMsgs = [];
+      const merged: Array<{ role: 'user' | 'assistant'; content: any }> = [];
       for (const m of anthropicMsgs) {
         if (merged.length > 0 && merged[merged.length - 1].role === m.role) {
           merged[merged.length - 1].content += '\n' + m.content;
@@ -733,9 +733,9 @@ REGRAS:
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[concierge] Error:', error);
-    return new Response(JSON.stringify({ error: error.message || 'Internal error' }), {
+    return new Response(JSON.stringify({ error: error?.message || 'Internal error' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
