@@ -125,6 +125,7 @@ export default function ChatPage() {
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null | undefined>(undefined);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
+  const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
