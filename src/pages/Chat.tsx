@@ -31,7 +31,6 @@ import { POSFinishConversationDialog } from "@/components/pos/POSFinishConversat
 import { POSWhatsAppCheckoutDialog } from "@/components/pos/POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "@/components/pos/POSWhatsAppPixDialog";
 import { POSProductCatalogSender } from "@/components/pos/POSProductCatalogSender";
-import { InstagramReferralCard } from "@/components/chat/InstagramReferralCard";
 import {
   Select,
   SelectContent,
