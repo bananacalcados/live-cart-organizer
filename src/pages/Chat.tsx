@@ -1365,6 +1365,58 @@ export default function ChatPage() {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* Finish Conversation Dialog */}
+      <POSFinishConversationDialog
+        open={showFinishDialog}
+        onOpenChange={setShowFinishDialog}
+        onFinish={async (reason) => {
+          if (selectedPhone) {
+            await finishConversation(selectedPhone, reason);
+            toast.success('Conversa finalizada!');
+            setShowFinishDialog(false);
+            setSelectedPhone(null);
+          }
+        }}
+      />
+
+      {/* Checkout Dialog */}
+      {selectedPhone && (
+        <POSWhatsAppCheckoutDialog
+          open={showCheckout}
+          onOpenChange={setShowCheckout}
+          storeId="chat"
+          phone={selectedPhone}
+          customerName={selectedConv?.customerName}
+          sendVia={isMetaNumber() ? "meta" : "zapi"}
+          selectedNumberId={getActiveNumberId()}
+        />
+      )}
+
+      {/* PIX Dialog */}
+      {selectedPhone && (
+        <POSWhatsAppPixDialog
+          open={showPix}
+          onOpenChange={setShowPix}
+          storeId="chat"
+          phone={selectedPhone}
+          customerName={selectedConv?.customerName}
+          sendVia={isMetaNumber() ? "meta" : "zapi"}
+          selectedNumberId={getActiveNumberId()}
+        />
+      )}
+
+      {/* Product Catalog Sender */}
+      {selectedPhone && (
+        <POSProductCatalogSender
+          storeId="chat"
+          phone={selectedPhone}
+          sendVia={isMetaNumber() ? "meta" : "zapi"}
+          selectedNumberId={getActiveNumberId()}
+          open={showCatalog}
+          onOpenChange={setShowCatalog}
+        />
+      )}
     </div>
   );
 }
