@@ -7,6 +7,96 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+class RetryableSecretaryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RetryableSecretaryError';
+  }
+}
+
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callAnthropicWithRetry(apiKey: string, body: Record<string, unknown>) {
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+
+    const errText = await response.text();
+    const isRetryable = response.status === 429 || response.status === 529 || /overloaded|rate.?limit/i.test(errText);
+
+    console.error(`Claude error (attempt ${attempt}/${maxAttempts}):`, response.status, errText);
+
+    if (isRetryable) {
+      if (attempt < maxAttempts) {
+        await sleep(700 * attempt);
+        continue;
+      }
+
+      throw new RetryableSecretaryError('A IA está temporariamente sobrecarregada. Tente novamente em alguns segundos.');
+    }
+
+    throw new Error(`Claude API error: ${response.status}`);
+  }
+
+  throw new RetryableSecretaryError('A IA está temporariamente indisponível no momento.');
+}
+
+function buildToolFallbackReply(toolResults: Array<{ content: string }>) {
+  const parsedResults = toolResults
+    .map((result) => {
+      try {
+        return JSON.parse(result.content);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  if (parsedResults.length === 0) {
+    return 'Consegui processar sua solicitação, mas a resposta detalhada da IA ficou indisponível agora. Se quiser, me envie a próxima instrução que continuo daqui.';
+  }
+
+  const lines = parsedResults.map((result: any) => {
+    if (result.error) return `• ${result.error}`;
+    if (result.fornecedor && result.valor && result.vencimento) {
+      return `• Conta registrada para ${result.fornecedor} no valor de R$ ${Number(result.valor).toFixed(2)} com vencimento em ${result.vencimento}`;
+    }
+    if (result.title && result.remind_at) {
+      return `• Lembrete criado: ${result.title} para ${result.remind_at}`;
+    }
+    if (typeof result.total === 'number' && result.contas) {
+      return `• Consulta concluída: ${result.total} conta(s) encontrada(s)`;
+    }
+    if (typeof result.vendas === 'number') {
+      return `• Resumo de vendas gerado: ${result.vendas} venda(s), faturamento total de R$ ${Number(result.faturamento_total || 0).toFixed(2)}`;
+    }
+    if (typeof result.total === 'number' && result.envios) {
+      return `• Consulta de expedição concluída: ${result.total} envio(s) encontrado(s)`;
+    }
+    if (result.phone && result.success) {
+      return `• Mensagem enviada com sucesso para ${result.phone}`;
+    }
+    return '• Solicitação processada com sucesso';
+  });
+
+  return `Consegui executar sua solicitação, mas a IA ficou instável ao montar a resposta final.\n\n${lines.join('\n')}`;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -139,29 +229,13 @@ Regras:
       content: m.content,
     }));
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: claudeMessages,
-        tools,
-      }),
+    const claudeData = await callAnthropicWithRetry(ANTHROPIC_API_KEY, {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: claudeMessages,
+      tools,
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Claude error:', response.status, errText);
-      throw new Error(`Claude API error: ${response.status}`);
-    }
-
-    const claudeData = await response.json();
 
     // Process tool calls
     const toolResults: any[] = [];
@@ -188,27 +262,24 @@ Regras:
         { role: 'user', content: toolResults },
       ];
 
-      const followUp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      try {
+        const followUpData = await callAnthropicWithRetry(ANTHROPIC_API_KEY, {
           model: 'claude-sonnet-4-20250514',
           max_tokens: 4096,
           system: systemPrompt,
           messages: followUpMessages,
           tools,
-        }),
-      });
+        });
 
-      if (followUp.ok) {
-        const followUpData = await followUp.json();
         finalText = '';
         for (const block of followUpData.content) {
           if (block.type === 'text') finalText += block.text;
+        }
+      } catch (followUpError) {
+        if (followUpError instanceof RetryableSecretaryError) {
+          finalText = buildToolFallbackReply(toolResults);
+        } else {
+          throw followUpError;
         }
       }
     }
@@ -218,6 +289,13 @@ Regras:
     });
   } catch (error) {
     console.error('Secretary error:', error);
+
+    if (error instanceof RetryableSecretaryError) {
+      return new Response(JSON.stringify({ error: error.message, retryable: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
