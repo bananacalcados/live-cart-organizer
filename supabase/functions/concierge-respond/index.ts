@@ -1100,8 +1100,6 @@ REGRAS:
         if (merged.length > 0 && merged[merged.length - 1].role === m.role && typeof m.content === 'string' && typeof merged[merged.length - 1].content === 'string') {
           merged[merged.length - 1].content += '\n' + m.content;
         } else {
-          merged[merged.length - 1].content += '\n' + m.content;
-        } else {
           merged.push({ ...m });
         }
       }
