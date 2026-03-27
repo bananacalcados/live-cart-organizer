@@ -73,6 +73,20 @@ serve(async (req) => {
     // Collect any media from recent messages
     const recentMediaUrl = mediaUrl || recentMsgs?.find(m => m.media_url && m.media_type?.startsWith('image'))?.media_url;
 
+    // Transcribe audio if present
+    const audioUrl = (mediaType === 'audio' && mediaUrl)
+      ? mediaUrl
+      : recentMsgs?.find(m => m.media_url && m.media_type === 'audio')?.media_url;
+
+    let audioTranscription: string | null = null;
+    if (audioUrl) {
+      console.log(`[livete-respond] Transcribing audio for ${phone}...`);
+      audioTranscription = await transcribeAudio(audioUrl);
+      if (audioTranscription) {
+        console.log(`[livete-respond] Audio transcribed: "${audioTranscription.slice(0, 100)}"`);
+      }
+    }
+
     // 1. Check for active AI session
     const { data: session } = await supabase
       .from('automation_ai_sessions')
