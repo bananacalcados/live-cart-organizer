@@ -594,9 +594,53 @@ async function executeToolCall(
   }
 
   if (toolName === 'transfer_to_human') {
-    // Create a chat assignment for human support
+    const ticketPriority = args.priority || 'medium';
+    const ticketSubject = args.reason || 'Transferência da Bia';
+    const ticketDescription = args.summary || '';
+
+    // Calculate deadline based on priority
+    const deadline = new Date();
+    if (ticketPriority === 'high') deadline.setMinutes(deadline.getMinutes() + 10);
+    else if (ticketPriority === 'medium') deadline.setMinutes(deadline.getMinutes() + 60);
+    else deadline.setMinutes(deadline.getMinutes() + 120);
+
+    // Resolve customer name from recent conversation context
+    let customerName: string | null = null;
     try {
-      // Find the "Suporte" sector or first available
+      const { data: recentLogs } = await supabase
+        .from('ai_conversation_logs')
+        .select('tool_params, tool_called')
+        .eq('phone', phone)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      for (const log of recentLogs || []) {
+        if (log.tool_called === 'search_customer_orders' && log.tool_params) {
+          const params = typeof log.tool_params === 'string' ? JSON.parse(log.tool_params) : log.tool_params;
+          if (params?.customer_name) { customerName = params.customer_name; break; }
+        }
+      }
+    } catch (_e) { /* ignore */ }
+
+    // Create support ticket
+    try {
+      const { error: ticketError } = await supabase.from('support_tickets').insert({
+        subject: ticketSubject,
+        description: `${ticketDescription}\n\nInstância WhatsApp: ${whatsappNumberId || 'não identificada'}`.trim(),
+        priority: ticketPriority,
+        customer_name: customerName,
+        customer_phone: phone,
+        deadline_at: deadline.toISOString(),
+        source: 'bia_ai',
+      });
+      if (ticketError) console.error('[concierge] Ticket creation error:', ticketError);
+      else console.log(`[concierge] Support ticket created for ${phone} - priority: ${ticketPriority}`);
+    } catch (e) {
+      console.error('[concierge] Ticket creation error:', e);
+    }
+
+    // Also create chat assignment for routing
+    try {
       const { data: sectors } = await supabase
         .from('chat_sectors')
         .select('id, name')
@@ -624,7 +668,7 @@ async function executeToolCall(
 
     return JSON.stringify({
       transferred: true,
-      message: "Conversa transferida para atendente humano.",
+      message: "Conversa transferida para atendente humano. Ticket de suporte criado.",
     });
   }
 
