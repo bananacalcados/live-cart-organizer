@@ -487,20 +487,41 @@ REGRAS:
 
         const data = await resp.json();
         const stopReason = data.stop_reason;
+        const contentBlocks = Array.isArray(data.content) ? data.content : [];
 
-        console.log(`[concierge][anthropic] turn ${turn} stop_reason=${stopReason}, content_blocks=${data.content?.length}`);
+        console.log(`[concierge][anthropic] turn ${turn} stop_reason=${stopReason}, content_blocks=${contentBlocks.length}`);
+
+        // Empty/malformed Anthropic response should trigger fallback
+        if (contentBlocks.length === 0) {
+          throw new Error('ANTHROPIC_EMPTY_CONTENT');
+        }
 
         // Extract text + tool_use blocks
         let textReply = '';
         const toolUseBlocks: any[] = [];
-        for (const block of (data.content || [])) {
-          if (block.type === 'text') textReply += block.text;
-          if (block.type === 'tool_use') toolUseBlocks.push(block);
+        const sanitizedAssistantContent: any[] = [];
+        for (const block of contentBlocks) {
+          if (block.type === 'text') {
+            const text = typeof block.text === 'string' ? block.text : '';
+            if (text.trim()) {
+              textReply += text;
+              sanitizedAssistantContent.push({ ...block, text });
+            }
+            continue;
+          }
+
+          if (block.type === 'tool_use') {
+            toolUseBlocks.push(block);
+            sanitizedAssistantContent.push(block);
+            continue;
+          }
+
+          sanitizedAssistantContent.push(block);
         }
 
         if (toolUseBlocks.length > 0) {
-          // Add assistant response to messages
-          currentAnthropicMsgs.push({ role: 'assistant', content: data.content });
+          // Add assistant response to messages, stripping empty text blocks
+          currentAnthropicMsgs.push({ role: 'assistant', content: sanitizedAssistantContent });
 
           // Execute tools and add results
           const toolResults: any[] = [];
@@ -518,6 +539,11 @@ REGRAS:
 
           if (textReply.trim()) finalReply = textReply.trim();
           continue;
+        }
+
+        // No tool calls and no text = malformed response, trigger fallback
+        if (!textReply.trim()) {
+          throw new Error('ANTHROPIC_EMPTY_TEXT');
         }
 
         // No tool calls — final text
@@ -588,6 +614,9 @@ REGRAS:
     // ─── Execute with fallback ──────────────────────────────────────────
     try {
       finalReply = await runAnthropic();
+      if (!finalReply?.trim()) {
+        throw new Error('ANTHROPIC_EMPTY_FINAL_REPLY');
+      }
       console.log(`[concierge] Anthropic OK, reply len=${finalReply.length}`);
     } catch (anthropicErr: any) {
       console.warn(`[concierge] Anthropic failed: ${anthropicErr.message}, falling back to Lovable AI`);
