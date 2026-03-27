@@ -440,14 +440,8 @@ serve(async (req) => {
                   case 'none':
                     break;
                 }
-              } else {
-                // Non-text messages — trigger automations
-                fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ phone, messageText: messageText || '', instance: whatsappNumberDbId || 'meta' }),
-                }).catch(err => console.error('automation-trigger-incoming error:', err));
               }
+
               // ===== END CENTRAL ROUTER =====
             }
 
