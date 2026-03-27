@@ -72,6 +72,7 @@ export type Database = {
       }
       ai_knowledge_base: {
         Row: {
+          agents: string[]
           category: string
           content: string
           created_at: string
@@ -82,6 +83,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agents?: string[]
           category: string
           content: string
           created_at?: string
@@ -92,6 +94,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agents?: string[]
           category?: string
           content?: string
           created_at?: string
