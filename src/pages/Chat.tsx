@@ -217,20 +217,11 @@ export default function ChatPage() {
     setEditingName(false);
   };
 
-  // ── Load conversations via RPC (now grouped by phone + whatsapp_number_id) ──
-  const loadConversations = useCallback(async () => {
-    const numberId = numberFilter !== 'all' ? numberFilter : undefined;
-
-    const { data, error } = await supabase.rpc('get_conversations', {
-      p_number_id: numberId || null,
-    });
-
-    if (error) { console.error('Error loading conversations:', error); return; }
-
+  // ── Helper to map RPC rows to Conversation objects ──
+  const mapRowsToConvs = useCallback((rows: any[]) => {
     const convs: Conversation[] = [];
     const phoneMessages = new Map<string, { direction: string }[]>();
-
-    for (const row of data || []) {
+    for (const row of rows) {
       const phone = row.phone;
       const rowNumberId = row.whatsapp_number_id || null;
       const convKey = `${phone}__${rowNumberId || 'none'}`;
@@ -261,9 +252,32 @@ export default function ChatPage() {
         channel: (row as any).channel || null,
       });
     }
+    return { convs, phoneMessages };
+  }, [orders, customers, getContactName, crmMap]);
+
+  // ── Load conversations via RPC - separate calls for regular and dispatch ──
+  const loadConversations = useCallback(async () => {
+    const numberId = numberFilter !== 'all' ? numberFilter : undefined;
+
+    // Load regular (non-dispatch) and dispatch conversations in parallel
+    const [regularResult, dispatchResult] = await Promise.all([
+      supabase.rpc('get_conversations', {
+        p_number_id: numberId || null,
+        p_dispatch_only: false,
+      }),
+      supabase.rpc('get_conversations', {
+        p_number_id: numberId || null,
+        p_dispatch_only: true,
+      }),
+    ]);
+
+    if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
+
+    const allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
+    const { convs, phoneMessages } = mapRowsToConvs(allRows);
 
     setConversations(enrichConversations(convs, phoneMessages));
-  }, [orders, customers, numberFilter, getContactName, crmMap, enrichConversations]);
+  }, [numberFilter, mapRowsToConvs, enrichConversations]);
 
   useEffect(() => {
     loadConversations();
