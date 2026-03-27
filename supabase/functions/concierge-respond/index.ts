@@ -611,6 +611,25 @@ REGRAS:
       return finalReply || '';
     }
 
+    // ─── Helper: log AI error ─────────────────────────────────────────
+    async function logAiError(errorType: string, errorMessage: string, providerAttempted: string, fallbackProvider?: string, fallbackSuccess?: boolean, aiResponse?: string) {
+      try {
+        await supabase.from('ai_error_logs').insert({
+          agent: 'concierge',
+          phone: normalizedPhone,
+          error_type: errorType,
+          error_message: errorMessage,
+          provider_attempted: providerAttempted,
+          fallback_provider: fallbackProvider || null,
+          fallback_success: fallbackSuccess ?? false,
+          customer_message: messageText,
+          ai_response: aiResponse || null,
+          history_sent_count: chatMessages.length - 1,
+          status: 'open',
+        });
+      } catch (e) { console.error('[concierge] Failed to log error:', e); }
+    }
+
     // ─── Execute with fallback ──────────────────────────────────────────
     try {
       finalReply = await runAnthropic();
@@ -623,14 +642,17 @@ REGRAS:
       try {
         finalReply = await runLovableAI();
         console.log(`[concierge] Lovable AI fallback OK, reply len=${finalReply.length}`);
+        await logAiError(anthropicErr.message, anthropicErr.message, 'anthropic', 'lovable-gemini', true, finalReply);
       } catch (lovableErr: any) {
         console.error(`[concierge] Both AI providers failed:`, lovableErr.message);
         finalReply = 'Desculpe, tive um probleminha técnico. Pode repetir sua mensagem? 😊';
+        await logAiError(anthropicErr.message, `anthropic: ${anthropicErr.message} | lovable: ${lovableErr.message}`, 'anthropic', 'lovable-gemini', false);
       }
     }
 
     if (!finalReply) {
       finalReply = 'Desculpe, estou com dificuldades técnicas. Vou transferir você para um atendente. 😊';
+      await logAiError('BOTH_EMPTY', 'Both providers returned empty', 'anthropic', 'lovable-gemini', false);
     }
 
     // ─── 7. Send Reply ──────────────────────────────────────────────────
