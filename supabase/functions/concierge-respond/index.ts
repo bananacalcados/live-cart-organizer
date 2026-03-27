@@ -243,7 +243,7 @@ function extractTrackingDataFromOrder(pedido: any): { trackingCode: string | nul
 }
 
 function buildTrackingReplyFromToolResult(toolName: string, rawResult: string): string | null {
-  if (toolName !== 'get_order_tracking') return null;
+  if (toolName !== 'get_order_details') return null;
 
   try {
     const result = JSON.parse(rawResult);
@@ -760,12 +760,12 @@ serve(async (req) => {
 
       if (selectedOrder) {
         console.log(`[concierge] Deterministic tracking path for ${normalizedPhone}: order=${selectedOrder.order_number} store=${selectedOrder.store_name}`);
-        const trackingResult = await executeToolCall('get_order_tracking', {
+        const trackingResult = await executeToolCall('get_order_details', {
           tiny_order_id: selectedOrder.tiny_order_id,
           store_name: selectedOrder.store_name,
         }, stores, supabase, normalizedPhone);
 
-        const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_tracking', trackingResult);
+        const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_details', trackingResult);
         if (forcedTrackingReply) {
           const typingDelay = Math.min(Math.max(forcedTrackingReply.length * 50, 2000), 12000);
           await sleep(typingDelay);
@@ -834,7 +834,7 @@ serve(async (req) => {
             ai_decision: 'deterministic_tracking_reply',
             provider: 'deterministic',
             stage: 'concierge',
-            tool_called: 'get_order_tracking',
+            tool_called: 'get_order_details',
             tool_params: {
               source: 'recent_search_confirmation',
               selectedOrder,
@@ -1070,7 +1070,7 @@ REGRAS:
           // Execute tools and add results
           const toolResults: any[] = [];
           for (const tu of toolUseBlocks) {
-            const resolvedToolArgs = tu.name === 'get_order_tracking'
+            const resolvedToolArgs = tu.name === 'get_order_details'
               ? resolveTrackingToolArgs(tu.input || {}, toolExecutions)
               : (tu.input || {});
             console.log(`[concierge][anthropic] tool: ${tu.name}(${JSON.stringify(resolvedToolArgs)})`);
@@ -1147,7 +1147,7 @@ REGRAS:
             const fnName = toolCall.function?.name;
             let fnArgs: Record<string, any> = {};
             try { fnArgs = JSON.parse(toolCall.function?.arguments || '{}'); } catch { fnArgs = {}; }
-            const resolvedFnArgs = fnName === 'get_order_tracking'
+            const resolvedFnArgs = fnName === 'get_order_details'
               ? resolveTrackingToolArgs(fnArgs, toolExecutions)
               : fnArgs;
             console.log(`[concierge][lovable] tool: ${fnName}(${JSON.stringify(resolvedFnArgs)})`);
