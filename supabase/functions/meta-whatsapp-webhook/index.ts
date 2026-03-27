@@ -358,10 +358,11 @@ serve(async (req) => {
               }
 
               // ===== CENTRAL ROUTER =====
-              if (messageText && msg.type === 'text') {
+              if (messageText || mediaType !== 'text') {
+                const routeText = messageText || `[${mediaType}]`;
                 const referralInput = referralData || null;
                 const route = await routeMessage(supabase, {
-                  phone, messageText, isGroup: false,
+                  phone, messageText: routeText, isGroup: false,
                   referral: referralInput,
                   whatsappNumberId: whatsappNumberDbId,
                 });
@@ -372,7 +373,7 @@ serve(async (req) => {
                     fetch(`${supabaseUrl}/functions/v1/livete-respond`, {
                       method: 'POST',
                       headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ phone, messageText, whatsappNumberId: whatsappNumberDbId }),
+                      body: JSON.stringify({ phone, messageText: routeText, whatsappNumberId: whatsappNumberDbId, mediaUrl, mediaType }),
                     }).catch(err => console.error('livete-respond trigger error:', err));
                     break;
 
