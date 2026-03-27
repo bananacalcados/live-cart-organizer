@@ -125,6 +125,7 @@ export default function ChatPage() {
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null | undefined>(undefined);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
+  const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -354,6 +355,7 @@ export default function ChatPage() {
     setSelectedPhone(phone);
     setSelectedConvNumberId(numberId);
     setSelectedConvKey(conv?.conversationKey || `${phone}__${numberId || 'none'}`);
+    setSelectedConvChannel(conv.channel || null);
     loadMessages(phone, false, numberId);
     const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
     if (order) setHasUnreadMessages(order.id, false);
@@ -478,6 +480,9 @@ export default function ChatPage() {
 
   // ── Get selected conversation channel ──
   const getSelectedChannel = (): string | null => {
+    // Use the stored channel from conversation selection (most reliable)
+    if (selectedConvChannel) return selectedConvChannel;
+    // Fallback: look up from conversations list
     if (!selectedPhone) return null;
     const conv = conversations.find(c => c.phone === selectedPhone && c.conversationKey === selectedConvKey);
     return conv?.channel || null;
