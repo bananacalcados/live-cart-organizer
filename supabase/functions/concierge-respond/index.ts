@@ -500,7 +500,8 @@ async function executeToolCall(
           const termWords = termLower.split(/\s+/).filter((w: string) => w.length >= 2);
           const filtered = orders.filter((o: any) => {
             const name = (o.nome || '').toLowerCase();
-            return termWords.some((word: string) => name.includes(word));
+            const sit = (o.situacao || '').toLowerCase();
+            return termWords.some((word: string) => name.includes(word)) && sit !== 'cancelado' && sit !== 'cancelled';
           });
 
           for (const order of filtered.slice(0, 3)) {
