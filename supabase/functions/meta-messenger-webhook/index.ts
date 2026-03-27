@@ -67,13 +67,28 @@ serve(async (req) => {
         // Skip message_edit and delivery events
         if (event.message_edit || event.delivery) continue;
 
-        // Skip echo messages (messages we sent)
+        // Skip echo messages (messages we sent) — the frontend already inserts
+        // the outgoing record after a successful send, so we only insert here
+        // if no record with the same message_id exists yet (e.g. sent from
+        // another device or the Meta platform directly).
         if (event.message?.is_echo) {
+          const mid = event.message?.mid;
+          if (mid) {
+            const { data: existing } = await supabase
+              .from('whatsapp_messages')
+              .select('id')
+              .eq('message_id', mid)
+              .limit(1);
+            if (existing && existing.length > 0) {
+              console.log(`Echo skipped (already exists): ${mid}`);
+              continue;
+            }
+          }
           await supabase.from('whatsapp_messages').insert({
             phone: event.recipient?.id || '',
             message: event.message?.text || '[media]',
             direction: 'outgoing',
-            message_id: event.message?.mid || null,
+            message_id: mid || null,
             status: 'sent',
             media_type: event.message?.attachments?.[0]?.type || 'text',
             channel,
