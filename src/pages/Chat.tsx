@@ -150,7 +150,12 @@ export default function ChatPage() {
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
   const [newChatPhone, setNewChatPhone] = useState("");
 
-  // Media
+  // Chat action dialogs
+  const [showFinishDialog, setShowFinishDialog] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [showPix, setShowPix] = useState(false);
+  const [showCatalog, setShowCatalog] = useState(false);
+
   const [selectedMedia, setSelectedMedia] = useState<{ file: File; type: 'image' | 'audio' | 'video' | 'document'; previewUrl: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
