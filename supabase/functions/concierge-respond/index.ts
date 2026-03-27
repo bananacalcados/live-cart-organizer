@@ -145,6 +145,62 @@ function buildTrackingReplyFromToolResult(toolName: string, rawResult: string): 
   return null;
 }
 
+function parseToolResult(rawResult: string): any {
+  try {
+    return JSON.parse(rawResult);
+  } catch {
+    return { raw: rawResult };
+  }
+}
+
+function isPositiveTrackingConfirmation(message: string): boolean {
+  const normalized = message.toLowerCase().trim();
+  return [
+    /^sim\b/,
+    /esse mesmo/,
+    /é esse/,
+    /e esse/,
+    /pode ser esse/,
+    /quero esse/,
+    /quero rastrear esse/,
+    /correto/,
+    /confirmo/,
+  ].some((pattern) => pattern.test(normalized));
+}
+
+function resolveOrderFromConfirmation(message: string, orders: any[]): any | null {
+  if (!Array.isArray(orders) || orders.length === 0) return null;
+
+  const normalized = message.toLowerCase().trim();
+  const explicitOrderRef = normalized.match(/#?\s*(\d{3,})/);
+  if (explicitOrderRef) {
+    const ref = explicitOrderRef[1];
+    const matched = orders.find((order: any) =>
+      String(order?.order_number || '').replace(/\D/g, '') === ref ||
+      String(order?.tiny_order_id || '').replace(/\D/g, '') === ref
+    );
+    if (matched) return matched;
+  }
+
+  const ordinalMap: Array<{ patterns: RegExp[]; index: number }> = [
+    { patterns: [/pedido 1\b/, /\b1\b/, /primeir[oa]/], index: 0 },
+    { patterns: [/pedido 2\b/, /\b2\b/, /segund[oa]/], index: 1 },
+    { patterns: [/pedido 3\b/, /\b3\b/, /terceir[oa]/], index: 2 },
+  ];
+
+  for (const entry of ordinalMap) {
+    if (entry.patterns.some((pattern) => pattern.test(normalized)) && orders[entry.index]) {
+      return orders[entry.index];
+    }
+  }
+
+  if (orders.length === 1 && isPositiveTrackingConfirmation(message)) {
+    return orders[0];
+  }
+
+  return null;
+}
+
 // ─── Tool definitions for AI ─────────────────────────────────────────────────
 
 const TOOLS = [
@@ -485,6 +541,7 @@ serve(async (req) => {
       .limit(1);
 
     const latestIncomingText = latestIncoming?.[0]?.message?.trim() || '';
+    const latestIncomingAt = latestIncoming?.[0]?.created_at || null;
     if (latestIncomingText && incomingMessageText && latestIncomingText !== incomingMessageText) {
       console.log(`[concierge] Debounced fragmented message for ${normalizedPhone}; newer input detected.`);
       return new Response(JSON.stringify({ success: true, handled: false, reason: 'debounced_newer_message' }), {
@@ -531,6 +588,121 @@ serve(async (req) => {
       };
       return priority(a.name) - priority(b.name);
     });
+
+    // ─── 1b. Deterministic tracking confirmation path ───────────────────
+    const { data: recentAiLogs } = await supabase
+      .from('ai_conversation_logs')
+      .select('message_out, tool_called, tool_params, created_at')
+      .eq('phone', normalizedPhone)
+      .eq('stage', 'concierge')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    const latestSearchLog = (recentAiLogs || []).find((log: any) => {
+      const toolData = log?.tool_params as any;
+      const hasSearchTool = typeof log?.tool_called === 'string' && log.tool_called.includes('search_customer_orders');
+      const hasOrders = Array.isArray(toolData?.toolExecutions)
+        && toolData.toolExecutions.some((exec: any) => exec?.name === 'search_customer_orders' && Array.isArray(exec?.result?.orders));
+      return hasSearchTool && hasOrders;
+    });
+
+    if (latestSearchLog) {
+      const toolExecutions = ((latestSearchLog.tool_params as any)?.toolExecutions || []) as any[];
+      const latestSearchExecution = [...toolExecutions].reverse().find((exec: any) => exec?.name === 'search_customer_orders');
+      const recentOrders = latestSearchExecution?.result?.orders || [];
+      const selectedOrder = resolveOrderFromConfirmation(combinedMessage, recentOrders);
+
+      if (selectedOrder) {
+        console.log(`[concierge] Deterministic tracking path for ${normalizedPhone}: order=${selectedOrder.order_number} store=${selectedOrder.store_name}`);
+        const trackingResult = await executeToolCall('get_order_tracking', {
+          tiny_order_id: selectedOrder.tiny_order_id,
+          store_name: selectedOrder.store_name,
+        }, stores, supabase, normalizedPhone);
+
+        const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_tracking', trackingResult);
+        if (forcedTrackingReply) {
+          const typingDelay = Math.min(Math.max(forcedTrackingReply.length * 50, 2000), 12000);
+          await sleep(typingDelay);
+
+          let latestBeforeSendQuery = supabase
+            .from('whatsapp_messages')
+            .select('message, created_at')
+            .eq('phone', normalizedPhone)
+            .eq('direction', 'incoming');
+
+          if (whatsappNumberId) {
+            latestBeforeSendQuery = latestBeforeSendQuery.eq('whatsapp_number_id', whatsappNumberId);
+          }
+
+          const { data: latestBeforeSend } = await latestBeforeSendQuery.order('created_at', { ascending: false }).limit(1);
+          const latestBeforeSendAt = latestBeforeSend?.[0]?.created_at || null;
+          const latestBeforeSendText = latestBeforeSend?.[0]?.message?.trim() || '';
+
+          if (latestIncomingAt && latestBeforeSendAt && latestBeforeSendAt > latestIncomingAt && latestBeforeSendText !== latestIncomingText) {
+            return new Response(JSON.stringify({ success: true, handled: false, reason: 'superseded_before_send' }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+
+          let sendFn = 'zapi-send-message';
+          const sendBody: Record<string, unknown> = { phone: normalizedPhone, message: forcedTrackingReply };
+
+          if (whatsappNumberId) {
+            const { data: numData } = await supabase
+              .from('whatsapp_numbers')
+              .select('api_type')
+              .eq('id', whatsappNumberId)
+              .maybeSingle();
+
+            if (numData?.api_type === 'meta') {
+              sendFn = 'meta-whatsapp-send';
+              sendBody.whatsappNumberId = whatsappNumberId;
+            } else {
+              sendBody.whatsapp_number_id = whatsappNumberId;
+            }
+          }
+
+          const sendRes = await fetch(`${supabaseUrl}/functions/v1/${sendFn}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(sendBody),
+          });
+
+          let messageId: string | null = null;
+          try { const sd = await sendRes.json(); messageId = sd?.messageId || sd?.zapiMessageId || null; } catch (_) {}
+
+          await supabase.from('whatsapp_messages').insert({
+            phone: normalizedPhone,
+            message: `[IA] ${forcedTrackingReply}`,
+            direction: 'outgoing',
+            status: 'sent',
+            message_id: messageId,
+            whatsapp_number_id: whatsappNumberId || null,
+          });
+
+          await supabase.from('ai_conversation_logs').insert({
+            phone: normalizedPhone,
+            message_in: combinedMessage,
+            message_out: forcedTrackingReply,
+            ai_decision: 'deterministic_tracking_reply',
+            provider: 'deterministic',
+            stage: 'concierge',
+            tool_called: 'get_order_tracking',
+            tool_params: {
+              source: 'recent_search_confirmation',
+              selectedOrder,
+              trackingResult: parseToolResult(trackingResult),
+            },
+          });
+
+          return new Response(JSON.stringify({ success: true, reply: forcedTrackingReply, deterministic: true }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+    }
 
     // ─── 2. Load Knowledge Base ─────────────────────────────────────────
     const { data: kbEntries } = await supabase
@@ -637,6 +809,7 @@ REGRAS:
     let finalReply = '';
     let sectorId: string | null = null;
     let aiClassification: string | null = null;
+    const toolExecutions: Array<{ name: string; args: Record<string, any>; result: any }> = [];
     const MAX_TOOL_TURNS = 3;
     let usedProvider = 'anthropic';
 
@@ -750,6 +923,7 @@ REGRAS:
             console.log(`[concierge][anthropic] tool: ${tu.name}(${JSON.stringify(tu.input)})`);
             const result = await executeToolCall(tu.name, tu.input || {}, stores, supabase, normalizedPhone);
             console.log(`[concierge][anthropic] result: ${result.slice(0, 200)}`);
+            toolExecutions.push({ name: tu.name, args: tu.input || {}, result: parseToolResult(result) });
             const forcedReply = buildTrackingReplyFromToolResult(tu.name, result);
             if (forcedReply) return forcedReply;
             toolResults.push({
@@ -823,6 +997,7 @@ REGRAS:
             console.log(`[concierge][lovable] tool: ${fnName}(${JSON.stringify(fnArgs)})`);
             const result = await executeToolCall(fnName, fnArgs, stores, supabase, normalizedPhone);
             console.log(`[concierge][lovable] result: ${result.slice(0, 200)}`);
+            toolExecutions.push({ name: fnName, args: fnArgs, result: parseToolResult(result) });
             const forcedReply = buildTrackingReplyFromToolResult(fnName, result);
             if (forcedReply) return forcedReply;
             currentMessages.push({ role: 'tool', content: result, tool_call_id: toolCall.id } as any);
@@ -884,6 +1059,31 @@ REGRAS:
     const typingDelay = Math.min(Math.max(finalReply.length * 50, 2000), 12000);
     await new Promise(r => setTimeout(r, typingDelay));
 
+    let latestBeforeSendQuery = supabase
+      .from('whatsapp_messages')
+      .select('message, created_at')
+      .eq('phone', normalizedPhone)
+      .eq('direction', 'incoming');
+
+    if (whatsappNumberId) {
+      latestBeforeSendQuery = latestBeforeSendQuery.eq('whatsapp_number_id', whatsappNumberId);
+    }
+
+    const { data: latestBeforeSend } = await latestBeforeSendQuery
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const latestBeforeSendAt = latestBeforeSend?.[0]?.created_at || null;
+    const latestBeforeSendText = latestBeforeSend?.[0]?.message?.trim() || '';
+
+    if (latestIncomingAt && latestBeforeSendAt && latestBeforeSendAt > latestIncomingAt && latestBeforeSendText !== latestIncomingText) {
+      console.log(`[concierge] Skipping stale reply for ${normalizedPhone}; newer incoming message arrived during processing.`);
+      return new Response(JSON.stringify({ success: true, handled: false, reason: 'superseded_before_send' }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     let sendFn = 'zapi-send-message';
     const sendBody: Record<string, unknown> = { phone: normalizedPhone, message: finalReply };
 
@@ -929,6 +1129,8 @@ REGRAS:
       ai_decision: sectorId ? `routed:${sectorId}` : 'responded',
       provider: usedProvider,
       stage: 'concierge',
+      tool_called: toolExecutions.map((exec) => exec.name).join(',') || null,
+      tool_params: toolExecutions.length > 0 ? { toolExecutions } : null,
     });
 
     console.log(`[concierge] Reply sent to ${phone}: ${finalReply.slice(0, 80)}...`);
