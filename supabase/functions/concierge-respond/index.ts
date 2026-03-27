@@ -195,16 +195,26 @@ async function executeToolCall(
           continue;
         }
 
-        // Filter orders that match the contact name (case-insensitive partial match)
+        // Filter orders that STRICTLY match the contact name
         const contactNameLower = contact.name.toLowerCase();
         const contactWords = contactNameLower.split(/\s+/).filter((w: string) => w.length >= 2);
         const filtered = orders.filter((o: any) => {
           const orderName = (o.nome || '').toLowerCase();
-          // At least the first word of the contact name should match
-          return contactWords.length > 0 && orderName.includes(contactWords[0]);
+          if (!orderName) return false;
+          // At least the first AND last word of the contact name must appear in order name
+          // This prevents returning orders from completely different customers
+          const firstWord = contactWords[0];
+          const lastWord = contactWords[contactWords.length - 1];
+          return firstWord && lastWord && orderName.includes(firstWord) && orderName.includes(lastWord);
         });
 
-        const ordersToUse = filtered.length > 0 ? filtered : orders.slice(0, 5);
+        // CRITICAL: Do NOT fallback to unfiltered orders - only use confirmed matches
+        if (filtered.length === 0) {
+          console.log(`[concierge] CPF contact "${contact.name}" found in "${store.name}" but no orders match this name. Skipping.`);
+          continue;
+        }
+
+        const ordersToUse = filtered;
 
         for (const order of ordersToUse.slice(0, 5)) {
           allResults.push({
@@ -454,11 +464,12 @@ FLUXO DE RASTREIO:
 1. Cliente pede rastreio → peça PRIMEIRO o CPF do pedido; aceite CPF com pontos e traços e trate isso normalmente removendo a máscara
 2. Só use nome como plano B quando a pessoa realmente não souber o CPF
 3. Use a ferramenta search_customer_orders para buscar
-4. Se encontrar pedido via CPF, antes de passar o rastreio confirme com o cliente: nome encontrado + data da compra
-5. Só depois da confirmação use get_order_tracking para obter o código de rastreio
-6. Se encontrar vários pedidos, confirme qual é mostrando nome, data e valor
-7. Envie o código + link clicável para rastreamento
+4. Se encontrar UM ÚNICO pedido, confirme brevemente o nome e data com o cliente. Mas NÃO transfira — aguarde a confirmação e depois use get_order_tracking
+5. Se encontrar VÁRIOS pedidos, liste todos mostrando número, data, valor e loja. Pergunte qual deseja rastrear
+6. Quando o cliente ESCOLHER um pedido da lista (ex: "pedido 1", "o primeiro", "#4809"), isso JÁ É a confirmação — use IMEDIATAMENTE get_order_tracking para buscar o rastreio. NÃO transfira para humano neste momento
+7. Após obter o rastreio, envie o código + link clicável para rastreamento
 8. Se não encontrar pelo nome, peça o CPF antes de transferir; se não encontrar pelo CPF, use transfer_to_human
+9. NUNCA use transfer_to_human se você ainda tem informação de pedido para buscar — só transfira quando realmente não conseguir resolver
 
 REGRAS:
 - Responda de forma curta e natural, como humano no WhatsApp
