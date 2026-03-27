@@ -411,6 +411,10 @@ export default function Admin() {
           <TabsContent value="secretary" className="mt-4">
             <SecretaryChat />
           </TabsContent>
+
+          <TabsContent value="errors" className="mt-4">
+            <AiErrorLogs />
+          </TabsContent>
         </Tabs>
       </main>
     </div>
