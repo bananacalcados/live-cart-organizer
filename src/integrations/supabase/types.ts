@@ -70,6 +70,66 @@ export type Database = {
           },
         ]
       }
+      ai_error_logs: {
+        Row: {
+          agent: string
+          ai_response: string | null
+          context_payload: Json | null
+          created_at: string
+          customer_message: string | null
+          error_message: string | null
+          error_type: string
+          fallback_provider: string | null
+          fallback_success: boolean | null
+          history_sent_count: number | null
+          id: string
+          phone: string | null
+          provider_attempted: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+        }
+        Insert: {
+          agent?: string
+          ai_response?: string | null
+          context_payload?: Json | null
+          created_at?: string
+          customer_message?: string | null
+          error_message?: string | null
+          error_type: string
+          fallback_provider?: string | null
+          fallback_success?: boolean | null
+          history_sent_count?: number | null
+          id?: string
+          phone?: string | null
+          provider_attempted?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Update: {
+          agent?: string
+          ai_response?: string | null
+          context_payload?: Json | null
+          created_at?: string
+          customer_message?: string | null
+          error_message?: string | null
+          error_type?: string
+          fallback_provider?: string | null
+          fallback_success?: boolean | null
+          history_sent_count?: number | null
+          id?: string
+          phone?: string | null
+          provider_attempted?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       ai_knowledge_base: {
         Row: {
           agents: string[]
