@@ -200,38 +200,43 @@ serve(async (req) => {
 
       if (fromMe) {
         // Dedup: match by phone + message + whatsapp_number_id
+        // Also try matching with [IA] prefix (concierge saves "[IA] msg" but webhook echo has just "msg")
         if (messageId && displayMessage) {
-          let dedupQuery = supabase
-            .from('whatsapp_messages')
-            .select('id, message_id')
-            .eq('phone', phone)
-            .eq('direction', 'outgoing')
-            .eq('message', displayMessage)
-            .order('created_at', { ascending: false })
-            .limit(1);
+          const messagesToMatch = [displayMessage, `[IA] ${displayMessage}`];
 
-          if (whatsappNumberId) {
-            dedupQuery = dedupQuery.eq('whatsapp_number_id', whatsappNumberId);
-          } else {
-            dedupQuery = dedupQuery.is('whatsapp_number_id', null);
-          }
-
-          const { data: existing } = await dedupQuery;
-
-          const row = existing?.[0];
-          if (row && !row.message_id) {
-            const { error: updateError } = await supabase
+          for (const matchMsg of messagesToMatch) {
+            let dedupQuery = supabase
               .from('whatsapp_messages')
-              .update({ message_id: messageId, status })
-              .eq('id', row.id);
+              .select('id, message_id')
+              .eq('phone', phone)
+              .eq('direction', 'outgoing')
+              .eq('message', matchMsg)
+              .order('created_at', { ascending: false })
+              .limit(1);
 
-            if (updateError) {
-              console.error('Error updating outgoing message (dedup):', updateError);
+            if (whatsappNumberId) {
+              dedupQuery = dedupQuery.eq('whatsapp_number_id', whatsappNumberId);
+            } else {
+              dedupQuery = dedupQuery.is('whatsapp_number_id', null);
             }
-            return new Response(JSON.stringify({ success: true, dedup: true }), {
-              status: 200,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
+
+            const { data: existing } = await dedupQuery;
+            const row = existing?.[0];
+            if (row) {
+              if (!row.message_id) {
+                const { error: updateError } = await supabase
+                  .from('whatsapp_messages')
+                  .update({ message_id: messageId, status })
+                  .eq('id', row.id);
+                if (updateError) {
+                  console.error('Error updating outgoing message (dedup):', updateError);
+                }
+              }
+              return new Response(JSON.stringify({ success: true, dedup: true }), {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
           }
         }
 

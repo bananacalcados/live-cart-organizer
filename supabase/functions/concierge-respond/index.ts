@@ -323,6 +323,7 @@ serve(async (req) => {
       .from('ai_knowledge_base')
       .select('category, title, content')
       .eq('is_active', true)
+      .contains('agents', ['concierge'])
       .order('sort_order');
 
     let knowledgeBlock = '';
@@ -383,7 +384,7 @@ REGRAS:
 
     const { data: dbMessages } = await supabase
       .from('whatsapp_messages')
-      .select('message, direction, created_at, media_type')
+      .select('message, direction, created_at, media_type, is_mass_dispatch')
       .eq('phone', normalizedPhone)
       .order('created_at', { ascending: true })
       .limit(30);
@@ -392,10 +393,17 @@ REGRAS:
       for (const msg of dbMessages) {
         const text = msg.message?.trim();
         if (!text) continue;
+        // Skip template placeholders
         if (/\{\{\d+\}\}/.test(text) || /\{\{[a-zA-Z_]+\}\}/.test(text)) continue;
+        // Skip template markers and spam
+        if (/\[Template:\s/.test(text)) continue;
+        // Skip very long messages (likely old template dumps or concatenated spam)
+        if (text.length > 600) continue;
+        // Skip mass dispatch content
+        if (msg.is_mass_dispatch) continue;
         chatMessages.push({
           role: msg.direction === 'incoming' ? 'user' : 'assistant',
-          content: text.replace(/^\[IA\]\s*/i, ''), // strip [IA] prefix for context
+          content: text.replace(/^\[IA\]\s*/i, '').slice(0, 500), // strip [IA] prefix, cap length
         });
       }
     }
