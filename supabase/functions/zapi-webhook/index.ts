@@ -414,21 +414,80 @@ serve(async (req) => {
         } else {
           console.log(`Saved incoming ${mediaInfo ? mediaInfo.mediaType : 'text'} message from ${phone}`);
           
-          // Trigger Livete AI respond (fire-and-forget) - only for individual text messages
+          // ===== CENTRAL ROUTER =====
           if (!isGroup && messageText) {
-            fetch(`${supabaseUrl}/functions/v1/livete-respond`, {
+            const route = await routeMessage(supabase, {
+              phone, messageText, isGroup, whatsappNumberId,
+            });
+            console.log(`[zapi-router] ${phone} → ${route.agent} (${route.reason})`);
+
+            switch (route.agent) {
+              case 'livete':
+                fetch(`${supabaseUrl}/functions/v1/livete-respond`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ phone, messageText, whatsappNumberId }),
+                }).catch(err => console.error('livete-respond trigger error:', err));
+                break;
+
+              case 'continue_session': {
+                const cooldownActive = await isOperatorCooldownActive(supabase, phone);
+                if (!cooldownActive && route.session) {
+                  const aiRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-respond`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: route.session.prompt, phone }),
+                  });
+                  const aiData = await aiRes.json();
+
+                  if (aiRes.ok && aiData.reply) {
+                    const typingDelay = Math.min(Math.max(aiData.reply.length * 50, 2000), 12000);
+                    await new Promise(r => setTimeout(r, typingDelay));
+
+                    await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ phone, message: aiData.reply }),
+                    });
+
+                    await supabase.from('whatsapp_messages').insert({
+                      phone, message: `[IA] ${aiData.reply}`, direction: 'outgoing',
+                      status: 'sent', whatsapp_number_id: whatsappNumberId,
+                    });
+
+                    const newCount = (route.session.messages_sent || 0) + 1;
+                    if (newCount >= (route.session.max_messages || 50)) {
+                      await supabase.from('automation_ai_sessions').update({ is_active: false, messages_sent: newCount }).eq('id', route.session.id);
+                    } else {
+                      await supabase.from('automation_ai_sessions').update({ messages_sent: newCount, updated_at: new Date().toISOString() }).eq('id', route.session.id);
+                    }
+                  }
+                } else if (cooldownActive) {
+                  console.log(`[zapi-router] Operator cooldown active for ${phone}, skipping AI`);
+                }
+                break;
+              }
+
+              case 'legacy':
+              default:
+                fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ phone, messageText: displayMessage, instance: 'zapi', isGroup }),
+                }).catch(err => console.error('automation-trigger-incoming error:', err));
+                break;
+
+              case 'none':
+                break;
+            }
+          } else if (!isGroup) {
+            fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ phone, messageText, whatsappNumberId }),
-            }).catch(err => console.error('livete-respond trigger error:', err));
+              body: JSON.stringify({ phone, messageText: displayMessage, instance: 'zapi', isGroup }),
+            }).catch(err => console.error('automation-trigger-incoming error:', err));
           }
-
-          // Trigger incoming_message automations (fire-and-forget) - skip groups
-          fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, messageText: displayMessage, instance: 'zapi', isGroup }),
-          }).catch(err => console.error('automation-trigger-incoming error:', err));
+          // ===== END CENTRAL ROUTER =====
         }
       }
     }
