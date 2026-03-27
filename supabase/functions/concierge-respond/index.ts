@@ -323,6 +323,7 @@ serve(async (req) => {
       .from('ai_knowledge_base')
       .select('category, title, content')
       .eq('is_active', true)
+      .contains('agents', ['concierge'])
       .order('sort_order');
 
     let knowledgeBlock = '';
