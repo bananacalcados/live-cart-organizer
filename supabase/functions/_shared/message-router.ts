@@ -124,7 +124,25 @@ export async function routeMessage(
     return { agent: 'none', reason: 'operator_cooldown' };
   }
 
-  // 5. Intent pre-classification for Concierge (Fase 1: Roteamento silencioso)
+  // 5. Check concierge test mode — only route to concierge if enabled + phone matches
+  let conciergeEnabled = false;
+  let conciergeTestPhone: string | null = null;
+  try {
+    const { data: settings } = await supabase
+      .from('app_settings')
+      .select('key, value')
+      .in('key', ['concierge_test_mode', 'concierge_test_phone']);
+    if (settings) {
+      for (const s of settings) {
+        if (s.key === 'concierge_test_mode') conciergeEnabled = s.value === true || s.value === 'true';
+        if (s.key === 'concierge_test_phone') conciergeTestPhone = String(s.value || '').replace(/"/g, '');
+      }
+    }
+  } catch (err) {
+    console.error('[router] Error checking concierge settings:', err);
+  }
+
+  // 6. Intent pre-classification for Concierge
   const msgLower = (input.messageText || '').toLowerCase().trim();
 
   // Sales-related keywords → legacy (human seller handles it)
