@@ -64,6 +64,25 @@ async function getTinyOrderDetail(token: string, tinyOrderId: string): Promise<a
   }
 }
 
+function extractTinyCpf(order: any): string {
+  const cliente = order?.cliente || {};
+  const directCpf = String(cliente.cpf_cnpj || cliente.cpf || '').replace(/\D/g, '');
+  if (directCpf.length >= 11) return directCpf;
+
+  const textSources = [order?.obs, order?.obs_interna, order?.observacoes, order?.observacao];
+  for (const source of textSources) {
+    if (!source) continue;
+    const match = String(source).match(/\b(?:cpf|cpf_cnpj)\b[^0-9]*([\d.\-\/]{11,18})/i)
+      || String(source).match(/\b([\d]{3}\.?[\d]{3}\.?[\d]{3}-?[\d]{2})\b/);
+    if (match?.[1]) {
+      const digits = match[1].replace(/\D/g, '');
+      if (digits.length >= 11) return digits;
+    }
+  }
+
+  return '';
+}
+
 // ─── Tool definitions for AI ─────────────────────────────────────────────────
 
 const TOOLS = [
@@ -155,7 +174,7 @@ async function executeToolCall(
       console.log(`[concierge] Searching Tiny "${store.name}" for: ${term}`);
       const orders = await searchTinyOrders(store.token, term);
       if (orders.length > 0) {
-        const filtered = isCpf
+        let filtered = isCpf
           ? orders
           : orders.filter((o: any) => {
               const termLower = term.toLowerCase();
@@ -163,6 +182,25 @@ async function executeToolCall(
               const name = (o.nome || '').toLowerCase();
               return termWords.some((word: string) => name.includes(word));
             });
+
+        if (isCpf) {
+          const detailedMatches = await Promise.all(
+            filtered.slice(0, 12).map(async (order: any) => {
+              const detail = await getTinyOrderDetail(store.token, String(order.id));
+              const orderCpf = extractTinyCpf(detail);
+              if (orderCpf && orderCpf === digitsOnly) {
+                return { order, detail };
+              }
+              return null;
+            })
+          );
+
+          const exactCpfMatches = detailedMatches.filter(Boolean) as Array<{ order: any; detail: any }>;
+          if (exactCpfMatches.length > 0) {
+            filtered = exactCpfMatches.map(({ order }) => order);
+          }
+        }
+
         for (const order of filtered.slice(0, 5)) {
           allResults.push({
             tiny_order_id: String(order.id),
