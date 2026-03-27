@@ -331,7 +331,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "search_customer_orders",
-      description: "Busca pedidos de um cliente pelo nome completo ou CPF no sistema Tiny ERP. Pesquisa em todas as lojas (Shopify, Centro, Pérola). Use quando o cliente pedir rastreio, status de pedido, ou informações sobre uma compra.",
+      description: "Busca pedidos de um cliente pelo nome completo ou CPF no sistema Tiny ERP. Pesquisa em todas as lojas (Site, Centro, Pérola). Use quando o cliente pedir rastreio, status de pedido, ou informações sobre uma compra. Retorna produtos, data, status e loja.",
       parameters: {
         type: "object",
         properties: {
@@ -348,8 +348,8 @@ const TOOLS = [
   {
     type: "function",
     function: {
-      name: "get_order_tracking",
-      description: "Obtém detalhes completos de um pedido específico no Tiny, incluindo código de rastreio e transportadora. Use após encontrar o pedido com search_customer_orders.",
+      name: "get_order_details",
+      description: "Obtém detalhes completos de um pedido específico: produtos comprados, código de rastreio, transportadora, status e valores. Use após encontrar o pedido com search_customer_orders, tanto para buscar rastreio quanto para saber quais produtos o cliente comprou.",
       parameters: {
         type: "object",
         properties: {
@@ -359,7 +359,7 @@ const TOOLS = [
           },
           store_name: {
             type: "string",
-            description: "Nome da loja onde o pedido foi encontrado (Tiny Shopify, Loja Centro, ou Loja Perola)"
+            description: "Nome da loja onde o pedido foi encontrado (Site, Loja Centro, ou Loja Perola)"
           }
         },
         required: ["tiny_order_id", "store_name"],
@@ -371,7 +371,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "transfer_to_human",
-      description: "Transfere a conversa para um atendente humano. Use quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo, ou precisa de atendimento especializado.",
+      description: "Transfere a conversa para um atendente humano. Use APENAS quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo de suporte, ou precisa de atendimento especializado. NÃO use se ainda tem ferramentas que podem responder a pergunta.",
       parameters: {
         type: "object",
         properties: {
