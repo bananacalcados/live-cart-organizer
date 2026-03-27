@@ -279,9 +279,10 @@ serve(async (req) => {
       });
     }
 
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }), {
+    if (!ANTHROPIC_API_KEY && !LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ error: 'No AI API key configured' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -411,94 +412,192 @@ REGRAS:
     console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | kb=${kbEntries?.length || 0} | stores=${stores.length}`);
 
     // ─── 6. AI Loop (with tool calling, max 3 turns) ────────────────────
+    // Primary: Anthropic Claude | Fallback: Lovable AI (Gemini)
     let finalReply = '';
     let sectorId: string | null = null;
     let aiClassification: string | null = null;
     const MAX_TOOL_TURNS = 3;
+    let usedProvider = 'anthropic';
 
-    let currentMessages = [...chatMessages];
+    // Convert tools to Anthropic format
+    const ANTHROPIC_TOOLS = TOOLS.map(t => ({
+      name: t.function.name,
+      description: t.function.description,
+      input_schema: t.function.parameters,
+    }));
 
-    for (let turn = 0; turn <= MAX_TOOL_TURNS; turn++) {
-      const aiBody: Record<string, any> = {
-        model: 'google/gemini-2.5-flash',
-        messages: currentMessages,
-        stream: false,
-      };
+    // Extract system prompt (first message) and user/assistant messages
+    const systemContent = chatMessages[0]?.content || '';
+    const conversationMsgs = chatMessages.slice(1);
 
-      // Only include tools on non-final turns
-      if (turn < MAX_TOOL_TURNS) {
-        aiBody.tools = TOOLS;
+    // ─── Try Anthropic first ────────────────────────────────────────────
+    async function runAnthropic(): Promise<string> {
+      if (!ANTHROPIC_API_KEY) throw new Error('NO_KEY');
+
+      // Build Anthropic-format messages
+      let anthropicMsgs = conversationMsgs.map(m => ({
+        role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
+        content: m.content,
+      }));
+      // Anthropic requires first message to be 'user'
+      if (anthropicMsgs.length === 0 || anthropicMsgs[0].role !== 'user') {
+        anthropicMsgs = [{ role: 'user' as const, content: '(início da conversa)' }, ...anthropicMsgs];
+      }
+      // Merge consecutive same-role messages
+      const merged: typeof anthropicMsgs = [];
+      for (const m of anthropicMsgs) {
+        if (merged.length > 0 && merged[merged.length - 1].role === m.role) {
+          merged[merged.length - 1].content += '\n' + m.content;
+        } else {
+          merged.push({ ...m });
+        }
       }
 
-      console.log(`[concierge] AI turn ${turn}/${MAX_TOOL_TURNS}, msgs=${currentMessages.length}`);
+      let currentAnthropicMsgs = [...merged];
 
-      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(aiBody),
-      });
+      for (let turn = 0; turn <= MAX_TOOL_TURNS; turn++) {
+        console.log(`[concierge][anthropic] turn ${turn}/${MAX_TOOL_TURNS}, msgs=${currentAnthropicMsgs.length}`);
 
-      if (!response.ok) {
-        const status = response.status;
-        const errorText = await response.text();
-        console.error(`[concierge] AI error: ${status} ${errorText.slice(0, 300)}`);
-        if (status === 429) {
-          finalReply = 'Estou com muitas solicitações no momento, pode me mandar de novo em 1 minutinho? 😊';
-          break;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1024,
+            system: systemContent,
+            messages: currentAnthropicMsgs,
+            tools: turn < MAX_TOOL_TURNS ? ANTHROPIC_TOOLS : undefined,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error(`[concierge][anthropic] error ${resp.status}: ${errText.slice(0, 300)}`);
+          throw new Error(`ANTHROPIC_${resp.status}`);
         }
-        if (status === 402) {
-          finalReply = 'Desculpe, estou com uma limitação técnica. Vou te conectar com uma de nossas consultoras! 😊';
-          break;
+
+        const data = await resp.json();
+        const stopReason = data.stop_reason;
+
+        console.log(`[concierge][anthropic] turn ${turn} stop_reason=${stopReason}, content_blocks=${data.content?.length}`);
+
+        // Extract text + tool_use blocks
+        let textReply = '';
+        const toolUseBlocks: any[] = [];
+        for (const block of (data.content || [])) {
+          if (block.type === 'text') textReply += block.text;
+          if (block.type === 'tool_use') toolUseBlocks.push(block);
         }
+
+        if (toolUseBlocks.length > 0) {
+          // Add assistant response to messages
+          currentAnthropicMsgs.push({ role: 'assistant', content: data.content });
+
+          // Execute tools and add results
+          const toolResults: any[] = [];
+          for (const tu of toolUseBlocks) {
+            console.log(`[concierge][anthropic] tool: ${tu.name}(${JSON.stringify(tu.input)})`);
+            const result = await executeToolCall(tu.name, tu.input || {}, stores, supabase, normalizedPhone);
+            console.log(`[concierge][anthropic] result: ${result.slice(0, 200)}`);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: tu.id,
+              content: result,
+            });
+          }
+          currentAnthropicMsgs.push({ role: 'user', content: toolResults } as any);
+
+          if (textReply.trim()) finalReply = textReply.trim();
+          continue;
+        }
+
+        // No tool calls — final text
+        return textReply.trim();
+      }
+
+      return finalReply || '';
+    }
+
+    // ─── Fallback: Lovable AI (OpenAI-compatible) ───────────────────────
+    async function runLovableAI(): Promise<string> {
+      if (!LOVABLE_API_KEY) throw new Error('NO_LOVABLE_KEY');
+      usedProvider = 'lovable-gemini';
+
+      let currentMessages = [...chatMessages];
+
+      for (let turn = 0; turn <= MAX_TOOL_TURNS; turn++) {
+        const aiBody: Record<string, any> = {
+          model: 'google/gemini-2.5-flash',
+          messages: currentMessages,
+          stream: false,
+        };
+        if (turn < MAX_TOOL_TURNS) aiBody.tools = TOOLS;
+
+        console.log(`[concierge][lovable] turn ${turn}/${MAX_TOOL_TURNS}, msgs=${currentMessages.length}`);
+
+        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(aiBody),
+        });
+
+        if (!response.ok) {
+          const st = response.status;
+          const errText = await response.text();
+          console.error(`[concierge][lovable] error ${st}: ${errText.slice(0, 300)}`);
+          if (st === 429) return 'Estou com muitas solicitações no momento, pode me mandar de novo em 1 minutinho? 😊';
+          if (st === 402) return 'Desculpe, estou com uma limitação técnica. Vou te conectar com uma de nossas consultoras! 😊';
+          throw new Error(`LOVABLE_${st}`);
+        }
+
+        const data = await response.json();
+        const message = data.choices?.[0]?.message;
+
+        if (message?.tool_calls && message.tool_calls.length > 0) {
+          currentMessages.push(message);
+          for (const toolCall of message.tool_calls) {
+            const fnName = toolCall.function?.name;
+            let fnArgs: Record<string, any> = {};
+            try { fnArgs = JSON.parse(toolCall.function?.arguments || '{}'); } catch { fnArgs = {}; }
+            console.log(`[concierge][lovable] tool: ${fnName}(${JSON.stringify(fnArgs)})`);
+            const result = await executeToolCall(fnName, fnArgs, stores, supabase, normalizedPhone);
+            console.log(`[concierge][lovable] result: ${result.slice(0, 200)}`);
+            currentMessages.push({ role: 'tool', content: result, tool_call_id: toolCall.id } as any);
+          }
+          if (message?.content?.trim()) finalReply = message.content.trim();
+          continue;
+        }
+
+        return message?.content?.trim() || '';
+      }
+      return finalReply || '';
+    }
+
+    // ─── Execute with fallback ──────────────────────────────────────────
+    try {
+      finalReply = await runAnthropic();
+      console.log(`[concierge] Anthropic OK, reply len=${finalReply.length}`);
+    } catch (anthropicErr: any) {
+      console.warn(`[concierge] Anthropic failed: ${anthropicErr.message}, falling back to Lovable AI`);
+      try {
+        finalReply = await runLovableAI();
+        console.log(`[concierge] Lovable AI fallback OK, reply len=${finalReply.length}`);
+      } catch (lovableErr: any) {
+        console.error(`[concierge] Both AI providers failed:`, lovableErr.message);
         finalReply = 'Desculpe, tive um probleminha técnico. Pode repetir sua mensagem? 😊';
-        break;
       }
-
-      const data = await response.json();
-      const choice = data.choices?.[0];
-      const message = choice?.message;
-      const finishReason = choice?.finish_reason;
-
-      console.log(`[concierge] AI turn ${turn} finish_reason=${finishReason}, has_tool_calls=${!!(message?.tool_calls?.length)}, content_len=${message?.content?.length || 0}`);
-
-      // Check for tool calls
-      if (message?.tool_calls && message.tool_calls.length > 0) {
-        // Add assistant message with tool calls to history
-        currentMessages.push(message);
-
-        // Execute each tool call
-        for (const toolCall of message.tool_calls) {
-          const fnName = toolCall.function?.name;
-          let fnArgs: Record<string, any> = {};
-          try {
-            fnArgs = JSON.parse(toolCall.function?.arguments || '{}');
-          } catch { fnArgs = {}; }
-
-          console.log(`[concierge] Tool call: ${fnName}(${JSON.stringify(fnArgs)})`);
-          const result = await executeToolCall(fnName, fnArgs, stores, supabase, normalizedPhone);
-          console.log(`[concierge] Tool result: ${result.slice(0, 200)}`);
-
-          currentMessages.push({
-            role: 'tool',
-            content: result,
-            tool_call_id: toolCall.id,
-          } as any);
-        }
-
-        // If there's also text content alongside tool calls, capture it
-        if (message?.content?.trim()) {
-          finalReply = message.content.trim();
-        }
-
-        continue; // Next turn — AI will process tool results
-      }
-
-      // No tool calls — this is the final text response
-      finalReply = message?.content || '';
-      break;
     }
 
     if (!finalReply) {
@@ -552,7 +651,7 @@ REGRAS:
       message_in: messageText,
       message_out: finalReply,
       ai_decision: sectorId ? `routed:${sectorId}` : 'responded',
-      provider: 'concierge',
+      provider: usedProvider,
       stage: 'concierge',
     });
 
