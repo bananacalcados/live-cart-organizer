@@ -27,6 +27,11 @@ import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { STAGES } from "@/types/order";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 import { InstagramReferralCard } from "@/components/chat/InstagramReferralCard";
+import { POSFinishConversationDialog } from "@/components/pos/POSFinishConversationDialog";
+import { POSWhatsAppCheckoutDialog } from "@/components/pos/POSWhatsAppCheckoutDialog";
+import { POSWhatsAppPixDialog } from "@/components/pos/POSWhatsAppPixDialog";
+import { POSProductCatalogSender } from "@/components/pos/POSProductCatalogSender";
+import { InstagramReferralCard } from "@/components/chat/InstagramReferralCard";
 import {
   Select,
   SelectContent,
