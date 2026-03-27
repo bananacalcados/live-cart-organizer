@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { liveteTools, executeToolCall } from "../_shared/livete-tools.ts";
+import { transcribeAudio } from "../_shared/audio-transcribe.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,14 +66,39 @@ serve(async (req) => {
       .gte('created_at', thirtySecsAgo)
       .order('created_at', { ascending: true });
 
-    const combinedMessage = (recentMsgs && recentMsgs.length > 1)
+    let combinedMessage = (recentMsgs && recentMsgs.length > 1)
       ? recentMsgs.map(m => m.message).filter(Boolean).join('\n')
       : (messageText || '');
+
+    // Append audio transcription to combined message (resolved later after transcription)
+    // This variable will be updated after transcription completes
 
     // Collect any media from recent messages
     const recentMediaUrl = mediaUrl || recentMsgs?.find(m => m.media_url && m.media_type?.startsWith('image'))?.media_url;
 
-    // 1. Check for active AI session
+    // Transcribe audio if present
+    const audioUrl = (mediaType === 'audio' && mediaUrl)
+      ? mediaUrl
+      : recentMsgs?.find(m => m.media_url && m.media_type === 'audio')?.media_url;
+
+    let audioTranscription: string | null = null;
+    if (audioUrl) {
+      console.log(`[livete-respond] Transcribing audio for ${phone}...`);
+      audioTranscription = await transcribeAudio(audioUrl);
+      if (audioTranscription) {
+        console.log(`[livete-respond] Audio transcribed: "${audioTranscription.slice(0, 100)}"`);
+      }
+    }
+
+    // Append audio transcription to combined message
+    if (audioTranscription) {
+      const audioPrefix = '[Áudio transcrito]: ';
+      combinedMessage = combinedMessage
+        ? `${combinedMessage}\n${audioPrefix}${audioTranscription}`
+        : `${audioPrefix}${audioTranscription}`;
+    }
+
+
     const { data: session } = await supabase
       .from('automation_ai_sessions')
       .select('*')

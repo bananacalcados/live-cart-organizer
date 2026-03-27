@@ -420,9 +420,10 @@ serve(async (req) => {
           console.log(`Saved incoming ${mediaInfo ? mediaInfo.mediaType : 'text'} message from ${phone}`);
           
           // ===== CENTRAL ROUTER =====
-          if (!isGroup && messageText) {
+          if (!isGroup && (messageText || mediaInfo)) {
+            const routeText = messageText || mediaInfo?.caption || (mediaInfo ? `[${mediaInfo.mediaType}]` : '');
             const route = await routeMessage(supabase, {
-              phone, messageText, isGroup, whatsappNumberId,
+              phone, messageText: routeText, isGroup, whatsappNumberId,
             });
             console.log(`[zapi-router] ${phone} → ${route.agent} (${route.reason})`);
 
@@ -431,7 +432,7 @@ serve(async (req) => {
                 fetch(`${supabaseUrl}/functions/v1/livete-respond`, {
                   method: 'POST',
                   headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ phone, messageText, whatsappNumberId }),
+                  body: JSON.stringify({ phone, messageText: routeText, whatsappNumberId, mediaUrl: mediaInfo?.mediaUrl || null, mediaType: mediaInfo?.mediaType || null }),
                 }).catch(err => console.error('livete-respond trigger error:', err));
                 break;
 
@@ -477,7 +478,7 @@ serve(async (req) => {
                 fetch(`${supabaseUrl}/functions/v1/concierge-respond`, {
                   method: 'POST',
                   headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ phone, messageText: displayMessage, whatsappNumberId, channel: 'zapi' }),
+                  body: JSON.stringify({ phone, messageText: displayMessage, whatsappNumberId, channel: 'zapi', mediaUrl: mediaInfo?.mediaUrl || null, mediaType: mediaInfo?.mediaType || null }),
                 }).catch(err => console.error('concierge-respond trigger error:', err));
                 break;
 

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { transcribeAudio } from "../_shared/audio-transcribe.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -687,11 +688,31 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { phone, messageText, whatsappNumberId, channel = 'whatsapp' } = await req.json();
+    const { phone, messageText, whatsappNumberId, channel = 'whatsapp', mediaUrl = null, mediaType = null } = await req.json();
 
-    if (!phone || !messageText) {
-      return new Response(JSON.stringify({ error: 'phone and messageText required' }), {
+    if (!phone || (!messageText && !mediaUrl)) {
+      return new Response(JSON.stringify({ error: 'phone and messageText or mediaUrl required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ─── Transcribe audio if present ───────────────────────────────────
+    let transcribedText: string | null = null;
+    if (mediaType === 'audio' && mediaUrl) {
+      console.log(`[concierge] Transcribing audio for ${phone}...`);
+      transcribedText = await transcribeAudio(mediaUrl);
+      if (transcribedText) {
+        console.log(`[concierge] Audio transcribed: "${transcribedText.slice(0, 100)}"`);
+      } else {
+        console.log(`[concierge] Audio transcription failed, will inform user`);
+      }
+    }
+
+    // Use transcribed text if original message is just a placeholder
+    const effectiveMessageText = transcribedText || messageText || '';
+    if (!effectiveMessageText.trim() && mediaType !== 'image') {
+      return new Response(JSON.stringify({ success: true, handled: false, reason: 'no_text_content' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
@@ -713,7 +734,7 @@ serve(async (req) => {
       normalizedPhone = '55' + normalizedPhone;
     }
 
-    const incomingMessageText = messageText.trim().slice(0, 500);
+    const incomingMessageText = effectiveMessageText.trim().slice(0, 500);
     const aggregationCutoff = new Date(Date.now() - 30000).toISOString();
 
     // ─── 0. Debounce + aggregate fragmented messages ───────────────────
@@ -1007,8 +1028,20 @@ REGRAS:
     // Always add the CURRENT incoming message (aggregated when fragmented)
     const lastHistoryMsg = chatMessages[chatMessages.length - 1];
     const currentMsgText = combinedMessage;
+
+    // Build current message content - may include image for vision
+    let currentUserContent: any = currentMsgText;
+    const hasImage = mediaType === 'image' && mediaUrl;
+    
+    if (hasImage) {
+      currentUserContent = [
+        { type: 'text', text: currentMsgText || 'O cliente enviou esta imagem.' },
+        { type: 'image_url', image_url: { url: mediaUrl } },
+      ];
+    }
+
     if (!lastHistoryMsg || lastHistoryMsg.role !== 'user' || lastHistoryMsg.content !== currentMsgText) {
-      chatMessages.push({ role: 'user', content: currentMsgText });
+      chatMessages.push({ role: 'user', content: currentUserContent });
     }
 
     console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | combined=${currentMsgText.split('\n').length} parts | latest_included=${dbMessages?.[0]?.created_at || 'none'} | kb=${kbEntries?.length || 0} | stores=${stores.length}`);
@@ -1037,19 +1070,34 @@ REGRAS:
     async function runAnthropic(): Promise<string> {
       if (!ANTHROPIC_API_KEY) throw new Error('NO_KEY');
 
-      // Build Anthropic-format messages
-      let anthropicMsgs: Array<{ role: 'user' | 'assistant'; content: any }> = conversationMsgs.map(m => ({
-        role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
-        content: m.content,
-      }));
+      // Build Anthropic-format messages, converting image_url to Anthropic image format
+      let anthropicMsgs: Array<{ role: 'user' | 'assistant'; content: any }> = conversationMsgs.map(m => {
+        let content = m.content;
+        // Convert OpenAI-style multimodal content to Anthropic format
+        if (Array.isArray(content)) {
+          content = content.map((part: any) => {
+            if (part.type === 'image_url' && part.image_url?.url) {
+              return {
+                type: 'image',
+                source: { type: 'url', url: part.image_url.url },
+              };
+            }
+            return part;
+          });
+        }
+        return {
+          role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
+          content,
+        };
+      });
       // Anthropic requires first message to be 'user'
       if (anthropicMsgs.length === 0 || anthropicMsgs[0].role !== 'user') {
         anthropicMsgs = [{ role: 'user' as const, content: '(início da conversa)' }, ...anthropicMsgs];
       }
-      // Merge consecutive same-role messages
+      // Merge consecutive same-role messages (only merge string contents)
       const merged: Array<{ role: 'user' | 'assistant'; content: any }> = [];
       for (const m of anthropicMsgs) {
-        if (merged.length > 0 && merged[merged.length - 1].role === m.role) {
+        if (merged.length > 0 && merged[merged.length - 1].role === m.role && typeof m.content === 'string' && typeof merged[merged.length - 1].content === 'string') {
           merged[merged.length - 1].content += '\n' + m.content;
         } else {
           merged.push({ ...m });
