@@ -9060,41 +9060,23 @@ export type Database = {
           new_count: number
         }[]
       }
-      get_conversations:
-        | {
-            Args: { p_number_id?: string }
-            Returns: {
-              channel: string
-              direction: string
-              has_outgoing: boolean
-              is_dispatch_only: boolean
-              is_group: boolean
-              last_message: string
-              last_message_at: string
-              phone: string
-              sender_name: string
-              status: string
-              unread_count: number
-              whatsapp_number_id: string
-            }[]
-          }
-        | {
-            Args: { p_dispatch_only?: boolean; p_number_id?: string }
-            Returns: {
-              channel: string
-              direction: string
-              has_outgoing: boolean
-              is_dispatch_only: boolean
-              is_group: boolean
-              last_message: string
-              last_message_at: string
-              phone: string
-              sender_name: string
-              status: string
-              unread_count: number
-              whatsapp_number_id: string
-            }[]
-          }
+      get_conversations: {
+        Args: { p_dispatch_only?: boolean; p_number_id?: string }
+        Returns: {
+          channel: string
+          direction: string
+          has_outgoing: boolean
+          is_dispatch_only: boolean
+          is_group: boolean
+          last_message: string
+          last_message_at: string
+          phone: string
+          sender_name: string
+          status: string
+          unread_count: number
+          whatsapp_number_id: string
+        }[]
+      }
       get_customer_chat_history: {
         Args: { p_phone: string }
         Returns: {
