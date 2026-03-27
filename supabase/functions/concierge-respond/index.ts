@@ -383,7 +383,7 @@ REGRAS:
 
     const { data: dbMessages } = await supabase
       .from('whatsapp_messages')
-      .select('message, direction, created_at, media_type')
+      .select('message, direction, created_at, media_type, is_mass_dispatch')
       .eq('phone', normalizedPhone)
       .order('created_at', { ascending: true })
       .limit(30);
