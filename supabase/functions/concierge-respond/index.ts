@@ -262,9 +262,6 @@ async function executeToolCall(
       total_results: allResults.length,
       orders: allResults.slice(0, 10),
     });
-      total_results: allResults.length,
-      orders: allResults.slice(0, 10),
-    });
   }
 
   if (toolName === 'get_order_tracking') {
