@@ -4,7 +4,7 @@ import {
   Search, Phone, Users, MessageCircle, Filter, ArrowLeft,
   Send, Mic, Image, Video, Paperclip, X, Check, CheckCheck,
   Clock, Camera, Plus, Smile, MoreVertical, ChevronDown, Square,
-  FileText, UserPlus, Pencil,
+  FileText, UserPlus, Pencil, PhoneOff, CreditCard, QrCode, ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,10 @@ import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { STAGES } from "@/types/order";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 import { InstagramReferralCard } from "@/components/chat/InstagramReferralCard";
+import { POSFinishConversationDialog } from "@/components/pos/POSFinishConversationDialog";
+import { POSWhatsAppCheckoutDialog } from "@/components/pos/POSWhatsAppCheckoutDialog";
+import { POSWhatsAppPixDialog } from "@/components/pos/POSWhatsAppPixDialog";
+import { POSProductCatalogSender } from "@/components/pos/POSProductCatalogSender";
 import {
   Select,
   SelectContent,
@@ -146,7 +150,12 @@ export default function ChatPage() {
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
   const [newChatPhone, setNewChatPhone] = useState("");
 
-  // Media
+  // Chat action dialogs
+  const [showFinishDialog, setShowFinishDialog] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [showPix, setShowPix] = useState(false);
+  const [showCatalog, setShowCatalog] = useState(false);
+
   const [selectedMedia, setSelectedMedia] = useState<{ file: File; type: 'image' | 'audio' | 'video' | 'document'; previewUrl: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -985,6 +994,30 @@ export default function ChatPage() {
                     {STAGES.find(s => s.id === selectedConv.stage)?.title}
                   </span>
                 )}
+                <div className="flex items-center gap-0.5 flex-shrink-0">
+                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#00a884]" onClick={() => setShowCheckout(true)} title="Gerar Link Checkout">
+                    <CreditCard className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">Checkout</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-emerald-400" onClick={() => setShowPix(true)} title="Gerar PIX">
+                    <QrCode className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">PIX</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#8696a0]" onClick={() => setShowCatalog(true)} title="Catálogo Shopify">
+                    <ShoppingBag className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">Catálogo</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-1.5 text-xs gap-1 text-[#8696a0] hover:text-red-400"
+                    title="Finalizar Conversa"
+                    onClick={() => setShowFinishDialog(true)}
+                  >
+                    <PhoneOff className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">Finalizar</span>
+                  </Button>
+                </div>
               </div>
 
               {/* Messages area */}
@@ -1332,6 +1365,58 @@ export default function ChatPage() {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* Finish Conversation Dialog */}
+      <POSFinishConversationDialog
+        open={showFinishDialog}
+        onOpenChange={setShowFinishDialog}
+        onFinish={async (reason) => {
+          if (selectedPhone) {
+            await finishConversation(selectedPhone, reason);
+            toast.success('Conversa finalizada!');
+            setShowFinishDialog(false);
+            setSelectedPhone(null);
+          }
+        }}
+      />
+
+      {/* Checkout Dialog */}
+      {selectedPhone && (
+        <POSWhatsAppCheckoutDialog
+          open={showCheckout}
+          onOpenChange={setShowCheckout}
+          storeId="chat"
+          phone={selectedPhone}
+          customerName={selectedConv?.customerName}
+          sendVia={isMetaNumber() ? "meta" : "zapi"}
+          selectedNumberId={getActiveNumberId()}
+        />
+      )}
+
+      {/* PIX Dialog */}
+      {selectedPhone && (
+        <POSWhatsAppPixDialog
+          open={showPix}
+          onOpenChange={setShowPix}
+          storeId="chat"
+          phone={selectedPhone}
+          customerName={selectedConv?.customerName}
+          sendVia={isMetaNumber() ? "meta" : "zapi"}
+          selectedNumberId={getActiveNumberId()}
+        />
+      )}
+
+      {/* Product Catalog Sender */}
+      {selectedPhone && (
+        <POSProductCatalogSender
+          storeId="chat"
+          phone={selectedPhone}
+          sendVia={isMetaNumber() ? "meta" : "zapi"}
+          selectedNumberId={getActiveNumberId()}
+          open={showCatalog}
+          onOpenChange={setShowCatalog}
+        />
+      )}
     </div>
   );
 }
