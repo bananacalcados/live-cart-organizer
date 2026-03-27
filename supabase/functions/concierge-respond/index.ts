@@ -371,16 +371,25 @@ const TOOLS = [
     type: "function",
     function: {
       name: "transfer_to_human",
-      description: "Transfere a conversa para um atendente humano. Use APENAS quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo de suporte, ou precisa de atendimento especializado. NÃO use se ainda tem ferramentas que podem responder a pergunta.",
+      description: "Transfere a conversa para um atendente humano e cria um ticket de suporte. Use APENAS quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo de suporte, ou precisa de atendimento especializado. NÃO use se ainda tem ferramentas que podem responder a pergunta. Preencha summary com um resumo claro da situação do cliente.",
       parameters: {
         type: "object",
         properties: {
           reason: {
             type: "string",
-            description: "Motivo da transferência (ex: pedido_nao_encontrado, fora_do_escopo, solicitacao_cliente)"
+            description: "Motivo curto da transferência para uso como assunto do ticket (ex: 'Pedido parado na transportadora', 'Cliente quer trocar produto', 'Pedido não encontrado')"
+          },
+          summary: {
+            type: "string",
+            description: "Resumo detalhado da situação do cliente para a equipe de suporte. Inclua: o que o cliente pediu, o que foi encontrado, qual o problema. Ex: 'Cliente Hélia Maria, CPF 766.180.721-15, pedido #4809 enviado em 27/03 com rastreio AN754068518BR. Pedido está parado há muito tempo segundo a cliente.'"
+          },
+          priority: {
+            type: "string",
+            enum: ["low", "medium", "high"],
+            description: "Urgência do ticket: 'high' para problemas urgentes (pedido extraviado, defeito, reclamação grave), 'medium' para questões normais (dúvidas, atraso moderado), 'low' para questões simples (informações gerais)"
           }
         },
-        required: ["reason"],
+        required: ["reason", "summary", "priority"],
         additionalProperties: false,
       },
     },
@@ -401,6 +410,7 @@ async function executeToolCall(
   stores: StoreConfig[],
   supabase: any,
   phone: string,
+  whatsappNumberId?: string,
 ): Promise<string> {
   if (toolName === 'search_customer_orders') {
     const originalTerm = args.search_term?.trim();
@@ -585,9 +595,54 @@ async function executeToolCall(
   }
 
   if (toolName === 'transfer_to_human') {
-    // Create a chat assignment for human support
+    const ticketPriority = args.priority || 'medium';
+    const ticketSubject = args.reason || 'Transferência da Bia';
+    const ticketDescription = args.summary || '';
+
+    // Calculate deadline based on priority
+    const deadline = new Date();
+    if (ticketPriority === 'high') deadline.setMinutes(deadline.getMinutes() + 10);
+    else if (ticketPriority === 'medium') deadline.setMinutes(deadline.getMinutes() + 60);
+    else deadline.setMinutes(deadline.getMinutes() + 120);
+
+    // Try to get customer name from the AI's summary or from recent tool results
+    let customerName: string | null = null;
     try {
-      // Find the "Suporte" sector or first available
+      const { data: recentLogs } = await supabase
+        .from('ai_conversation_logs')
+        .select('message_out, tool_called')
+        .eq('phone', phone)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      for (const log of recentLogs || []) {
+        if (log.message_out) {
+          // Extract customer name from Bia's messages like "*Cliente:* Helia Maria de Oliveira"
+          const nameMatch = log.message_out.match(/\*Cliente:\*\s*(.+)/i);
+          if (nameMatch) { customerName = nameMatch[1].trim(); break; }
+        }
+      }
+    } catch (_e) { /* ignore */ }
+
+    // Create support ticket
+    try {
+      const { error: ticketError } = await supabase.from('support_tickets').insert({
+        subject: ticketSubject,
+        description: `${ticketDescription}\n\nInstância WhatsApp: ${whatsappNumberId || 'não identificada'}`.trim(),
+        priority: ticketPriority,
+        customer_name: customerName,
+        customer_phone: phone,
+        deadline_at: deadline.toISOString(),
+        source: 'bia_ai',
+      });
+      if (ticketError) console.error('[concierge] Ticket creation error:', ticketError);
+      else console.log(`[concierge] Support ticket created for ${phone} - priority: ${ticketPriority}`);
+    } catch (e) {
+      console.error('[concierge] Ticket creation error:', e);
+    }
+
+    // Also create chat assignment for routing
+    try {
       const { data: sectors } = await supabase
         .from('chat_sectors')
         .select('id, name')
@@ -615,7 +670,7 @@ async function executeToolCall(
 
     return JSON.stringify({
       transferred: true,
-      message: "Conversa transferida para atendente humano.",
+      message: "Conversa transferida para atendente humano. Ticket de suporte criado.",
     });
   }
 
@@ -749,7 +804,7 @@ serve(async (req) => {
     if (recentOrders.length === 0) {
       const fallbackCpf = extractCpfFromTexts((recentIncomingContext || []).map((msg: any) => msg.message));
       if (fallbackCpf) {
-        const fallbackSearchRaw = await executeToolCall('search_customer_orders', { search_term: fallbackCpf }, stores, supabase, normalizedPhone);
+        const fallbackSearchRaw = await executeToolCall('search_customer_orders', { search_term: fallbackCpf }, stores, supabase, normalizedPhone, whatsappNumberId);
         const fallbackSearch = parseToolResult(fallbackSearchRaw);
         recentOrders = Array.isArray(fallbackSearch?.orders) ? fallbackSearch.orders : [];
       }
@@ -763,7 +818,7 @@ serve(async (req) => {
         const trackingResult = await executeToolCall('get_order_details', {
           tiny_order_id: selectedOrder.tiny_order_id,
           store_name: selectedOrder.store_name,
-        }, stores, supabase, normalizedPhone);
+        }, stores, supabase, normalizedPhone, whatsappNumberId);
 
         const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_details', trackingResult);
         if (forcedTrackingReply) {
@@ -1074,7 +1129,7 @@ REGRAS:
               ? resolveTrackingToolArgs(tu.input || {}, toolExecutions)
               : (tu.input || {});
             console.log(`[concierge][anthropic] tool: ${tu.name}(${JSON.stringify(resolvedToolArgs)})`);
-            const result = await executeToolCall(tu.name, resolvedToolArgs, stores, supabase, normalizedPhone);
+            const result = await executeToolCall(tu.name, resolvedToolArgs, stores, supabase, normalizedPhone, whatsappNumberId);
             console.log(`[concierge][anthropic] result: ${result.slice(0, 200)}`);
             toolExecutions.push({ name: tu.name, args: resolvedToolArgs, result: parseToolResult(result) });
             const forcedReply = buildTrackingReplyFromToolResult(tu.name, result);
@@ -1151,7 +1206,7 @@ REGRAS:
               ? resolveTrackingToolArgs(fnArgs, toolExecutions)
               : fnArgs;
             console.log(`[concierge][lovable] tool: ${fnName}(${JSON.stringify(resolvedFnArgs)})`);
-            const result = await executeToolCall(fnName, resolvedFnArgs, stores, supabase, normalizedPhone);
+            const result = await executeToolCall(fnName, resolvedFnArgs, stores, supabase, normalizedPhone, whatsappNumberId);
             console.log(`[concierge][lovable] result: ${result.slice(0, 200)}`);
             toolExecutions.push({ name: fnName, args: resolvedFnArgs, result: parseToolResult(result) });
             const forcedReply = buildTrackingReplyFromToolResult(fnName, result);
