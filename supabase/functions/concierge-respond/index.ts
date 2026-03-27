@@ -461,7 +461,10 @@ async function executeToolCall(
           continue;
         }
 
-        const ordersToUse = filtered;
+        const ordersToUse = filtered.filter((o: any) => {
+          const sit = (o.situacao || '').toLowerCase();
+          return sit !== 'cancelado' && sit !== 'cancelled';
+        });
 
         for (const order of ordersToUse.slice(0, 3)) {
           // Fetch detail to get product names
