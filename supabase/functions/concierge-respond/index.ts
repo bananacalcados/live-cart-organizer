@@ -614,6 +614,9 @@ REGRAS:
     // ─── Execute with fallback ──────────────────────────────────────────
     try {
       finalReply = await runAnthropic();
+      if (!finalReply?.trim()) {
+        throw new Error('ANTHROPIC_EMPTY_FINAL_REPLY');
+      }
       console.log(`[concierge] Anthropic OK, reply len=${finalReply.length}`);
     } catch (anthropicErr: any) {
       console.warn(`[concierge] Anthropic failed: ${anthropicErr.message}, falling back to Lovable AI`);
