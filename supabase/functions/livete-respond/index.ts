@@ -90,7 +90,15 @@ serve(async (req) => {
       }
     }
 
-    // 1. Check for active AI session
+    // Append audio transcription to combined message
+    if (audioTranscription) {
+      const audioPrefix = '[Áudio transcrito]: ';
+      combinedMessage = combinedMessage
+        ? `${combinedMessage}\n${audioPrefix}${audioTranscription}`
+        : `${audioPrefix}${audioTranscription}`;
+    }
+
+
     const { data: session } = await supabase
       .from('automation_ai_sessions')
       .select('*')
