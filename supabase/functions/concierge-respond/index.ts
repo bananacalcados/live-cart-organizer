@@ -1028,8 +1028,20 @@ REGRAS:
     // Always add the CURRENT incoming message (aggregated when fragmented)
     const lastHistoryMsg = chatMessages[chatMessages.length - 1];
     const currentMsgText = combinedMessage;
+
+    // Build current message content - may include image for vision
+    let currentUserContent: any = currentMsgText;
+    const hasImage = mediaType === 'image' && mediaUrl;
+    
+    if (hasImage) {
+      currentUserContent = [
+        { type: 'text', text: currentMsgText || 'O cliente enviou esta imagem.' },
+        { type: 'image_url', image_url: { url: mediaUrl } },
+      ];
+    }
+
     if (!lastHistoryMsg || lastHistoryMsg.role !== 'user' || lastHistoryMsg.content !== currentMsgText) {
-      chatMessages.push({ role: 'user', content: currentMsgText });
+      chatMessages.push({ role: 'user', content: currentUserContent });
     }
 
     console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | combined=${currentMsgText.split('\n').length} parts | latest_included=${dbMessages?.[0]?.created_at || 'none'} | kb=${kbEntries?.length || 0} | stores=${stores.length}`);
