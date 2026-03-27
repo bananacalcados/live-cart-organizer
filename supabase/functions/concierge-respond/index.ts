@@ -734,7 +734,7 @@ serve(async (req) => {
       normalizedPhone = '55' + normalizedPhone;
     }
 
-    const incomingMessageText = messageText.trim().slice(0, 500);
+    const incomingMessageText = effectiveMessageText.trim().slice(0, 500);
     const aggregationCutoff = new Date(Date.now() - 30000).toISOString();
 
     // ─── 0. Debounce + aggregate fragmented messages ───────────────────
