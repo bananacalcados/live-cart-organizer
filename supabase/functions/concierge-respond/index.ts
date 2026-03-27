@@ -224,19 +224,19 @@ REGRAS:
     let sendFn = 'zapi-send-message';
     const sendBody: Record<string, unknown> = { phone: normalizedPhone, message: reply };
 
-    if (channel === 'meta' || whatsappNumberId) {
-      // Check if this number uses Meta API
-      if (whatsappNumberId) {
-        const { data: numData } = await supabase
-          .from('whatsapp_numbers')
-          .select('api_type')
-          .eq('id', whatsappNumberId)
-          .maybeSingle();
+    if (whatsappNumberId) {
+      const { data: numData } = await supabase
+        .from('whatsapp_numbers')
+        .select('api_type')
+        .eq('id', whatsappNumberId)
+        .maybeSingle();
 
-        if (numData?.api_type === 'meta') {
-          sendFn = 'meta-whatsapp-send';
-          sendBody.whatsappNumberId = whatsappNumberId;
-        }
+      if (numData?.api_type === 'meta') {
+        sendFn = 'meta-whatsapp-send';
+        sendBody.whatsappNumberId = whatsappNumberId;
+      } else {
+        // Z-API: pass whatsapp_number_id so it uses the correct instance
+        sendBody.whatsapp_number_id = whatsappNumberId;
       }
     }
 
