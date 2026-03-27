@@ -431,11 +431,9 @@ export default function ChatPage() {
   };
 
   const isMetaNumber = (): boolean => {
-    // Z-API conversations have null/undefined whatsapp_number_id — always use Z-API
-    if (selectedConvNumberId === null) return false;
     const numId = getActiveNumberId();
     if (!numId) return false;
-    return numbers.some(n => n.id === numId);
+    return numbers.some(n => n.id === numId && n.provider === 'meta');
   };
 
   const sendViaMeta = async (phone: string, message: string, type: string = 'text', mediaUrl?: string, caption?: string): Promise<{ success: boolean; messageId?: string }> => {
