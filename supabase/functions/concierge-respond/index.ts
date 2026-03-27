@@ -430,6 +430,8 @@ REGRAS:
         aiBody.tools = TOOLS;
       }
 
+      console.log(`[concierge] AI turn ${turn}/${MAX_TOOL_TURNS}, msgs=${currentMessages.length}`);
+
       const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -441,26 +443,26 @@ REGRAS:
 
       if (!response.ok) {
         const status = response.status;
+        const errorText = await response.text();
+        console.error(`[concierge] AI error: ${status} ${errorText.slice(0, 300)}`);
         if (status === 429) {
-          return new Response(JSON.stringify({ error: 'Rate limit excedido' }), {
-            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          finalReply = 'Estou com muitas solicitações no momento, pode me mandar de novo em 1 minutinho? 😊';
+          break;
         }
         if (status === 402) {
-          return new Response(JSON.stringify({ error: 'Créditos insuficientes' }), {
-            status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          finalReply = 'Desculpe, estou com uma limitação técnica. Vou te conectar com uma de nossas consultoras! 😊';
+          break;
         }
-        const errorText = await response.text();
-        console.error('[concierge] AI error:', status, errorText);
-        return new Response(JSON.stringify({ error: 'Erro no serviço de IA' }), {
-          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        finalReply = 'Desculpe, tive um probleminha técnico. Pode repetir sua mensagem? 😊';
+        break;
       }
 
       const data = await response.json();
       const choice = data.choices?.[0];
       const message = choice?.message;
+      const finishReason = choice?.finish_reason;
+
+      console.log(`[concierge] AI turn ${turn} finish_reason=${finishReason}, has_tool_calls=${!!(message?.tool_calls?.length)}, content_len=${message?.content?.length || 0}`);
 
       // Check for tool calls
       if (message?.tool_calls && message.tool_calls.length > 0) {
@@ -484,6 +486,11 @@ REGRAS:
             content: result,
             tool_call_id: toolCall.id,
           } as any);
+        }
+
+        // If there's also text content alongside tool calls, capture it
+        if (message?.content?.trim()) {
+          finalReply = message.content.trim();
         }
 
         continue; // Next turn — AI will process tool results
