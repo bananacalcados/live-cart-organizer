@@ -6,7 +6,30 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// ─── Tiny ERP search helper ──────────────────────────────────────────────────
+// ─── Tiny ERP search helpers ─────────────────────────────────────────────────
+
+async function searchTinyContactByCpf(token: string, cpf: string): Promise<{ name: string; id: string } | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const resp = await fetch('https://api.tiny.com.br/api2/contatos.pesquisa.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `token=${token}&formato=json&cpf_cnpj=${encodeURIComponent(cpf)}`,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const data = JSON.parse(await resp.text());
+    if (data.retorno?.status === 'OK' && data.retorno?.contatos?.length > 0) {
+      const contato = data.retorno.contatos[0].contato;
+      return { name: contato.nome || '', id: String(contato.id || '') };
+    }
+    return null;
+  } catch (e) {
+    console.error('[concierge] Tiny contact search error:', e);
+    return null;
+  }
+}
 
 async function searchTinyOrders(token: string, searchTerm: string): Promise<any[]> {
   try {
@@ -62,25 +85,6 @@ async function getTinyOrderDetail(token: string, tinyOrderId: string): Promise<a
     console.error('[concierge] Tiny detail error:', e);
     return null;
   }
-}
-
-function extractTinyCpf(order: any): string {
-  const cliente = order?.cliente || {};
-  const directCpf = String(cliente.cpf_cnpj || cliente.cpf || '').replace(/\D/g, '');
-  if (directCpf.length >= 11) return directCpf;
-
-  const textSources = [order?.obs, order?.obs_interna, order?.observacoes, order?.observacao];
-  for (const source of textSources) {
-    if (!source) continue;
-    const match = String(source).match(/\b(?:cpf|cpf_cnpj)\b[^0-9]*([\d.\-\/]{11,18})/i)
-      || String(source).match(/\b([\d]{3}\.?[\d]{3}\.?[\d]{3}-?[\d]{2})\b/);
-    if (match?.[1]) {
-      const digits = match[1].replace(/\D/g, '');
-      if (digits.length >= 11) return digits;
-    }
-  }
-
-  return '';
 }
 
 // ─── Tool definitions for AI ─────────────────────────────────────────────────
@@ -169,50 +173,77 @@ async function executeToolCall(
     }
 
     const allResults: any[] = [];
-    // Search priority: Tiny Shopify → Centro → Pérola
+
     for (const store of stores) {
-      console.log(`[concierge] Searching Tiny "${store.name}" for: ${term}`);
-      const orders = await searchTinyOrders(store.token, term);
-      if (orders.length > 0) {
-        let filtered = isCpf
-          ? orders
-          : orders.filter((o: any) => {
-              const termLower = term.toLowerCase();
-              const termWords = termLower.split(/\s+/).filter((w: string) => w.length >= 2);
-              const name = (o.nome || '').toLowerCase();
-              return termWords.some((word: string) => name.includes(word));
-            });
-
-        if (isCpf) {
-          const detailedMatches = await Promise.all(
-            filtered.slice(0, 12).map(async (order: any) => {
-              const detail = await getTinyOrderDetail(store.token, String(order.id));
-              const orderCpf = extractTinyCpf(detail);
-              if (orderCpf && orderCpf === digitsOnly) {
-                return { order, detail };
-              }
-              return null;
-            })
-          );
-
-          const exactCpfMatches = detailedMatches.filter(Boolean) as Array<{ order: any; detail: any }>;
-          if (exactCpfMatches.length > 0) {
-            filtered = exactCpfMatches.map(({ order }) => order);
-          }
+      if (isCpf) {
+        // ── TWO-STAGE CPF FLOW ──
+        // Stage 1: Find contact by CPF using contatos.pesquisa.php
+        console.log(`[concierge] Stage 1: Searching contact by CPF in "${store.name}"`);
+        const contact = await searchTinyContactByCpf(store.token, digitsOnly);
+        
+        if (!contact || !contact.name) {
+          console.log(`[concierge] No contact found by CPF in "${store.name}"`);
+          continue;
         }
 
-        for (const order of filtered.slice(0, 5)) {
+        console.log(`[concierge] Stage 2: Contact found "${contact.name}", searching orders in "${store.name}"`);
+        
+        // Stage 2: Search orders by the contact name returned from Tiny
+        const orders = await searchTinyOrders(store.token, contact.name);
+        if (orders.length === 0) {
+          console.log(`[concierge] No orders found for contact "${contact.name}" in "${store.name}"`);
+          continue;
+        }
+
+        // Filter orders that match the contact name (case-insensitive partial match)
+        const contactNameLower = contact.name.toLowerCase();
+        const contactWords = contactNameLower.split(/\s+/).filter((w: string) => w.length >= 2);
+        const filtered = orders.filter((o: any) => {
+          const orderName = (o.nome || '').toLowerCase();
+          // At least the first word of the contact name should match
+          return contactWords.length > 0 && orderName.includes(contactWords[0]);
+        });
+
+        const ordersToUse = filtered.length > 0 ? filtered : orders.slice(0, 5);
+
+        for (const order of ordersToUse.slice(0, 5)) {
           allResults.push({
             tiny_order_id: String(order.id),
             order_number: String(order.numero),
             date: order.data_pedido,
-            customer_name: order.nome,
+            customer_name: contact.name, // Use the verified contact name
             total: parseFloat(order.valor || '0'),
             status: order.situacao,
             store_name: store.name,
-            searched_by: isCpf ? 'cpf' : 'name',
-            cpf_suffix: isCpf ? digitsOnly.slice(-4) : null,
+            searched_by: 'cpf',
+            cpf_suffix: digitsOnly.slice(-4),
           });
+        }
+      } else {
+        // ── NAME SEARCH (fallback) ──
+        console.log(`[concierge] Searching orders by name "${term}" in "${store.name}"`);
+        const orders = await searchTinyOrders(store.token, term);
+        if (orders.length > 0) {
+          const termLower = term.toLowerCase();
+          const termWords = termLower.split(/\s+/).filter((w: string) => w.length >= 2);
+          const filtered = orders.filter((o: any) => {
+            const name = (o.nome || '').toLowerCase();
+            return termWords.some((word: string) => name.includes(word));
+          });
+
+          for (const order of filtered.slice(0, 5)) {
+            allResults.push({
+              tiny_order_id: String(order.id),
+              order_number: String(order.numero),
+              date: order.data_pedido,
+              customer_name: order.nome,
+              total: parseFloat(order.valor || '0'),
+              status: order.situacao,
+              store_name: store.name,
+              searched_by: 'name',
+              cpf_suffix: null,
+            });
+          }
         }
       }
     }
@@ -221,7 +252,7 @@ async function executeToolCall(
       return JSON.stringify({
         found: false,
         message: isCpf
-          ? "Nenhum pedido encontrado com esse CPF em nenhuma das lojas."
+          ? "Nenhum pedido encontrado com esse CPF em nenhuma das lojas. Confirme o CPF ou tente com o nome completo."
           : "Nenhum pedido encontrado com esse nome em nenhuma das lojas."
       });
     }
@@ -462,6 +493,13 @@ REGRAS:
           content: text.replace(/^\[IA\]\s*/i, '').slice(0, 500),
         });
       }
+    }
+
+    // Always add the CURRENT incoming message (it may not be in DB yet)
+    const lastHistoryMsg = chatMessages[chatMessages.length - 1];
+    const currentMsgText = messageText.trim().slice(0, 500);
+    if (!lastHistoryMsg || lastHistoryMsg.role !== 'user' || lastHistoryMsg.content !== currentMsgText) {
+      chatMessages.push({ role: 'user', content: currentMsgText });
     }
 
     console.log(`[concierge] ${phone} | history=${chatMessages.length - 1} msgs | latest_included=${dbMessages?.[0]?.created_at || 'none'} | kb=${kbEntries?.length || 0} | stores=${stores.length}`);
