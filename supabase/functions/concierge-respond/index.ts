@@ -76,6 +76,90 @@ function firstNonEmptyString(...values: unknown[]): string | null {
   return null;
 }
 
+function normalizeLooseText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function getCustomerFacingStoreName(storeName: string): string {
+  const normalized = normalizeLooseText(storeName);
+  if (normalized.includes('shopify')) return 'Site';
+  if (normalized.includes('centro')) return 'Loja Centro';
+  if (normalized.includes('perola')) return 'Loja Pérola';
+  return storeName.replace(/^tiny\s+/i, '').trim();
+}
+
+function storeMatchesReference(storeName: string, reference: string): boolean {
+  const normalizedStore = normalizeLooseText(storeName);
+  const normalizedRef = normalizeLooseText(reference);
+  const customerFacingStore = normalizeLooseText(getCustomerFacingStoreName(storeName));
+
+  if (!normalizedRef) return false;
+  if (normalizedRef === 'site') return normalizedStore.includes('shopify');
+
+  return normalizedStore.includes(normalizedRef)
+    || normalizedRef.includes(normalizedStore)
+    || customerFacingStore.includes(normalizedRef)
+    || normalizedRef.includes(customerFacingStore);
+}
+
+function extractCpfFromTexts(texts: Array<string | null | undefined>): string | null {
+  for (const text of texts) {
+    if (!text) continue;
+    const cpfMatch = text.match(/\d{3}\.?\d{3}\.?\d{3}-?\d{2}/);
+    if (cpfMatch) return cpfMatch[0].replace(/\D/g, '');
+
+    const digits = text.replace(/\D/g, '');
+    if (digits.length === 11) return digits;
+  }
+
+  return null;
+}
+
+function extractOrdersFromToolParams(toolParams: any): any[] {
+  const executions = Array.isArray(toolParams?.toolExecutions) ? toolParams.toolExecutions : [];
+  for (const execution of [...executions].reverse()) {
+    if (execution?.name === 'search_customer_orders' && Array.isArray(execution?.result?.orders)) {
+      return execution.result.orders;
+    }
+  }
+  return [];
+}
+
+function resolveTrackingToolArgs(
+  args: Record<string, any>,
+  toolExecutions: Array<{ name: string; args: Record<string, any>; result: any }>,
+): Record<string, any> {
+  if (!args?.tiny_order_id) return args;
+
+  const requestedRef = String(args.tiny_order_id).trim().replace(/^#/, '').replace(/\D/g, '');
+  if (!requestedRef) return args;
+
+  const searchExecutions = [...toolExecutions].reverse().filter((execution) => execution.name === 'search_customer_orders');
+  for (const execution of searchExecutions) {
+    const orders = Array.isArray(execution.result?.orders) ? execution.result.orders : [];
+    const matchedOrder = orders.find((order: any) => {
+      const orderNumber = String(order?.order_number || '').replace(/\D/g, '');
+      const tinyOrderId = String(order?.tiny_order_id || '').replace(/\D/g, '');
+      const storeOk = !args.store_name || storeMatchesReference(String(order?.store_name || ''), String(args.store_name || ''));
+      return storeOk && (requestedRef === orderNumber || requestedRef === tinyOrderId);
+    });
+
+    if (matchedOrder?.tiny_order_id) {
+      return {
+        ...args,
+        tiny_order_id: String(matchedOrder.tiny_order_id),
+        store_name: matchedOrder.store_name || args.store_name,
+      };
+    }
+  }
+
+  return args;
+}
+
 async function getTinyOrderDetail(token: string, tinyOrderId: string): Promise<any | null> {
   try {
     const controller = new AbortController();
@@ -117,6 +201,45 @@ async function resolveTinyOrderDetail(token: string, requestedOrderRef: string):
 
   if (!matchedOrder?.id) return null;
   return await getTinyOrderDetail(token, String(matchedOrder.id));
+}
+
+function extractTrackingDataFromOrder(pedido: any): { trackingCode: string | null; trackingLink: string | null; carrier: string | null } {
+  const expedition = pedido?.expedicao || pedido?.expedition || pedido?.envio || {};
+
+  return {
+    trackingCode: firstNonEmptyString(
+      pedido?.codigo_rastreamento,
+      pedido?.codigoRastreamento,
+      pedido?.objeto_postal,
+      pedido?.objetoPostal,
+      pedido?.codigo_objeto,
+      pedido?.codigoObjeto,
+      expedition?.codigo_rastreamento,
+      expedition?.codigoRastreamento,
+      expedition?.objeto_postal,
+      expedition?.objetoPostal,
+      expedition?.codigo_objeto,
+      expedition?.codigoObjeto,
+    ),
+    trackingLink: firstNonEmptyString(
+      pedido?.url_rastreamento,
+      pedido?.urlRastreamento,
+      pedido?.link_rastreamento,
+      pedido?.linkRastreamento,
+      expedition?.url_rastreamento,
+      expedition?.urlRastreamento,
+      expedition?.link_rastreamento,
+      expedition?.linkRastreamento,
+    ),
+    carrier: firstNonEmptyString(
+      pedido?.nome_transportador,
+      pedido?.forma_envio,
+      pedido?.transportador,
+      expedition?.transportadora,
+      expedition?.forma_envio,
+      expedition?.formaEnvio,
+    ),
+  };
 }
 
 function buildTrackingReplyFromToolResult(toolName: string, rawResult: string): string | null {
@@ -338,7 +461,7 @@ async function executeToolCall(
             customer_name: contact.name, // Use the verified contact name
             total: parseFloat(order.valor || '0'),
             status: order.situacao,
-            store_name: store.name,
+            store_name: getCustomerFacingStoreName(store.name),
             searched_by: 'cpf',
             cpf_suffix: digitsOnly.slice(-4),
           });
@@ -363,7 +486,7 @@ async function executeToolCall(
               customer_name: order.nome,
               total: parseFloat(order.valor || '0'),
               status: order.situacao,
-              store_name: store.name,
+              store_name: getCustomerFacingStoreName(store.name),
               searched_by: 'name',
               cpf_suffix: null,
             });
@@ -391,7 +514,7 @@ async function executeToolCall(
   if (toolName === 'get_order_tracking') {
     const requestedOrderRef = String(args.tiny_order_id || '').trim().replace(/^#/, '');
     const storeName = args.store_name;
-    const store = stores.find(s => s.name.toLowerCase().includes(storeName.toLowerCase()));
+    const store = stores.find(s => storeMatchesReference(s.name, storeName));
     if (!store) {
       return JSON.stringify({ error: `Loja "${storeName}" não encontrada.` });
     }
@@ -401,26 +524,14 @@ async function executeToolCall(
       return JSON.stringify({ error: "Não foi possível obter detalhes do pedido." });
     }
 
-    const trackingCode = firstNonEmptyString(
-      pedido.codigo_rastreamento,
-      pedido.codigoRastreamento,
-      pedido.objeto_postal,
-      pedido.codigo_objeto,
-      pedido?.expedicao?.codigo_rastreamento,
-    );
-    const carrier = firstNonEmptyString(pedido.nome_transportador, pedido.forma_envio, pedido.transportador);
+    const { trackingCode, trackingLink: trackingLinkRaw, carrier } = extractTrackingDataFromOrder(pedido);
     const items = (pedido.itens || []).map((i: any) => {
       const item = i.item || i;
       return `${item.descricao} (x${item.quantidade})`;
     });
 
     // Build tracking link
-    let trackingLink: string | null = firstNonEmptyString(
-      pedido.url_rastreamento,
-      pedido.urlRastreamento,
-      pedido.link_rastreamento,
-      pedido.linkRastreamento,
-    );
+    let trackingLink: string | null = trackingLinkRaw;
     if (trackingCode) {
       const codeLower = (trackingCode || '').toUpperCase();
       // Correios codes usually match pattern: 2 letters + 9 digits + 2 letters (e.g., AB123456789BR)
@@ -445,7 +556,7 @@ async function executeToolCall(
       tracking_link: trackingLink,
       tracking_available: !!trackingCode,
       carrier: carrier,
-      store_name: store.name,
+      store_name: getCustomerFacingStoreName(store.name),
       obs: pedido.obs || null,
     });
   }
@@ -524,7 +635,7 @@ serve(async (req) => {
     const aggregationCutoff = new Date(Date.now() - 30000).toISOString();
 
     // ─── 0. Debounce + aggregate fragmented messages ───────────────────
-    await sleep(4000);
+    await sleep(10000);
 
     let latestIncomingQuery = supabase
       .from('whatsapp_messages')
@@ -596,20 +707,32 @@ serve(async (req) => {
       .eq('phone', normalizedPhone)
       .eq('stage', 'concierge')
       .order('created_at', { ascending: false })
-      .limit(5);
+      .limit(12);
+
+    const { data: recentIncomingContext } = await supabase
+      .from('whatsapp_messages')
+      .select('message, created_at')
+      .eq('phone', normalizedPhone)
+      .eq('direction', 'incoming')
+      .order('created_at', { ascending: false })
+      .limit(12);
 
     const latestSearchLog = (recentAiLogs || []).find((log: any) => {
-      const toolData = log?.tool_params as any;
-      const hasSearchTool = typeof log?.tool_called === 'string' && log.tool_called.includes('search_customer_orders');
-      const hasOrders = Array.isArray(toolData?.toolExecutions)
-        && toolData.toolExecutions.some((exec: any) => exec?.name === 'search_customer_orders' && Array.isArray(exec?.result?.orders));
-      return hasSearchTool && hasOrders;
+      return extractOrdersFromToolParams(log?.tool_params).length > 0;
     });
 
-    if (latestSearchLog) {
-      const toolExecutions = ((latestSearchLog.tool_params as any)?.toolExecutions || []) as any[];
-      const latestSearchExecution = [...toolExecutions].reverse().find((exec: any) => exec?.name === 'search_customer_orders');
-      const recentOrders = latestSearchExecution?.result?.orders || [];
+    let recentOrders = latestSearchLog ? extractOrdersFromToolParams(latestSearchLog.tool_params) : [];
+
+    if (recentOrders.length === 0) {
+      const fallbackCpf = extractCpfFromTexts((recentIncomingContext || []).map((msg: any) => msg.message));
+      if (fallbackCpf) {
+        const fallbackSearchRaw = await executeToolCall('search_customer_orders', { search_term: fallbackCpf }, stores, supabase, normalizedPhone);
+        const fallbackSearch = parseToolResult(fallbackSearchRaw);
+        recentOrders = Array.isArray(fallbackSearch?.orders) ? fallbackSearch.orders : [];
+      }
+    }
+
+    if (recentOrders.length > 0) {
       const selectedOrder = resolveOrderFromConfirmation(combinedMessage, recentOrders);
 
       if (selectedOrder) {
@@ -764,6 +887,7 @@ REGRAS:
 - Use emojis com moderação (máximo 2 por mensagem)
 - NUNCA repita informações já ditas
 - Se não conseguir resolver, use transfer_to_human
+- Se a loja for Shopify, para o cliente diga apenas "Site"; nunca diga "Shopify"
 - Ao enviar rastreio, SEMPRE inclua o link clicável${knowledgeBlock}${routingBlock}`;
 
     // ─── 5. Build Conversation History ──────────────────────────────────
@@ -920,10 +1044,13 @@ REGRAS:
           // Execute tools and add results
           const toolResults: any[] = [];
           for (const tu of toolUseBlocks) {
-            console.log(`[concierge][anthropic] tool: ${tu.name}(${JSON.stringify(tu.input)})`);
-            const result = await executeToolCall(tu.name, tu.input || {}, stores, supabase, normalizedPhone);
+            const resolvedToolArgs = tu.name === 'get_order_tracking'
+              ? resolveTrackingToolArgs(tu.input || {}, toolExecutions)
+              : (tu.input || {});
+            console.log(`[concierge][anthropic] tool: ${tu.name}(${JSON.stringify(resolvedToolArgs)})`);
+            const result = await executeToolCall(tu.name, resolvedToolArgs, stores, supabase, normalizedPhone);
             console.log(`[concierge][anthropic] result: ${result.slice(0, 200)}`);
-            toolExecutions.push({ name: tu.name, args: tu.input || {}, result: parseToolResult(result) });
+            toolExecutions.push({ name: tu.name, args: resolvedToolArgs, result: parseToolResult(result) });
             const forcedReply = buildTrackingReplyFromToolResult(tu.name, result);
             if (forcedReply) return forcedReply;
             toolResults.push({
@@ -994,10 +1121,13 @@ REGRAS:
             const fnName = toolCall.function?.name;
             let fnArgs: Record<string, any> = {};
             try { fnArgs = JSON.parse(toolCall.function?.arguments || '{}'); } catch { fnArgs = {}; }
-            console.log(`[concierge][lovable] tool: ${fnName}(${JSON.stringify(fnArgs)})`);
-            const result = await executeToolCall(fnName, fnArgs, stores, supabase, normalizedPhone);
+            const resolvedFnArgs = fnName === 'get_order_tracking'
+              ? resolveTrackingToolArgs(fnArgs, toolExecutions)
+              : fnArgs;
+            console.log(`[concierge][lovable] tool: ${fnName}(${JSON.stringify(resolvedFnArgs)})`);
+            const result = await executeToolCall(fnName, resolvedFnArgs, stores, supabase, normalizedPhone);
             console.log(`[concierge][lovable] result: ${result.slice(0, 200)}`);
-            toolExecutions.push({ name: fnName, args: fnArgs, result: parseToolResult(result) });
+            toolExecutions.push({ name: fnName, args: resolvedFnArgs, result: parseToolResult(result) });
             const forcedReply = buildTrackingReplyFromToolResult(fnName, result);
             if (forcedReply) return forcedReply;
             currentMessages.push({ role: 'tool', content: result, tool_call_id: toolCall.id } as any);
