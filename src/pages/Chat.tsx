@@ -423,13 +423,13 @@ export default function ChatPage() {
 
   // ── Determine if using Meta API ──
   const getActiveNumberId = (): string | null => {
-    // If we have a selected conversation with a specific instance, use that
-    if (selectedConvNumberId) return selectedConvNumberId;
+    // If a conversation is selected, respect its instance (null = Z-API)
+    if (selectedConvNumberId !== undefined) return selectedConvNumberId;
     return numberFilter !== 'all' ? numberFilter : (selectedNumberId || null);
   };
 
   const isMetaNumber = (): boolean => {
-    // Z-API conversations have null whatsapp_number_id — always use Z-API for them
+    // Z-API conversations have null/undefined whatsapp_number_id — always use Z-API
     if (selectedConvNumberId === null) return false;
     const numId = getActiveNumberId();
     if (!numId) return false;
