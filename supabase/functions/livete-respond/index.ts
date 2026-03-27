@@ -66,9 +66,12 @@ serve(async (req) => {
       .gte('created_at', thirtySecsAgo)
       .order('created_at', { ascending: true });
 
-    const combinedMessage = (recentMsgs && recentMsgs.length > 1)
+    let combinedMessage = (recentMsgs && recentMsgs.length > 1)
       ? recentMsgs.map(m => m.message).filter(Boolean).join('\n')
       : (messageText || '');
+
+    // Append audio transcription to combined message (resolved later after transcription)
+    // This variable will be updated after transcription completes
 
     // Collect any media from recent messages
     const recentMediaUrl = mediaUrl || recentMsgs?.find(m => m.media_url && m.media_type?.startsWith('image'))?.media_url;
