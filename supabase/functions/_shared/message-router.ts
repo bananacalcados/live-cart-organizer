@@ -114,13 +114,62 @@ export async function routeMessage(
   // 3. Check for ad referral (Click-to-WhatsApp)
   if (referral && referral.source_url) {
     console.log(`[router] Ad referral detected for ${phone}`);
-    // For now, route to legacy (automation-trigger-incoming handles it)
-    // Future: return { agent: 'ads', reason: 'ad_referral', referral };
     return { agent: 'legacy', reason: 'ad_referral_legacy', referral };
   }
 
-  // 4. Default: Legacy fallback (Concierge PAUSED — sending wrong values)
-  return { agent: 'legacy', reason: 'default' };
+  // 4. Operator cooldown — if a human replied recently, don't activate AI
+  const cooldownActive = await isOperatorCooldownActive(supabase, phone, 10);
+  if (cooldownActive) {
+    console.log(`[router] Operator cooldown active for ${phone}, skipping AI`);
+    return { agent: 'none', reason: 'operator_cooldown' };
+  }
+
+  // 5. Intent pre-classification for Concierge (Fase 1: Roteamento silencioso)
+  const msgLower = (input.messageText || '').toLowerCase().trim();
+
+  // Sales-related keywords → legacy (human seller handles it)
+  const salesKeywords = [
+    'valor', 'preço', 'preco', 'quanto custa', 'quanto é', 'quanto e',
+    'tem o', 'tem na', 'tem no', 'tem esse', 'tem essa', 'tem disponível',
+    'foto', 'fotos', 'imagem', 'imagens', 'catálogo', 'catalogo',
+    'modelo', 'modelos', 'comprar', 'quero comprar', 'encomenda',
+    'tamanho', 'numeração', 'numeracao', 'número', 'numero',
+    'cor ', 'cores', 'qual cor', 'promoção', 'promocao', 'desconto',
+    'parcela', 'parcelas', 'pix', 'cartão', 'cartao',
+    'frete pra', 'frete para', 'entrega pra', 'entrega para',
+    'novidade', 'novidades', 'lançamento', 'lancamento',
+  ];
+
+  // Support/tracking keywords → concierge
+  const supportKeywords = [
+    'rastreio', 'rastrear', 'rastreamento', 'código de rastreio',
+    'cadê meu pedido', 'cade meu pedido', 'meu pedido', 'onde está',
+    'onde esta', 'entrega', 'chegou', 'não chegou', 'nao chegou',
+    'troca', 'trocar', 'defeito', 'defeituoso', 'quebrado', 'quebrou',
+    'devolver', 'devolução', 'devoluçao', 'devolucao', 'estragou',
+    'reclamação', 'reclamacao', 'problema', 'errado', 'veio errado',
+    'suporte', 'ajuda', 'atendimento',
+    'nota fiscal', 'nf', 'cupom fiscal',
+    'cancelar', 'cancelamento', 'estorno', 'reembolso',
+  ];
+
+  const isSalesIntent = salesKeywords.some(kw => msgLower.includes(kw));
+  const isSupportIntent = supportKeywords.some(kw => msgLower.includes(kw));
+
+  // Support intent takes priority; if both detected, route to concierge
+  if (isSupportIntent) {
+    console.log(`[router] Support intent detected for ${phone}: "${msgLower.slice(0, 60)}"`);
+    return { agent: 'concierge', reason: 'support_intent' };
+  }
+
+  if (isSalesIntent) {
+    console.log(`[router] Sales intent detected for ${phone}, routing to legacy (human seller)`);
+    return { agent: 'legacy', reason: 'sales_intent' };
+  }
+
+  // 6. Default: greetings and unclassified → legacy (human handles)
+  console.log(`[router] Unclassified message for ${phone}, routing to legacy`);
+  return { agent: 'legacy', reason: 'default_unclassified' };
 }
 
 // ─── Helper: Operator cooldown check ─────────────────────────────────────────
