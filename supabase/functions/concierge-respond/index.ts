@@ -817,7 +817,7 @@ serve(async (req) => {
         const trackingResult = await executeToolCall('get_order_details', {
           tiny_order_id: selectedOrder.tiny_order_id,
           store_name: selectedOrder.store_name,
-        }, stores, supabase, normalizedPhone);
+        }, stores, supabase, normalizedPhone, whatsappNumberId);
 
         const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_details', trackingResult);
         if (forcedTrackingReply) {
