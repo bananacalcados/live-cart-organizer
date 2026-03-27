@@ -410,6 +410,7 @@ async function executeToolCall(
   stores: StoreConfig[],
   supabase: any,
   phone: string,
+  whatsappNumberId?: string,
 ): Promise<string> {
   if (toolName === 'search_customer_orders') {
     const originalTerm = args.search_term?.trim();
