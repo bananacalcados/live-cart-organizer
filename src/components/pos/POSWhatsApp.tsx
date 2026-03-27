@@ -53,6 +53,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
+  const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -129,6 +130,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   );
 
   useEffect(() => {
+    const isSocialConversation = selectedConvChannel === "instagram" || selectedConvChannel === "messenger";
+
+    if (isSocialConversation) {
+      if (selectedSendNumberId !== null) setSelectedSendNumberId(null);
+      if (sendVia !== "meta") setSendVia("meta");
+      return;
+    }
+
     if (storeNumbers.length === 0) {
       setSelectedSendNumberId(null);
       return;
@@ -143,7 +152,13 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     if (fallbackNumber) {
       setSendVia(fallbackNumber.provider === "meta" ? "meta" : "zapi");
     }
-  }, [storeNumbers, selectedSendNumberId, sendVia]);
+  }, [storeNumbers, selectedSendNumberId, sendVia, selectedConvChannel]);
+
+  useEffect(() => {
+    if (!selectedPhone) {
+      setSelectedConvChannel(null);
+    }
+  }, [selectedPhone]);
 
   // Load chat contacts + photos + group names
   useEffect(() => {
@@ -373,6 +388,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           whatsapp_number_id: value.numberId,
           lastIncomingInstance,
           isDispatchOnly,
+          channel: (lastMsg as any).channel || null,
         });
       });
 
@@ -411,13 +427,53 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     setMessages(data || []);
   };
 
+  const getSelectedChannel = () => {
+    if (selectedConvChannel) return selectedConvChannel;
+    if (!selectedPhone) return null;
+
+    return conversations.find((conversation) => {
+      const conversationKey = conversation.conversationKey || `${conversation.phone}__${conversation.whatsapp_number_id || 'none'}`;
+      return conversationKey === (selectedConvKey || `${selectedPhone}__${selectedConvNumberId || 'none'}`);
+    })?.channel || null;
+  };
+
+  const sendViaMessenger = async (
+    recipientId: string,
+    message: string,
+    channel: "messenger" | "instagram" = "instagram",
+    type: "text" | "image" | "video" | "audio" | "file" = "text",
+    mediaUrl?: string,
+  ) => {
+    const { data, error } = await supabase.functions.invoke("meta-messenger-send", {
+      body: { recipientId, message, channel, type, mediaUrl },
+    });
+
+    if (error) throw error;
+    if (data?.success === false) {
+      throw new Error(data?.error || `Erro ao enviar mensagem via ${channel}`);
+    }
+
+    return { messageId: data?.messageId || null };
+  };
+
   const handleSelectConversation = async (phone: string, whatsappNumberId?: string | null) => {
+    const conversationKey = `${phone}__${whatsappNumberId || 'none'}`;
+    const selectedConversation = conversations.find((conversation) => {
+      const key = conversation.conversationKey || `${conversation.phone}__${conversation.whatsapp_number_id || 'none'}`;
+      return key === conversationKey;
+    }) || null;
+    const conversationChannel = selectedConversation?.channel || null;
+
     setSelectedPhone(phone);
     setSelectedConvNumberId(whatsappNumberId ?? null);
-    setSelectedConvKey(`${phone}__${whatsappNumberId || 'none'}`);
+    setSelectedConvKey(conversationKey);
+    setSelectedConvChannel(conversationChannel);
     loadMessages(phone, whatsappNumberId);
 
-    if (whatsappNumberId) {
+    if (conversationChannel === "instagram" || conversationChannel === "messenger") {
+      setSelectedSendNumberId(null);
+      setSendVia("meta");
+    } else if (whatsappNumberId) {
       const matchedNumber = storeNumbers.find((number) => number.id === whatsappNumberId);
       setSelectedSendNumberId(whatsappNumberId);
       setSendVia(matchedNumber?.provider === 'meta' ? 'meta' : 'zapi');
@@ -441,15 +497,23 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedPhone || isSending) return;
     const messageText = newMessage.trim();
+    const selectedChannel = getSelectedChannel();
+    const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
+    const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
+
     setIsSending(true);
     setNewMessage("");
+
     try {
       const numberIdToUse = selectedSendNumberId || storeNumbers.find((number) => number.provider === sendVia)?.id || storeNumbers[0]?.id || null;
       const numberToUse = storeNumbers.find((number) => number.id === numberIdToUse) ?? null;
       const effectiveSendVia = numberToUse?.provider === "meta" ? "meta" : "zapi";
 
       let metaMessageId: string | null = null;
-      if (effectiveSendVia === "meta") {
+      if (useMessenger) {
+        const result = await sendViaMessenger(selectedPhone, messageText, messengerChannel);
+        metaMessageId = result.messageId;
+      } else if (effectiveSendVia === "meta") {
         if (!numberIdToUse) {
           throw new Error("Nenhum número Meta configurado para esta loja");
         }
@@ -473,8 +537,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message: messageText,
         direction: "outgoing",
         status: "sent",
-        whatsapp_number_id: numberIdToUse || null,
+        whatsapp_number_id: useMessenger ? null : numberIdToUse || null,
         message_id: metaMessageId,
+        channel: useMessenger ? messengerChannel : null,
       });
 
       await supabase
@@ -494,6 +559,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       loadMessages(selectedPhone, selectedConvNumberId);
     } catch (error) {
       console.error("Error sending:", error);
+      setNewMessage(messageText);
       toast.error("Erro ao enviar mensagem");
     } finally {
       setIsSending(false);
@@ -504,12 +570,18 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     if (!selectedPhone) return;
     setIsSending(true);
     try {
+      const selectedChannel = getSelectedChannel();
+      const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
+      const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
       const numberIdToUse = selectedSendNumberId || storeNumbers.find((number) => number.provider === sendVia)?.id || storeNumbers[0]?.id || null;
       const numberToUse = storeNumbers.find((number) => number.id === numberIdToUse) ?? null;
       const effectiveSendVia = numberToUse?.provider === "meta" ? "meta" : "zapi";
 
       let audioMsgId: string | null = null;
-      if (effectiveSendVia === "meta") {
+      if (useMessenger) {
+        const result = await sendViaMessenger(selectedPhone, "[áudio]", messengerChannel, "audio", audioUrl);
+        audioMsgId = result.messageId;
+      } else if (effectiveSendVia === "meta") {
         if (!numberIdToUse) throw new Error("Nenhum número Meta configurado para esta loja");
         const res = await supabase.functions.invoke("meta-whatsapp-send", {
           body: { phone: selectedPhone, message: "[áudio]", whatsapp_number_id: numberIdToUse, media_url: audioUrl, media_type: "audio" },
@@ -527,7 +599,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
         message_id: audioMsgId,
-        whatsapp_number_id: numberIdToUse,
+        whatsapp_number_id: useMessenger ? null : numberIdToUse,
+        channel: useMessenger ? messengerChannel : null,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Áudio enviado!");
@@ -542,13 +615,25 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     if (!selectedPhone) return;
     setIsSending(true);
     try {
+      const selectedChannel = getSelectedChannel();
+      const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
+      const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
       const numberIdToUse = selectedSendNumberId || storeNumbers.find((number) => number.provider === sendVia)?.id || storeNumbers[0]?.id || null;
       const numberToUse = storeNumbers.find((number) => number.id === numberIdToUse) ?? null;
       const effectiveSendVia = numberToUse?.provider === "meta" ? "meta" : "zapi";
       const msgText = caption || `[${mediaType}]`;
       let mediaMsgId: string | null = null;
 
-      if (effectiveSendVia === "meta") {
+      if (useMessenger) {
+        const result = await sendViaMessenger(
+          selectedPhone,
+          msgText,
+          messengerChannel,
+          mediaType === "document" ? "file" : mediaType as "image" | "video" | "audio",
+          mediaUrl,
+        );
+        mediaMsgId = result.messageId;
+      } else if (effectiveSendVia === "meta") {
         if (!numberIdToUse) throw new Error("Nenhum número Meta configurado para esta loja");
         const res = await supabase.functions.invoke("meta-whatsapp-send", {
           body: { phone: selectedPhone, message: msgText, whatsapp_number_id: numberIdToUse, media_url: mediaUrl, media_type: mediaType },
@@ -566,7 +651,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
         message_id: mediaMsgId,
-        whatsapp_number_id: numberIdToUse,
+        whatsapp_number_id: useMessenger ? null : numberIdToUse,
+        channel: useMessenger ? messengerChannel : null,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Mídia enviada!");
@@ -614,6 +700,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   };
 
   const selectedConversation = conversations.find(c => c.conversationKey === selectedConvKey) || conversations.find(c => c.phone === selectedPhone) || null;
+  const selectedChannel = getSelectedChannel();
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   const statusLabels: Record<string, string> = {
@@ -851,6 +938,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                   {selectedConversation?.customerName && (
                     <span className="text-[10px] text-muted-foreground truncate">{selectedPhone}</span>
                   )}
+                  {selectedChannel === "instagram" && (
+                    <Badge variant="secondary" className="mt-1 w-fit text-[10px]">📷 Instagram Direct</Badge>
+                  )}
+                  {selectedChannel === "messenger" && (
+                    <Badge variant="secondary" className="mt-1 w-fit text-[10px]">💬 Messenger</Badge>
+                  )}
                 </div>
               )}
               <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -904,7 +997,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             </div>
 
             <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] bg-white dark:bg-[#202c33] text-xs flex-shrink-0">
-              {storeNumbers.length > 1 ? (
+              {selectedChannel === "instagram" ? (
+                <Badge variant="secondary" className="text-[10px] px-2 py-0.5">📷 Instagram Direct</Badge>
+              ) : selectedChannel === "messenger" ? (
+                <Badge variant="secondary" className="text-[10px] px-2 py-0.5">💬 Messenger</Badge>
+              ) : storeNumbers.length > 1 ? (
                 <WhatsAppNumberSelector
                   className="h-7 min-w-[220px] text-xs"
                   value={selectedSendNumberId}
@@ -925,7 +1022,13 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                 <span className="text-muted-foreground">Nenhuma instância disponível</span>
               )}
               <span className="text-muted-foreground ml-auto">
-                {selectedSendNumber?.provider === 'meta' ? 'Meta API' : 'Z-API'}
+                {selectedChannel === "instagram"
+                  ? "Instagram Direct"
+                  : selectedChannel === "messenger"
+                    ? "Messenger"
+                    : selectedSendNumber?.provider === 'meta'
+                      ? 'Meta API'
+                      : 'Z-API'}
               </span>
             </div>
 
