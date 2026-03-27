@@ -1128,7 +1128,7 @@ REGRAS:
               ? resolveTrackingToolArgs(tu.input || {}, toolExecutions)
               : (tu.input || {});
             console.log(`[concierge][anthropic] tool: ${tu.name}(${JSON.stringify(resolvedToolArgs)})`);
-            const result = await executeToolCall(tu.name, resolvedToolArgs, stores, supabase, normalizedPhone);
+            const result = await executeToolCall(tu.name, resolvedToolArgs, stores, supabase, normalizedPhone, whatsappNumberId);
             console.log(`[concierge][anthropic] result: ${result.slice(0, 200)}`);
             toolExecutions.push({ name: tu.name, args: resolvedToolArgs, result: parseToolResult(result) });
             const forcedReply = buildTrackingReplyFromToolResult(tu.name, result);
