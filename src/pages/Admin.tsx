@@ -401,7 +401,8 @@ export default function Admin() {
             <ZApiInstanceManager />
           </TabsContent>
 
-          <TabsContent value="knowledge" className="mt-4">
+          <TabsContent value="knowledge" className="mt-4 space-y-6">
+            <AiTestPanel />
             <AiKnowledgeBase />
           </TabsContent>
 

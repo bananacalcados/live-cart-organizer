@@ -176,8 +176,20 @@ export async function routeMessage(
 
   // Support intent takes priority; if both detected, route to concierge
   if (isSupportIntent) {
-    console.log(`[router] Support intent detected for ${phone}: "${msgLower.slice(0, 60)}"`);
-    return { agent: 'concierge', reason: 'support_intent' };
+    // Only route to concierge if test mode is on AND phone matches test phone
+    if (conciergeEnabled && conciergeTestPhone) {
+      const phoneSuffix = phone.replace(/\D/g, '').slice(-8);
+      const testSuffix = conciergeTestPhone.replace(/\D/g, '').slice(-8);
+      if (phoneSuffix === testSuffix) {
+        console.log(`[router] Support intent + test phone match for ${phone}`);
+        return { agent: 'concierge', reason: 'support_intent' };
+      }
+      console.log(`[router] Support intent for ${phone} but not test phone, routing to legacy`);
+      return { agent: 'legacy', reason: 'support_intent_not_test_phone' };
+    }
+    // Concierge disabled → legacy
+    console.log(`[router] Support intent for ${phone} but concierge disabled, routing to legacy`);
+    return { agent: 'legacy', reason: 'concierge_disabled' };
   }
 
   if (isSalesIntent) {
