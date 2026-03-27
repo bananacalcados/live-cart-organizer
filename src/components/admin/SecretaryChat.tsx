@@ -144,7 +144,7 @@ export function SecretaryChat() {
       });
 
       if (res.error || res.data?.error) {
-        throw new Error(res.data?.error || "Erro na resposta da IA");
+        throw new Error(res.data?.error || (res.data?.retryable ? "A IA está temporariamente indisponível. Tente novamente em instantes." : "Erro na resposta da IA"));
       }
 
       const assistantMsg: Message = {
@@ -169,6 +169,8 @@ export function SecretaryChat() {
         description: err.message || "Não foi possível obter resposta",
         variant: "destructive",
       });
+
+      setMessages(prev => prev.filter(message => message.id !== userMsg.id || message.role !== "user" ? true : true));
     } finally {
       setLoading(false);
     }
