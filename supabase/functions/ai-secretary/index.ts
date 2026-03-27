@@ -7,6 +7,55 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+class RetryableSecretaryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RetryableSecretaryError';
+  }
+}
+
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callAnthropicWithRetry(apiKey: string, body: Record<string, unknown>) {
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+
+    const errText = await response.text();
+    const isRetryable = response.status === 429 || response.status === 529 || /overloaded|rate.?limit/i.test(errText);
+
+    console.error(`Claude error (attempt ${attempt}/${maxAttempts}):`, response.status, errText);
+
+    if (isRetryable) {
+      if (attempt < maxAttempts) {
+        await sleep(700 * attempt);
+        continue;
+      }
+
+      throw new RetryableSecretaryError('A IA está temporariamente sobrecarregada. Tente novamente em alguns segundos.');
+    }
+
+    throw new Error(`Claude API error: ${response.status}`);
+  }
+
+  throw new RetryableSecretaryError('A IA está temporariamente indisponível no momento.');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -139,29 +188,13 @@ Regras:
       content: m.content,
     }));
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: claudeMessages,
-        tools,
-      }),
+    const claudeData = await callAnthropicWithRetry(ANTHROPIC_API_KEY, {
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: claudeMessages,
+      tools,
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Claude error:', response.status, errText);
-      throw new Error(`Claude API error: ${response.status}`);
-    }
-
-    const claudeData = await response.json();
 
     // Process tool calls
     const toolResults: any[] = [];
@@ -188,28 +221,17 @@ Regras:
         { role: 'user', content: toolResults },
       ];
 
-      const followUp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4096,
-          system: systemPrompt,
-          messages: followUpMessages,
-          tools,
-        }),
+      const followUpData = await callAnthropicWithRetry(ANTHROPIC_API_KEY, {
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: followUpMessages,
+        tools,
       });
 
-      if (followUp.ok) {
-        const followUpData = await followUp.json();
-        finalText = '';
-        for (const block of followUpData.content) {
-          if (block.type === 'text') finalText += block.text;
-        }
+      finalText = '';
+      for (const block of followUpData.content) {
+        if (block.type === 'text') finalText += block.text;
       }
     }
 
@@ -218,6 +240,13 @@ Regras:
     });
   } catch (error) {
     console.error('Secretary error:', error);
+
+    if (error instanceof RetryableSecretaryError) {
+      return new Response(JSON.stringify({ error: error.message, retryable: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
