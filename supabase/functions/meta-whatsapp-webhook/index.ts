@@ -419,6 +419,14 @@ serve(async (req) => {
                     break;
                   }
 
+                  case 'concierge':
+                    fetch(`${supabaseUrl}/functions/v1/concierge-respond`, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ phone, messageText, whatsappNumberId: whatsappNumberDbId, channel: 'meta' }),
+                    }).catch(err => console.error('concierge-respond trigger error:', err));
+                    break;
+
                   case 'legacy':
                   default:
                     fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
