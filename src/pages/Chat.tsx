@@ -480,6 +480,9 @@ export default function ChatPage() {
 
   // ── Get selected conversation channel ──
   const getSelectedChannel = (): string | null => {
+    // Use the stored channel from conversation selection (most reliable)
+    if (selectedConvChannel) return selectedConvChannel;
+    // Fallback: look up from conversations list
     if (!selectedPhone) return null;
     const conv = conversations.find(c => c.phone === selectedPhone && c.conversationKey === selectedConvKey);
     return conv?.channel || null;
