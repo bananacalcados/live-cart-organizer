@@ -7,6 +7,11 @@ interface FinishedConversation {
   phone: string;
 }
 
+const normalizePhoneKey = (phone: string | null | undefined) => {
+  const digits = (phone || '').replace(/\D/g, '');
+  return digits ? digits.slice(-8) : '';
+};
+
 /**
  * Computes conversation status from message data and enriches with instance info.
  */
@@ -19,7 +24,7 @@ export function useConversationEnrichment() {
   const loadFinished = useCallback(async () => {
     const { data } = await supabase.from('chat_finished_conversations').select('phone');
     if (data) {
-      setFinishedPhones(new Set((data as FinishedConversation[]).map(d => d.phone)));
+      setFinishedPhones(new Set((data as FinishedConversation[]).map(d => normalizePhoneKey(d.phone)).filter(Boolean)));
     }
   }, []);
 
@@ -52,16 +57,44 @@ export function useConversationEnrichment() {
   }, [loadFinished, loadArchived, loadAwaitingPayment]);
 
   const finishConversation = useCallback(async (phone: string, reason?: string, sellerId?: string) => {
-    await supabase.from('chat_finished_conversations').upsert({
+    const phoneKey = normalizePhoneKey(phone);
+    if (phoneKey) {
+      setFinishedPhones(prev => new Set([...prev, phoneKey]));
+    }
+
+    const { error } = await supabase.from('chat_finished_conversations').upsert({
       phone,
       finished_at: new Date().toISOString(),
       finish_reason: reason || null,
       seller_id: sellerId || null,
     } as any, { onConflict: 'phone' });
+
+    if (error && phoneKey) {
+      setFinishedPhones(prev => {
+        const next = new Set(prev);
+        next.delete(phoneKey);
+        return next;
+      });
+      throw error;
+    }
   }, []);
 
   const reopenConversation = useCallback(async (phone: string) => {
-    await supabase.from('chat_finished_conversations').delete().eq('phone', phone);
+    const phoneKey = normalizePhoneKey(phone);
+    if (phoneKey) {
+      setFinishedPhones(prev => {
+        const next = new Set(prev);
+        next.delete(phoneKey);
+        return next;
+      });
+    }
+
+    const { error } = await supabase.from('chat_finished_conversations').delete().eq('phone', phone);
+
+    if (error && phoneKey) {
+      setFinishedPhones(prev => new Set([...prev, phoneKey]));
+      throw error;
+    }
   }, []);
 
   const archiveConversation = useCallback(async (phone: string, archivedBy?: string) => {
@@ -116,7 +149,7 @@ export function useConversationEnrichment() {
       const convKey = `${conv.phone}__${conv.whatsapp_number_id || 'none'}`;
       const msgs = phoneMessages.get(convKey) || phoneMessages.get(conv.phone) || [];
       const status = computeStatus(msgs);
-      const isFinished = finishedPhones.has(conv.phone);
+      const isFinished = finishedPhones.has(normalizePhoneKey(conv.phone));
       const isArchived = archivedPhones.has(conv.phone);
       const isAwaitingPayment = awaitingPaymentPhones.has(conv.phone);
       const instanceLabel = getInstanceLabel(conv.whatsapp_number_id);
