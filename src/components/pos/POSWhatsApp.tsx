@@ -320,7 +320,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         .order("created_at", { ascending: false });
 
       // Group by phone + whatsapp_number_id to create separate conversations per instance
-      const convMap = new Map<string, { messages: Message[]; unread: number; isGroup: boolean; phone: string; numberId: string | null }>();
+      const convMap = new Map<string, { messages: Message[]; unread: number; isGroup: boolean; phone: string; numberId: string | null; hasIncoming: boolean; lastIsMassDispatch: boolean }>();
       for (const msg of data || []) {
         // Filter by store's assigned WhatsApp numbers
         if (storeNumberIds.length > 0) {
@@ -332,11 +332,16 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           }
         }
         const convKey = `${msg.phone}__${msg.whatsapp_number_id || 'none'}`;
-        if (!convMap.has(convKey)) convMap.set(convKey, { messages: [], unread: 0, isGroup: msg.is_group || false, phone: msg.phone, numberId: msg.whatsapp_number_id || null });
+        if (!convMap.has(convKey)) convMap.set(convKey, { messages: [], unread: 0, isGroup: msg.is_group || false, phone: msg.phone, numberId: msg.whatsapp_number_id || null, hasIncoming: false, lastIsMassDispatch: false });
         const entry = convMap.get(convKey)!;
         entry.messages.push(msg);
-        if (msg.direction === "incoming" && msg.status !== "read") entry.unread++;
+        if (msg.direction === "incoming") {
+          entry.hasIncoming = true;
+          if (msg.status !== "read") entry.unread++;
+        }
         if (msg.is_group) entry.isGroup = true;
+        // Track if latest message is a mass dispatch
+        if (entry.messages.length === 1 && (msg as any).is_mass_dispatch) entry.lastIsMassDispatch = true;
       }
 
       const convs: Conversation[] = [];
