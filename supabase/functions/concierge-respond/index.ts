@@ -243,7 +243,7 @@ function extractTrackingDataFromOrder(pedido: any): { trackingCode: string | nul
 }
 
 function buildTrackingReplyFromToolResult(toolName: string, rawResult: string): string | null {
-  if (toolName !== 'get_order_tracking') return null;
+  if (toolName !== 'get_order_details') return null;
 
   try {
     const result = JSON.parse(rawResult);
@@ -331,7 +331,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "search_customer_orders",
-      description: "Busca pedidos de um cliente pelo nome completo ou CPF no sistema Tiny ERP. Pesquisa em todas as lojas (Shopify, Centro, Pérola). Use quando o cliente pedir rastreio, status de pedido, ou informações sobre uma compra.",
+      description: "Busca pedidos de um cliente pelo nome completo ou CPF no sistema Tiny ERP. Pesquisa em todas as lojas (Site, Centro, Pérola). Use quando o cliente pedir rastreio, status de pedido, ou informações sobre uma compra. Retorna produtos, data, status e loja.",
       parameters: {
         type: "object",
         properties: {
@@ -348,8 +348,8 @@ const TOOLS = [
   {
     type: "function",
     function: {
-      name: "get_order_tracking",
-      description: "Obtém detalhes completos de um pedido específico no Tiny, incluindo código de rastreio e transportadora. Use após encontrar o pedido com search_customer_orders.",
+      name: "get_order_details",
+      description: "Obtém detalhes completos de um pedido específico: produtos comprados, código de rastreio, transportadora, status e valores. Use após encontrar o pedido com search_customer_orders, tanto para buscar rastreio quanto para saber quais produtos o cliente comprou.",
       parameters: {
         type: "object",
         properties: {
@@ -359,7 +359,7 @@ const TOOLS = [
           },
           store_name: {
             type: "string",
-            description: "Nome da loja onde o pedido foi encontrado (Tiny Shopify, Loja Centro, ou Loja Perola)"
+            description: "Nome da loja onde o pedido foi encontrado (Site, Loja Centro, ou Loja Perola)"
           }
         },
         required: ["tiny_order_id", "store_name"],
@@ -371,7 +371,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "transfer_to_human",
-      description: "Transfere a conversa para um atendente humano. Use quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo, ou precisa de atendimento especializado.",
+      description: "Transfere a conversa para um atendente humano. Use APENAS quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo de suporte, ou precisa de atendimento especializado. NÃO use se ainda tem ferramentas que podem responder a pergunta.",
       parameters: {
         type: "object",
         properties: {
@@ -453,13 +453,25 @@ async function executeToolCall(
 
         const ordersToUse = filtered;
 
-        for (const order of ordersToUse.slice(0, 5)) {
+        for (const order of ordersToUse.slice(0, 3)) {
+          // Fetch detail to get product names
+          let productNames: string[] = [];
+          try {
+            const detail = await getTinyOrderDetail(store.token, String(order.id));
+            if (detail?.itens) {
+              productNames = detail.itens.map((i: any) => {
+                const item = i.item || i;
+                return item.descricao || item.nome || '';
+              }).filter(Boolean).slice(0, 3);
+            }
+          } catch (e) { console.error('[concierge] detail fetch error:', e); }
+
           allResults.push({
             tiny_order_id: String(order.id),
             order_number: String(order.numero),
             date: order.data_pedido,
-            customer_name: contact.name, // Use the verified contact name
-            total: parseFloat(order.valor || '0'),
+            customer_name: contact.name,
+            products: productNames.length > 0 ? productNames : ['(produtos não disponíveis)'],
             status: order.situacao,
             store_name: getCustomerFacingStoreName(store.name),
             searched_by: 'cpf',
@@ -478,13 +490,24 @@ async function executeToolCall(
             return termWords.some((word: string) => name.includes(word));
           });
 
-          for (const order of filtered.slice(0, 5)) {
+          for (const order of filtered.slice(0, 3)) {
+            let productNames: string[] = [];
+            try {
+              const detail = await getTinyOrderDetail(store.token, String(order.id));
+              if (detail?.itens) {
+                productNames = detail.itens.map((i: any) => {
+                  const item = i.item || i;
+                  return item.descricao || item.nome || '';
+                }).filter(Boolean).slice(0, 3);
+              }
+            } catch (e) { console.error('[concierge] detail fetch error:', e); }
+
             allResults.push({
               tiny_order_id: String(order.id),
               order_number: String(order.numero),
               date: order.data_pedido,
               customer_name: order.nome,
-              total: parseFloat(order.valor || '0'),
+              products: productNames.length > 0 ? productNames : ['(produtos não disponíveis)'],
               status: order.situacao,
               store_name: getCustomerFacingStoreName(store.name),
               searched_by: 'name',
@@ -511,7 +534,7 @@ async function executeToolCall(
     });
   }
 
-  if (toolName === 'get_order_tracking') {
+  if (toolName === 'get_order_details') {
     const requestedOrderRef = String(args.tiny_order_id || '').trim().replace(/^#/, '');
     const storeName = args.store_name;
     const store = stores.find(s => storeMatchesReference(s.name, storeName));
@@ -737,12 +760,12 @@ serve(async (req) => {
 
       if (selectedOrder) {
         console.log(`[concierge] Deterministic tracking path for ${normalizedPhone}: order=${selectedOrder.order_number} store=${selectedOrder.store_name}`);
-        const trackingResult = await executeToolCall('get_order_tracking', {
+        const trackingResult = await executeToolCall('get_order_details', {
           tiny_order_id: selectedOrder.tiny_order_id,
           store_name: selectedOrder.store_name,
         }, stores, supabase, normalizedPhone);
 
-        const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_tracking', trackingResult);
+        const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_details', trackingResult);
         if (forcedTrackingReply) {
           const typingDelay = Math.min(Math.max(forcedTrackingReply.length * 50, 2000), 12000);
           await sleep(typingDelay);
@@ -811,7 +834,7 @@ serve(async (req) => {
             ai_decision: 'deterministic_tracking_reply',
             provider: 'deterministic',
             stage: 'concierge',
-            tool_called: 'get_order_tracking',
+            tool_called: 'get_order_details',
             tool_params: {
               source: 'recent_search_confirmation',
               selectedOrder,
@@ -860,35 +883,38 @@ ${sectors.map(s => `- ${s.name}: ${s.description || ''} (Keywords: ${(s.ai_routi
 
 SEU PAPEL (APENAS):
 - Ajudar clientes com rastreio de pedidos usando as ferramentas disponíveis
+- Informar sobre produtos comprados, status e detalhes do pedido
 - Direcionar para atendente humano quando necessário
 - Responder dúvidas básicas usando a base de conhecimento
 
 O QUE VOCÊ NÃO PODE FAZER (PROIBIDO):
 - NUNCA fale sobre preços, valores ou promoções
-- NUNCA ofereça produtos, modelos, fotos ou catálogos
+- NUNCA ofereça produtos novos, modelos disponíveis, fotos ou catálogos
 - NUNCA tente vender nada
 - NUNCA prometa enviar fotos, imagens ou vídeos
 - NUNCA fale sobre disponibilidade de estoque, tamanhos ou cores
 - Se a cliente pedir algo de vendas, diga "Vou te conectar com uma de nossas consultoras! 😊" e use transfer_to_human
 
-FLUXO DE RASTREIO:
-1. Cliente pede rastreio → peça PRIMEIRO o CPF do pedido; aceite CPF com pontos e traços e trate isso normalmente removendo a máscara
+FLUXO DE RASTREIO E DETALHES DO PEDIDO:
+1. Cliente pede rastreio ou informação do pedido → peça PRIMEIRO o CPF; aceite CPF com pontos e traços (remova a máscara)
 2. Só use nome como plano B quando a pessoa realmente não souber o CPF
-3. Use a ferramenta search_customer_orders para buscar
-4. Se encontrar UM ÚNICO pedido, confirme brevemente o nome e data com o cliente. Mas NÃO transfira — aguarde a confirmação e depois use get_order_tracking
-5. Se encontrar VÁRIOS pedidos, liste todos mostrando número, data, valor e loja. Pergunte qual deseja rastrear
-6. Quando o cliente ESCOLHER um pedido da lista (ex: "pedido 1", "o primeiro", "#4809"), isso JÁ É a confirmação — use IMEDIATAMENTE get_order_tracking para buscar o rastreio. NÃO transfira para humano neste momento
-7. Após obter o rastreio, envie o código + link clicável para rastreamento
-8. Se não encontrar pelo nome, peça o CPF antes de transferir; se não encontrar pelo CPF, use transfer_to_human
-9. NUNCA use transfer_to_human se você ainda tem informação de pedido para buscar — só transfira quando realmente não conseguir resolver
+3. Use search_customer_orders para buscar — os resultados já incluem os produtos comprados
+4. Se encontrar UM ÚNICO pedido, confirme o nome e o produto com o cliente. NÃO transfira — aguarde confirmação
+5. Se encontrar VÁRIOS pedidos, liste mostrando: número, data, produto(s) e loja. NÃO mostre valores/preços. Pergunte qual deseja
+6. Quando o cliente ESCOLHER ou CONFIRMAR um pedido, use IMEDIATAMENTE get_order_details para buscar rastreio e mais detalhes
+7. Após obter o rastreio, envie código + link clicável
+8. Se o cliente perguntar qual produto comprou, você já tem essa info nos resultados — responda diretamente, sem transferir
+9. Se não encontrar pelo nome, peça o CPF; se não encontrar pelo CPF, use transfer_to_human
+10. NUNCA use transfer_to_human se você ainda tem informação de pedido para consultar
 
 REGRAS:
 - Responda de forma curta e natural, como humano no WhatsApp
 - Use emojis com moderação (máximo 2 por mensagem)
 - NUNCA repita informações já ditas
 - Se não conseguir resolver, use transfer_to_human
-- Se a loja for Shopify, para o cliente diga apenas "Site"; nunca diga "Shopify"
-- Ao enviar rastreio, SEMPRE inclua o link clicável${knowledgeBlock}${routingBlock}`;
+- Para o cliente, diga "Site" e nunca "Shopify"
+- Ao enviar rastreio, SEMPRE inclua o link clicável
+- NUNCA mostre valores monetários (R$) dos pedidos ao cliente${knowledgeBlock}${routingBlock}`;
 
     // ─── 5. Build Conversation History ──────────────────────────────────
     const chatMessages: Array<{ role: string; content: string }> = [
@@ -1044,7 +1070,7 @@ REGRAS:
           // Execute tools and add results
           const toolResults: any[] = [];
           for (const tu of toolUseBlocks) {
-            const resolvedToolArgs = tu.name === 'get_order_tracking'
+            const resolvedToolArgs = tu.name === 'get_order_details'
               ? resolveTrackingToolArgs(tu.input || {}, toolExecutions)
               : (tu.input || {});
             console.log(`[concierge][anthropic] tool: ${tu.name}(${JSON.stringify(resolvedToolArgs)})`);
@@ -1121,7 +1147,7 @@ REGRAS:
             const fnName = toolCall.function?.name;
             let fnArgs: Record<string, any> = {};
             try { fnArgs = JSON.parse(toolCall.function?.arguments || '{}'); } catch { fnArgs = {}; }
-            const resolvedFnArgs = fnName === 'get_order_tracking'
+            const resolvedFnArgs = fnName === 'get_order_details'
               ? resolveTrackingToolArgs(fnArgs, toolExecutions)
               : fnArgs;
             console.log(`[concierge][lovable] tool: ${fnName}(${JSON.stringify(resolvedFnArgs)})`);
