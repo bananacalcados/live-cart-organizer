@@ -104,7 +104,10 @@ serve(async (req) => {
       );
     }
 
-    const apiUrl = `https://graph.facebook.com/v21.0/me/messages`;
+    // Instagram uses graph.instagram.com; Messenger uses graph.facebook.com
+    const apiUrl = channel === 'instagram'
+      ? `https://graph.instagram.com/v21.0/me/messages`
+      : `https://graph.facebook.com/v21.0/me/messages`;
 
     const res = await fetch(apiUrl, {
       method: 'POST',
