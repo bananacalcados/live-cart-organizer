@@ -119,9 +119,8 @@ export async function routeMessage(
     return { agent: 'legacy', reason: 'ad_referral_legacy', referral };
   }
 
-  // 4. Default: legacy behavior (automation-trigger-incoming)
-  // Future: this will become 'concierge'
-  return { agent: 'legacy', reason: 'default' };
+  // 4. Default: Concierge agent handles organic leads
+  return { agent: 'concierge', reason: 'default' };
 }
 
 // ─── Helper: Operator cooldown check ─────────────────────────────────────────
