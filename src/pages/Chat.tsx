@@ -26,6 +26,7 @@ import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { STAGES } from "@/types/order";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
+import { InstagramReferralCard } from "@/components/chat/InstagramReferralCard";
 import {
   Select,
   SelectContent,
