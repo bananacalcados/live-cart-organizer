@@ -1,0 +1,1 @@
+ALTER TABLE public.ai_knowledge_base ADD COLUMN agents text[] NOT NULL DEFAULT ARRAY['concierge'];
