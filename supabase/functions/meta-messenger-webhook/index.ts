@@ -85,9 +85,29 @@ serve(async (req) => {
         let messageText = '';
         let mediaType = 'text';
         let mediaUrl: string | null = null;
+        let referralData: Record<string, unknown> | null = null;
 
         if (event.message) {
           messageText = event.message.text || '';
+
+          // Handle reply_to (story reply context from Instagram)
+          if (event.message.reply_to?.story) {
+            const storyUrl = event.message.reply_to.story.url || null;
+            const storyId = event.message.reply_to.story.id || null;
+            referralData = {
+              source_type: 'story_reply',
+              source_id: storyId,
+              media_url: storyUrl,
+              headline: 'Resposta ao Story',
+            };
+            if (!messageText) messageText = '[resposta ao story]';
+          } else if (event.message.reply_to?.mid) {
+            // Generic reply reference
+            referralData = {
+              source_type: 'message_reply',
+              source_id: event.message.reply_to.mid,
+            };
+          }
 
           // Handle attachments
           if (event.message.attachments?.length > 0) {
@@ -99,19 +119,48 @@ serve(async (req) => {
               if (!messageText) {
                 messageText = rawType === 'ephemeral' ? '[story reply]' : '[unsupported media]';
               }
+              // Enrich referral with story media if not already set
+              if (rawType === 'ephemeral' && mediaUrl && !referralData) {
+                referralData = {
+                  source_type: 'story_reply',
+                  media_url: mediaUrl,
+                  headline: 'Resposta ao Story',
+                };
+              }
             } else if (rawType === 'share') {
               // Shared post/reel
               mediaType = 'share';
               mediaUrl = att.payload?.url || null;
               if (!messageText) messageText = '[post compartilhado]';
+              if (!referralData) {
+                referralData = {
+                  source_type: 'shared_post',
+                  media_url: mediaUrl,
+                  headline: 'Post/Reel Compartilhado',
+                };
+              }
             } else if (rawType === 'story_mention') {
               mediaType = 'story';
               mediaUrl = att.payload?.url || null;
               if (!messageText) messageText = '[menção no story]';
+              if (!referralData) {
+                referralData = {
+                  source_type: 'story_mention',
+                  media_url: mediaUrl,
+                  headline: 'Menção no Story',
+                };
+              }
             } else if (rawType === 'reel') {
               mediaType = 'video';
               mediaUrl = att.payload?.url || null;
               if (!messageText) messageText = '[reel compartilhado]';
+              if (!referralData) {
+                referralData = {
+                  source_type: 'reel',
+                  media_url: mediaUrl,
+                  headline: 'Reel',
+                };
+              }
             } else {
               mediaType = rawType; // image, video, audio, file
               mediaUrl = att.payload?.url || null;
@@ -126,10 +175,22 @@ serve(async (req) => {
         } else if (event.postback) {
           messageText = event.postback.payload || event.postback.title || '[postback]';
         } else if (event.referral) {
-          messageText = `[referral: ${event.referral.ref || ''}]`;
+          messageText = event.referral.ref ? `[referral: ${event.referral.ref}]` : '[via anúncio]';
+          referralData = {
+            source_type: event.referral.source || 'ad',
+            source_id: event.referral.ad_id || null,
+            source_url: event.referral.ads_context_data?.ad_link || null,
+            headline: event.referral.ads_context_data?.ad_title || null,
+            media_url: event.referral.ads_context_data?.photo_url || event.referral.ads_context_data?.video_url || null,
+            video_url: event.referral.ads_context_data?.video_url || null,
+          };
         } else {
           console.log(`Skipping unknown event from ${senderId}:`, JSON.stringify(event).slice(0, 300));
           continue;
+        }
+
+        if (referralData) {
+          console.log(`Instagram referral for ${senderId}:`, JSON.stringify(referralData));
         }
 
         // Get sender profile name (use Instagram-specific fields)
@@ -168,6 +229,7 @@ serve(async (req) => {
           is_group: false,
           channel,
           sender_name: senderName,
+          referral: referralData,
         });
 
         if (error) {
