@@ -651,7 +651,7 @@ REGRAS:
       message_in: messageText,
       message_out: finalReply,
       ai_decision: sectorId ? `routed:${sectorId}` : 'responded',
-      provider: 'concierge',
+      provider: usedProvider,
       stage: 'concierge',
     });
 
