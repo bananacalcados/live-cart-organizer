@@ -47,6 +47,7 @@ import PushNotificationPanel from "@/components/marketing/PushNotificationPanel"
 import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
 import { LeadImportDialog } from "@/components/marketing/LeadImportDialog";
 import WhatsAppAdKeywords from "@/components/marketing/WhatsAppAdKeywords";
+import { MarketingAttributionDashboard } from "@/components/marketing/MarketingAttributionDashboard";
 
 // ─── Types ──────────────────────────────────────
 
