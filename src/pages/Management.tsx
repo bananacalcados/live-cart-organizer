@@ -29,6 +29,7 @@ import { MarginFormation } from "@/components/management/MarginFormation";
 import { CrmDuplicates } from "@/components/management/CrmDuplicates";
 import { InvestmentsDashboard } from "@/components/management/InvestmentsDashboard";
 import { AbcCurveAnalysis } from "@/components/management/AbcCurveAnalysis";
+import ExchangeDashboard from "@/components/management/ExchangeDashboard";
 
 interface PosSale {
   id: string;
