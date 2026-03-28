@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
       stats[key].captured++;
 
       // Check if this lead has ANY sales (from pos or zoppy)
-      const allSales = getAllSalesForPhone(normalized);
+      const allSales = getAllSalesForPhone(normalized, undefined);
       const isExistingCustomer = allSales.length > 0;
 
       if (isExistingCustomer) {
