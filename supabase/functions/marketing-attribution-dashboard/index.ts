@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     }
 
     // ─── 2. Fetch pos_customers with whatsapp (paginated) ───
-    const suffixToCustomerId: Record<string, string> = {};
+    const suffixToCustomerIds: Record<string, string[]> = {};
     off = 0;
     while (true) {
       const { data } = await supabase
@@ -78,13 +78,35 @@ Deno.serve(async (req) => {
       if (!data || data.length === 0) break;
       for (const c of data) {
         const s = phoneSuffix(c.whatsapp);
-        if (s.length >= 8) suffixToCustomerId[s] = c.id;
+        if (s.length >= 8) {
+          if (!suffixToCustomerIds[s]) suffixToCustomerIds[s] = [];
+          suffixToCustomerIds[s].push(c.id);
+        }
+      }
+      if (data.length < 1000) break;
+      off += 1000;
+    }
+
+    // Also fetch zoppy_customers phone for matching (covers Tiny/online customers)
+    const suffixToZoppyPhone: Record<string, string> = {};
+    off = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("zoppy_customers")
+        .select("phone")
+        .not("phone", "is", null)
+        .range(off, off + 999);
+      if (!data || data.length === 0) break;
+      for (const c of data) {
+        const s = phoneSuffix(c.phone);
+        if (s.length >= 8) suffixToZoppyPhone[s] = c.phone;
       }
       if (data.length < 1000) break;
       off += 1000;
     }
 
     // ─── 3. Fetch pos_sales (completed, paginated) ───
+    // Map ALL customer IDs for each suffix to catch re-registered customers
     const customerSales: Record<string, any[]> = {};
     off = 0;
     while (true) {
@@ -93,7 +115,6 @@ Deno.serve(async (req) => {
         .select("id, customer_id, total, created_at, store_id")
         .eq("status", "completed")
         .not("customer_id", "is", null);
-      // No date filter on sales - we need all sales to check attribution
       q = q.range(off, off + 999);
       const { data } = await q;
       if (!data || data.length === 0) break;
@@ -103,6 +124,39 @@ Deno.serve(async (req) => {
       }
       if (data.length < 1000) break;
       off += 1000;
+    }
+
+    // ─── 3b. Fetch zoppy_sales (online sales from Tiny ERP) ───
+    const zoppyPhoneSales: Record<string, any[]> = {};
+    off = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("zoppy_sales")
+        .select("id, customer_phone, total, completed_at")
+        .not("customer_phone", "is", null)
+        .not("completed_at", "is", null)
+        .range(off, off + 999);
+      if (!data || data.length === 0) break;
+      for (const s of data) {
+        const suffix = phoneSuffix(s.customer_phone);
+        if (!zoppyPhoneSales[suffix]) zoppyPhoneSales[suffix] = [];
+        zoppyPhoneSales[suffix].push({ ...s, created_at: s.completed_at });
+      }
+      if (data.length < 1000) break;
+      off += 1000;
+    }
+
+    // Helper: get ALL sales for a phone suffix (from both pos_sales and zoppy_sales)
+    function getAllSalesForSuffix(suffix: string): any[] {
+      const sales: any[] = [];
+      // pos_sales via customer IDs
+      const custIds = suffixToCustomerIds[suffix] || [];
+      for (const cid of custIds) {
+        if (customerSales[cid]) sales.push(...customerSales[cid]);
+      }
+      // zoppy_sales via phone
+      if (zoppyPhoneSales[suffix]) sales.push(...zoppyPhoneSales[suffix]);
+      return sales;
     }
 
     // ─── 4. Process lead attribution ───
@@ -154,8 +208,9 @@ Deno.serve(async (req) => {
       }
       stats[key].captured++;
 
-      const custId = suffixToCustomerId[suffix];
-      const isExistingCustomer = !!custId && !!customerSales[custId];
+      // Check if this lead has ANY sales (from pos or zoppy)
+      const allSales = getAllSalesForSuffix(suffix);
+      const isExistingCustomer = allSales.length > 0;
 
       if (isExistingCustomer) {
         stats[key].leadsAreCustomers++;
@@ -163,13 +218,12 @@ Deno.serve(async (req) => {
         stats[key].leadsNotCustomers++;
       }
 
-      if (!custId || !customerSales[custId]) continue;
+      if (allSales.length === 0) continue;
 
       const leadDate = new Date(lead.created_at);
-      const sales = customerSales[custId];
-      const hadPriorSales = sales.some(s => new Date(s.created_at) < leadDate);
+      const hadPriorSales = allSales.some(s => new Date(s.created_at) < leadDate);
 
-      for (const sale of sales) {
+      for (const sale of allSales) {
         const saleDate = new Date(sale.created_at);
         if (saleDate <= leadDate) continue;
         if (hadPriorSales) {
@@ -257,10 +311,10 @@ Deno.serve(async (req) => {
         const suffix = phoneSuffix(r.phone);
         if (suffix.length < 8) continue;
 
-        const custId = suffixToCustomerId[suffix];
-        if (!custId || !customerSales[custId]) continue;
+        const allSales = getAllSalesForSuffix(suffix);
+        if (allSales.length === 0) continue;
 
-        for (const sale of customerSales[custId]) {
+        for (const sale of allSales) {
           const saleDate = new Date(sale.created_at);
           if (saleDate > dispatchDate && saleDate <= windowEnd) {
             if (!stats[key].convertedSuffixes.has(suffix)) {
