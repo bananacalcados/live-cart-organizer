@@ -155,8 +155,8 @@ Deno.serve(async (req) => {
       if (!data || data.length === 0) break;
       for (const s of data) {
         const normalized = normalizePhone(s.customer_phone);
-        if (!zoppyPhoneSales[suffix]) zoppyPhoneSales[suffix] = [];
-        zoppyPhoneSales[suffix].push({ ...s, created_at: s.completed_at });
+        if (!zoppyPhoneSales[normalized]) zoppyPhoneSales[normalized] = [];
+        zoppyPhoneSales[normalized].push({ ...s, created_at: s.completed_at });
       }
       if (data.length < 1000) break;
       off += 1000;
