@@ -245,10 +245,8 @@ Deno.serve(async (req) => {
       stats[key].dispatchCount++;
       stats[key].dispatchDates.push(dispatch.created_at);
 
-      // Try to detect template category from name if not set
-      if (!stats[key].templateCategory || stats[key].templateCategory === "unknown") {
-        stats[key].templateCategory = dispatch.template_category || "MARKETING";
-      }
+
+
 
       if (recipients.length === 0) continue;
 
