@@ -1,0 +1,1 @@
+ALTER TABLE public.dispatch_history ADD COLUMN IF NOT EXISTS campaign_name text;
