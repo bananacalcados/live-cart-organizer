@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { liveteTools, executeToolCall } from "../_shared/livete-tools.ts";
 import { transcribeAudio } from "../_shared/audio-transcribe.ts";
+import { analyzeIncomingAttachment } from "../_shared/media-understanding.ts";
 import { isVisualReferenceMessage, joinMeaningfulMessages, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
 
 const corsHeaders = {
@@ -77,8 +78,15 @@ serve(async (req) => {
     // Append audio transcription to combined message (resolved later after transcription)
     // This variable will be updated after transcription completes
 
-    // Collect any media from recent messages
-    const recentMediaUrl = mediaUrl || recentMsgs?.find(m => m.media_url && m.media_type?.startsWith('image'))?.media_url;
+    // Collect the latest analyzable attachment from recent messages
+    const recentAttachment = mediaUrl && mediaType && ['image', 'document'].includes(mediaType)
+      ? { mediaUrl, mediaType }
+      : (() => {
+          const mediaRow = recentMsgs?.find(m => m.media_url && ['image', 'document'].includes(m.media_type || ''));
+          return mediaRow?.media_url && mediaRow?.media_type
+            ? { mediaUrl: mediaRow.media_url, mediaType: mediaRow.media_type }
+            : null;
+        })();
 
     // Transcribe audio if present
     const audioUrl = (mediaType === 'audio' && mediaUrl)
@@ -101,6 +109,18 @@ serve(async (req) => {
         ? `${combinedMessage}\n${audioPrefix}${audioTranscription}`
         : `${audioPrefix}${audioTranscription}`;
     }
+
+    const attachmentAnalysis = recentAttachment
+      ? await analyzeIncomingAttachment({
+          mediaUrl: recentAttachment.mediaUrl,
+          mediaType: recentAttachment.mediaType,
+          promptContext: combinedMessage,
+        })
+      : null;
+
+    const currentMessageForAi = attachmentAnalysis?.analysis
+      ? `${combinedMessage}\n\n[ANÁLISE DO ANEXO]\n${attachmentAnalysis.analysis}`.trim()
+      : combinedMessage;
 
 
     const { data: session } = await supabase
@@ -337,7 +357,9 @@ ${JSON.stringify(regData, null, 2)}
 - Se esse cliente retornar em outra live, use notify_presenter com alert_type "returning_desistente".
 
 ### Política de Fotos
-    - Você CONSEGUE analisar fotos e prints enviados pelo cliente quando eles vierem anexados no contexto.
+- Você CONSEGUE analisar fotos, prints e PDFs enviados pelo cliente quando eles vierem anexados no contexto.
+- Se houver um bloco [ANÁLISE DO ANEXO] na mensagem atual, trate-o como leitura real do arquivo/imagem enviado.
+- Quando a mensagem atual for sobre esse anexo, responda sobre ele antes de retomar a etapa anterior do pedido.
 - NÃO envie fotos de produtos para evitar "leilão reverso" (cliente comparando preços).
 - Diga que é o mesmo produto que apareceu na live.
 - Ofereça pedir à apresentadora para mostrar novamente: use notify_presenter com alert_type "show_product_again".
@@ -380,18 +402,18 @@ ${cancellationCount >= 2 ? '- ⚠️ ATENÇÃO: próximo cancelamento resultará
     const userContent: any[] = [];
     userContent.push({
       type: 'text',
-      text: `Histórico da conversa:\n${conversationHistory}\n\nMensagem mais recente do cliente: "${combinedMessage}"`,
+      text: `Histórico da conversa:\n${conversationHistory}\n\nMensagem mais recente do cliente: "${currentMessageForAi}"`,
     });
 
     // If customer sent an image, include it for vision analysis
-    if (recentMediaUrl && (mediaType === 'image' || referencesVisual)) {
+    if (attachmentAnalysis?.mediaKind === 'image' && attachmentAnalysis.inlineDataUrl && (mediaType === 'image' || referencesVisual)) {
       userContent.push({
         type: 'image_url',
-        image_url: { url: recentMediaUrl },
+        image_url: { url: attachmentAnalysis.inlineDataUrl },
       });
       userContent.push({
         type: 'text',
-        text: 'O cliente enviou esta imagem. Analise-a para identificar o produto e use find_product se necessário.',
+        text: 'O cliente enviou esta imagem. Use a imagem e a análise anexada para entender todos os detalhes visuais antes de responder.',
       });
     }
 
@@ -598,7 +620,7 @@ ${cancellationCount >= 2 ? '- ⚠️ ATENÇÃO: próximo cancelamento resultará
       order_id: orderId,
       phone,
       stage: effectiveStage,
-      message_in: combinedMessage,
+      message_in: currentMessageForAi,
       message_out: finalReply,
       ai_decision: stageAdvanced ? `stage_${currentStage}_to_${stageAdvanced}` : `stage_${currentStage}_hold`,
       tool_called: toolsExecuted.length > 0 ? toolsExecuted.join(',') : 'livete-respond',
