@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
 
       // ROAS calc: marketing = R$0.40, utility = R$0.50
       const isUtility = (s.templateCategory || "").toUpperCase().includes("UTILITY");
-      const costPerMsg = isUtility ? 0.50 : 0.40;
+      const costPerMsg = isUtility ? 0.05 : 0.40;
       const totalCost = s.totalMessagesSent * costPerMsg;
       const roas = totalCost > 0 ? s.revenue / totalCost : 0;
 
