@@ -1494,6 +1494,11 @@ export default function Management() {
               <TabsContent value="investments" className="space-y-4">
                 <InvestmentsDashboard />
               </TabsContent>
+
+              {/* Trocas e Devoluções */}
+              <TabsContent value="exchanges" className="space-y-4">
+                <ExchangeDashboard />
+              </TabsContent>
             </Tabs>
           </>
         )}
