@@ -297,7 +297,7 @@ Deno.serve(async (req) => {
         dispatch_dates: s.dispatchDates.sort(),
         dispatch_count: s.dispatchCount,
         total_messages_sent: s.totalMessagesSent,
-        template_category: s.templateCategory,
+        cost_per_msg: s.costPerMsg,
         total_cost: Math.round(totalCost * 100) / 100,
         roas: Math.round(roas * 100) / 100,
       };
