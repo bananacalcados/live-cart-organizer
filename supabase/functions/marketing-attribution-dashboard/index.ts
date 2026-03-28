@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
       if (!data || data.length === 0) break;
       for (const c of data) {
         const s = normalizePhone(c.whatsapp);
-        if (s.length >= 8) {
+        if (s) {
           if (!phoneToCustomerIds[s]) phoneToCustomerIds[s] = [];
           phoneToCustomerIds[s].push(c.id);
         }
@@ -115,14 +115,14 @@ Deno.serve(async (req) => {
       if (!data || data.length === 0) break;
       for (const c of data) {
         const s = normalizePhone(c.phone);
-        if (s.length >= 8) phoneToZoppyPhone[s] = c.phone;
+        if (s) phoneToZoppyPhone[s] = c.phone;
       }
       if (data.length < 1000) break;
       off += 1000;
     }
 
     // ─── 3. Fetch pos_sales (completed, paginated) ───
-    // Map ALL customer IDs for each suffix to catch re-registered customers
+    // Map ALL customer IDs for each normalized phone to catch re-registered customers
     const customerSales: Record<string, any[]> = {};
     off = 0;
     while (true) {
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
       off += 1000;
     }
 
-    // Helper: get ALL sales for a phone suffix (from both pos_sales and zoppy_sales)
+    // Helper: get ALL sales for a normalized phone (from both pos_sales and zoppy_sales)
     function getAllSalesForPhone(suffix: string): any[] {
       const sales: any[] = [];
       // pos_sales via customer IDs
@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
       converted: number;
       revenue: number;
       convDays: number[];
-      convertedSuffixes: Set<string>;
+      convertedPhones: Set<string>;
       leadsAreCustomers: number;
       leadsNotCustomers: number;
       dispatchDates: string[];
@@ -216,7 +216,7 @@ Deno.serve(async (req) => {
         stats[key] = {
           campaign: lead.campaign, templateName: "", type: "lead_capture",
           captured: 0, converted: 0, revenue: 0, convDays: [],
-          convertedSuffixes: new Set(),
+          convertedPhones: new Set(),
           leadsAreCustomers: 0, leadsNotCustomers: 0,
           dispatchDates: [], dispatchCount: 0,
           costPerMsg: 0, totalMessagesSent: 0,
@@ -246,8 +246,8 @@ Deno.serve(async (req) => {
           const daysDiff = (saleDate.getTime() - leadDate.getTime()) / 86400000;
           if (daysDiff > windowDays) continue;
         }
-        if (!stats[key].convertedSuffixes.has(suffix)) {
-          stats[key].convertedSuffixes.add(suffix);
+        if (!stats[key].convertedPhones.has(suffix)) {
+          stats[key].convertedPhones.add(suffix);
           stats[key].converted++;
           stats[key].convDays.push((saleDate.getTime() - leadDate.getTime()) / 86400000);
         }
@@ -303,7 +303,7 @@ Deno.serve(async (req) => {
           templateName: dispatch.template_name || "",
           type: "mass_dispatch",
           captured: 0, converted: 0, revenue: 0, convDays: [],
-          convertedSuffixes: new Set(),
+          convertedPhones: new Set(),
           leadsAreCustomers: 0, leadsNotCustomers: 0,
           dispatchDates: [], dispatchCount: 0,
           costPerMsg,
@@ -333,8 +333,8 @@ Deno.serve(async (req) => {
         for (const sale of allSales) {
           const saleDate = new Date(sale.created_at);
           if (saleDate > dispatchDate && saleDate <= windowEnd) {
-            if (!stats[key].convertedSuffixes.has(suffix)) {
-              stats[key].convertedSuffixes.add(suffix);
+            if (!stats[key].convertedPhones.has(suffix)) {
+              stats[key].convertedPhones.add(suffix);
               stats[key].converted++;
               stats[key].convDays.push((saleDate.getTime() - dispatchDate.getTime()) / 86400000);
             }
