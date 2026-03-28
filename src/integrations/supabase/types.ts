@@ -2508,6 +2508,105 @@ export type Database = {
           },
         ]
       }
+      exchange_requests: {
+        Row: {
+          ai_interpretation: string | null
+          ai_nuance_tags: string[] | null
+          auto_approved: boolean | null
+          created_at: string
+          customer_name: string | null
+          customer_verbatim: string | null
+          desired_size: string | null
+          fit_area: string | null
+          fit_detail: string | null
+          frenet_quote_id: string | null
+          id: string
+          order_number: string | null
+          phone: string
+          product_name: string
+          product_size: string | null
+          product_sku: string | null
+          reason_category: Database["public"]["Enums"]["exchange_reason_category"]
+          reason_subcategory: string | null
+          requires_human_review: boolean | null
+          reverse_shipping_code: string | null
+          reverse_tracking_url: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          shipping_carrier: string | null
+          status: Database["public"]["Enums"]["exchange_status"]
+          support_ticket_id: string | null
+          tiny_order_id: string | null
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          ai_interpretation?: string | null
+          ai_nuance_tags?: string[] | null
+          auto_approved?: boolean | null
+          created_at?: string
+          customer_name?: string | null
+          customer_verbatim?: string | null
+          desired_size?: string | null
+          fit_area?: string | null
+          fit_detail?: string | null
+          frenet_quote_id?: string | null
+          id?: string
+          order_number?: string | null
+          phone: string
+          product_name: string
+          product_size?: string | null
+          product_sku?: string | null
+          reason_category?: Database["public"]["Enums"]["exchange_reason_category"]
+          reason_subcategory?: string | null
+          requires_human_review?: boolean | null
+          reverse_shipping_code?: string | null
+          reverse_tracking_url?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shipping_carrier?: string | null
+          status?: Database["public"]["Enums"]["exchange_status"]
+          support_ticket_id?: string | null
+          tiny_order_id?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          ai_interpretation?: string | null
+          ai_nuance_tags?: string[] | null
+          auto_approved?: boolean | null
+          created_at?: string
+          customer_name?: string | null
+          customer_verbatim?: string | null
+          desired_size?: string | null
+          fit_area?: string | null
+          fit_detail?: string | null
+          frenet_quote_id?: string | null
+          id?: string
+          order_number?: string | null
+          phone?: string
+          product_name?: string
+          product_size?: string | null
+          product_sku?: string | null
+          reason_category?: Database["public"]["Enums"]["exchange_reason_category"]
+          reason_subcategory?: string | null
+          requires_human_review?: boolean | null
+          reverse_shipping_code?: string | null
+          reverse_tracking_url?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shipping_carrier?: string | null
+          status?: Database["public"]["Enums"]["exchange_status"]
+          support_ticket_id?: string | null
+          tiny_order_id?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       expedition_beta_order_items: {
         Row: {
           barcode: string | null
@@ -9407,6 +9506,21 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "manager" | "user"
+      exchange_reason_category:
+        | "tamanho"
+        | "defeito"
+        | "nao_gostou"
+        | "produto_errado"
+        | "outro"
+      exchange_status:
+        | "solicitado"
+        | "aprovado"
+        | "aguardando_postagem"
+        | "em_transito"
+        | "recebido"
+        | "concluido"
+        | "recusado"
+        | "cancelado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -9535,6 +9649,23 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "manager", "user"],
+      exchange_reason_category: [
+        "tamanho",
+        "defeito",
+        "nao_gostou",
+        "produto_errado",
+        "outro",
+      ],
+      exchange_status: [
+        "solicitado",
+        "aprovado",
+        "aguardando_postagem",
+        "em_transito",
+        "recebido",
+        "concluido",
+        "recusado",
+        "cancelado",
+      ],
     },
   },
 } as const
