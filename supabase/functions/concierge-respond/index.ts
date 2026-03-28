@@ -912,7 +912,7 @@ serve(async (req) => {
           store_name: selectedOrder.store_name,
         }, stores, supabase, normalizedPhone, whatsappNumberId);
 
-        const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_details', trackingResult);
+        const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_details', trackingResult, recentAiLogs);
         if (forcedTrackingReply) {
           const typingDelay = Math.min(Math.max(forcedTrackingReply.length * 50, 2000), 12000);
           await sleep(typingDelay);
