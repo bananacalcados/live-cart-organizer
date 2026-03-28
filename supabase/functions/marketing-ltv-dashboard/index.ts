@@ -15,80 +15,139 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { store_filter, date_from, date_to } = await req.json().catch(() => ({}));
+    const { date_from, date_to } = await req.json().catch(() => ({}));
 
-    // ─── 1. Get stores ───
-    const { data: stores } = await supabase
-      .from("pos_stores")
-      .select("id, name")
-      .order("name");
-
-    // ─── 2. Get all completed sales with customer (paginated) ───
-    let allSales: any[] = [];
+    // ─── 1. Get ALL customers from zoppy_customers (pre-computed metrics) ───
+    // This has the full 27k+ customer base
+    let allCustomers: any[] = [];
     let off = 0;
     while (true) {
-      let q = supabase
-        .from("pos_sales")
-        .select("id, customer_id, total, created_at, store_id")
-        .eq("status", "completed")
-        .not("customer_id", "is", null)
-        .order("created_at", { ascending: true });
-      if (date_from) q = q.gte("created_at", date_from);
-      if (date_to) q = q.lte("created_at", date_to);
-      if (store_filter && store_filter !== "all") {
-        q = q.eq("store_id", store_filter);
-      }
-      q = q.range(off, off + 999);
-      const { data } = await q;
+      const { data } = await supabase
+        .from("zoppy_customers")
+        .select("id, total_orders, total_spent, first_purchase_at, last_purchase_at, avg_ticket, source")
+        .gt("total_orders", 0)
+        .range(off, off + 999);
       if (!data || data.length === 0) break;
-      allSales = allSales.concat(data);
+      allCustomers = allCustomers.concat(data);
       if (data.length < 1000) break;
       off += 1000;
     }
 
-    // ─── 3. Group by customer ───
-    const customerData: Record<string, {
-      orders: number;
-      totalSpent: number;
-      dates: Date[];
-      storeId: string;
-    }> = {};
-
-    for (const s of allSales) {
-      if (!customerData[s.customer_id]) {
-        customerData[s.customer_id] = { orders: 0, totalSpent: 0, dates: [], storeId: s.store_id };
-      }
-      customerData[s.customer_id].orders++;
-      customerData[s.customer_id].totalSpent += Number(s.total || 0);
-      customerData[s.customer_id].dates.push(new Date(s.created_at));
+    // Apply date filter if provided (filter by first_purchase_at or last_purchase_at)
+    let filtered = allCustomers;
+    if (date_from || date_to) {
+      filtered = allCustomers.filter(c => {
+        // Include customer if any of their purchase activity falls within the range
+        const first = c.first_purchase_at ? new Date(c.first_purchase_at) : null;
+        const last = c.last_purchase_at ? new Date(c.last_purchase_at) : null;
+        if (!first && !last) return false;
+        if (date_from) {
+          const from = new Date(date_from);
+          // Customer's last purchase must be after the start of the period
+          if (last && last < from) return false;
+        }
+        if (date_to) {
+          const to = new Date(date_to);
+          // Customer's first purchase must be before the end of the period
+          if (first && first > to) return false;
+        }
+        return true;
+      });
     }
 
-    const customers = Object.values(customerData);
-    const totalCustomers = customers.length;
-    const totalOrders = customers.reduce((a, b) => a + b.orders, 0);
-    const totalRevenue = customers.reduce((a, b) => a + b.totalSpent, 0);
-
-    // ─── 4. Calculate metrics ───
+    // ─── 2. Overall metrics ───
+    const totalCustomers = filtered.length;
+    const totalOrders = filtered.reduce((a, c) => a + (c.total_orders || 0), 0);
+    const totalRevenue = filtered.reduce((a, c) => a + Number(c.total_spent || 0), 0);
     const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
     const ltv = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
-    const repeatCustomers = customers.filter(c => c.orders >= 2).length;
+    const repeatCustomers = filtered.filter(c => (c.total_orders || 0) >= 2).length;
     const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
-
-    const secondPurchaseTimes: number[] = [];
-    for (const c of customers) {
-      if (c.dates.length >= 2) {
-        c.dates.sort((a, b) => a.getTime() - b.getTime());
-        const diff = (c.dates[1].getTime() - c.dates[0].getTime()) / 86400000;
-        secondPurchaseTimes.push(diff);
-      }
-    }
-    const avgDaysToSecondPurchase = secondPurchaseTimes.length > 0
-      ? secondPurchaseTimes.reduce((a, b) => a + b, 0) / secondPurchaseTimes.length
-      : 0;
-
     const avgOrders = totalCustomers > 0 ? totalOrders / totalCustomers : 0;
 
-    // ─── 5. Per-store breakdown ───
+    // For avg days to second purchase, we need zoppy_sales data
+    // Use the pre-computed data: customers with 2+ orders, calculate from first/last
+    // Better approach: get actual sales for repeat customers to find 2nd purchase date
+    let secondPurchaseDays: number[] = [];
+    
+    // Get zoppy_sales for time-to-second calculation (paginated)
+    const phoneToSales: Record<string, Date[]> = {};
+    off = 0;
+    while (true) {
+      let q = supabase
+        .from("zoppy_sales")
+        .select("customer_phone, completed_at")
+        .not("customer_phone", "is", null)
+        .not("completed_at", "is", null)
+        .order("completed_at", { ascending: true });
+      q = q.range(off, off + 999);
+      const { data } = await q;
+      if (!data || data.length === 0) break;
+      for (const s of data) {
+        if (!phoneToSales[s.customer_phone]) phoneToSales[s.customer_phone] = [];
+        phoneToSales[s.customer_phone].push(new Date(s.completed_at));
+      }
+      if (data.length < 1000) break;
+      off += 1000;
+    }
+
+    // Also get pos_sales for second purchase calc
+    off = 0;
+    const custIdToSales: Record<string, Date[]> = {};
+    while (true) {
+      const { data } = await supabase
+        .from("pos_sales")
+        .select("customer_id, created_at")
+        .eq("status", "completed")
+        .not("customer_id", "is", null)
+        .order("created_at", { ascending: true })
+        .range(off, off + 999);
+      if (!data || data.length === 0) break;
+      for (const s of data) {
+        if (!custIdToSales[s.customer_id]) custIdToSales[s.customer_id] = [];
+        custIdToSales[s.customer_id].push(new Date(s.created_at));
+      }
+      if (data.length < 1000) break;
+      off += 1000;
+    }
+
+    // Calculate second purchase times from zoppy_sales
+    for (const dates of Object.values(phoneToSales)) {
+      if (dates.length >= 2) {
+        dates.sort((a, b) => a.getTime() - b.getTime());
+        secondPurchaseDays.push((dates[1].getTime() - dates[0].getTime()) / 86400000);
+      }
+    }
+    // Also from pos_sales
+    for (const dates of Object.values(custIdToSales)) {
+      if (dates.length >= 2) {
+        dates.sort((a, b) => a.getTime() - b.getTime());
+        secondPurchaseDays.push((dates[1].getTime() - dates[0].getTime()) / 86400000);
+      }
+    }
+
+    const avgDaysToSecondPurchase = secondPurchaseDays.length > 0
+      ? secondPurchaseDays.reduce((a, b) => a + b, 0) / secondPurchaseDays.length
+      : 0;
+
+    // ─── 3. Frequency distribution ───
+    const freqDist: Record<string, number> = { "1x": 0, "2x": 0, "3x": 0, "4x": 0, "5+": 0 };
+    for (const c of filtered) {
+      const o = c.total_orders || 0;
+      if (o === 1) freqDist["1x"]++;
+      else if (o === 2) freqDist["2x"]++;
+      else if (o === 3) freqDist["3x"]++;
+      else if (o === 4) freqDist["4x"]++;
+      else if (o >= 5) freqDist["5+"]++;
+    }
+
+    // ─── 4. Store breakdown using pos_sales (physical stores) + source for online ───
+    const { data: posStores } = await supabase
+      .from("pos_stores")
+      .select("id, name")
+      .order("name");
+
+    // Build store breakdown from pos_sales
     const storeStats: Record<string, {
       name: string;
       customers: Set<string>;
@@ -98,7 +157,7 @@ Deno.serve(async (req) => {
       secondPurchaseDays: number[];
     }> = {};
 
-    for (const store of stores || []) {
+    for (const store of posStores || []) {
       storeStats[store.id] = {
         name: store.name,
         customers: new Set(),
@@ -108,23 +167,73 @@ Deno.serve(async (req) => {
         secondPurchaseDays: [],
       };
     }
+    // Add "Site" channel for online orders
+    storeStats["online"] = {
+      name: "Site (Online)",
+      customers: new Set(),
+      orders: 0,
+      revenue: 0,
+      repeatCustomers: 0,
+      secondPurchaseDays: [],
+    };
 
+    // POS sales per store
+    off = 0;
     const storeCustomerOrders: Record<string, Record<string, Date[]>> = {};
-    for (const s of allSales) {
-      if (!storeCustomerOrders[s.store_id]) storeCustomerOrders[s.store_id] = {};
-      if (!storeCustomerOrders[s.store_id][s.customer_id]) storeCustomerOrders[s.store_id][s.customer_id] = [];
-      storeCustomerOrders[s.store_id][s.customer_id].push(new Date(s.created_at));
-
-      if (storeStats[s.store_id]) {
-        storeStats[s.store_id].customers.add(s.customer_id);
-        storeStats[s.store_id].orders++;
-        storeStats[s.store_id].revenue += Number(s.total || 0);
+    while (true) {
+      let q = supabase
+        .from("pos_sales")
+        .select("customer_id, total, created_at, store_id")
+        .eq("status", "completed")
+        .not("customer_id", "is", null);
+      if (date_from) q = q.gte("created_at", date_from);
+      if (date_to) q = q.lte("created_at", date_to);
+      q = q.range(off, off + 999);
+      const { data } = await q;
+      if (!data || data.length === 0) break;
+      for (const s of data) {
+        if (storeStats[s.store_id]) {
+          storeStats[s.store_id].customers.add(s.customer_id);
+          storeStats[s.store_id].orders++;
+          storeStats[s.store_id].revenue += Number(s.total || 0);
+          if (!storeCustomerOrders[s.store_id]) storeCustomerOrders[s.store_id] = {};
+          if (!storeCustomerOrders[s.store_id][s.customer_id]) storeCustomerOrders[s.store_id][s.customer_id] = [];
+          storeCustomerOrders[s.store_id][s.customer_id].push(new Date(s.created_at));
+        }
       }
+      if (data.length < 1000) break;
+      off += 1000;
     }
 
+    // Online sales from zoppy_sales
+    off = 0;
+    const onlineCustomerOrders: Record<string, Date[]> = {};
+    while (true) {
+      let q = supabase
+        .from("zoppy_sales")
+        .select("customer_phone, total, completed_at")
+        .not("customer_phone", "is", null)
+        .not("completed_at", "is", null);
+      if (date_from) q = q.gte("completed_at", date_from);
+      if (date_to) q = q.lte("completed_at", date_to);
+      q = q.range(off, off + 999);
+      const { data } = await q;
+      if (!data || data.length === 0) break;
+      for (const s of data) {
+        storeStats["online"].customers.add(s.customer_phone);
+        storeStats["online"].orders++;
+        storeStats["online"].revenue += Number(s.total || 0);
+        if (!onlineCustomerOrders[s.customer_phone]) onlineCustomerOrders[s.customer_phone] = [];
+        onlineCustomerOrders[s.customer_phone].push(new Date(s.completed_at));
+      }
+      if (data.length < 1000) break;
+      off += 1000;
+    }
+
+    // Calculate repeat for stores
     for (const [storeId, custMap] of Object.entries(storeCustomerOrders)) {
       if (!storeStats[storeId]) continue;
-      for (const [, dates] of Object.entries(custMap)) {
+      for (const dates of Object.values(custMap)) {
         if (dates.length >= 2) {
           storeStats[storeId].repeatCustomers++;
           dates.sort((a, b) => a.getTime() - b.getTime());
@@ -132,6 +241,16 @@ Deno.serve(async (req) => {
             (dates[1].getTime() - dates[0].getTime()) / 86400000
           );
         }
+      }
+    }
+    // Online repeat
+    for (const dates of Object.values(onlineCustomerOrders)) {
+      if (dates.length >= 2) {
+        storeStats["online"].repeatCustomers++;
+        dates.sort((a, b) => a.getTime() - b.getTime());
+        storeStats["online"].secondPurchaseDays.push(
+          (dates[1].getTime() - dates[0].getTime()) / 86400000
+        );
       }
     }
 
@@ -154,16 +273,6 @@ Deno.serve(async (req) => {
           : 0,
       }))
       .sort((a, b) => b.total_revenue - a.total_revenue);
-
-    // ─── 6. Frequency distribution ───
-    const freqDist: Record<string, number> = { "1x": 0, "2x": 0, "3x": 0, "4x": 0, "5+": 0 };
-    for (const c of customers) {
-      if (c.orders === 1) freqDist["1x"]++;
-      else if (c.orders === 2) freqDist["2x"]++;
-      else if (c.orders === 3) freqDist["3x"]++;
-      else if (c.orders === 4) freqDist["4x"]++;
-      else freqDist["5+"]++;
-    }
 
     return new Response(JSON.stringify({
       summary: {
