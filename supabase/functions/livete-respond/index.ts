@@ -49,7 +49,8 @@ serve(async (req) => {
       .limit(1);
 
     const latestMsg = latestMsgs?.[0];
-    if (latestMsg && messageText && latestMsg.message !== messageText) {
+    const isMediaMessage = mediaType === 'audio' || mediaType === 'image';
+    if (!isMediaMessage && latestMsg && messageText && latestMsg.message !== messageText) {
       console.log(`[livete-respond] Skipping: newer message detected for ${phone}`);
       return new Response(JSON.stringify({ handled: false, reason: 'debounced' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
