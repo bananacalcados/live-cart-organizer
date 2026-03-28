@@ -290,13 +290,15 @@ Deno.serve(async (req) => {
     }
 
     // ─── 5. Mass dispatch attribution ───
+    // Include completed AND cancelled dispatches that actually sent messages (>10)
     let allDispatches: any[] = [];
     off = 0;
     while (true) {
       let q = supabase
         .from("dispatch_history")
         .select("id, template_name, campaign_name, created_at, sent_count, status, cost_per_message")
-        .eq("status", "completed");
+        .in("status", ["completed", "cancelled"])
+        .gt("sent_count", 10); // exclude transactional one-offs
       if (date_from) q = q.gte("created_at", date_from);
       if (date_to) q = q.lte("created_at", date_to);
       q = q.range(off, off + 999);
