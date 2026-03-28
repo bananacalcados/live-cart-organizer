@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
           convertedSuffixes: new Set(),
           leadsAreCustomers: 0, leadsNotCustomers: 0,
           dispatchDates: [], dispatchCount: 0,
-          templateCategory: "unknown", totalMessagesSent: 0,
+          costPerMsg: 0, totalMessagesSent: 0,
         };
       }
       stats[key].captured++;
