@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     while (true) {
       const { data } = await supabase
         .from("zoppy_customers")
-        .select("id, total_orders, total_spent, first_purchase_at, last_purchase_at, avg_ticket, source")
+        .select("id, total_orders, total_spent, first_purchase_at, last_purchase_at, avg_ticket, source, region_type")
         .gt("total_orders", 0)
         .range(off, off + 999);
       if (!data || data.length === 0) break;
@@ -103,43 +103,72 @@ Deno.serve(async (req) => {
       else if (o >= 5) freqDist["5+"]++;
     }
 
-    // ─── 4. Store breakdown using pos_sales (physical stores) + source for online ───
-    const { data: posStores } = await supabase
-      .from("pos_stores")
-      .select("id, name")
-      .order("name");
-
-    // Build store breakdown from pos_sales
-    const storeStats: Record<string, {
+    // ─── 4. Channel breakdown using zoppy_customers (full RFM matrix) ───
+    // Group by region_type to get the breakdown across all 27k+ customers
+    const channelStats: Record<string, {
       name: string;
-      customers: Set<string>;
+      customers: number;
       orders: number;
       revenue: number;
       repeatCustomers: number;
       secondPurchaseDays: number[];
     }> = {};
 
-    for (const store of posStores || []) {
-      storeStats[store.id] = {
-        name: store.name,
-        customers: new Set(),
-        orders: 0,
-        revenue: 0,
-        repeatCustomers: 0,
-        secondPurchaseDays: [],
-      };
-    }
-    // Add "Site" channel for online orders
-    storeStats["online"] = {
-      name: "Site (Online)",
-      customers: new Set(),
-      orders: 0,
-      revenue: 0,
-      repeatCustomers: 0,
-      secondPurchaseDays: [],
+    // Initialize channels
+    const channelMap: Record<string, string> = {
+      "local": "Lojas Físicas",
+      "online": "Site (Online)",
+      "unknown": "Outros / Não identificado",
     };
 
-    // POS sales per store
+    for (const [key, name] of Object.entries(channelMap)) {
+      channelStats[key] = { name, customers: 0, orders: 0, revenue: 0, repeatCustomers: 0, secondPurchaseDays: [] };
+    }
+
+    for (const c of filtered) {
+      const channel = c.region_type || "unknown";
+      if (!channelStats[channel]) {
+        channelStats[channel] = { name: channel, customers: 0, orders: 0, revenue: 0, repeatCustomers: 0, secondPurchaseDays: [] };
+      }
+      channelStats[channel].customers++;
+      channelStats[channel].orders += c.total_orders || 0;
+      channelStats[channel].revenue += Number(c.total_spent || 0);
+
+      if ((c.total_orders || 0) >= 2) {
+        channelStats[channel].repeatCustomers++;
+        if (c.first_purchase_at && c.last_purchase_at) {
+          const first = new Date(c.first_purchase_at).getTime();
+          const last = new Date(c.last_purchase_at).getTime();
+          if (last > first) {
+            if (c.total_orders === 2) {
+              channelStats[channel].secondPurchaseDays.push((last - first) / 86400000);
+            } else {
+              channelStats[channel].secondPurchaseDays.push((last - first) / ((c.total_orders - 1) * 86400000));
+            }
+          }
+        }
+      }
+    }
+
+    // Also get per-physical-store detail from pos_sales for sub-breakdown
+    const { data: posStores } = await supabase
+      .from("pos_stores")
+      .select("id, name")
+      .order("name");
+
+    const physicalStoreStats: Record<string, {
+      name: string; customers: Set<string>; orders: number; revenue: number;
+      repeatCustomers: number; secondPurchaseDays: number[];
+    }> = {};
+
+    for (const store of (posStores || []).filter(s => !s.name.toLowerCase().includes("site") && !s.name.toLowerCase().includes("tiny") && !s.name.toLowerCase().includes("shopify"))) {
+      physicalStoreStats[store.id] = {
+        name: store.name, customers: new Set(), orders: 0, revenue: 0,
+        repeatCustomers: 0, secondPurchaseDays: [],
+      };
+    }
+
+    // Fetch pos_sales for per-store detail
     off = 0;
     const storeCustomerOrders: Record<string, Record<string, Date[]>> = {};
     while (true) {
@@ -154,10 +183,10 @@ Deno.serve(async (req) => {
       const { data } = await q;
       if (!data || data.length === 0) break;
       for (const s of data) {
-        if (storeStats[s.store_id]) {
-          storeStats[s.store_id].customers.add(s.customer_id);
-          storeStats[s.store_id].orders++;
-          storeStats[s.store_id].revenue += Number(s.total || 0);
+        if (physicalStoreStats[s.store_id]) {
+          physicalStoreStats[s.store_id].customers.add(s.customer_id);
+          physicalStoreStats[s.store_id].orders++;
+          physicalStoreStats[s.store_id].revenue += Number(s.total || 0);
           if (!storeCustomerOrders[s.store_id]) storeCustomerOrders[s.store_id] = {};
           if (!storeCustomerOrders[s.store_id][s.customer_id]) storeCustomerOrders[s.store_id][s.customer_id] = [];
           storeCustomerOrders[s.store_id][s.customer_id].push(new Date(s.created_at));
@@ -167,74 +196,56 @@ Deno.serve(async (req) => {
       off += 1000;
     }
 
-    // Online sales from zoppy_sales
-    off = 0;
-    const onlineCustomerOrders: Record<string, Date[]> = {};
-    while (true) {
-      let q = supabase
-        .from("zoppy_sales")
-        .select("customer_phone, total, completed_at")
-        .not("customer_phone", "is", null)
-        .not("completed_at", "is", null);
-      if (date_from) q = q.gte("completed_at", date_from);
-      if (date_to) q = q.lte("completed_at", date_to);
-      q = q.range(off, off + 999);
-      const { data } = await q;
-      if (!data || data.length === 0) break;
-      for (const s of data) {
-        storeStats["online"].customers.add(s.customer_phone);
-        storeStats["online"].orders++;
-        storeStats["online"].revenue += Number(s.total || 0);
-        if (!onlineCustomerOrders[s.customer_phone]) onlineCustomerOrders[s.customer_phone] = [];
-        onlineCustomerOrders[s.customer_phone].push(new Date(s.completed_at));
-      }
-      if (data.length < 1000) break;
-      off += 1000;
-    }
-
-    // Calculate repeat for stores
     for (const [storeId, custMap] of Object.entries(storeCustomerOrders)) {
-      if (!storeStats[storeId]) continue;
+      if (!physicalStoreStats[storeId]) continue;
       for (const dates of Object.values(custMap)) {
         if (dates.length >= 2) {
-          storeStats[storeId].repeatCustomers++;
+          physicalStoreStats[storeId].repeatCustomers++;
           dates.sort((a, b) => a.getTime() - b.getTime());
-          storeStats[storeId].secondPurchaseDays.push(
+          physicalStoreStats[storeId].secondPurchaseDays.push(
             (dates[1].getTime() - dates[0].getTime()) / 86400000
           );
         }
       }
     }
-    // Online repeat
-    for (const dates of Object.values(onlineCustomerOrders)) {
-      if (dates.length >= 2) {
-        storeStats["online"].repeatCustomers++;
-        dates.sort((a, b) => a.getTime() - b.getTime());
-        storeStats["online"].secondPurchaseDays.push(
-          (dates[1].getTime() - dates[0].getTime()) / 86400000
-        );
-      }
-    }
 
-    const storeBreakdown = Object.entries(storeStats)
-      .filter(([, v]) => v.customers.size > 0)
-      .map(([id, v]) => ({
-        store_id: id,
-        store_name: v.name,
-        total_customers: v.customers.size,
-        total_orders: v.orders,
-        total_revenue: Math.round(v.revenue * 100) / 100,
-        avg_ticket: v.orders > 0 ? Math.round(v.revenue / v.orders * 100) / 100 : 0,
-        ltv: v.customers.size > 0 ? Math.round(v.revenue / v.customers.size * 100) / 100 : 0,
-        repeat_rate: v.customers.size > 0
-          ? Math.round(v.repeatCustomers / v.customers.size * 10000) / 100
-          : 0,
-        repeat_customers: v.repeatCustomers,
-        avg_days_to_second_purchase: v.secondPurchaseDays.length > 0
-          ? Math.round(v.secondPurchaseDays.reduce((a, b) => a + b, 0) / v.secondPurchaseDays.length * 10) / 10
-          : 0,
-      }))
-      .sort((a, b) => b.total_revenue - a.total_revenue);
+    // Build store breakdown: channels from zoppy_customers + physical store detail from pos_sales
+    const storeBreakdown = [
+      // Channel-level breakdown from RFM matrix
+      ...Object.entries(channelStats)
+        .filter(([, v]) => v.customers > 0)
+        .map(([id, v]) => ({
+          store_id: `channel:${id}`,
+          store_name: v.name,
+          total_customers: v.customers,
+          total_orders: v.orders,
+          total_revenue: Math.round(v.revenue * 100) / 100,
+          avg_ticket: v.orders > 0 ? Math.round(v.revenue / v.orders * 100) / 100 : 0,
+          ltv: v.customers > 0 ? Math.round(v.revenue / v.customers * 100) / 100 : 0,
+          repeat_rate: v.customers > 0 ? Math.round(v.repeatCustomers / v.customers * 10000) / 100 : 0,
+          repeat_customers: v.repeatCustomers,
+          avg_days_to_second_purchase: v.secondPurchaseDays.length > 0
+            ? Math.round(v.secondPurchaseDays.reduce((a, b) => a + b, 0) / v.secondPurchaseDays.length * 10) / 10 : 0,
+          is_channel: true,
+        })),
+      // Per-physical-store detail from POS (sub-breakdown)
+      ...Object.entries(physicalStoreStats)
+        .filter(([, v]) => v.customers.size > 0)
+        .map(([id, v]) => ({
+          store_id: id,
+          store_name: `  ↳ ${v.name} (PDV)`,
+          total_customers: v.customers.size,
+          total_orders: v.orders,
+          total_revenue: Math.round(v.revenue * 100) / 100,
+          avg_ticket: v.orders > 0 ? Math.round(v.revenue / v.orders * 100) / 100 : 0,
+          ltv: v.customers.size > 0 ? Math.round(v.revenue / v.customers.size * 100) / 100 : 0,
+          repeat_rate: v.customers.size > 0 ? Math.round(v.repeatCustomers / v.customers.size * 10000) / 100 : 0,
+          repeat_customers: v.repeatCustomers,
+          avg_days_to_second_purchase: v.secondPurchaseDays.length > 0
+            ? Math.round(v.secondPurchaseDays.reduce((a, b) => a + b, 0) / v.secondPurchaseDays.length * 10) / 10 : 0,
+          is_channel: false,
+        })),
+    ].sort((a, b) => b.total_revenue - a.total_revenue);
 
     return new Response(JSON.stringify({
       summary: {
