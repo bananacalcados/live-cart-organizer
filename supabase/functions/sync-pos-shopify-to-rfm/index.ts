@@ -157,15 +157,19 @@ serve(async (req) => {
           const url = `https://api.tiny.com.br/api2/pedidos.pesquisa.php?token=${tinyToken}&formato=json&pagina=${page}&dataInicial=${formatBRDate(dateFrom)}&dataFinal=${formatBRDate(now)}&situacao=Faturado`;
 
           try {
+            console.log(`Tiny: fetching page ${page}...`);
             const resp = await fetch(url);
             apiCallCount++;
             const data = await safeJson(resp);
             const retorno = data.retorno;
 
             if (retorno?.status === 'Erro' || retorno?.status_processamento === '3') {
-              console.log(`Tiny page ${page}: no more data or error`);
+              const errMsg = retorno?.erros?.[0]?.erro || retorno?.status || 'unknown';
+              console.log(`Tiny page ${page}: error - ${errMsg}`);
               break;
             }
+
+            console.log(`Tiny page ${page}: status=${retorno?.status}, records=${retorno?.pedidos?.length || 0}`);
 
             const pedidos = retorno?.pedidos || [];
             if (page === resumePage) {
