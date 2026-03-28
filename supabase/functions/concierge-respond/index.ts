@@ -396,6 +396,82 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "create_exchange_request",
+      description: "Registra uma solicitação de troca de produto. Use quando o cliente disser que quer trocar, devolver ou que o produto não serviu/não gostou. A IA DEVE coletar TODAS as informações antes de chamar esta ferramenta: qual pedido, qual produto, motivo detalhado, e tamanho desejado (se aplicável). Interprete o motivo do cliente para classificar corretamente a categoria e as nuances (ex: 'apertou no peito do pé' = tamanho + fit_area:'peito_do_pe').",
+      parameters: {
+        type: "object",
+        properties: {
+          order_number: {
+            type: "string",
+            description: "Número do pedido (ex: 4811)"
+          },
+          tiny_order_id: {
+            type: "string",
+            description: "ID interno Tiny do pedido"
+          },
+          customer_name: {
+            type: "string",
+            description: "Nome do cliente"
+          },
+          product_name: {
+            type: "string",
+            description: "Nome completo do produto que será trocado"
+          },
+          product_sku: {
+            type: "string",
+            description: "SKU do produto, se disponível"
+          },
+          product_size: {
+            type: "string",
+            description: "Tamanho atual do produto (ex: 37, 38, M, G)"
+          },
+          desired_size: {
+            type: "string",
+            description: "Tamanho desejado na troca, se aplicável"
+          },
+          reason_category: {
+            type: "string",
+            enum: ["tamanho", "defeito", "nao_gostou", "produto_errado", "outro"],
+            description: "Categoria principal: 'tamanho' (ficou grande/pequeno/apertou), 'defeito' (problema de fabricação), 'nao_gostou' (estética/conforto), 'produto_errado' (enviamos errado), 'outro'"
+          },
+          reason_subcategory: {
+            type: "string",
+            description: "Subcategoria interpretada pela IA. Exemplos: 'comprimento_pequeno', 'comprimento_grande', 'largura_apertada', 'peito_do_pe', 'calcanhar_folgado', 'solado_descolando', 'costura_soltando', 'cor_diferente_da_foto', 'desconfortavel', 'material_diferente'"
+          },
+          ai_nuance_tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Tags de nuance para análise futura. Ex: ['peito_do_pe', 'altura_produto', 'forma_pequena']. Interprete o que o cliente diz para gerar tags precisas sobre o FIT do calçado."
+          },
+          customer_verbatim: {
+            type: "string",
+            description: "Frase EXATA do cliente descrevendo o motivo da troca, sem editar"
+          },
+          ai_interpretation: {
+            type: "string",
+            description: "Interpretação da IA sobre o problema real. Ex: 'Cliente reporta que o calçado apertou no peito do pé. Isso indica que a FORMA do modelo é estreita na região do metatarso, não necessariamente que o comprimento está errado. Recomenda-se numeração maior OU modelo com forma mais larga.'"
+          },
+          fit_area: {
+            type: "string",
+            description: "Área do pé afetada (se troca por tamanho): 'comprimento', 'largura', 'peito_do_pe', 'calcanhar', 'bico', 'cano', 'palmilha', 'geral'"
+          },
+          fit_detail: {
+            type: "string",
+            description: "Detalhe sobre o fit: 'apertado', 'folgado', 'curto', 'longo', 'alto', 'baixo'"
+          },
+          customer_cep: {
+            type: "string",
+            description: "CEP do cliente para gerar logística reversa"
+          }
+        },
+        required: ["product_name", "reason_category", "customer_verbatim", "ai_interpretation"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "transfer_to_human",
       description: "Transfere a conversa para um atendente humano e cria um ticket de suporte. Use APENAS quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo de suporte, ou precisa de atendimento especializado. NÃO use se ainda tem ferramentas que podem responder a pergunta. Preencha summary com um resumo claro da situação do cliente.",
       parameters: {
@@ -622,6 +698,123 @@ async function executeToolCall(
       store_name: getCustomerFacingStoreName(store.name),
       obs: pedido.obs || null,
     });
+  }
+
+  if (toolName === 'create_exchange_request') {
+    // Determine if auto-approve or needs human review
+    const isSimple = ['tamanho'].includes(args.reason_category) && !['defeito'].includes(args.reason_category);
+    const requiresHuman = ['defeito', 'produto_errado'].includes(args.reason_category);
+
+    const exchangeData: Record<string, any> = {
+      phone,
+      customer_name: args.customer_name || null,
+      order_number: args.order_number || null,
+      tiny_order_id: args.tiny_order_id || null,
+      product_name: args.product_name,
+      product_sku: args.product_sku || null,
+      product_size: args.product_size || null,
+      desired_size: args.desired_size || null,
+      reason_category: args.reason_category || 'outro',
+      reason_subcategory: args.reason_subcategory || null,
+      ai_nuance_tags: args.ai_nuance_tags || [],
+      customer_verbatim: args.customer_verbatim || null,
+      ai_interpretation: args.ai_interpretation || null,
+      fit_area: args.fit_area || null,
+      fit_detail: args.fit_detail || null,
+      auto_approved: isSimple && !requiresHuman,
+      requires_human_review: requiresHuman,
+      status: requiresHuman ? 'solicitado' : (isSimple ? 'aprovado' : 'solicitado'),
+      whatsapp_number_id: whatsappNumberId || null,
+    };
+
+    const { data: exchangeRow, error: exchangeErr } = await supabase
+      .from('exchange_requests')
+      .insert(exchangeData)
+      .select('id')
+      .single();
+
+    if (exchangeErr) {
+      console.error('[concierge] Exchange request creation error:', exchangeErr);
+      return JSON.stringify({ error: 'Erro ao registrar solicitação de troca.' });
+    }
+
+    console.log(`[concierge] Exchange request created: ${exchangeRow.id} | category=${args.reason_category} | auto_approved=${isSimple && !requiresHuman}`);
+
+    // If auto-approved and has CEP, try to quote reverse shipping
+    let reverseShippingInfo: string | null = null;
+    if (isSimple && !requiresHuman && args.customer_cep) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        // Get store CEP from first store
+        const { data: storeSettings } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'store_cep')
+          .maybeSingle();
+        
+        const storeCep = (storeSettings?.value as any)?.cep || '38400000'; // default Uberlândia
+
+        const reverseResp = await fetch(`${supabaseUrl}/functions/v1/exchange-reverse-shipping`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            exchange_request_id: exchangeRow.id,
+            cep_origin: args.customer_cep.replace(/\D/g, ''),
+            cep_destination: storeCep.replace(/\D/g, ''),
+          }),
+        });
+
+        if (reverseResp.ok) {
+          const reverseData = await reverseResp.json();
+          if (reverseData.success && reverseData.tracking_code) {
+            reverseShippingInfo = `Código de postagem reversa: ${reverseData.tracking_code} (${reverseData.carrier})`;
+          } else if (reverseData.success && reverseData.cheapest) {
+            reverseShippingInfo = `Frete reverso disponível via ${reverseData.cheapest.carrier}: R$ ${reverseData.cheapest.price.toFixed(2)}, entrega em ${reverseData.cheapest.delivery_days} dias úteis`;
+          }
+        }
+      } catch (e) {
+        console.error('[concierge] Reverse shipping quote error:', e);
+      }
+    }
+
+    // Also create a support ticket for visibility
+    try {
+      const deadline = new Date();
+      deadline.setMinutes(deadline.getMinutes() + (requiresHuman ? 30 : 120));
+      
+      await supabase.from('support_tickets').insert({
+        subject: `Troca: ${args.product_name} - ${args.reason_category}`,
+        description: `Solicitação de troca registrada pela Bia.\n\nProduto: ${args.product_name}\nTamanho atual: ${args.product_size || 'N/I'}\nTamanho desejado: ${args.desired_size || 'N/I'}\nMotivo: ${args.reason_category} - ${args.reason_subcategory || ''}\nVerbatim cliente: "${args.customer_verbatim}"\nInterpretação IA: ${args.ai_interpretation}\nFit: ${args.fit_area || 'N/A'} - ${args.fit_detail || 'N/A'}\nNuance tags: ${(args.ai_nuance_tags || []).join(', ')}\n${reverseShippingInfo ? `\nLogística reversa: ${reverseShippingInfo}` : ''}\n\nInstância WhatsApp: ${whatsappNumberId || 'N/I'}`,
+        priority: requiresHuman ? 'high' : 'medium',
+        customer_name: args.customer_name,
+        customer_phone: phone,
+        deadline_at: deadline.toISOString(),
+        source: 'bia_ai',
+      });
+    } catch (e) {
+      console.error('[concierge] Exchange ticket error:', e);
+    }
+
+    const result: Record<string, any> = {
+      exchange_created: true,
+      exchange_id: exchangeRow.id,
+      auto_approved: isSimple && !requiresHuman,
+      requires_human_review: requiresHuman,
+      status: exchangeData.status,
+    };
+
+    if (reverseShippingInfo) result.reverse_shipping = reverseShippingInfo;
+
+    if (requiresHuman) {
+      result.message = 'Solicitação de troca registrada. Como envolve defeito/produto errado, nossa equipe vai analisar e entrar em contato.';
+    } else if (isSimple) {
+      result.message = 'Troca aprovada automaticamente! Informações de logística reversa foram geradas.';
+    } else {
+      result.message = 'Solicitação de troca registrada. Nossa equipe vai analisar e retornar em breve.';
+    }
+
+    return JSON.stringify(result);
   }
 
   if (toolName === 'transfer_to_human') {
@@ -1048,8 +1241,34 @@ EMPATIA E SITUAÇÕES DIFÍCEIS:
 SEU PAPEL (APENAS):
 - Ajudar clientes com rastreio de pedidos usando as ferramentas disponíveis
 - Informar sobre produtos comprados, status e detalhes do pedido
+- PROCESSAR SOLICITAÇÕES DE TROCA/DEVOLUÇÃO (novo! detalhes abaixo)
 - Direcionar para atendente humano quando necessário
 - Responder dúvidas básicas usando a base de conhecimento
+
+FLUXO DE TROCA/DEVOLUÇÃO (IMPORTANTE):
+Quando o cliente disser que quer trocar, devolver, que o produto não serviu, ficou apertado, grande, etc.:
+1. Primeiro, identifique QUAL pedido e QUAL produto. Se não souber, pergunte: "Qual pedido você gostaria de trocar? Me passa seu CPF que localizo rapidinho! 😊"
+2. Pergunte o MOTIVO da troca de forma empática: "Entendo! E o que aconteceu com o produto? Ficou apertado, grande, ou foi outro motivo?"
+3. Se for problema de TAMANHO, investigue com carinho: "Apertou onde exatamente? No comprimento, na largura, no peito do pé?" — isso é CRUCIAL para a gente entender a forma do calçado.
+4. Se for DEFEITO, peça foto: "Você pode me mandar uma foto do defeito? Assim consigo registrar direitinho pra nossa equipe! 📸"
+5. Pergunte o tamanho desejado (se troca por tamanho): "Qual tamanho você gostaria de receber no lugar?"
+6. Pergunte o CEP do cliente pra gerar a logística reversa: "Me passa seu CEP que eu já gero o código de postagem pra você!"
+7. Quando tiver TODAS as informações, use create_exchange_request com os dados completos. INTERPRETE o motivo do cliente para:
+   - Classificar a reason_category corretamente
+   - Criar reason_subcategory precisa (ex: 'comprimento_pequeno', 'largura_apertada', 'peito_do_pe_apertado')
+   - Gerar ai_nuance_tags que capturem as nuances do fit (ex: ['forma_estreita', 'peito_do_pe', 'metatarso'])
+   - Escrever uma ai_interpretation profissional explicando o problema real (ex: "O calçado aperta no peito do pé, indicando que a forma é estreita na região do metatarso. Para troca, recomenda-se modelo com forma mais larga ou numeração maior.")
+   - Identificar fit_area e fit_detail com precisão
+8. Após registrar, informe o cliente com empatia:
+   - Se aprovada automaticamente: "Prontinho! Sua troca foi aprovada! 🎉 [informações de logística reversa se disponíveis] Nossa equipe vai acompanhar tudo!"
+   - Se precisa revisão humana (defeito/produto errado): "Registrei sua solicitação e nossa equipe vai analisar com prioridade! Eles vão entrar em contato pelo WhatsApp mesmo. Nosso horário de atendimento é Seg-Sex 9h às 18h 😊"
+
+POLÍTICA DE TROCA:
+- Prazo: 30 dias após o recebimento
+- Trocas por tamanho são aprovadas automaticamente (se dentro do prazo)
+- Trocas por defeito ou produto errado precisam de análise humana
+- O cliente NÃO paga pelo frete reverso em caso de defeito ou produto errado
+- Em caso de troca por tamanho, informar que será gerado código de postagem
 
 O QUE VOCÊ NÃO PODE FAZER (PROIBIDO):
 - NUNCA fale sobre preços, valores ou promoções

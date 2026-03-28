@@ -29,6 +29,7 @@ import { MarginFormation } from "@/components/management/MarginFormation";
 import { CrmDuplicates } from "@/components/management/CrmDuplicates";
 import { InvestmentsDashboard } from "@/components/management/InvestmentsDashboard";
 import { AbcCurveAnalysis } from "@/components/management/AbcCurveAnalysis";
+import ExchangeDashboard from "@/components/management/ExchangeDashboard";
 
 interface PosSale {
   id: string;
@@ -1300,6 +1301,10 @@ export default function Management() {
                   <TrendingUp className="h-3.5 w-3.5" />
                   Investimentos
                 </TabsTrigger>
+                <TabsTrigger value="exchanges" className="gap-1">
+                  <ArrowDownRight className="h-3.5 w-3.5" />
+                  Trocas
+                </TabsTrigger>
               </TabsList>
 
               {/* Overview */}
@@ -1488,6 +1493,11 @@ export default function Management() {
               {/* Investimentos */}
               <TabsContent value="investments" className="space-y-4">
                 <InvestmentsDashboard />
+              </TabsContent>
+
+              {/* Trocas e Devoluções */}
+              <TabsContent value="exchanges" className="space-y-4">
+                <ExchangeDashboard />
               </TabsContent>
             </Tabs>
           </>
