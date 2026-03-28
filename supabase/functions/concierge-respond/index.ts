@@ -245,15 +245,29 @@ function extractTrackingDataFromOrder(pedido: any): { trackingCode: string | nul
   };
 }
 
-function buildTrackingReplyFromToolResult(toolName: string, rawResult: string): string | null {
+function buildTrackingReplyFromToolResult(toolName: string, rawResult: string, recentAiMessages?: Array<{ message_out: string | null }>): string | null {
   if (toolName !== 'get_order_details') return null;
 
   try {
     const result = JSON.parse(rawResult);
+
+    // Check if this exact tracking code was already sent recently
+    if (result?.tracking_code && recentAiMessages && recentAiMessages.length > 0) {
+      const alreadySent = recentAiMessages.some((m: any) =>
+        m.message_out && m.message_out.includes(result.tracking_code)
+      );
+      if (alreadySent) {
+        // Don't force a template — let the AI respond contextually
+        return null;
+      }
+    }
+
     if (result?.tracking_code) {
       const orderLabel = result.order_number ? `#${result.order_number}` : 'do seu pedido';
+      const customerName = result.customer_name || '';
+      const greeting = getTimeGreeting();
       const parts = [
-        `Prontinho! Encontrei o rastreio ${orderLabel}.`,
+        `${greeting}! 😊 Encontrei o rastreio do pedido ${orderLabel}${customerName ? ` em nome de *${customerName}*` : ''}.`,
         `Código de rastreio: ${result.tracking_code}`,
         result.tracking_link ? `Acompanhe aqui: ${result.tracking_link}` : null,
       ].filter(Boolean);
@@ -262,13 +276,22 @@ function buildTrackingReplyFromToolResult(toolName: string, rawResult: string): 
     }
 
     if (!result?.error && result?.order_number) {
-      return `Encontrei o pedido #${result.order_number}, mas o código de rastreio ainda não aparece disponível no sistema.`;
+      return null; // Let the AI handle this contextually instead of a rigid template
     }
   } catch (_err) {
     return null;
   }
 
   return null;
+}
+
+function getTimeGreeting(): string {
+  // Brazil timezone (UTC-3)
+  const now = new Date();
+  const brHour = (now.getUTCHours() - 3 + 24) % 24;
+  if (brHour >= 5 && brHour < 12) return 'Bom dia';
+  if (brHour >= 12 && brHour < 18) return 'Boa tarde';
+  return 'Boa noite';
 }
 
 function parseToolResult(rawResult: string): any {
