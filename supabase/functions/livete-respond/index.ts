@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { liveteTools, executeToolCall } from "../_shared/livete-tools.ts";
 import { transcribeAudio } from "../_shared/audio-transcribe.ts";
+import { joinMeaningfulMessages, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,9 +68,10 @@ serve(async (req) => {
       .gte('created_at', thirtySecsAgo)
       .order('created_at', { ascending: true });
 
-    let combinedMessage = (recentMsgs && recentMsgs.length > 1)
-      ? recentMsgs.map(m => m.message).filter(Boolean).join('\n')
-      : (messageText || '');
+    const aggregatedRecentText = joinMeaningfulMessages(recentMsgs || []);
+    let combinedMessage = aggregatedRecentText
+      || sanitizeMediaPlaceholderText(messageText || '')
+      || (mediaType === 'image' ? 'O cliente enviou uma imagem.' : '');
 
     // Append audio transcription to combined message (resolved later after transcription)
     // This variable will be updated after transcription completes
@@ -182,9 +184,14 @@ serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(20);
 
-    const conversationHistory = (history || []).reverse().map((m: any) =>
-      `${m.direction === 'outgoing' ? 'Livete' : 'Cliente'}: ${m.message}`
-    ).join('\n');
+    const conversationHistory = (history || [])
+      .reverse()
+      .map((m: any) => {
+        const text = sanitizeMediaPlaceholderText(m.message);
+        return text ? `${m.direction === 'outgoing' ? 'Livete' : 'Cliente'}: ${text}` : '';
+      })
+      .filter(Boolean)
+      .join('\n');
 
     const { data: kb } = await supabase
       .from('ai_knowledge_base')

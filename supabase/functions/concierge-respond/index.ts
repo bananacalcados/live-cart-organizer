@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { transcribeAudio } from "../_shared/audio-transcribe.ts";
+import { joinMeaningfulMessages, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -780,9 +781,10 @@ serve(async (req) => {
     }
 
     const { data: recentIncomingMessages } = await recentIncomingQuery;
-    const combinedMessage = (recentIncomingMessages && recentIncomingMessages.length > 0)
-      ? recentIncomingMessages.map((msg: any) => msg.message?.trim()).filter(Boolean).join('\n').slice(0, 500)
-      : incomingMessageText;
+    const aggregatedIncomingText = joinMeaningfulMessages(recentIncomingMessages || []).slice(0, 500);
+    const combinedMessage = aggregatedIncomingText
+      || sanitizeMediaPlaceholderText(incomingMessageText)
+      || (mediaType === 'image' ? 'O cliente enviou uma imagem.' : '');
 
     // ─── 1. Load stores with Tiny tokens ────────────────────────────────
     const { data: storesData } = await supabase
@@ -1014,7 +1016,7 @@ REGRAS:
     if (dbMessages && dbMessages.length > 0) {
       const recentMessages = [...dbMessages].reverse();
       for (const msg of recentMessages) {
-        const text = msg.message?.trim();
+        const text = sanitizeMediaPlaceholderText(msg.message);
         if (!text) continue;
         if (/\{\{\d+\}\}/.test(text) || /\{\{[a-zA-Z_]+\}\}/.test(text)) continue;
         if (/\[Template:\s/.test(text)) continue;
