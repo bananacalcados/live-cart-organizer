@@ -182,6 +182,15 @@ serve(async (req) => {
             apiCallCount++;
             const data = await safeJson(resp);
             const retorno = data.retorno;
+            console.log(`Tiny page ${page} raw response keys:`, JSON.stringify({
+              status: retorno?.status,
+              status_processamento: retorno?.status_processamento,
+              tipo_processamento: typeof retorno?.status_processamento,
+              numero_paginas: retorno?.numero_paginas,
+              pedidos_count: retorno?.pedidos?.length,
+              erros: retorno?.erros,
+              codigo_erro: retorno?.codigo_erro,
+            }));
 
             if (retorno?.status === 'Erro' || retorno?.status_processamento === '3') {
               const errMsg = retorno?.erros?.[0]?.erro || retorno?.status || 'unknown';
