@@ -857,41 +857,8 @@ export default function Marketing() {
           </div>
 
           {/* ── CAMPANHAS ── */}
-          <TabsContent value="campaigns" className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <p className="text-sm text-muted-foreground">{campaigns.length} campanhas</p>
-              <div className="flex gap-2 w-full sm:w-auto">
-                <Button variant="outline" size="sm" onClick={() => setUploadDialogOpen(true)} className="gap-1 flex-1 sm:flex-initial text-xs">
-                  <Upload className="h-3.5 w-3.5" />Excel
-                </Button>
-                <Button size="sm" onClick={() => navigate('/marketing/new')} className="gap-1 flex-1 sm:flex-initial text-xs">
-                  <Plus className="h-3.5 w-3.5" />Nova Campanha
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid gap-3">
-              {campaigns.map(c => (
-                <CampaignCardExpanded
-                  key={c.id}
-                  campaign={c}
-                  onOpenDetail={() => setSelectedCampaign(c)}
-                  onDelete={() => deleteCampaign(c.id)}
-                />
-              ))}
-              {campaigns.length === 0 && (
-                <Card>
-                  <CardContent className="py-12 text-center text-muted-foreground">
-                    <Target className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">Nenhuma campanha criada ainda</p>
-                    <p className="text-xs mt-1">Crie uma campanha 360° com estratégia multicanal gerada por IA</p>
-                    <Button size="sm" className="mt-3 gap-1" onClick={() => navigate('/marketing/new')}>
-                      <Plus className="h-3.5 w-3.5" />Criar primeira campanha
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+          <TabsContent value="attribution" className="space-y-4">
+            <MarketingAttributionDashboard />
           </TabsContent>
 
           {/* ── CLIENTES RFM ── */}
