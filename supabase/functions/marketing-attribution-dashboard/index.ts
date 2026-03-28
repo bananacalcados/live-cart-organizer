@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
       const key = `lead:${lead.campaign}`;
       if (!stats[key]) {
         stats[key] = {
-          campaign: lead.campaign, type: "lead_capture",
+          campaign: lead.campaign, templateName: "", type: "lead_capture",
           captured: 0, converted: 0, revenue: 0, convDays: [],
           convertedSuffixes: new Set(),
           leadsAreCustomers: 0, leadsNotCustomers: 0,
