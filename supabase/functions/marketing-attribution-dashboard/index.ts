@@ -6,8 +6,24 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-function phoneSuffix(phone: string): string {
-  return (phone || "").replace(/\D/g, "").slice(-8);
+/**
+ * Normalize a Brazilian phone to E.164: 55 + DDD + 9 + 8 digits.
+ * This ensures consistent matching even when the 9th digit is missing.
+ */
+function normalizePhone(raw: string): string {
+  let phone = (raw || "").replace(/\D/g, "");
+  if (!phone) return "";
+  // Add country code if missing (10-11 digits = BR without 55)
+  if (phone.length >= 10 && phone.length <= 11) {
+    phone = "55" + phone;
+  }
+  // If 12-digit BR number (55 + DDD + 8 digits), inject the 9th digit
+  if (phone.startsWith("55") && phone.length === 12) {
+    const ddd = phone.substring(2, 4);
+    const number = phone.substring(4);
+    phone = "55" + ddd + "9" + number;
+  }
+  return phone;
 }
 
 Deno.serve(async (req) => {
