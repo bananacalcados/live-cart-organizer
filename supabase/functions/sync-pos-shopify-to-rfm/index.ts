@@ -192,9 +192,15 @@ serve(async (req) => {
               codigo_erro: retorno?.codigo_erro,
             }));
 
-            if (retorno?.status === 'Erro' || retorno?.status_processamento === '3') {
-              const errMsg = retorno?.erros?.[0]?.erro || retorno?.status || 'unknown';
-              console.log(`Tiny page ${page}: error - ${errMsg}`);
+            if (retorno?.status === 'Erro') {
+              const errMsg = retorno?.erros?.[0]?.erro || 'unknown error';
+              console.log(`Tiny page ${page}: API error - ${errMsg}`);
+              break;
+            }
+
+            // status_processamento '3' just means the data was returned (not an error)
+            if (!retorno?.pedidos || retorno.pedidos.length === 0) {
+              console.log(`Tiny page ${page}: no orders returned`);
               break;
             }
 
