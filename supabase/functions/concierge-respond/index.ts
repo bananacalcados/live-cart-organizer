@@ -396,6 +396,82 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "create_exchange_request",
+      description: "Registra uma solicitação de troca de produto. Use quando o cliente disser que quer trocar, devolver ou que o produto não serviu/não gostou. A IA DEVE coletar TODAS as informações antes de chamar esta ferramenta: qual pedido, qual produto, motivo detalhado, e tamanho desejado (se aplicável). Interprete o motivo do cliente para classificar corretamente a categoria e as nuances (ex: 'apertou no peito do pé' = tamanho + fit_area:'peito_do_pe').",
+      parameters: {
+        type: "object",
+        properties: {
+          order_number: {
+            type: "string",
+            description: "Número do pedido (ex: 4811)"
+          },
+          tiny_order_id: {
+            type: "string",
+            description: "ID interno Tiny do pedido"
+          },
+          customer_name: {
+            type: "string",
+            description: "Nome do cliente"
+          },
+          product_name: {
+            type: "string",
+            description: "Nome completo do produto que será trocado"
+          },
+          product_sku: {
+            type: "string",
+            description: "SKU do produto, se disponível"
+          },
+          product_size: {
+            type: "string",
+            description: "Tamanho atual do produto (ex: 37, 38, M, G)"
+          },
+          desired_size: {
+            type: "string",
+            description: "Tamanho desejado na troca, se aplicável"
+          },
+          reason_category: {
+            type: "string",
+            enum: ["tamanho", "defeito", "nao_gostou", "produto_errado", "outro"],
+            description: "Categoria principal: 'tamanho' (ficou grande/pequeno/apertou), 'defeito' (problema de fabricação), 'nao_gostou' (estética/conforto), 'produto_errado' (enviamos errado), 'outro'"
+          },
+          reason_subcategory: {
+            type: "string",
+            description: "Subcategoria interpretada pela IA. Exemplos: 'comprimento_pequeno', 'comprimento_grande', 'largura_apertada', 'peito_do_pe', 'calcanhar_folgado', 'solado_descolando', 'costura_soltando', 'cor_diferente_da_foto', 'desconfortavel', 'material_diferente'"
+          },
+          ai_nuance_tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Tags de nuance para análise futura. Ex: ['peito_do_pe', 'altura_produto', 'forma_pequena']. Interprete o que o cliente diz para gerar tags precisas sobre o FIT do calçado."
+          },
+          customer_verbatim: {
+            type: "string",
+            description: "Frase EXATA do cliente descrevendo o motivo da troca, sem editar"
+          },
+          ai_interpretation: {
+            type: "string",
+            description: "Interpretação da IA sobre o problema real. Ex: 'Cliente reporta que o calçado apertou no peito do pé. Isso indica que a FORMA do modelo é estreita na região do metatarso, não necessariamente que o comprimento está errado. Recomenda-se numeração maior OU modelo com forma mais larga.'"
+          },
+          fit_area: {
+            type: "string",
+            description: "Área do pé afetada (se troca por tamanho): 'comprimento', 'largura', 'peito_do_pe', 'calcanhar', 'bico', 'cano', 'palmilha', 'geral'"
+          },
+          fit_detail: {
+            type: "string",
+            description: "Detalhe sobre o fit: 'apertado', 'folgado', 'curto', 'longo', 'alto', 'baixo'"
+          },
+          customer_cep: {
+            type: "string",
+            description: "CEP do cliente para gerar logística reversa"
+          }
+        },
+        required: ["product_name", "reason_category", "customer_verbatim", "ai_interpretation"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "transfer_to_human",
       description: "Transfere a conversa para um atendente humano e cria um ticket de suporte. Use APENAS quando: a IA não consegue resolver, o cliente insiste em algo fora do escopo de suporte, ou precisa de atendimento especializado. NÃO use se ainda tem ferramentas que podem responder a pergunta. Preencha summary com um resumo claro da situação do cliente.",
       parameters: {
