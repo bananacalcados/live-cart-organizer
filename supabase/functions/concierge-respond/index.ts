@@ -397,7 +397,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "create_exchange_request",
-      description: "Registra uma solicitação de troca de produto. Use quando o cliente disser que quer trocar, devolver ou que o produto não serviu/não gostou. A IA DEVE coletar TODAS as informações antes de chamar esta ferramenta: qual pedido, qual produto, motivo detalhado, e tamanho desejado (se aplicável). Interprete o motivo do cliente para classificar corretamente a categoria e as nuances (ex: 'apertou no peito do pé' = tamanho + fit_area:'peito_do_pe').",
+      description: "Registra uma solicitação de troca de produto E gera automaticamente o código de postagem reversa (Correios via Melhor Envio). Use quando o cliente disser que quer trocar, devolver ou que o produto não serviu/não gostou. A IA DEVE coletar TODAS as informações antes de chamar esta ferramenta: qual pedido, qual produto, motivo detalhado, e tamanho desejado (se aplicável). Os dados do cliente (nome, CPF, endereço) serão PUXADOS AUTOMATICAMENTE do cadastro do pedido — NÃO peça novamente. Apenas CONFIRME o endereço antes de chamar. IMPORTANTE: Antes de chamar, use get_order_details para verificar a data de entrega e confirmar que o prazo de troca está dentro da política (30 dias a partir do recebimento).",
       parameters: {
         type: "object",
         properties: {
@@ -409,9 +409,13 @@ const TOOLS = [
             type: "string",
             description: "ID interno Tiny do pedido"
           },
+          store_name: {
+            type: "string",
+            description: "Nome da loja onde o pedido foi feito (Site, Loja Centro, ou Loja Perola)"
+          },
           customer_name: {
             type: "string",
-            description: "Nome do cliente"
+            description: "Nome do cliente (se já disponível no contexto)"
           },
           product_name: {
             type: "string",
@@ -459,12 +463,12 @@ const TOOLS = [
             type: "string",
             description: "Detalhe sobre o fit: 'apertado', 'folgado', 'curto', 'longo', 'alto', 'baixo'"
           },
-          customer_cep: {
-            type: "string",
-            description: "CEP do cliente para gerar logística reversa"
+          address_confirmed: {
+            type: "boolean",
+            description: "Se o cliente confirmou que o endereço cadastrado está correto. DEVE ser true para gerar o código de postagem."
           }
         },
-        required: ["product_name", "reason_category", "customer_verbatim", "ai_interpretation"],
+        required: ["product_name", "reason_category", "customer_verbatim", "ai_interpretation", "tiny_order_id"],
         additionalProperties: false,
       },
     },
@@ -705,9 +709,33 @@ async function executeToolCall(
     const isSimple = ['tamanho'].includes(args.reason_category) && !['defeito'].includes(args.reason_category);
     const requiresHuman = ['defeito', 'produto_errado'].includes(args.reason_category);
 
+    // ── Pull customer data from registration (no need to ask again) ──
+    let customerData: any = null;
+
+    // Try to find customer registration by phone suffix
+    const phoneSuffix = phone.replace(/\D/g, '').slice(-8);
+    const { data: regByPhone } = await supabase
+      .from('customer_registrations')
+      .select('*')
+      .ilike('whatsapp', `%${phoneSuffix}`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (regByPhone) customerData = regByPhone;
+
+    const customerName = args.customer_name || customerData?.full_name || null;
+    const customerCpf = customerData?.cpf || null;
+    const customerCep = customerData?.cep || null;
+    const customerAddress = customerData?.address || null;
+    const customerNumber = customerData?.address_number || null;
+    const customerDistrict = customerData?.neighborhood || null;
+    const customerCity = customerData?.city || null;
+    const customerState = customerData?.state || null;
+    const customerEmail = customerData?.email || null;
+
     const exchangeData: Record<string, any> = {
       phone,
-      customer_name: args.customer_name || null,
+      customer_name: customerName,
       order_number: args.order_number || null,
       tiny_order_id: args.tiny_order_id || null,
       product_name: args.product_name,
@@ -740,42 +768,53 @@ async function executeToolCall(
 
     console.log(`[concierge] Exchange request created: ${exchangeRow.id} | category=${args.reason_category} | auto_approved=${isSimple && !requiresHuman}`);
 
-    // If auto-approved and has CEP, try to quote reverse shipping
+    // ── Generate reverse shipping via Melhor Envio (Correios only) ──
     let reverseShippingInfo: string | null = null;
-    if (isSimple && !requiresHuman && args.customer_cep) {
+    let reverseInstructions: string | null = null;
+    if (isSimple && !requiresHuman && customerCep && customerCpf && customerName) {
       try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        // Get store CEP from first store
-        const { data: storeSettings } = await supabase
-          .from('app_settings')
-          .select('value')
-          .eq('key', 'store_cep')
-          .maybeSingle();
-        
-        const storeCep = (storeSettings?.value as any)?.cep || '38400000'; // default Uberlândia
 
         const reverseResp = await fetch(`${supabaseUrl}/functions/v1/exchange-reverse-shipping`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             exchange_request_id: exchangeRow.id,
-            cep_origin: args.customer_cep.replace(/\D/g, ''),
-            cep_destination: storeCep.replace(/\D/g, ''),
+            customer_name: customerName,
+            customer_cpf: customerCpf,
+            customer_email: customerEmail,
+            customer_phone: phone,
+            customer_cep: customerCep,
+            customer_address: customerAddress,
+            customer_number: customerNumber,
+            customer_district: customerDistrict,
+            customer_city: customerCity,
+            customer_state: customerState,
+            product_name: args.product_name,
+            insurance_value: 100,
           }),
         });
 
         if (reverseResp.ok) {
           const reverseData = await reverseResp.json();
-          if (reverseData.success && reverseData.tracking_code) {
-            reverseShippingInfo = `Código de postagem reversa: ${reverseData.tracking_code} (${reverseData.carrier})`;
-          } else if (reverseData.success && reverseData.cheapest) {
-            reverseShippingInfo = `Frete reverso disponível via ${reverseData.cheapest.carrier}: R$ ${reverseData.cheapest.price.toFixed(2)}, entrega em ${reverseData.cheapest.delivery_days} dias úteis`;
+          if (reverseData.success) {
+            const code = reverseData.tracking_code || reverseData.melhor_envio_order_id;
+            reverseShippingInfo = `Código de postagem: ${code} | Correios (${reverseData.service || reverseData.carrier}) | Prazo: ${reverseData.delivery_days || '?'} dias úteis`;
+            if (reverseData.label_url) {
+              reverseShippingInfo += ` | Etiqueta: ${reverseData.label_url}`;
+            }
+            reverseInstructions = reverseData.instructions || 'Leve o pacote até uma agência dos Correios mais próxima e informe o código de postagem no balcão.';
+          } else {
+            reverseShippingInfo = `Erro: ${reverseData.message || reverseData.error || 'erro desconhecido'}. Equipe será notificada.`;
           }
         }
       } catch (e) {
-        console.error('[concierge] Reverse shipping quote error:', e);
+        console.error('[concierge] Reverse shipping error:', e);
+        reverseShippingInfo = 'Erro ao gerar código de postagem. Equipe será notificada.';
       }
+    } else if (isSimple && !requiresHuman && (!customerCep || !customerCpf)) {
+      reverseShippingInfo = 'Dados cadastrais incompletos para gerar código automaticamente. Equipe será notificada.';
     }
 
     // Also create a support ticket for visibility
@@ -785,9 +824,9 @@ async function executeToolCall(
       
       await supabase.from('support_tickets').insert({
         subject: `Troca: ${args.product_name} - ${args.reason_category}`,
-        description: `Solicitação de troca registrada pela Bia.\n\nProduto: ${args.product_name}\nTamanho atual: ${args.product_size || 'N/I'}\nTamanho desejado: ${args.desired_size || 'N/I'}\nMotivo: ${args.reason_category} - ${args.reason_subcategory || ''}\nVerbatim cliente: "${args.customer_verbatim}"\nInterpretação IA: ${args.ai_interpretation}\nFit: ${args.fit_area || 'N/A'} - ${args.fit_detail || 'N/A'}\nNuance tags: ${(args.ai_nuance_tags || []).join(', ')}\n${reverseShippingInfo ? `\nLogística reversa: ${reverseShippingInfo}` : ''}\n\nInstância WhatsApp: ${whatsappNumberId || 'N/I'}`,
+        description: `Solicitação de troca registrada pela Bia.\n\nProduto: ${args.product_name}\nTamanho atual: ${args.product_size || 'N/I'}\nTamanho desejado: ${args.desired_size || 'N/I'}\nMotivo: ${args.reason_category} - ${args.reason_subcategory || ''}\nVerbatim cliente: "${args.customer_verbatim}"\nInterpretação IA: ${args.ai_interpretation}\nFit: ${args.fit_area || 'N/A'} - ${args.fit_detail || 'N/A'}\nNuance tags: ${(args.ai_nuance_tags || []).join(', ')}\n${reverseShippingInfo ? `\nLogística reversa: ${reverseShippingInfo}` : ''}\nEndereço: ${customerAddress || 'N/I'}, ${customerNumber || ''} - ${customerCity || ''}/${customerState || ''}\n\nInstância WhatsApp: ${whatsappNumberId || 'N/I'}`,
         priority: requiresHuman ? 'high' : 'medium',
-        customer_name: args.customer_name,
+        customer_name: customerName,
         customer_phone: phone,
         deadline_at: deadline.toISOString(),
         source: 'bia_ai',
@@ -802,14 +841,19 @@ async function executeToolCall(
       auto_approved: isSimple && !requiresHuman,
       requires_human_review: requiresHuman,
       status: exchangeData.status,
+      customer_data_found: !!customerData,
+      customer_address_used: customerCep ? `${customerAddress || ''}, ${customerNumber || ''} - ${customerDistrict || ''}, ${customerCity || ''}/${customerState || ''} - CEP ${customerCep}` : null,
     };
 
     if (reverseShippingInfo) result.reverse_shipping = reverseShippingInfo;
+    if (reverseInstructions) result.correios_instructions = reverseInstructions;
 
     if (requiresHuman) {
       result.message = 'Solicitação de troca registrada. Como envolve defeito/produto errado, nossa equipe vai analisar e entrar em contato.';
+    } else if (isSimple && reverseShippingInfo && !reverseShippingInfo.includes('Erro')) {
+      result.message = 'Troca aprovada! Código de postagem reversa gerado via Correios. O cliente deve levar o pacote até uma agência dos Correios.';
     } else if (isSimple) {
-      result.message = 'Troca aprovada automaticamente! Informações de logística reversa foram geradas.';
+      result.message = 'Troca aprovada! A equipe vai gerar o código de postagem e enviar.';
     } else {
       result.message = 'Solicitação de troca registrada. Nossa equipe vai analisar e retornar em breve.';
     }
@@ -1248,27 +1292,28 @@ SEU PAPEL (APENAS):
 FLUXO DE TROCA/DEVOLUÇÃO (IMPORTANTE):
 Quando o cliente disser que quer trocar, devolver, que o produto não serviu, ficou apertado, grande, etc.:
 1. Primeiro, identifique QUAL pedido e QUAL produto. Se não souber, pergunte: "Qual pedido você gostaria de trocar? Me passa seu CPF que localizo rapidinho! 😊"
-2. Pergunte o MOTIVO da troca de forma empática: "Entendo! E o que aconteceu com o produto? Ficou apertado, grande, ou foi outro motivo?"
-3. Se for problema de TAMANHO, investigue com carinho: "Apertou onde exatamente? No comprimento, na largura, no peito do pé?" — isso é CRUCIAL para a gente entender a forma do calçado.
-4. Se for DEFEITO, peça foto: "Você pode me mandar uma foto do defeito? Assim consigo registrar direitinho pra nossa equipe! 📸"
-5. Pergunte o tamanho desejado (se troca por tamanho): "Qual tamanho você gostaria de receber no lugar?"
-6. Pergunte o CEP do cliente pra gerar a logística reversa: "Me passa seu CEP que eu já gero o código de postagem pra você!"
-7. Quando tiver TODAS as informações, use create_exchange_request com os dados completos. INTERPRETE o motivo do cliente para:
-   - Classificar a reason_category corretamente
-   - Criar reason_subcategory precisa (ex: 'comprimento_pequeno', 'largura_apertada', 'peito_do_pe_apertado')
-   - Gerar ai_nuance_tags que capturem as nuances do fit (ex: ['forma_estreita', 'peito_do_pe', 'metatarso'])
-   - Escrever uma ai_interpretation profissional explicando o problema real (ex: "O calçado aperta no peito do pé, indicando que a forma é estreita na região do metatarso. Para troca, recomenda-se modelo com forma mais larga ou numeração maior.")
-   - Identificar fit_area e fit_detail com precisão
-8. Após registrar, informe o cliente com empatia:
-   - Se aprovada automaticamente: "Prontinho! Sua troca foi aprovada! 🎉 [informações de logística reversa se disponíveis] Nossa equipe vai acompanhar tudo!"
-   - Se precisa revisão humana (defeito/produto errado): "Registrei sua solicitação e nossa equipe vai analisar com prioridade! Eles vão entrar em contato pelo WhatsApp mesmo. Nosso horário de atendimento é Seg-Sex 9h às 18h 😊"
+2. OBRIGATÓRIO: Use get_order_details para buscar detalhes do pedido. Verifique a DATA DE ENTREGA. O prazo começa A PARTIR DO RECEBIMENTO.
+3. VALIDE O PRAZO: Se passaram mais de 30 dias da entrega → informe com empatia que o prazo expirou e transfira para humano. Dentro do prazo → prossiga.
+4. Pergunte o MOTIVO da troca de forma empática: "Entendo! E o que aconteceu com o produto? Ficou apertado, grande, ou foi outro motivo?"
+5. Se TAMANHO, investigue: "Apertou onde? No comprimento, na largura, no peito do pé?"
+6. Se DEFEITO, peça foto: "Pode me mandar uma foto do defeito? 📸"
+7. Pergunte o tamanho desejado (se troca por tamanho).
+8. CONFIRME O ENDEREÇO (os dados são puxados do cadastro, NÃO peça de novo): "Seu endereço cadastrado é Rua X, 123 - Bairro Y. Está correto? É de lá que você vai postar?"
+9. Com TUDO confirmado, use create_exchange_request. INTERPRETE o motivo para classificar corretamente.
+10. Após registrar, informe:
+   - Se aprovada com código: "Sua troca foi aprovada! 🎉 Seu código de postagem é: [CÓDIGO]. Leve o pacote até uma *agência dos Correios* mais próxima e informe esse código no balcão. Prazo: ~X dias úteis."
+   - SEMPRE diga que deve ir a uma AGÊNCIA DOS CORREIOS. Nunca mencione transportadoras.
+   - Se revisão humana: "Registrei e nossa equipe vai analisar com prioridade! Seg-Sex 9h às 18h 😊"
 
-POLÍTICA DE TROCA:
-- Prazo: 30 dias após o recebimento
-- Trocas por tamanho são aprovadas automaticamente (se dentro do prazo)
-- Trocas por defeito ou produto errado precisam de análise humana
-- O cliente NÃO paga pelo frete reverso em caso de defeito ou produto errado
-- Em caso de troca por tamanho, informar que será gerado código de postagem
+POLÍTICA DE TROCA (PRAZOS A PARTIR DO RECEBIMENTO):
+- Troca por tamanho: 30 dias → aprovação automática + código Correios
+- Defeito: 90 dias → análise humana + foto
+- Arrependimento: 7 dias (CDC)
+- Produto errado: sem prazo fixo → prioridade alta
+- Frete reverso: cliente NÃO paga em defeito/produto errado
+- LOGÍSTICA REVERSA: SEMPRE Correios (PAC/SEDEX). NUNCA transportadora privada.
+- Destino fixo: Loja Tiny Pérola, Gov. Valadares/MG
+- Produto: sem uso, com etiqueta, embalagem original
 
 O QUE VOCÊ NÃO PODE FAZER (PROIBIDO):
 - NUNCA fale sobre preços, valores ou promoções
