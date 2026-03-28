@@ -756,7 +756,10 @@ serve(async (req) => {
 
     const latestIncomingText = latestIncoming?.[0]?.message?.trim() || '';
     const latestIncomingAt = latestIncoming?.[0]?.created_at || null;
-    if (latestIncomingText && incomingMessageText && latestIncomingText !== incomingMessageText) {
+    // Skip debounce text comparison for audio/image — DB stores empty/placeholder text
+    // while incomingMessageText contains the transcription or description
+    const isMediaMessage = mediaType === 'audio' || mediaType === 'image';
+    if (!isMediaMessage && latestIncomingText && incomingMessageText && latestIncomingText !== incomingMessageText) {
       console.log(`[concierge] Debounced fragmented message for ${normalizedPhone}; newer input detected.`);
       return new Response(JSON.stringify({ success: true, handled: false, reason: 'debounced_newer_message' }), {
         status: 200,
