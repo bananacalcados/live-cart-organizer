@@ -154,7 +154,10 @@ serve(async (req) => {
         console.log(`Tiny online: fetching orders from ${formatBRDate(dateFrom)} to ${formatBRDate(now)}`);
 
         while (page <= totalPages && (Date.now() - functionStart) < TIME_LIMIT_MS) {
-          const url = `https://api.tiny.com.br/api2/pedidos.pesquisa.php?token=${tinyToken}&formato=json&pagina=${page}&dataInicial=${formatBRDate(dateFrom)}&dataFinal=${formatBRDate(now)}&situacao=Faturado`;
+          // Try multiple statuses that indicate completed orders
+          const situacao = body.situacao || '';
+          const situacaoParam = situacao ? `&situacao=${encodeURIComponent(situacao)}` : '';
+          const url = `https://api.tiny.com.br/api2/pedidos.pesquisa.php?token=${tinyToken}&formato=json&pagina=${page}&dataInicial=${formatBRDate(dateFrom)}&dataFinal=${formatBRDate(now)}${situacaoParam}`;
 
           try {
             console.log(`Tiny: fetching page ${page}...`);
