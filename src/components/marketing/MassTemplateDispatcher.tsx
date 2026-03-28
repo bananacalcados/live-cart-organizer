@@ -1539,6 +1539,15 @@ export function MassTemplateDispatcher() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-sm">Você está prestes a enviar:</p>
+            <div className="space-y-2">
+              <Label className="text-sm">Nome da campanha (opcional)</Label>
+              <Input
+                placeholder="Ex: Lançamento Verão 2026"
+                value={campaignName}
+                onChange={e => setCampaignName(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
             <div className="bg-muted/50 rounded-lg p-3 space-y-1">
               <p className="text-sm font-medium">Template: <span className="font-mono">{selectedTemplate?.name}</span></p>
               <p className="text-sm">Destinatários: <span className="font-bold">{selectedCount}</span></p>
