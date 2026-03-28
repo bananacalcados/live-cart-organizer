@@ -294,6 +294,11 @@ serve(async (req) => {
           if (error) {
             console.error('Error saving incoming message:', error);
           }
+        } else {
+          return new Response(JSON.stringify({ success: true, dedup: true }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
         }
 
         // Reopen conversations that were auto-closed by dispatch
@@ -442,7 +447,7 @@ serve(async (req) => {
                   const aiRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-respond`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: route.session.prompt, phone }),
+                    body: JSON.stringify({ prompt: route.session.prompt, phone, messageText: routeText, mediaUrl: mediaInfo?.mediaUrl || null, mediaType: mediaInfo?.mediaType || null, whatsappNumberId }),
                   });
                   const aiData = await aiRes.json();
 

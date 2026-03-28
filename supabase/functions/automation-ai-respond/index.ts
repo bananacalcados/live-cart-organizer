@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
+import { isVisualReferenceMessage, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +11,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { prompt, messages, mode = 'chat', phone, historyLimit = 30, enableRouting = false, enableTracking = false } = await req.json();
+    const { prompt, messages, mode = 'chat', phone, historyLimit = 30, enableRouting = false, enableTracking = false, messageText, mediaUrl, mediaType, whatsappNumberId } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -102,10 +102,17 @@ REGRAS DE RASTREIO:
       }
     }
 
-    const systemPrompt = basePrompt + antiRepetition + routingInstructions + trackingInstructions;
+    const mediaInstructions = `
+
+ANÁLISE DE IMAGENS:
+- Você consegue analisar fotos e prints enviados pelo cliente quando houver uma imagem anexada no contexto.
+- Se o cliente mandar uma imagem e logo depois perguntar "o que é isso?", "viu a foto?" ou algo parecido, considere a imagem mais recente como parte da pergunta atual.
+- Não diga que não consegue ver imagens se uma imagem estiver anexada nesta conversa.`;
+
+    const systemPrompt = basePrompt + antiRepetition + mediaInstructions + routingInstructions + trackingInstructions;
 
     // Build conversation history from DB if phone is provided
-    let chatMessages: Array<{ role: string; content: string }> = [
+    let chatMessages: Array<{ role: string; content: any }> = [
       { role: 'system', content: systemPrompt },
     ];
 
@@ -136,6 +143,51 @@ REGRAS DE RASTREIO:
             role: msg.direction === 'incoming' ? 'user' : 'assistant',
             content: text,
           });
+        }
+      }
+
+      const normalizedCurrentText = sanitizeMediaPlaceholderText(messageText);
+      const referencesVisual = isVisualReferenceMessage(normalizedCurrentText);
+      let relevantImageUrl = mediaType === 'image' ? (mediaUrl || null) : null;
+
+      if (!relevantImageUrl && referencesVisual) {
+        let latestImageQuery = supabase
+          .from('whatsapp_messages')
+          .select('media_url, created_at')
+          .eq('phone', normalizedPhone)
+          .eq('direction', 'incoming')
+          .eq('media_type', 'image')
+          .not('media_url', 'is', null)
+          .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (whatsappNumberId) {
+          latestImageQuery = latestImageQuery.eq('whatsapp_number_id', whatsappNumberId);
+        }
+
+        const { data: latestImageRows } = await latestImageQuery;
+        relevantImageUrl = latestImageRows?.[0]?.media_url || null;
+      }
+
+      if (normalizedCurrentText || relevantImageUrl) {
+        const currentUserContent = relevantImageUrl
+          ? [
+              {
+                type: 'text',
+                text: referencesVisual
+                  ? `${normalizedCurrentText || 'O cliente está se referindo à imagem recém-enviada.'}\n\nConsidere a imagem anexada como o foco principal da pergunta atual.`
+                  : (normalizedCurrentText || 'O cliente enviou esta imagem.'),
+              },
+              { type: 'image_url', image_url: { url: relevantImageUrl } },
+            ]
+          : normalizedCurrentText;
+
+        const lastMessage = chatMessages[chatMessages.length - 1];
+        if (relevantImageUrl && lastMessage?.role === 'user' && lastMessage.content === normalizedCurrentText) {
+          chatMessages[chatMessages.length - 1] = { role: 'user', content: currentUserContent };
+        } else if (!lastMessage || lastMessage.role !== 'user' || lastMessage.content !== currentUserContent) {
+          chatMessages.push({ role: 'user', content: currentUserContent });
         }
       }
     }

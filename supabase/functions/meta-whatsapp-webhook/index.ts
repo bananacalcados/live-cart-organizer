@@ -384,7 +384,7 @@ serve(async (req) => {
                       const aiRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-respond`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ prompt: route.session.prompt, phone }),
+                        body: JSON.stringify({ prompt: route.session.prompt, phone, messageText: routeText, mediaUrl, mediaType, whatsappNumberId: whatsappNumberDbId }),
                       });
                       const aiData = await aiRes.json();
 
