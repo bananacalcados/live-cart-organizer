@@ -184,9 +184,14 @@ serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(20);
 
-    const conversationHistory = (history || []).reverse().map((m: any) =>
-      `${m.direction === 'outgoing' ? 'Livete' : 'Cliente'}: ${m.message}`
-    ).join('\n');
+    const conversationHistory = (history || [])
+      .reverse()
+      .map((m: any) => {
+        const text = sanitizeMediaPlaceholderText(m.message);
+        return text ? `${m.direction === 'outgoing' ? 'Livete' : 'Cliente'}: ${text}` : '';
+      })
+      .filter(Boolean)
+      .join('\n');
 
     const { data: kb } = await supabase
       .from('ai_knowledge_base')

@@ -1016,7 +1016,7 @@ REGRAS:
     if (dbMessages && dbMessages.length > 0) {
       const recentMessages = [...dbMessages].reverse();
       for (const msg of recentMessages) {
-        const text = msg.message?.trim();
+        const text = sanitizeMediaPlaceholderText(msg.message);
         if (!text) continue;
         if (/\{\{\d+\}\}/.test(text) || /\{\{[a-zA-Z_]+\}\}/.test(text)) continue;
         if (/\[Template:\s/.test(text)) continue;

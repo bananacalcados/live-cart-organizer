@@ -126,8 +126,7 @@ REGRAS DE RASTREIO:
 
       if (dbMessages && dbMessages.length > 0) {
         for (const msg of dbMessages) {
-          // Skip media-only messages without text
-          const text = msg.message?.trim();
+          const text = sanitizeMediaPlaceholderText(msg.message);
           if (!text) continue;
 
           // Skip template messages (contain unresolved {{variables}})
