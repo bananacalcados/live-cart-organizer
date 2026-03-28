@@ -208,8 +208,9 @@ Deno.serve(async (req) => {
       }
       stats[key].captured++;
 
-      const custId = suffixToCustomerId[suffix];
-      const isExistingCustomer = !!custId && !!customerSales[custId];
+      // Check if this lead has ANY sales (from pos or zoppy)
+      const allSales = getAllSalesForSuffix(suffix);
+      const isExistingCustomer = allSales.length > 0;
 
       if (isExistingCustomer) {
         stats[key].leadsAreCustomers++;
@@ -217,13 +218,12 @@ Deno.serve(async (req) => {
         stats[key].leadsNotCustomers++;
       }
 
-      if (!custId || !customerSales[custId]) continue;
+      if (allSales.length === 0) continue;
 
       const leadDate = new Date(lead.created_at);
-      const sales = customerSales[custId];
-      const hadPriorSales = sales.some(s => new Date(s.created_at) < leadDate);
+      const hadPriorSales = allSales.some(s => new Date(s.created_at) < leadDate);
 
-      for (const sale of sales) {
+      for (const sale of allSales) {
         const saleDate = new Date(sale.created_at);
         if (saleDate <= leadDate) continue;
         if (hadPriorSales) {
