@@ -50,7 +50,7 @@ interface CampaignResult {
   dispatch_dates: string[];
   dispatch_count: number;
   total_messages_sent: number;
-  template_category: string;
+  cost_per_msg: number;
   total_cost: number;
   roas: number;
 }

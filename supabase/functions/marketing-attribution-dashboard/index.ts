@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
       leadsNotCustomers: number;
       dispatchDates: string[];
       dispatchCount: number;
-      templateCategory: string;
+      costPerMsg: number;
       totalMessagesSent: number;
     };
     const stats: Record<string, CampaignStat> = {};
@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
           convertedSuffixes: new Set(),
           leadsAreCustomers: 0, leadsNotCustomers: 0,
           dispatchDates: [], dispatchCount: 0,
-          templateCategory: "unknown", totalMessagesSent: 0,
+          costPerMsg: 0, totalMessagesSent: 0,
         };
       }
       stats[key].captured++;
@@ -191,7 +191,8 @@ Deno.serve(async (req) => {
     while (true) {
       let q = supabase
         .from("dispatch_history")
-        .select("id, template_name, campaign_name, created_at, sent_count, status, template_category");
+        .select("id, template_name, campaign_name, created_at, sent_count, status, cost_per_message")
+        .eq("status", "completed");
       if (date_from) q = q.gte("created_at", date_from);
       if (date_to) q = q.lte("created_at", date_to);
       q = q.range(off, off + 999);
@@ -223,6 +224,10 @@ Deno.serve(async (req) => {
       const displayName = dispatch.campaign_name || dispatch.template_name || "Disparo sem nome";
       const key = `dispatch:${dispatch.id}`;
       if (!stats[key]) {
+        // Determine cost per message: use stored value, or guess from template name
+        const isUtility = (dispatch.template_name || "").toLowerCase().match(/confirm|pedido|rastreio|entrega|nf|nota|boleto|pix_/);
+        const costPerMsg = dispatch.cost_per_message ? Number(dispatch.cost_per_message) : (isUtility ? 0.05 : 0.40);
+        
         stats[key] = {
           campaign: displayName,
           templateName: dispatch.template_name || "",
@@ -231,7 +236,7 @@ Deno.serve(async (req) => {
           convertedSuffixes: new Set(),
           leadsAreCustomers: 0, leadsNotCustomers: 0,
           dispatchDates: [], dispatchCount: 0,
-          templateCategory: dispatch.template_category || "MARKETING",
+          costPerMsg,
           totalMessagesSent: 0,
         };
       }
@@ -240,10 +245,8 @@ Deno.serve(async (req) => {
       stats[key].dispatchCount++;
       stats[key].dispatchDates.push(dispatch.created_at);
 
-      // Try to detect template category from name if not set
-      if (!stats[key].templateCategory || stats[key].templateCategory === "unknown") {
-        stats[key].templateCategory = dispatch.template_category || "MARKETING";
-      }
+
+
 
       if (recipients.length === 0) continue;
 
@@ -278,10 +281,8 @@ Deno.serve(async (req) => {
       const rate = s.captured > 0 ? (s.converted / s.captured) * 100 : 0;
       const avgTicket = s.converted > 0 ? s.revenue / s.converted : 0;
 
-      // ROAS calc: marketing = R$0.40, utility = R$0.50
-      const isUtility = (s.templateCategory || "").toUpperCase().includes("UTILITY");
-      const costPerMsg = isUtility ? 0.05 : 0.40;
-      const totalCost = s.totalMessagesSent * costPerMsg;
+      // ROAS calc using stored costPerMsg
+      const totalCost = s.totalMessagesSent * s.costPerMsg;
       const roas = totalCost > 0 ? s.revenue / totalCost : 0;
 
       return {
@@ -296,7 +297,7 @@ Deno.serve(async (req) => {
         dispatch_dates: s.dispatchDates.sort(),
         dispatch_count: s.dispatchCount,
         total_messages_sent: s.totalMessagesSent,
-        template_category: s.templateCategory,
+        cost_per_msg: s.costPerMsg,
         total_cost: Math.round(totalCost * 100) / 100,
         roas: Math.round(roas * 100) / 100,
       };
