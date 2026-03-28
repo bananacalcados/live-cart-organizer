@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
       leadsNotCustomers: number;
       dispatchDates: string[];
       dispatchCount: number;
-      templateCategory: string;
+      costPerMsg: number;
       totalMessagesSent: number;
     };
     const stats: Record<string, CampaignStat> = {};
