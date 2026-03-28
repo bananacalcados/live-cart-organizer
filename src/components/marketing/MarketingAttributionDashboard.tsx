@@ -310,7 +310,7 @@ export function MarketingAttributionDashboard() {
               </div>
 
               <Card>
-                <ScrollArea className="max-h-[500px]">
+                <div className="max-h-[600px] overflow-y-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -383,7 +383,7 @@ export function MarketingAttributionDashboard() {
                       )}
                     </TableBody>
                   </Table>
-                </ScrollArea>
+                </div>
               </Card>
 
               {filtered.length > 0 && (
