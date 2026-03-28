@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { store_filter } = await req.json().catch(() => ({}));
+    const { store_filter, date_from, date_to } = await req.json().catch(() => ({}));
 
     // ─── 1. Get stores ───
     const { data: stores } = await supabase
@@ -32,11 +32,13 @@ Deno.serve(async (req) => {
         .select("id, customer_id, total, created_at, store_id")
         .eq("status", "completed")
         .not("customer_id", "is", null)
-        .order("created_at", { ascending: true })
-        .range(off, off + 999);
+        .order("created_at", { ascending: true });
+      if (date_from) q = q.gte("created_at", date_from);
+      if (date_to) q = q.lte("created_at", date_to);
       if (store_filter && store_filter !== "all") {
         q = q.eq("store_id", store_filter);
       }
+      q = q.range(off, off + 999);
       const { data } = await q;
       if (!data || data.length === 0) break;
       allSales = allSales.concat(data);
@@ -67,17 +69,11 @@ Deno.serve(async (req) => {
     const totalRevenue = customers.reduce((a, b) => a + b.totalSpent, 0);
 
     // ─── 4. Calculate metrics ───
-    // Ticket médio
     const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-    // LTV (average revenue per customer)
     const ltv = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
-
-    // Recompra rate
     const repeatCustomers = customers.filter(c => c.orders >= 2).length;
     const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
 
-    // Average time to second purchase (days)
     const secondPurchaseTimes: number[] = [];
     for (const c of customers) {
       if (c.dates.length >= 2) {
@@ -90,7 +86,6 @@ Deno.serve(async (req) => {
       ? secondPurchaseTimes.reduce((a, b) => a + b, 0) / secondPurchaseTimes.length
       : 0;
 
-    // Average orders per customer
     const avgOrders = totalCustomers > 0 ? totalOrders / totalCustomers : 0;
 
     // ─── 5. Per-store breakdown ───
@@ -103,7 +98,6 @@ Deno.serve(async (req) => {
       secondPurchaseDays: number[];
     }> = {};
 
-    // Initialize stores
     for (const store of stores || []) {
       storeStats[store.id] = {
         name: store.name,
@@ -115,7 +109,6 @@ Deno.serve(async (req) => {
       };
     }
 
-    // Group sales by store + customer
     const storeCustomerOrders: Record<string, Record<string, Date[]>> = {};
     for (const s of allSales) {
       if (!storeCustomerOrders[s.store_id]) storeCustomerOrders[s.store_id] = {};
@@ -129,7 +122,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Calculate repeat + second purchase time per store
     for (const [storeId, custMap] of Object.entries(storeCustomerOrders)) {
       if (!storeStats[storeId]) continue;
       for (const [, dates] of Object.entries(custMap)) {
