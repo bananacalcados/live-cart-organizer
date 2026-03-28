@@ -1301,6 +1301,10 @@ export default function Management() {
                   <TrendingUp className="h-3.5 w-3.5" />
                   Investimentos
                 </TabsTrigger>
+                <TabsTrigger value="exchanges" className="gap-1">
+                  <ArrowDownRight className="h-3.5 w-3.5" />
+                  Trocas
+                </TabsTrigger>
               </TabsList>
 
               {/* Overview */}
