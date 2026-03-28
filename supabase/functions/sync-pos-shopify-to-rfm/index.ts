@@ -131,10 +131,18 @@ serve(async (req) => {
 
     // ── 2. Sync online sales from Tiny ERP (site) ──
     if (mode === 'tiny' || mode === 'all') {
-      const tinyToken = Deno.env.get('TINY_ERP_TOKEN');
+      // Use the Tiny Shopify store token from pos_stores
+      const { data: tinyShopifyStore } = await supabase
+        .from('pos_stores')
+        .select('id, name, tiny_token')
+        .eq('name', 'Tiny Shopify')
+        .single();
+      
+      const tinyToken = tinyShopifyStore?.tiny_token || Deno.env.get('TINY_ERP_TOKEN');
       if (!tinyToken) {
-        console.warn('TINY_ERP_TOKEN not set, skipping online sync');
+        console.warn('No Tiny token found for online sync');
       } else {
+        console.log(`Using Tiny token from: ${tinyShopifyStore ? 'pos_stores (Tiny Shopify)' : 'env TINY_ERP_TOKEN'}`);
         const now = new Date();
         const dateFrom = new Date(now);
         dateFrom.setMonth(dateFrom.getMonth() - months);
