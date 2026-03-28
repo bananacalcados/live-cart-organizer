@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { transcribeAudio } from "../_shared/audio-transcribe.ts";
+import { analyzeIncomingAttachment, parseDataUrl } from "../_shared/media-understanding.ts";
 import { isVisualReferenceMessage, joinMeaningfulMessages, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
 
 const corsHeaders = {
@@ -787,26 +788,42 @@ serve(async (req) => {
       || (mediaType === 'image' ? 'O cliente enviou uma imagem.' : '');
     const referencesVisual = isVisualReferenceMessage(combinedMessage);
 
-    let relevantImageUrl = mediaType === 'image' ? (mediaUrl || null) : null;
-    if (!relevantImageUrl && referencesVisual) {
-      let latestImageQuery = supabase
+    let relevantAttachment: { media_url: string; media_type: string } | null = mediaUrl && mediaType && ['image', 'document'].includes(mediaType)
+      ? { media_url: mediaUrl, media_type: mediaType }
+      : null;
+
+    if (!relevantAttachment && referencesVisual) {
+      let latestAttachmentQuery = supabase
         .from('whatsapp_messages')
-        .select('media_url, created_at')
+        .select('media_url, media_type, created_at')
         .eq('phone', normalizedPhone)
         .eq('direction', 'incoming')
-        .eq('media_type', 'image')
+        .in('media_type', ['image', 'document'])
         .not('media_url', 'is', null)
         .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
         .order('created_at', { ascending: false })
         .limit(1);
 
       if (whatsappNumberId) {
-        latestImageQuery = latestImageQuery.eq('whatsapp_number_id', whatsappNumberId);
+        latestAttachmentQuery = latestAttachmentQuery.eq('whatsapp_number_id', whatsappNumberId);
       }
 
-      const { data: latestImageRows } = await latestImageQuery;
-      relevantImageUrl = latestImageRows?.[0]?.media_url || null;
+      const { data: latestAttachmentRows } = await latestAttachmentQuery;
+      const latestAttachment = latestAttachmentRows?.[0];
+      relevantAttachment = latestAttachment?.media_url ? latestAttachment : null;
     }
+
+    const attachmentAnalysis = relevantAttachment
+      ? await analyzeIncomingAttachment({
+          mediaUrl: relevantAttachment.media_url,
+          mediaType: relevantAttachment.media_type,
+          promptContext: combinedMessage,
+        })
+      : null;
+
+    const currentMessageForAi = attachmentAnalysis?.analysis
+      ? `${combinedMessage}\n\n[ANÁLISE DO ANEXO]\n${attachmentAnalysis.analysis}`.trim()
+      : combinedMessage;
 
     // ─── 1. Load stores with Tiny tokens ────────────────────────────────
     const { data: storesData } = await supabase
@@ -1005,6 +1022,9 @@ O QUE VOCÊ NÃO PODE FAZER (PROIBIDO):
 SOBRE IMAGENS ENVIADAS PELO CLIENTE:
 - Você CONSEGUE analisar fotos e prints enviados pelo cliente quando eles vierem anexados no contexto.
 - Se a cliente mandar uma imagem e logo depois perguntar "o que é isso?", "viu a foto?" ou algo parecido, trate isso como continuação da imagem mais recente.
+- Se houver um bloco [ANÁLISE DO ANEXO] na mensagem atual, trate-o como leitura real da imagem ou PDF enviado.
+- Se o CPF, pedido, rastreio, data, link ou qualquer outro dado estiver visível nessa análise, use esse dado diretamente e NÃO peça de novo.
+- Quando a mensagem atual for sobre o anexo, responda primeiro sobre ele e só depois retome qualquer assunto anterior.
 - Diferencie bem: você pode ANALISAR a imagem enviada pela cliente, mas NÃO pode oferecer fotos de catálogo nem prometer enviar novas imagens.
 
 FLUXO DE RASTREIO E DETALHES DO PEDIDO:
@@ -1059,11 +1079,12 @@ REGRAS:
 
     // Always add the CURRENT incoming message (aggregated when fragmented)
     const lastHistoryMsg = chatMessages[chatMessages.length - 1];
-    const currentMsgText = combinedMessage;
+    const currentMsgText = currentMessageForAi;
 
     // Build current message content - may include image for vision
     let currentUserContent: any = currentMsgText;
-    const hasImage = Boolean(relevantImageUrl);
+    const inlineImageUrl = attachmentAnalysis?.mediaKind === 'image' ? attachmentAnalysis.inlineDataUrl : null;
+    const hasImage = Boolean(inlineImageUrl);
     
     if (hasImage) {
       const imageContextText = referencesVisual
@@ -1071,7 +1092,7 @@ REGRAS:
         : (currentMsgText || 'A cliente enviou esta imagem.');
       currentUserContent = [
         { type: 'text', text: imageContextText },
-        { type: 'image_url', image_url: { url: relevantImageUrl } },
+        { type: 'image_url', image_url: { url: inlineImageUrl } },
       ];
     }
 
@@ -1112,9 +1133,16 @@ REGRAS:
         if (Array.isArray(content)) {
           content = content.map((part: any) => {
             if (part.type === 'image_url' && part.image_url?.url) {
+              const parsed = parseDataUrl(part.image_url.url);
+              if (parsed) {
+                return {
+                  type: 'image',
+                  source: { type: 'base64', media_type: parsed.mimeType, data: parsed.data },
+                };
+              }
               return {
-                type: 'image',
-                source: { type: 'url', url: part.image_url.url },
+                type: 'text',
+                text: '[Imagem anexada pelo cliente]',
               };
             }
             return part;

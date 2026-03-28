@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { analyzeIncomingAttachment } from "../_shared/media-understanding.ts";
 import { isVisualReferenceMessage, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
 
 const corsHeaders = {
@@ -104,10 +105,11 @@ REGRAS DE RASTREIO:
 
     const mediaInstructions = `
 
-ANÁLISE DE IMAGENS:
-- Você consegue analisar fotos e prints enviados pelo cliente quando houver uma imagem anexada no contexto.
-- Se o cliente mandar uma imagem e logo depois perguntar "o que é isso?", "viu a foto?" ou algo parecido, considere a imagem mais recente como parte da pergunta atual.
-- Não diga que não consegue ver imagens se uma imagem estiver anexada nesta conversa.`;
+ANÁLISE DE IMAGENS E DOCUMENTOS:
+- Você consegue analisar fotos, prints e PDFs enviados pelo cliente quando houver um anexo no contexto.
+- Se o cliente mandar um anexo e logo depois perguntar "o que é isso?", "viu a foto?", "viu o PDF?" ou algo parecido, considere o anexo mais recente como parte da pergunta atual.
+- Se houver um bloco [ANÁLISE DO ANEXO] na mensagem atual, trate-o como leitura real do arquivo/imagem enviado.
+- Não diga que não consegue ver imagens ou documentos se houver um anexo analisado nesta conversa.`;
 
     const systemPrompt = basePrompt + antiRepetition + mediaInstructions + routingInstructions + trackingInstructions;
 
@@ -148,43 +150,58 @@ ANÁLISE DE IMAGENS:
 
       const normalizedCurrentText = sanitizeMediaPlaceholderText(messageText);
       const referencesVisual = isVisualReferenceMessage(normalizedCurrentText);
-      let relevantImageUrl = mediaType === 'image' ? (mediaUrl || null) : null;
+      let relevantAttachment: { media_url: string; media_type: string } | null = mediaUrl && mediaType && ['image', 'document'].includes(mediaType)
+        ? { media_url: mediaUrl, media_type: mediaType }
+        : null;
 
-      if (!relevantImageUrl && referencesVisual) {
-        let latestImageQuery = supabase
+      if (!relevantAttachment && referencesVisual) {
+        let latestAttachmentQuery = supabase
           .from('whatsapp_messages')
-          .select('media_url, created_at')
+          .select('media_url, media_type, created_at')
           .eq('phone', normalizedPhone)
           .eq('direction', 'incoming')
-          .eq('media_type', 'image')
+          .in('media_type', ['image', 'document'])
           .not('media_url', 'is', null)
           .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (whatsappNumberId) {
-          latestImageQuery = latestImageQuery.eq('whatsapp_number_id', whatsappNumberId);
+          latestAttachmentQuery = latestAttachmentQuery.eq('whatsapp_number_id', whatsappNumberId);
         }
 
-        const { data: latestImageRows } = await latestImageQuery;
-        relevantImageUrl = latestImageRows?.[0]?.media_url || null;
+        const { data: latestAttachmentRows } = await latestAttachmentQuery;
+        const latestAttachment = latestAttachmentRows?.[0];
+        relevantAttachment = latestAttachment?.media_url ? latestAttachment : null;
       }
 
-      if (normalizedCurrentText || relevantImageUrl) {
-        const currentUserContent = relevantImageUrl
+      const attachmentAnalysis = relevantAttachment
+        ? await analyzeIncomingAttachment({
+            mediaUrl: relevantAttachment.media_url,
+            mediaType: relevantAttachment.media_type,
+            promptContext: normalizedCurrentText || '',
+          })
+        : null;
+
+      const currentTextWithAttachment = attachmentAnalysis?.analysis
+        ? `${normalizedCurrentText || (attachmentAnalysis.mediaKind === 'document' ? 'O cliente enviou um documento.' : 'O cliente enviou uma imagem.')}\n\n[ANÁLISE DO ANEXO]\n${attachmentAnalysis.analysis}`.trim()
+        : normalizedCurrentText;
+
+      if (currentTextWithAttachment || relevantAttachment) {
+        const currentUserContent = attachmentAnalysis?.mediaKind === 'image' && attachmentAnalysis.inlineDataUrl
           ? [
               {
                 type: 'text',
                 text: referencesVisual
-                  ? `${normalizedCurrentText || 'O cliente está se referindo à imagem recém-enviada.'}\n\nConsidere a imagem anexada como o foco principal da pergunta atual.`
-                  : (normalizedCurrentText || 'O cliente enviou esta imagem.'),
+                  ? `${currentTextWithAttachment || 'O cliente está se referindo ao anexo recém-enviado.'}\n\nConsidere a imagem anexada como o foco principal da pergunta atual.`
+                  : (currentTextWithAttachment || 'O cliente enviou esta imagem.'),
               },
-              { type: 'image_url', image_url: { url: relevantImageUrl } },
+              { type: 'image_url', image_url: { url: attachmentAnalysis.inlineDataUrl } },
             ]
-          : normalizedCurrentText;
+          : currentTextWithAttachment;
 
         const lastMessage = chatMessages[chatMessages.length - 1];
-        if (relevantImageUrl && lastMessage?.role === 'user' && lastMessage.content === normalizedCurrentText) {
+        if (attachmentAnalysis?.mediaKind === 'image' && lastMessage?.role === 'user' && lastMessage.content === currentTextWithAttachment) {
           chatMessages[chatMessages.length - 1] = { role: 'user', content: currentUserContent };
         } else if (!lastMessage || lastMessage.role !== 'user' || lastMessage.content !== currentUserContent) {
           chatMessages.push({ role: 'user', content: currentUserContent });
