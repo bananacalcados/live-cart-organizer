@@ -108,6 +108,7 @@ Deno.serve(async (req) => {
     // ─── 4. Process lead attribution ───
     type CampaignStat = {
       campaign: string;
+      templateName: string;
       type: string;
       captured: number;
       converted: number;
@@ -118,7 +119,7 @@ Deno.serve(async (req) => {
       leadsNotCustomers: number;
       dispatchDates: string[];
       dispatchCount: number;
-      templateCategory: string; // 'marketing' | 'utility' | 'unknown'
+      templateCategory: string;
       totalMessagesSent: number;
     };
     const stats: Record<string, CampaignStat> = {};
@@ -143,7 +144,7 @@ Deno.serve(async (req) => {
       const key = `lead:${lead.campaign}`;
       if (!stats[key]) {
         stats[key] = {
-          campaign: lead.campaign, type: "lead_capture",
+          campaign: lead.campaign, templateName: "", type: "lead_capture",
           captured: 0, converted: 0, revenue: 0, convDays: [],
           convertedSuffixes: new Set(),
           leadsAreCustomers: 0, leadsNotCustomers: 0,
@@ -190,7 +191,7 @@ Deno.serve(async (req) => {
     while (true) {
       let q = supabase
         .from("dispatch_history")
-        .select("id, template_name, created_at, sent_count, status, template_category");
+        .select("id, template_name, campaign_name, created_at, sent_count, status, template_category");
       if (date_from) q = q.gte("created_at", date_from);
       if (date_to) q = q.lte("created_at", date_to);
       q = q.range(off, off + 999);
@@ -218,10 +219,13 @@ Deno.serve(async (req) => {
         rOff += 1000;
       }
 
-      const key = `dispatch:${dispatch.template_name || dispatch.id}`;
+      // Each dispatch is its own entry (unique by ID)
+      const displayName = dispatch.campaign_name || dispatch.template_name || "Disparo sem nome";
+      const key = `dispatch:${dispatch.id}`;
       if (!stats[key]) {
         stats[key] = {
-          campaign: dispatch.template_name || "Disparo sem nome",
+          campaign: displayName,
+          templateName: dispatch.template_name || "",
           type: "mass_dispatch",
           captured: 0, converted: 0, revenue: 0, convDays: [],
           convertedSuffixes: new Set(),
@@ -281,7 +285,7 @@ Deno.serve(async (req) => {
       const roas = totalCost > 0 ? s.revenue / totalCost : 0;
 
       return {
-        campaign: s.campaign, type: s.type,
+        campaign: s.campaign, template_name: s.templateName, type: s.type,
         leads_captured: s.captured, leads_converted: s.converted,
         conversion_rate: Math.round(rate * 100) / 100,
         total_revenue: Math.round(s.revenue * 100) / 100,

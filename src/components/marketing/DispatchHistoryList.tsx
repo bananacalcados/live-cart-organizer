@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -13,7 +14,7 @@ import {
 import {
   History, Send, CheckCircle, XCircle, Eye, Clock, RefreshCw,
   MessageSquare, BarChart3, Users, ChevronDown, ChevronUp,
-  Pause, Play, CalendarClock, Trash2, Copy,
+  Pause, Play, CalendarClock, Trash2, Copy, Pencil, Check, X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -22,6 +23,7 @@ import { toast } from "sonner";
 interface DispatchRecord {
   id: string;
   template_name: string;
+  campaign_name: string | null;
   audience_source: string;
   audience_filters: any;
   total_recipients: number;
@@ -78,6 +80,8 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
   const [recipientStats, setRecipientStats] = useState<Record<string, string>>({});
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [expanded, setExpanded] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
@@ -348,6 +352,17 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     return parts.length > 0 ? parts.join(' • ') : source || 'N/A';
   };
 
+  const handleSaveRename = async (dispatchId: string) => {
+    try {
+      await supabase.from('dispatch_history').update({ campaign_name: editName.trim() || null } as any).eq('id', dispatchId);
+      setDispatches(prev => prev.map(d => d.id === dispatchId ? { ...d, campaign_name: editName.trim() || null } : d));
+      setEditingId(null);
+      toast.success("Campanha renomeada!");
+    } catch {
+      toast.error("Erro ao renomear");
+    }
+  };
+
   if (dispatches.length === 0 && !isLoading) return null;
 
   return (
@@ -397,7 +412,38 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-sm font-medium">{d.template_name}</span>
+                            {editingId === d.id ? (
+                              <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                <Input
+                                  className="h-6 text-xs w-[200px]"
+                                  value={editName}
+                                  onChange={e => setEditName(e.target.value)}
+                                  placeholder="Nome da campanha"
+                                  autoFocus
+                                  onKeyDown={e => { if (e.key === 'Enter') handleSaveRename(d.id); if (e.key === 'Escape') setEditingId(null); }}
+                                />
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => handleSaveRename(d.id)}>
+                                  <Check className="h-3 w-3 text-emerald-500" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingId(null)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                {d.campaign_name && (
+                                  <span className="text-sm font-medium">{d.campaign_name}</span>
+                                )}
+                                <span className={`font-mono text-sm ${d.campaign_name ? 'text-muted-foreground text-xs' : 'font-medium'}`}>{d.template_name}</span>
+                                <Button
+                                  variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-40 hover:opacity-100"
+                                  onClick={e => { e.stopPropagation(); setEditingId(d.id); setEditName(d.campaign_name || ''); }}
+                                  title="Renomear campanha"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
                             {getDispatchStatusBadge(d)}
                             {d.force_resend && (
                               <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">Reenvio</Badge>

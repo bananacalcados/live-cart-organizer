@@ -1964,6 +1964,7 @@ export type Database = {
         Row: {
           audience_filters: Json | null
           audience_source: string | null
+          campaign_name: string | null
           completed_at: string | null
           cost_per_message: number | null
           created_at: string
@@ -1989,6 +1990,7 @@ export type Database = {
         Insert: {
           audience_filters?: Json | null
           audience_source?: string | null
+          campaign_name?: string | null
           completed_at?: string | null
           cost_per_message?: number | null
           created_at?: string
@@ -2014,6 +2016,7 @@ export type Database = {
         Update: {
           audience_filters?: Json | null
           audience_source?: string | null
+          campaign_name?: string | null
           completed_at?: string | null
           cost_per_message?: number | null
           created_at?: string
