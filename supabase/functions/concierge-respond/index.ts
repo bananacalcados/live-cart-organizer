@@ -397,7 +397,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "create_exchange_request",
-      description: "Registra uma solicitação de troca de produto. Use quando o cliente disser que quer trocar, devolver ou que o produto não serviu/não gostou. A IA DEVE coletar TODAS as informações antes de chamar esta ferramenta: qual pedido, qual produto, motivo detalhado, e tamanho desejado (se aplicável). Interprete o motivo do cliente para classificar corretamente a categoria e as nuances (ex: 'apertou no peito do pé' = tamanho + fit_area:'peito_do_pe').",
+      description: "Registra uma solicitação de troca de produto E gera automaticamente o código de postagem reversa (Correios via Melhor Envio). Use quando o cliente disser que quer trocar, devolver ou que o produto não serviu/não gostou. A IA DEVE coletar TODAS as informações antes de chamar esta ferramenta: qual pedido, qual produto, motivo detalhado, e tamanho desejado (se aplicável). Os dados do cliente (nome, CPF, endereço) serão PUXADOS AUTOMATICAMENTE do cadastro do pedido — NÃO peça novamente. Apenas CONFIRME o endereço antes de chamar. IMPORTANTE: Antes de chamar, use get_order_details para verificar a data de entrega e confirmar que o prazo de troca está dentro da política (30 dias a partir do recebimento).",
       parameters: {
         type: "object",
         properties: {
@@ -409,9 +409,13 @@ const TOOLS = [
             type: "string",
             description: "ID interno Tiny do pedido"
           },
+          store_name: {
+            type: "string",
+            description: "Nome da loja onde o pedido foi feito (Site, Loja Centro, ou Loja Perola)"
+          },
           customer_name: {
             type: "string",
-            description: "Nome do cliente"
+            description: "Nome do cliente (se já disponível no contexto)"
           },
           product_name: {
             type: "string",
@@ -459,12 +463,12 @@ const TOOLS = [
             type: "string",
             description: "Detalhe sobre o fit: 'apertado', 'folgado', 'curto', 'longo', 'alto', 'baixo'"
           },
-          customer_cep: {
-            type: "string",
-            description: "CEP do cliente para gerar logística reversa"
+          address_confirmed: {
+            type: "boolean",
+            description: "Se o cliente confirmou que o endereço cadastrado está correto. DEVE ser true para gerar o código de postagem."
           }
         },
-        required: ["product_name", "reason_category", "customer_verbatim", "ai_interpretation"],
+        required: ["product_name", "reason_category", "customer_verbatim", "ai_interpretation", "tiny_order_id"],
         additionalProperties: false,
       },
     },
