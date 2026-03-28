@@ -310,7 +310,7 @@ export function MarketingAttributionDashboard() {
               </div>
 
               <Card>
-                <ScrollArea className="max-h-[500px]">
+                <div className="max-h-[600px] overflow-y-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
