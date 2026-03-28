@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { transcribeAudio } from "../_shared/audio-transcribe.ts";
-import { joinMeaningfulMessages, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
+import { isVisualReferenceMessage, joinMeaningfulMessages, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -770,7 +770,7 @@ serve(async (req) => {
 
     let recentIncomingQuery = supabase
       .from('whatsapp_messages')
-      .select('message, created_at')
+      .select('message, created_at, media_type, media_url')
       .eq('phone', normalizedPhone)
       .eq('direction', 'incoming')
       .gte('created_at', aggregationCutoff)
@@ -785,6 +785,28 @@ serve(async (req) => {
     const combinedMessage = aggregatedIncomingText
       || sanitizeMediaPlaceholderText(incomingMessageText)
       || (mediaType === 'image' ? 'O cliente enviou uma imagem.' : '');
+    const referencesVisual = isVisualReferenceMessage(combinedMessage);
+
+    let relevantImageUrl = mediaType === 'image' ? (mediaUrl || null) : null;
+    if (!relevantImageUrl && referencesVisual) {
+      let latestImageQuery = supabase
+        .from('whatsapp_messages')
+        .select('media_url, created_at')
+        .eq('phone', normalizedPhone)
+        .eq('direction', 'incoming')
+        .eq('media_type', 'image')
+        .not('media_url', 'is', null)
+        .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (whatsappNumberId) {
+        latestImageQuery = latestImageQuery.eq('whatsapp_number_id', whatsappNumberId);
+      }
+
+      const { data: latestImageRows } = await latestImageQuery;
+      relevantImageUrl = latestImageRows?.[0]?.media_url || null;
+    }
 
     // ─── 1. Load stores with Tiny tokens ────────────────────────────────
     const { data: storesData } = await supabase
@@ -980,6 +1002,11 @@ O QUE VOCÊ NÃO PODE FAZER (PROIBIDO):
 - NUNCA fale sobre disponibilidade de estoque, tamanhos ou cores
 - Se a cliente pedir algo de vendas, diga "Vou te conectar com uma de nossas consultoras! 😊" e use transfer_to_human
 
+SOBRE IMAGENS ENVIADAS PELO CLIENTE:
+- Você CONSEGUE analisar fotos e prints enviados pelo cliente quando eles vierem anexados no contexto.
+- Se a cliente mandar uma imagem e logo depois perguntar "o que é isso?", "viu a foto?" ou algo parecido, trate isso como continuação da imagem mais recente.
+- Diferencie bem: você pode ANALISAR a imagem enviada pela cliente, mas NÃO pode oferecer fotos de catálogo nem prometer enviar novas imagens.
+
 FLUXO DE RASTREIO E DETALHES DO PEDIDO:
 1. Cliente pede rastreio ou informação do pedido → peça PRIMEIRO o CPF; aceite CPF com pontos e traços (remova a máscara)
 2. Só use nome como plano B quando a pessoa realmente não souber o CPF
@@ -1036,12 +1063,15 @@ REGRAS:
 
     // Build current message content - may include image for vision
     let currentUserContent: any = currentMsgText;
-    const hasImage = mediaType === 'image' && mediaUrl;
+    const hasImage = Boolean(relevantImageUrl);
     
     if (hasImage) {
+      const imageContextText = referencesVisual
+        ? `${currentMsgText || 'A cliente está se referindo à imagem recém-enviada.'}\n\nConsidere a imagem anexada como o foco principal da pergunta atual.`
+        : (currentMsgText || 'A cliente enviou esta imagem.');
       currentUserContent = [
-        { type: 'text', text: currentMsgText || 'O cliente enviou esta imagem.' },
-        { type: 'image_url', image_url: { url: mediaUrl } },
+        { type: 'text', text: imageContextText },
+        { type: 'image_url', image_url: { url: relevantImageUrl } },
       ];
     }
 

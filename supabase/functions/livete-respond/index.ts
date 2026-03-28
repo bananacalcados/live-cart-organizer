@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { liveteTools, executeToolCall } from "../_shared/livete-tools.ts";
 import { transcribeAudio } from "../_shared/audio-transcribe.ts";
-import { joinMeaningfulMessages, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
+import { isVisualReferenceMessage, joinMeaningfulMessages, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -72,6 +72,7 @@ serve(async (req) => {
     let combinedMessage = aggregatedRecentText
       || sanitizeMediaPlaceholderText(messageText || '')
       || (mediaType === 'image' ? 'O cliente enviou uma imagem.' : '');
+    const referencesVisual = isVisualReferenceMessage(combinedMessage);
 
     // Append audio transcription to combined message (resolved later after transcription)
     // This variable will be updated after transcription completes
@@ -336,6 +337,7 @@ ${JSON.stringify(regData, null, 2)}
 - Se esse cliente retornar em outra live, use notify_presenter com alert_type "returning_desistente".
 
 ### Política de Fotos
+    - Você CONSEGUE analisar fotos e prints enviados pelo cliente quando eles vierem anexados no contexto.
 - NÃO envie fotos de produtos para evitar "leilão reverso" (cliente comparando preços).
 - Diga que é o mesmo produto que apareceu na live.
 - Ofereça pedir à apresentadora para mostrar novamente: use notify_presenter com alert_type "show_product_again".
@@ -382,7 +384,7 @@ ${cancellationCount >= 2 ? '- ⚠️ ATENÇÃO: próximo cancelamento resultará
     });
 
     // If customer sent an image, include it for vision analysis
-    if (recentMediaUrl) {
+    if (recentMediaUrl && (mediaType === 'image' || referencesVisual)) {
       userContent.push({
         type: 'image_url',
         image_url: { url: recentMediaUrl },
