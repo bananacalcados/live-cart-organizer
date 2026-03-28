@@ -163,15 +163,13 @@ Deno.serve(async (req) => {
     }
 
     // Helper: get ALL sales for a normalized phone (from both pos_sales and zoppy_sales)
-    function getAllSalesForPhone(suffix: string): any[] {
+    function getAllSalesForPhone(phone: string): any[] {
       const sales: any[] = [];
-      // pos_sales via customer IDs
-      const custIds = phoneToCustomerIds[suffix] || [];
+      const custIds = phoneToCustomerIds[phone] || [];
       for (const cid of custIds) {
         if (customerSales[cid]) sales.push(...customerSales[cid]);
       }
-      // zoppy_sales via phone
-      if (zoppyPhoneSales[suffix]) sales.push(...zoppyPhoneSales[suffix]);
+      if (zoppyPhoneSales[phone]) sales.push(...zoppyPhoneSales[phone]);
       return sales;
     }
 
