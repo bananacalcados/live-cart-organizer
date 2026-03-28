@@ -383,7 +383,7 @@ export function MarketingAttributionDashboard() {
                       )}
                     </TableBody>
                   </Table>
-                </ScrollArea>
+                </div>
               </Card>
 
               {filtered.length > 0 && (
