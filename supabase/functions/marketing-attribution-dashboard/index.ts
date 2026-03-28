@@ -224,6 +224,10 @@ Deno.serve(async (req) => {
       const displayName = dispatch.campaign_name || dispatch.template_name || "Disparo sem nome";
       const key = `dispatch:${dispatch.id}`;
       if (!stats[key]) {
+        // Determine cost per message: use stored value, or guess from template name
+        const isUtility = (dispatch.template_name || "").toLowerCase().match(/confirm|pedido|rastreio|entrega|nf|nota|boleto|pix_/);
+        const costPerMsg = dispatch.cost_per_message ? Number(dispatch.cost_per_message) : (isUtility ? 0.05 : 0.40);
+        
         stats[key] = {
           campaign: displayName,
           templateName: dispatch.template_name || "",
@@ -232,7 +236,7 @@ Deno.serve(async (req) => {
           convertedSuffixes: new Set(),
           leadsAreCustomers: 0, leadsNotCustomers: 0,
           dispatchDates: [], dispatchCount: 0,
-          templateCategory: dispatch.template_category || "MARKETING",
+          costPerMsg,
           totalMessagesSent: 0,
         };
       }
