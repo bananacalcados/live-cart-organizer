@@ -218,10 +218,13 @@ Deno.serve(async (req) => {
         rOff += 1000;
       }
 
-      const key = `dispatch:${dispatch.template_name || dispatch.id}`;
+      // Each dispatch is its own entry (unique by ID)
+      const displayName = dispatch.campaign_name || dispatch.template_name || "Disparo sem nome";
+      const key = `dispatch:${dispatch.id}`;
       if (!stats[key]) {
         stats[key] = {
-          campaign: dispatch.template_name || "Disparo sem nome",
+          campaign: displayName,
+          templateName: dispatch.template_name || "",
           type: "mass_dispatch",
           captured: 0, converted: 0, revenue: 0, convDays: [],
           convertedSuffixes: new Set(),
