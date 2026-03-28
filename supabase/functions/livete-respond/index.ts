@@ -67,9 +67,11 @@ serve(async (req) => {
       .gte('created_at', thirtySecsAgo)
       .order('created_at', { ascending: true });
 
-    let combinedMessage = (recentMsgs && recentMsgs.length > 1)
-      ? recentMsgs.map(m => m.message).filter(Boolean).join('\n')
-      : (messageText || '');
+    const aggregatedRecentText = (recentMsgs || [])
+      .map(m => m.message?.trim())
+      .filter(Boolean)
+      .join('\n');
+    let combinedMessage = aggregatedRecentText || (messageText || '') || (mediaType === 'image' ? 'O cliente enviou uma imagem.' : '');
 
     // Append audio transcription to combined message (resolved later after transcription)
     // This variable will be updated after transcription completes
