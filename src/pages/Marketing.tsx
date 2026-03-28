@@ -227,7 +227,7 @@ export default function Marketing() {
         } else {
           keepFetching = false;
         }
-        if (allCustomers.length >= 25000) keepFetching = false; // safety cap
+        if (allCustomers.length >= 50000) keepFetching = false; // safety cap
       }
       setCustomers(allCustomers as ZoppyCustomer[]);
     } catch (err) { console.error(err); toast.error("Erro ao carregar clientes"); }
