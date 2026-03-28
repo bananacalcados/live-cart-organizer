@@ -813,7 +813,7 @@ export default function Marketing() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="calendar">📅 Calendário</SelectItem>
-                <SelectItem value="campaigns">🎯 Campanhas 360°</SelectItem>
+                <SelectItem value="attribution">📊 Dashboard</SelectItem>
                 <SelectItem value="customers">👥 Clientes RFM</SelectItem>
                 <SelectItem value="templates">📢 Templates Meta</SelectItem>
                 <SelectItem value="disparos">📨 Disparos</SelectItem>
