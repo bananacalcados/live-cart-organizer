@@ -144,9 +144,24 @@ serve(async (req) => {
       });
     }
 
-    // Pick cheapest Correios service
-    availableServices.sort((a: any, b: any) => parseFloat(a.price) - parseFloat(b.price));
-    const chosen = availableServices[0];
+    // Prefer PAC; only pick SEDEX if price difference to PAC is < R$3
+    const pacService = availableServices.find((s: any) => {
+      const name = (s.name || '').toLowerCase();
+      return name.includes('pac') && !name.includes('sedex');
+    });
+    const sedexService = availableServices.find((s: any) => {
+      const name = (s.name || '').toLowerCase();
+      return name.includes('sedex');
+    });
+
+    let chosen: any;
+    if (pacService && sedexService) {
+      const priceDiff = parseFloat(pacService.price) - parseFloat(sedexService.price);
+      // If SEDEX is less than R$3 more expensive than PAC, pick SEDEX for faster delivery
+      chosen = (parseFloat(sedexService.price) - parseFloat(pacService.price) < 3) ? sedexService : pacService;
+    } else {
+      chosen = pacService || sedexService || availableServices[0];
+    }
     const serviceId = chosen.id;
 
     console.log(`[exchange-reverse] Chosen: ${chosen.name} (ID ${serviceId}) - R$ ${chosen.price} - ${chosen.delivery_time} days`);
