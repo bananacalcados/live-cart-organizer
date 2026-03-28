@@ -19,18 +19,22 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const twelveMonthsAgo = new Date();
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+    const body = await req.json().catch(() => ({}));
+    const { date_from, date_to, attribution_window_days = 7 } = body;
+    const windowDays = Number(attribution_window_days) || 7;
 
     // ─── 1. Fetch all leads (paginated) ───
     let allLpLeads: any[] = [];
     let off = 0;
     while (true) {
-      const { data } = await supabase
+      let q = supabase
         .from("lp_leads")
         .select("id, campaign_tag, phone, name, source, created_at")
-        .not("phone", "is", null)
-        .range(off, off + 999);
+        .not("phone", "is", null);
+      if (date_from) q = q.gte("created_at", date_from);
+      if (date_to) q = q.lte("created_at", date_to);
+      q = q.range(off, off + 999);
+      const { data } = await q;
       if (!data || data.length === 0) break;
       allLpLeads = allLpLeads.concat(data);
       if (data.length < 1000) break;
@@ -40,11 +44,14 @@ Deno.serve(async (req) => {
     let allCampaignLeads: any[] = [];
     off = 0;
     while (true) {
-      const { data } = await supabase
+      let q = supabase
         .from("campaign_leads")
         .select("id, campaign_id, phone, name, source, created_at")
-        .not("phone", "is", null)
-        .range(off, off + 999);
+        .not("phone", "is", null);
+      if (date_from) q = q.gte("created_at", date_from);
+      if (date_to) q = q.lte("created_at", date_to);
+      q = q.range(off, off + 999);
+      const { data } = await q;
       if (!data || data.length === 0) break;
       allCampaignLeads = allCampaignLeads.concat(data);
       if (data.length < 1000) break;
@@ -77,17 +84,18 @@ Deno.serve(async (req) => {
       off += 1000;
     }
 
-    // ─── 3. Fetch pos_sales (completed, last 12 months, paginated) ───
+    // ─── 3. Fetch pos_sales (completed, paginated) ───
     const customerSales: Record<string, any[]> = {};
     off = 0;
     while (true) {
-      const { data } = await supabase
+      let q = supabase
         .from("pos_sales")
         .select("id, customer_id, total, created_at, store_id")
-        .gte("created_at", twelveMonthsAgo.toISOString())
         .eq("status", "completed")
-        .not("customer_id", "is", null)
-        .range(off, off + 999);
+        .not("customer_id", "is", null);
+      // No date filter on sales - we need all sales to check attribution
+      q = q.range(off, off + 999);
+      const { data } = await q;
       if (!data || data.length === 0) break;
       for (const s of data) {
         if (!customerSales[s.customer_id]) customerSales[s.customer_id] = [];
@@ -106,6 +114,12 @@ Deno.serve(async (req) => {
       revenue: number;
       convDays: number[];
       convertedSuffixes: Set<string>;
+      leadsAreCustomers: number;
+      leadsNotCustomers: number;
+      dispatchDates: string[];
+      dispatchCount: number;
+      templateCategory: string; // 'marketing' | 'utility' | 'unknown'
+      totalMessagesSent: number;
     };
     const stats: Record<string, CampaignStat> = {};
 
@@ -132,11 +146,22 @@ Deno.serve(async (req) => {
           campaign: lead.campaign, type: "lead_capture",
           captured: 0, converted: 0, revenue: 0, convDays: [],
           convertedSuffixes: new Set(),
+          leadsAreCustomers: 0, leadsNotCustomers: 0,
+          dispatchDates: [], dispatchCount: 0,
+          templateCategory: "unknown", totalMessagesSent: 0,
         };
       }
       stats[key].captured++;
 
       const custId = suffixToCustomerId[suffix];
+      const isExistingCustomer = !!custId && !!customerSales[custId];
+
+      if (isExistingCustomer) {
+        stats[key].leadsAreCustomers++;
+      } else {
+        stats[key].leadsNotCustomers++;
+      }
+
       if (!custId || !customerSales[custId]) continue;
 
       const leadDate = new Date(lead.created_at);
@@ -148,7 +173,7 @@ Deno.serve(async (req) => {
         if (saleDate <= leadDate) continue;
         if (hadPriorSales) {
           const daysDiff = (saleDate.getTime() - leadDate.getTime()) / 86400000;
-          if (daysDiff > 7) continue;
+          if (daysDiff > windowDays) continue;
         }
         if (!stats[key].convertedSuffixes.has(suffix)) {
           stats[key].convertedSuffixes.add(suffix);
@@ -163,11 +188,13 @@ Deno.serve(async (req) => {
     let allDispatches: any[] = [];
     off = 0;
     while (true) {
-      const { data } = await supabase
+      let q = supabase
         .from("dispatch_history")
-        .select("id, template_name, created_at, sent_count, status")
-        .gte("created_at", twelveMonthsAgo.toISOString())
-        .range(off, off + 999);
+        .select("id, template_name, created_at, sent_count, status, template_category");
+      if (date_from) q = q.gte("created_at", date_from);
+      if (date_to) q = q.lte("created_at", date_to);
+      q = q.range(off, off + 999);
+      const { data } = await q;
       if (!data || data.length === 0) break;
       allDispatches = allDispatches.concat(data);
       if (data.length < 1000) break;
@@ -191,8 +218,6 @@ Deno.serve(async (req) => {
         rOff += 1000;
       }
 
-      if (recipients.length === 0) continue;
-
       const key = `dispatch:${dispatch.template_name || dispatch.id}`;
       if (!stats[key]) {
         stats[key] = {
@@ -200,12 +225,26 @@ Deno.serve(async (req) => {
           type: "mass_dispatch",
           captured: 0, converted: 0, revenue: 0, convDays: [],
           convertedSuffixes: new Set(),
+          leadsAreCustomers: 0, leadsNotCustomers: 0,
+          dispatchDates: [], dispatchCount: 0,
+          templateCategory: dispatch.template_category || "MARKETING",
+          totalMessagesSent: 0,
         };
       }
       stats[key].captured += recipients.length;
+      stats[key].totalMessagesSent += recipients.length;
+      stats[key].dispatchCount++;
+      stats[key].dispatchDates.push(dispatch.created_at);
+
+      // Try to detect template category from name if not set
+      if (!stats[key].templateCategory || stats[key].templateCategory === "unknown") {
+        stats[key].templateCategory = dispatch.template_category || "MARKETING";
+      }
+
+      if (recipients.length === 0) continue;
 
       const dispatchDate = new Date(dispatch.created_at);
-      const sevenDaysAfter = new Date(dispatchDate.getTime() + 7 * 86400000);
+      const windowEnd = new Date(dispatchDate.getTime() + windowDays * 86400000);
 
       for (const r of recipients) {
         const suffix = phoneSuffix(r.phone);
@@ -216,7 +255,7 @@ Deno.serve(async (req) => {
 
         for (const sale of customerSales[custId]) {
           const saleDate = new Date(sale.created_at);
-          if (saleDate > dispatchDate && saleDate <= sevenDaysAfter) {
+          if (saleDate > dispatchDate && saleDate <= windowEnd) {
             if (!stats[key].convertedSuffixes.has(suffix)) {
               stats[key].convertedSuffixes.add(suffix);
               stats[key].converted++;
@@ -228,12 +267,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ─── 6. Build response ───
+    // ─── 6. Build response with ROAS ───
     const results = Object.values(stats).map(s => {
       const avgDays = s.convDays.length > 0
         ? s.convDays.reduce((a, b) => a + b, 0) / s.convDays.length : 0;
       const rate = s.captured > 0 ? (s.converted / s.captured) * 100 : 0;
       const avgTicket = s.converted > 0 ? s.revenue / s.converted : 0;
+
+      // ROAS calc: marketing = R$0.40, utility = R$0.50
+      const isUtility = (s.templateCategory || "").toUpperCase().includes("UTILITY");
+      const costPerMsg = isUtility ? 0.50 : 0.40;
+      const totalCost = s.totalMessagesSent * costPerMsg;
+      const roas = totalCost > 0 ? s.revenue / totalCost : 0;
+
       return {
         campaign: s.campaign, type: s.type,
         leads_captured: s.captured, leads_converted: s.converted,
@@ -241,6 +287,14 @@ Deno.serve(async (req) => {
         total_revenue: Math.round(s.revenue * 100) / 100,
         avg_ticket: Math.round(avgTicket * 100) / 100,
         avg_conversion_days: Math.round(avgDays * 10) / 10,
+        leads_are_customers: s.leadsAreCustomers,
+        leads_not_customers: s.leadsNotCustomers,
+        dispatch_dates: s.dispatchDates.sort(),
+        dispatch_count: s.dispatchCount,
+        total_messages_sent: s.totalMessagesSent,
+        template_category: s.templateCategory,
+        total_cost: Math.round(totalCost * 100) / 100,
+        roas: Math.round(roas * 100) / 100,
       };
     });
     results.sort((a, b) => b.total_revenue - a.total_revenue);
@@ -248,13 +302,16 @@ Deno.serve(async (req) => {
     const leadR = results.filter(r => r.type === "lead_capture");
     const dispR = results.filter(r => r.type === "mass_dispatch");
 
+    const totalDispatchCost = dispR.reduce((a, b) => a + b.total_cost, 0);
+    const totalDispatchRevenue = dispR.reduce((a, b) => a + b.total_revenue, 0);
+
     const summary = {
       total_leads: leadR.reduce((a, b) => a + b.leads_captured, 0),
       total_leads_converted: leadR.reduce((a, b) => a + b.leads_converted, 0),
       total_lead_revenue: Math.round(leadR.reduce((a, b) => a + b.total_revenue, 0) * 100) / 100,
       total_dispatches_sent: dispR.reduce((a, b) => a + b.leads_captured, 0),
       total_dispatch_conversions: dispR.reduce((a, b) => a + b.leads_converted, 0),
-      total_dispatch_revenue: Math.round(dispR.reduce((a, b) => a + b.total_revenue, 0) * 100) / 100,
+      total_dispatch_revenue: Math.round(totalDispatchRevenue * 100) / 100,
       overall_revenue: Math.round(results.reduce((a, b) => a + b.total_revenue, 0) * 100) / 100,
       avg_conversion_days: (() => {
         const withDays = results.filter(r => r.avg_conversion_days > 0);
@@ -262,6 +319,11 @@ Deno.serve(async (req) => {
           ? Math.round(withDays.reduce((a, b) => a + b.avg_conversion_days, 0) / withDays.length * 10) / 10
           : 0;
       })(),
+      total_leads_are_customers: leadR.reduce((a, b) => a + b.leads_are_customers, 0),
+      total_leads_not_customers: leadR.reduce((a, b) => a + b.leads_not_customers, 0),
+      total_dispatch_cost: Math.round(totalDispatchCost * 100) / 100,
+      dispatch_roas: totalDispatchCost > 0 ? Math.round(totalDispatchRevenue / totalDispatchCost * 100) / 100 : 0,
+      attribution_window_days: windowDays,
     };
 
     return new Response(JSON.stringify({ summary, campaigns: results }), {

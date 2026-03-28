@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +11,28 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import {
   DollarSign, Users, TrendingUp, Clock, RefreshCw, Target, Send,
-  BarChart3, Loader2, Percent, Store, Repeat, ShoppingCart,
+  BarChart3, Loader2, Percent, Store, Repeat, ShoppingCart, Calendar,
+  Settings2, UserCheck, UserX, Megaphone,
 } from "lucide-react";
+import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, subWeeks, startOfQuarter, endOfQuarter } from "date-fns";
+
+// ─── Period helpers ───
+type PeriodKey = "all" | "7d" | "30d" | "quarter" | "semester" | "year" | "custom";
+
+function getPeriodDates(period: PeriodKey): { from?: string; to?: string } {
+  const now = new Date();
+  switch (period) {
+    case "7d": return { from: subDays(now, 7).toISOString(), to: now.toISOString() };
+    case "30d": return { from: subDays(now, 30).toISOString(), to: now.toISOString() };
+    case "quarter": return { from: startOfQuarter(now).toISOString(), to: endOfQuarter(now).toISOString() };
+    case "semester": return { from: subMonths(now, 6).toISOString(), to: now.toISOString() };
+    case "year": return { from: startOfYear(now).toISOString(), to: endOfYear(now).toISOString() };
+    default: return {};
+  }
+}
 
 // ─── Types ───
 interface CampaignResult {
@@ -26,6 +44,14 @@ interface CampaignResult {
   total_revenue: number;
   avg_ticket: number;
   avg_conversion_days: number;
+  leads_are_customers: number;
+  leads_not_customers: number;
+  dispatch_dates: string[];
+  dispatch_count: number;
+  total_messages_sent: number;
+  template_category: string;
+  total_cost: number;
+  roas: number;
 }
 
 interface Summary {
@@ -37,6 +63,11 @@ interface Summary {
   total_dispatch_revenue: number;
   overall_revenue: number;
   avg_conversion_days: number;
+  total_leads_are_customers: number;
+  total_leads_not_customers: number;
+  total_dispatch_cost: number;
+  dispatch_roas: number;
+  attribution_window_days: number;
 }
 
 interface LtvSummary {
@@ -68,8 +99,19 @@ interface StoreBreakdown {
 export function MarketingAttributionDashboard() {
   const [subTab, setSubTab] = useState<"attribution" | "ltv">("attribution");
 
+  // Shared period state
+  const [attrPeriod, setAttrPeriod] = useState<PeriodKey>("all");
+  const [attrCustomFrom, setAttrCustomFrom] = useState("");
+  const [attrCustomTo, setAttrCustomTo] = useState("");
+  const [ltvPeriod, setLtvPeriod] = useState<PeriodKey>("all");
+  const [ltvCustomFrom, setLtvCustomFrom] = useState("");
+  const [ltvCustomTo, setLtvCustomTo] = useState("");
+
+  // Attribution window
+  const [windowDays, setWindowDays] = useState(7);
+
   // Attribution state
-  const [attrLoading, setAttrLoading] = useState(true);
+  const [attrLoading, setAttrLoading] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignResult[]>([]);
   const [filter, setFilter] = useState<"all" | "lead_capture" | "mass_dispatch">("all");
@@ -79,16 +121,27 @@ export function MarketingAttributionDashboard() {
   const [ltvSummary, setLtvSummary] = useState<LtvSummary | null>(null);
   const [stores, setStores] = useState<StoreBreakdown[]>([]);
   const [freqDist, setFreqDist] = useState<Record<string, number>>({});
-  const [ltvLoaded, setLtvLoaded] = useState(false);
 
   const fmt = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   // ─── Fetch attribution ───
-  const fetchAttribution = async () => {
+  const fetchAttribution = useCallback(async () => {
     setAttrLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("marketing-attribution-dashboard");
+      let dateFrom: string | undefined;
+      let dateTo: string | undefined;
+      if (attrPeriod === "custom") {
+        dateFrom = attrCustomFrom ? new Date(attrCustomFrom).toISOString() : undefined;
+        dateTo = attrCustomTo ? new Date(attrCustomTo + "T23:59:59").toISOString() : undefined;
+      } else if (attrPeriod !== "all") {
+        const d = getPeriodDates(attrPeriod);
+        dateFrom = d.from;
+        dateTo = d.to;
+      }
+      const { data, error } = await supabase.functions.invoke("marketing-attribution-dashboard", {
+        body: { date_from: dateFrom, date_to: dateTo, attribution_window_days: windowDays },
+      });
       if (error) throw error;
       setSummary(data.summary);
       setCampaigns(data.campaigns || []);
@@ -97,30 +150,38 @@ export function MarketingAttributionDashboard() {
     } finally {
       setAttrLoading(false);
     }
-  };
+  }, [attrPeriod, attrCustomFrom, attrCustomTo, windowDays]);
 
   // ─── Fetch LTV ───
-  const fetchLtv = async () => {
+  const fetchLtv = useCallback(async () => {
     setLtvLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("marketing-ltv-dashboard");
+      let dateFrom: string | undefined;
+      let dateTo: string | undefined;
+      if (ltvPeriod === "custom") {
+        dateFrom = ltvCustomFrom ? new Date(ltvCustomFrom).toISOString() : undefined;
+        dateTo = ltvCustomTo ? new Date(ltvCustomTo + "T23:59:59").toISOString() : undefined;
+      } else if (ltvPeriod !== "all") {
+        const d = getPeriodDates(ltvPeriod);
+        dateFrom = d.from;
+        dateTo = d.to;
+      }
+      const { data, error } = await supabase.functions.invoke("marketing-ltv-dashboard", {
+        body: { date_from: dateFrom, date_to: dateTo },
+      });
       if (error) throw error;
       setLtvSummary(data.summary);
       setStores(data.stores || []);
       setFreqDist(data.frequency_distribution || {});
-      setLtvLoaded(true);
     } catch (err) {
       console.error("Error fetching LTV:", err);
     } finally {
       setLtvLoading(false);
     }
-  };
+  }, [ltvPeriod, ltvCustomFrom, ltvCustomTo]);
 
   useEffect(() => { fetchAttribution(); }, []);
-
-  useEffect(() => {
-    if (subTab === "ltv" && !ltvLoaded) fetchLtv();
-  }, [subTab]);
+  useEffect(() => { if (subTab === "ltv") fetchLtv(); }, [subTab]);
 
   const filtered = filter === "all"
     ? campaigns
@@ -128,7 +189,6 @@ export function MarketingAttributionDashboard() {
 
   return (
     <div className="space-y-4">
-      {/* Sub-tabs */}
       <Tabs value={subTab} onValueChange={(v) => setSubTab(v as any)}>
         <TabsList className="bg-muted/50">
           <TabsTrigger value="attribution" className="gap-1">
@@ -141,6 +201,53 @@ export function MarketingAttributionDashboard() {
 
         {/* ═══════ ATTRIBUTION TAB ═══════ */}
         <TabsContent value="attribution" className="space-y-4 mt-4">
+          {/* Controls row */}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[140px]">
+              <label className="text-[10px] text-muted-foreground mb-1 block">Período</label>
+              <Select value={attrPeriod} onValueChange={(v) => setAttrPeriod(v as PeriodKey)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todo o período</SelectItem>
+                  <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                  <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                  <SelectItem value="quarter">Trimestre atual</SelectItem>
+                  <SelectItem value="semester">Últimos 6 meses</SelectItem>
+                  <SelectItem value="year">Ano atual</SelectItem>
+                  <SelectItem value="custom">Período livre</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {attrPeriod === "custom" && (
+              <>
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">De</label>
+                  <Input type="date" className="h-8 text-xs w-[140px]" value={attrCustomFrom} onChange={e => setAttrCustomFrom(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">Até</label>
+                  <Input type="date" className="h-8 text-xs w-[140px]" value={attrCustomTo} onChange={e => setAttrCustomTo(e.target.value)} />
+                </div>
+              </>
+            )}
+            <div className="min-w-[130px]">
+              <label className="text-[10px] text-muted-foreground mb-1 block flex items-center gap-1">
+                <Settings2 className="h-3 w-3" />Janela de atribuição
+              </label>
+              <Select value={String(windowDays)} onValueChange={(v) => setWindowDays(Number(v))}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[1,2,3,4,5,7,10,14,21,30].map(d => (
+                    <SelectItem key={d} value={String(d)}>{d} {d === 1 ? "dia" : "dias"}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchAttribution} className="gap-1 h-8">
+              <RefreshCw className="h-3.5 w-3.5" />Atualizar
+            </Button>
+          </div>
+
           {attrLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -148,26 +255,45 @@ export function MarketingAttributionDashboard() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">
-                    ROI por campanha de leads e disparos em massa (janela de 7 dias para clientes existentes)
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={fetchAttribution} className="gap-1">
-                  <RefreshCw className="h-3.5 w-3.5" />Atualizar
-                </Button>
-              </div>
+              <p className="text-[10px] text-muted-foreground">
+                ROI por campanha · janela de atribuição: {windowDays} {windowDays === 1 ? "dia" : "dias"}
+              </p>
 
               {summary && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <StatCard icon={DollarSign} iconColor="text-emerald-500" label="Faturamento Atribuído" value={fmt(summary.overall_revenue)} valueColor="text-emerald-500" />
-                  <StatCard icon={Target} iconColor="text-blue-500" label="Leads Captados" value={summary.total_leads.toLocaleString()}
-                    sub={`${summary.total_leads_converted} convertidos → ${fmt(summary.total_lead_revenue)}`} />
-                  <StatCard icon={Send} iconColor="text-violet-500" label="Disparos em Massa" value={summary.total_dispatches_sent.toLocaleString()}
-                    sub={`${summary.total_dispatch_conversions} conversões → ${fmt(summary.total_dispatch_revenue)}`} />
-                  <StatCard icon={Clock} iconColor="text-amber-500" label="Tempo Médio Conversão" value={`${summary.avg_conversion_days} dias`} />
-                </div>
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <StatCard icon={DollarSign} iconColor="text-emerald-500" label="Faturamento Atribuído" value={fmt(summary.overall_revenue)} valueColor="text-emerald-500" />
+                    <StatCard icon={Target} iconColor="text-blue-500" label="Leads Captados" value={summary.total_leads.toLocaleString()}
+                      sub={`${summary.total_leads_converted} convertidos → ${fmt(summary.total_lead_revenue)}`} />
+                    <StatCard icon={Send} iconColor="text-violet-500" label="Disparos em Massa" value={summary.total_dispatches_sent.toLocaleString()}
+                      sub={`${summary.total_dispatch_conversions} conversões → ${fmt(summary.total_dispatch_revenue)}`} />
+                    <StatCard icon={Clock} iconColor="text-amber-500" label="Tempo Médio Conversão" value={`${summary.avg_conversion_days} dias`} />
+                    <StatCard icon={Megaphone} iconColor="text-orange-500" label="ROAS Disparos" value={`${summary.dispatch_roas}x`}
+                      sub={`Custo: ${fmt(summary.total_dispatch_cost)}`} valueColor={summary.dispatch_roas >= 1 ? "text-emerald-500" : "text-red-500"} />
+                  </div>
+
+                  {/* Leads breakdown */}
+                  <div className="flex gap-3">
+                    <Card className="flex-1">
+                      <CardContent className="py-2 px-3 flex items-center gap-2">
+                        <UserX className="h-4 w-4 text-blue-400" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">Leads novos (não eram clientes)</p>
+                          <p className="text-sm font-bold">{summary.total_leads_not_customers.toLocaleString()}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="flex-1">
+                      <CardContent className="py-2 px-3 flex items-center gap-2">
+                        <UserCheck className="h-4 w-4 text-emerald-400" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">Leads que já eram clientes</p>
+                          <p className="text-sm font-bold">{summary.total_leads_are_customers.toLocaleString()}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </>
               )}
 
               <div className="flex gap-2">
@@ -189,18 +315,27 @@ export function MarketingAttributionDashboard() {
                       <TableRow>
                         <TableHead>Campanha</TableHead>
                         <TableHead>Tipo</TableHead>
-                        <TableHead className="text-right">Captados</TableHead>
+                        <TableHead className="text-right">Enviados</TableHead>
                         <TableHead className="text-right">Convertidos</TableHead>
                         <TableHead className="text-right">Taxa Conv.</TableHead>
                         <TableHead className="text-right">Faturamento</TableHead>
+                        <TableHead className="text-right">Custo</TableHead>
+                        <TableHead className="text-right">ROAS</TableHead>
                         <TableHead className="text-right">Ticket Médio</TableHead>
-                        <TableHead className="text-right">Tempo Médio</TableHead>
+                        <TableHead className="text-right">Disparos</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filtered.map((c, i) => (
                         <TableRow key={i}>
-                          <TableCell className="font-medium max-w-[200px] truncate">{c.campaign}</TableCell>
+                          <TableCell className="font-medium max-w-[180px]">
+                            <div className="truncate">{c.campaign}</div>
+                            {c.type === "mass_dispatch" && c.dispatch_dates.length > 0 && (
+                              <div className="text-[9px] text-muted-foreground mt-0.5">
+                                {c.dispatch_dates.map(d => format(new Date(d), "dd/MM/yy HH:mm")).join(" · ")}
+                              </div>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={
                               c.type === "lead_capture"
@@ -220,13 +355,23 @@ export function MarketingAttributionDashboard() {
                             </span>
                           </TableCell>
                           <TableCell className="text-right font-medium">{c.total_revenue > 0 ? fmt(c.total_revenue) : "—"}</TableCell>
+                          <TableCell className="text-right text-muted-foreground text-xs">
+                            {c.type === "mass_dispatch" && c.total_cost > 0 ? fmt(c.total_cost) : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {c.type === "mass_dispatch" && c.roas > 0 ? (
+                              <span className={c.roas >= 1 ? "text-emerald-500 font-medium" : "text-red-400"}>{c.roas}x</span>
+                            ) : "—"}
+                          </TableCell>
                           <TableCell className="text-right">{c.avg_ticket > 0 ? fmt(c.avg_ticket) : "—"}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">{c.avg_conversion_days > 0 ? `${c.avg_conversion_days}d` : "—"}</TableCell>
+                          <TableCell className="text-right text-muted-foreground text-xs">
+                            {c.type === "mass_dispatch" ? `${c.dispatch_count}x` : "—"}
+                          </TableCell>
                         </TableRow>
                       ))}
                       {filtered.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                             <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-40" />
                             Nenhuma campanha com dados de atribuição
                           </TableCell>
@@ -240,12 +385,13 @@ export function MarketingAttributionDashboard() {
               {filtered.length > 0 && (
                 <Card>
                   <CardContent className="py-3 px-4">
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center justify-between text-sm flex-wrap gap-2">
                       <span className="text-muted-foreground font-medium">TOTAL ({filtered.length} campanhas)</span>
-                      <div className="flex gap-6">
-                        <MiniStat label="Captados" value={filtered.reduce((a, b) => a + b.leads_captured, 0).toLocaleString()} />
+                      <div className="flex gap-6 flex-wrap">
+                        <MiniStat label="Enviados" value={filtered.reduce((a, b) => a + b.leads_captured, 0).toLocaleString()} />
                         <MiniStat label="Convertidos" value={String(filtered.reduce((a, b) => a + b.leads_converted, 0))} color="text-emerald-500" />
                         <MiniStat label="Faturamento" value={fmt(filtered.reduce((a, b) => a + b.total_revenue, 0))} color="text-emerald-500" />
+                        <MiniStat label="Custo" value={fmt(filtered.reduce((a, b) => a + b.total_cost, 0))} />
                       </div>
                     </div>
                   </CardContent>
@@ -257,6 +403,40 @@ export function MarketingAttributionDashboard() {
 
         {/* ═══════ LTV TAB ═══════ */}
         <TabsContent value="ltv" className="space-y-4 mt-4">
+          {/* Controls row */}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[140px]">
+              <label className="text-[10px] text-muted-foreground mb-1 block">Período</label>
+              <Select value={ltvPeriod} onValueChange={(v) => setLtvPeriod(v as PeriodKey)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todo o período</SelectItem>
+                  <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                  <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                  <SelectItem value="quarter">Trimestre atual</SelectItem>
+                  <SelectItem value="semester">Últimos 6 meses</SelectItem>
+                  <SelectItem value="year">Ano atual</SelectItem>
+                  <SelectItem value="custom">Período livre</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {ltvPeriod === "custom" && (
+              <>
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">De</label>
+                  <Input type="date" className="h-8 text-xs w-[140px]" value={ltvCustomFrom} onChange={e => setLtvCustomFrom(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">Até</label>
+                  <Input type="date" className="h-8 text-xs w-[140px]" value={ltvCustomTo} onChange={e => setLtvCustomTo(e.target.value)} />
+                </div>
+              </>
+            )}
+            <Button variant="outline" size="sm" onClick={fetchLtv} className="gap-1 h-8">
+              <RefreshCw className="h-3.5 w-3.5" />Atualizar
+            </Button>
+          </div>
+
           {ltvLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -264,16 +444,11 @@ export function MarketingAttributionDashboard() {
             </div>
           ) : ltvSummary ? (
             <>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
-                  Lifetime Value, ticket médio e taxa de recompra com base em todas as vendas
-                </p>
-                <Button variant="outline" size="sm" onClick={fetchLtv} className="gap-1">
-                  <RefreshCw className="h-3.5 w-3.5" />Atualizar
-                </Button>
-              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Lifetime Value, ticket médio e taxa de recompra com base em todas as vendas
+                {ltvPeriod !== "all" && " (período filtrado)"}
+              </p>
 
-              {/* Summary cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <StatCard icon={DollarSign} iconColor="text-emerald-500" label="LTV Médio" value={fmt(ltvSummary.ltv)} valueColor="text-emerald-500" />
                 <StatCard icon={ShoppingCart} iconColor="text-blue-500" label="Ticket Médio" value={fmt(ltvSummary.avg_ticket)} />
@@ -284,7 +459,6 @@ export function MarketingAttributionDashboard() {
                   sub={`${ltvSummary.total_orders} pedidos / ${ltvSummary.total_customers} clientes`} />
               </div>
 
-              {/* Frequency distribution */}
               <Card>
                 <CardContent className="pt-4 pb-3 px-4">
                   <p className="text-xs text-muted-foreground mb-3 font-medium">Distribuição de Frequência de Compra</p>
@@ -305,7 +479,6 @@ export function MarketingAttributionDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Per-store breakdown */}
               <Card>
                 <CardContent className="pt-4 pb-2 px-4">
                   <p className="text-xs text-muted-foreground mb-3 font-medium flex items-center gap-1">
@@ -378,7 +551,7 @@ function MiniStat({ label, value, color }: { label: string; value: string; color
   return (
     <div className="text-right">
       <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className={`font-bold ${color || ""}`}>{value}</p>
+      <p className={`text-sm font-bold ${color || ""}`}>{value}</p>
     </div>
   );
 }
