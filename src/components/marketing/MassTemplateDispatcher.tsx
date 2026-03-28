@@ -759,6 +759,7 @@ export function MassTemplateDispatcher() {
         .from('dispatch_history')
         .insert({
           template_name: selectedTemplate.name,
+          campaign_name: campaignName.trim() || null,
           template_language: selectedTemplate.language,
           whatsapp_number_id: selectedNumber,
           audience_source: audienceSource,
