@@ -80,6 +80,8 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
   const [recipientStats, setRecipientStats] = useState<Record<string, string>>({});
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [expanded, setExpanded] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
