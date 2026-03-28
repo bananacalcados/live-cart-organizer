@@ -1370,7 +1370,7 @@ REGRAS GERAIS:
             const result = await executeToolCall(fnName, resolvedFnArgs, stores, supabase, normalizedPhone, whatsappNumberId);
             console.log(`[concierge][lovable] result: ${result.slice(0, 200)}`);
             toolExecutions.push({ name: fnName, args: resolvedFnArgs, result: parseToolResult(result) });
-            const forcedReply = buildTrackingReplyFromToolResult(fnName, result);
+            const forcedReply = buildTrackingReplyFromToolResult(fnName, result, recentAiLogs);
             if (forcedReply) return forcedReply;
             currentMessages.push({ role: 'tool', content: result, tool_call_id: toolCall.id } as any);
           }
