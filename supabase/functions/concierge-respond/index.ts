@@ -1293,7 +1293,7 @@ REGRAS GERAIS:
             const result = await executeToolCall(tu.name, resolvedToolArgs, stores, supabase, normalizedPhone, whatsappNumberId);
             console.log(`[concierge][anthropic] result: ${result.slice(0, 200)}`);
             toolExecutions.push({ name: tu.name, args: resolvedToolArgs, result: parseToolResult(result) });
-            const forcedReply = buildTrackingReplyFromToolResult(tu.name, result);
+            const forcedReply = buildTrackingReplyFromToolResult(tu.name, result, recentAiLogs);
             if (forcedReply) return forcedReply;
             toolResults.push({
               type: 'tool_result',
