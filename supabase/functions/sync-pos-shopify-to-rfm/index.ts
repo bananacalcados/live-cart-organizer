@@ -147,10 +147,9 @@ serve(async (req) => {
         const dateFrom = new Date(now);
         dateFrom.setMonth(dateFrom.getMonth() - months);
 
-        // Aggregate customers from Tiny orders
-        const customerAgg = new Map<string, {
-          name: string; email: string | null; phone: string | null; cpf: string | null;
-          city: string | null; state: string | null;
+        // Phase 1: Collect all orders from search (fast, no detail calls needed)
+        // The search endpoint returns: id, numero, nome (customer name), valor, data_pedido, situacao
+        const customerByName = new Map<string, {
           total: number; count: number; first: string; last: string;
         }>();
 
@@ -161,19 +160,16 @@ serve(async (req) => {
 
         console.log(`Tiny online: fetching orders from ${formatBRDate(dateFrom)} to ${formatBRDate(now)}`);
 
-        while (page <= totalPages && (Date.now() - functionStart) < TIME_LIMIT_MS) {
-          const situacao = body.situacao || '';
+        // Phase 1: Scan all pages (only search endpoint, no detail calls)
+        while (page <= totalPages && (Date.now() - functionStart) < TIME_LIMIT_MS - 15000) {
           const formParams: Record<string, string> = {
-            token: tinyToken,
-            formato: 'json',
-            pagina: String(page),
-            dataInicial: formatBRDate(dateFrom),
-            dataFinal: formatBRDate(now),
+            token: tinyToken, formato: 'json', pagina: String(page),
+            dataInicial: formatBRDate(dateFrom), dataFinal: formatBRDate(now),
           };
+          const situacao = body.situacao || '';
           if (situacao) formParams.situacao = situacao;
 
           try {
-            console.log(`Tiny: fetching page ${page}...`);
             const resp = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -182,125 +178,121 @@ serve(async (req) => {
             apiCallCount++;
             const data = await safeJson(resp);
             const retorno = data.retorno;
-            console.log(`Tiny page ${page} raw response keys:`, JSON.stringify({
-              status: retorno?.status,
-              status_processamento: retorno?.status_processamento,
-              tipo_processamento: typeof retorno?.status_processamento,
-              numero_paginas: retorno?.numero_paginas,
-              pedidos_count: retorno?.pedidos?.length,
-              erros: retorno?.erros,
-              codigo_erro: retorno?.codigo_erro,
-            }));
 
             if (retorno?.status === 'Erro') {
-              const errMsg = retorno?.erros?.[0]?.erro || 'unknown error';
-              console.log(`Tiny page ${page}: API error - ${errMsg}`);
+              console.log(`Tiny page ${page}: error - ${retorno?.erros?.[0]?.erro || 'unknown'}`);
               break;
             }
-
-            // status_processamento '3' just means the data was returned (not an error)
             if (!retorno?.pedidos || retorno.pedidos.length === 0) {
-              console.log(`Tiny page ${page}: no orders returned`);
+              console.log(`Tiny page ${page}: no orders`);
               break;
             }
 
-            console.log(`Tiny page ${page}: status=${retorno?.status}, records=${retorno?.pedidos?.length || 0}`);
-
-            const pedidos = retorno?.pedidos || [];
             if (page === resumePage) {
               totalPages = retorno?.numero_paginas || 1;
-              console.log(`Tiny online: ${totalPages} pages total`);
             }
 
-            for (const p of pedidos) {
-              if ((Date.now() - functionStart) > TIME_LIMIT_MS - 5000) break;
+            for (const p of retorno.pedidos) {
+              const pedido = p.pedido;
+              if (!pedido) continue;
+              totalOrdersFetched++;
 
-              const orderId = p.pedido?.id;
-              if (!orderId) continue;
+              const customerName = (pedido.nome || '').trim();
+              if (!customerName) continue;
 
-              // Rate limiting: ~2 req/sec to stay under Tiny's 30/min limit
-              await new Promise(r => setTimeout(r, 500));
+              const orderTotal = parseFloat(pedido.valor || '0');
+              const orderDate = pedido.data_pedido || pedido.dataPrevista || new Date().toISOString().slice(0, 10);
 
-              try {
-                const detailResp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                  body: new URLSearchParams({ token: tinyToken, formato: 'json', id: String(orderId) }).toString(),
+              const existing = customerByName.get(customerName);
+              if (existing) {
+                existing.total += orderTotal;
+                existing.count += 1;
+                if (orderDate < existing.first) existing.first = orderDate;
+                if (orderDate > existing.last) existing.last = orderDate;
+              } else {
+                customerByName.set(customerName, {
+                  total: orderTotal, count: 1, first: orderDate, last: orderDate,
                 });
-                apiCallCount++;
-                const detailData = await safeJson(detailResp);
-                const pedido = detailData.retorno?.pedido;
-                if (!pedido) continue;
-
-                totalOrdersFetched++;
-
-                const cliente = pedido.cliente;
-                if (!cliente) continue;
-
-                const phone = (cliente.fone || cliente.celular || '').replace(/\D/g, '');
-                const cpf = (cliente.cpf_cnpj || '').replace(/\D/g, '') || null;
-                const email = cliente.email || null;
-                const name = cliente.nome || '';
-
-                // We need at least one identifier
-                if (!phone && !email && !cpf) continue;
-
-                // Key by CPF first (most stable), then phone, then email
-                const key = cpf || phone || email || '';
-                if (!key) continue;
-
-                // Calculate order total from items
-                let orderTotal = 0;
-                if (pedido.itens) {
-                  for (const itemW of pedido.itens) {
-                    const item = itemW.item;
-                    if (!item) continue;
-                    orderTotal += parseFloat(item.quantidade || '0') * parseFloat(item.valor_unitario || '0');
-                  }
-                }
-                // Fallback to pedido.total_pedido if items didn't give us a value
-                if (orderTotal === 0 && pedido.total_pedido) {
-                  orderTotal = parseFloat(pedido.total_pedido);
-                }
-
-                const orderDate = pedido.data_pedido || new Date().toISOString().slice(0, 10);
-
-                const existing = customerAgg.get(key);
-                if (existing) {
-                  existing.total += orderTotal;
-                  existing.count += 1;
-                  if (orderDate < existing.first) existing.first = orderDate;
-                  if (orderDate > existing.last) existing.last = orderDate;
-                  // Update name/contact if we got better data
-                  if (!existing.phone && phone) existing.phone = phone;
-                  if (!existing.email && email) existing.email = email;
-                  if (!existing.cpf && cpf) existing.cpf = cpf;
-                  if (!existing.name && name) existing.name = name;
-                } else {
-                  customerAgg.set(key, {
-                    name, email, phone: phone || null, cpf,
-                    city: cliente.cidade || null,
-                    state: cliente.uf || null,
-                    total: orderTotal, count: 1,
-                    first: orderDate, last: orderDate,
-                  });
-                }
-              } catch (e) {
-                console.error(`Error fetching Tiny order ${orderId}:`, e);
               }
             }
 
+            console.log(`Tiny page ${page}/${totalPages}: ${retorno.pedidos.length} orders, ${customerByName.size} unique customers so far`);
             page++;
-            // Small delay between pages
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 350));
           } catch (e) {
             console.error(`Tiny page ${page} error:`, e);
             break;
           }
         }
 
+        console.log(`Phase 1 done: ${totalOrdersFetched} orders, ${customerByName.size} unique customers`);
+
+        // Phase 2: Fetch contact details for each unique customer (by name)
+        const customerAgg = new Map<string, {
+          name: string; email: string | null; phone: string | null; cpf: string | null;
+          city: string | null; state: string | null;
+          total: number; count: number; first: string; last: string;
+        }>();
+
+        const customerNames = [...customerByName.entries()];
+        let contactsFetched = 0;
+
+        for (const [customerName, stats] of customerNames) {
+          if ((Date.now() - functionStart) > TIME_LIMIT_MS - 5000) break;
+
+          await new Promise(r => setTimeout(r, 400));
+
+          try {
+            const contactResp = await fetch('https://api.tiny.com.br/api2/contatos.pesquisa.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ token: tinyToken, formato: 'json', pesquisa: customerName }).toString(),
+            });
+            apiCallCount++;
+            const contactData = await safeJson(contactResp);
+            const contatos = contactData.retorno?.contatos || [];
+
+            if (contatos.length > 0) {
+              const contato = contatos[0].contato;
+              const phone = (contato?.fone || contato?.celular || '').replace(/\D/g, '');
+              const cpf = (contato?.cpf_cnpj || '').replace(/\D/g, '') || null;
+              const email = contato?.email || null;
+
+              const key = cpf || phone || email || customerName;
+              if (!key) continue;
+
+              const existingAgg = customerAgg.get(key);
+              if (existingAgg) {
+                existingAgg.total += stats.total;
+                existingAgg.count += stats.count;
+                if (stats.first < existingAgg.first) existingAgg.first = stats.first;
+                if (stats.last > existingAgg.last) existingAgg.last = stats.last;
+              } else {
+                customerAgg.set(key, {
+                  name: customerName,
+                  email, phone: phone || null, cpf,
+                  city: contato?.cidade || null, state: contato?.uf || null,
+                  total: stats.total, count: stats.count,
+                  first: stats.first, last: stats.last,
+                });
+              }
+              contactsFetched++;
+            } else {
+              // No contact found, use name as key
+              customerAgg.set(customerName, {
+                name: customerName, email: null, phone: null, cpf: null,
+                city: null, state: null,
+                total: stats.total, count: stats.count,
+                first: stats.first, last: stats.last,
+              });
+            }
+          } catch (e) {
+            console.error(`Contact lookup error for ${customerName}:`, e);
+          }
+        }
+
         const timeRanOut = (Date.now() - functionStart) >= TIME_LIMIT_MS - 5000;
-        console.log(`Tiny online: ${totalOrdersFetched} orders processed, ${customerAgg.size} unique customers, ${apiCallCount} API calls, pages ${resumePage}-${page - 1}/${totalPages}${timeRanOut ? ' (TIME LIMIT)' : ''}`);
+        console.log(`Phase 2 done: ${contactsFetched} contacts found, ${customerAgg.size} aggregated customers, ${apiCallCount} total API calls${timeRanOut ? ' (TIME LIMIT)' : ''}`);
 
         // Upsert aggregated customers
         const batch: any[] = [];
