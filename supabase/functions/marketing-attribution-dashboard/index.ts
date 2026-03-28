@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     }
 
     // ─── 2. Fetch pos_customers with whatsapp (paginated) ───
-    const suffixToCustomerIds: Record<string, string[]> = {};
+    const phoneToCustomerIds: Record<string, string[]> = {};
     off = 0;
     while (true) {
       const { data } = await supabase
@@ -93,10 +93,10 @@ Deno.serve(async (req) => {
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const c of data) {
-        const s = phoneSuffix(c.whatsapp);
+        const s = normalizePhone(c.whatsapp);
         if (s.length >= 8) {
-          if (!suffixToCustomerIds[s]) suffixToCustomerIds[s] = [];
-          suffixToCustomerIds[s].push(c.id);
+          if (!phoneToCustomerIds[s]) phoneToCustomerIds[s] = [];
+          phoneToCustomerIds[s].push(c.id);
         }
       }
       if (data.length < 1000) break;
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     }
 
     // Also fetch zoppy_customers phone for matching (covers Tiny/online customers)
-    const suffixToZoppyPhone: Record<string, string> = {};
+    const phoneToZoppyPhone: Record<string, string> = {};
     off = 0;
     while (true) {
       const { data } = await supabase
@@ -114,8 +114,8 @@ Deno.serve(async (req) => {
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const c of data) {
-        const s = phoneSuffix(c.phone);
-        if (s.length >= 8) suffixToZoppyPhone[s] = c.phone;
+        const s = normalizePhone(c.phone);
+        if (s.length >= 8) phoneToZoppyPhone[s] = c.phone;
       }
       if (data.length < 1000) break;
       off += 1000;
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const s of data) {
-        const suffix = phoneSuffix(s.customer_phone);
+        const suffix = normalizePhone(s.customer_phone);
         if (!zoppyPhoneSales[suffix]) zoppyPhoneSales[suffix] = [];
         zoppyPhoneSales[suffix].push({ ...s, created_at: s.completed_at });
       }
@@ -163,10 +163,10 @@ Deno.serve(async (req) => {
     }
 
     // Helper: get ALL sales for a phone suffix (from both pos_sales and zoppy_sales)
-    function getAllSalesForSuffix(suffix: string): any[] {
+    function getAllSalesForPhone(suffix: string): any[] {
       const sales: any[] = [];
       // pos_sales via customer IDs
-      const custIds = suffixToCustomerIds[suffix] || [];
+      const custIds = phoneToCustomerIds[suffix] || [];
       for (const cid of custIds) {
         if (customerSales[cid]) sales.push(...customerSales[cid]);
       }
@@ -208,8 +208,8 @@ Deno.serve(async (req) => {
     ];
 
     for (const lead of allLeads) {
-      const suffix = phoneSuffix(lead.phone);
-      if (suffix.length < 8) continue;
+      const suffix = normalizePhone(lead.phone);
+      if (!normalized) continue;
 
       const key = `lead:${lead.campaign}`;
       if (!stats[key]) {
@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
       stats[key].captured++;
 
       // Check if this lead has ANY sales (from pos or zoppy)
-      const allSales = getAllSalesForSuffix(suffix);
+      const allSales = getAllSalesForPhone(suffix);
       const isExistingCustomer = allSales.length > 0;
 
       if (isExistingCustomer) {
@@ -324,10 +324,10 @@ Deno.serve(async (req) => {
       const windowEnd = new Date(dispatchDate.getTime() + windowDays * 86400000);
 
       for (const r of recipients) {
-        const suffix = phoneSuffix(r.phone);
-        if (suffix.length < 8) continue;
+        const suffix = normalizePhone(r.phone);
+        if (!normalized) continue;
 
-        const allSales = getAllSalesForSuffix(suffix);
+        const allSales = getAllSalesForPhone(suffix);
         if (allSales.length === 0) continue;
 
         for (const sale of allSales) {
