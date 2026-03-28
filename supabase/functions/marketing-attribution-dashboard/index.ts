@@ -361,7 +361,7 @@ Deno.serve(async (req) => {
         const normalized = normalizePhone(r.phone);
         if (!normalized) continue;
 
-        const allSales = getAllSalesForPhone(normalized);
+        const allSales = getAllSalesForPhone(normalized, undefined);
         if (allSales.length === 0) continue;
 
         for (const sale of allSales) {
