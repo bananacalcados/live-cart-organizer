@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const s of data) {
-        const suffix = normalizePhone(s.customer_phone);
+        const normalized = normalizePhone(s.customer_phone);
         if (!zoppyPhoneSales[suffix]) zoppyPhoneSales[suffix] = [];
         zoppyPhoneSales[suffix].push({ ...s, created_at: s.completed_at });
       }
@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
     ];
 
     for (const lead of allLeads) {
-      const suffix = normalizePhone(lead.phone);
+      const normalized = normalizePhone(lead.phone);
       if (!normalized) continue;
 
       const key = `lead:${lead.campaign}`;
@@ -324,7 +324,7 @@ Deno.serve(async (req) => {
       const windowEnd = new Date(dispatchDate.getTime() + windowDays * 86400000);
 
       for (const r of recipients) {
-        const suffix = normalizePhone(r.phone);
+        const normalized = normalizePhone(r.phone);
         if (!normalized) continue;
 
         const allSales = getAllSalesForPhone(suffix);
