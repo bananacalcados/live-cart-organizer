@@ -37,6 +37,7 @@ function getPeriodDates(period: PeriodKey): { from?: string; to?: string } {
 // ─── Types ───
 interface CampaignResult {
   campaign: string;
+  template_name: string;
   type: "lead_capture" | "mass_dispatch";
   leads_captured: number;
   leads_converted: number;
