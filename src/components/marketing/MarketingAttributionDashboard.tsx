@@ -329,8 +329,11 @@ export function MarketingAttributionDashboard() {
                     <TableBody>
                       {filtered.map((c, i) => (
                         <TableRow key={i}>
-                          <TableCell className="font-medium max-w-[180px]">
+                          <TableCell className="font-medium max-w-[200px]">
                             <div className="truncate">{c.campaign}</div>
+                            {c.type === "mass_dispatch" && c.template_name && c.template_name !== c.campaign && (
+                              <div className="text-[10px] text-muted-foreground font-mono">{c.template_name}</div>
+                            )}
                             {c.type === "mass_dispatch" && c.dispatch_dates.length > 0 && (
                               <div className="text-[9px] text-muted-foreground mt-0.5">
                                 {c.dispatch_dates.map(d => format(new Date(d), "dd/MM/yy HH:mm")).join(" · ")}
