@@ -144,6 +144,7 @@ export function MassTemplateDispatcher() {
   const [historyKey, setHistoryKey] = useState(0);
   const [scheduleMode, setScheduleMode] = useState<'none' | 'schedule' | 'paused'>('none');
   const [scheduledDate, setScheduledDate] = useState("");
+  const [campaignName, setCampaignName] = useState("");
 
   // Check for active dispatches on mount (resume monitoring)
   useEffect(() => {
