@@ -781,12 +781,10 @@ serve(async (req) => {
     }
 
     const { data: recentIncomingMessages } = await recentIncomingQuery;
-    const aggregatedIncomingText = (recentIncomingMessages || [])
-      .map((msg: any) => msg.message?.trim())
-      .filter(Boolean)
-      .join('\n')
-      .slice(0, 500);
-    const combinedMessage = aggregatedIncomingText || incomingMessageText || (mediaType === 'image' ? 'O cliente enviou uma imagem.' : '');
+    const aggregatedIncomingText = joinMeaningfulMessages(recentIncomingMessages || []).slice(0, 500);
+    const combinedMessage = aggregatedIncomingText
+      || sanitizeMediaPlaceholderText(incomingMessageText)
+      || (mediaType === 'image' ? 'O cliente enviou uma imagem.' : '');
 
     // ─── 1. Load stores with Tiny tokens ────────────────────────────────
     const { data: storesData } = await supabase
