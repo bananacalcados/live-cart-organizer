@@ -870,6 +870,7 @@ export function MassTemplateDispatcher() {
     try {
       const insertData: Record<string, any> = {
         template_name: selectedTemplate.name,
+        campaign_name: campaignName.trim() || null,
         template_language: selectedTemplate.language,
         whatsapp_number_id: selectedNumber,
         audience_source: audienceSource,
