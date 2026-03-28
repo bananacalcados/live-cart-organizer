@@ -82,47 +82,61 @@ Deno.serve(async (req) => {
       for (const c of data || []) campaignNameMap[c.id] = c.name;
     }
 
-    // ─── 2. Fetch pos_customers with whatsapp (paginated) ───
+    // ─── 2. Fetch pos_customers with whatsapp AND cpf (paginated) ───
     const phoneToCustomerIds: Record<string, string[]> = {};
+    const cpfToCustomerIds: Record<string, string[]> = {};
     off = 0;
     while (true) {
       const { data } = await supabase
         .from("pos_customers")
-        .select("id, whatsapp")
-        .not("whatsapp", "is", null)
+        .select("id, whatsapp, cpf")
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const c of data) {
-        const s = normalizePhone(c.whatsapp);
-        if (s) {
-          if (!phoneToCustomerIds[s]) phoneToCustomerIds[s] = [];
-          phoneToCustomerIds[s].push(c.id);
+        if (c.whatsapp) {
+          const s = normalizePhone(c.whatsapp);
+          if (s) {
+            if (!phoneToCustomerIds[s]) phoneToCustomerIds[s] = [];
+            phoneToCustomerIds[s].push(c.id);
+          }
+        }
+        if (c.cpf) {
+          const normCpf = (c.cpf || '').replace(/\D/g, '');
+          if (normCpf.length >= 11) {
+            if (!cpfToCustomerIds[normCpf]) cpfToCustomerIds[normCpf] = [];
+            cpfToCustomerIds[normCpf].push(c.id);
+          }
         }
       }
       if (data.length < 1000) break;
       off += 1000;
     }
 
-    // Also fetch zoppy_customers phone for matching (covers Tiny/online customers)
+    // Also build zoppy_customers CPF+phone index
+    const zoppyCpfToPhone: Record<string, string> = {};
     const phoneToZoppyPhone: Record<string, string> = {};
     off = 0;
     while (true) {
       const { data } = await supabase
         .from("zoppy_customers")
-        .select("phone")
-        .not("phone", "is", null)
+        .select("phone, cpf")
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const c of data) {
-        const s = normalizePhone(c.phone);
-        if (s) phoneToZoppyPhone[s] = c.phone;
+        if (c.phone) {
+          const s = normalizePhone(c.phone);
+          if (s) phoneToZoppyPhone[s] = c.phone;
+        }
+        if (c.cpf && c.phone) {
+          const normCpf = (c.cpf || '').replace(/\D/g, '');
+          if (normCpf.length >= 11) zoppyCpfToPhone[normCpf] = c.phone;
+        }
       }
       if (data.length < 1000) break;
       off += 1000;
     }
 
     // ─── 3. Fetch pos_sales (completed, paginated) ───
-    // Map ALL customer IDs for each normalized phone to catch re-registered customers
     const customerSales: Record<string, any[]> = {};
     off = 0;
     while (true) {
@@ -162,14 +176,36 @@ Deno.serve(async (req) => {
       off += 1000;
     }
 
-    // Helper: get ALL sales for a normalized phone (from both pos_sales and zoppy_sales)
-    function getAllSalesForPhone(phone: string): any[] {
+    // Helper: get ALL sales for a normalized phone, also checking CPF cross-references
+    function getAllSalesForPhone(phone: string, cpf?: string): any[] {
       const sales: any[] = [];
-      const custIds = phoneToCustomerIds[phone] || [];
-      for (const cid of custIds) {
-        if (customerSales[cid]) sales.push(...customerSales[cid]);
+      const seenSaleIds = new Set<string>();
+
+      // Collect customer IDs by phone
+      const custIdsByPhone = phoneToCustomerIds[phone] || [];
+      // Collect customer IDs by CPF (if available)
+      const custIdsByCpf = cpf ? (cpfToCustomerIds[cpf] || []) : [];
+      // Merge unique customer IDs
+      const allCustIds = [...new Set([...custIdsByPhone, ...custIdsByCpf])];
+
+      for (const cid of allCustIds) {
+        for (const s of (customerSales[cid] || [])) {
+          if (!seenSaleIds.has(s.id)) { seenSaleIds.add(s.id); sales.push(s); }
+        }
       }
-      if (zoppyPhoneSales[phone]) sales.push(...zoppyPhoneSales[phone]);
+      // Zoppy sales by phone
+      for (const s of (zoppyPhoneSales[phone] || [])) {
+        if (!seenSaleIds.has(s.id)) { seenSaleIds.add(s.id); sales.push(s); }
+      }
+      // If CPF maps to a different phone in zoppy, also check those sales
+      if (cpf && zoppyCpfToPhone[cpf]) {
+        const altPhone = normalizePhone(zoppyCpfToPhone[cpf]);
+        if (altPhone && altPhone !== phone) {
+          for (const s of (zoppyPhoneSales[altPhone] || [])) {
+            if (!seenSaleIds.has(s.id)) { seenSaleIds.add(s.id); sales.push(s); }
+          }
+        }
+      }
       return sales;
     }
 
@@ -223,7 +259,7 @@ Deno.serve(async (req) => {
       stats[key].captured++;
 
       // Check if this lead has ANY sales (from pos or zoppy)
-      const allSales = getAllSalesForPhone(normalized);
+      const allSales = getAllSalesForPhone(normalized, undefined);
       const isExistingCustomer = allSales.length > 0;
 
       if (isExistingCustomer) {
@@ -325,7 +361,7 @@ Deno.serve(async (req) => {
         const normalized = normalizePhone(r.phone);
         if (!normalized) continue;
 
-        const allSales = getAllSalesForPhone(normalized);
+        const allSales = getAllSalesForPhone(normalized, undefined);
         if (allSales.length === 0) continue;
 
         for (const sale of allSales) {
