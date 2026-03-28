@@ -162,14 +162,23 @@ serve(async (req) => {
         console.log(`Tiny online: fetching orders from ${formatBRDate(dateFrom)} to ${formatBRDate(now)}`);
 
         while (page <= totalPages && (Date.now() - functionStart) < TIME_LIMIT_MS) {
-          // Try multiple statuses that indicate completed orders
           const situacao = body.situacao || '';
-          const situacaoParam = situacao ? `&situacao=${encodeURIComponent(situacao)}` : '';
-          const url = `https://api.tiny.com.br/api2/pedidos.pesquisa.php?token=${tinyToken}&formato=json&pagina=${page}&dataInicial=${formatBRDate(dateFrom)}&dataFinal=${formatBRDate(now)}${situacaoParam}`;
+          const formParams: Record<string, string> = {
+            token: tinyToken,
+            formato: 'json',
+            pagina: String(page),
+            dataInicial: formatBRDate(dateFrom),
+            dataFinal: formatBRDate(now),
+          };
+          if (situacao) formParams.situacao = situacao;
 
           try {
             console.log(`Tiny: fetching page ${page}...`);
-            const resp = await fetch(url);
+            const resp = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams(formParams).toString(),
+            });
             apiCallCount++;
             const data = await safeJson(resp);
             const retorno = data.retorno;
@@ -198,8 +207,11 @@ serve(async (req) => {
               await new Promise(r => setTimeout(r, 500));
 
               try {
-                const detailUrl = `https://api.tiny.com.br/api2/pedido.obter.php?token=${tinyToken}&formato=json&id=${orderId}`;
-                const detailResp = await fetch(detailUrl);
+                const detailResp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: new URLSearchParams({ token: tinyToken, formato: 'json', id: String(orderId) }).toString(),
+                });
                 apiCallCount++;
                 const detailData = await safeJson(detailResp);
                 const pedido = detailData.retorno?.pedido;
