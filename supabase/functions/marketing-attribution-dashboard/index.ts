@@ -108,6 +108,7 @@ Deno.serve(async (req) => {
     // ─── 4. Process lead attribution ───
     type CampaignStat = {
       campaign: string;
+      templateName: string;
       type: string;
       captured: number;
       converted: number;
@@ -118,7 +119,7 @@ Deno.serve(async (req) => {
       leadsNotCustomers: number;
       dispatchDates: string[];
       dispatchCount: number;
-      templateCategory: string; // 'marketing' | 'utility' | 'unknown'
+      templateCategory: string;
       totalMessagesSent: number;
     };
     const stats: Record<string, CampaignStat> = {};
