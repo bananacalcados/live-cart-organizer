@@ -401,7 +401,38 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-sm font-medium">{d.template_name}</span>
+                            {editingId === d.id ? (
+                              <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                <Input
+                                  className="h-6 text-xs w-[200px]"
+                                  value={editName}
+                                  onChange={e => setEditName(e.target.value)}
+                                  placeholder="Nome da campanha"
+                                  autoFocus
+                                  onKeyDown={e => { if (e.key === 'Enter') handleSaveRename(d.id); if (e.key === 'Escape') setEditingId(null); }}
+                                />
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => handleSaveRename(d.id)}>
+                                  <Check className="h-3 w-3 text-emerald-500" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingId(null)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                {d.campaign_name && (
+                                  <span className="text-sm font-medium">{d.campaign_name}</span>
+                                )}
+                                <span className={`font-mono text-sm ${d.campaign_name ? 'text-muted-foreground text-xs' : 'font-medium'}`}>{d.template_name}</span>
+                                <Button
+                                  variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-40 hover:opacity-100"
+                                  onClick={e => { e.stopPropagation(); setEditingId(d.id); setEditName(d.campaign_name || ''); }}
+                                  title="Renomear campanha"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
                             {getDispatchStatusBadge(d)}
                             {d.force_resend && (
                               <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">Reenvio</Badge>
