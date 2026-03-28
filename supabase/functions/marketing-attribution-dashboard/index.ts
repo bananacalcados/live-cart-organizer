@@ -330,9 +330,10 @@ Deno.serve(async (req) => {
       const displayName = dispatch.campaign_name || dispatch.template_name || "Disparo sem nome";
       const key = `dispatch:${dispatch.id}`;
       if (!stats[key]) {
-        // Determine cost per message: use stored value, or guess from template name
-        const isUtility = (dispatch.template_name || "").toLowerCase().match(/confirm|pedido|rastreio|entrega|nf|nota|boleto|pix_/);
-        const costPerMsg = dispatch.cost_per_message ? Number(dispatch.cost_per_message) : (isUtility ? 0.05 : 0.40);
+        // Cost: default to UTILITY (R$0.05). Only mark as MARKETING (R$0.40)
+        // for templates that are promotional/marketing in nature.
+        const isMarketing = (dispatch.template_name || "").toLowerCase().match(/xepa|promo|oferta|desconto|black|sale|marketing|cupom/);
+        const costPerMsg = dispatch.cost_per_message ? Number(dispatch.cost_per_message) : (isMarketing ? 0.40 : 0.05);
         
         stats[key] = {
           campaign: displayName,
