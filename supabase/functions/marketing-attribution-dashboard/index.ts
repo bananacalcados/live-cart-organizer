@@ -285,7 +285,7 @@ Deno.serve(async (req) => {
       const roas = totalCost > 0 ? s.revenue / totalCost : 0;
 
       return {
-        campaign: s.campaign, type: s.type,
+        campaign: s.campaign, template_name: s.templateName, type: s.type,
         leads_captured: s.captured, leads_converted: s.converted,
         conversion_rate: Math.round(rate * 100) / 100,
         total_revenue: Math.round(s.revenue * 100) / 100,
