@@ -244,8 +244,8 @@ Deno.serve(async (req) => {
           const daysDiff = (saleDate.getTime() - leadDate.getTime()) / 86400000;
           if (daysDiff > windowDays) continue;
         }
-        if (!stats[key].convertedPhones.has(suffix)) {
-          stats[key].convertedPhones.add(suffix);
+        if (!stats[key].convertedPhones.has(normalized)) {
+          stats[key].convertedPhones.add(normalized);
           stats[key].converted++;
           stats[key].convDays.push((saleDate.getTime() - leadDate.getTime()) / 86400000);
         }
