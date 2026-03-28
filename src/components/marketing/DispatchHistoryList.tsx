@@ -23,6 +23,7 @@ import { toast } from "sonner";
 interface DispatchRecord {
   id: string;
   template_name: string;
+  campaign_name: string | null;
   audience_source: string;
   audience_filters: any;
   total_recipients: number;
