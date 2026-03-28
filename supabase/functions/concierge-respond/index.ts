@@ -245,15 +245,29 @@ function extractTrackingDataFromOrder(pedido: any): { trackingCode: string | nul
   };
 }
 
-function buildTrackingReplyFromToolResult(toolName: string, rawResult: string): string | null {
+function buildTrackingReplyFromToolResult(toolName: string, rawResult: string, recentAiMessages?: Array<{ message_out: string | null }>): string | null {
   if (toolName !== 'get_order_details') return null;
 
   try {
     const result = JSON.parse(rawResult);
+
+    // Check if this exact tracking code was already sent recently
+    if (result?.tracking_code && recentAiMessages && recentAiMessages.length > 0) {
+      const alreadySent = recentAiMessages.some((m: any) =>
+        m.message_out && m.message_out.includes(result.tracking_code)
+      );
+      if (alreadySent) {
+        // Don't force a template — let the AI respond contextually
+        return null;
+      }
+    }
+
     if (result?.tracking_code) {
       const orderLabel = result.order_number ? `#${result.order_number}` : 'do seu pedido';
+      const customerName = result.customer_name || '';
+      const greeting = getTimeGreeting();
       const parts = [
-        `Prontinho! Encontrei o rastreio ${orderLabel}.`,
+        `${greeting}! 😊 Encontrei o rastreio do pedido ${orderLabel}${customerName ? ` em nome de *${customerName}*` : ''}.`,
         `Código de rastreio: ${result.tracking_code}`,
         result.tracking_link ? `Acompanhe aqui: ${result.tracking_link}` : null,
       ].filter(Boolean);
@@ -262,13 +276,22 @@ function buildTrackingReplyFromToolResult(toolName: string, rawResult: string): 
     }
 
     if (!result?.error && result?.order_number) {
-      return `Encontrei o pedido #${result.order_number}, mas o código de rastreio ainda não aparece disponível no sistema.`;
+      return null; // Let the AI handle this contextually instead of a rigid template
     }
   } catch (_err) {
     return null;
   }
 
   return null;
+}
+
+function getTimeGreeting(): string {
+  // Brazil timezone (UTC-3)
+  const now = new Date();
+  const brHour = (now.getUTCHours() - 3 + 24) % 24;
+  if (brHour >= 5 && brHour < 12) return 'Bom dia';
+  if (brHour >= 12 && brHour < 18) return 'Boa tarde';
+  return 'Boa noite';
 }
 
 function parseToolResult(rawResult: string): any {
@@ -889,7 +912,7 @@ serve(async (req) => {
           store_name: selectedOrder.store_name,
         }, stores, supabase, normalizedPhone, whatsappNumberId);
 
-        const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_details', trackingResult);
+        const forcedTrackingReply = buildTrackingReplyFromToolResult('get_order_details', trackingResult, recentAiLogs);
         if (forcedTrackingReply) {
           const typingDelay = Math.min(Math.max(forcedTrackingReply.length * 50, 2000), 12000);
           await sleep(typingDelay);
@@ -1003,7 +1026,24 @@ ${sectors.map(s => `- ${s.name}: ${s.description || ''} (Keywords: ${(s.ai_routi
     }
 
     // ─── 4. Build System Prompt ─────────────────────────────────────────
-    const systemPrompt = `Você é a Bia, assistente virtual de SUPORTE da Banana Calçados. Você responde em português brasileiro de forma simpática e objetiva.
+    const greeting = getTimeGreeting();
+    const systemPrompt = `Você é a Bia, assistente virtual de SUPORTE da Banana Calçados. Você é simpática, acolhedora e fala como uma pessoa real no WhatsApp — nunca como robô.
+
+PERSONALIDADE E TOM:
+- Comece SEMPRE a primeira mensagem de uma conversa com uma saudação natural: "${greeting}!" seguida de algo acolhedor como "tudo bem?", "como posso te ajudar?", etc.
+- Fale de forma natural e humana. Varie suas frases. Não use sempre a mesma estrutura.
+- Use emojis com moderação (1-2 por mensagem), mas de forma natural.
+- Quando o cliente continuar conversando, MANTENHA O CONTEXTO. Releia o histórico antes de responder.
+- Se você já deu uma informação (rastreio, nome, pedido), NÃO repita. Apenas confirme de forma natural: "Isso mesmo!", "É esse aí!", "Tá certinho o que te mandei antes 😊"
+- Adapte seu tom ao do cliente: se ele está tranquilo, seja leve; se está nervoso ou irritado, seja empática e acolhedora.
+- Não termine TODAS as mensagens com perguntas. Às vezes só responda naturalmente.
+
+EMPATIA E SITUAÇÕES DIFÍCEIS:
+- Se o cliente estiver irritado, frustrado ou com pressa: acolha primeiro ("Entendo sua frustração", "Imagino como isso é chato"), depois resolva.
+- Se o pedido está atrasado: diga que vai verificar e ajudar. Nunca minimize a preocupação do cliente.
+- Se não encontrar o rastreio: NÃO diga simplesmente "não tem rastreio". Diga algo como "O rastreio ainda não apareceu no sistema, mas vou abrir um chamado pra nossa equipe verificar e te dar um retorno rapidinho! 😊" e use transfer_to_human com prioridade adequada.
+- Se o cliente insistir em algo que você não resolve: transfira para humano com empatia, informe o horário de atendimento (Seg-Sex 9h às 18h) e diga que a equipe vai entrar em contato.
+- Faça o cliente sentir que estamos fazendo TUDO ao nosso alcance pra resolver.
 
 SEU PAPEL (APENAS):
 - Ajudar clientes com rastreio de pedidos usando as ferramentas disponíveis
@@ -1015,7 +1055,7 @@ O QUE VOCÊ NÃO PODE FAZER (PROIBIDO):
 - NUNCA fale sobre preços, valores ou promoções
 - NUNCA ofereça produtos novos, modelos disponíveis, fotos ou catálogos
 - NUNCA tente vender nada
-- NUNCA prometa enviar fotos, imagens ou vídeos
+- NUNCA prometa enviar fotos, imagens ou vídeos de catálogo
 - NUNCA fale sobre disponibilidade de estoque, tamanhos ou cores
 - Se a cliente pedir algo de vendas, diga "Vou te conectar com uma de nossas consultoras! 😊" e use transfer_to_human
 
@@ -1028,22 +1068,28 @@ SOBRE IMAGENS ENVIADAS PELO CLIENTE:
 - Diferencie bem: você pode ANALISAR a imagem enviada pela cliente, mas NÃO pode oferecer fotos de catálogo nem prometer enviar novas imagens.
 
 FLUXO DE RASTREIO E DETALHES DO PEDIDO:
-1. Cliente pede rastreio ou informação do pedido → peça PRIMEIRO o CPF; aceite CPF com pontos e traços (remova a máscara)
+1. Cliente pede rastreio ou informação do pedido → peça PRIMEIRO o CPF com uma frase natural: "Me passa seu CPF que eu busco rapidinho pra você! 😊"
 2. Só use nome como plano B quando a pessoa realmente não souber o CPF
 3. Use search_customer_orders para buscar — os resultados já incluem os produtos comprados
-4. Se encontrar UM ÚNICO pedido, confirme o nome e o produto com o cliente. NÃO transfira — aguarde confirmação
-5. Se encontrar VÁRIOS pedidos, liste mostrando: número, data, produto(s) e loja. NÃO mostre valores/preços. Pergunte qual deseja
+4. Se encontrar UM ÚNICO pedido, confirme o nome e o produto com o cliente de forma natural: "Achei aqui! É o pedido #XXXX em nome de Fulana, certo?"
+5. Se encontrar VÁRIOS pedidos, liste de forma organizada mostrando: número, data, produto(s) e loja. NÃO mostre valores/preços. Pergunte qual deseja.
 6. Quando o cliente ESCOLHER ou CONFIRMAR um pedido, use IMEDIATAMENTE get_order_details para buscar rastreio e mais detalhes
-7. Após obter o rastreio, envie código + link clicável
-8. Se o cliente perguntar qual produto comprou, você já tem essa info nos resultados — responda diretamente, sem transferir
-9. Se não encontrar pelo nome, peça o CPF; se não encontrar pelo CPF, use transfer_to_human
+7. Após obter o rastreio, envie código + link clicável de forma natural
+8. Se o cliente perguntar qual produto comprou, você já tem essa info nos resultados — responda diretamente
+9. Se não encontrar pelo nome, peça o CPF; se não encontrar pelo CPF, acolha e use transfer_to_human
 10. NUNCA use transfer_to_human se você ainda tem informação de pedido para consultar
 
-REGRAS:
+LEITURA DE CONTEXTO (CRÍTICO):
+- SEMPRE releia as últimas mensagens antes de responder.
+- Se você já enviou um código de rastreio e o cliente manda CPF ou confirma, NÃO repita o rastreio. Confirme que está tudo certo: "É esse mesmo, [nome]! O rastreio que te mandei tá certinho 😊 Conseguiu acompanhar?"
+- Se o cliente muda de assunto, acompanhe a mudança naturalmente.
+- Se o cliente faz uma pergunta de acompanhamento (follow-up), conecte com o que já foi dito.
+- Prolongue a conversa quando o cliente demonstrar que quer continuar. Pergunte se tem mais dúvidas, se conseguiu resolver, etc.
+
+REGRAS GERAIS:
 - Responda de forma curta e natural, como humano no WhatsApp
-- Use emojis com moderação (máximo 2 por mensagem)
-- NUNCA repita informações já ditas
-- Se não conseguir resolver, use transfer_to_human
+- NUNCA repita informações já ditas na conversa
+- Se não conseguir resolver, use transfer_to_human com um resumo completo
 - Para o cliente, diga "Site" e nunca "Shopify"
 - Ao enviar rastreio, SEMPRE inclua o link clicável
 - NUNCA mostre valores monetários (R$) dos pedidos ao cliente${knowledgeBlock}${routingBlock}`;
@@ -1247,7 +1293,7 @@ REGRAS:
             const result = await executeToolCall(tu.name, resolvedToolArgs, stores, supabase, normalizedPhone, whatsappNumberId);
             console.log(`[concierge][anthropic] result: ${result.slice(0, 200)}`);
             toolExecutions.push({ name: tu.name, args: resolvedToolArgs, result: parseToolResult(result) });
-            const forcedReply = buildTrackingReplyFromToolResult(tu.name, result);
+            const forcedReply = buildTrackingReplyFromToolResult(tu.name, result, recentAiLogs);
             if (forcedReply) return forcedReply;
             toolResults.push({
               type: 'tool_result',
@@ -1324,7 +1370,7 @@ REGRAS:
             const result = await executeToolCall(fnName, resolvedFnArgs, stores, supabase, normalizedPhone, whatsappNumberId);
             console.log(`[concierge][lovable] result: ${result.slice(0, 200)}`);
             toolExecutions.push({ name: fnName, args: resolvedFnArgs, result: parseToolResult(result) });
-            const forcedReply = buildTrackingReplyFromToolResult(fnName, result);
+            const forcedReply = buildTrackingReplyFromToolResult(fnName, result, recentAiLogs);
             if (forcedReply) return forcedReply;
             currentMessages.push({ role: 'tool', content: result, tool_call_id: toolCall.id } as any);
           }
