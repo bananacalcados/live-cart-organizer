@@ -352,6 +352,17 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     return parts.length > 0 ? parts.join(' • ') : source || 'N/A';
   };
 
+  const handleSaveRename = async (dispatchId: string) => {
+    try {
+      await supabase.from('dispatch_history').update({ campaign_name: editName.trim() || null } as any).eq('id', dispatchId);
+      setDispatches(prev => prev.map(d => d.id === dispatchId ? { ...d, campaign_name: editName.trim() || null } : d));
+      setEditingId(null);
+      toast.success("Campanha renomeada!");
+    } catch {
+      toast.error("Erro ao renomear");
+    }
+  };
+
   if (dispatches.length === 0 && !isLoading) return null;
 
   return (
