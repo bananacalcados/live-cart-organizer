@@ -311,10 +311,10 @@ Deno.serve(async (req) => {
         const suffix = phoneSuffix(r.phone);
         if (suffix.length < 8) continue;
 
-        const custId = suffixToCustomerId[suffix];
-        if (!custId || !customerSales[custId]) continue;
+        const allSales = getAllSalesForSuffix(suffix);
+        if (allSales.length === 0) continue;
 
-        for (const sale of customerSales[custId]) {
+        for (const sale of allSales) {
           const saleDate = new Date(sale.created_at);
           if (saleDate > dispatchDate && saleDate <= windowEnd) {
             if (!stats[key].convertedSuffixes.has(suffix)) {
