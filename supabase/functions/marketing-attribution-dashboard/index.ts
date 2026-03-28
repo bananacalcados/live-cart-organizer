@@ -325,14 +325,14 @@ Deno.serve(async (req) => {
         const normalized = normalizePhone(r.phone);
         if (!normalized) continue;
 
-        const allSales = getAllSalesForPhone(suffix);
+        const allSales = getAllSalesForPhone(normalized);
         if (allSales.length === 0) continue;
 
         for (const sale of allSales) {
           const saleDate = new Date(sale.created_at);
           if (saleDate > dispatchDate && saleDate <= windowEnd) {
-            if (!stats[key].convertedPhones.has(suffix)) {
-              stats[key].convertedPhones.add(suffix);
+            if (!stats[key].convertedPhones.has(normalized)) {
+              stats[key].convertedPhones.add(normalized);
               stats[key].converted++;
               stats[key].convDays.push((saleDate.getTime() - dispatchDate.getTime()) / 86400000);
             }
