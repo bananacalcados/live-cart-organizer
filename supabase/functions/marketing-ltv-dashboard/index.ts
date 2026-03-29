@@ -318,6 +318,8 @@ Deno.serve(async (req) => {
         repeat_customers: repeatCustomers,
         avg_orders_per_customer: Math.round(avgOrders * 100) / 100,
         avg_days_to_second_purchase: Math.round(avgDaysToSecondPurchase * 10) / 10,
+        second_purchase_sample_size: secondPurchaseSampleSize,
+        second_purchase_total_days: Math.round(totalDaysSum),
       },
       stores: storeBreakdown,
       frequency_distribution: freqDist,
