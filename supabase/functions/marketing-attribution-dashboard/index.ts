@@ -349,6 +349,9 @@ Deno.serve(async (req) => {
           dispatchDates: [], dispatchCount: 0,
           costPerMsg,
           totalMessagesSent: 0,
+          audienceSource: dispatch.audience_source || "",
+          audienceFilters: dispatch.audience_filters || null,
+          dispatchIds: [],
         };
       }
       stats[key].captured += recipients.length;
