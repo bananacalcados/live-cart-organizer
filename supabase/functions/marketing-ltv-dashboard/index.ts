@@ -65,26 +65,67 @@ Deno.serve(async (req) => {
     const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
     const avgOrders = totalCustomers > 0 ? totalOrders / totalCustomers : 0;
 
-    // For avg days to second purchase, use zoppy_customers pre-computed data
-    // which has the full 27k+ customer base from Tiny ERP
-    // For customers with exactly 2 orders: last - first = exact time to 2nd purchase
-    // For customers with 3+ orders: (last - first) / (total_orders - 1) = avg inter-purchase interval
+    // ─── Avg days to SECOND purchase: use ACTUAL SALES with exact dates ───
+    // Query pos_sales (3 Tinys: Pérola, Centro, Site) and zoppy_sales
+    // Only consider customers where we have the exact 1st and 2nd purchase dates
     let secondPurchaseDays: number[] = [];
-    
-    for (const c of filtered) {
-      if ((c.total_orders || 0) < 2) continue;
-      if (!c.first_purchase_at || !c.last_purchase_at) continue;
-      const first = new Date(c.first_purchase_at).getTime();
-      const last = new Date(c.last_purchase_at).getTime();
-      if (last <= first) continue;
-      
-      const gapMs = last - first;
-      if (c.total_orders === 2) {
-        // Exact time to 2nd purchase
-        secondPurchaseDays.push(gapMs / 86400000);
-      } else {
-        // Approximate avg inter-purchase interval
-        secondPurchaseDays.push(gapMs / ((c.total_orders - 1) * 86400000));
+
+    // 1. pos_sales: group by customer_id, find 1st and 2nd purchase
+    const posCustomerDates: Record<string, Date[]> = {};
+    let posOff = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("pos_sales")
+        .select("customer_id, created_at")
+        .eq("status", "completed")
+        .not("customer_id", "is", null)
+        .order("created_at", { ascending: true })
+        .range(posOff, posOff + 999);
+      if (!data || data.length === 0) break;
+      for (const s of data) {
+        if (!posCustomerDates[s.customer_id]) posCustomerDates[s.customer_id] = [];
+        if (posCustomerDates[s.customer_id].length < 2) {
+          posCustomerDates[s.customer_id].push(new Date(s.created_at));
+        }
+      }
+      if (data.length < 1000) break;
+      posOff += 1000;
+    }
+
+    for (const dates of Object.values(posCustomerDates)) {
+      if (dates.length >= 2) {
+        const gap = (dates[1].getTime() - dates[0].getTime()) / 86400000;
+        if (gap > 0) secondPurchaseDays.push(gap);
+      }
+    }
+
+    // 2. zoppy_sales: group by customer_email (or phone), find 1st and 2nd
+    const zoppyCustomerDates: Record<string, Date[]> = {};
+    let zOff = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("zoppy_sales")
+        .select("customer_email, customer_phone, completed_at")
+        .not("completed_at", "is", null)
+        .order("completed_at", { ascending: true })
+        .range(zOff, zOff + 999);
+      if (!data || data.length === 0) break;
+      for (const s of data) {
+        const key = s.customer_email || s.customer_phone || "";
+        if (!key) continue;
+        if (!zoppyCustomerDates[key]) zoppyCustomerDates[key] = [];
+        if (zoppyCustomerDates[key].length < 2) {
+          zoppyCustomerDates[key].push(new Date(s.completed_at));
+        }
+      }
+      if (data.length < 1000) break;
+      zOff += 1000;
+    }
+
+    for (const dates of Object.values(zoppyCustomerDates)) {
+      if (dates.length >= 2) {
+        const gap = (dates[1].getTime() - dates[0].getTime()) / 86400000;
+        if (gap > 0) secondPurchaseDays.push(gap);
       }
     }
 
