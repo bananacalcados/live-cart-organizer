@@ -231,6 +231,11 @@ Deno.serve(async (req) => {
     };
     const stats: Record<string, CampaignStat> = {};
 
+    // Track per-phone attributions for deduplicated summary
+    // Each phone can appear in multiple campaigns; dedup picks the best one
+    type PhoneAttr = { type: string; touchDate: number; revenue: number; convDays: number };
+    const allPhoneAttrs: Record<string, PhoneAttr[]> = {};
+
     const allLeads = [
       ...allLpLeads.map(l => ({
         phone: l.phone,
