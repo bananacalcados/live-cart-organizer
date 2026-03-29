@@ -65,12 +65,26 @@ Deno.serve(async (req) => {
     const repeatRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
     const avgOrders = totalCustomers > 0 ? totalOrders / totalCustomers : 0;
 
-    // ─── Avg days to SECOND purchase: use ACTUAL SALES with exact dates ───
-    // Query pos_sales (3 Tinys: Pérola, Centro, Site) and zoppy_sales
-    // Only consider customers where we have the exact 1st and 2nd purchase dates
-    let secondPurchaseDays: number[] = [];
+    // ─── Avg days to SECOND purchase ───
+    // Strategy: combine 3 sources, deduplicating by a key
+    // 1. zoppy_customers with total_orders=2 AND both dates → last_purchase IS 2nd purchase
+    // 2. pos_sales: group by customer_id, get 1st and 2nd purchase dates
+    // 3. zoppy_sales: group by customer key, get 1st and 2nd purchase dates
+    const secondPurchaseGaps: Map<string, number> = new Map(); // key → days gap
 
-    // 1. pos_sales: group by customer_id, find 1st and 2nd purchase
+    // Source 1: zoppy_customers with exactly 2 orders (last_purchase = 2nd purchase)
+    for (const c of allCustomers) {
+      if (c.total_orders === 2 && c.first_purchase_at && c.last_purchase_at) {
+        const first = new Date(c.first_purchase_at).getTime();
+        const last = new Date(c.last_purchase_at).getTime();
+        const gap = (last - first) / 86400000;
+        if (gap > 0) {
+          secondPurchaseGaps.set(`zc:${c.id}`, gap);
+        }
+      }
+    }
+
+    // Source 2: pos_sales – group by customer_id, pick 1st and 2nd
     const posCustomerDates: Record<string, Date[]> = {};
     let posOff = 0;
     while (true) {
@@ -92,14 +106,16 @@ Deno.serve(async (req) => {
       posOff += 1000;
     }
 
-    for (const dates of Object.values(posCustomerDates)) {
+    for (const [custId, dates] of Object.entries(posCustomerDates)) {
       if (dates.length >= 2) {
         const gap = (dates[1].getTime() - dates[0].getTime()) / 86400000;
-        if (gap > 0) secondPurchaseDays.push(gap);
+        if (gap > 0) {
+          secondPurchaseGaps.set(`pos:${custId}`, gap);
+        }
       }
     }
 
-    // 2. zoppy_sales: group by customer_email (or phone), find 1st and 2nd
+    // Source 3: zoppy_sales – group by email/phone, pick 1st and 2nd
     const zoppyCustomerDates: Record<string, Date[]> = {};
     let zOff = 0;
     while (true) {
@@ -122,16 +138,21 @@ Deno.serve(async (req) => {
       zOff += 1000;
     }
 
-    for (const dates of Object.values(zoppyCustomerDates)) {
+    for (const [key, dates] of Object.entries(zoppyCustomerDates)) {
       if (dates.length >= 2) {
         const gap = (dates[1].getTime() - dates[0].getTime()) / 86400000;
-        if (gap > 0) secondPurchaseDays.push(gap);
+        if (gap > 0) {
+          secondPurchaseGaps.set(`zs:${key}`, gap);
+        }
       }
     }
 
-    const avgDaysToSecondPurchase = secondPurchaseDays.length > 0
-      ? secondPurchaseDays.reduce((a, b) => a + b, 0) / secondPurchaseDays.length
+    const allGaps = Array.from(secondPurchaseGaps.values());
+    const totalDaysSum = allGaps.reduce((a, b) => a + b, 0);
+    const avgDaysToSecondPurchase = allGaps.length > 0
+      ? totalDaysSum / allGaps.length
       : 0;
+    const secondPurchaseSampleSize = allGaps.length;
 
     // ─── 3. Frequency distribution ───
     const freqDist: Record<string, number> = { "1x": 0, "2x": 0, "3x": 0, "4x": 0, "5+": 0 };
@@ -297,6 +318,8 @@ Deno.serve(async (req) => {
         repeat_customers: repeatCustomers,
         avg_orders_per_customer: Math.round(avgOrders * 100) / 100,
         avg_days_to_second_purchase: Math.round(avgDaysToSecondPurchase * 10) / 10,
+        second_purchase_sample_size: secondPurchaseSampleSize,
+        second_purchase_total_days: Math.round(totalDaysSum),
       },
       stores: storeBreakdown,
       frequency_distribution: freqDist,
