@@ -225,6 +225,9 @@ Deno.serve(async (req) => {
       dispatchCount: number;
       costPerMsg: number;
       totalMessagesSent: number;
+      audienceSource: string;
+      audienceFilters: any;
+      dispatchIds: string[];
     };
     const stats: Record<string, CampaignStat> = {};
 
