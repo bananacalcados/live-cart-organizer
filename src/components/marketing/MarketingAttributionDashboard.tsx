@@ -119,6 +119,7 @@ export function MarketingAttributionDashboard() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignResult[]>([]);
   const [filter, setFilter] = useState<"all" | "lead_capture" | "mass_dispatch">("all");
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   // LTV state
   const [ltvLoading, setLtvLoading] = useState(false);
