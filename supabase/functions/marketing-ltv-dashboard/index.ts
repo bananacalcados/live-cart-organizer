@@ -177,15 +177,13 @@ Deno.serve(async (req) => {
 
       if ((c.total_orders || 0) >= 2) {
         channelStats[channel].repeatCustomers++;
-        if (c.first_purchase_at && c.last_purchase_at) {
+        // secondPurchaseDays per channel: only use customers with exactly 2 orders
+        // where we have exact first/last dates (since first=1st, last=2nd)
+        if (c.total_orders === 2 && c.first_purchase_at && c.last_purchase_at) {
           const first = new Date(c.first_purchase_at).getTime();
           const last = new Date(c.last_purchase_at).getTime();
           if (last > first) {
-            if (c.total_orders === 2) {
-              channelStats[channel].secondPurchaseDays.push((last - first) / 86400000);
-            } else {
-              channelStats[channel].secondPurchaseDays.push((last - first) / ((c.total_orders - 1) * 86400000));
-            }
+            channelStats[channel].secondPurchaseDays.push((last - first) / 86400000);
           }
         }
       }
