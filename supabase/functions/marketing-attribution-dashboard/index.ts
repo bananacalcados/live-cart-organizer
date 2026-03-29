@@ -392,7 +392,11 @@ Deno.serve(async (req) => {
               stats[key].converted++;
               stats[key].convDays.push((saleDate.getTime() - dispatchDate.getTime()) / 86400000);
             }
-            stats[key].revenue += Number(sale.total || 0);
+            const saleRev2 = Number(sale.total || 0);
+            stats[key].revenue += saleRev2;
+            // Track for dedup summary
+            if (!allPhoneAttrs[normalized]) allPhoneAttrs[normalized] = [];
+            allPhoneAttrs[normalized].push({ type: 'mass_dispatch', touchDate: dispatchDate.getTime(), revenue: saleRev2, convDays: (saleDate.getTime() - dispatchDate.getTime()) / 86400000 });
           }
         }
       }
