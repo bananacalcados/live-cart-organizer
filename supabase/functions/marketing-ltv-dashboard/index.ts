@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     while (true) {
       const { data } = await supabase
         .from("zoppy_customers")
-        .select("id, total_orders, total_spent, first_purchase_at, last_purchase_at, avg_ticket, source, region_type")
+        .select("id, total_orders, total_spent, first_purchase_at, last_purchase_at, avg_ticket, source, region_type, email, phone")
         .gt("total_orders", 0)
         .range(off, off + 999);
       if (!data || data.length === 0) break;
@@ -66,21 +66,70 @@ Deno.serve(async (req) => {
     const avgOrders = totalCustomers > 0 ? totalOrders / totalCustomers : 0;
 
     // ─── Avg days to SECOND purchase ───
-    // Strategy: combine 3 sources, deduplicating by a key
-    // 1. zoppy_customers with total_orders=2 AND both dates → last_purchase IS 2nd purchase
-    // 2. pos_sales: group by customer_id, get 1st and 2nd purchase dates
-    // 3. zoppy_sales: group by customer key, get 1st and 2nd purchase dates
-    const secondPurchaseGaps: Map<string, number> = new Map(); // key → days gap
+    // Strategy: combine sources, deduplicating by key
+    const secondPurchaseGaps: Map<string, number> = new Map();
 
-    // Source 1: zoppy_customers with exactly 2 orders (last_purchase = 2nd purchase)
+    // Source 1a: zoppy_customers with total_orders=2 AND both dates filled
+    // For these, last_purchase_at IS the 2nd purchase date
+    const missingFirstDateCustomers: { id: string; email?: string; phone?: string; last: number }[] = [];
     for (const c of allCustomers) {
-      if (c.total_orders === 2 && c.first_purchase_at && c.last_purchase_at) {
+      if (c.total_orders !== 2) continue;
+      if (!c.last_purchase_at) continue;
+
+      if (c.first_purchase_at) {
         const first = new Date(c.first_purchase_at).getTime();
         const last = new Date(c.last_purchase_at).getTime();
         const gap = (last - first) / 86400000;
-        if (gap > 0) {
-          secondPurchaseGaps.set(`zc:${c.id}`, gap);
+        if (gap > 0) secondPurchaseGaps.set(`zc:${c.id}`, gap);
+      } else {
+        // Missing first_purchase_at — will try to find it from zoppy_sales
+        missingFirstDateCustomers.push({
+          id: c.id,
+          email: c.email || undefined,
+          phone: c.phone || undefined,
+          last: new Date(c.last_purchase_at).getTime(),
+        });
+      }
+    }
+
+    // Source 1b: For zoppy_customers missing first_purchase_at,
+    // look up their earliest sale in zoppy_sales
+    // Build lookup from zoppy_sales (already need it for Source 3)
+    const zoppySalesFirstDate: Record<string, Date> = {}; // key → earliest date
+    const zoppySalesDates: Record<string, Date[]> = {};
+    let zOff = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("zoppy_sales")
+        .select("customer_email, customer_phone, completed_at")
+        .not("completed_at", "is", null)
+        .order("completed_at", { ascending: true })
+        .range(zOff, zOff + 999);
+      if (!data || data.length === 0) break;
+      for (const s of data) {
+        const key = s.customer_email || s.customer_phone || "";
+        if (!key) continue;
+        const d = new Date(s.completed_at);
+        if (!zoppySalesFirstDate[key] || d < zoppySalesFirstDate[key]) {
+          zoppySalesFirstDate[key] = d;
         }
+        if (!zoppySalesDates[key]) zoppySalesDates[key] = [];
+        if (zoppySalesDates[key].length < 2) {
+          zoppySalesDates[key].push(d);
+        }
+      }
+      if (data.length < 1000) break;
+      zOff += 1000;
+    }
+
+    // Now resolve missing first_purchase_at from zoppy_sales
+    for (const c of missingFirstDateCustomers) {
+      const key = c.email || c.phone || "";
+      if (!key) continue;
+      const firstDate = zoppySalesFirstDate[key];
+      if (firstDate) {
+        const gap = (c.last - firstDate.getTime()) / 86400000;
+        if (gap > 0) secondPurchaseGaps.set(`zc:${c.id}`, gap);
       }
     }
 
@@ -109,41 +158,15 @@ Deno.serve(async (req) => {
     for (const [custId, dates] of Object.entries(posCustomerDates)) {
       if (dates.length >= 2) {
         const gap = (dates[1].getTime() - dates[0].getTime()) / 86400000;
-        if (gap > 0) {
-          secondPurchaseGaps.set(`pos:${custId}`, gap);
-        }
+        if (gap > 0) secondPurchaseGaps.set(`pos:${custId}`, gap);
       }
     }
 
-    // Source 3: zoppy_sales – group by email/phone, pick 1st and 2nd
-    const zoppyCustomerDates: Record<string, Date[]> = {};
-    let zOff = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("zoppy_sales")
-        .select("customer_email, customer_phone, completed_at")
-        .not("completed_at", "is", null)
-        .order("completed_at", { ascending: true })
-        .range(zOff, zOff + 999);
-      if (!data || data.length === 0) break;
-      for (const s of data) {
-        const key = s.customer_email || s.customer_phone || "";
-        if (!key) continue;
-        if (!zoppyCustomerDates[key]) zoppyCustomerDates[key] = [];
-        if (zoppyCustomerDates[key].length < 2) {
-          zoppyCustomerDates[key].push(new Date(s.completed_at));
-        }
-      }
-      if (data.length < 1000) break;
-      zOff += 1000;
-    }
-
-    for (const [key, dates] of Object.entries(zoppyCustomerDates)) {
+    // Source 3: zoppy_sales – already loaded above, use zoppySalesDates
+    for (const [key, dates] of Object.entries(zoppySalesDates)) {
       if (dates.length >= 2) {
         const gap = (dates[1].getTime() - dates[0].getTime()) / 86400000;
-        if (gap > 0) {
-          secondPurchaseGaps.set(`zs:${key}`, gap);
-        }
+        if (gap > 0) secondPurchaseGaps.set(`zs:${key}`, gap);
       }
     }
 
