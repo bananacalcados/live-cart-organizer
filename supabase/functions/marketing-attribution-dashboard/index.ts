@@ -225,6 +225,9 @@ Deno.serve(async (req) => {
       dispatchCount: number;
       costPerMsg: number;
       totalMessagesSent: number;
+      audienceSource: string;
+      audienceFilters: any;
+      dispatchIds: string[];
     };
     const stats: Record<string, CampaignStat> = {};
 
@@ -254,6 +257,7 @@ Deno.serve(async (req) => {
           leadsAreCustomers: 0, leadsNotCustomers: 0,
           dispatchDates: [], dispatchCount: 0,
           costPerMsg: 0, totalMessagesSent: 0,
+          audienceSource: "", audienceFilters: null, dispatchIds: [],
         };
       }
       stats[key].captured++;
@@ -296,7 +300,7 @@ Deno.serve(async (req) => {
     while (true) {
       let q = supabase
         .from("dispatch_history")
-        .select("id, template_name, campaign_name, created_at, sent_count, status, cost_per_message")
+        .select("id, template_name, campaign_name, created_at, sent_count, status, cost_per_message, audience_source, audience_filters")
         .in("status", ["completed", "cancelled"])
         .gt("sent_count", 10); // exclude transactional one-offs
       if (date_from) q = q.gte("created_at", date_from);
@@ -345,12 +349,16 @@ Deno.serve(async (req) => {
           dispatchDates: [], dispatchCount: 0,
           costPerMsg,
           totalMessagesSent: 0,
+          audienceSource: dispatch.audience_source || "",
+          audienceFilters: dispatch.audience_filters || null,
+          dispatchIds: [],
         };
       }
       stats[key].captured += recipients.length;
       stats[key].totalMessagesSent += recipients.length;
       stats[key].dispatchCount++;
       stats[key].dispatchDates.push(dispatch.created_at);
+      stats[key].dispatchIds.push(dispatch.id);
 
 
 
@@ -407,6 +415,9 @@ Deno.serve(async (req) => {
         cost_per_msg: s.costPerMsg,
         total_cost: Math.round(totalCost * 100) / 100,
         roas: Math.round(roas * 100) / 100,
+        audience_source: s.audienceSource,
+        audience_filters: s.audienceFilters,
+        dispatch_ids: s.dispatchIds,
       };
     });
     results.sort((a, b) => b.total_revenue - a.total_revenue);
