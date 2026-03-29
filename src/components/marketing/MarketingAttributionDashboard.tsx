@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import {
   DollarSign, Users, TrendingUp, Clock, RefreshCw, Target, Send,
   BarChart3, Loader2, Percent, Store, Repeat, ShoppingCart, Calendar,
-  Settings2, UserCheck, UserX, Megaphone,
+  Settings2, UserCheck, UserX, Megaphone, ChevronDown, ChevronRight, Filter,
 } from "lucide-react";
 import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear, subWeeks, startOfQuarter, endOfQuarter } from "date-fns";
 
