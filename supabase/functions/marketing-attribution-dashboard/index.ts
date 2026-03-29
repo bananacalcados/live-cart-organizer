@@ -231,6 +231,11 @@ Deno.serve(async (req) => {
     };
     const stats: Record<string, CampaignStat> = {};
 
+    // Track per-phone attributions for deduplicated summary
+    // Each phone can appear in multiple campaigns; dedup picks the best one
+    type PhoneAttr = { type: string; touchDate: number; revenue: number; convDays: number };
+    const allPhoneAttrs: Record<string, PhoneAttr[]> = {};
+
     const allLeads = [
       ...allLpLeads.map(l => ({
         phone: l.phone,
@@ -289,7 +294,11 @@ Deno.serve(async (req) => {
           stats[key].converted++;
           stats[key].convDays.push((saleDate.getTime() - leadDate.getTime()) / 86400000);
         }
-        stats[key].revenue += Number(sale.total || 0);
+        const saleRev = Number(sale.total || 0);
+        stats[key].revenue += saleRev;
+        // Track for dedup summary
+        if (!allPhoneAttrs[normalized]) allPhoneAttrs[normalized] = [];
+        allPhoneAttrs[normalized].push({ type: 'lead_capture', touchDate: leadDate.getTime(), revenue: saleRev, convDays: (saleDate.getTime() - leadDate.getTime()) / 86400000 });
       }
     }
 
@@ -383,7 +392,11 @@ Deno.serve(async (req) => {
               stats[key].converted++;
               stats[key].convDays.push((saleDate.getTime() - dispatchDate.getTime()) / 86400000);
             }
-            stats[key].revenue += Number(sale.total || 0);
+            const saleRev2 = Number(sale.total || 0);
+            stats[key].revenue += saleRev2;
+            // Track for dedup summary
+            if (!allPhoneAttrs[normalized]) allPhoneAttrs[normalized] = [];
+            allPhoneAttrs[normalized].push({ type: 'mass_dispatch', touchDate: dispatchDate.getTime(), revenue: saleRev2, convDays: (saleDate.getTime() - dispatchDate.getTime()) / 86400000 });
           }
         }
       }
@@ -428,24 +441,49 @@ Deno.serve(async (req) => {
     const totalDispatchCost = dispR.reduce((a, b) => a + b.total_cost, 0);
     const totalDispatchRevenue = dispR.reduce((a, b) => a + b.total_revenue, 0);
 
+    // ─── Deduplicated summary ───
+    // Rule: if a phone has BOTH lead and dispatch attributions, count as dispatch (client).
+    // Each phone's revenue is counted only ONCE in the summary, under the winning type.
+    let dedupLeadConverted = 0, dedupLeadRevenue = 0;
+    let dedupDispatchConverted = 0, dedupDispatchRevenue = 0;
+    const dedupConvDays: number[] = [];
+
+    for (const [, attrs] of Object.entries(allPhoneAttrs)) {
+      const hasDispatch = attrs.some(a => a.type === 'mass_dispatch');
+      // If phone received a dispatch AND is also a lead, prioritize dispatch
+      const winningType = hasDispatch ? 'mass_dispatch' : 'lead_capture';
+      const winningAttrs = attrs.filter(a => a.type === winningType);
+      const totalRev = winningAttrs.reduce((s, a) => s + a.revenue, 0);
+      const avgDays = winningAttrs.length > 0
+        ? winningAttrs.reduce((s, a) => s + a.convDays, 0) / winningAttrs.length : 0;
+
+      if (winningType === 'mass_dispatch') {
+        dedupDispatchConverted++;
+        dedupDispatchRevenue += totalRev;
+      } else {
+        dedupLeadConverted++;
+        dedupLeadRevenue += totalRev;
+      }
+      if (avgDays > 0) dedupConvDays.push(avgDays);
+    }
+
+    const dedupOverallRevenue = dedupLeadRevenue + dedupDispatchRevenue;
+    const dedupAvgDays = dedupConvDays.length > 0
+      ? Math.round(dedupConvDays.reduce((a, b) => a + b, 0) / dedupConvDays.length * 10) / 10 : 0;
+
     const summary = {
       total_leads: leadR.reduce((a, b) => a + b.leads_captured, 0),
-      total_leads_converted: leadR.reduce((a, b) => a + b.leads_converted, 0),
-      total_lead_revenue: Math.round(leadR.reduce((a, b) => a + b.total_revenue, 0) * 100) / 100,
+      total_leads_converted: dedupLeadConverted,
+      total_lead_revenue: Math.round(dedupLeadRevenue * 100) / 100,
       total_dispatches_sent: dispR.reduce((a, b) => a + b.leads_captured, 0),
-      total_dispatch_conversions: dispR.reduce((a, b) => a + b.leads_converted, 0),
-      total_dispatch_revenue: Math.round(totalDispatchRevenue * 100) / 100,
-      overall_revenue: Math.round(results.reduce((a, b) => a + b.total_revenue, 0) * 100) / 100,
-      avg_conversion_days: (() => {
-        const withDays = results.filter(r => r.avg_conversion_days > 0);
-        return withDays.length > 0
-          ? Math.round(withDays.reduce((a, b) => a + b.avg_conversion_days, 0) / withDays.length * 10) / 10
-          : 0;
-      })(),
+      total_dispatch_conversions: dedupDispatchConverted,
+      total_dispatch_revenue: Math.round(dedupDispatchRevenue * 100) / 100,
+      overall_revenue: Math.round(dedupOverallRevenue * 100) / 100,
+      avg_conversion_days: dedupAvgDays,
       total_leads_are_customers: leadR.reduce((a, b) => a + b.leads_are_customers, 0),
       total_leads_not_customers: leadR.reduce((a, b) => a + b.leads_not_customers, 0),
       total_dispatch_cost: Math.round(totalDispatchCost * 100) / 100,
-      dispatch_roas: totalDispatchCost > 0 ? Math.round(totalDispatchRevenue / totalDispatchCost * 100) / 100 : 0,
+      dispatch_roas: totalDispatchCost > 0 ? Math.round(dedupDispatchRevenue / totalDispatchCost * 100) / 100 : 0,
       attribution_window_days: windowDays,
     };
 
