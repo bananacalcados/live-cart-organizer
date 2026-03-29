@@ -415,6 +415,9 @@ Deno.serve(async (req) => {
         cost_per_msg: s.costPerMsg,
         total_cost: Math.round(totalCost * 100) / 100,
         roas: Math.round(roas * 100) / 100,
+        audience_source: s.audienceSource,
+        audience_filters: s.audienceFilters,
+        dispatch_ids: s.dispatchIds,
       };
     });
     results.sort((a, b) => b.total_revenue - a.total_revenue);
