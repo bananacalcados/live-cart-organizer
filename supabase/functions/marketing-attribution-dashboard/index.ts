@@ -257,6 +257,7 @@ Deno.serve(async (req) => {
           leadsAreCustomers: 0, leadsNotCustomers: 0,
           dispatchDates: [], dispatchCount: 0,
           costPerMsg: 0, totalMessagesSent: 0,
+          audienceSource: "", audienceFilters: null, dispatchIds: [],
         };
       }
       stats[key].captured++;
