@@ -299,7 +299,7 @@ Deno.serve(async (req) => {
     while (true) {
       let q = supabase
         .from("dispatch_history")
-        .select("id, template_name, campaign_name, created_at, sent_count, status, cost_per_message")
+        .select("id, template_name, campaign_name, created_at, sent_count, status, cost_per_message, audience_source, audience_filters")
         .in("status", ["completed", "cancelled"])
         .gt("sent_count", 10); // exclude transactional one-offs
       if (date_from) q = q.gte("created_at", date_from);
