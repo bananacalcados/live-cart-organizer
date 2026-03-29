@@ -332,50 +332,90 @@ export function MarketingAttributionDashboard() {
                     </TableHeader>
                     <TableBody>
                       {filtered.map((c, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="font-medium max-w-[200px]">
-                            <div className="truncate">{c.campaign}</div>
-                            {c.type === "mass_dispatch" && c.template_name && c.template_name !== c.campaign && (
-                              <div className="text-[10px] text-muted-foreground font-mono">{c.template_name}</div>
-                            )}
-                            {c.type === "mass_dispatch" && c.dispatch_dates.length > 0 && (
-                              <div className="text-[9px] text-muted-foreground mt-0.5">
-                                {c.dispatch_dates.map(d => format(new Date(d), "dd/MM/yy HH:mm")).join(" · ")}
+                        <>
+                          <TableRow key={i} className={c.type === "mass_dispatch" ? "cursor-pointer hover:bg-muted/50" : ""} onClick={() => {
+                            if (c.type === "mass_dispatch") setExpandedRow(expandedRow === i ? null : i);
+                          }}>
+                            <TableCell className="font-medium max-w-[200px]">
+                              <div className="flex items-center gap-1">
+                                {c.type === "mass_dispatch" && (
+                                  expandedRow === i ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                )}
+                                <div>
+                                  <div className="truncate">{c.campaign}</div>
+                                  {c.type === "mass_dispatch" && c.template_name && c.template_name !== c.campaign && (
+                                    <div className="text-[10px] text-muted-foreground font-mono">{c.template_name}</div>
+                                  )}
+                                  {c.type === "mass_dispatch" && c.dispatch_dates.length > 0 && (
+                                    <div className="text-[9px] text-muted-foreground mt-0.5">
+                                      {c.dispatch_dates.map(d => format(new Date(d), "dd/MM/yy HH:mm")).join(" · ")}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={
-                              c.type === "lead_capture"
-                                ? "bg-blue-500/10 text-blue-500 border-blue-500/30 text-[10px]"
-                                : "bg-violet-500/10 text-violet-500 border-violet-500/30 text-[10px]"
-                            }>
-                              {c.type === "lead_capture" ? "Lead" : "Disparo"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">{c.leads_captured.toLocaleString()}</TableCell>
-                          <TableCell className="text-right">
-                            <span className={c.leads_converted > 0 ? "text-emerald-500 font-medium" : ""}>{c.leads_converted}</span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className={c.conversion_rate > 5 ? "text-emerald-500" : c.conversion_rate > 0 ? "text-amber-500" : "text-muted-foreground"}>
-                              {c.conversion_rate}%
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">{c.total_revenue > 0 ? fmt(c.total_revenue) : "—"}</TableCell>
-                          <TableCell className="text-right text-muted-foreground text-xs">
-                            {c.type === "mass_dispatch" && c.total_cost > 0 ? fmt(c.total_cost) : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {c.type === "mass_dispatch" && c.roas > 0 ? (
-                              <span className={c.roas >= 1 ? "text-emerald-500 font-medium" : "text-red-400"}>{c.roas}x</span>
-                            ) : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">{c.avg_ticket > 0 ? fmt(c.avg_ticket) : "—"}</TableCell>
-                          <TableCell className="text-right text-muted-foreground text-xs">
-                            {c.type === "mass_dispatch" ? `${c.dispatch_count}x` : "—"}
-                          </TableCell>
-                        </TableRow>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={
+                                c.type === "lead_capture"
+                                  ? "bg-blue-500/10 text-blue-500 border-blue-500/30 text-[10px]"
+                                  : "bg-violet-500/10 text-violet-500 border-violet-500/30 text-[10px]"
+                              }>
+                                {c.type === "lead_capture" ? "Lead" : "Disparo"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">{c.leads_captured.toLocaleString()}</TableCell>
+                            <TableCell className="text-right">
+                              <span className={c.leads_converted > 0 ? "text-emerald-500 font-medium" : ""}>{c.leads_converted}</span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className={c.conversion_rate > 5 ? "text-emerald-500" : c.conversion_rate > 0 ? "text-amber-500" : "text-muted-foreground"}>
+                                {c.conversion_rate}%
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">{c.total_revenue > 0 ? fmt(c.total_revenue) : "—"}</TableCell>
+                            <TableCell className="text-right text-muted-foreground text-xs">
+                              {c.type === "mass_dispatch" && c.total_cost > 0 ? fmt(c.total_cost) : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {c.type === "mass_dispatch" && c.roas > 0 ? (
+                                <span className={c.roas >= 1 ? "text-emerald-500 font-medium" : "text-red-400"}>{c.roas}x</span>
+                              ) : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">{c.avg_ticket > 0 ? fmt(c.avg_ticket) : "—"}</TableCell>
+                            <TableCell className="text-right text-muted-foreground text-xs">
+                              {c.type === "mass_dispatch" ? `${c.dispatch_count}x` : "—"}
+                            </TableCell>
+                          </TableRow>
+                          {expandedRow === i && c.type === "mass_dispatch" && (
+                            <TableRow key={`${i}-detail`}>
+                              <TableCell colSpan={10} className="bg-muted/30 p-3">
+                                <div className="flex items-start gap-4 text-xs">
+                                  <div className="flex items-center gap-1.5">
+                                    <Filter className="h-3.5 w-3.5 text-primary" />
+                                    <span className="font-medium">Público selecionado:</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Badge variant="secondary" className="text-[10px]">
+                                      Fonte: {c.audience_source === "crm" ? "CRM (Clientes)" : c.audience_source === "leads" ? "Leads Captados" : c.audience_source || "N/A"}
+                                    </Badge>
+                                    {c.audience_filters && Object.entries(c.audience_filters).map(([key, val]) => {
+                                      if (val === "all" || !val) return null;
+                                      const labels: Record<string, string> = { ddd: "DDD", rfm: "Segmento RFM", city: "Cidade", state: "Estado", region: "Região", campaign: "Campanha" };
+                                      return (
+                                        <Badge key={key} variant="outline" className="text-[10px]">
+                                          {labels[key] || key}: {val}
+                                        </Badge>
+                                      );
+                                    })}
+                                    {c.audience_filters && Object.values(c.audience_filters).every(v => v === "all") && (
+                                      <span className="text-muted-foreground">Todos os contatos (sem filtro específico)</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
                       ))}
                       {filtered.length === 0 && (
                         <TableRow>
