@@ -53,6 +53,9 @@ interface CampaignResult {
   cost_per_msg: number;
   total_cost: number;
   roas: number;
+  audience_source?: string;
+  audience_filters?: Record<string, string>;
+  dispatch_ids?: string[];
 }
 
 interface Summary {
