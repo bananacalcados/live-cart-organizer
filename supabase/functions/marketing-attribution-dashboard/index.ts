@@ -358,6 +358,7 @@ Deno.serve(async (req) => {
       stats[key].totalMessagesSent += recipients.length;
       stats[key].dispatchCount++;
       stats[key].dispatchDates.push(dispatch.created_at);
+      stats[key].dispatchIds.push(dispatch.id);
 
 
 
