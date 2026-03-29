@@ -294,7 +294,11 @@ Deno.serve(async (req) => {
           stats[key].converted++;
           stats[key].convDays.push((saleDate.getTime() - leadDate.getTime()) / 86400000);
         }
-        stats[key].revenue += Number(sale.total || 0);
+        const saleRev = Number(sale.total || 0);
+        stats[key].revenue += saleRev;
+        // Track for dedup summary
+        if (!allPhoneAttrs[normalized]) allPhoneAttrs[normalized] = [];
+        allPhoneAttrs[normalized].push({ type: 'lead_capture', touchDate: leadDate.getTime(), revenue: saleRev, convDays: (saleDate.getTime() - leadDate.getTime()) / 86400000 });
       }
     }
 
