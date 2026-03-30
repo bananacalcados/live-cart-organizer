@@ -112,10 +112,55 @@ export async function routeMessage(
     console.error('[router] Error checking AI session:', err);
   }
 
-  // 3. Check for ad referral (Click-to-WhatsApp)
+  // 3. Check for ad referral (Click-to-WhatsApp) OR ad keyword match
   if (referral && referral.source_url) {
-    console.log(`[router] Ad referral detected for ${phone}`);
+    // Check if there's an active ad campaign matching
+    const matchedCampaign = await matchAdCampaign(supabase, input.messageText);
+    if (matchedCampaign) {
+      console.log(`[router] Ad referral + campaign match for ${phone}, campaign=${matchedCampaign.name}`);
+      return { agent: 'ads', reason: 'ad_referral_campaign', referral, adCampaignId: matchedCampaign.id };
+    }
+    console.log(`[router] Ad referral detected for ${phone}, no campaign match`);
     return { agent: 'legacy', reason: 'ad_referral_legacy', referral };
+  }
+
+  // 3b. Check ad keywords even without referral (user may type the keyword directly)
+  {
+    const matchedCampaign = await matchAdCampaign(supabase, input.messageText);
+    if (matchedCampaign) {
+      console.log(`[router] Ad keyword match for ${phone}, campaign=${matchedCampaign.name}`);
+      return { agent: 'ads', reason: 'ad_keyword_match', adCampaignId: matchedCampaign.id };
+    }
+  }
+
+  // 3c. Check if lead already has an active ad session (continue conversation)
+  {
+    const { data: activeLead } = await supabase
+      .from('ad_leads')
+      .select('id, campaign_id')
+      .eq('phone', normalizedPhone)
+      .eq('is_active', true)
+      .neq('temperature', 'convertido')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activeLead?.campaign_id) {
+      // Check if last AI contact was within 2 hours (active conversation)
+      const { data: recentLog } = await supabase
+        .from('ai_conversation_logs')
+        .select('created_at')
+        .eq('phone', phone)
+        .like('stage', 'ads_%')
+        .gt('created_at', new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString())
+        .limit(1)
+        .maybeSingle();
+
+      if (recentLog) {
+        console.log(`[router] Active ad lead session for ${phone}`);
+        return { agent: 'ads', reason: 'active_ad_lead', adCampaignId: activeLead.campaign_id };
+      }
+    }
   }
 
   // 4. Operator cooldown — if a human replied recently, don't activate AI
