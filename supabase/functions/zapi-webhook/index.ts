@@ -479,6 +479,39 @@ serve(async (req) => {
                 break;
               }
 
+              case 'ads': {
+                const adsCooldown = await isOperatorCooldownActive(supabase, phone);
+                if (!adsCooldown) {
+                  try {
+                    const adsRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-ads-respond`, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ phone, messageText: routeText, campaignId: route.adCampaignId, whatsappNumberId, channel: 'zapi' }),
+                    });
+                    const adsData = await adsRes.json();
+
+                    if (adsRes.ok && adsData.reply) {
+                      const typingDelay = Math.min(Math.max(adsData.reply.length * 50, 2000), 12000);
+                      await new Promise(r => setTimeout(r, typingDelay));
+
+                      await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone, message: adsData.reply, whatsapp_number_id: whatsappNumberId }),
+                      });
+
+                      await supabase.from('whatsapp_messages').insert({
+                        phone, message: `[IA-ADS] ${adsData.reply}`, direction: 'outgoing',
+                        status: 'sent', whatsapp_number_id: whatsappNumberId,
+                      });
+                    }
+                  } catch (err) {
+                    console.error('[zapi-router] ads-respond error:', err);
+                  }
+                }
+                break;
+              }
+
               case 'concierge':
                 fetch(`${supabaseUrl}/functions/v1/concierge-respond`, {
                   method: 'POST',
