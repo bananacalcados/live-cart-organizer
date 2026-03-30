@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { FlaskConical, RotateCcw, Phone, Loader2, Power } from "lucide-react";
+import { FlaskConical, RotateCcw, Phone, Loader2, Power, Rocket } from "lucide-react";
 
 export function AiTestPanel() {
   const [testMode, setTestMode] = useState(false);
