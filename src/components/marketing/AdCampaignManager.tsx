@@ -36,7 +36,7 @@ interface Campaign {
   objective: string;
   activation_keywords: string[];
   prompt: string;
-  product_info: { catalogo?: CatalogProduct[] } | null;
+  product_info: any;
   payment_conditions: string | null;
   event_id: string | null;
   data_to_collect: string[];
