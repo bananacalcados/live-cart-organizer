@@ -36,6 +36,7 @@ import { useEventStore } from "@/stores/eventStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
+import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone } from "lucide-react";
 import { format } from "date-fns";
@@ -335,8 +336,11 @@ const Events = () => {
             <TabsTrigger value="payments" className="gap-1">
               <CreditCard className="h-4 w-4" /> Pagamentos
             </TabsTrigger>
-            <TabsTrigger value="team" className="gap-1">
+             <TabsTrigger value="team" className="gap-1">
               <UserCheck className="h-4 w-4" /> Equipe
+            </TabsTrigger>
+            <TabsTrigger value="shipping" className="gap-1">
+              <Truck className="h-4 w-4" /> Frete
             </TabsTrigger>
           </TabsList>
 
@@ -534,6 +538,10 @@ const Events = () => {
 
           <TabsContent value="team">
             <EventTeamManager />
+          </TabsContent>
+
+          <TabsContent value="shipping">
+            <ShippingRulesManager />
           </TabsContent>
         </Tabs>
       </main>

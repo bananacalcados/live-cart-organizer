@@ -31,6 +31,7 @@ interface OrderData {
   checkoutStartedAt: string | null;
   freeShipping: boolean;
   shippingCost: number;
+  eventId?: string;
 }
 
 interface PixData {
@@ -437,6 +438,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
           weight_kg: 0.3,
           items_count: totalQty,
           order_id: orderId,
+          event_id: orderData?.eventId || null,
         },
       });
       if (error) throw error;
@@ -1251,6 +1253,7 @@ export default function TransparentCheckout() {
         products, subtotal, discountAmount, totalAmount,
         isPaid: order.is_paid, checkoutStartedAt: order.checkout_started_at,
         freeShipping: order.free_shipping || false, shippingCost: orderShippingCost,
+        eventId: order.event_id || undefined,
       });
 
       if (order.is_paid) {
