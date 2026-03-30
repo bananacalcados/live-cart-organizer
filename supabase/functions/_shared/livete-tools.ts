@@ -531,6 +531,67 @@ export async function executeToolCall(
       };
     }
 
+    // ─── LOOKUP CEP ───
+    case 'lookup_cep': {
+      const cep = (args.cep || '').replace(/\D/g, '');
+      if (cep.length !== 8) {
+        return { success: false, error: 'CEP inválido. Deve ter 8 dígitos.' };
+      }
+
+      try {
+        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await resp.json();
+
+        if (data.erro) {
+          return { success: false, error: 'CEP não encontrado.' };
+        }
+
+        // Auto-save address data from CEP
+        const addressData: Record<string, any> = {
+          cep: cep,
+          address: data.logradouro || '',
+          neighborhood: data.bairro || '',
+          city: data.localidade || '',
+          state: data.uf || '',
+        };
+
+        if (ctx.registration) {
+          await supabase.from('customer_registrations').update({
+            ...addressData,
+            updated_at: new Date().toISOString(),
+          }).eq('id', ctx.registration.id);
+        } else {
+          await supabase.from('customer_registrations').insert({
+            order_id: orderId,
+            customer_id: customerId,
+            whatsapp: phone,
+            full_name: '',
+            cpf: '',
+            email: '',
+            ...addressData,
+            address_number: '',
+            complement: '',
+            status: 'pending',
+          });
+        }
+
+        return {
+          success: true,
+          data: {
+            cep: cep,
+            logradouro: data.logradouro || '',
+            bairro: data.bairro || '',
+            cidade: data.localidade || '',
+            estado: data.uf || '',
+            saved: true,
+            message: 'Endereço encontrado e salvo. Agora peça apenas o número e complemento.',
+          },
+        };
+      } catch (e) {
+        return { success: false, error: `Erro ao consultar CEP: ${(e as Error).message}` };
+      }
+    }
+
     default:
       return { success: false, error: `Tool desconhecida: ${toolName}` };
   }
