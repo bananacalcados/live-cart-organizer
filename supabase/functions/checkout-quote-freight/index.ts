@@ -178,6 +178,66 @@ serve(async (req) => {
       console.warn('FRENET_TOKEN not configured');
     }
 
+    // === Apply shipping rules ===
+    let shippingRules: any[] = [];
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const sb = createClient(supabaseUrl, supabaseKey);
+
+      let query = sb.from('shipping_rules').select('*').eq('is_active', true).order('priority', { ascending: false });
+      if (event_id) {
+        query = query.or(`event_id.eq.${event_id},event_id.is.null`);
+      } else {
+        query = query.is('event_id', null);
+      }
+      const { data: rulesData } = await query;
+      shippingRules = rulesData || [];
+    } catch (e) {
+      console.warn('Error fetching shipping rules:', e.message);
+    }
+
+    // Apply rules to carrier quotes
+    if (shippingRules.length > 0) {
+      for (let i = 0; i < quotes.length; i++) {
+        const q = quotes[i];
+        if (q.type !== 'carrier') continue; // only apply to Frenet quotes
+
+        // Find first matching rule (highest priority first, event rules > global)
+        const matchingRule = shippingRules
+          .sort((a: any, b: any) => {
+            // Event-specific rules have priority over global
+            if (a.event_id && !b.event_id) return -1;
+            if (!a.event_id && b.event_id) return 1;
+            return (b.priority || 0) - (a.priority || 0);
+          })
+          .find((rule: any) => {
+            // Check carrier match
+            if (rule.carrier_match) {
+              const carrierLower = (q.carrier + ' ' + q.service).toLowerCase();
+              if (!carrierLower.includes(rule.carrier_match.toLowerCase())) return false;
+            }
+            // Check region (state) match via CEP-to-state mapping
+            if (rule.region_states && rule.region_states.length > 0) {
+              const destState = cepToState(cepDigits);
+              if (!destState || !rule.region_states.includes(destState)) return false;
+            }
+            return true;
+          });
+
+        if (matchingRule) {
+          if (matchingRule.rule_type === 'fixed_price' && matchingRule.fixed_price != null) {
+            q.price = matchingRule.fixed_price;
+          } else if (matchingRule.rule_type === 'discount_percentage' && matchingRule.discount_percentage != null) {
+            q.price = Math.max(0, q.price * (1 - matchingRule.discount_percentage / 100));
+          } else if (matchingRule.rule_type === 'discount_fixed' && matchingRule.discount_fixed != null) {
+            q.price = Math.max(0, q.price - matchingRule.discount_fixed);
+          }
+          q.price = Math.round(q.price * 100) / 100;
+        }
+      }
+    }
+
     // Sort: repeat_free first, then pickup, then local, then by price
     quotes.sort((a, b) => {
       if (a.type === 'repeat_free') return -1;
