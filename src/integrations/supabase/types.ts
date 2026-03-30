@@ -8107,6 +8107,68 @@ export type Database = {
         }
         Relationships: []
       }
+      shipping_rules: {
+        Row: {
+          carrier_match: string | null
+          cep_range_end: string | null
+          cep_range_start: string | null
+          created_at: string
+          discount_fixed: number | null
+          discount_percentage: number | null
+          event_id: string | null
+          fixed_price: number | null
+          id: string
+          is_active: boolean
+          name: string
+          priority: number
+          region_states: string[] | null
+          rule_type: string
+          updated_at: string
+        }
+        Insert: {
+          carrier_match?: string | null
+          cep_range_end?: string | null
+          cep_range_start?: string | null
+          created_at?: string
+          discount_fixed?: number | null
+          discount_percentage?: number | null
+          event_id?: string | null
+          fixed_price?: number | null
+          id?: string
+          is_active?: boolean
+          name: string
+          priority?: number
+          region_states?: string[] | null
+          rule_type?: string
+          updated_at?: string
+        }
+        Update: {
+          carrier_match?: string | null
+          cep_range_end?: string | null
+          cep_range_start?: string | null
+          created_at?: string
+          discount_fixed?: number | null
+          discount_percentage?: number | null
+          event_id?: string | null
+          fixed_price?: number | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          priority?: number
+          region_states?: string[] | null
+          rule_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipping_rules_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shopify_live_order_locks: {
         Row: {
           created_at: string
