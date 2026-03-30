@@ -309,3 +309,32 @@ export async function isOperatorCooldownActive(
     return false; // Don't block AI on error
   }
 }
+
+// ─── Helper: Match ad campaign by keyword ────────────────────────────────────
+
+async function matchAdCampaign(
+  supabase: SupabaseClient,
+  messageText: string | null
+): Promise<{ id: string; name: string } | null> {
+  if (!messageText) return null;
+
+  try {
+    const { data: campaigns } = await supabase
+      .from('ad_campaigns_ai')
+      .select('id, name, activation_keywords')
+      .eq('is_active', true);
+
+    if (!campaigns || campaigns.length === 0) return null;
+
+    const msgLower = messageText.toLowerCase().trim();
+    for (const c of campaigns) {
+      const keywords = c.activation_keywords || [];
+      if (keywords.some((kw: string) => msgLower.includes(kw.toLowerCase()))) {
+        return { id: c.id, name: c.name };
+      }
+    }
+  } catch (err) {
+    console.error('[router] Error matching ad campaign:', err);
+  }
+  return null;
+}
