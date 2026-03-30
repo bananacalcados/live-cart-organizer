@@ -392,7 +392,120 @@ export default function AdCampaignManager() {
                   />
                 </div>
 
-                {/* Post actions */}
+                {/* Product Catalog */}
+                <div className="border rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold flex items-center gap-1">
+                      <Target className="h-4 w-4" /> Catálogo de Produtos
+                    </Label>
+                    <Button size="sm" variant="outline" onClick={() => {
+                      const catalogo = editingCampaign.product_info?.catalogo || [];
+                      setEditingCampaign({
+                        ...editingCampaign,
+                        product_info: {
+                          ...editingCampaign.product_info,
+                          catalogo: [...catalogo, { nome: '', preco: '', keywords: [], detalhes: '' }],
+                        },
+                      });
+                    }}>
+                      <Plus className="h-3 w-3 mr-1" /> Produto
+                    </Button>
+                  </div>
+                  {(editingCampaign.product_info?.catalogo || []).map((prod: CatalogProduct, idx: number) => (
+                    <div key={idx} className="border rounded p-2 space-y-2 bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <Label className="text-xs">Nome do Produto</Label>
+                          <Input
+                            value={prod.nome}
+                            onChange={e => {
+                              const catalogo = [...(editingCampaign.product_info?.catalogo || [])];
+                              catalogo[idx] = { ...catalogo[idx], nome: e.target.value };
+                              setEditingCampaign({ ...editingCampaign, product_info: { ...editingCampaign.product_info, catalogo } });
+                            }}
+                            placeholder="Ex: Tênis Runner Pro"
+                            className="text-sm h-8"
+                          />
+                        </div>
+                        <div className="w-28">
+                          <Label className="text-xs">Preço (R$)</Label>
+                          <Input
+                            value={prod.preco}
+                            onChange={e => {
+                              const catalogo = [...(editingCampaign.product_info?.catalogo || [])];
+                              catalogo[idx] = { ...catalogo[idx], preco: e.target.value };
+                              setEditingCampaign({ ...editingCampaign, product_info: { ...editingCampaign.product_info, catalogo } });
+                            }}
+                            placeholder="199,90"
+                            className="text-sm h-8"
+                          />
+                        </div>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive mt-4" onClick={() => {
+                          const catalogo = (editingCampaign.product_info?.catalogo || []).filter((_: any, i: number) => i !== idx);
+                          setEditingCampaign({ ...editingCampaign, product_info: { ...editingCampaign.product_info, catalogo } });
+                        }}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Detalhes</Label>
+                        <Input
+                          value={prod.detalhes || ''}
+                          onChange={e => {
+                            const catalogo = [...(editingCampaign.product_info?.catalogo || [])];
+                            catalogo[idx] = { ...catalogo[idx], detalhes: e.target.value };
+                            setEditingCampaign({ ...editingCampaign, product_info: { ...editingCampaign.product_info, catalogo } });
+                          }}
+                          placeholder="Ex: Cores: preto, branco. Tamanhos: 34-42"
+                          className="text-sm h-8"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Keywords do produto (frases que identificam este produto)</Label>
+                        <div className="flex flex-wrap gap-1 mb-1">
+                          {(prod.keywords || []).map((kw, ki) => (
+                            <Badge key={ki} variant="secondary" className="text-xs cursor-pointer" onClick={() => {
+                              const catalogo = [...(editingCampaign.product_info?.catalogo || [])];
+                              catalogo[idx] = { ...catalogo[idx], keywords: prod.keywords.filter((_, j) => j !== ki) };
+                              setEditingCampaign({ ...editingCampaign, product_info: { ...editingCampaign.product_info, catalogo } });
+                            }}>
+                              {kw} ✕
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            value={newProductKeyword[idx] || ''}
+                            onChange={e => setNewProductKeyword({ ...newProductKeyword, [idx]: e.target.value })}
+                            placeholder="Ex: tênis runner"
+                            className="text-sm h-8"
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && newProductKeyword[idx]?.trim()) {
+                                const catalogo = [...(editingCampaign.product_info?.catalogo || [])];
+                                catalogo[idx] = { ...catalogo[idx], keywords: [...(prod.keywords || []), newProductKeyword[idx].trim()] };
+                                setEditingCampaign({ ...editingCampaign, product_info: { ...editingCampaign.product_info, catalogo } });
+                                setNewProductKeyword({ ...newProductKeyword, [idx]: '' });
+                              }
+                            }}
+                          />
+                          <Button size="sm" variant="outline" className="h-8" onClick={() => {
+                            if (newProductKeyword[idx]?.trim()) {
+                              const catalogo = [...(editingCampaign.product_info?.catalogo || [])];
+                              catalogo[idx] = { ...catalogo[idx], keywords: [...(prod.keywords || []), newProductKeyword[idx].trim()] };
+                              setEditingCampaign({ ...editingCampaign, product_info: { ...editingCampaign.product_info, catalogo } });
+                              setNewProductKeyword({ ...newProductKeyword, [idx]: '' });
+                            }
+                          }}>+</Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {(!editingCampaign.product_info?.catalogo || editingCampaign.product_info.catalogo.length === 0) && (
+                    <p className="text-xs text-muted-foreground text-center py-2">Nenhum produto. Clique em "+ Produto" para adicionar ao catálogo.</p>
+                  )}
+                </div>
+
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Pós-venda</Label>
