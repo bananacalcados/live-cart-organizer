@@ -157,17 +157,39 @@ export function AiTestPanel() {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <FlaskConical className="h-5 w-5 text-primary" />
-          Modo Teste — Concierge (Bia)
+          Concierge (Bia) — Controle de Ativação
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Status */}
+        {/* Production Mode */}
+        <div className={`flex items-center justify-between p-3 rounded-lg ${productionMode ? "bg-primary/10 border border-primary/30" : "bg-muted/50"}`}>
+          <div className="flex items-center gap-3">
+            <Rocket className={`h-5 w-5 ${productionMode ? "text-primary" : "text-muted-foreground"}`} />
+            <div>
+              <p className="text-sm font-medium">
+                {productionMode ? "🚀 PRODUÇÃO — Bia atendendo TODOS" : "Modo Produção (desligado)"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {productionMode
+                  ? "A Bia está respondendo todos os clientes automaticamente"
+                  : "Ative para a Bia responder todos os clientes"}
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={productionMode}
+            onCheckedChange={handleToggleProductionMode}
+            disabled={saving}
+          />
+        </div>
+
+        {/* Test Mode */}
         <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
           <div className="flex items-center gap-3">
             <Power className={`h-5 w-5 ${testMode ? "text-green-500" : "text-muted-foreground"}`} />
             <div>
               <p className="text-sm font-medium">
-                {testMode ? "Modo teste ATIVO" : "Bia desligada"}
+                {testMode ? "Modo teste ATIVO" : "Modo Teste (desligado)"}
               </p>
               <p className="text-xs text-muted-foreground">
                 {testMode
