@@ -14,6 +14,223 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_campaign_nurture_steps: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          days_before_event: number
+          id: string
+          is_active: boolean
+          meta_template_name: string | null
+          meta_template_vars: Json | null
+          send_time: string
+          sort_order: number
+          zapi_message_text: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          days_before_event?: number
+          id?: string
+          is_active?: boolean
+          meta_template_name?: string | null
+          meta_template_vars?: Json | null
+          send_time?: string
+          sort_order?: number
+          zapi_message_text?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          days_before_event?: number
+          id?: string
+          is_active?: boolean
+          meta_template_name?: string | null
+          meta_template_vars?: Json | null
+          send_time?: string
+          sort_order?: number
+          zapi_message_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_campaign_nurture_steps_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns_ai"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_campaigns_ai: {
+        Row: {
+          activation_keywords: string[]
+          created_at: string
+          data_to_collect: string[]
+          event_id: string | null
+          id: string
+          is_active: boolean
+          name: string
+          objective: string
+          payment_conditions: string | null
+          post_capture_action: string | null
+          post_sale_action: string | null
+          product_info: Json | null
+          prompt: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          activation_keywords?: string[]
+          created_at?: string
+          data_to_collect?: string[]
+          event_id?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          objective?: string
+          payment_conditions?: string | null
+          post_capture_action?: string | null
+          post_sale_action?: string | null
+          product_info?: Json | null
+          prompt?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          activation_keywords?: string[]
+          created_at?: string
+          data_to_collect?: string[]
+          event_id?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          objective?: string
+          payment_conditions?: string | null
+          post_capture_action?: string | null
+          post_sale_action?: string | null
+          product_info?: Json | null
+          prompt?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_campaigns_ai_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_leads: {
+        Row: {
+          campaign_id: string | null
+          channel: string | null
+          collected_data: Json
+          created_at: string
+          event_id: string | null
+          id: string
+          is_active: boolean
+          last_ai_contact_at: string | null
+          last_human_contact_at: string | null
+          name: string | null
+          notes: string | null
+          phone: string
+          source: string
+          temperature: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          channel?: string | null
+          collected_data?: Json
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          is_active?: boolean
+          last_ai_contact_at?: string | null
+          last_human_contact_at?: string | null
+          name?: string | null
+          notes?: string | null
+          phone: string
+          source?: string
+          temperature?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          channel?: string | null
+          collected_data?: Json
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          is_active?: boolean
+          last_ai_contact_at?: string | null
+          last_human_contact_at?: string | null
+          name?: string | null
+          notes?: string | null
+          phone?: string
+          source?: string
+          temperature?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_leads_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns_ai"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_leads_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_nurture_sent: {
+        Row: {
+          id: string
+          lead_id: string
+          nurture_step_id: string
+          sent_at: string
+        }
+        Insert: {
+          id?: string
+          lead_id: string
+          nurture_step_id: string
+          sent_at?: string
+        }
+        Update: {
+          id?: string
+          lead_id?: string
+          nurture_step_id?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_nurture_sent_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "ad_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_nurture_sent_nurture_step_id_fkey"
+            columns: ["nurture_step_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaign_nurture_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_conversation_logs: {
         Row: {
           ai_decision: string | null
