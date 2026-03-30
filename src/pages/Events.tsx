@@ -335,8 +335,11 @@ const Events = () => {
             <TabsTrigger value="payments" className="gap-1">
               <CreditCard className="h-4 w-4" /> Pagamentos
             </TabsTrigger>
-            <TabsTrigger value="team" className="gap-1">
+             <TabsTrigger value="team" className="gap-1">
               <UserCheck className="h-4 w-4" /> Equipe
+            </TabsTrigger>
+            <TabsTrigger value="shipping" className="gap-1">
+              <Truck className="h-4 w-4" /> Frete
             </TabsTrigger>
           </TabsList>
 
