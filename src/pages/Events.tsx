@@ -538,6 +538,10 @@ const Events = () => {
           <TabsContent value="team">
             <EventTeamManager />
           </TabsContent>
+
+          <TabsContent value="shipping">
+            <ShippingRulesManager />
+          </TabsContent>
         </Tabs>
       </main>
     </div>
