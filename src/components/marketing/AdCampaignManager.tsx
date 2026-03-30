@@ -23,13 +23,20 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+interface CatalogProduct {
+  nome: string;
+  preco: string;
+  keywords: string[];
+  detalhes?: string;
+}
+
 interface Campaign {
   id: string;
   name: string;
   objective: string;
   activation_keywords: string[];
   prompt: string;
-  product_info: any;
+  product_info: { catalogo?: CatalogProduct[] } | null;
   payment_conditions: string | null;
   event_id: string | null;
   data_to_collect: string[];

@@ -132,9 +132,17 @@ INFORMAÇÕES DO EVENTO/LIVE:
     let productContext = '';
     if (campaign.product_info) {
       const pi = campaign.product_info;
-      productContext = `
+      if (pi.catalogo && Array.isArray(pi.catalogo) && pi.catalogo.length > 0) {
+        productContext = `
+CATÁLOGO DE PRODUTOS DA CAMPANHA:
+${pi.catalogo.map((p: any, i: number) => `${i + 1}. ${p.nome} — R$ ${p.preco}${p.detalhes ? ` (${p.detalhes})` : ''}${p.keywords?.length ? ` [ativado por: ${p.keywords.join(', ')}]` : ''}`).join('\n')}
+
+IMPORTANTE: Quando o cliente mencionar um produto específico (pelas keywords ou nome), apresente as informações DAQUELE produto. Se não ficar claro qual produto, pergunte qual interessa.`;
+      } else {
+        productContext = `
 INFORMAÇÕES DO PRODUTO/OFERTA:
 ${JSON.stringify(pi, null, 2)}`;
+      }
     }
     if (campaign.payment_conditions) {
       productContext += `
