@@ -48,6 +48,9 @@ export async function notifyPaymentConfirmed(payload: PaymentConfirmedPayload) {
 
   console.log(`[payment-confirmado] delivered for order ${payload.pedido_id}: ${responseText || "ok"}`);
 
+  // Trigger Livete payment confirmation (fire-and-forget)
+  triggerLiveteConfirmation(payload.pedido_id);
+
   return {
     ok: true,
     status: response.status,
