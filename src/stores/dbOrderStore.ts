@@ -31,6 +31,11 @@ const notifyPaymentConfirmed = async (orderId: string, source: string = 'events-
   } catch (err) {
     console.error('[payment-webhook] Failed to notify agent:', err);
   }
+
+  // Trigger Livete payment confirmation (fire-and-forget)
+  supabase.functions.invoke('livete-payment-confirmation', {
+    body: { orderId },
+  }).catch(err => console.error('[livete-confirmation] Failed:', err));
 };
 
 interface DbOrderStore {
