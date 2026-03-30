@@ -248,9 +248,17 @@ export function AiTestPanel() {
         </div>
 
         {/* Status badges */}
-        {testMode && testPhone && (
+        {productionMode && (
           <div className="flex items-center gap-2 pt-2">
-            <Badge variant="outline" className="text-green-600 border-green-300">
+            <Badge className="bg-primary text-primary-foreground">
+              🚀 Produção ativa
+            </Badge>
+            <Badge variant="secondary">Todos os números</Badge>
+          </div>
+        )}
+        {testMode && testPhone && !productionMode && (
+          <div className="flex items-center gap-2 pt-2">
+            <Badge variant="outline" className="text-primary border-primary/50">
               Teste ativo
             </Badge>
             <Badge variant="secondary">{testPhone}</Badge>
