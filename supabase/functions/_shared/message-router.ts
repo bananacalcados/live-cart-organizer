@@ -33,6 +33,8 @@ export interface RouteResult {
   };
   /** Referral data when agent is 'ads' */
   referral?: Record<string, unknown>;
+  /** Ad campaign ID when agent is 'ads' */
+  adCampaignId?: string;
 }
 
 export interface RouteInput {
