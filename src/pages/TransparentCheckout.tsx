@@ -438,6 +438,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
           weight_kg: 0.3,
           items_count: totalQty,
           order_id: orderId,
+          event_id: orderData?.eventId || null,
         },
       });
       if (error) throw error;
