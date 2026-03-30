@@ -149,6 +149,20 @@ export const liveteTools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "lookup_cep",
+      description: "Consultar CEP para obter endereço completo (rua, bairro, cidade, estado). Use SEMPRE que o cliente informar um CEP para preencher automaticamente o endereço e confirmar com o cliente. Isso evita pedir informações redundantes.",
+      parameters: {
+        type: "object",
+        properties: {
+          cep: { type: "string", description: "CEP com 8 dígitos (só números)" },
+        },
+        required: ["cep"],
+      },
+    },
+  },
 ];
 
 // ─── Tool Execution ───

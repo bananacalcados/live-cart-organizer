@@ -302,8 +302,8 @@ ${JSON.stringify(regData, null, 2)}
 ## Cancelamentos anteriores: ${cancellationCount}/3 ${cancellationCount >= 2 ? '⚠️ PRÓXIMO CANCELAMENTO = BAN' : ''}
 
 ## Fluxo de etapas (use a tool advance_stage para avançar):
-1. endereco → Pegar endereço completo. Se "retirada na loja", aceite e dê frete grátis.
-2. confirmar_endereco → Confirmar endereço salvo.
+1. endereco → Pegar endereço. Quando o cliente informar o CEP, use a tool lookup_cep para preencher automaticamente rua, bairro, cidade e estado. Depois confirme o endereço completo com o cliente pedindo SÓ o número e complemento (se necessário). Se "retirada na loja", aceite e dê frete grátis.
+2. confirmar_endereco → Confirmar endereço salvo. Monte o endereço completo e pergunte "Ficou assim: [endereço completo]. Está correto?" Se o cliente disser que sim, avance. Se disser que algo está errado, corrija. NÃO peça cidade/estado separado se já tem o CEP — o lookup_cep já resolve isso.
 3. dados_pessoais → Nome Completo, CPF, E-mail (email é opcional).
 4. forma_pagamento → PIX, Cartão (até 3x sem juros), Boleto ou Pagar na Loja.
 5. aguardando_pix → PIX será gerado automaticamente.
