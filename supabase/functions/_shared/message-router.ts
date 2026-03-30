@@ -15,7 +15,7 @@ export type RouteAgent =
   | 'none'           // human assumed control or AI paused
   | 'livete'         // live commerce agent
   | 'continue_session' // existing AI session (generic automation)
-  | 'ads'            // lead from ad click-to-WhatsApp (future)
+  | 'ads'            // lead from ad click-to-WhatsApp
   | 'concierge'      // default general agent (future)
   | 'legacy';        // fallback to current automation-trigger-incoming behavior
 
