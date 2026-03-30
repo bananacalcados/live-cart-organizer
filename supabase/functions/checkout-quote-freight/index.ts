@@ -12,6 +12,43 @@ function isGVCep(cep: string): boolean {
   return num >= 35010000 && num <= 35064999;
 }
 
+// Map CEP prefix to Brazilian state
+function cepToState(cep: string): string | null {
+  const n = parseInt(cep.substring(0, 5), 10);
+  if (n >= 1000 && n <= 19999) return 'SP';
+  if (n >= 20000 && n <= 28999) return 'RJ';
+  if (n >= 29000 && n <= 29999) return 'ES';
+  if (n >= 30000 && n <= 39999) return 'MG';
+  if (n >= 40000 && n <= 48999) return 'BA';
+  if (n >= 49000 && n <= 49999) return 'SE';
+  if (n >= 50000 && n <= 56999) return 'PE';
+  if (n >= 57000 && n <= 57999) return 'AL';
+  if (n >= 58000 && n <= 58999) return 'PB';
+  if (n >= 59000 && n <= 59999) return 'RN';
+  if (n >= 60000 && n <= 63999) return 'CE';
+  if (n >= 64000 && n <= 64999) return 'PI';
+  if (n >= 65000 && n <= 65999) return 'MA';
+  if (n >= 66000 && n <= 68899) return 'PA';
+  if (n >= 68900 && n <= 68999) return 'AP';
+  if (n >= 69000 && n <= 69299) return 'AM';
+  if (n >= 69300 && n <= 69399) return 'RR';
+  if (n >= 69400 && n <= 69899) return 'AM';
+  if (n >= 69900 && n <= 69999) return 'AC';
+  if (n >= 70000 && n <= 72799) return 'DF';
+  if (n >= 72800 && n <= 72999) return 'GO';
+  if (n >= 73000 && n <= 73699) return 'GO';
+  if (n >= 73700 && n <= 76799) return 'GO';
+  if (n >= 74000 && n <= 76799) return 'GO';
+  if (n >= 76800 && n <= 76999) return 'RO';
+  if (n >= 77000 && n <= 77999) return 'TO';
+  if (n >= 78000 && n <= 78899) return 'MT';
+  if (n >= 79000 && n <= 79999) return 'MS';
+  if (n >= 80000 && n <= 87999) return 'PR';
+  if (n >= 88000 && n <= 89999) return 'SC';
+  if (n >= 90000 && n <= 99999) return 'RS';
+  return null;
+}
+
 // Store CEP origins
 const STORE_CEPS: Record<string, string> = {
   centro: '35010002',
