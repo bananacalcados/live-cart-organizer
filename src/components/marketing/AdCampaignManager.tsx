@@ -82,6 +82,7 @@ export default function AdCampaignManager() {
   const [nurtureSteps, setNurtureSteps] = useState<NurtureStep[]>([]);
   const [showLeads, setShowLeads] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [newProductKeyword, setNewProductKeyword] = useState<Record<number, string>>({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
