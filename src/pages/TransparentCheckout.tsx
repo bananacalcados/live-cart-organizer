@@ -31,6 +31,7 @@ interface OrderData {
   checkoutStartedAt: string | null;
   freeShipping: boolean;
   shippingCost: number;
+  eventId?: string;
 }
 
 interface PixData {
