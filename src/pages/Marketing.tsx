@@ -1574,6 +1574,11 @@ export default function Marketing() {
             <MarketingCalendar />
           </TabsContent>
 
+          {/* ── IA ADS ── */}
+          <TabsContent value="ai_ads" className="space-y-4">
+            <AdCampaignManager />
+          </TabsContent>
+
           {/* Lead WhatsApp Chat Dialog */}
           <LeadWhatsAppDialog
             open={!!leadChatPhone}
