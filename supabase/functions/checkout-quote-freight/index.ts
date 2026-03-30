@@ -24,7 +24,7 @@ serve(async (req) => {
   }
 
   try {
-    const { recipient_cep, store, total_value, weight_kg, items_count, order_id } = await req.json();
+    const { recipient_cep, store, total_value, weight_kg, items_count, order_id, event_id } = await req.json();
     if (!recipient_cep) throw new Error('recipient_cep is required');
 
     const cepDigits = recipient_cep.replace(/\D/g, '');
