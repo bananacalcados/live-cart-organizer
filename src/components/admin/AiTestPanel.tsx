@@ -53,8 +53,29 @@ export function AiTestPanel() {
     setSaving(true);
     try {
       await saveSetting("concierge_test_mode", enabled);
+      if (enabled && productionMode) {
+        await saveSetting("concierge_production_mode", false);
+        setProductionMode(false);
+      }
       setTestMode(enabled);
-      toast.success(enabled ? "Modo teste ATIVADO — Bia responde apenas o número de teste" : "Modo teste DESATIVADO — Bia desligada");
+      toast.success(enabled ? "Modo teste ATIVADO — Bia responde apenas o número de teste" : "Modo teste DESATIVADO");
+    } catch {
+      toast.error("Erro ao salvar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleProductionMode = async (enabled: boolean) => {
+    setSaving(true);
+    try {
+      await saveSetting("concierge_production_mode", enabled);
+      if (enabled && testMode) {
+        await saveSetting("concierge_test_mode", false);
+        setTestMode(false);
+      }
+      setProductionMode(enabled);
+      toast.success(enabled ? "🚀 Modo PRODUÇÃO ATIVADO — Bia responde TODOS os clientes" : "Modo produção DESATIVADO");
     } catch {
       toast.error("Erro ao salvar");
     } finally {
