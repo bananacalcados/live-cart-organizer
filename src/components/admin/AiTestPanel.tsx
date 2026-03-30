@@ -11,6 +11,7 @@ import { FlaskConical, RotateCcw, Phone, Loader2, Power } from "lucide-react";
 
 export function AiTestPanel() {
   const [testMode, setTestMode] = useState(false);
+  const [productionMode, setProductionMode] = useState(false);
   const [testPhone, setTestPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -26,12 +27,13 @@ export function AiTestPanel() {
       const { data } = await supabase
         .from("app_settings")
         .select("key, value")
-        .in("key", ["concierge_test_mode", "concierge_test_phone"]);
+        .in("key", ["concierge_test_mode", "concierge_test_phone", "concierge_production_mode"]);
 
       if (data) {
         for (const row of data) {
           if (row.key === "concierge_test_mode") setTestMode(row.value === true || row.value === "true");
           if (row.key === "concierge_test_phone") setTestPhone(String(row.value || "").replace(/"/g, ""));
+          if (row.key === "concierge_production_mode") setProductionMode(row.value === true || row.value === "true");
         }
       }
     } catch (err) {

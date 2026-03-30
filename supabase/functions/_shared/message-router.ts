@@ -172,18 +172,20 @@ export async function routeMessage(
     return { agent: 'none', reason: 'operator_cooldown' };
   }
 
-  // 5. Check concierge test mode — only route to concierge if enabled + phone matches
-  let conciergeEnabled = false;
+  // 5. Check concierge mode — production (all phones) or test (single phone)
+  let conciergeTestMode = false;
+  let conciergeProductionMode = false;
   let conciergeTestPhone: string | null = null;
   try {
     const { data: settings } = await supabase
       .from('app_settings')
       .select('key, value')
-      .in('key', ['concierge_test_mode', 'concierge_test_phone']);
+      .in('key', ['concierge_test_mode', 'concierge_test_phone', 'concierge_production_mode']);
     if (settings) {
       for (const s of settings) {
-        if (s.key === 'concierge_test_mode') conciergeEnabled = s.value === true || s.value === 'true';
+        if (s.key === 'concierge_test_mode') conciergeTestMode = s.value === true || s.value === 'true';
         if (s.key === 'concierge_test_phone') conciergeTestPhone = String(s.value || '').replace(/"/g, '');
+        if (s.key === 'concierge_production_mode') conciergeProductionMode = s.value === true || s.value === 'true';
       }
     }
   } catch (err) {
@@ -191,7 +193,10 @@ export async function routeMessage(
   }
 
   const conciergeAvailableForPhone = (() => {
-    if (!conciergeEnabled || !conciergeTestPhone) return false;
+    // Production mode: Bia responds to everyone
+    if (conciergeProductionMode) return true;
+    // Test mode: Bia responds only to the test phone
+    if (!conciergeTestMode || !conciergeTestPhone) return false;
     const phoneSuffix = normalizedPhone.slice(-8);
     const testSuffix = conciergeTestPhone.replace(/\D/g, '').slice(-8);
     return phoneSuffix === testSuffix;
