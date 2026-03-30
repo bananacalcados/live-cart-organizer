@@ -391,6 +391,14 @@ ${cancellationCount >= 2 ? '- ⚠️ ATENÇÃO: próximo cancelamento resultará
 - notify_presenter: notificar apresentadora
 - generate_boleto: gerar boleto bancário
 - mark_delayed_desistente: marcar cliente que quer pagar no futuro
+- lookup_cep: consultar CEP via ViaCEP para preencher endereço automaticamente (rua, bairro, cidade, estado)
+
+## Regra de Endereço PRÁTICA
+- Quando o cliente enviar um CEP, use lookup_cep IMEDIATAMENTE para obter rua, bairro, cidade e estado.
+- Depois, peça APENAS o número e complemento (se necessário).
+- Em seguida, confirme o endereço completo de uma vez: "Então ficou: Rua X, Nº Y, Bairro Z, Cidade - UF, CEP 00000-000. Tá certinho?"
+- Se o cliente disser que já passou o endereço, NÃO peça de novo. Confirme o que já tem e pergunte se está correto.
+- Se o endereço já estiver completo nos dados coletados, NÃO peça novamente. Apenas confirme e avance.
 
 ## Regras de Stage
 - endereco/confirmar_endereco: extraia dados de endereço. Se completo → advance_stage para dados_pessoais.
