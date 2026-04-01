@@ -1437,6 +1437,10 @@ export default function ChatPage() {
         onFinish={async (reason) => {
           if (selectedPhone) {
             await finishConversation(selectedPhone, reason);
+            // Immediately update conversations state so UI reflects the change
+            setConversations(prev => prev.map(c =>
+              c.phone === selectedPhone ? { ...c, isFinished: true } : c
+            ));
             toast.success('Conversa finalizada!');
             setShowFinishDialog(false);
             setSelectedPhone(null);
