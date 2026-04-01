@@ -203,6 +203,14 @@ serve(async (req) => {
         // Also try matching with [IA] prefix (concierge saves "[IA] msg" but webhook echo has just "msg")
         if (messageId && displayMessage) {
           const messagesToMatch = [displayMessage, `[IA] ${displayMessage}`];
+          // Also match the frontend label for media messages (e.g. "[áudio]" vs "📎 audio")
+          const mediaLabelMap: Record<string, string> = { audio: '[áudio]', image: '[imagem]', video: '[vídeo]', document: '[documento]' };
+          if (mediaInfo?.mediaType && mediaLabelMap[mediaInfo.mediaType]) {
+            messagesToMatch.push(mediaLabelMap[mediaInfo.mediaType]);
+          }
+
+          // Time window: only match messages from the last 5 minutes to avoid stale dedup
+          const dedupCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
           for (const matchMsg of messagesToMatch) {
             let dedupQuery = supabase
@@ -211,6 +219,7 @@ serve(async (req) => {
               .eq('phone', phone)
               .eq('direction', 'outgoing')
               .eq('message', matchMsg)
+              .gte('created_at', dedupCutoff)
               .order('created_at', { ascending: false })
               .limit(1);
 
