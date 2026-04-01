@@ -9,6 +9,20 @@
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const AI_MESSAGE_PREFIX_REGEX = /^\[IA(?:-[A-Z]+)?\]\s*/i;
+const AUTOMATED_DUPLICATE_WINDOW_MS = 15_000;
+
+function isAiTaggedMessage(message: string | null | undefined): boolean {
+  return AI_MESSAGE_PREFIX_REGEX.test((message || '').trim());
+}
+
+function normalizeAutomatedMessage(message: string | null | undefined): string {
+  return (message || '')
+    .replace(AI_MESSAGE_PREFIX_REGEX, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type RouteAgent =
@@ -293,19 +307,39 @@ export async function isOperatorCooldownActive(
 ): Promise<boolean> {
   try {
     const cooldownCutoff = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
-    const { data: recentManual } = await supabase
+    const { data: recentOutgoing } = await supabase
       .from('whatsapp_messages')
-      .select('id, message')
+      .select('id, message, created_at')
       .eq('phone', phone)
       .eq('direction', 'outgoing')
       .gt('created_at', cooldownCutoff)
-      .not('message', 'ilike', '%[IA]%')
-      .not('message', 'ilike', '%[IA-ADS]%')
-      .not('message', 'ilike', '%[IA-CONCIERGE]%')
-      .not('message', 'ilike', '%[IA-LIVETE]%')
-      .limit(1);
+      .order('created_at', { ascending: false })
+      .limit(20);
 
-    return !!(recentManual && recentManual.length > 0);
+    if (!recentOutgoing?.length) return false;
+
+    const taggedAutomations = recentOutgoing
+      .filter((msg) => isAiTaggedMessage(msg.message))
+      .map((msg) => ({
+        createdAt: new Date(msg.created_at).getTime(),
+        normalizedMessage: normalizeAutomatedMessage(msg.message),
+      }));
+
+    const recentManual = recentOutgoing.find((msg) => {
+      if (isAiTaggedMessage(msg.message)) return false;
+
+      const normalizedMessage = normalizeAutomatedMessage(msg.message);
+      const createdAt = new Date(msg.created_at).getTime();
+
+      const duplicatedAutomation = taggedAutomations.some((automation) =>
+        automation.normalizedMessage === normalizedMessage
+        && Math.abs(automation.createdAt - createdAt) <= AUTOMATED_DUPLICATE_WINDOW_MS
+      );
+
+      return !duplicatedAutomation;
+    });
+
+    return Boolean(recentManual);
   } catch (err) {
     console.error('[router] Error checking operator cooldown:', err);
     return false; // Don't block AI on error
