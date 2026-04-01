@@ -249,24 +249,32 @@ REGRAS GERAIS:
       { role: 'system', content: systemPrompt },
     ];
 
-    // Fetch recent messages
+    // Fetch only recent messages (last 2 hours) to avoid mixing old contexts
+    const historyWindowCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const { data: dbMessages } = await supabase
       .from('whatsapp_messages')
       .select('message, direction, created_at')
       .eq('phone', normalizedPhone)
-      .order('created_at', { ascending: true })
+      .gt('created_at', historyWindowCutoff)
+      .order('created_at', { ascending: false })
       .limit(historyLimit);
 
-    if (dbMessages) {
-      for (const msg of dbMessages) {
-        const text = msg.message?.trim();
-        if (!text) continue;
-        if (/\{\{\d+\}\}/.test(text)) continue;
-        chatMessages.push({
-          role: msg.direction === 'incoming' ? 'user' : 'assistant',
-          content: text,
-        });
-      }
+    // Reverse to chronological order after fetching most recent
+    const chronologicalMessages = (dbMessages || []).reverse();
+
+    for (const msg of chronologicalMessages) {
+      const text = msg.message?.trim();
+      if (!text) continue;
+      // Skip template placeholders
+      if (/\{\{\d+\}\}/.test(text)) continue;
+      // Skip messages from other AI agents (Concierge, Livete) to avoid context contamination
+      if (text.startsWith('[IA]') || text.startsWith('[IA-CONCIERGE]') || text.startsWith('[IA-LIVETE]')) continue;
+      // Skip mass dispatch messages
+      if (text.length > 500) continue;
+      chatMessages.push({
+        role: msg.direction === 'incoming' ? 'user' : 'assistant',
+        content: text.replace(/^\[IA-ADS\]\s*/i, ''),
+      });
     }
 
     // Add current message if not already in history
