@@ -949,14 +949,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             contactNames={chatContacts}
             selectedPhone={selectedPhone}
             selectedConversationKey={selectedConvKey}
-            onBulkFinish={async (phones) => {
-              for (const phone of phones) {
-                await finishConversation(phone);
-              }
-              setConversations(prev => prev.map(c =>
-                phones.includes(c.phone) ? { ...c, isFinished: true } : c
-              ));
-              toast.success(`${phones.length} conversa${phones.length !== 1 ? 's' : ''} finalizada${phones.length !== 1 ? 's' : ''}`);
+            onBulkFinish={(phones) => {
+              setBulkFinishPhones(phones);
+              setShowBulkFinishDialog(true);
             }}
             hasActiveSupport={hasActiveSupport}
             supportFilterActive={supportFilterActive}
