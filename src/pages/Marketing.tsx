@@ -1581,6 +1581,11 @@ export default function Marketing() {
             <AdCampaignManager />
           </TabsContent>
 
+          {/* ── IG AUTOMAÇÃO ── */}
+          <TabsContent value="ig_automation" className="space-y-4">
+            <InstagramCommentAutomation />
+          </TabsContent>
+
           {/* Lead WhatsApp Chat Dialog */}
           <LeadWhatsAppDialog
             open={!!leadChatPhone}
