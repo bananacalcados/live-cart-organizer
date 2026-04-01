@@ -951,6 +951,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               for (const phone of phones) {
                 await finishConversation(phone);
               }
+              setConversations(prev => prev.map(c =>
+                phones.includes(c.phone) ? { ...c, isFinished: true } : c
+              ));
               toast.success(`${phones.length} conversa${phones.length !== 1 ? 's' : ''} finalizada${phones.length !== 1 ? 's' : ''}`);
             }}
             hasActiveSupport={hasActiveSupport}
