@@ -583,7 +583,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         status: "sent",
         whatsapp_number_id: useMessenger ? null : numberIdToUse || null,
         message_id: metaMessageId,
-        channel: useMessenger ? messengerChannel : null,
+        channel: useMessenger ? messengerChannel : 'whatsapp',
       });
 
       await supabase
