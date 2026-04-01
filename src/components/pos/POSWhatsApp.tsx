@@ -1208,6 +1208,21 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           }
         }}
       />
+
+      {/* Transfer Conversation Dialog */}
+      {selectedPhone && (
+        <TransferConversationDialog
+          open={showTransferDialog}
+          onOpenChange={setShowTransferDialog}
+          phone={selectedPhone}
+          whatsappNumberId={selectedConvNumberId}
+          customerName={selectedConversation?.customerName}
+          currentAssignedTo={getAssignedTo(selectedConvKey || '')}
+          onTransferred={() => {
+            toast.success("Conversa transferida!");
+          }}
+        />
+      )}
     </div>
   );
 }
