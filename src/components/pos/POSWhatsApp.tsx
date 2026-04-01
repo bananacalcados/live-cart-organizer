@@ -1249,6 +1249,28 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           }}
         />
       )}
+      {/* Bulk Finish Dialog */}
+      <POSFinishConversationDialog
+        open={showBulkFinishDialog}
+        onOpenChange={setShowBulkFinishDialog}
+        onFinish={async (reason) => {
+          for (const phone of bulkFinishPhones) {
+            await finishConversation(phone, reason, selectedSellerId || undefined);
+            // Deactivate followups
+            supabase.from('chat_payment_followups')
+              .update({ is_active: false, completed_at: new Date().toISOString() } as any)
+              .eq('phone', phone)
+              .eq('is_active', true)
+              .then(() => {});
+          }
+          setConversations(prev => prev.map(c =>
+            bulkFinishPhones.includes(c.phone) ? { ...c, isFinished: true } : c
+          ));
+          setShowBulkFinishDialog(false);
+          toast.success(`${bulkFinishPhones.length} conversa${bulkFinishPhones.length !== 1 ? 's' : ''} finalizada${bulkFinishPhones.length !== 1 ? 's' : ''}`);
+          setBulkFinishPhones([]);
+        }}
+      />
     </div>
   );
 }
