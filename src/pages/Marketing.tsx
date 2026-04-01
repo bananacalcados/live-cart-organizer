@@ -49,6 +49,7 @@ import { LeadImportDialog } from "@/components/marketing/LeadImportDialog";
 import WhatsAppAdKeywords from "@/components/marketing/WhatsAppAdKeywords";
 import { MarketingAttributionDashboard } from "@/components/marketing/MarketingAttributionDashboard";
 import AdCampaignManager from "@/components/marketing/AdCampaignManager";
+import InstagramCommentAutomation from "@/components/marketing/InstagramCommentAutomation";
 
 // ─── Types ──────────────────────────────────────
 
