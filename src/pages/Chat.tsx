@@ -763,28 +763,51 @@ export default function ChatPage() {
           <MessageCircle className="h-5 w-5 text-[#00a884]" />
           <span className="text-[#e9edef] font-semibold text-lg">WhatsApp</span>
         </div>
-        {/* Instance selector with "Todos" */}
-        <Select value={numberFilter} onValueChange={setNumberFilter}>
-          <SelectTrigger className="w-auto min-w-[200px] h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef]">
-            <Phone className="h-3.5 w-3.5 mr-2 text-[#00a884]" />
-            <SelectValue placeholder="Filtrar número" />
-          </SelectTrigger>
-          <SelectContent className="bg-[#233138] border-[#3b4a54]">
-            <SelectItem value="all" className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">Todos os WhatsApps</span>
-              </div>
-            </SelectItem>
-            {numbers.map((num) => (
-              <SelectItem key={num.id} value={num.id} className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{num.label}</span>
-                  <span className="text-[#8696a0] text-xs">{num.phone_display}</span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          {/* Multi-instance filter */}
+          <MultiInstanceFilter
+            numbers={numbers}
+            selectedIds={multiInstanceFilter}
+            onSelectedIdsChange={(ids) => {
+              setMultiInstanceFilter(ids);
+              // Reset legacy single filter when using multi
+              if (ids.length > 0) setNumberFilter('all');
+            }}
+            className="h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef] hover:bg-[#3b4a54]"
+          />
+          {/* Legacy single instance selector (shown when multi is empty) */}
+          {multiInstanceFilter.length === 0 && (
+            <Select value={numberFilter} onValueChange={setNumberFilter}>
+              <SelectTrigger className="w-auto min-w-[200px] h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef]">
+                <Phone className="h-3.5 w-3.5 mr-2 text-[#00a884]" />
+                <SelectValue placeholder="Filtrar número" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#233138] border-[#3b4a54]">
+                <SelectItem value="all" className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Todos os WhatsApps</span>
+                  </div>
+                </SelectItem>
+                {numbers.map((num) => (
+                  <SelectItem key={num.id} value={num.id} className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{num.label}</span>
+                      <span className="text-[#8696a0] text-xs">{num.phone_display}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {/* Agent filter (admins only) */}
+          {isAdmin && (
+            <AgentFilterSelector
+              value={viewAsUserId}
+              onValueChange={setViewAsUserId}
+              className="h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef]"
+            />
+          )}
+        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
