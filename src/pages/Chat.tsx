@@ -139,6 +139,7 @@ export default function ChatPage() {
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [numberFilter, setNumberFilter] = useState<string>('all');
+  const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>('all');
   const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [chatContacts, setChatContacts] = useState<ChatContact[]>([]);
