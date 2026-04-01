@@ -855,6 +855,7 @@ export default function Marketing() {
                 <TabsTrigger value="link_pages" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Link className="h-3.5 w-3.5" />Link Pages</TabsTrigger>
                 <TabsTrigger value="push_notifications" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Bell className="h-3.5 w-3.5" />Push</TabsTrigger>
                 <TabsTrigger value="ai_ads" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Brain className="h-3.5 w-3.5" />IA Ads</TabsTrigger>
+                <TabsTrigger value="ig_automation" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Instagram className="h-3.5 w-3.5" />IG Automação</TabsTrigger>
                 <button onClick={() => navigate('/marketing/email-marketing')} className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium gap-1 text-white/70 hover:text-white hover:bg-white/10 transition-colors"><Mail className="h-3.5 w-3.5" />Email Marketing</button>
               </TabsList>
             </ScrollArea>
