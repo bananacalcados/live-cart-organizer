@@ -1002,6 +1002,16 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="h-7 px-1.5 text-xs gap-1 text-blue-500 hover:text-blue-400"
+                  title="Transferir Conversa"
+                  onClick={() => setShowTransferDialog(true)}
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Transferir</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-amber-600"
                   title="Arquivar Conversa"
                   onClick={async () => {
