@@ -841,7 +841,22 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           )}
           {totalUnread > 0 && <Badge className="bg-white text-[#008069] border-0 text-xs font-bold">{totalUnread}</Badge>}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
+          {/* Multi-instance filter */}
+          <MultiInstanceFilter
+            numbers={storeNumbers}
+            selectedIds={multiInstanceFilter}
+            onSelectedIdsChange={setMultiInstanceFilter}
+            className="h-7 text-[10px] bg-white/10 border-white/20 text-white hover:bg-white/20"
+          />
+          {/* Agent filter (admins only) */}
+          {isAdmin && (
+            <AgentFilterSelector
+              value={viewAsUserId}
+              onValueChange={setViewAsUserId}
+              className="h-7 text-[10px] bg-white/10 border-white/20 text-white"
+            />
+          )}
           {selectedSellerId && (
             <Button
               variant="ghost"
