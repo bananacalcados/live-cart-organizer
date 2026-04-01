@@ -298,6 +298,7 @@ REGRAS GERAIS:
       body: JSON.stringify({
         model: 'google/gemini-3-flash-preview',
         messages: chatMessages,
+        max_tokens: 250,
         stream: false,
       }),
     });

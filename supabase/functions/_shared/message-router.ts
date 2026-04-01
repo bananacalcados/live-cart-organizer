@@ -295,11 +295,14 @@ export async function isOperatorCooldownActive(
     const cooldownCutoff = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
     const { data: recentManual } = await supabase
       .from('whatsapp_messages')
-      .select('id')
+      .select('id, message')
       .eq('phone', phone)
       .eq('direction', 'outgoing')
       .gt('created_at', cooldownCutoff)
       .not('message', 'ilike', '%[IA]%')
+      .not('message', 'ilike', '%[IA-ADS]%')
+      .not('message', 'ilike', '%[IA-CONCIERGE]%')
+      .not('message', 'ilike', '%[IA-LIVETE]%')
       .limit(1);
 
     return !!(recentManual && recentManual.length > 0);
