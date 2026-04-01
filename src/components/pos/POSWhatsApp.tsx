@@ -429,7 +429,26 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, finishedPhones, archivedPhones, awaitingPaymentPhones]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, enrichConversations, filterByAssignment]);
+
+  // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
+  // This handles cross-device realtime updates without disrupting the current UI
+  useEffect(() => {
+    setConversations(prev => {
+      if (prev.length === 0) return prev;
+      const normalizePhoneKey = (phone: string) => {
+        const digits = phone.replace(/\D/g, '');
+        return digits ? digits.slice(-8) : '';
+      };
+      return prev.map(c => ({
+        ...c,
+        isFinished: finishedPhones.has(normalizePhoneKey(c.phone)),
+        isArchived: archivedPhones.has(c.phone),
+        isAwaitingPayment: awaitingPaymentPhones.has(c.phone),
+      }));
+    });
+  }, [finishedPhones, archivedPhones, awaitingPaymentPhones]);
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
     let query = supabase
