@@ -86,6 +86,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
 
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
+
   // Store-specific WhatsApp number IDs
   const [storeNumberIds, setStoreNumberIds] = useState<string[]>([]);
   const [selectedSendNumberId, setSelectedSendNumberId] = useState<string | null>(null);
