@@ -1181,6 +1181,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           if (selectedPhone) {
             await finishConversation(selectedPhone, reason, selectedSellerId || undefined);
             
+            // Immediately update conversations state so UI reflects the change
+            setConversations(prev => prev.map(c =>
+              c.phone === selectedPhone ? { ...c, isFinished: true } : c
+            ));
+            
             // Auto-send NPS when reason is 'compra'
             if (reason === 'compra') {
               const conv = conversations.find(c => c.phone === selectedPhone);
