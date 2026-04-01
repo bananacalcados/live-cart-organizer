@@ -27,6 +27,10 @@ import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
 import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
 import { POSWhatsAppDashboard } from "./POSWhatsAppDashboard";
+import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
+import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
+import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
+import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 
 interface Props {
   storeId: string;
