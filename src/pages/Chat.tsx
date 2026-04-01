@@ -603,7 +603,7 @@ export default function ChatPage() {
         status: 'sent',
         whatsapp_number_id: numberId,
         message_id: sendResult.messageId || null,
-        channel: useMessenger ? messengerChannel : null,
+        channel: useMessenger ? messengerChannel : 'whatsapp',
       } as any);
       loadMessages(selectedPhone, false, selectedConvNumberId);
     }
