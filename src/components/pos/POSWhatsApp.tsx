@@ -96,6 +96,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
+  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
