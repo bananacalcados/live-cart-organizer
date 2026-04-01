@@ -84,6 +84,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(() => sessionStorage.getItem(sellerKey));
   const [selectedSellerName, setSelectedSellerName] = useState<string | null>(() => sessionStorage.getItem(sellerNameKey));
   const [showFinishDialog, setShowFinishDialog] = useState(false);
+  const [bulkFinishPhones, setBulkFinishPhones] = useState<string[]>([]);
+  const [showBulkFinishDialog, setShowBulkFinishDialog] = useState(false);
   const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
 
   const [showTransferDialog, setShowTransferDialog] = useState(false);
