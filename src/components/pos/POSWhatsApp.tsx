@@ -611,12 +611,13 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         if (error) throw error;
       }
 
-      await supabase.from("whatsapp_messages").insert({
+      const { error: insertErr } = await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
         message_id: audioMsgId,
         whatsapp_number_id: useMessenger ? null : numberIdToUse,
         channel: useMessenger ? messengerChannel : null,
       });
+      if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Áudio enviado!");
     } catch (error) {
