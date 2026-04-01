@@ -697,7 +697,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
         message_id: mediaMsgId,
         whatsapp_number_id: useMessenger ? null : numberIdToUse,
-        channel: useMessenger ? messengerChannel : null,
+        channel: useMessenger ? messengerChannel : 'whatsapp',
       });
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Mídia enviada!");
