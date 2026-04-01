@@ -31,6 +31,10 @@ import { POSFinishConversationDialog } from "@/components/pos/POSFinishConversat
 import { POSWhatsAppCheckoutDialog } from "@/components/pos/POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "@/components/pos/POSWhatsAppPixDialog";
 import { POSProductCatalogSender } from "@/components/pos/POSProductCatalogSender";
+import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
+import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
+import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
+import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import {
   Select,
   SelectContent,
