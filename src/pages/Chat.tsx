@@ -1481,6 +1481,19 @@ export default function ChatPage() {
           onOpenChange={setShowCatalog}
         />
       )}
+
+      {/* Transfer Conversation Dialog */}
+      {selectedPhone && (
+        <TransferConversationDialog
+          open={showTransferDialog}
+          onOpenChange={setShowTransferDialog}
+          phone={selectedPhone}
+          whatsappNumberId={selectedConvNumberId}
+          customerName={selectedConv?.customerName}
+          currentAssignedTo={getAssignedTo(selectedConvKey || '')}
+          onTransferred={() => loadConversations()}
+        />
+      )}
     </div>
   );
 }
