@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchInstagramSenderUsername } from "../_shared/meta-instagram-profile.ts";
+import { processCommentAutomation } from "../_shared/instagram-comment-automation.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -294,6 +295,22 @@ serve(async (req) => {
             console.error('Error saving comment:', error);
           } else {
             console.log(`Saved Instagram comment from ${username || fromId}: ${text.slice(0, 50)}`);
+
+            // Process comment automation rules (auto-reply, DM, flows)
+            try {
+              const automationResult = await processCommentAutomation(supabase, {
+                commentId: comment.id,
+                fromId,
+                username: senderName,
+                text,
+                mediaType,
+              });
+              if (automationResult.actions.length > 0) {
+                console.log(`Comment automations triggered: ${automationResult.actions.join(', ')}`);
+              }
+            } catch (autoErr) {
+              console.error('Error processing comment automation:', autoErr);
+            }
           }
 
           // Upsert chat_contacts

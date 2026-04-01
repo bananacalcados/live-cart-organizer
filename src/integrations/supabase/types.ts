@@ -4046,6 +4046,112 @@ export type Database = {
           },
         ]
       }
+      instagram_comment_actions: {
+        Row: {
+          action_type: string
+          comment_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          rule_id: string | null
+          status: string | null
+        }
+        Insert: {
+          action_type: string
+          comment_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          rule_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          action_type?: string
+          comment_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          rule_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_comment_actions_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_comment_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instagram_comment_rules: {
+        Row: {
+          action_reply_comment: boolean | null
+          action_send_dm: boolean | null
+          action_trigger_automation: boolean | null
+          ai_generate_reply: boolean | null
+          ai_prompt: string | null
+          automation_flow_id: string | null
+          cooldown_minutes: number | null
+          created_at: string
+          dm_message_text: string | null
+          id: string
+          is_active: boolean
+          media_types: string[] | null
+          name: string
+          reply_comment_text: string | null
+          trigger_keywords: string[] | null
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          action_reply_comment?: boolean | null
+          action_send_dm?: boolean | null
+          action_trigger_automation?: boolean | null
+          ai_generate_reply?: boolean | null
+          ai_prompt?: string | null
+          automation_flow_id?: string | null
+          cooldown_minutes?: number | null
+          created_at?: string
+          dm_message_text?: string | null
+          id?: string
+          is_active?: boolean
+          media_types?: string[] | null
+          name: string
+          reply_comment_text?: string | null
+          trigger_keywords?: string[] | null
+          trigger_type?: string
+          updated_at?: string
+        }
+        Update: {
+          action_reply_comment?: boolean | null
+          action_send_dm?: boolean | null
+          action_trigger_automation?: boolean | null
+          ai_generate_reply?: boolean | null
+          ai_prompt?: string | null
+          automation_flow_id?: string | null
+          cooldown_minutes?: number | null
+          created_at?: string
+          dm_message_text?: string | null
+          id?: string
+          is_active?: boolean
+          media_types?: string[] | null
+          name?: string
+          reply_comment_text?: string | null
+          trigger_keywords?: string[] | null
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_comment_rules_automation_flow_id_fkey"
+            columns: ["automation_flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       internal_cashback: {
         Row: {
           cashback_amount: number
