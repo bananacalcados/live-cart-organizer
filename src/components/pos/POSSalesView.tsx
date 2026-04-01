@@ -476,28 +476,51 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     const name = `${rfm.first_name || ''} ${rfm.last_name || ''}`.trim();
     const phone = rfm.phone?.replace(/\D/g, '') || '';
     try {
-      // Check if customer already exists by phone or email
+      // Check if customer already exists by EXACT phone or CPF match (not substring)
       let existing: any = null;
-      if (phone.length >= 8) {
+      if (rfm.cpf) {
+        const cpfDigits = rfm.cpf.replace(/\D/g, '');
+        if (cpfDigits.length >= 11) {
+          const { data } = await supabase
+            .from('pos_customers')
+            .select('*')
+            .eq('cpf', cpfDigits)
+            .maybeSingle();
+          existing = data;
+        }
+      }
+      if (!existing && phone.length >= 10) {
+        // Match by full phone (last 10+ digits) to avoid false positives
         const { data } = await supabase
           .from('pos_customers')
           .select('*')
-          .ilike('whatsapp', `%${phone.slice(-8)}%`)
-          .limit(1)
-          .maybeSingle();
-        existing = data;
+          .or(`whatsapp.eq.${phone},whatsapp.eq.55${phone},whatsapp.ilike.%${phone.slice(-10)}%`)
+          .limit(5);
+        // If multiple results, try to find exact name match to avoid wrong customer
+        if (data && data.length === 1) {
+          existing = data[0];
+        } else if (data && data.length > 1) {
+          // Pick the one whose name matches the RFM name best
+          const rfmNameLower = name.toLowerCase();
+          existing = data.find(d => d.name?.toLowerCase() === rfmNameLower) || null;
+          // If no name match, don't auto-select — let user decide
+        }
       }
       if (!existing && rfm.email) {
         const { data } = await supabase
           .from('pos_customers')
           .select('*')
           .ilike('email', rfm.email)
-          .limit(1)
           .maybeSingle();
         existing = data;
       }
 
       if (existing) {
+        // Update existing customer name if it's different and RFM has a better name
+        if (name && existing.name !== name) {
+          await supabase.from('pos_customers').update({ name } as any).eq('id', existing.id);
+          existing = { ...existing, name };
+        }
         toast.success("Cliente já cadastrado — selecionado automaticamente!");
         setSelectedCustomer(existing);
         lookupCashback(existing);
