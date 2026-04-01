@@ -909,7 +909,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           selectedPhone ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
         )}>
           <ConversationList
-            conversations={conversations}
+            conversations={multiInstanceFilter.length > 0
+              ? conversations.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
+              : conversations}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onSelectConversation={handleSelectConversation}
