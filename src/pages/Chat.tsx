@@ -1064,6 +1064,16 @@ export default function ChatPage() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="h-7 px-1.5 text-xs gap-1 text-blue-400 hover:text-blue-300"
+                    title="Transferir Conversa"
+                    onClick={() => setShowTransferDialog(true)}
+                  >
+                    <ArrowRightLeft className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">Transferir</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     className="h-7 px-1.5 text-xs gap-1 text-[#8696a0] hover:text-red-400"
                     title="Finalizar Conversa"
                     onClick={() => setShowFinishDialog(true)}
