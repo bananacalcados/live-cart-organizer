@@ -1376,6 +1376,39 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_conversation_assignments: {
+        Row: {
+          assigned_by: string | null
+          assigned_to: string
+          created_at: string
+          id: string
+          notes: string | null
+          phone: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          assigned_by?: string | null
+          assigned_to: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          phone: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          assigned_by?: string | null
+          assigned_to?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          phone?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       chat_finish_reasons: {
         Row: {
           color: string | null

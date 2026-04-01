@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3 } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,10 @@ import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
 import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
 import { POSWhatsAppDashboard } from "./POSWhatsAppDashboard";
+import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
+import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
+import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
+import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 
 interface Props {
   storeId: string;
@@ -82,6 +86,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
 
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
+
   // Store-specific WhatsApp number IDs
   const [storeNumberIds, setStoreNumberIds] = useState<string[]>([]);
   const [selectedSendNumberId, setSelectedSendNumberId] = useState<string | null>(null);
@@ -89,6 +96,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
+  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
@@ -403,7 +411,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       });
 
       convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
-      setConversations(enrichConversations(convs, phoneMessages));
+      setConversations(filterByAssignment(enrichConversations(convs, phoneMessages)));
     };
 
     loadConversations();
@@ -833,7 +841,22 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           )}
           {totalUnread > 0 && <Badge className="bg-white text-[#008069] border-0 text-xs font-bold">{totalUnread}</Badge>}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
+          {/* Multi-instance filter */}
+          <MultiInstanceFilter
+            numbers={storeNumbers}
+            selectedIds={multiInstanceFilter}
+            onSelectedIdsChange={setMultiInstanceFilter}
+            className="h-7 text-[10px] bg-white/10 border-white/20 text-white hover:bg-white/20"
+          />
+          {/* Agent filter (admins only) */}
+          {isAdmin && (
+            <AgentFilterSelector
+              value={viewAsUserId}
+              onValueChange={setViewAsUserId}
+              className="h-7 text-[10px] bg-white/10 border-white/20 text-white"
+            />
+          )}
           {selectedSellerId && (
             <Button
               variant="ghost"
@@ -886,7 +909,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           selectedPhone ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
         )}>
           <ConversationList
-            conversations={conversations}
+            conversations={multiInstanceFilter.length > 0
+              ? conversations.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
+              : conversations}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onSelectConversation={handleSelectConversation}
@@ -976,6 +1001,16 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                   <span className="hidden xl:inline">Catálogo</span>
                 </Button>
                 <CreateSupportTicketDialog phone={selectedPhone} customerName={selectedConversation?.customerName} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-1.5 text-xs gap-1 text-blue-500 hover:text-blue-400"
+                  title="Transferir Conversa"
+                  onClick={() => setShowTransferDialog(true)}
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Transferir</span>
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1175,6 +1210,21 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           }
         }}
       />
+
+      {/* Transfer Conversation Dialog */}
+      {selectedPhone && (
+        <TransferConversationDialog
+          open={showTransferDialog}
+          onOpenChange={setShowTransferDialog}
+          phone={selectedPhone}
+          whatsappNumberId={selectedConvNumberId}
+          customerName={selectedConversation?.customerName}
+          currentAssignedTo={getAssignedTo(selectedConvKey || '')}
+          onTransferred={() => {
+            toast.success("Conversa transferida!");
+          }}
+        />
+      )}
     </div>
   );
 }

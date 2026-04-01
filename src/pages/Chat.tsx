@@ -4,7 +4,7 @@ import {
   Search, Phone, Users, MessageCircle, Filter, ArrowLeft,
   Send, Mic, Image, Video, Paperclip, X, Check, CheckCheck,
   Clock, Camera, Plus, Smile, MoreVertical, ChevronDown, Square,
-  FileText, UserPlus, Pencil, PhoneOff, CreditCard, QrCode, ShoppingBag,
+  FileText, UserPlus, Pencil, PhoneOff, CreditCard, QrCode, ShoppingBag, ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,10 @@ import { POSFinishConversationDialog } from "@/components/pos/POSFinishConversat
 import { POSWhatsAppCheckoutDialog } from "@/components/pos/POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "@/components/pos/POSWhatsAppPixDialog";
 import { POSProductCatalogSender } from "@/components/pos/POSProductCatalogSender";
+import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
+import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
+import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
+import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import {
   Select,
   SelectContent,
@@ -135,6 +139,7 @@ export default function ChatPage() {
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [numberFilter, setNumberFilter] = useState<string>('all');
+  const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<ConversationStatusFilter>('all');
   const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [chatContacts, setChatContacts] = useState<ChatContact[]>([]);
@@ -156,6 +161,7 @@ export default function ChatPage() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [showPix, setShowPix] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
 
   const [selectedMedia, setSelectedMedia] = useState<{ file: File; type: 'image' | 'audio' | 'video' | 'document'; previewUrl: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -183,6 +189,7 @@ export default function ChatPage() {
   const { sendMessage: zapiSend, sendMedia: zapiSendMedia } = useZapi();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
+  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
@@ -278,7 +285,10 @@ export default function ChatPage() {
 
   // ── Load conversations via RPC - separate calls for regular and dispatch ──
   const loadConversations = useCallback(async () => {
-    const numberId = numberFilter !== 'all' ? numberFilter : undefined;
+    // Multi-instance: if specific instances selected, load all and filter client-side
+    // Single instance legacy: use numberFilter for backward compat
+    const useMulti = multiInstanceFilter.length > 0;
+    const numberId = (!useMulti && numberFilter !== 'all') ? numberFilter : undefined;
 
     // Load regular (non-dispatch) and dispatch conversations in parallel
     const [regularResult, dispatchResult] = await Promise.all([
@@ -294,11 +304,19 @@ export default function ChatPage() {
 
     if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
 
-    const allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
+    let allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
+    
+    // Client-side multi-instance filter
+    if (useMulti) {
+      allRows = allRows.filter((row: any) => 
+        multiInstanceFilter.includes(row.whatsapp_number_id)
+      );
+    }
+
     const { convs, phoneMessages } = mapRowsToConvs(allRows);
 
-    setConversations(enrichConversations(convs, phoneMessages));
-  }, [numberFilter, mapRowsToConvs, enrichConversations]);
+    setConversations(filterByAssignment(enrichConversations(convs, phoneMessages)));
+  }, [numberFilter, multiInstanceFilter, mapRowsToConvs, enrichConversations, filterByAssignment]);
 
   useEffect(() => {
     loadConversations();
@@ -745,28 +763,51 @@ export default function ChatPage() {
           <MessageCircle className="h-5 w-5 text-[#00a884]" />
           <span className="text-[#e9edef] font-semibold text-lg">WhatsApp</span>
         </div>
-        {/* Instance selector with "Todos" */}
-        <Select value={numberFilter} onValueChange={setNumberFilter}>
-          <SelectTrigger className="w-auto min-w-[200px] h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef]">
-            <Phone className="h-3.5 w-3.5 mr-2 text-[#00a884]" />
-            <SelectValue placeholder="Filtrar número" />
-          </SelectTrigger>
-          <SelectContent className="bg-[#233138] border-[#3b4a54]">
-            <SelectItem value="all" className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">Todos os WhatsApps</span>
-              </div>
-            </SelectItem>
-            {numbers.map((num) => (
-              <SelectItem key={num.id} value={num.id} className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{num.label}</span>
-                  <span className="text-[#8696a0] text-xs">{num.phone_display}</span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          {/* Multi-instance filter */}
+          <MultiInstanceFilter
+            numbers={numbers}
+            selectedIds={multiInstanceFilter}
+            onSelectedIdsChange={(ids) => {
+              setMultiInstanceFilter(ids);
+              // Reset legacy single filter when using multi
+              if (ids.length > 0) setNumberFilter('all');
+            }}
+            className="h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef] hover:bg-[#3b4a54]"
+          />
+          {/* Legacy single instance selector (shown when multi is empty) */}
+          {multiInstanceFilter.length === 0 && (
+            <Select value={numberFilter} onValueChange={setNumberFilter}>
+              <SelectTrigger className="w-auto min-w-[200px] h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef]">
+                <Phone className="h-3.5 w-3.5 mr-2 text-[#00a884]" />
+                <SelectValue placeholder="Filtrar número" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#233138] border-[#3b4a54]">
+                <SelectItem value="all" className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Todos os WhatsApps</span>
+                  </div>
+                </SelectItem>
+                {numbers.map((num) => (
+                  <SelectItem key={num.id} value={num.id} className="text-[#e9edef] focus:bg-[#2a3942] focus:text-[#e9edef]">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{num.label}</span>
+                      <span className="text-[#8696a0] text-xs">{num.phone_display}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {/* Agent filter (admins only) */}
+          {isAdmin && (
+            <AgentFilterSelector
+              value={viewAsUserId}
+              onValueChange={setViewAsUserId}
+              className="h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef]"
+            />
+          )}
+        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -1019,6 +1060,16 @@ export default function ChatPage() {
                   <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#8696a0]" onClick={() => setShowCatalog(true)} title="Catálogo Shopify">
                     <ShoppingBag className="h-3.5 w-3.5" />
                     <span className="hidden xl:inline">Catálogo</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-1.5 text-xs gap-1 text-blue-400 hover:text-blue-300"
+                    title="Transferir Conversa"
+                    onClick={() => setShowTransferDialog(true)}
+                  >
+                    <ArrowRightLeft className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">Transferir</span>
                   </Button>
                   <Button
                     variant="ghost"
@@ -1428,6 +1479,19 @@ export default function ChatPage() {
           selectedNumberId={getActiveNumberId()}
           open={showCatalog}
           onOpenChange={setShowCatalog}
+        />
+      )}
+
+      {/* Transfer Conversation Dialog */}
+      {selectedPhone && (
+        <TransferConversationDialog
+          open={showTransferDialog}
+          onOpenChange={setShowTransferDialog}
+          phone={selectedPhone}
+          whatsappNumberId={selectedConvNumberId}
+          customerName={selectedConv?.customerName}
+          currentAssignedTo={getAssignedTo(selectedConvKey || '')}
+          onTransferred={() => loadConversations()}
         />
       )}
     </div>
