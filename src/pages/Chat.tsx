@@ -189,6 +189,7 @@ export default function ChatPage() {
   const { sendMessage: zapiSend, sendMedia: zapiSendMedia } = useZapi();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
+  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
