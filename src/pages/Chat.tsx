@@ -285,7 +285,10 @@ export default function ChatPage() {
 
   // ── Load conversations via RPC - separate calls for regular and dispatch ──
   const loadConversations = useCallback(async () => {
-    const numberId = numberFilter !== 'all' ? numberFilter : undefined;
+    // Multi-instance: if specific instances selected, load all and filter client-side
+    // Single instance legacy: use numberFilter for backward compat
+    const useMulti = multiInstanceFilter.length > 0;
+    const numberId = (!useMulti && numberFilter !== 'all') ? numberFilter : undefined;
 
     // Load regular (non-dispatch) and dispatch conversations in parallel
     const [regularResult, dispatchResult] = await Promise.all([
@@ -301,11 +304,19 @@ export default function ChatPage() {
 
     if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
 
-    const allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
+    let allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
+    
+    // Client-side multi-instance filter
+    if (useMulti) {
+      allRows = allRows.filter((row: any) => 
+        multiInstanceFilter.includes(row.whatsapp_number_id)
+      );
+    }
+
     const { convs, phoneMessages } = mapRowsToConvs(allRows);
 
-    setConversations(enrichConversations(convs, phoneMessages));
-  }, [numberFilter, mapRowsToConvs, enrichConversations]);
+    setConversations(filterByAssignment(enrichConversations(convs, phoneMessages)));
+  }, [numberFilter, multiInstanceFilter, mapRowsToConvs, enrichConversations, filterByAssignment]);
 
   useEffect(() => {
     loadConversations();
