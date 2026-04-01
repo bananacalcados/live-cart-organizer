@@ -22,10 +22,25 @@ export function useConversationEnrichment() {
   const { numbers } = useWhatsAppNumberStore();
 
   const loadFinished = useCallback(async () => {
-    const { data } = await supabase.from('chat_finished_conversations').select('phone');
-    if (data) {
-      setFinishedPhones(new Set((data as FinishedConversation[]).map(d => normalizePhoneKey(d.phone)).filter(Boolean)));
+    let allFinished: FinishedConversation[] = [];
+    let from = 0;
+    const PAGE_SIZE = 1000;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('chat_finished_conversations')
+        .select('phone')
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error || !data || data.length === 0) break;
+
+      allFinished = allFinished.concat(data as FinishedConversation[]);
+
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
+
+    setFinishedPhones(new Set(allFinished.map(d => normalizePhoneKey(d.phone)).filter(Boolean)));
   }, []);
 
   const loadArchived = useCallback(async () => {
