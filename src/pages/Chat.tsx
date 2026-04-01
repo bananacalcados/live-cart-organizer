@@ -161,6 +161,7 @@ export default function ChatPage() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [showPix, setShowPix] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
 
   const [selectedMedia, setSelectedMedia] = useState<{ file: File; type: 'image' | 'audio' | 'video' | 'document'; previewUrl: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
