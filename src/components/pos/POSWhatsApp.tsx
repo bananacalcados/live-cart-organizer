@@ -84,6 +84,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(() => sessionStorage.getItem(sellerKey));
   const [selectedSellerName, setSelectedSellerName] = useState<string | null>(() => sessionStorage.getItem(sellerNameKey));
   const [showFinishDialog, setShowFinishDialog] = useState(false);
+  const [bulkFinishPhones, setBulkFinishPhones] = useState<string[]>([]);
+  const [showBulkFinishDialog, setShowBulkFinishDialog] = useState(false);
   const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
 
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -947,14 +949,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             contactNames={chatContacts}
             selectedPhone={selectedPhone}
             selectedConversationKey={selectedConvKey}
-            onBulkFinish={async (phones) => {
-              for (const phone of phones) {
-                await finishConversation(phone);
-              }
-              setConversations(prev => prev.map(c =>
-                phones.includes(c.phone) ? { ...c, isFinished: true } : c
-              ));
-              toast.success(`${phones.length} conversa${phones.length !== 1 ? 's' : ''} finalizada${phones.length !== 1 ? 's' : ''}`);
+            onBulkFinish={(phones) => {
+              setBulkFinishPhones(phones);
+              setShowBulkFinishDialog(true);
             }}
             hasActiveSupport={hasActiveSupport}
             supportFilterActive={supportFilterActive}
@@ -1252,6 +1249,28 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           }}
         />
       )}
+      {/* Bulk Finish Dialog */}
+      <POSFinishConversationDialog
+        open={showBulkFinishDialog}
+        onOpenChange={setShowBulkFinishDialog}
+        onFinish={async (reason) => {
+          for (const phone of bulkFinishPhones) {
+            await finishConversation(phone, reason, selectedSellerId || undefined);
+            // Deactivate followups
+            supabase.from('chat_payment_followups')
+              .update({ is_active: false, completed_at: new Date().toISOString() } as any)
+              .eq('phone', phone)
+              .eq('is_active', true)
+              .then(() => {});
+          }
+          setConversations(prev => prev.map(c =>
+            bulkFinishPhones.includes(c.phone) ? { ...c, isFinished: true } : c
+          ));
+          setShowBulkFinishDialog(false);
+          toast.success(`${bulkFinishPhones.length} conversa${bulkFinishPhones.length !== 1 ? 's' : ''} finalizada${bulkFinishPhones.length !== 1 ? 's' : ''}`);
+          setBulkFinishPhones([]);
+        }}
+      />
     </div>
   );
 }
