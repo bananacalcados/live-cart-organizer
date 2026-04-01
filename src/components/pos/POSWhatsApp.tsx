@@ -411,7 +411,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       });
 
       convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
-      setConversations(enrichConversations(convs, phoneMessages));
+      setConversations(filterByAssignment(enrichConversations(convs, phoneMessages)));
     };
 
     loadConversations();
