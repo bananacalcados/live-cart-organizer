@@ -40,11 +40,10 @@ export function TransferConversationDialog({
     if (!open) return;
     const load = async () => {
       const { data } = await supabase
-        .from("user_profiles")
+        .from("profiles")
         .select("user_id, display_name")
-        .eq("is_active", true)
         .order("display_name");
-      if (data) setAgents(data.filter((a: any) => a.user_id !== currentAssignedTo));
+      if (data) setAgents(data.filter((a: any) => a.user_id !== currentAssignedTo && a.display_name));
     };
     load();
   }, [open, currentAssignedTo]);
