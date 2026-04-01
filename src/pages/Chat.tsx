@@ -336,6 +336,23 @@ export default function ChatPage() {
     return () => { supabase.removeChannel(channel); };
   }, [loadConversations]);
 
+  // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
+  useEffect(() => {
+    setConversations(prev => {
+      if (prev.length === 0) return prev;
+      const normalizePhoneKey = (phone: string) => {
+        const digits = phone.replace(/\D/g, '');
+        return digits ? digits.slice(-8) : '';
+      };
+      return prev.map(c => ({
+        ...c,
+        isFinished: finishedPhones.has(normalizePhoneKey(c.phone)),
+        isArchived: archivedPhones.has(c.phone),
+        isAwaitingPayment: awaitingPaymentPhones.has(c.phone),
+      }));
+    });
+  }, [finishedPhones, archivedPhones, awaitingPaymentPhones]);
+
   // ── Load messages for a phone (paginated) ──
   const PAGE_SIZE = 50;
 
