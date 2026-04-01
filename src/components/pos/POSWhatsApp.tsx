@@ -583,7 +583,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         status: "sent",
         whatsapp_number_id: useMessenger ? null : numberIdToUse || null,
         message_id: metaMessageId,
-        channel: useMessenger ? messengerChannel : null,
+        channel: useMessenger ? messengerChannel : 'whatsapp',
       });
 
       await supabase
@@ -644,7 +644,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
         message_id: audioMsgId,
         whatsapp_number_id: useMessenger ? null : numberIdToUse,
-        channel: useMessenger ? messengerChannel : null,
+        channel: useMessenger ? messengerChannel : 'whatsapp',
       });
       if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
       loadMessages(selectedPhone, selectedConvNumberId);
@@ -697,7 +697,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
         message_id: mediaMsgId,
         whatsapp_number_id: useMessenger ? null : numberIdToUse,
-        channel: useMessenger ? messengerChannel : null,
+        channel: useMessenger ? messengerChannel : 'whatsapp',
       });
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Mídia enviada!");
