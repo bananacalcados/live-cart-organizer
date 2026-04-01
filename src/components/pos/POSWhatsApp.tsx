@@ -644,7 +644,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
         message_id: audioMsgId,
         whatsapp_number_id: useMessenger ? null : numberIdToUse,
-        channel: useMessenger ? messengerChannel : null,
+        channel: useMessenger ? messengerChannel : 'whatsapp',
       });
       if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
       loadMessages(selectedPhone, selectedConvNumberId);
