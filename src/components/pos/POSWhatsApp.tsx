@@ -429,7 +429,26 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, finishedPhones, archivedPhones, awaitingPaymentPhones]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, enrichConversations, filterByAssignment]);
+
+  // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
+  // This handles cross-device realtime updates without disrupting the current UI
+  useEffect(() => {
+    setConversations(prev => {
+      if (prev.length === 0) return prev;
+      const normalizePhoneKey = (phone: string) => {
+        const digits = phone.replace(/\D/g, '');
+        return digits ? digits.slice(-8) : '';
+      };
+      return prev.map(c => ({
+        ...c,
+        isFinished: finishedPhones.has(normalizePhoneKey(c.phone)),
+        isArchived: archivedPhones.has(c.phone),
+        isAwaitingPayment: awaitingPaymentPhones.has(c.phone),
+      }));
+    });
+  }, [finishedPhones, archivedPhones, awaitingPaymentPhones]);
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
     let query = supabase
@@ -932,6 +951,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               for (const phone of phones) {
                 await finishConversation(phone);
               }
+              setConversations(prev => prev.map(c =>
+                phones.includes(c.phone) ? { ...c, isFinished: true } : c
+              ));
               toast.success(`${phones.length} conversa${phones.length !== 1 ? 's' : ''} finalizada${phones.length !== 1 ? 's' : ''}`);
             }}
             hasActiveSupport={hasActiveSupport}
@@ -1180,6 +1202,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         onFinish={async (reason) => {
           if (selectedPhone) {
             await finishConversation(selectedPhone, reason, selectedSellerId || undefined);
+            
+            // Immediately update conversations state so UI reflects the change
+            setConversations(prev => prev.map(c =>
+              c.phone === selectedPhone ? { ...c, isFinished: true } : c
+            ));
             
             // Auto-send NPS when reason is 'compra'
             if (reason === 'compra') {

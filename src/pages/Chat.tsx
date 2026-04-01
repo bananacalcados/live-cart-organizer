@@ -187,7 +187,7 @@ export default function ChatPage() {
   const { customers } = useCustomerStore();
   const { numbers, fetchNumbers, selectedNumberId, setSelectedNumberId } = useWhatsAppNumberStore();
   const { sendMessage: zapiSend, sendMedia: zapiSendMedia } = useZapi();
-  const { enrichConversations, finishConversation } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
@@ -335,6 +335,23 @@ export default function ChatPage() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [loadConversations]);
+
+  // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
+  useEffect(() => {
+    setConversations(prev => {
+      if (prev.length === 0) return prev;
+      const normalizePhoneKey = (phone: string) => {
+        const digits = phone.replace(/\D/g, '');
+        return digits ? digits.slice(-8) : '';
+      };
+      return prev.map(c => ({
+        ...c,
+        isFinished: finishedPhones.has(normalizePhoneKey(c.phone)),
+        isArchived: archivedPhones.has(c.phone),
+        isAwaitingPayment: awaitingPaymentPhones.has(c.phone),
+      }));
+    });
+  }, [finishedPhones, archivedPhones, awaitingPaymentPhones]);
 
   // ── Load messages for a phone (paginated) ──
   const PAGE_SIZE = 50;
@@ -1437,6 +1454,10 @@ export default function ChatPage() {
         onFinish={async (reason) => {
           if (selectedPhone) {
             await finishConversation(selectedPhone, reason);
+            // Immediately update conversations state so UI reflects the change
+            setConversations(prev => prev.map(c =>
+              c.phone === selectedPhone ? { ...c, isFinished: true } : c
+            ));
             toast.success('Conversa finalizada!');
             setShowFinishDialog(false);
             setSelectedPhone(null);

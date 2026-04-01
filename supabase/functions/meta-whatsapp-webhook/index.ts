@@ -261,15 +261,15 @@ serve(async (req) => {
             } else {
               console.log(`Saved incoming message from ${phone} (${senderName || 'unknown'})`);
 
-              // Reopen conversations that were auto-closed by dispatch
+              // Reopen any finished conversation when customer sends a new message
               const { data: finished } = await supabase
                 .from('chat_finished_conversations')
                 .select('id, finish_reason')
                 .eq('phone', phone)
                 .maybeSingle();
-              if (finished && finished.finish_reason === 'disparo_msg') {
+              if (finished) {
                 await supabase.from('chat_finished_conversations').delete().eq('id', finished.id);
-                console.log(`Reopened dispatch-closed conversation for ${phone}`);
+                console.log(`Reopened finished conversation for ${phone} (was: ${finished.finish_reason})`);
               }
               // NPS capture (only individual chats)
               const trimmed = (messageText || '').trim();
