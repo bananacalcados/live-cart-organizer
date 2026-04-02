@@ -262,126 +262,128 @@ export async function executeAdsToolCall(
       };
     }
 
-    // ─── GENERATE PIX ───
-    case 'generate_pix': {
-      const accessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-      if (!accessToken) {
-        return { success: false, error: 'Gateway de pagamento não configurado' };
-      }
+    // ─── GENERATE CHECKOUT LINK ───
+    case 'generate_checkout_link': {
+      const CHECKOUT_BASE_URL = 'https://checkout.bananacalcados.com.br';
 
       try {
-        const payerEmail = collectedData.email || `${phone}@ads-lead.com`;
-        const payerName = collectedData.nome || 'Cliente';
+        // 1. Find or create customer
+        const phoneDigits = phone.replace(/\D/g, '');
+        let customerId: string | null = null;
 
-        const pixResp = await fetch('https://api.mercadopago.com/v1/payments', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'X-Idempotency-Key': `ads-${leadId}-${Date.now()}`,
-          },
-          body: JSON.stringify({
-            transaction_amount: args.amount,
-            description: args.product_name,
-            payment_method_id: 'pix',
-            payer: {
-              email: payerEmail,
-              first_name: payerName.split(' ')[0],
-              last_name: payerName.split(' ').slice(1).join(' ') || payerName.split(' ')[0],
-            },
-          }),
-        });
+        // Search by phone (last 8 digits)
+        const { data: existingCustomers } = await supabase
+          .from('customers')
+          .select('id')
+          .ilike('whatsapp', `%${phoneDigits.slice(-8)}%`)
+          .limit(1);
 
-        const pixData = await pixResp.json();
-
-        if (!pixResp.ok || pixData.status === 'rejected') {
-          console.error('[generate_pix] MP error:', pixData);
-          return { success: false, error: 'Erro ao gerar PIX. Tente novamente.' };
+        if (existingCustomers && existingCustomers.length > 0) {
+          customerId = existingCustomers[0].id;
+        } else {
+          // Create customer
+          const { data: newCustomer } = await supabase
+            .from('customers')
+            .insert({
+              whatsapp: phoneDigits,
+              instagram_handle: collectedData.nome || 'Lead Campanha',
+              tags: ['ads-lead'],
+            })
+            .select('id')
+            .single();
+          customerId = newCustomer?.id || null;
         }
 
-        const pixCode = pixData.point_of_interaction?.transaction_data?.qr_code || '';
-        const pixUrl = pixData.point_of_interaction?.transaction_data?.ticket_url || '';
+        if (!customerId) {
+          return { success: false, error: 'Não foi possível criar o cadastro do cliente' };
+        }
 
-        // Save payment ID to lead
+        // 2. Determine event_id from campaign
+        const eventId = campaign.event_id;
+        if (!eventId) {
+          return { success: false, error: 'Campanha sem evento vinculado. Não é possível gerar checkout.' };
+        }
+
+        // 3. Build product entry
+        const quantity = args.quantity || 1;
+        const product = {
+          title: args.product_name,
+          price: args.amount,
+          quantity,
+          variant: args.variant || collectedData.tamanho || '',
+        };
+
+        // 4. Determine shipping
+        const shippingRule = campaign.shipping_rule;
+        let freeShipping = false;
+        let shippingCost = 0;
+        if (shippingRule?.type === 'free') {
+          freeShipping = true;
+        } else if (shippingRule?.type === 'fixed') {
+          shippingCost = Number(shippingRule.value) || 0;
+        }
+
+        // 5. Create order
+        const { data: order, error: orderErr } = await supabase
+          .from('orders')
+          .insert({
+            event_id: eventId,
+            customer_id: customerId,
+            products: [product],
+            stage: 'new',
+            free_shipping: freeShipping,
+            shipping_cost: shippingCost,
+            delivery_method: 'shipping',
+          })
+          .select('id')
+          .single();
+
+        if (orderErr || !order) {
+          console.error('[generate_checkout_link] Order creation error:', orderErr);
+          return { success: false, error: 'Erro ao criar pedido para checkout' };
+        }
+
+        // 6. Save customer registration data for checkout
+        const regData: any = {
+          order_id: order.id,
+          full_name: collectedData.nome || '',
+          whatsapp: phoneDigits,
+          cpf: collectedData.cpf || '',
+          email: collectedData.email || '',
+          cep: collectedData.cep || '',
+          address: collectedData.endereco || '',
+          address_number: collectedData.numero || '',
+          neighborhood: collectedData.bairro || '',
+          city: collectedData.cidade || '',
+          state: collectedData.estado || '',
+        };
+
+        await supabase.from('customer_registrations').upsert(regData, { onConflict: 'order_id' });
+
+        const checkoutUrl = `${CHECKOUT_BASE_URL}/checkout/order/${order.id}`;
+
+        // 7. Update lead
         await supabase.from('ad_leads').update({
           payment_link_sent: true,
-          collected_data: { ...collectedData, mercadopago_payment_id: pixData.id, payment_method: 'pix' },
+          collected_data: { ...collectedData, checkout_url: checkoutUrl, order_id: order.id },
         }).eq('id', leadId);
 
+        // 8. Update order with cart link
+        await supabase.from('orders').update({ cart_link: checkoutUrl }).eq('id', order.id);
+
+        const total = args.amount * quantity;
         return {
           success: true,
           data: {
-            pix_code: pixCode,
-            pix_url: pixUrl,
-            payment_id: pixData.id,
-            amount: args.amount,
-            message: `PIX gerado! Valor: R$ ${args.amount.toFixed(2)}. Envie o código copia-e-cola em uma mensagem SEPARADA.`,
+            checkout_url: checkoutUrl,
+            order_id: order.id,
+            amount: total,
+            message: `Link de checkout gerado: ${checkoutUrl} — O cliente pode escolher entre PIX (com 5% de desconto) ou cartão de crédito (até 6x sem juros).`,
           },
         };
       } catch (err) {
-        console.error('[generate_pix] Error:', err);
-        return { success: false, error: 'Erro técnico ao gerar PIX' };
-      }
-    }
-
-    // ─── GENERATE CARD LINK ───
-    case 'generate_card_link': {
-      const accessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-      if (!accessToken) {
-        return { success: false, error: 'Gateway de pagamento não configurado' };
-      }
-
-      try {
-        const prefResp = await fetch('https://api.mercadopago.com/checkout/preferences', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            items: [{
-              title: args.product_name,
-              quantity: 1,
-              unit_price: args.amount,
-              currency_id: 'BRL',
-            }],
-            payment_methods: {
-              installments: 6,
-              excluded_payment_types: [{ id: 'ticket' }],
-            },
-            back_urls: {
-              success: 'https://www.bananacalcados.com.br/obrigado',
-              failure: 'https://www.bananacalcados.com.br',
-            },
-            auto_return: 'approved',
-            external_reference: `ads-${leadId}`,
-          }),
-        });
-
-        const prefData = await prefResp.json();
-
-        if (!prefResp.ok) {
-          console.error('[generate_card_link] MP error:', prefData);
-          return { success: false, error: 'Erro ao gerar link de pagamento' };
-        }
-
-        // Save to lead
-        await supabase.from('ad_leads').update({
-          payment_link_sent: true,
-          collected_data: { ...collectedData, checkout_url: prefData.init_point, payment_method: 'cartao' },
-        }).eq('id', leadId);
-
-        return {
-          success: true,
-          data: {
-            checkout_url: prefData.init_point,
-            amount: args.amount,
-            message: `Link de pagamento gerado: ${prefData.init_point}`,
-          },
-        };
-      } catch (err) {
-        console.error('[generate_card_link] Error:', err);
-        return { success: false, error: 'Erro técnico ao gerar link' };
+        console.error('[generate_checkout_link] Error:', err);
+        return { success: false, error: 'Erro técnico ao gerar link de checkout' };
       }
     }
 
