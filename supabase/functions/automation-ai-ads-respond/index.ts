@@ -114,8 +114,8 @@ GUIA DE RESPOSTAS POR TIPO DE DÚVIDA:
 
 🎨 CORES: Descreva as cores disponíveis brevemente. Se não souber as cores exatas, diga "Temos algumas opções lindas! Posso te mostrar?"
 
-🚚 ENTREGA/FRETE: 
-${ctx.isFromGV ? '- Cliente de Valadares: "Entregamos aí em Valadares! Pode ser pagamento na entrega também 😉"' : '- "Enviamos pra todo o Brasil com frete grátis!" (se aplicável)'}
+🚚 ENTREGA/FRETE: Regra de frete: ${getShippingRuleText(ctx.campaign)}
+${ctx.isFromGV ? '- Cliente de Valadares: "Entregamos aí em Valadares! Pode ser pagamento na entrega também 😉"' : ''}
 
 📍 DE ONDE SOMOS: "Somos de Governador Valadares - MG!"
 
