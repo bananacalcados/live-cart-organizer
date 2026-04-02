@@ -18,16 +18,29 @@ serve(async (req) => {
 
     // ── PART 1: Abandoned checkout detection ──
     // Find orders where checkout was opened (checkout_started_at set) but not paid,
-    // and no followup of type 'checkout_abandonado' exists yet
+    // only from last 48h and at least 10min ago
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     const { data: abandonedOrders } = await supabase
       .from('orders')
       .select('id, customer_id, checkout_started_at, cart_link')
       .eq('is_paid', false)
       .not('checkout_started_at', 'is', null)
       .lte('checkout_started_at', tenMinAgo)
+      .gte('checkout_started_at', twoDaysAgo)
       .order('checkout_started_at', { ascending: false })
       .limit(50);
+
+    // Get all phones that already received checkout_abandonado in last 24h
+    const { data: recentAbandoned } = await supabase
+      .from('chat_payment_followups')
+      .select('phone')
+      .eq('type', 'checkout_abandonado')
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+    
+    const alreadySentPhones = new Set(
+      (recentAbandoned || []).map((r: any) => r.phone?.replace(/\D/g, '').slice(-8))
+    );
 
     let abandonedSent = 0;
     if (abandonedOrders?.length) {
@@ -41,17 +54,11 @@ serve(async (req) => {
 
         if (!customer?.whatsapp) continue;
         const phone = customer.whatsapp;
+        const phoneSuffix = phone.replace(/\D/g, '').slice(-8);
 
-        // Check if we already sent a checkout_abandonado followup for this phone recently
-        const { data: existingFu } = await supabase
-          .from('chat_payment_followups')
-          .select('id')
-          .eq('phone', phone)
-          .eq('type', 'checkout_abandonado')
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-          .maybeSingle();
-
-        if (existingFu) continue;
+        // Check if we already sent for this phone suffix
+        if (alreadySentPhones.has(phoneSuffix)) continue;
+        alreadySentPhones.add(phoneSuffix); // prevent duplicates within same batch
 
         // Check if already paid via other means
         if (order.customer_id) {
