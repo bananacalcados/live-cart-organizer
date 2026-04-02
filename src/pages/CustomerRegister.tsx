@@ -257,8 +257,20 @@ export default function CustomerRegister() {
     const isPickupOrder = order?.is_pickup;
 
     // For pickup orders, address is not required
-    if (!fullName || !cpf || !email || !whatsapp) {
-      toast.error("Preencha todos os campos obrigatórios");
+    if (!fullName || fullName.trim().split(/\s+/).length < 2) {
+      toast.error("Informe nome e sobrenome");
+      return;
+    }
+    if (!email || !isValidEmail(email.trim())) {
+      toast.error("E-mail inválido (ex: nome@email.com)");
+      return;
+    }
+    if (!cpf || !isValidCPF(cpf)) {
+      toast.error("CPF inválido");
+      return;
+    }
+    if (!whatsapp || whatsapp.replace(/\D/g, "").length < 10) {
+      toast.error("WhatsApp inválido");
       return;
     }
 
