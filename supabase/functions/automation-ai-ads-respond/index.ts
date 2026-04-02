@@ -63,6 +63,22 @@ function detectSituation(ctx: {
     }
   }
 
+  // Detect objections (before first-message check, so it works on any stage)
+  if (!isFirstMessage) {
+    const objectionPatterns = {
+      objecao_financeira: /(caro|cart[aã]o.*vir|n[aã]o tenho|sem dinheiro|apertado|dia \d|vira dia|s[oó] (no|dia)|pr[oó]ximo m[eê]s|sal[aá]rio|pagamento|n[aã]o posso agora|muito caro|tá caro|ta caro|valor alto)/i,
+      objecao_consulta: /(marido|esposa|m[aã]e|pai|irm[aã]|filho|amig|ver com|falar com|consultar|perguntar pr|familia|parente)/i,
+      objecao_pensar: /(pensar|pensando|avaliar|analisar|ver depois|ainda n[aã]o|n[aã]o sei|vou ver|deixa eu ver|preciso ver|talvez|quem sabe)/i,
+      objecao_recusa: /(n[aã]o quero|n[aã]o preciso|obrigad[oa]|n[aã]o.*interesse|hoje n[aã]o|agora n[aã]o|dispenso|n[aã]o.*momento|desculpa mas|passa dessa)/i,
+    };
+
+    for (const [key, pattern] of Object.entries(objectionPatterns)) {
+      if (pattern.test(normalizedMessage)) {
+        return 'objecoes';
+      }
+    }
+  }
+
   // First message → info + qualification
   if (isFirstMessage) return 'info_qualificacao';
 
