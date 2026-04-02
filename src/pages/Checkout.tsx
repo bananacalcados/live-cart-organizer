@@ -63,6 +63,23 @@ declare global {
   }
 }
 
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidCPF(cpf: string): boolean {
+  const digits = cpf.replace(/\D/g, "");
+  if (digits.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(digits)) return false;
+  for (let t = 9; t <= 10; t++) {
+    let sum = 0;
+    for (let i = 0; i < t; i++) sum += parseInt(digits[i]) * (t + 1 - i);
+    const remainder = (sum * 10) % 11;
+    if ((remainder === 10 ? 0 : remainder) !== parseInt(digits[t])) return false;
+  }
+  return true;
+}
+
 function formatCPF(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 3) return digits;
@@ -172,15 +189,19 @@ function PixPaymentSection({
     }
   };
 
-  const handleGeneratePix = async () => {
-    if (!firstName.trim() || !cpf.trim() || !email.trim()) {
-      toast.error("Preencha nome, CPF e e-mail para continuar");
-      return;
-    }
-    if (cpf.replace(/\D/g, "").length !== 11) {
-      toast.error("CPF inválido");
-      return;
-    }
+   const handleGeneratePix = async () => {
+     if (!firstName.trim()) {
+       toast.error("Preencha o nome para continuar");
+       return;
+     }
+     if (!email.trim() || !isValidEmail(email.trim())) {
+       toast.error("E-mail inválido (ex: nome@email.com)");
+       return;
+     }
+     if (!cpf.trim() || !isValidCPF(cpf)) {
+       toast.error("CPF inválido");
+       return;
+     }
 
     setIsGenerating(true);
     try {

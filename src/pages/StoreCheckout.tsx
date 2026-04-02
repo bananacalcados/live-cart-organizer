@@ -59,7 +59,24 @@ interface PixData {
   expirationDate: string;
 }
 
-// ── Formatters ──────────────────────────────────────────────────
+// ── Formatters & Validators ─────────────────────────────────────
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidCPF(cpf: string): boolean {
+  const digits = cpf.replace(/\D/g, "");
+  if (digits.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(digits)) return false;
+  for (let t = 9; t <= 10; t++) {
+    let sum = 0;
+    for (let i = 0; i < t; i++) sum += parseInt(digits[i]) * (t + 1 - i);
+    const remainder = (sum * 10) % 11;
+    if ((remainder === 10 ? 0 : remainder) !== parseInt(digits[t])) return false;
+  }
+  return true;
+}
+
 function formatCPF(value: string) {
   const d = value.replace(/\D/g, "").slice(0, 11);
   if (d.length <= 3) return d;
@@ -256,11 +273,26 @@ function OrderSummary({ saleData }: { saleData: SaleData }) {
 
 // ── Step 1 ──────────────────────────────────────────────────────
 function StepIdentification({ form, setForm, onNext, prefilled }: { form: CustomerFormData; setForm: (f: CustomerFormData) => void; onNext: () => void; prefilled: boolean }) {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const handleNext = () => {
-    if (!form.fullName.trim() || !form.email.trim() || !form.cpf.trim() || !form.whatsapp.trim()) {
-      toast.error("Preencha todos os campos obrigatórios");
-      return;
-    }
+    const newErrors: Record<string, string> = {};
+    if (!form.fullName.trim()) newErrors.fullName = "Nome é obrigatório";
+    else if (form.fullName.trim().split(/\s+/).length < 2) newErrors.fullName = "Informe nome e sobrenome";
+
+    const emailTrimmed = form.email.trim();
+    if (!emailTrimmed) newErrors.email = "E-mail é obrigatório";
+    else if (!isValidEmail(emailTrimmed)) newErrors.email = "E-mail inválido (ex: nome@email.com)";
+
+    if (!form.cpf.trim()) newErrors.cpf = "CPF é obrigatório";
+    else if (!isValidCPF(form.cpf)) newErrors.cpf = "CPF inválido";
+
+    const whatsDigits = form.whatsapp.replace(/\D/g, "");
+    if (!form.whatsapp.trim()) newErrors.whatsapp = "WhatsApp é obrigatório";
+    else if (whatsDigits.length < 10 || whatsDigits.length > 11) newErrors.whatsapp = "WhatsApp inválido";
+
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
     onNext();
   };
   return (
@@ -273,20 +305,24 @@ function StepIdentification({ form, setForm, onNext, prefilled }: { form: Custom
       <div className="space-y-3">
         <div>
           <Label className="text-sm">Nome completo *</Label>
-          <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="João da Silva" />
+          <Input value={form.fullName} onChange={(e) => { setForm({ ...form, fullName: e.target.value }); setErrors(prev => ({ ...prev, fullName: "" })); }} placeholder="João da Silva" className={errors.fullName ? "border-destructive" : ""} />
+          {errors.fullName && <p className="text-destructive text-xs mt-1">{errors.fullName}</p>}
         </div>
         <div>
           <Label className="text-sm">E-mail *</Label>
-          <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="seu@email.com" />
+          <Input type="email" value={form.email} onChange={(e) => { setForm({ ...form, email: e.target.value }); setErrors(prev => ({ ...prev, email: "" })); }} placeholder="seu@email.com" className={errors.email ? "border-destructive" : ""} />
+          {errors.email && <p className="text-destructive text-xs mt-1">{errors.email}</p>}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-sm">CPF *</Label>
-            <Input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: formatCPF(e.target.value) })} placeholder="000.000.000-00" maxLength={14} />
+            <Input value={form.cpf} onChange={(e) => { setForm({ ...form, cpf: formatCPF(e.target.value) }); setErrors(prev => ({ ...prev, cpf: "" })); }} placeholder="000.000.000-00" maxLength={14} className={errors.cpf ? "border-destructive" : ""} />
+            {errors.cpf && <p className="text-destructive text-xs mt-1">{errors.cpf}</p>}
           </div>
           <div>
             <Label className="text-sm">WhatsApp *</Label>
-            <Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: formatPhone(e.target.value) })} placeholder="(11) 99999-9999" maxLength={15} />
+            <Input value={form.whatsapp} onChange={(e) => { setForm({ ...form, whatsapp: formatPhone(e.target.value) }); setErrors(prev => ({ ...prev, whatsapp: "" })); }} placeholder="(11) 99999-9999" maxLength={15} className={errors.whatsapp ? "border-destructive" : ""} />
+            {errors.whatsapp && <p className="text-destructive text-xs mt-1">{errors.whatsapp}</p>}
           </div>
         </div>
       </div>
