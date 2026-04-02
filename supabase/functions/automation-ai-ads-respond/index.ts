@@ -650,6 +650,7 @@ REGRAS OBRIGATÓRIAS:
     let reply = '';
     const allToolCalls: string[] = [];
     let currentMessages = [...chatMessages];
+    let checkoutToolResult: { success: boolean; data?: any; error?: string } | null = null;
 
     for (let turn = 0; turn < 3; turn++) {
       const aiBody: any = {
@@ -722,6 +723,10 @@ REGRAS OBRIGATÓRIAS:
 
           const result = await executeAdsToolCall(toolName, toolArgs, toolCtx);
 
+          if (toolName === 'generate_checkout_link') {
+            checkoutToolResult = result;
+          }
+
           // Add tool result to conversation
           currentMessages.push({
             role: 'tool',
@@ -737,6 +742,15 @@ REGRAS OBRIGATÓRIAS:
       // No tool calls — we have the final text response
       reply = choice?.message?.content || '';
       break;
+    }
+
+    if (checkoutToolResult?.success && checkoutToolResult.data?.checkout_url) {
+      const checkoutUrl = checkoutToolResult.data.checkout_url;
+      const pixDiscount = campaign.pix_discount_percent || 5;
+      const customerFirstName = ((toolCtx.collectedData?.nome || collectedData.nome || '').trim().split(' ')[0] || '').trim();
+      reply = `${customerFirstName ? `${customerFirstName}, ` : ''}prontinho! Aqui está seu link para finalizar a compra:\n\n${checkoutUrl}\n\nLá você pode escolher PIX com ${pixDiscount}% de desconto ou cartão em até 6x sem juros 😊`;
+    } else if (checkoutToolResult && !checkoutToolResult.success) {
+      reply = `Perdão! Não consegui gerar o link do checkout transparente agora. ${checkoutToolResult.error || 'Tente novamente em instantes.'}`;
     }
 
     // 10. Clean up any remaining tags from reply
