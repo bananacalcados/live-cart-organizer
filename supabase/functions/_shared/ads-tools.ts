@@ -231,7 +231,7 @@ export async function executeAdsToolCall(
 
     // ─── SAVE LEAD DATA ───
     case 'save_lead_data': {
-      const fields = ['nome', 'tamanho', 'cidade', 'estado', 'cpf', 'email', 'cep', 'endereco'];
+      const fields = ['nome', 'tamanho', 'cor', 'cidade', 'estado', 'cpf', 'email', 'cep', 'endereco'];
       const newData: Record<string, any> = { ...collectedData };
       const savedFields: string[] = [];
 
