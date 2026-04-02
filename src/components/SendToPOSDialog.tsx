@@ -50,8 +50,9 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
           discount: discountAmount,
           total: finalValue,
           status: "pending_pickup",
+          sale_type: "live",
           source_order_id: order.id,
-          notes: `Retirada na loja - Live ${order.customer?.instagram_handle || ""}. Pedido CRM: ${order.id.slice(0, 8)}`,
+          notes: `Venda da Live - ${order.customer?.instagram_handle || ""}. Pedido CRM: ${order.id.slice(0, 8)}`,
           payment_details: {
             source: "live_event",
             customer_instagram: order.customer?.instagram_handle,
