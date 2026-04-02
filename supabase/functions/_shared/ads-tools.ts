@@ -37,28 +37,15 @@ export const adsTools = [
   {
     type: "function",
     function: {
-      name: "generate_pix",
-      description: "Gerar cobrança PIX via Mercado Pago. Use quando o cliente escolher pagar com PIX. Retorna o código copia-e-cola do PIX.",
+      name: "generate_checkout_link",
+      description: "Gerar link do checkout transparente para o cliente finalizar a compra. O checkout aceita PIX (com desconto automático) e cartão de crédito. Use quando todos os dados forem coletados e for hora de enviar o link de pagamento.",
       parameters: {
         type: "object",
         properties: {
           product_name: { type: "string", description: "Nome do produto" },
-          amount: { type: "number", description: "Valor total em reais" },
-        },
-        required: ["product_name", "amount"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "generate_card_link",
-      description: "Gerar link de pagamento via cartão de crédito. Use quando o cliente escolher pagar com cartão.",
-      parameters: {
-        type: "object",
-        properties: {
-          product_name: { type: "string", description: "Nome do produto" },
-          amount: { type: "number", description: "Valor total em reais" },
+          amount: { type: "number", description: "Valor unitário em reais" },
+          quantity: { type: "number", description: "Quantidade do produto (padrão: 1)" },
+          variant: { type: "string", description: "Variante/tamanho do produto (ex: '38')" },
         },
         required: ["product_name", "amount"],
       },
