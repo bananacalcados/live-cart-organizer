@@ -119,7 +119,7 @@ ${ctx.isFromGV ? '- Cliente de Valadares: "Entregamos aí em Valadares! Pode ser
 
 📍 DE ONDE SOMOS: "Somos de Governador Valadares - MG!"
 
-💰 FORMA DE PAGAMENTO: "Aceitamos PIX, cartão em até 6x sem juros${ctx.isFromGV ? ' e pagamento na entrega pra quem é de Valadares' : ''}!"
+💰 FORMA DE PAGAMENTO: "Aceitamos PIX com ${ctx.campaign.pix_discount_percent || 5}% de desconto, cartão em até 6x sem juros${ctx.isFromGV ? ' e pagamento na entrega pra quem é de Valadares' : ''}!"
 
 🏷️ DESCONTO: Mencione apenas descontos reais da campanha. Nunca invente.
 
