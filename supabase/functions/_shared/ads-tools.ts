@@ -100,12 +100,13 @@ export const adsTools = [
     type: "function",
     function: {
       name: "send_product_image",
-      description: "Enviar foto do produto para o cliente via WhatsApp. Use quando o cliente pedir para ver fotos, ou após apresentar o produto para reforçar visualmente. Busca a imagem diretamente da Shopify.",
+      description: "Enviar foto do produto para o cliente via WhatsApp. Use quando o cliente pedir para ver fotos, ou após apresentar o produto para reforçar visualmente. Busca a imagem diretamente da Shopify. Se o cliente pedir fotos de cores específicas, chame esta ferramenta UMA VEZ para cada cor desejada.",
       parameters: {
         type: "object",
         properties: {
           query: { type: "string", description: "Nome ou termo de busca do produto para encontrar a imagem" },
-          caption: { type: "string", description: "Legenda curta para acompanhar a foto (ex: 'Tênis Jess Ortopédico 😍')" },
+          color: { type: "string", description: "Cor específica da variante desejada (ex: 'Preto', 'Verde Militar'). Se informada, busca a imagem da variante dessa cor." },
+          caption: { type: "string", description: "Legenda curta para acompanhar a foto (ex: 'Tênis Jess Ortopédico - Preto 😍')" },
         },
         required: ["query"],
       },
@@ -540,6 +541,7 @@ export async function executeAdsToolCall(
     // ─── SEND PRODUCT IMAGE ───
     case 'send_product_image': {
       const query = args.query;
+      const color = args.color || '';
       const caption = args.caption || '';
       const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
       const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
@@ -549,13 +551,23 @@ export async function executeAdsToolCall(
 
       if (shopifyDomain && shopifyToken) {
         try {
+          // Fetch product with ALL variant images so we can match by color
           const graphql = `{
-            products(first: 1, query: "${query.replace(/"/g, '\\"')}") {
+            products(first: 3, query: "${query.replace(/"/g, '\\"')}") {
               edges {
                 node {
                   title
-                  images(first: 1) {
-                    edges { node { url } }
+                  images(first: 20) {
+                    edges { node { url altText } }
+                  }
+                  variants(first: 50) {
+                    edges {
+                      node {
+                        title
+                        selectedOptions { name value }
+                        image { url }
+                      }
+                    }
                   }
                 }
               }
@@ -572,10 +584,50 @@ export async function executeAdsToolCall(
           });
 
           const data = await resp.json();
-          const product = data?.data?.products?.edges?.[0]?.node;
-          if (product) {
+          const products = data?.data?.products?.edges || [];
+          console.log('[send_product_image] Shopify returned', products.length, 'products for query:', query);
+
+          for (const { node: product } of products) {
             productTitle = product.title;
-            imageUrl = product.images?.edges?.[0]?.node?.url || null;
+
+            // If a color was requested, try to find the variant image for that color
+            if (color) {
+              const colorLower = color.toLowerCase();
+              const variants = product.variants?.edges || [];
+              for (const { node: variant } of variants) {
+                const variantColor = variant.selectedOptions?.find(
+                  (o: any) => o.name.toLowerCase() === 'cor' || o.name.toLowerCase() === 'color'
+                )?.value?.toLowerCase() || variant.title?.toLowerCase() || '';
+
+                if (variantColor.includes(colorLower) || colorLower.includes(variantColor)) {
+                  if (variant.image?.url) {
+                    imageUrl = variant.image.url;
+                    console.log('[send_product_image] Found variant image for color:', color, imageUrl);
+                    break;
+                  }
+                }
+              }
+
+              // Also try matching via image altText
+              if (!imageUrl) {
+                const images = product.images?.edges || [];
+                for (const { node: img } of images) {
+                  if (img.altText && img.altText.toLowerCase().includes(colorLower)) {
+                    imageUrl = img.url;
+                    console.log('[send_product_image] Found image via altText for color:', color, imageUrl);
+                    break;
+                  }
+                }
+              }
+            }
+
+            // Fallback: use first product image
+            if (!imageUrl) {
+              imageUrl = product.images?.edges?.[0]?.node?.url || null;
+              console.log('[send_product_image] Using first product image:', imageUrl);
+            }
+
+            if (imageUrl) break;
           }
         } catch (err) {
           console.error('[send_product_image] Shopify error:', err);
