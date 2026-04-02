@@ -198,24 +198,23 @@ function getPagamentoPrompt(ctx: SituationContext): string {
 
   return `SITUAÇÃO: PAGAMENTO
 
-Todos os dados foram coletados! Agora pergunte a forma de pagamento.
+Todos os dados foram coletados! Agora gere o link de checkout usando a tool generate_checkout_link.
 
-${ctx.isFromGV
-    ? `O cliente é de GOVERNADOR VALADARES. Ofereça: PIX (com ${pixDiscount}% de desconto), Cartão (${paymentConditions}) ou Pagamento na Entrega.`
-    : `Ofereça: PIX (com ${pixDiscount}% de desconto) ou Cartão (${paymentConditions}).`}
+O checkout transparente aceita PIX (com ${pixDiscount}% de desconto automático) e cartão (${paymentConditions}).
 
 REGRA DE FRETE: ${shippingRule}
-Se o frete for grátis, mencione: "Com frete grátis!"
-Se o frete for fixo, mencione o valor.
 
-FORMATO: 
-"Como prefere pagar? 😊
-${ctx.isFromGV ? `1️⃣ PIX (${pixDiscount}% de desconto!)\n2️⃣ Cartão (${paymentConditions})\n3️⃣ Pagamento na entrega` : `1️⃣ PIX (${pixDiscount}% de desconto!)\n2️⃣ Cartão (${paymentConditions})`}"
+FORMATO DA RESPOSTA após gerar o link:
+"Prontinho! Aqui está o link pra você finalizar a compra:
+[LINK]
+Lá você escolhe entre PIX com ${pixDiscount}% de desconto ou cartão ${paymentConditions} 😊
+${shippingRule.includes('GRÁTIS') ? 'Frete grátis! 🎉' : ''}"
 
-Se o cliente escolher PIX: responda com a chave PIX em mensagem separada usando [ACAO:enviar_pix]
-Se o cliente escolher Cartão: use [ACAO:gerar_link_cartao]
-Se o cliente escolher entrega (só GV): confirme que será pago na entrega e use [ACAO:pagamento_entrega]`;
-}
+IMPORTANTE: 
+- Use generate_checkout_link para gerar o link. NÃO invente links.
+- O cliente escolhe a forma de pagamento direto no checkout.
+- NÃO pergunte a forma de pagamento. Envie o link diretamente.`;}
+
 
 function getFollowup2Prompt(ctx: SituationContext): string {
   const hasEvent = !!ctx.event;
@@ -622,9 +621,13 @@ REGRAS OBRIGATÓRIAS:
       const name = t.function.name;
       // Always offer save_lead_data, search_product, and send_product_image
       if (name === 'save_lead_data' || name === 'search_product' || name === 'send_product_image') return true;
-      // Payment tools only in payment situation
-      if (['generate_pix', 'generate_card_link', 'confirm_delivery_payment'].includes(name)) {
+      // Checkout link only in payment situation
+      if (name === 'generate_checkout_link') {
         return situation === 'pagamento' || situation === 'duvidas';
+      }
+      // Delivery payment only in payment for GV clients
+      if (name === 'confirm_delivery_payment') {
+        return (situation === 'pagamento' || situation === 'duvidas') && clientIsFromGV;
       }
       // CEP lookup in coleta or duvidas
       if (name === 'lookup_cep') return situation === 'coleta_dados' || situation === 'duvidas';
@@ -750,7 +753,7 @@ REGRAS OBRIGATÓRIAS:
     let nextStage = situation as string;
     if (situation === 'info_qualificacao' && !isFirstMessage) nextStage = 'duvidas';
     if (allToolCalls.includes('register_live_reminder')) nextStage = 'followup_2';
-    if (allToolCalls.includes('generate_pix') || allToolCalls.includes('generate_card_link') || allToolCalls.includes('confirm_delivery_payment')) {
+    if (allToolCalls.includes('generate_checkout_link') || allToolCalls.includes('confirm_delivery_payment')) {
       nextStage = 'pagamento';
     }
 
