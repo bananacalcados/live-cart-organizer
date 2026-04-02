@@ -502,8 +502,8 @@ REGRAS OBRIGATÓRIAS:
     // Determine which tools to offer based on situation
     const situationTools = adsTools.filter(t => {
       const name = t.function.name;
-      // Always offer save_lead_data and search_product
-      if (name === 'save_lead_data' || name === 'search_product') return true;
+      // Always offer save_lead_data, search_product, and send_product_image
+      if (name === 'save_lead_data' || name === 'search_product' || name === 'send_product_image') return true;
       // Payment tools only in payment situation
       if (['generate_pix', 'generate_card_link', 'confirm_delivery_payment'].includes(name)) {
         return situation === 'pagamento' || situation === 'duvidas';
