@@ -443,20 +443,10 @@ REGRAS OBRIGATÓRIAS:
 - NÃO repita informações já ditas nas mensagens anteriores.
 - Use o nome do cliente se já souber: ${collectedData.nome || 'ainda não sabe'}
 - Fuso: America/Sao_Paulo
-
-EXTRAÇÃO DE DADOS (inclua no final quando o cliente informar):
-[DADOS:campo=valor] — Campos: ${requiredFields.join(', ')}
-Exemplo: [DADOS:nome=Maria] [DADOS:tamanho=38]
-
-CLASSIFICAÇÃO DE TEMPERATURA (inclua no final):
-[TEMPERATURA:valor] — frio|morno|quente|super_quente|convertido
-
-AÇÕES DISPONÍVEIS (use quando necessário):
-[ACAO:enviar_pix] — Quando cliente escolher PIX
-[ACAO:gerar_link_cartao] — Quando cliente escolher cartão
-[ACAO:pagamento_entrega] — Quando cliente de GV escolher entrega
-[ACAO:convidar_live] — Quando convidar para a live
-[ACAO:lembrar_live] — Quando cliente aceitar ser lembrado da live`;
+- Quando o cliente informar dados (nome, tamanho, cidade, etc), use a tool save_lead_data para salvar.
+- Quando o cliente perguntar sobre detalhes do produto (cores, tamanhos disponíveis), use search_product.
+- Quando gerar PIX, envie o código copia-e-cola em uma mensagem SEPARADA (apenas o código, sem texto).
+- NUNCA invente informações de produto. Se não souber, use search_product.`;
 
     // 7. Build chat history
     const chatMessages: Array<{ role: string; content: string }> = [
@@ -495,39 +485,128 @@ AÇÕES DISPONÍVEIS (use quando necessário):
 
     console.log(`[ads-ai] phone=${normalizedPhone}, campaign=${campaign.name}, situation=${situation}, stage=${existingLead?.conversation_stage}, temp=${existingLead?.temperature || 'frio'}`);
 
-    // 8. Call AI
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: chatMessages,
-        max_tokens: 200,
-        stream: false,
-      }),
+    // 8. Tool calling context
+    const toolCtx = {
+      supabase,
+      supabaseUrl,
+      supabaseKey,
+      phone: normalizedPhone,
+      leadId: existingLead?.id || '',
+      lead: existingLead,
+      campaign,
+      collectedData,
+    };
+
+    // Determine which tools to offer based on situation
+    const situationTools = adsTools.filter(t => {
+      const name = t.function.name;
+      // Always offer save_lead_data and search_product
+      if (name === 'save_lead_data' || name === 'search_product') return true;
+      // Payment tools only in payment situation
+      if (['generate_pix', 'generate_card_link', 'confirm_delivery_payment'].includes(name)) {
+        return situation === 'pagamento' || situation === 'duvidas';
+      }
+      // CEP lookup in coleta or duvidas
+      if (name === 'lookup_cep') return situation === 'coleta_dados' || situation === 'duvidas';
+      // Live reminder in followup_2
+      if (name === 'register_live_reminder') return situation === 'followup_2';
+      return true;
     });
 
-    if (!response.ok) {
-      const status = response.status;
-      if (status === 429) {
-        return new Response(JSON.stringify({ error: 'Rate limit' }), {
-          status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // 9. AI call with tool calling loop (max 3 turns)
+    let reply = '';
+    const allToolCalls: string[] = [];
+    let currentMessages = [...chatMessages];
+
+    for (let turn = 0; turn < 3; turn++) {
+      const aiBody: any = {
+        model: 'google/gemini-3-flash-preview',
+        messages: currentMessages,
+        max_tokens: 250,
+        stream: false,
+      };
+
+      // Add tools on first turn or when continuing tool calls
+      if (situationTools.length > 0) {
+        aiBody.tools = situationTools;
+        aiBody.tool_choice = 'auto';
+      }
+
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(aiBody),
+      });
+
+      if (!response.ok) {
+        const status = response.status;
+        if (status === 429) {
+          return new Response(JSON.stringify({ error: 'Rate limit' }), {
+            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        const errorText = await response.text();
+        console.error('[ads-ai] Gateway error:', status, errorText);
+        return new Response(JSON.stringify({ error: 'AI service error' }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const errorText = await response.text();
-      console.error('[ads-ai] Gateway error:', status, errorText);
-      return new Response(JSON.stringify({ error: 'AI service error' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+
+      const data = await response.json();
+      const choice = data.choices?.[0];
+
+      // Check if AI wants to call tools
+      if (choice?.finish_reason === 'tool_calls' || choice?.message?.tool_calls?.length > 0) {
+        const toolCalls = choice.message.tool_calls || [];
+
+        // Add assistant message with tool calls to history
+        currentMessages.push(choice.message);
+
+        for (const tc of toolCalls) {
+          const toolName = tc.function.name;
+          let toolArgs: Record<string, any> = {};
+          try {
+            toolArgs = JSON.parse(tc.function.arguments || '{}');
+          } catch { toolArgs = {}; }
+
+          console.log(`[ads-ai] Tool call: ${toolName}(${JSON.stringify(toolArgs)})`);
+          allToolCalls.push(toolName);
+
+          // Refresh collectedData before tool execution
+          if (toolName !== 'save_lead_data') {
+            const { data: freshLead } = await supabase
+              .from('ad_leads')
+              .select('collected_data')
+              .eq('id', existingLead?.id)
+              .maybeSingle();
+            if (freshLead) {
+              toolCtx.collectedData = (freshLead.collected_data as Record<string, any>) || {};
+            }
+          }
+
+          const result = await executeAdsToolCall(toolName, toolArgs, toolCtx);
+
+          // Add tool result to conversation
+          currentMessages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(result),
+          } as any);
+        }
+
+        // Continue loop for next AI response
+        continue;
+      }
+
+      // No tool calls — we have the final text response
+      reply = choice?.message?.content || '';
+      break;
     }
 
-    const data = await response.json();
-    let reply = data.choices?.[0]?.message?.content || '';
-
-    // 9. Parse temperature
+    // 10. Clean up any remaining tags from reply
     let newTemperature: string | null = null;
     const tempMatch = reply.match(/\[TEMPERATURA:(\w+)\]/);
     if (tempMatch) {
@@ -535,7 +614,6 @@ AÇÕES DISPONÍVEIS (use quando necessário):
       reply = reply.replace(tempMatch[0], '').trim();
     }
 
-    // 10. Parse data extraction
     const dataMatches = [...reply.matchAll(/\[DADOS:(\w+)=([^\]]+)\]/g)];
     const extractedData: Record<string, string> = {};
     for (const m of dataMatches) {
@@ -543,21 +621,20 @@ AÇÕES DISPONÍVEIS (use quando necessário):
       reply = reply.replace(m[0], '').trim();
     }
 
-    // 11. Parse actions
     const actionMatches = [...reply.matchAll(/\[ACAO:(\w+)\]/g)];
-    const actions: string[] = actionMatches.map(m => m[1]);
     for (const m of actionMatches) {
       reply = reply.replace(m[0], '').trim();
     }
 
-    // 12. Determine next stage based on situation and actions
+    // 11. Determine next stage
     let nextStage = situation as string;
     if (situation === 'info_qualificacao' && !isFirstMessage) nextStage = 'duvidas';
-    if (actions.includes('convidar_live') || actions.includes('lembrar_live')) {
-      nextStage = 'followup_2';
+    if (allToolCalls.includes('register_live_reminder')) nextStage = 'followup_2';
+    if (allToolCalls.includes('generate_pix') || allToolCalls.includes('generate_card_link') || allToolCalls.includes('confirm_delivery_payment')) {
+      nextStage = 'pagamento';
     }
 
-    // 13. Update lead
+    // 12. Update lead
     if (existingLead) {
       const updates: Record<string, any> = {
         last_ai_contact_at: new Date().toISOString(),
@@ -569,7 +646,10 @@ AÇÕES DISPONÍVEIS (use quando necessário):
       }
 
       if (Object.keys(extractedData).length > 0) {
-        updates.collected_data = { ...collectedData, ...extractedData };
+        // Refresh collected data as tools may have already saved
+        const { data: freshLead } = await supabase.from('ad_leads').select('collected_data').eq('id', existingLead.id).maybeSingle();
+        const latestData = (freshLead?.collected_data as Record<string, any>) || collectedData;
+        updates.collected_data = { ...latestData, ...extractedData };
         if (extractedData.nome) updates.name = extractedData.nome;
       }
 
@@ -577,19 +657,9 @@ AÇÕES DISPONÍVEIS (use quando necessário):
         updates.followup_count = (existingLead.followup_count || 0) + 1;
         updates.last_followup_at = new Date().toISOString();
       } else {
-        // Reset followup counter when client responds
         updates.followup_count = 0;
       }
 
-      if (actions.includes('enviar_pix') || actions.includes('gerar_link_cartao') || actions.includes('pagamento_entrega')) {
-        updates.payment_link_sent = true;
-      }
-
-      if (actions.includes('convidar_live') || actions.includes('lembrar_live')) {
-        updates.live_invite_sent = true;
-      }
-
-      // Update interested product keywords on requalificacao
       if (situation === 'requalificacao') {
         const matchedProduct = getMatchedProduct(campaign, messageText);
         if (matchedProduct?.keywords) {
@@ -597,13 +667,10 @@ AÇÕES DISPONÍVEIS (use quando necessário):
         }
       }
 
-      await supabase
-        .from('ad_leads')
-        .update(updates)
-        .eq('id', existingLead.id);
+      await supabase.from('ad_leads').update(updates).eq('id', existingLead.id);
     }
 
-    // 14. Log interaction
+    // 13. Log interaction
     await supabase.from('ai_conversation_logs').insert({
       phone: normalizedPhone,
       message_in: messageText,
@@ -611,9 +678,10 @@ AÇÕES DISPONÍVEIS (use quando necessário):
       stage: `ads_${situation}`,
       ai_decision: [
         newTemperature ? `temp:${newTemperature}` : null,
-        actions.length > 0 ? `actions:${actions.join(',')}` : null,
+        allToolCalls.length > 0 ? `tools:${allToolCalls.join(',')}` : null,
       ].filter(Boolean).join('|') || null,
       provider: 'lovable',
+      tool_called: allToolCalls.length > 0 ? allToolCalls.join(',') : null,
     });
 
     return new Response(JSON.stringify({
@@ -625,7 +693,7 @@ AÇÕES DISPONÍVEIS (use quando necessário):
       temperature: newTemperature || existingLead?.temperature || 'frio',
       situation,
       extractedData,
-      actions,
+      toolsCalled: allToolCalls,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
