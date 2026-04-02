@@ -514,6 +514,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const handleSelectFreight = (option: FreightOption) => {
     setSelectedFreight(option.id);
+    setShowAllFreight(false);
     onShippingSelected(option);
   };
 
