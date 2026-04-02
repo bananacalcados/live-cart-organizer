@@ -715,6 +715,8 @@ REGRAS OBRIGATÓRIAS:
       lead: existingLead,
       campaign,
       collectedData,
+      whatsappNumberId: whatsappNumberId || existingLead?.whatsapp_number_id || null,
+      channel: channel || existingLead?.channel || 'zapi',
     };
 
     // Determine which tools to offer based on situation
@@ -923,6 +925,14 @@ REGRAS OBRIGATÓRIAS:
         last_ai_contact_at: new Date().toISOString(),
         conversation_stage: nextStage,
       };
+
+       if (whatsappNumberId) {
+        updates.whatsapp_number_id = whatsappNumberId;
+      }
+
+      if (channel) {
+        updates.channel = channel;
+      }
 
       if (newTemperature && ['frio', 'morno', 'quente', 'super_quente', 'convertido'].includes(newTemperature)) {
         updates.temperature = newTemperature;
