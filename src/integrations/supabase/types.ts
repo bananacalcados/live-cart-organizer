@@ -128,14 +128,20 @@ export type Database = {
           campaign_id: string | null
           channel: string | null
           collected_data: Json
+          conversation_stage: string | null
           created_at: string
           event_id: string | null
+          followup_count: number | null
           id: string
+          interested_product_keywords: string[] | null
           is_active: boolean
           last_ai_contact_at: string | null
+          last_followup_at: string | null
           last_human_contact_at: string | null
+          live_invite_sent: boolean | null
           name: string | null
           notes: string | null
+          payment_link_sent: boolean | null
           phone: string
           source: string
           temperature: string
@@ -146,14 +152,20 @@ export type Database = {
           campaign_id?: string | null
           channel?: string | null
           collected_data?: Json
+          conversation_stage?: string | null
           created_at?: string
           event_id?: string | null
+          followup_count?: number | null
           id?: string
+          interested_product_keywords?: string[] | null
           is_active?: boolean
           last_ai_contact_at?: string | null
+          last_followup_at?: string | null
           last_human_contact_at?: string | null
+          live_invite_sent?: boolean | null
           name?: string | null
           notes?: string | null
+          payment_link_sent?: boolean | null
           phone: string
           source?: string
           temperature?: string
@@ -164,14 +176,20 @@ export type Database = {
           campaign_id?: string | null
           channel?: string | null
           collected_data?: Json
+          conversation_stage?: string | null
           created_at?: string
           event_id?: string | null
+          followup_count?: number | null
           id?: string
+          interested_product_keywords?: string[] | null
           is_active?: boolean
           last_ai_contact_at?: string | null
+          last_followup_at?: string | null
           last_human_contact_at?: string | null
+          live_invite_sent?: boolean | null
           name?: string | null
           notes?: string | null
+          payment_link_sent?: boolean | null
           phone?: string
           source?: string
           temperature?: string
