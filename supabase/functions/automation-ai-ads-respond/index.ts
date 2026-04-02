@@ -181,7 +181,10 @@ ${fieldPrompts[nextField] || `Pergunte: "${nextField}"`}
 Dados já coletados: ${JSON.stringify(ctx.collectedData)}
 Dados faltando: ${missing.join(', ')}
 
-REGRA: UMA pergunta por mensagem. Máximo 1 linha.`;
+REGRAS:
+- UMA pergunta por mensagem. Máximo 1 linha.
+- NÃO mencione live, evento ou qualquer outro assunto. Foco TOTAL na coleta de dados.
+- Se o cliente informar vários dados de uma vez, extraia todos e pergunte o próximo faltante.`;
 }
 
 function getPagamentoPrompt(ctx: SituationContext): string {
