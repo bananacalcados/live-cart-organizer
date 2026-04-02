@@ -564,6 +564,7 @@ serve(async (req) => {
       switch (situation) {
         case 'info_qualificacao': situationPrompt = getInfoQualificacaoPrompt(sitCtx); break;
         case 'duvidas': situationPrompt = getDuvidasPrompt(sitCtx); break;
+        case 'objecoes': situationPrompt = getObjecoesPrompt(sitCtx, subSituation); break;
         case 'followup_1': situationPrompt = getFollowup1Prompt(sitCtx); break;
         case 'coleta_dados': situationPrompt = getColetaDadosPrompt(sitCtx); break;
         case 'pagamento': situationPrompt = getPagamentoPrompt(sitCtx); break;
