@@ -265,6 +265,17 @@ Máximo 2 linhas + pergunta.`;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function getShippingRuleText(campaign: any): string {
+  const rule = campaign.shipping_rule;
+  if (!rule) return 'Calcular frete pelo CEP do cliente';
+  switch (rule.type) {
+    case 'free': return 'FRETE GRÁTIS para esta campanha';
+    case 'fixed': return `Frete fixo de R$ ${rule.value || '0,00'}`;
+    case 'calculate':
+    default: return 'Calcular frete pelo CEP do cliente';
+  }
+}
+
 function getMatchedProduct(campaign: any, messageText: string): any | null {
   const catalog = campaign.product_info?.catalogo;
   if (!catalog || !Array.isArray(catalog)) return null;
