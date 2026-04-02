@@ -382,30 +382,75 @@ function StepDelivery({ form, setForm, onNext, onBack, saleData, onShippingSelec
         <h2 className="font-semibold text-lg">Endereço de Entrega</h2>
         <Badge variant="secondary" className="text-[10px]">2 de 3</Badge>
       </div>
-      <div className="space-y-3">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-1">
-            <Label className="text-sm">CEP *</Label>
-            <div className="relative">
-              <Input value={form.cep} onChange={(e) => { const v = formatCEP(e.target.value); setForm({ ...form, cep: v }); lookupCep(v); }} placeholder="00000-000" maxLength={9} />
-              {fetchingCep && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
-            </div>
-          </div>
-          <div className="col-span-2">
-            <Label className="text-sm">Rua *</Label>
-            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div><Label className="text-sm">Número *</Label><Input value={form.addressNumber} onChange={(e) => setForm({ ...form, addressNumber: e.target.value })} /></div>
-          <div><Label className="text-sm">Complemento</Label><Input value={form.complement} onChange={(e) => setForm({ ...form, complement: e.target.value })} placeholder="Apto" /></div>
-          <div><Label className="text-sm">Bairro *</Label><Input value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} /></div>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2"><Label className="text-sm">Cidade *</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
-          <div><Label className="text-sm">UF *</Label><Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })} maxLength={2} /></div>
-        </div>
-      </div>
+       <div className="space-y-3">
+         {/* CEP Field - always visible */}
+         <div>
+           <Label className="text-sm font-medium">CEP *</Label>
+           <div className="relative max-w-[200px]">
+             <Input
+               value={form.cep}
+               onChange={(e) => { const v = formatCEP(e.target.value); setForm({ ...form, cep: v }); lookupCep(v); }}
+               placeholder="00000-000"
+               maxLength={9}
+               autoFocus
+               className="text-lg h-12"
+             />
+             {fetchingCep && <Loader2 className="absolute right-3 top-3.5 h-4 w-4 animate-spin text-muted-foreground" />}
+           </div>
+         </div>
+
+         {/* Address fields - appear after CEP lookup */}
+         {(() => {
+           const cepDigits = form.cep.replace(/\D/g, "");
+           const addressLoaded = cepDigits.length === 8 && !fetchingCep && (form.address.trim() || form.city.trim());
+           if (!addressLoaded) return null;
+
+           const hasMissingStreet = !form.address.trim();
+           const hasMissingNeighborhood = !form.neighborhood.trim();
+
+           return (
+             <div className="animate-in slide-in-from-top-2 duration-200 space-y-3">
+               {/* Address summary card */}
+               <div className="bg-secondary/40 rounded-lg p-3 border border-border">
+                 <p className="text-xs text-muted-foreground mb-1">Endereço encontrado</p>
+                 <p className="text-sm font-medium">
+                   {form.address && `${form.address}, `}{form.neighborhood && `${form.neighborhood} - `}{form.city}/{form.state}
+                 </p>
+               </div>
+
+               {/* Manual fields for generic CEPs */}
+               {(hasMissingStreet || hasMissingNeighborhood) && (
+                 <div className="grid grid-cols-2 gap-3">
+                   {hasMissingStreet && (
+                     <div className="col-span-2">
+                       <Label className="text-sm">Rua *</Label>
+                       <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                     </div>
+                   )}
+                   {hasMissingNeighborhood && (
+                     <div className="col-span-2">
+                       <Label className="text-sm">Bairro *</Label>
+                       <Input value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} />
+                     </div>
+                   )}
+                 </div>
+               )}
+
+               {/* Number + Complement */}
+               <div className="grid grid-cols-2 gap-3">
+                 <div>
+                   <Label className="text-sm">Número *</Label>
+                   <Input value={form.addressNumber} onChange={(e) => setForm({ ...form, addressNumber: e.target.value })} autoFocus />
+                 </div>
+                 <div>
+                   <Label className="text-sm">Complemento</Label>
+                   <Input value={form.complement} onChange={(e) => setForm({ ...form, complement: e.target.value })} placeholder="Apto" />
+                 </div>
+               </div>
+             </div>
+           );
+         })()}
+       </div>
 
       {/* Freight Options */}
       {loadingFreight && (
