@@ -380,6 +380,36 @@ export async function executeAdsToolCall(
         // 8. Update order with cart link
         await supabase.from('orders').update({ cart_link: checkoutUrl }).eq('id', order.id);
 
+        // 9. Create follow-up records so cron sends payment reminders
+        const phoneForFollowup = phone.replace(/\D/g, '');
+        try {
+          // Insert chat_awaiting_payment (required for followup cron to send)
+          await supabase.from('chat_awaiting_payment').upsert(
+            { phone: phoneForFollowup, type: 'ads_checkout', sale_id: null },
+            { onConflict: 'phone' }
+          );
+
+          // Insert chat_payment_followups with escalating intervals
+          const firstReminder = new Date();
+          firstReminder.setMinutes(firstReminder.getMinutes() + 5);
+
+          await supabase.from('chat_payment_followups').insert({
+            phone: phoneForFollowup,
+            type: 'ads_checkout',
+            sale_id: null,
+            seller_id: null,
+            whatsapp_number_id: ctx.whatsappNumberId || null,
+            interval_minutes: 30,
+            max_reminders: 3,
+            reminder_count: 0,
+            next_reminder_at: firstReminder.toISOString(),
+            is_active: true,
+          });
+          console.log(`[generate_checkout_link] Follow-up created for ${phoneForFollowup}`);
+        } catch (fuErr) {
+          console.warn('[generate_checkout_link] Follow-up creation error (non-blocking):', fuErr);
+        }
+
         const total = args.amount * quantity;
         return {
           success: true,
