@@ -494,6 +494,134 @@ export async function executeAdsToolCall(
       };
     }
 
+    // ─── SEND PRODUCT IMAGE ───
+    case 'send_product_image': {
+      const query = args.query;
+      const caption = args.caption || '';
+      const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
+      const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+
+      let imageUrl: string | null = null;
+      let productTitle = query;
+
+      if (shopifyDomain && shopifyToken) {
+        try {
+          const graphql = `{
+            products(first: 1, query: "${query.replace(/"/g, '\\"')}") {
+              edges {
+                node {
+                  title
+                  images(first: 1) {
+                    edges { node { url } }
+                  }
+                }
+              }
+            }
+          }`;
+
+          const resp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopifyToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: graphql }),
+          });
+
+          const data = await resp.json();
+          const product = data?.data?.products?.edges?.[0]?.node;
+          if (product) {
+            productTitle = product.title;
+            imageUrl = product.images?.edges?.[0]?.node?.url || null;
+          }
+        } catch (err) {
+          console.error('[send_product_image] Shopify error:', err);
+        }
+      }
+
+      // Fallback: check catalog for image
+      if (!imageUrl) {
+        const catalog = campaign.product_info?.catalogo || [];
+        const searchLower = query.toLowerCase();
+        const matched = catalog.find((p: any) =>
+          (p.nome || '').toLowerCase().includes(searchLower) ||
+          (p.keywords || []).some((kw: string) => searchLower.includes(kw.toLowerCase()))
+        );
+        if (matched?.imagem) {
+          imageUrl = matched.imagem;
+          productTitle = matched.nome || query;
+        }
+      }
+
+      if (!imageUrl) {
+        return {
+          success: false,
+          error: 'Não encontrei imagem para esse produto. Descreva o produto por texto.',
+        };
+      }
+
+      // Send image via edge function (supports both Z-API and Meta)
+      try {
+        const sendPayload: any = {
+          phone,
+          mediaUrl: imageUrl,
+          mediaType: 'image',
+          caption: caption || productTitle,
+        };
+
+        // Determine which channel to use based on lead
+        const leadChannel = lead?.channel || 'zapi';
+        const whatsappNumberId = lead?.whatsapp_number_id;
+
+        if (leadChannel === 'meta') {
+          sendPayload.whatsapp_number_id = whatsappNumberId;
+          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sendPayload),
+          });
+        } else {
+          sendPayload.whatsapp_number_id = whatsappNumberId;
+          await fetch(`${supabaseUrl}/functions/v1/zapi-send-media`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sendPayload),
+          });
+        }
+
+        // Save message to DB
+        await supabase.from('whatsapp_messages').insert({
+          phone,
+          message: `[IA-ADS] 📷 ${caption || productTitle}`,
+          direction: 'outgoing',
+          media_type: 'image',
+          media_url: imageUrl,
+          whatsapp_number_id: whatsappNumberId,
+          is_mass_dispatch: false,
+          channel: leadChannel,
+        });
+
+        return {
+          success: true,
+          data: {
+            image_sent: true,
+            product_title: productTitle,
+            image_url: imageUrl,
+            message: `Foto do ${productTitle} enviada com sucesso!`,
+          },
+        };
+      } catch (err) {
+        console.error('[send_product_image] Send error:', err);
+        return { success: false, error: 'Erro ao enviar foto. Tente descrever o produto por texto.' };
+      }
+    }
+
     default:
       return { success: false, error: `Tool desconhecida: ${toolName}` };
   }
