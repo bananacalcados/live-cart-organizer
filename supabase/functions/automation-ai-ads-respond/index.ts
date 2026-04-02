@@ -445,6 +445,8 @@ REGRAS OBRIGATÓRIAS:
 - Fuso: America/Sao_Paulo
 - Quando o cliente informar dados (nome, tamanho, cidade, etc), use a tool save_lead_data para salvar.
 - Quando o cliente perguntar sobre detalhes do produto (cores, tamanhos disponíveis), use search_product.
+- Quando o cliente pedir fotos ou quiser ver o produto, use send_product_image para enviar a foto direto pelo WhatsApp.
+- Após apresentar o produto na primeira mensagem, use send_product_image para enviar a foto junto (reforço visual).
 - Quando gerar PIX, envie o código copia-e-cola em uma mensagem SEPARADA (apenas o código, sem texto).
 - NUNCA invente informações de produto. Se não souber, use search_product.`;
 
