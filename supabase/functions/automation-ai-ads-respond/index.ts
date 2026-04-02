@@ -753,7 +753,7 @@ REGRAS OBRIGATÓRIAS:
     let nextStage = situation as string;
     if (situation === 'info_qualificacao' && !isFirstMessage) nextStage = 'duvidas';
     if (allToolCalls.includes('register_live_reminder')) nextStage = 'followup_2';
-    if (allToolCalls.includes('generate_pix') || allToolCalls.includes('generate_card_link') || allToolCalls.includes('confirm_delivery_payment')) {
+    if (allToolCalls.includes('generate_checkout_link') || allToolCalls.includes('confirm_delivery_payment')) {
       nextStage = 'pagamento';
     }
 
