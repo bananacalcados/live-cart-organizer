@@ -332,49 +332,70 @@ function PixPaymentSection({
           <Input id="pix-cpf" value={cpf} onChange={(e) => setCpf(formatCPF(e.target.value))} placeholder="000.000.000-00" maxLength={14} />
         </div>
 
-        <div className="pt-2 border-t">
-          <p className="text-xs text-muted-foreground mb-3">Endereço de entrega</p>
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-1">
-                <Label htmlFor="pix-cep" className="text-sm">CEP</Label>
-                <Input
-                  id="pix-cep"
-                  value={cep}
-                  onChange={(e) => {
-                    const v = formatCEP(e.target.value);
-                    setCep(v);
-                    lookupCep(v);
-                  }}
-                  placeholder="00000-000"
-                  maxLength={9}
-                />
-              </div>
-              <div className="col-span-2">
-                <Label htmlFor="pix-street" className="text-sm">Rua</Label>
-                <Input id="pix-street" value={street} onChange={(e) => setStreet(e.target.value)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label htmlFor="pix-number" className="text-sm">Número</Label>
-                <Input id="pix-number" value={number} onChange={(e) => setNumber(e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="pix-neighborhood" className="text-sm">Bairro</Label>
-                <Input id="pix-neighborhood" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="pix-city" className="text-sm">Cidade</Label>
-                <Input id="pix-city" value={city} onChange={(e) => setCity(e.target.value)} />
-              </div>
-            </div>
-            <div className="w-20">
-              <Label htmlFor="pix-state" className="text-sm">UF</Label>
-              <Input id="pix-state" value={state} onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))} maxLength={2} />
-            </div>
-          </div>
-        </div>
+         <div className="pt-2 border-t">
+           <p className="text-xs text-muted-foreground mb-3">Endereço de entrega</p>
+           <div className="space-y-3">
+             {/* CEP field - always visible */}
+             <div className="max-w-[200px]">
+               <Label htmlFor="pix-cep" className="text-sm">CEP</Label>
+               <Input
+                 id="pix-cep"
+                 value={cep}
+                 onChange={(e) => {
+                   const v = formatCEP(e.target.value);
+                   setCep(v);
+                   lookupCep(v);
+                 }}
+                 placeholder="00000-000"
+                 maxLength={9}
+                 className="text-lg h-12"
+               />
+             </div>
+
+             {/* Address fields - appear after CEP lookup */}
+             {(() => {
+               const cepDigits = cep.replace(/\D/g, "");
+               const addressLoaded = cepDigits.length === 8 && (street.trim() || city.trim());
+               if (!addressLoaded) return null;
+
+               return (
+                 <div className="animate-in slide-in-from-top-2 duration-200 space-y-3">
+                   <div className="bg-secondary/40 rounded-lg p-3 border border-border">
+                     <p className="text-xs text-muted-foreground mb-1">Endereço encontrado</p>
+                     <p className="text-sm font-medium">
+                       {street && `${street}, `}{neighborhood && `${neighborhood} - `}{city}/{state}
+                     </p>
+                   </div>
+
+                   {/* Manual fields for generic CEPs */}
+                   {(!street.trim() || !neighborhood.trim()) && (
+                     <div className="space-y-3">
+                       {!street.trim() && (
+                         <div>
+                           <Label htmlFor="pix-street" className="text-sm">Rua</Label>
+                           <Input id="pix-street" value={street} onChange={(e) => setStreet(e.target.value)} />
+                         </div>
+                       )}
+                       {!neighborhood.trim() && (
+                         <div>
+                           <Label htmlFor="pix-neighborhood" className="text-sm">Bairro</Label>
+                           <Input id="pix-neighborhood" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} />
+                         </div>
+                       )}
+                     </div>
+                   )}
+
+                   <div className="grid grid-cols-2 gap-3">
+                     <div>
+                       <Label htmlFor="pix-number" className="text-sm">Número</Label>
+                       <Input id="pix-number" value={number} onChange={(e) => setNumber(e.target.value)} autoFocus />
+                     </div>
+                   </div>
+                 </div>
+               );
+             })()}
+           </div>
+         </div>
       </div>
 
       <Button onClick={handleGeneratePix} disabled={isGenerating} className="w-full h-14 text-lg font-semibold" size="lg">
