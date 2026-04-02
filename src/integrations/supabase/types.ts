@@ -1633,6 +1633,53 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_scheduled_followups: {
+        Row: {
+          campaign_id: string | null
+          created_at: string
+          id: string
+          is_sent: boolean
+          phone: string
+          reason: string
+          scheduled_at: string
+          sent_at: string | null
+          situation_hint: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          created_at?: string
+          id?: string
+          is_sent?: boolean
+          phone: string
+          reason?: string
+          scheduled_at: string
+          sent_at?: string | null
+          situation_hint?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          created_at?: string
+          id?: string
+          is_sent?: boolean
+          phone?: string
+          reason?: string
+          scheduled_at?: string
+          sent_at?: string | null
+          situation_hint?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_scheduled_followups_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns_ai"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_sector_agents: {
         Row: {
           created_at: string

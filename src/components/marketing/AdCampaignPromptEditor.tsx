@@ -24,6 +24,7 @@ interface SituationPrompt {
 const SITUATION_META: Record<string, { label: string; icon: string; description: string }> = {
   info_qualificacao: { label: "Informação + Qualificação", icon: "👋", description: "Primeiro contato: saudar, apresentar produto e perguntar tamanho" },
   duvidas: { label: "Dúvidas", icon: "❓", description: "Responder perguntas do cliente (ativado por sub-situações)" },
+  objecoes: { label: "Objeções", icon: "🛡️", description: "Cliente apresenta resistência ou adia a compra" },
   followup_1: { label: "Follow-up 1", icon: "🔔", description: "Cliente não respondeu — retomar conversa" },
   coleta_dados: { label: "Coleta de Dados", icon: "📋", description: "Coletar nome, CPF, endereço, email (um por vez)" },
   pagamento: { label: "Pagamento", icon: "💳", description: "Perguntar forma de pagamento e enviar link/PIX" },
@@ -41,6 +42,13 @@ const SUB_SITUATION_META: Record<string, { label: string; icon: string }> = {
   fotos: { label: "Fotos", icon: "📸" },
   desconto: { label: "Descontos", icon: "🏷️" },
   geral: { label: "Dúvida Geral", icon: "💬" },
+};
+
+const OBJECTION_SUB_META: Record<string, { label: string; icon: string }> = {
+  objecao_financeira: { label: "Financeira (cartão, caro)", icon: "💸" },
+  objecao_consulta: { label: "Consultar alguém", icon: "👥" },
+  objecao_pensar: { label: "Vou pensar", icon: "🤔" },
+  objecao_recusa: { label: "Não quer / Agradece", icon: "👋" },
 };
 
 interface Props {
@@ -162,7 +170,7 @@ export default function AdCampaignPromptEditor({ campaignId }: Props) {
     const editedText = getEditedText(situation, subSituation);
     const currentText = editedText ?? prompt?.prompt_text ?? "";
     const hasChanges = editedText !== null && editedText !== (prompt?.prompt_text ?? "");
-    const subMeta = subSituation ? SUB_SITUATION_META[subSituation] : null;
+    const subMeta = subSituation ? (SUB_SITUATION_META[subSituation] || OBJECTION_SUB_META[subSituation] || null) : null;
 
     return (
       <div key={`${situation}-${subSituation || "main"}`} className={`p-3 rounded-lg border ${isOverride ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"}`}>
@@ -229,7 +237,7 @@ export default function AdCampaignPromptEditor({ campaignId }: Props) {
       {situations.map(situation => {
         const meta = SITUATION_META[situation];
         const isExpanded = expandedSituation === situation;
-        const subSituations = situation === "duvidas" ? Object.keys(SUB_SITUATION_META) : [];
+        const subSituations = situation === "duvidas" ? Object.keys(SUB_SITUATION_META) : situation === "objecoes" ? Object.keys(OBJECTION_SUB_META) : [];
         const overrideCount = campaignPrompts.filter(p => p.situation === situation).length;
 
         return (
