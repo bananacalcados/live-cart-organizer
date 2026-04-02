@@ -6,6 +6,278 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ─── Situation Detection ─────────────────────────────────────────────────────
+
+type Situation =
+  | 'info_qualificacao'   // Present product + ask size (first contact)
+  | 'duvidas'             // Answer questions only when asked
+  | 'followup_1'          // Client not responding
+  | 'coleta_dados'        // Collect address, name, CPF, email
+  | 'pagamento'           // Ask payment method + send link/PIX
+  | 'followup_2'          // Post-payment or post-ghosting → pivot to Live
+  | 'requalificacao';     // Client asks about different product
+
+interface SituationContext {
+  situation: Situation;
+  lead: any;
+  campaign: any;
+  event: any | null;
+  messageText: string;
+  collectedData: Record<string, any>;
+  missingFields: string[];
+  isFromGV: boolean;
+}
+
+function detectSituation(ctx: {
+  lead: any;
+  messageText: string;
+  campaign: any;
+  isFirstMessage: boolean;
+  collectedData: Record<string, any>;
+  hasAllRequiredData: boolean;
+}): Situation {
+  const { lead, messageText, campaign, isFirstMessage, collectedData, hasAllRequiredData } = ctx;
+  const msgLower = (messageText || '').toLowerCase().trim();
+  const currentStage = lead?.conversation_stage || 'info_qualificacao';
+
+  // Check if client asks about a DIFFERENT product (requalificacao)
+  if (!isFirstMessage && currentStage !== 'info_qualificacao') {
+    const catalogProducts = campaign.product_info?.catalogo || [];
+    if (catalogProducts.length > 1) {
+      const currentKeywords = lead?.interested_product_keywords || [];
+      const mentionsDifferent = catalogProducts.some((p: any) =>
+        (p.keywords || []).some((kw: string) =>
+          msgLower.includes(kw.toLowerCase()) && !currentKeywords.includes(kw.toLowerCase())
+        )
+      );
+      if (mentionsDifferent) return 'requalificacao';
+    }
+  }
+
+  // First message → info + qualification
+  if (isFirstMessage) return 'info_qualificacao';
+
+  // If payment was already sent and we're following up
+  if (lead?.payment_link_sent && currentStage === 'pagamento') return 'followup_2';
+
+  // If all data collected → payment
+  if (hasAllRequiredData && currentStage !== 'pagamento' && !lead?.payment_link_sent) return 'pagamento';
+
+  // If we already presented the product and client is responding → check if it's a question
+  if (currentStage === 'info_qualificacao' || currentStage === 'duvidas') {
+    // Check if the message contains data (name, size, city, etc.) → might be moving to coleta
+    const dataFields = campaign.data_to_collect || [];
+    const hasEnoughQualification = collectedData.tamanho || collectedData.calcado;
+    if (hasEnoughQualification && !hasAllRequiredData) return 'coleta_dados';
+    
+    // Otherwise treat as potential question/response
+    return 'duvidas';
+  }
+
+  // If in coleta_dados stage, stay there until all data collected
+  if (currentStage === 'coleta_dados' && !hasAllRequiredData) return 'coleta_dados';
+
+  // Default: stay in current stage
+  return currentStage as Situation;
+}
+
+// ─── Situation-Specific Prompts ──────────────────────────────────────────────
+
+function getInfoQualificacaoPrompt(ctx: SituationContext): string {
+  const product = getMatchedProduct(ctx.campaign, ctx.messageText);
+  const productInfo = product
+    ? `Produto: ${product.nome} — R$ ${product.preco}${product.detalhes ? ` (${product.detalhes})` : ''}`
+    : formatProductList(ctx.campaign);
+
+  return `SITUAÇÃO: PRIMEIRO CONTATO — INFORMAÇÃO + QUALIFICAÇÃO
+
+O cliente chegou pelo anúncio e quer saber sobre o produto. Sua missão:
+1. Cumprimentar brevemente (Oii! / Oi, tudo bem?)
+2. Apresentar o produto com preço e benefício principal em UMA frase
+3. Perguntar o tamanho/número do calçado
+
+${productInfo}
+
+FORMATO DA RESPOSTA: Máximo 2 linhas + pergunta do tamanho. Exemplo:
+"Oii! O tênis Jess é ortopédico e está saindo a R$ 279,99 com frete grátis 😍 Qual número você calça?"`;
+}
+
+function getDuvidasPrompt(ctx: SituationContext): string {
+  return `SITUAÇÃO: RESPONDER DÚVIDA DO CLIENTE
+
+O cliente está perguntando algo. Responda APENAS o que foi perguntado, de forma direta.
+
+GUIA DE RESPOSTAS POR TIPO DE DÚVIDA:
+
+📏 TAMANHO: "Vai do 34 ao 39! Qual é o seu?" (adapte ao catálogo real)
+
+🎨 CORES: Descreva as cores disponíveis brevemente. Se não souber as cores exatas, diga "Temos algumas opções lindas! Posso te mostrar?"
+
+🚚 ENTREGA/FRETE: 
+${ctx.isFromGV ? '- Cliente de Valadares: "Entregamos aí em Valadares! Pode ser pagamento na entrega também 😉"' : '- "Enviamos pra todo o Brasil com frete grátis!" (se aplicável)'}
+
+📍 DE ONDE SOMOS: "Somos de Governador Valadares - MG!"
+
+💰 FORMA DE PAGAMENTO: "Aceitamos PIX, cartão em até 6x sem juros${ctx.isFromGV ? ' e pagamento na entrega pra quem é de Valadares' : ''}!"
+
+🏷️ DESCONTO: Mencione apenas descontos reais da campanha. Nunca invente.
+
+📸 FOTOS: "Vou verificar e te mando! 😊" (não invente que tem fotos se não tiver)
+
+REGRA: Responda a dúvida em NO MÁXIMO 2 linhas. Depois, se ainda não coletou tamanho, pergunte. Se já tem tamanho, avance para coleta de dados.
+
+Dados já coletados: ${JSON.stringify(ctx.collectedData)}
+Dados faltando: ${ctx.missingFields.join(', ') || 'Nenhum'}`;
+}
+
+function getFollowup1Prompt(ctx: SituationContext): string {
+  const stage = ctx.lead?.conversation_stage || 'info_qualificacao';
+  const followupCount = ctx.lead?.followup_count || 0;
+
+  let contextualFollowup = '';
+  if (stage === 'info_qualificacao') {
+    contextualFollowup = 'O cliente recebeu info do produto mas não respondeu. Pergunte se ficou com alguma dúvida sobre o produto.';
+  } else if (stage === 'duvidas') {
+    contextualFollowup = 'O cliente estava tirando dúvidas e parou de responder. Retome de forma leve.';
+  } else if (stage === 'coleta_dados') {
+    contextualFollowup = 'O cliente estava passando os dados e parou. Pergunte se está tudo bem e se pode continuar.';
+  } else if (stage === 'pagamento') {
+    contextualFollowup = 'O cliente recebeu as formas de pagamento e não respondeu. Pergunte se precisa de ajuda.';
+  }
+
+  return `SITUAÇÃO: FOLLOW-UP (tentativa ${followupCount + 1})
+
+${contextualFollowup}
+
+REGRAS:
+- Mensagem SUPER curta (1 linha apenas)
+- Tom casual e leve, sem pressão
+- Não repita informações já ditas
+- Exemplos: "E aí, conseguiu ver? 😊", "Oi! Ficou com alguma dúvida?", "Oi! Ainda com interesse? 💛"`;
+}
+
+function getColetaDadosPrompt(ctx: SituationContext): string {
+  const missing = ctx.missingFields;
+  const nextField = missing[0]; // Collect one at a time
+
+  const fieldPrompts: Record<string, string> = {
+    nome: 'Pergunte o nome completo. Ex: "Pra finalizar, qual seu nome completo?"',
+    cidade: 'Pergunte a cidade. Ex: "De qual cidade você é?"',
+    endereco: 'Peça o endereço completo com CEP. Ex: "Me passa o endereço completo com CEP pra entrega?"',
+    cep: 'Peça o CEP. Ex: "Qual seu CEP?"',
+    cpf: 'Peça o CPF. Ex: "E o CPF?"',
+    email: 'Peça o e-mail. Ex: "E um e-mail pra enviar a nota fiscal?"',
+    tamanho: 'Pergunte o tamanho/número. Ex: "Qual número você calça?"',
+    calcado: 'Pergunte o tamanho/número. Ex: "Qual número você calça?"',
+  };
+
+  return `SITUAÇÃO: COLETA DE DADOS
+
+Colete UM dado por vez de forma natural. Não faça interrogatório.
+
+PRÓXIMO DADO A COLETAR: ${nextField}
+${fieldPrompts[nextField] || `Pergunte: "${nextField}"`}
+
+Dados já coletados: ${JSON.stringify(ctx.collectedData)}
+Dados faltando: ${missing.join(', ')}
+
+REGRA: UMA pergunta por mensagem. Máximo 1 linha.`;
+}
+
+function getPagamentoPrompt(ctx: SituationContext): string {
+  const paymentConditions = ctx.campaign.payment_conditions || '6x sem juros no cartão ou PIX';
+
+  return `SITUAÇÃO: PAGAMENTO
+
+Todos os dados foram coletados! Agora pergunte a forma de pagamento.
+
+${ctx.isFromGV
+    ? `O cliente é de GOVERNADOR VALADARES. Ofereça: PIX, Cartão (${paymentConditions}) ou Pagamento na Entrega.`
+    : `Ofereça: PIX ou Cartão (${paymentConditions}).`}
+
+FORMATO: 
+"Como prefere pagar? 😊
+${ctx.isFromGV ? '1️⃣ PIX\n2️⃣ Cartão (6x sem juros)\n3️⃣ Pagamento na entrega' : '1️⃣ PIX\n2️⃣ Cartão (6x sem juros)'}"
+
+Se o cliente escolher PIX: responda com a chave PIX em mensagem separada usando [ACAO:enviar_pix]
+Se o cliente escolher Cartão: use [ACAO:gerar_link_cartao]
+Se o cliente escolher entrega (só GV): confirme que será pago na entrega e use [ACAO:pagamento_entrega]`;
+}
+
+function getFollowup2Prompt(ctx: SituationContext): string {
+  const hasEvent = !!ctx.event;
+  const liveInviteSent = ctx.lead?.live_invite_sent;
+
+  let liveContext = '';
+  if (hasEvent && !liveInviteSent) {
+    const eventDate = new Date(ctx.event.starts_at);
+    liveContext = `
+MUDE DE ASSUNTO para a LIVE:
+- Nome: ${ctx.event.name}
+- Data: ${eventDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${eventDate.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
+- PERGUNTE se o cliente quer ser LEMBRADO quando a live começar
+- Exemplo: "A propósito, sábado teremos uma Live com ofertas incríveis! Quer que eu te avise quando começar? 😍"`;
+  } else if (hasEvent && liveInviteSent) {
+    liveContext = 'Já convidou para a live. Apenas faça um follow-up leve e final.';
+  }
+
+  return `SITUAÇÃO: FOLLOW-UP 2 (mudança de assunto)
+
+O cliente não avançou no pagamento ou não respondeu os follow-ups anteriores.
+É hora de mudar de assunto e tentar engajar de outra forma.
+
+${liveContext || 'Não há evento programado. Faça um follow-up final amigável e se despida.'}
+
+REGRA IMPORTANTE: PERGUNTE se o cliente quer participar/ser lembrado. Não apenas informe.
+Máximo 2 linhas.`;
+}
+
+function getRequalificacaoPrompt(ctx: SituationContext): string {
+  const catalog = ctx.campaign.product_info?.catalogo || [];
+
+  return `SITUAÇÃO: REQUALIFICAÇÃO — CLIENTE PERGUNTOU SOBRE OUTRO PRODUTO
+
+O cliente demonstrou interesse em algo diferente do produto inicial.
+
+CATÁLOGO DISPONÍVEL:
+${catalog.map((p: any, i: number) => `${i + 1}. ${p.nome} — R$ ${p.preco}${p.detalhes ? ` (${p.detalhes})` : ''}`).join('\n')}
+
+MISSÃO:
+1. Entenda o que o cliente procura (preço diferente? estilo diferente?)
+2. Apresente as opções relevantes do catálogo
+3. Pergunte qual interessou
+
+Máximo 2 linhas + pergunta.`;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getMatchedProduct(campaign: any, messageText: string): any | null {
+  const catalog = campaign.product_info?.catalogo;
+  if (!catalog || !Array.isArray(catalog)) return null;
+  const msgLower = (messageText || '').toLowerCase();
+  return catalog.find((p: any) =>
+    (p.keywords || []).some((kw: string) => msgLower.includes(kw.toLowerCase()))
+  ) || catalog[0]; // Default to first product
+}
+
+function formatProductList(campaign: any): string {
+  const catalog = campaign.product_info?.catalogo;
+  if (!catalog || !Array.isArray(catalog)) {
+    return campaign.product_info ? `Produto: ${JSON.stringify(campaign.product_info)}` : '';
+  }
+  return 'CATÁLOGO:\n' + catalog.map((p: any, i: number) =>
+    `${i + 1}. ${p.nome} — R$ ${p.preco}${p.detalhes ? ` (${p.detalhes})` : ''}`
+  ).join('\n');
+}
+
+function isFromGV(collectedData: Record<string, any>): boolean {
+  const city = (collectedData.cidade || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return city.includes('valadares') || city.includes('gv') || city === 'gov valadares';
+}
+
+// ─── Main Handler ────────────────────────────────────────────────────────────
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -17,6 +289,7 @@ serve(async (req) => {
       whatsappNumberId,
       channel = 'zapi',
       historyLimit = 20,
+      isFollowup = false,
     } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -30,7 +303,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Load the campaign
+    // 1. Load campaign
     let campaign: any = null;
     if (campaignId) {
       const { data } = await supabase
@@ -42,13 +315,11 @@ serve(async (req) => {
       campaign = data;
     }
 
-    // If no campaignId, try to detect via keyword matching
     if (!campaign && messageText) {
       const { data: campaigns } = await supabase
         .from('ad_campaigns_ai')
         .select('*')
         .eq('is_active', true);
-
       if (campaigns) {
         const msgLower = (messageText || '').toLowerCase().trim();
         campaign = campaigns.find((c: any) =>
@@ -75,7 +346,13 @@ serve(async (req) => {
       .eq('is_active', true)
       .maybeSingle();
 
+    const isFirstMessage = !existingLead;
+
     if (!existingLead) {
+      // Detect product keywords from first message
+      const matchedProduct = getMatchedProduct(campaign, messageText);
+      const productKeywords = matchedProduct?.keywords || [];
+
       const { data: newLead } = await supabase
         .from('ad_leads')
         .insert({
@@ -86,171 +363,102 @@ serve(async (req) => {
           event_id: campaign.event_id,
           whatsapp_number_id: whatsappNumberId,
           channel,
+          conversation_stage: 'info_qualificacao',
+          interested_product_keywords: productKeywords,
         })
         .select()
         .single();
       existingLead = newLead;
     }
 
-    // 3. Load event info if campaign is linked to one
-    let eventContext = '';
+    const collectedData = (existingLead?.collected_data as Record<string, any>) || {};
+    const requiredFields = campaign.data_to_collect || [];
+    const missingFields = requiredFields.filter((f: string) => !collectedData[f]);
+    const hasAllRequiredData = missingFields.length === 0;
+    const clientIsFromGV = isFromGV(collectedData);
+
+    // 3. Detect situation
+    let situation: Situation;
+    if (isFollowup) {
+      const followupCount = existingLead?.followup_count || 0;
+      situation = followupCount >= 3 ? 'followup_2' : 'followup_1';
+    } else {
+      situation = detectSituation({
+        lead: existingLead,
+        messageText,
+        campaign,
+        isFirstMessage,
+        collectedData,
+        hasAllRequiredData,
+      });
+    }
+
+    // 4. Load event context
+    let eventData: any = null;
     if (campaign.event_id) {
       const { data: event } = await supabase
         .from('events')
         .select('id, name, starts_at, status, description')
         .eq('id', campaign.event_id)
         .maybeSingle();
-
-      if (event) {
-        const now = new Date();
-        const brNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-        const eventDate = new Date(event.starts_at);
-        const diffMs = eventDate.getTime() - brNow.getTime();
-        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-        let statusText = '';
-        if (event.status === 'live') {
-          statusText = 'A live está acontecendo AGORA! Mande o link para o cliente participar.';
-        } else if (event.status === 'ended' || diffDays < 0) {
-          statusText = `A live "${event.name}" já aconteceu. Informe que quando houver outra, você avisa. Pergunte se ele quer ficar na lista.`;
-        } else if (diffDays === 0) {
-          statusText = `A live "${event.name}" é HOJE! Crie expectativa e garanta que o cliente saiba o horário.`;
-        } else {
-          statusText = `A live "${event.name}" será em ${diffDays} dia(s), no dia ${eventDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}. Crie expectativa!`;
-        }
-
-        eventContext = `
-INFORMAÇÕES DO EVENTO/LIVE:
-- Nome: ${event.name}
-- Data: ${eventDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${eventDate.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
-- Status: ${statusText}
-- Descrição: ${event.description || 'N/A'}`;
-      }
+      eventData = event;
     }
 
-    // 4. Build product/payment context
-    let productContext = '';
-    if (campaign.product_info) {
-      const pi = campaign.product_info;
-      if (pi.catalogo && Array.isArray(pi.catalogo) && pi.catalogo.length > 0) {
-        productContext = `
-CATÁLOGO DE PRODUTOS DA CAMPANHA:
-${pi.catalogo.map((p: any, i: number) => `${i + 1}. ${p.nome} — R$ ${p.preco}${p.detalhes ? ` (${p.detalhes})` : ''}${p.keywords?.length ? ` [ativado por: ${p.keywords.join(', ')}]` : ''}`).join('\n')}
+    // 5. Build situation-specific prompt
+    const sitCtx: SituationContext = {
+      situation,
+      lead: existingLead,
+      campaign,
+      event: eventData,
+      messageText,
+      collectedData,
+      missingFields,
+      isFromGV: clientIsFromGV,
+    };
 
-IMPORTANTE: Quando o cliente mencionar um produto específico (pelas keywords ou nome), apresente as informações DAQUELE produto. Se não ficar claro qual produto, pergunte qual interessa.`;
-      } else {
-        productContext = `
-INFORMAÇÕES DO PRODUTO/OFERTA:
-${JSON.stringify(pi, null, 2)}`;
-      }
-    }
-    if (campaign.payment_conditions) {
-      productContext += `
-CONDIÇÕES DE PAGAMENTO: ${campaign.payment_conditions}`;
-    }
-
-    // 5. Lead data context
-    const collectedData = existingLead?.collected_data || {};
-    const missingFields = (campaign.data_to_collect || []).filter(
-      (f: string) => !collectedData[f]
-    );
-
-    let leadContext = `
-DADOS DO LEAD:
-- Telefone: ${normalizedPhone}
-- Temperatura: ${existingLead?.temperature || 'frio'}
-- Dados coletados: ${Object.keys(collectedData).length > 0 ? JSON.stringify(collectedData) : 'Nenhum ainda'}
-- Dados faltando: ${missingFields.length > 0 ? missingFields.join(', ') : 'Todos coletados ✅'}`;
-
-    // 6. Build objective instructions
-    let objectiveInstructions = '';
-    switch (campaign.objective) {
-      case 'venda_direta':
-        objectiveInstructions = `
-OBJETIVO PRINCIPAL: VENDA DIRETA
-- Apresente o produto/oferta de forma natural e envolvente.
-- Colete os dados necessários (${(campaign.data_to_collect || []).join(', ')}).
-- Tire dúvidas sobre o produto, tamanho, cor, etc.
-- Ofereça condições de pagamento e gere link quando possível.
-- Se o cliente NÃO comprar após algumas interações, tente novamente de forma sutil.
-- ${campaign.post_sale_action === 'convite_live' && campaign.event_id ? 'Se o cliente COMPRAR ou demonstrar que não vai comprar agora, convide para a Live como alternativa.' : ''}`;
-        break;
-      case 'captacao_live':
-        objectiveInstructions = `
-OBJETIVO PRINCIPAL: CAPTAÇÃO PARA LIVE
-- Explique sobre a Live: o que é, quando será, o que vai ter.
-- Crie expectativa e urgência (vagas limitadas, ofertas exclusivas, etc).
-- Colete os dados necessários (${(campaign.data_to_collect || []).join(', ')}).
-- Confirme a participação do cliente.
-- ${campaign.post_capture_action === 'oferta_produto' ? 'Se o cliente demonstrar interesse em comprar agora, ofereça produtos disponíveis.' : ''}`;
-        break;
-      case 'hibrido':
-        objectiveInstructions = `
-OBJETIVO: HÍBRIDO (VENDA + CAPTAÇÃO LIVE)
-- Entenda primeiro o que trouxe o cliente (interesse em produto ou na live).
-- Se interesse em COMPRA: apresente produto, tire dúvidas, ofereça pagamento.
-- Se interesse na LIVE: explique sobre o evento, crie expectativa, confirme participação.
-- Em AMBOS os casos, colete os dados necessários (${(campaign.data_to_collect || []).join(', ')}).
-- Se não converter na venda, convide para a live. Se já captou para live, ofereça produtos.`;
-        break;
+    let situationPrompt = '';
+    switch (situation) {
+      case 'info_qualificacao': situationPrompt = getInfoQualificacaoPrompt(sitCtx); break;
+      case 'duvidas': situationPrompt = getDuvidasPrompt(sitCtx); break;
+      case 'followup_1': situationPrompt = getFollowup1Prompt(sitCtx); break;
+      case 'coleta_dados': situationPrompt = getColetaDadosPrompt(sitCtx); break;
+      case 'pagamento': situationPrompt = getPagamentoPrompt(sitCtx); break;
+      case 'followup_2': situationPrompt = getFollowup2Prompt(sitCtx); break;
+      case 'requalificacao': situationPrompt = getRequalificacaoPrompt(sitCtx); break;
     }
 
-    // 7. Temperature classification instructions
-    const temperatureInstructions = `
-CLASSIFICAÇÃO DE TEMPERATURA DO LEAD:
-Após cada interação, avalie a temperatura do lead e inclua no final da resposta:
-[TEMPERATURA:valor]
+    // 6. Base persona prompt
+    const basePrompt = campaign.prompt || 'Você é uma atendente simpática e consultora de vendas.';
 
-Critérios:
-- frio: Apenas recebeu a msg, não demonstrou interesse real
-- morno: Respondeu, fez perguntas, mas sem compromisso
-- quente: Demonstrou interesse claro (perguntou preço, tamanho, como comprar, confirmou presença na live)
-- super_quente: Pediu link de pagamento, disse que vai comprar, ou confirmou presença com entusiasmo
-- convertido: Comprou ou se cadastrou oficialmente para a live
-
-A tag deve ser a ÚLTIMA coisa na resposta, após uma quebra de linha.`;
-
-    // 8. Data extraction instructions
-    const dataExtractionInstructions = `
-EXTRAÇÃO DE DADOS:
-Quando o cliente informar dados, inclua na resposta:
-[DADOS:campo=valor]
-
-Campos possíveis: ${(campaign.data_to_collect || []).join(', ')}
-Exemplo: [DADOS:nome=Maria Silva] [DADOS:tamanho=38]
-
-Importante: Colete os dados de forma NATURAL na conversa. Não faça um interrogatório.
-Pergunte um dado por vez, de forma contextualizada.`;
-
-    // 9. Assemble system prompt
-    const basePrompt = campaign.prompt || 'Você é uma atendente simpática da Banana Calçados. Responda de forma natural, curta e envolvente em português brasileiro.';
-    
     const systemPrompt = `${basePrompt}
 
-${objectiveInstructions}
-${eventContext}
-${productContext}
-${leadContext}
+${situationPrompt}
 
-${temperatureInstructions}
-${dataExtractionInstructions}
+REGRAS OBRIGATÓRIAS:
+- Mensagens ULTRA CURTAS: máximo 2 linhas. Parece WhatsApp real.
+- NÃO repita informações já ditas nas mensagens anteriores.
+- Use o nome do cliente se já souber: ${collectedData.nome || 'ainda não sabe'}
+- Fuso: America/Sao_Paulo
 
-REGRAS GERAIS:
-- Seja simpática, natural e humana. Nada de parecer robô.
-- Mensagens ULTRA CURTAS: máximo 2 linhas de texto + 1 pergunta. Menos é mais.
-- NUNCA escreva parágrafos longos. Cada mensagem deve parecer uma mensagem de WhatsApp real.
-- NÃO repita informações que já disse nas mensagens anteriores.
-- Varie suas respostas. Não siga sempre o mesmo padrão.
-- Não termine TODAS as mensagens com pergunta. Às vezes apenas responda.
-- Use o nome do cliente se já souber.
-- Fuso horário: America/Sao_Paulo (horário de Brasília).`;
+EXTRAÇÃO DE DADOS (inclua no final quando o cliente informar):
+[DADOS:campo=valor] — Campos: ${requiredFields.join(', ')}
+Exemplo: [DADOS:nome=Maria] [DADOS:tamanho=38]
 
-    // 10. Build chat history
+CLASSIFICAÇÃO DE TEMPERATURA (inclua no final):
+[TEMPERATURA:valor] — frio|morno|quente|super_quente|convertido
+
+AÇÕES DISPONÍVEIS (use quando necessário):
+[ACAO:enviar_pix] — Quando cliente escolher PIX
+[ACAO:gerar_link_cartao] — Quando cliente escolher cartão
+[ACAO:pagamento_entrega] — Quando cliente de GV escolher entrega
+[ACAO:convidar_live] — Quando convidar para a live
+[ACAO:lembrar_live] — Quando cliente aceitar ser lembrado da live`;
+
+    // 7. Build chat history
     const chatMessages: Array<{ role: string; content: string }> = [
       { role: 'system', content: systemPrompt },
     ];
 
-    // Fetch only recent messages (last 2 hours) to avoid mixing old contexts
     const historyWindowCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const { data: dbMessages } = await supabase
       .from('whatsapp_messages')
@@ -260,17 +468,13 @@ REGRAS GERAIS:
       .order('created_at', { ascending: false })
       .limit(historyLimit);
 
-    // Reverse to chronological order after fetching most recent
     const chronologicalMessages = (dbMessages || []).reverse();
 
     for (const msg of chronologicalMessages) {
       const text = msg.message?.trim();
       if (!text) continue;
-      // Skip template placeholders
       if (/\{\{\d+\}\}/.test(text)) continue;
-      // Skip messages from other AI agents (Concierge, Livete) to avoid context contamination
       if (text.startsWith('[IA]') || text.startsWith('[IA-CONCIERGE]') || text.startsWith('[IA-LIVETE]')) continue;
-      // Skip mass dispatch messages
       if (text.length > 500) continue;
       chatMessages.push({
         role: msg.direction === 'incoming' ? 'user' : 'assistant',
@@ -278,7 +482,6 @@ REGRAS GERAIS:
       });
     }
 
-    // Add current message if not already in history
     if (messageText) {
       const last = chatMessages[chatMessages.length - 1];
       if (!last || last.role !== 'user' || last.content !== messageText) {
@@ -286,9 +489,9 @@ REGRAS GERAIS:
       }
     }
 
-    console.log(`[ads-ai] Responding for phone=${normalizedPhone}, campaign=${campaign.name}, objective=${campaign.objective}, temperature=${existingLead?.temperature || 'frio'}`);
+    console.log(`[ads-ai] phone=${normalizedPhone}, campaign=${campaign.name}, situation=${situation}, stage=${existingLead?.conversation_stage}, temp=${existingLead?.temperature || 'frio'}`);
 
-    // 11. Call AI
+    // 8. Call AI
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -298,7 +501,7 @@ REGRAS GERAIS:
       body: JSON.stringify({
         model: 'google/gemini-3-flash-preview',
         messages: chatMessages,
-        max_tokens: 250,
+        max_tokens: 200,
         stream: false,
       }),
     });
@@ -320,7 +523,7 @@ REGRAS GERAIS:
     const data = await response.json();
     let reply = data.choices?.[0]?.message?.content || '';
 
-    // 12. Parse temperature tag
+    // 9. Parse temperature
     let newTemperature: string | null = null;
     const tempMatch = reply.match(/\[TEMPERATURA:(\w+)\]/);
     if (tempMatch) {
@@ -328,7 +531,7 @@ REGRAS GERAIS:
       reply = reply.replace(tempMatch[0], '').trim();
     }
 
-    // 13. Parse data extraction tags
+    // 10. Parse data extraction
     const dataMatches = [...reply.matchAll(/\[DADOS:(\w+)=([^\]]+)\]/g)];
     const extractedData: Record<string, string> = {};
     for (const m of dataMatches) {
@@ -336,10 +539,25 @@ REGRAS GERAIS:
       reply = reply.replace(m[0], '').trim();
     }
 
-    // 14. Update lead with extracted data and temperature
+    // 11. Parse actions
+    const actionMatches = [...reply.matchAll(/\[ACAO:(\w+)\]/g)];
+    const actions: string[] = actionMatches.map(m => m[1]);
+    for (const m of actionMatches) {
+      reply = reply.replace(m[0], '').trim();
+    }
+
+    // 12. Determine next stage based on situation and actions
+    let nextStage = situation as string;
+    if (situation === 'info_qualificacao' && !isFirstMessage) nextStage = 'duvidas';
+    if (actions.includes('convidar_live') || actions.includes('lembrar_live')) {
+      nextStage = 'followup_2';
+    }
+
+    // 13. Update lead
     if (existingLead) {
       const updates: Record<string, any> = {
         last_ai_contact_at: new Date().toISOString(),
+        conversation_stage: nextStage,
       };
 
       if (newTemperature && ['frio', 'morno', 'quente', 'super_quente', 'convertido'].includes(newTemperature)) {
@@ -348,9 +566,30 @@ REGRAS GERAIS:
 
       if (Object.keys(extractedData).length > 0) {
         updates.collected_data = { ...collectedData, ...extractedData };
-        // Update name if extracted
-        if (extractedData.nome) {
-          updates.name = extractedData.nome;
+        if (extractedData.nome) updates.name = extractedData.nome;
+      }
+
+      if (isFollowup) {
+        updates.followup_count = (existingLead.followup_count || 0) + 1;
+        updates.last_followup_at = new Date().toISOString();
+      } else {
+        // Reset followup counter when client responds
+        updates.followup_count = 0;
+      }
+
+      if (actions.includes('enviar_pix') || actions.includes('gerar_link_cartao') || actions.includes('pagamento_entrega')) {
+        updates.payment_link_sent = true;
+      }
+
+      if (actions.includes('convidar_live') || actions.includes('lembrar_live')) {
+        updates.live_invite_sent = true;
+      }
+
+      // Update interested product keywords on requalificacao
+      if (situation === 'requalificacao') {
+        const matchedProduct = getMatchedProduct(campaign, messageText);
+        if (matchedProduct?.keywords) {
+          updates.interested_product_keywords = matchedProduct.keywords;
         }
       }
 
@@ -360,13 +599,16 @@ REGRAS GERAIS:
         .eq('id', existingLead.id);
     }
 
-    // 15. Log the interaction
+    // 14. Log interaction
     await supabase.from('ai_conversation_logs').insert({
       phone: normalizedPhone,
       message_in: messageText,
       message_out: reply,
-      stage: `ads_${campaign.objective}`,
-      ai_decision: newTemperature ? `temperature:${newTemperature}` : null,
+      stage: `ads_${situation}`,
+      ai_decision: [
+        newTemperature ? `temp:${newTemperature}` : null,
+        actions.length > 0 ? `actions:${actions.join(',')}` : null,
+      ].filter(Boolean).join('|') || null,
       provider: 'lovable',
     });
 
@@ -377,7 +619,9 @@ REGRAS GERAIS:
       campaignName: campaign.name,
       leadId: existingLead?.id,
       temperature: newTemperature || existingLead?.temperature || 'frio',
+      situation,
       extractedData,
+      actions,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
