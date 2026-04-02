@@ -129,6 +129,21 @@ export const adsTools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "open_support_ticket",
+      description: "Abrir um chamado de suporte para as vendedoras humanas responderem. Use SEMPRE que o cliente fizer uma pergunta sobre o produto que você NÃO sabe a resposta (material, composição, detalhes técnicos, caimento, etc). Nunca invente informações sobre o produto — abra o chamado e informe que vai verificar.",
+      parameters: {
+        type: "object",
+        properties: {
+          question: { type: "string", description: "A pergunta do cliente que precisa ser respondida por uma vendedora" },
+          context: { type: "string", description: "Contexto adicional (produto em questão, cor, tamanho, etc)" },
+        },
+        required: ["question"],
+      },
+    },
+  },
 ];
 
 interface AdsToolContext {
@@ -217,7 +232,7 @@ export async function executeAdsToolCall(
         const data = await resp.json();
         const products = (data?.data?.products?.edges || []).map((e: any) => ({
           title: e.node.title,
-          description: (e.node.description || '').substring(0, 200),
+          description: (e.node.description || '').substring(0, 1000),
           image: e.node.images?.edges?.[0]?.node?.url || null,
           variants: (e.node.variants?.edges || []).map((v: any) => ({
             title: v.node.title,
@@ -813,6 +828,38 @@ export async function executeAdsToolCall(
       } catch (err) {
         console.error('[schedule_followup] Error:', err);
         return { success: false, error: 'Erro ao agendar follow-up' };
+      }
+    }
+
+    // ─── OPEN SUPPORT TICKET ───
+    case 'open_support_ticket': {
+      const question = args.question || '';
+      const context = args.context || '';
+
+      try {
+        await supabase.from('support_tickets').insert({
+          customer_phone: phone,
+          source: 'jess_ai',
+          subject: `Dúvida de produto: ${question.substring(0, 100)}`,
+          description: `Cliente perguntou: "${question}"\nContexto: ${context}\nDados do lead: ${JSON.stringify(collectedData)}`,
+          priority: 'normal',
+          customer_name: collectedData.nome || null,
+        });
+
+        return {
+          success: true,
+          data: {
+            message: 'Chamado aberto! Uma vendedora vai verificar e responder em breve.',
+          },
+        };
+      } catch (err) {
+        console.error('[open_support_ticket] Error:', err);
+        return {
+          success: true,
+          data: {
+            message: 'Vou verificar com a equipe e te retorno!',
+          },
+        };
       }
     }
 
