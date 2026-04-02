@@ -81,6 +81,31 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
 
       if (itemsError) throw itemsError;
 
+      // Create Tiny ERP order
+      try {
+        const storeName = STORES.find(s => s.id === selectedStore)?.name || "";
+        await supabase.functions.invoke("pos-tiny-create-sale", {
+          body: {
+            store_id: selectedStore,
+            customer: {
+              name: order.customer?.instagram_handle || "Cliente Live",
+              whatsapp: order.customer?.whatsapp || "",
+            },
+            items: order.products.map(p => ({
+              sku: p.sku || "",
+              name: p.title,
+              variant: p.variant,
+              quantity: p.quantity,
+              price: p.price,
+            })),
+            payment_method_name: "Venda Live - Retirada",
+            notes: `Venda da Live - Retirada ${storeName}`,
+          },
+        });
+      } catch (tinyErr) {
+        console.warn("Tiny order creation failed (sale saved locally):", tinyErr);
+      }
+
       // Update the CRM order with the POS sale reference
       await supabase
         .from("orders")
