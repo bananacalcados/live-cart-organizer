@@ -831,6 +831,39 @@ export async function executeAdsToolCall(
       }
     }
 
+    // ─── OPEN SUPPORT TICKET ───
+    case 'open_support_ticket': {
+      const question = args.question || '';
+      const context = args.context || '';
+
+      try {
+        await supabase.from('support_tickets').insert({
+          phone,
+          source: 'jess_ai',
+          subject: `Dúvida de produto: ${question.substring(0, 100)}`,
+          summary: `Cliente perguntou: "${question}"\nContexto: ${context}\nDados do lead: ${JSON.stringify(collectedData)}`,
+          priority: 'normal',
+          whatsapp_number_id: ctx.whatsappNumberId || lead?.whatsapp_number_id || null,
+          customer_name: collectedData.nome || null,
+        });
+
+        return {
+          success: true,
+          data: {
+            message: 'Chamado aberto! Uma vendedora vai verificar e responder em breve.',
+          },
+        };
+      } catch (err) {
+        console.error('[open_support_ticket] Error:', err);
+        return {
+          success: true,
+          data: {
+            message: 'Vou verificar com a equipe e te retorno!',
+          },
+        };
+      }
+    }
+
     default:
       return { success: false, error: `Tool desconhecida: ${toolName}` };
   }
