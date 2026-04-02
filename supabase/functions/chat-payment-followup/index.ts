@@ -135,9 +135,12 @@ serve(async (req) => {
         whatsapp_number_id: sendNumberId || null,
       });
 
-      // Update followup
+      // Update followup — escalating intervals per reminder number
+      // 1st→2nd: 30min, 2nd→3rd: 2h (120min)
+      const intervalMap: Record<number, number> = { 1: 30, 2: 120, 3: 120 };
+      const nextInterval = intervalMap[reminderNum] || fu.interval_minutes;
       const nextReminder = new Date();
-      nextReminder.setMinutes(nextReminder.getMinutes() + fu.interval_minutes);
+      nextReminder.setMinutes(nextReminder.getMinutes() + nextInterval);
       
       await supabase.from('chat_payment_followups').update({
         reminder_count: reminderNum,
