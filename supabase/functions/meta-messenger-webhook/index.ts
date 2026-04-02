@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchInstagramSenderUsername } from "../_shared/meta-instagram-profile.ts";
+import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
 import { processCommentAutomation } from "../_shared/instagram-comment-automation.ts";
 
 const corsHeaders = {
@@ -262,6 +263,80 @@ serve(async (req) => {
               { phone: senderId, display_name: senderName },
               { onConflict: 'phone', ignoreDuplicates: false }
             );
+        }
+
+        // ===== CENTRAL ROUTER — AI for Instagram DMs =====
+        if (channel === 'instagram' && messageText) {
+          try {
+            const route = await routeMessage(supabase, {
+              phone: senderId,
+              messageText,
+              isGroup: false,
+              referral: referralData,
+            });
+            console.log(`[ig-router] ${senderId} → ${route.agent} (${route.reason})`);
+
+            switch (route.agent) {
+              case 'concierge':
+                fetch(`${supabaseUrl}/functions/v1/concierge-respond`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    phone: senderId,
+                    messageText,
+                    channel: 'instagram',
+                    mediaUrl,
+                    mediaType,
+                  }),
+                }).catch(err => console.error('[ig-router] concierge-respond error:', err));
+                break;
+
+              case 'continue_session': {
+                const cooldownActive = await isOperatorCooldownActive(supabase, senderId);
+                if (!cooldownActive && route.session) {
+                  try {
+                    const aiRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-respond`, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ prompt: route.session.prompt, phone: senderId, messageText, mediaUrl, mediaType }),
+                    });
+                    const aiData = await aiRes.json();
+                    if (aiRes.ok && aiData.reply) {
+                      const typingDelay = Math.min(Math.max(aiData.reply.length * 50, 2000), 12000);
+                      await new Promise(r => setTimeout(r, typingDelay));
+
+                      await fetch(`${supabaseUrl}/functions/v1/meta-messenger-send`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ recipientId: senderId, message: aiData.reply, channel: 'instagram' }),
+                      });
+
+                      await supabase.from('whatsapp_messages').insert({
+                        phone: senderId, message: `[IA] ${aiData.reply}`, direction: 'outgoing',
+                        status: 'sent', channel: 'instagram',
+                      });
+
+                      const newCount = (route.session.messages_sent || 0) + 1;
+                      if (newCount >= (route.session.max_messages || 50)) {
+                        await supabase.from('automation_ai_sessions').update({ is_active: false, messages_sent: newCount }).eq('id', route.session.id);
+                      } else {
+                        await supabase.from('automation_ai_sessions').update({ messages_sent: newCount, updated_at: new Date().toISOString() }).eq('id', route.session.id);
+                      }
+                    }
+                  } catch (err) {
+                    console.error('[ig-router] continue_session error:', err);
+                  }
+                }
+                break;
+              }
+
+              case 'none':
+              default:
+                break;
+            }
+          } catch (routeErr) {
+            console.error('[ig-router] routing error:', routeErr);
+          }
         }
       }
 
