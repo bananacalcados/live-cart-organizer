@@ -24,6 +24,7 @@ export const adsTools = [
         properties: {
           nome: { type: "string", description: "Nome completo do cliente" },
           tamanho: { type: "string", description: "Tamanho/número do calçado" },
+          cor: { type: "string", description: "Cor do produto desejada pelo cliente" },
           cidade: { type: "string", description: "Cidade do cliente" },
           estado: { type: "string", description: "Estado (UF)" },
           cpf: { type: "string", description: "CPF do cliente" },
@@ -38,7 +39,7 @@ export const adsTools = [
     type: "function",
     function: {
       name: "generate_checkout_link",
-      description: "Gerar link do checkout transparente para o cliente finalizar a compra. O checkout aceita PIX (com desconto automático) e cartão de crédito. Use quando todos os dados forem coletados e for hora de enviar o link de pagamento.",
+      description: "Gerar link do checkout transparente para o cliente finalizar a compra. O checkout aceita PIX (com desconto automático) e cartão de crédito. IMPORTANTE: Antes de chamar esta ferramenta, você DEVE ter coletado o tamanho E a cor desejada do produto. Se faltar algum desses dados, pergunte ao cliente antes de gerar o link.",
       parameters: {
         type: "object",
         properties: {
@@ -46,8 +47,9 @@ export const adsTools = [
           amount: { type: "number", description: "Valor unitário em reais" },
           quantity: { type: "number", description: "Quantidade do produto (padrão: 1)" },
           variant: { type: "string", description: "Variante/tamanho do produto (ex: '38')" },
+          color: { type: "string", description: "Cor do produto escolhida pelo cliente (ex: 'Preto', 'Rosa')" },
         },
-        required: ["product_name", "amount"],
+        required: ["product_name", "amount", "variant", "color"],
       },
     },
   },
@@ -229,7 +231,7 @@ export async function executeAdsToolCall(
 
     // ─── SAVE LEAD DATA ───
     case 'save_lead_data': {
-      const fields = ['nome', 'tamanho', 'cidade', 'estado', 'cpf', 'email', 'cep', 'endereco'];
+      const fields = ['nome', 'tamanho', 'cor', 'cidade', 'estado', 'cpf', 'email', 'cep', 'endereco'];
       const newData: Record<string, any> = { ...collectedData };
       const savedFields: string[] = [];
 
@@ -303,11 +305,15 @@ export async function executeAdsToolCall(
 
         // 3. Build product entry
         const quantity = args.quantity || 1;
+        const variantLabel = args.variant || collectedData.tamanho || '';
+        const colorLabel = args.color || collectedData.cor || '';
         const product = {
           title: args.product_name,
           price: args.amount,
           quantity,
-          variant: args.variant || collectedData.tamanho || '',
+          variant: [variantLabel, colorLabel].filter(Boolean).join(' / '),
+          size: variantLabel,
+          color: colorLabel,
         };
 
         // 4. Determine shipping
