@@ -140,6 +140,8 @@ interface AdsToolContext {
   lead: any;
   campaign: any;
   collectedData: Record<string, any>;
+  whatsappNumberId?: string | null;
+  channel?: string;
 }
 
 export async function executeAdsToolCall(
@@ -665,8 +667,8 @@ export async function executeAdsToolCall(
         };
 
         // Determine which channel to use based on lead
-        const leadChannel = lead?.channel || 'zapi';
-        const whatsappNumberId = lead?.whatsapp_number_id;
+        const leadChannel = ctx.channel || lead?.channel || 'zapi';
+        const whatsappNumberId = ctx.whatsappNumberId || lead?.whatsapp_number_id;
         sendPayload.whatsapp_number_id = whatsappNumberId;
 
         let sendSuccess = false;
@@ -797,7 +799,7 @@ export async function executeAdsToolCall(
           reason,
           situation_hint: situationHint,
           campaign_id: campaign.id,
-          whatsapp_number_id: lead?.whatsapp_number_id || null,
+          whatsapp_number_id: ctx.whatsappNumberId || lead?.whatsapp_number_id || null,
         });
 
         return {
