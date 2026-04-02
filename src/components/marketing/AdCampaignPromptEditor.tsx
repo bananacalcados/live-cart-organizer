@@ -170,7 +170,7 @@ export default function AdCampaignPromptEditor({ campaignId }: Props) {
     const editedText = getEditedText(situation, subSituation);
     const currentText = editedText ?? prompt?.prompt_text ?? "";
     const hasChanges = editedText !== null && editedText !== (prompt?.prompt_text ?? "");
-    const subMeta = subSituation ? SUB_SITUATION_META[subSituation] : null;
+    const subMeta = subSituation ? (SUB_SITUATION_META[subSituation] || OBJECTION_SUB_META[subSituation] || null) : null;
 
     return (
       <div key={`${situation}-${subSituation || "main"}`} className={`p-3 rounded-lg border ${isOverride ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"}`}>
