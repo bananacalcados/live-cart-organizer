@@ -1,11 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
-import { prepareZApiImagePayload } from "../_shared/zapi-media.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -41,15 +50,14 @@ serve(async (req) => {
     switch (mediaType) {
       case 'image': {
         endpoint = 'send-image';
-        let imageData: string;
+        
         if (mediaUrl.startsWith('data:image/')) {
           // Already a base64 data URI — send directly
-          imageData = mediaUrl;
+          payload = { phone: formattedPhone, image: mediaUrl, caption: caption || '' };
         } else {
-          const preparedImage = await prepareZApiImagePayload(mediaUrl);
-          imageData = preparedImage.image;
+          // Send URL directly to Z-API (most reliable method)
+          payload = { phone: formattedPhone, image: mediaUrl, caption: caption || '' };
         }
-        payload = { phone: formattedPhone, image: imageData, caption: caption || '' };
         break;
       }
       case 'audio':
@@ -61,7 +69,6 @@ serve(async (req) => {
         payload = { phone: formattedPhone, video: mediaUrl, caption: caption || '' };
         break;
       case 'document': {
-        // Z-API requires the file extension in the endpoint path, e.g. send-document/pdf
         const docFilename = filename || 'document';
         const ext = mediaUrl.split('?')[0].split('.').pop()?.toLowerCase() || docFilename.split('.').pop()?.toLowerCase() || 'pdf';
         endpoint = `send-document/${ext}`;
@@ -76,7 +83,8 @@ serve(async (req) => {
     }
 
     const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/${endpoint}`;
-    console.log(`Sending ${mediaType} to ${formattedPhone} via endpoint=${endpoint}:`, mediaUrl);
+    console.log(`[zapi-send-media] Sending ${mediaType} to ${formattedPhone} via ${endpoint}`);
+    console.log(`[zapi-send-media] Payload image type: ${mediaUrl.startsWith('data:') ? 'base64' : 'URL'}, URL preview: ${mediaUrl.substring(0, 80)}`);
 
     const response = await fetch(zapiUrl, {
       method: 'POST',
@@ -88,16 +96,54 @@ serve(async (req) => {
     });
 
     const data = await response.json();
+    console.log(`[zapi-send-media] Z-API response: ${response.status}`, JSON.stringify(data));
+
+    // If URL-based image send failed or returned error, retry with base64
+    if (mediaType === 'image' && !mediaUrl.startsWith('data:') && (!response.ok || data?.error || !data?.zaapId)) {
+      console.log('[zapi-send-media] URL-based image failed, retrying with base64 download...');
+      try {
+        const imgResp = await fetch(mediaUrl);
+        if (imgResp.ok) {
+          const contentType = imgResp.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg';
+          if (contentType.startsWith('image/')) {
+            const bytes = new Uint8Array(await imgResp.arrayBuffer());
+            const base64 = uint8ToBase64(bytes);
+            const dataUri = `data:${contentType};base64,${base64}`;
+
+            console.log(`[zapi-send-media] Retrying with base64, size: ${bytes.length} bytes`);
+            const retryResp = await fetch(zapiUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Client-Token': clientToken,
+              },
+              body: JSON.stringify({ phone: formattedPhone, image: dataUri, caption: caption || '' }),
+            });
+            const retryData = await retryResp.json();
+            console.log(`[zapi-send-media] Base64 retry response: ${retryResp.status}`, JSON.stringify(retryData));
+
+            if (retryResp.ok && !retryData?.error) {
+              return new Response(
+                JSON.stringify({ success: true, data: retryData, method: 'base64-retry' }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+          }
+        }
+      } catch (retryErr) {
+        console.error('[zapi-send-media] Base64 retry error:', retryErr);
+      }
+    }
 
     if (!response.ok || data?.error) {
-      console.error('Z-API error:', data);
+      console.error('[zapi-send-media] Z-API error:', data);
       return new Response(
         JSON.stringify({ error: 'Failed to send media', details: data }),
         { status: response.ok ? 422 : response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Media sent successfully:', data);
+    console.log('[zapi-send-media] Media sent successfully:', data);
     return new Response(
       JSON.stringify({ success: true, data }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
