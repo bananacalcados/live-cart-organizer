@@ -111,9 +111,24 @@ export const adsTools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "schedule_followup",
+      description: "Agendar um follow-up para uma data/hora específica. Use quando o cliente disser que quer ser contatado em um dia/horário específico (ex: 'me manda msg quinta', 'cartão vira dia 15', 'fala comigo amanhã de tarde'). Também use quando o cliente disser 'vou pensar' ou 'vou falar com alguém' sem informar horário — nesse caso agende para o próximo dia útil às 9h.",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "Data no formato YYYY-MM-DD. Se o cliente disser 'amanhã', calcule. Se disser 'quinta', calcule a próxima quinta." },
+          time: { type: "string", description: "Horário no formato HH:MM (24h). Default: 09:00" },
+          reason: { type: "string", description: "Motivo do agendamento (ex: 'cartão vira', 'vai falar com marido', 'pediu pra ligar quinta')" },
+          situation_hint: { type: "string", description: "Tipo de objeção: 'objecao_financeira', 'objecao_consulta', 'objecao_pensar', 'objecao_recusa'" },
+        },
+        required: ["date", "reason"],
+      },
+    },
+  },
 ];
-
-// ─── Tool Execution ───
 
 interface AdsToolContext {
   supabase: any;
