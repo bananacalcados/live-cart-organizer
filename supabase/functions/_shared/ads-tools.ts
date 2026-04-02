@@ -111,9 +111,24 @@ export const adsTools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "schedule_followup",
+      description: "Agendar um follow-up para uma data/hora específica. Use quando o cliente disser que quer ser contatado em um dia/horário específico (ex: 'me manda msg quinta', 'cartão vira dia 15', 'fala comigo amanhã de tarde'). Também use quando o cliente disser 'vou pensar' ou 'vou falar com alguém' sem informar horário — nesse caso agende para o próximo dia útil às 9h.",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "Data no formato YYYY-MM-DD. Se o cliente disser 'amanhã', calcule. Se disser 'quinta', calcule a próxima quinta." },
+          time: { type: "string", description: "Horário no formato HH:MM (24h). Default: 09:00" },
+          reason: { type: "string", description: "Motivo do agendamento (ex: 'cartão vira', 'vai falar com marido', 'pediu pra ligar quinta')" },
+          situation_hint: { type: "string", description: "Tipo de objeção: 'objecao_financeira', 'objecao_consulta', 'objecao_pensar', 'objecao_recusa'" },
+        },
+        required: ["date", "reason"],
+      },
+    },
+  },
 ];
-
-// ─── Tool Execution ───
 
 interface AdsToolContext {
   supabase: any;
@@ -647,6 +662,46 @@ export async function executeAdsToolCall(
       } catch (err) {
         console.error('[send_product_image] Send error:', err);
         return { success: false, error: 'Erro ao enviar foto. Tente descrever o produto por texto.' };
+      }
+    }
+
+    // ─── SCHEDULE FOLLOWUP ───
+    case 'schedule_followup': {
+      const date = args.date; // YYYY-MM-DD
+      const time = args.time || '09:00';
+      const reason = args.reason || '';
+      const situationHint = args.situation_hint || null;
+
+      try {
+        // Parse date/time in São Paulo timezone
+        const scheduledAt = new Date(`${date}T${time}:00-03:00`);
+
+        // Validate it's in the future
+        if (scheduledAt <= new Date()) {
+          // If in the past, schedule for tomorrow at the same time
+          scheduledAt.setDate(scheduledAt.getDate() + 1);
+        }
+
+        await supabase.from('chat_scheduled_followups').insert({
+          phone,
+          scheduled_at: scheduledAt.toISOString(),
+          reason,
+          situation_hint: situationHint,
+          campaign_id: campaign.id,
+          whatsapp_number_id: lead?.whatsapp_number_id || null,
+        });
+
+        return {
+          success: true,
+          data: {
+            scheduled_at: scheduledAt.toISOString(),
+            reason,
+            message: `Follow-up agendado para ${scheduledAt.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${scheduledAt.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`,
+          },
+        };
+      } catch (err) {
+        console.error('[schedule_followup] Error:', err);
+        return { success: false, error: 'Erro ao agendar follow-up' };
       }
     }
 

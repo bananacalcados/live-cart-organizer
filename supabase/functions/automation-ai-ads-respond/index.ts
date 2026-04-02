@@ -12,10 +12,12 @@ const corsHeaders = {
 type Situation =
   | 'info_qualificacao'   // Present product + ask size (first contact)
   | 'duvidas'             // Answer questions only when asked
+  | 'objecoes'            // Client shows resistance or delays purchase
   | 'followup_1'          // Client not responding
   | 'coleta_dados'        // Collect address, name, CPF, email
   | 'pagamento'           // Generate or resend transparent checkout link
   | 'followup_2'          // Post-payment or post-ghosting → pivot to Live
+  | 'checkout_abandonado' // Client opened link but didn't pay
   | 'requalificacao';     // Client asks about different product
 
 interface SituationContext {
@@ -58,6 +60,22 @@ function detectSituation(ctx: {
         )
       );
       if (mentionsDifferent) return 'requalificacao';
+    }
+  }
+
+  // Detect objections (before first-message check, so it works on any stage)
+  if (!isFirstMessage) {
+    const objectionPatterns = {
+      objecao_financeira: /(caro|cart[aã]o.*vir|n[aã]o tenho|sem dinheiro|apertado|dia \d|vira dia|s[oó] (no|dia)|pr[oó]ximo m[eê]s|sal[aá]rio|pagamento|n[aã]o posso agora|muito caro|tá caro|ta caro|valor alto)/i,
+      objecao_consulta: /(marido|esposa|m[aã]e|pai|irm[aã]|filho|amig|ver com|falar com|consultar|perguntar pr|familia|parente)/i,
+      objecao_pensar: /(pensar|pensando|avaliar|analisar|ver depois|ainda n[aã]o|n[aã]o sei|vou ver|deixa eu ver|preciso ver|talvez|quem sabe)/i,
+      objecao_recusa: /(n[aã]o quero|n[aã]o preciso|obrigad[oa]|n[aã]o.*interesse|hoje n[aã]o|agora n[aã]o|dispenso|n[aã]o.*momento|desculpa mas|passa dessa)/i,
+    };
+
+    for (const [key, pattern] of Object.entries(objectionPatterns)) {
+      if (pattern.test(normalizedMessage)) {
+        return 'objecoes';
+      }
     }
   }
 
@@ -272,6 +290,66 @@ MISSÃO:
 Máximo 2 linhas + pergunta.`;
 }
 
+function getObjecoesPrompt(ctx: SituationContext, subSituation: string | null): string {
+  const hasEvent = !!ctx.event;
+  const eventInfo = hasEvent
+    ? `\n\nEVENTO DISPONÍVEL: ${ctx.event.name} em ${new Date(ctx.event.starts_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${new Date(ctx.event.starts_at).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`
+    : '';
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const subPrompts: Record<string, string> = {
+    objecao_financeira: `SITUAÇÃO: OBJEÇÃO FINANCEIRA
+O cliente mencionou questão de dinheiro/cartão.
+
+1. Acolha: "Entendo perfeitamente!"
+2. Se mencionou DATA (ex: "cartão vira dia 15"): "Quer que eu te mande uma mensagem no dia [data]?" → Use schedule_followup com a data informada
+3. Se disse "tá caro": destaque parcelamento 6x sem juros, custo-benefício
+4. Se possível, busque alternativas mais acessíveis (use search_product)
+
+HOJE É: ${today}
+Use a tool schedule_followup para agendar quando o cliente informar uma data.
+Máximo 2 linhas.`,
+
+    objecao_consulta: `SITUAÇÃO: CLIENTE VAI CONSULTAR ALGUÉM
+O cliente quer falar com marido/mãe/amigo antes de decidir.
+
+1. Valide: "Claro! É sempre bom decidir junto 😊"
+2. Pergunte: "Qual o melhor horário pra eu voltar a falar com você?"
+3. Se informar horário → Use schedule_followup com data e hora
+4. Se NÃO informar → Use schedule_followup para o próximo dia útil às 09:00
+5. Reforce que o preço/oferta pode mudar
+
+HOJE É: ${today}
+Máximo 2 linhas + pergunta do horário.`,
+
+    objecao_pensar: `SITUAÇÃO: "VOU PENSAR"
+O cliente quer tempo pra decidir. Descubra o motivo REAL de forma sutil.
+
+1. Acolha: "Claro, sem pressa! 😊"
+2. Sonde: "Posso te ajudar com alguma informação pra facilitar a decisão?"
+3. Se o motivo for preço → ofereça parcelamento ou alternativas
+4. Se for dúvida → responda
+5. Se realmente quiser tempo: "Quer que eu te mande uma mensagem amanhã?" → Use schedule_followup
+
+HOJE É: ${today}
+Tom leve. NUNCA insistir. Máximo 2 linhas.`,
+
+    objecao_recusa: `SITUAÇÃO: CLIENTE NÃO QUER
+O cliente disse claramente que não quer.
+
+1. Respeite: "Tudo bem! Agradeço seu tempo 😊"
+${hasEvent ? `2. PIVOTE para o evento: "Ah, mas antes de ir... ${ctx.event?.name || 'teremos uma Live'} com promoções exclusivas! Quer que eu te avise quando começar?"
+3. Se aceitar → use register_live_reminder
+4. Se recusar → agradeça e encerre com elegância` : '2. Agradeça e encerre com elegância.'}
+${eventInfo}
+
+Máximo 2 linhas.`,
+  };
+
+  return subPrompts[subSituation || 'objecao_pensar'] || subPrompts.objecao_pensar;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getShippingRuleText(campaign: any): string {
@@ -449,7 +527,7 @@ serve(async (req) => {
       isFromGV: clientIsFromGV,
     };
 
-    // Detect sub-situation for "duvidas"
+    // Detect sub-situation for "duvidas" and "objecoes"
     let subSituation: string | null = null;
     if (situation === 'duvidas') {
       const ml = (messageText || '').toLowerCase();
@@ -461,6 +539,17 @@ serve(async (req) => {
       else if (/foto|imag|ver|mostr/i.test(ml)) subSituation = 'fotos';
       else if (/descont|promo|cupon|oferta|barato|mais barato/i.test(ml)) subSituation = 'desconto';
       else subSituation = 'geral';
+    } else if (situation === 'objecoes') {
+      const ml = (messageText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (/(caro|cartao.*vir|nao tenho|sem dinheiro|apertado|dia \d|vira dia|so (no|dia)|proximo mes|salario|nao posso agora|muito caro|ta caro|valor alto)/i.test(ml)) {
+        subSituation = 'objecao_financeira';
+      } else if (/(marido|esposa|mae|pai|irma|filho|amig|ver com|falar com|consultar|perguntar pr|familia|parente)/i.test(ml)) {
+        subSituation = 'objecao_consulta';
+      } else if (/(nao quero|nao preciso|obrigad|nao.*interesse|hoje nao|agora nao|dispenso|nao.*momento|desculpa mas|passa dessa)/i.test(ml)) {
+        subSituation = 'objecao_recusa';
+      } else {
+        subSituation = 'objecao_pensar';
+      }
     }
 
     // Try to load from DB: campaign-specific first, then global
@@ -535,6 +624,7 @@ serve(async (req) => {
       switch (situation) {
         case 'info_qualificacao': situationPrompt = getInfoQualificacaoPrompt(sitCtx); break;
         case 'duvidas': situationPrompt = getDuvidasPrompt(sitCtx); break;
+        case 'objecoes': situationPrompt = getObjecoesPrompt(sitCtx, subSituation); break;
         case 'followup_1': situationPrompt = getFollowup1Prompt(sitCtx); break;
         case 'coleta_dados': situationPrompt = getColetaDadosPrompt(sitCtx); break;
         case 'pagamento': situationPrompt = getPagamentoPrompt(sitCtx); break;
@@ -574,6 +664,7 @@ REGRAS OBRIGATÓRIAS:
 - Quando o cliente pedir fotos ou quiser ver o produto, use send_product_image para enviar a foto direto pelo WhatsApp.
 - Após apresentar o produto na primeira mensagem, use send_product_image para enviar a foto junto (reforço visual).
 - Quando gerar PIX, envie o código copia-e-cola em uma mensagem SEPARADA (apenas o código, sem texto).
+- Quando o cliente apresentar objeção (não quer, vou pensar, tá caro, vou falar com alguém), use schedule_followup para agendar um retorno. A data de hoje é ${new Date().toISOString().split('T')[0]}.
 - NUNCA invente informações sobre a loja, endereço, horários ou produtos. Use APENAS as informações da BASE DE CONHECIMENTO e do catálogo.
 - NUNCA invente informações de produto. Se não souber, use search_product.`;
 
@@ -631,6 +722,10 @@ REGRAS OBRIGATÓRIAS:
       const name = t.function.name;
       // Always offer save_lead_data, search_product, and send_product_image
       if (name === 'save_lead_data' || name === 'search_product' || name === 'send_product_image') return true;
+      // Schedule followup in objections, followup_1, followup_2, or duvidas
+      if (name === 'schedule_followup') {
+        return ['objecoes', 'followup_1', 'followup_2', 'duvidas', 'checkout_abandonado'].includes(situation);
+      }
       // Checkout link only in payment situation
       if (name === 'generate_checkout_link') {
         return situation === 'pagamento' || situation === 'duvidas';
@@ -641,8 +736,8 @@ REGRAS OBRIGATÓRIAS:
       }
       // CEP lookup in coleta or duvidas
       if (name === 'lookup_cep') return situation === 'coleta_dados' || situation === 'duvidas';
-      // Live reminder in followup_2
-      if (name === 'register_live_reminder') return situation === 'followup_2';
+      // Live reminder in followup_2 or objecoes (recusa pivot)
+      if (name === 'register_live_reminder') return situation === 'followup_2' || situation === 'objecoes';
       return true;
     });
 
@@ -776,9 +871,50 @@ REGRAS OBRIGATÓRIAS:
     // 11. Determine next stage
     let nextStage = situation as string;
     if (situation === 'info_qualificacao' && !isFirstMessage) nextStage = 'duvidas';
+    if (situation === 'objecoes') nextStage = existingLead?.conversation_stage || 'duvidas'; // Stay in previous stage
     if (allToolCalls.includes('register_live_reminder')) nextStage = 'followup_2';
     if (allToolCalls.includes('generate_checkout_link') || allToolCalls.includes('confirm_delivery_payment')) {
       nextStage = 'pagamento';
+    }
+
+    // 11b. Register follow-up for ALL stages when client doesn't have an active followup
+    // This ensures follow-ups happen at every funnel stage, not just payment
+    if (!isFollowup && situation !== 'objecoes' && !allToolCalls.includes('schedule_followup')) {
+      try {
+        const { data: existingActive } = await supabase
+          .from('chat_payment_followups')
+          .select('id')
+          .eq('phone', normalizedPhone)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (!existingActive) {
+          // No active followup — create one for general funnel follow-up
+          const firstReminder = new Date();
+          firstReminder.setMinutes(firstReminder.getMinutes() + 30); // 30min inactivity trigger
+
+          await supabase.from('chat_payment_followups').upsert({
+            phone: normalizedPhone,
+            type: `ads_${nextStage}`,
+            is_active: true,
+            interval_minutes: 30,
+            max_reminders: 3,
+            reminder_count: 0,
+            next_reminder_at: firstReminder.toISOString(),
+            whatsapp_number_id: whatsappNumberId || null,
+          }, { onConflict: 'phone' }).then(() => {
+            console.log(`[ads-ai] Funnel followup registered for ${normalizedPhone} at stage ${nextStage}`);
+          });
+
+          // Ensure chat_awaiting_payment exists
+          await supabase.from('chat_awaiting_payment').upsert(
+            { phone: normalizedPhone, type: `ads_${nextStage}` },
+            { onConflict: 'phone' }
+          );
+        }
+      } catch (fuErr) {
+        console.warn('[ads-ai] Funnel followup error (non-blocking):', fuErr);
+      }
     }
 
     // 12. Update lead
