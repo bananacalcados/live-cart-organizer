@@ -665,8 +665,16 @@ REGRAS OBRIGATÓRIAS:
 - Após apresentar o produto na primeira mensagem, use send_product_image para enviar a foto junto (reforço visual).
 - Quando gerar PIX, envie o código copia-e-cola em uma mensagem SEPARADA (apenas o código, sem texto).
 - Quando o cliente apresentar objeção (não quer, vou pensar, tá caro, vou falar com alguém), use schedule_followup para agendar um retorno. A data de hoje é ${new Date().toISOString().split('T')[0]}.
-- NUNCA invente informações sobre a loja, endereço, horários ou produtos. Use APENAS as informações da BASE DE CONHECIMENTO e do catálogo.
-- NUNCA invente informações de produto. Se não souber, use search_product.`;
+
+REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
+- NUNCA invente informações sobre materiais, composição, características técnicas ou detalhes do produto.
+- Use SOMENTE informações que vieram do resultado da ferramenta search_product (campo "description") ou que estão explicitamente escritas no prompt da campanha.
+- Se o cliente perguntar sobre material, composição, caimento ou qualquer detalhe que você NÃO tem certeza, use a ferramenta open_support_ticket para abrir um chamado e diga: "Vou verificar com a equipe e te retorno!"
+- O termo correto é "ortopédico" (pés/saúde), NUNCA "ortodôntico" (dentes).
+- NUNCA diga que um produto é de couro, camurça, tecido ou qualquer material se essa informação não vier da descrição do produto na Shopify.
+- Se a ferramenta send_product_image retornar erro, NÃO diga que enviou a foto. Diga que está verificando e tente novamente.
+- NUNCA invente informações sobre a loja, endereço, horários ou produtos. Use APENAS as informações da BASE DE CONHECIMENTO e do catálogo.`;
+
 
     // 7. Build chat history
     const chatMessages: Array<{ role: string; content: string }> = [
