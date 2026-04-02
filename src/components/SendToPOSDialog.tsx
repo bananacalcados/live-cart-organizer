@@ -3,10 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Store, Loader2, CheckCircle } from "lucide-react";
+import { Store, Loader2, CheckCircle, Radio } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DbOrder } from "@/types/database";
+import { Badge } from "@/components/ui/badge";
 
 interface SendToPOSDialogProps {
   open: boolean;
