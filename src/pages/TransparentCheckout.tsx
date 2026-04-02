@@ -389,20 +389,24 @@ function StepIdentification({ form, setForm, onNext }: { form: CustomerFormData;
       <div className="space-y-3">
         <div>
           <Label className="text-sm">Nome completo *</Label>
-          <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="João da Silva" />
+          <Input value={form.fullName} onChange={(e) => { setForm({ ...form, fullName: e.target.value }); setErrors(prev => ({ ...prev, fullName: "" })); }} placeholder="João da Silva" className={errors.fullName ? "border-destructive" : ""} />
+          {errors.fullName && <p className="text-destructive text-xs mt-1">{errors.fullName}</p>}
         </div>
         <div>
           <Label className="text-sm">E-mail *</Label>
-          <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="seu@email.com" />
+          <Input type="email" value={form.email} onChange={(e) => { setForm({ ...form, email: e.target.value }); setErrors(prev => ({ ...prev, email: "" })); }} placeholder="seu@email.com" className={errors.email ? "border-destructive" : ""} />
+          {errors.email && <p className="text-destructive text-xs mt-1">{errors.email}</p>}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-sm">CPF *</Label>
-            <Input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: formatCPF(e.target.value) })} placeholder="000.000.000-00" maxLength={14} />
+            <Input value={form.cpf} onChange={(e) => { setForm({ ...form, cpf: formatCPF(e.target.value) }); setErrors(prev => ({ ...prev, cpf: "" })); }} placeholder="000.000.000-00" maxLength={14} className={errors.cpf ? "border-destructive" : ""} />
+            {errors.cpf && <p className="text-destructive text-xs mt-1">{errors.cpf}</p>}
           </div>
           <div>
             <Label className="text-sm">WhatsApp *</Label>
-            <Input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: formatPhone(e.target.value) })} placeholder="(11) 99999-9999" maxLength={15} />
+            <Input value={form.whatsapp} onChange={(e) => { setForm({ ...form, whatsapp: formatPhone(e.target.value) }); setErrors(prev => ({ ...prev, whatsapp: "" })); }} placeholder="(11) 99999-9999" maxLength={15} className={errors.whatsapp ? "border-destructive" : ""} />
+            {errors.whatsapp && <p className="text-destructive text-xs mt-1">{errors.whatsapp}</p>}
           </div>
         </div>
       </div>
