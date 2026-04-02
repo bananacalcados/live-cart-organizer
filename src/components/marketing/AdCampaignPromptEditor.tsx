@@ -237,7 +237,7 @@ export default function AdCampaignPromptEditor({ campaignId }: Props) {
       {situations.map(situation => {
         const meta = SITUATION_META[situation];
         const isExpanded = expandedSituation === situation;
-        const subSituations = situation === "duvidas" ? Object.keys(SUB_SITUATION_META) : [];
+        const subSituations = situation === "duvidas" ? Object.keys(SUB_SITUATION_META) : situation === "objecoes" ? Object.keys(OBJECTION_SUB_META) : [];
         const overrideCount = campaignPrompts.filter(p => p.situation === situation).length;
 
         return (
