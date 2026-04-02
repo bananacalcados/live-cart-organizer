@@ -44,6 +44,13 @@ const SUB_SITUATION_META: Record<string, { label: string; icon: string }> = {
   geral: { label: "Dúvida Geral", icon: "💬" },
 };
 
+const OBJECTION_SUB_META: Record<string, { label: string; icon: string }> = {
+  objecao_financeira: { label: "Financeira (cartão, caro)", icon: "💸" },
+  objecao_consulta: { label: "Consultar alguém", icon: "👥" },
+  objecao_pensar: { label: "Vou pensar", icon: "🤔" },
+  objecao_recusa: { label: "Não quer / Agradece", icon: "👋" },
+};
+
 interface Props {
   campaignId: string;
 }
