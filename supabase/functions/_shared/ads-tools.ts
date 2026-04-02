@@ -356,7 +356,7 @@ export async function executeAdsToolCall(
         const regData: any = {
           order_id: order.id,
           full_name: collectedData.nome || '',
-          whatsapp: phoneDigits,
+          whatsapp: phoneLocal,
           cpf: collectedData.cpf || '',
           email: collectedData.email || '',
           cep: collectedData.cep || '',
