@@ -22,6 +22,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import AdCampaignPromptEditor from "./AdCampaignPromptEditor";
 
 interface CatalogProduct {
   nome: string;
