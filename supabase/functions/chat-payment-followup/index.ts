@@ -16,7 +16,138 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Find active followups where next_reminder_at <= now
+    // ── PART 1: Abandoned checkout detection ──
+    // Find orders where checkout was opened (checkout_started_at set) but not paid,
+    // and no followup of type 'checkout_abandonado' exists yet
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: abandonedOrders } = await supabase
+      .from('orders')
+      .select('id, customer_id, checkout_started_at, cart_link')
+      .eq('is_paid', false)
+      .not('checkout_started_at', 'is', null)
+      .lte('checkout_started_at', tenMinAgo)
+      .order('checkout_started_at', { ascending: false })
+      .limit(50);
+
+    let abandonedSent = 0;
+    if (abandonedOrders?.length) {
+      for (const order of abandonedOrders) {
+        // Get customer phone
+        const { data: customer } = await supabase
+          .from('customers')
+          .select('whatsapp')
+          .eq('id', order.customer_id)
+          .maybeSingle();
+
+        if (!customer?.whatsapp) continue;
+        const phone = customer.whatsapp;
+
+        // Check if we already sent a checkout_abandonado followup for this phone recently
+        const { data: existingFu } = await supabase
+          .from('chat_payment_followups')
+          .select('id')
+          .eq('phone', phone)
+          .eq('type', 'checkout_abandonado')
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .maybeSingle();
+
+        if (existingFu) continue;
+
+        // Check if already paid via other means
+        if (order.customer_id) {
+          const { data: paidOrder } = await supabase
+            .from('orders')
+            .select('id')
+            .eq('customer_id', order.customer_id)
+            .eq('is_paid', true)
+            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+            .maybeSingle();
+          if (paidOrder) continue;
+        }
+
+        // Try to get campaign-specific prompt for checkout_abandonado
+        let message = `Oi! 😊 Vi que você abriu o link do seu pedido mas não finalizou. Aconteceu algum problema? Posso te ajudar com qualquer dúvida!`;
+
+        // Look for ad_lead to find campaign_id and whatsapp_number_id
+        const phoneSuffix = phone.replace(/\D/g, '').slice(-8);
+        const { data: adLead } = await supabase
+          .from('ad_leads')
+          .select('campaign_id, whatsapp_number_id')
+          .ilike('phone', `%${phoneSuffix}`)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const sendNumberId = adLead?.whatsapp_number_id || null;
+
+        if (adLead?.campaign_id) {
+          // Try campaign-specific prompt
+          const { data: prompt } = await supabase
+            .from('ad_campaign_situation_prompts')
+            .select('prompt_text')
+            .eq('campaign_id', adLead.campaign_id)
+            .eq('situation', 'checkout_abandonado')
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (!prompt) {
+            // Fallback to global prompt
+            const { data: globalPrompt } = await supabase
+              .from('ad_campaign_situation_prompts')
+              .select('prompt_text')
+              .is('campaign_id', null)
+              .eq('situation', 'checkout_abandonado')
+              .eq('is_active', true)
+              .maybeSingle();
+
+            if (globalPrompt?.prompt_text) {
+              message = globalPrompt.prompt_text;
+            }
+          } else if (prompt.prompt_text) {
+            message = prompt.prompt_text;
+          }
+        }
+
+        // Send message
+        if (sendNumberId) {
+          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, message, whatsappNumberId: sendNumberId }),
+          });
+        } else {
+          await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, message }),
+          });
+        }
+
+        // Save message
+        await supabase.from('whatsapp_messages').insert({
+          phone, message, direction: 'outgoing', status: 'sent',
+          whatsapp_number_id: sendNumberId,
+        });
+
+        // Create followup record to prevent duplicates
+        await supabase.from('chat_payment_followups').insert({
+          phone,
+          type: 'checkout_abandonado',
+          is_active: false,
+          reminder_count: 1,
+          max_reminders: 1,
+          completed_at: new Date().toISOString(),
+          whatsapp_number_id: sendNumberId,
+        });
+
+        abandonedSent++;
+        console.log(`[followup] Checkout abandonado detected for ${phone}, sent message`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    // ── PART 2: Regular payment followups ──
     const { data: followups } = await supabase
       .from('chat_payment_followups')
       .select('*')
@@ -25,7 +156,9 @@ serve(async (req) => {
       .order('next_reminder_at');
 
     if (!followups || followups.length === 0) {
-      return new Response(JSON.stringify({ message: 'No pending followups', count: 0 }), {
+      return new Response(JSON.stringify({ 
+        message: 'Processed', abandonedSent, regularSent: 0 
+      }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -45,7 +178,7 @@ serve(async (req) => {
         if (sale?.status === 'completed' || sale?.status === 'paid') isPaid = true;
       }
 
-      // Verificar também na tabela orders (pedidos de live) via customers.whatsapp
+      // Verificar na tabela orders via customers.whatsapp
       if (!isPaid && fu.phone) {
         const phoneSuffix = fu.phone.replace(/\D/g, '').slice(-8);
         if (phoneSuffix.length >= 8) {
@@ -78,7 +211,6 @@ serve(async (req) => {
         .maybeSingle();
 
       if (isPaid || !awp) {
-        // Payment confirmed or no longer awaiting
         if (awp) {
           await supabase.from('chat_awaiting_payment').delete().eq('id', awp.id);
         }
@@ -90,7 +222,6 @@ serve(async (req) => {
         continue;
       }
 
-      // Check if max reminders reached
       if (fu.reminder_count >= fu.max_reminders) {
         await supabase.from('chat_payment_followups').update({
           is_active: false,
@@ -100,18 +231,52 @@ serve(async (req) => {
         continue;
       }
 
-      // Send reminder message
+      // Check if checkout was opened — use contextual message
+      let checkoutOpened = false;
+      if (fu.phone) {
+        const phoneSuffix = fu.phone.replace(/\D/g, '').slice(-8);
+        const { data: customers } = await supabase
+          .from('customers')
+          .select('id')
+          .ilike('whatsapp', `%${phoneSuffix}`)
+          .limit(5);
+
+        if (customers?.length) {
+          const customerIds = customers.map((c: any) => c.id);
+          const { data: openedOrder } = await supabase
+            .from('orders')
+            .select('id, checkout_started_at')
+            .in('customer_id', customerIds)
+            .eq('is_paid', false)
+            .not('checkout_started_at', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (openedOrder?.checkout_started_at) checkoutOpened = true;
+        }
+      }
+
       const reminderNum = fu.reminder_count + 1;
-      const messages = [
+
+      // Messages with checkout-aware variants
+      const standardMessages = [
         `Olá! 😊 Vi que seu link de pagamento ainda está pendente. Precisa de ajuda para finalizar? Estou aqui!`,
         `Oi! Passando pra lembrar do seu pedido 🛍️ O link ainda está ativo, é só clicar para concluir. Qualquer dúvida, estou à disposição!`,
         `Olá! Último aviso sobre seu pedido pendente ⏰ Se tiver alguma dificuldade com o pagamento, me avise que ajudo! 😊`,
       ];
-      const message = messages[Math.min(reminderNum - 1, messages.length - 1)];
 
-      // Determine send method
+      const checkoutOpenedMessages = [
+        `Oi! 😊 Vi que você abriu o link do pedido mas não finalizou. Teve alguma dificuldade? Estou aqui pra te ajudar!`,
+        `Ei! Notei que você chegou a acessar o checkout 🛒 Se precisar de ajuda com alguma etapa do pagamento, é só me chamar!`,
+        `Olá! Percebi que você acessou o link mas não concluiu ⏰ Posso te ajudar com alguma dúvida sobre o pagamento?`,
+      ];
+
+      const messagePool = checkoutOpened ? checkoutOpenedMessages : standardMessages;
+      const message = messagePool[Math.min(reminderNum - 1, messagePool.length - 1)];
+
       const sendNumberId = fu.whatsapp_number_id;
-      
+
       if (sendNumberId) {
         await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
           method: 'POST',
@@ -126,35 +291,28 @@ serve(async (req) => {
         });
       }
 
-      // Save message to DB
       await supabase.from('whatsapp_messages').insert({
-        phone: fu.phone,
-        message,
-        direction: 'outgoing',
-        status: 'sent',
+        phone: fu.phone, message, direction: 'outgoing', status: 'sent',
         whatsapp_number_id: sendNumberId || null,
       });
 
-      // Update followup — escalating intervals per reminder number
-      // 1st→2nd: 30min, 2nd→3rd: 2h (120min)
+      // Escalating intervals: 1st→2nd: 30min, 2nd→3rd: 2h
       const intervalMap: Record<number, number> = { 1: 30, 2: 120, 3: 120 };
       const nextInterval = intervalMap[reminderNum] || fu.interval_minutes;
       const nextReminder = new Date();
       nextReminder.setMinutes(nextReminder.getMinutes() + nextInterval);
-      
+
       await supabase.from('chat_payment_followups').update({
         reminder_count: reminderNum,
         next_reminder_at: nextReminder.toISOString(),
       }).eq('id', fu.id);
 
       sent++;
-      console.log(`[followup] Sent reminder ${reminderNum}/${fu.max_reminders} to ${fu.phone}`);
-      
-      // Small delay between sends
+      console.log(`[followup] Sent reminder ${reminderNum}/${fu.max_reminders} to ${fu.phone} (checkoutOpened=${checkoutOpened})`);
       await new Promise(r => setTimeout(r, 1000));
     }
 
-    return new Response(JSON.stringify({ success: true, processed: followups.length, sent }), {
+    return new Response(JSON.stringify({ success: true, processed: followups.length, sent, abandonedSent }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {

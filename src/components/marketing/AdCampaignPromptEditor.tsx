@@ -28,6 +28,7 @@ const SITUATION_META: Record<string, { label: string; icon: string; description:
   coleta_dados: { label: "Coleta de Dados", icon: "📋", description: "Coletar nome, CPF, endereço, email (um por vez)" },
   pagamento: { label: "Pagamento", icon: "💳", description: "Perguntar forma de pagamento e enviar link/PIX" },
   followup_2: { label: "Follow-up 2", icon: "🎯", description: "Mudar de assunto, convidar para Live" },
+  checkout_abandonado: { label: "Checkout Abandonado", icon: "🛒", description: "Cliente abriu o link mas não finalizou a compra" },
   requalificacao: { label: "Requalificação", icon: "🔄", description: "Cliente quer outro produto" },
 };
 
