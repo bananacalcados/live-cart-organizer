@@ -506,6 +506,9 @@ export default function AdCampaignManager() {
                   )}
                 </div>
 
+                {/* Situation Prompts Editor */}
+                <AdCampaignPromptEditor campaignId={editingCampaign.id} />
+
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
