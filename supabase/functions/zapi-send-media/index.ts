@@ -41,8 +41,15 @@ serve(async (req) => {
     switch (mediaType) {
       case 'image': {
         endpoint = 'send-image';
-        const preparedImage = await prepareZApiImagePayload(mediaUrl);
-        payload = { phone: formattedPhone, image: preparedImage.image, caption: caption || '' };
+        let imageData: string;
+        if (mediaUrl.startsWith('data:image/')) {
+          // Already a base64 data URI — send directly
+          imageData = mediaUrl;
+        } else {
+          const preparedImage = await prepareZApiImagePayload(mediaUrl);
+          imageData = preparedImage.image;
+        }
+        payload = { phone: formattedPhone, image: imageData, caption: caption || '' };
         break;
       }
       case 'audio':
