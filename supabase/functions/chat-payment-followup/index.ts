@@ -54,11 +54,11 @@ serve(async (req) => {
 
         if (!customer?.whatsapp) continue;
         const phone = customer.whatsapp;
-        // phoneSuffix already computed above
+        const pSuffix = phone.replace(/\D/g, '').slice(-8);
 
         // Check if we already sent for this phone suffix
-        if (alreadySentPhones.has(phoneSuffix)) continue;
-        alreadySentPhones.add(phoneSuffix); // prevent duplicates within same batch
+        if (alreadySentPhones.has(pSuffix)) continue;
+        alreadySentPhones.add(pSuffix); // prevent duplicates within same batch
 
         // Check if already paid via other means
         if (order.customer_id) {
