@@ -720,7 +720,8 @@ function StepPayment({
   onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
   onBack: () => void;
 }) {
-  const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | null>(null);
+   const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | null>(null);
+   const [showAllMethods, setShowAllMethods] = useState(true);
   const [pixDiscountPercent, setPixDiscountPercent] = useState(0);
 
   useEffect(() => {
