@@ -24,6 +24,7 @@ export const adsTools = [
         properties: {
           nome: { type: "string", description: "Nome completo do cliente" },
           tamanho: { type: "string", description: "Tamanho/número do calçado" },
+          cor: { type: "string", description: "Cor do produto desejada pelo cliente" },
           cidade: { type: "string", description: "Cidade do cliente" },
           estado: { type: "string", description: "Estado (UF)" },
           cpf: { type: "string", description: "CPF do cliente" },
