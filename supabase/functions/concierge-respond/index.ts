@@ -1729,7 +1729,12 @@ REGRAS GERAIS:
     let sendFn = 'zapi-send-message';
     const sendBody: Record<string, unknown> = { phone: normalizedPhone, message: finalReply };
 
-    if (whatsappNumberId) {
+    if (channel === 'instagram') {
+      sendFn = 'meta-messenger-send';
+      delete sendBody.phone;
+      sendBody.recipientId = normalizedPhone;
+      sendBody.channel = 'instagram';
+    } else if (whatsappNumberId) {
       const { data: numData } = await supabase
         .from('whatsapp_numbers')
         .select('api_type')
@@ -1761,6 +1766,7 @@ REGRAS GERAIS:
       status: 'sent',
       message_id: messageId,
       whatsapp_number_id: whatsappNumberId || null,
+      channel: channel === 'instagram' ? 'instagram' : undefined,
     });
 
     // Log
