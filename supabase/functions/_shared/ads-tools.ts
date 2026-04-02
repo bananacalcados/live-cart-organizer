@@ -300,9 +300,6 @@ export async function executeAdsToolCall(
 
         // 2. Determine event_id from campaign
         const eventId = campaign.event_id;
-        if (!eventId) {
-          return { success: false, error: 'Campanha sem evento vinculado. Não é possível gerar checkout.' };
-        }
 
         // 3. Build product entry
         const quantity = args.quantity || 1;
@@ -324,17 +321,19 @@ export async function executeAdsToolCall(
         }
 
         // 5. Create order
+        const orderPayload: Record<string, any> = {
+          customer_id: customerId,
+          products: [product],
+          stage: 'new',
+          free_shipping: freeShipping,
+          shipping_cost: shippingCost,
+          delivery_method: 'shipping',
+        };
+        if (eventId) orderPayload.event_id = eventId;
+
         const { data: order, error: orderErr } = await supabase
           .from('orders')
-          .insert({
-            event_id: eventId,
-            customer_id: customerId,
-            products: [product],
-            stage: 'new',
-            free_shipping: freeShipping,
-            shipping_cost: shippingCost,
-            delivery_method: 'shipping',
-          })
+          .insert(orderPayload)
           .select('id')
           .single();
 
