@@ -12,10 +12,12 @@ const corsHeaders = {
 type Situation =
   | 'info_qualificacao'   // Present product + ask size (first contact)
   | 'duvidas'             // Answer questions only when asked
+  | 'objecoes'            // Client shows resistance or delays purchase
   | 'followup_1'          // Client not responding
   | 'coleta_dados'        // Collect address, name, CPF, email
   | 'pagamento'           // Generate or resend transparent checkout link
   | 'followup_2'          // Post-payment or post-ghosting → pivot to Live
+  | 'checkout_abandonado' // Client opened link but didn't pay
   | 'requalificacao';     // Client asks about different product
 
 interface SituationContext {
