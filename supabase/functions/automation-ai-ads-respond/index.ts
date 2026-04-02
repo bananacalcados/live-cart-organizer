@@ -871,9 +871,50 @@ REGRAS OBRIGATÓRIAS:
     // 11. Determine next stage
     let nextStage = situation as string;
     if (situation === 'info_qualificacao' && !isFirstMessage) nextStage = 'duvidas';
+    if (situation === 'objecoes') nextStage = existingLead?.conversation_stage || 'duvidas'; // Stay in previous stage
     if (allToolCalls.includes('register_live_reminder')) nextStage = 'followup_2';
     if (allToolCalls.includes('generate_checkout_link') || allToolCalls.includes('confirm_delivery_payment')) {
       nextStage = 'pagamento';
+    }
+
+    // 11b. Register follow-up for ALL stages when client doesn't have an active followup
+    // This ensures follow-ups happen at every funnel stage, not just payment
+    if (!isFollowup && situation !== 'objecoes' && !allToolCalls.includes('schedule_followup')) {
+      try {
+        const { data: existingActive } = await supabase
+          .from('chat_payment_followups')
+          .select('id')
+          .eq('phone', normalizedPhone)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (!existingActive) {
+          // No active followup — create one for general funnel follow-up
+          const firstReminder = new Date();
+          firstReminder.setMinutes(firstReminder.getMinutes() + 30); // 30min inactivity trigger
+
+          await supabase.from('chat_payment_followups').upsert({
+            phone: normalizedPhone,
+            type: `ads_${nextStage}`,
+            is_active: true,
+            interval_minutes: 30,
+            max_reminders: 3,
+            reminder_count: 0,
+            next_reminder_at: firstReminder.toISOString(),
+            whatsapp_number_id: whatsappNumberId || null,
+          }, { onConflict: 'phone' }).then(() => {
+            console.log(`[ads-ai] Funnel followup registered for ${normalizedPhone} at stage ${nextStage}`);
+          });
+
+          // Ensure chat_awaiting_payment exists
+          await supabase.from('chat_awaiting_payment').upsert(
+            { phone: normalizedPhone, type: `ads_${nextStage}` },
+            { onConflict: 'phone' }
+          );
+        }
+      } catch (fuErr) {
+        console.warn('[ads-ai] Funnel followup error (non-blocking):', fuErr);
+      }
     }
 
     // 12. Update lead
