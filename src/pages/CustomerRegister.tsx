@@ -125,6 +125,21 @@ export default function CustomerRegister() {
     setLoading(false);
   };
 
+  const isValidEmail = (em: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em);
+
+  const isValidCPF = (cpfVal: string) => {
+    const digits = cpfVal.replace(/\D/g, "");
+    if (digits.length !== 11) return false;
+    if (/^(\d)\1{10}$/.test(digits)) return false;
+    for (let t = 9; t <= 10; t++) {
+      let sum = 0;
+      for (let i = 0; i < t; i++) sum += parseInt(digits[i]) * (t + 1 - i);
+      const remainder = (sum * 10) % 11;
+      if ((remainder === 10 ? 0 : remainder) !== parseInt(digits[t])) return false;
+    }
+    return true;
+  };
+
   const formatCpf = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 11);
     return digits
