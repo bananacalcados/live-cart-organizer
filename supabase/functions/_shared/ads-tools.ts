@@ -129,6 +129,21 @@ export const adsTools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "open_support_ticket",
+      description: "Abrir um chamado de suporte para as vendedoras humanas responderem. Use SEMPRE que o cliente fizer uma pergunta sobre o produto que você NÃO sabe a resposta (material, composição, detalhes técnicos, caimento, etc). Nunca invente informações sobre o produto — abra o chamado e informe que vai verificar.",
+      parameters: {
+        type: "object",
+        properties: {
+          question: { type: "string", description: "A pergunta do cliente que precisa ser respondida por uma vendedora" },
+          context: { type: "string", description: "Contexto adicional (produto em questão, cor, tamanho, etc)" },
+        },
+        required: ["question"],
+      },
+    },
+  },
 ];
 
 interface AdsToolContext {
