@@ -615,10 +615,12 @@ export async function executeAdsToolCall(
         // Determine which channel to use based on lead
         const leadChannel = lead?.channel || 'zapi';
         const whatsappNumberId = lead?.whatsapp_number_id;
+        sendPayload.whatsapp_number_id = whatsappNumberId;
+
+        let sendSuccess = false;
 
         if (leadChannel === 'meta') {
-          sendPayload.whatsapp_number_id = whatsappNumberId;
-          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+          const metaResp = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${supabaseKey}`,
@@ -626,9 +628,12 @@ export async function executeAdsToolCall(
             },
             body: JSON.stringify(sendPayload),
           });
+          const metaData = await metaResp.json().catch(() => ({}));
+          sendSuccess = metaResp.ok && !metaData?.error;
+          console.log('[send_product_image] Meta response:', metaResp.status, JSON.stringify(metaData));
         } else {
-          sendPayload.whatsapp_number_id = whatsappNumberId;
-          await fetch(`${supabaseUrl}/functions/v1/zapi-send-media`, {
+          // First attempt via zapi-send-media (already converts to base64 for images)
+          const zapiResp = await fetch(`${supabaseUrl}/functions/v1/zapi-send-media`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${supabaseKey}`,
@@ -636,9 +641,53 @@ export async function executeAdsToolCall(
             },
             body: JSON.stringify(sendPayload),
           });
+          const zapiData = await zapiResp.json().catch(() => ({}));
+          console.log('[send_product_image] Z-API attempt 1 response:', zapiResp.status, JSON.stringify(zapiData));
+
+          sendSuccess = zapiResp.ok && zapiData?.success === true;
+
+          // If first attempt failed, retry by downloading the image and sending as base64 inline
+          if (!sendSuccess) {
+            console.log('[send_product_image] First attempt failed, retrying with direct base64 download...');
+            try {
+              const imgResp = await fetch(imageUrl!);
+              if (imgResp.ok) {
+                const contentType = imgResp.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg';
+                const bytes = new Uint8Array(await imgResp.arrayBuffer());
+                // Convert to base64
+                let binary = '';
+                const chunkSize = 0x8000;
+                for (let i = 0; i < bytes.length; i += chunkSize) {
+                  const chunk = bytes.subarray(i, i + chunkSize);
+                  binary += String.fromCharCode(...chunk);
+                }
+                const base64 = btoa(binary);
+                const dataUri = `data:${contentType};base64,${base64}`;
+
+                // Send directly with base64 image URL
+                const retryPayload = {
+                  ...sendPayload,
+                  mediaUrl: dataUri,
+                };
+                const retryResp = await fetch(`${supabaseUrl}/functions/v1/zapi-send-media`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(retryPayload),
+                });
+                const retryData = await retryResp.json().catch(() => ({}));
+                console.log('[send_product_image] Z-API retry response:', retryResp.status, JSON.stringify(retryData));
+                sendSuccess = retryResp.ok && retryData?.success === true;
+              }
+            } catch (retryErr) {
+              console.error('[send_product_image] Retry base64 error:', retryErr);
+            }
+          }
         }
 
-        // Save message to DB
+        // Save message to DB regardless (so chat history shows the image)
         await supabase.from('whatsapp_messages').insert({
           phone,
           message: `[IA-ADS] 📷 ${caption || productTitle}`,
@@ -649,6 +698,14 @@ export async function executeAdsToolCall(
           is_mass_dispatch: false,
           channel: leadChannel,
         });
+
+        if (!sendSuccess) {
+          console.error('[send_product_image] All send attempts failed for', imageUrl);
+          return {
+            success: false,
+            error: 'Não consegui entregar a foto agora. Tente descrever o produto por texto.',
+          };
+        }
 
         return {
           success: true,
