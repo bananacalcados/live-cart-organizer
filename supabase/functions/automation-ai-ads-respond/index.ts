@@ -721,6 +721,10 @@ REGRAS OBRIGATÓRIAS:
       const name = t.function.name;
       // Always offer save_lead_data, search_product, and send_product_image
       if (name === 'save_lead_data' || name === 'search_product' || name === 'send_product_image') return true;
+      // Schedule followup in objections, followup_1, followup_2, or duvidas
+      if (name === 'schedule_followup') {
+        return ['objecoes', 'followup_1', 'followup_2', 'duvidas', 'checkout_abandonado'].includes(situation);
+      }
       // Checkout link only in payment situation
       if (name === 'generate_checkout_link') {
         return situation === 'pagamento' || situation === 'duvidas';
@@ -731,8 +735,8 @@ REGRAS OBRIGATÓRIAS:
       }
       // CEP lookup in coleta or duvidas
       if (name === 'lookup_cep') return situation === 'coleta_dados' || situation === 'duvidas';
-      // Live reminder in followup_2
-      if (name === 'register_live_reminder') return situation === 'followup_2';
+      // Live reminder in followup_2 or objecoes (recusa pivot)
+      if (name === 'register_live_reminder') return situation === 'followup_2' || situation === 'objecoes';
       return true;
     });
 
