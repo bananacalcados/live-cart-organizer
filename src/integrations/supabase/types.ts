@@ -5886,7 +5886,7 @@ export type Database = {
           discount_type: string | null
           discount_value: number | null
           eligible_for_prize: boolean | null
-          event_id: string
+          event_id: string | null
           free_shipping: boolean | null
           has_gift: boolean | null
           has_unread_messages: boolean
@@ -5926,7 +5926,7 @@ export type Database = {
           discount_type?: string | null
           discount_value?: number | null
           eligible_for_prize?: boolean | null
-          event_id: string
+          event_id?: string | null
           free_shipping?: boolean | null
           has_gift?: boolean | null
           has_unread_messages?: boolean
@@ -5966,7 +5966,7 @@ export type Database = {
           discount_type?: string | null
           discount_value?: number | null
           eligible_for_prize?: boolean | null
-          event_id?: string
+          event_id?: string | null
           free_shipping?: boolean | null
           has_gift?: boolean | null
           has_unread_messages?: boolean
