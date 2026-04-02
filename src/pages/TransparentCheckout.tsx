@@ -350,15 +350,32 @@ function CountdownTimer({ checkoutStartedAt }: { checkoutStartedAt: string | nul
 
 // ── Step 1: Identification ──────────────────────────────────────
 function StepIdentification({ form, setForm, onNext }: { form: CustomerFormData; setForm: (f: CustomerFormData) => void; onNext: () => void }) {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const handleNext = () => {
-    if (!form.fullName.trim() || !form.email.trim() || !form.cpf.trim() || !form.whatsapp.trim()) {
-      toast.error("Preencha todos os campos obrigatórios");
+    const newErrors: Record<string, string> = {};
+
+    if (!form.fullName.trim()) newErrors.fullName = "Nome é obrigatório";
+    else if (form.fullName.trim().split(/\s+/).length < 2) newErrors.fullName = "Informe nome e sobrenome";
+
+    const emailTrimmed = form.email.trim();
+    if (!emailTrimmed) newErrors.email = "E-mail é obrigatório";
+    else if (!isValidEmail(emailTrimmed)) newErrors.email = "E-mail inválido (ex: nome@email.com)";
+
+    if (!form.cpf.trim()) newErrors.cpf = "CPF é obrigatório";
+    else if (!isValidCPF(form.cpf)) newErrors.cpf = "CPF inválido";
+
+    const phoneDigits = form.whatsapp.replace(/\D/g, "");
+    if (!phoneDigits) newErrors.whatsapp = "WhatsApp é obrigatório";
+    else if (phoneDigits.length < 10 || phoneDigits.length > 11) newErrors.whatsapp = "Número inválido";
+
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) {
+      toast.error("Corrija os campos destacados");
       return;
     }
-    if (form.cpf.replace(/\D/g, "").length !== 11) {
-      toast.error("CPF inválido");
-      return;
-    }
+    // Sanitize email before proceeding
+    setForm({ ...form, email: emailTrimmed });
     onNext();
   };
 
