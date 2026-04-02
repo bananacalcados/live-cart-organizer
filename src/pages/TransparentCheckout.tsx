@@ -528,6 +528,9 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
     onNext();
   };
 
+  const cepDigits = form.cep.replace(/\D/g, "");
+  const addressLoaded = cepDigits.length === 8 && !fetchingCep && (form.address.trim() || form.city.trim());
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2">
@@ -535,45 +538,93 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
         <h2 className="font-semibold text-lg">Endereço de Entrega</h2>
         <Badge variant="secondary" className="text-[10px]">2 de 3</Badge>
       </div>
-      <div className="space-y-3">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-1">
-            <Label className="text-sm">CEP *</Label>
-            <div className="relative">
-              <Input value={form.cep} onChange={(e) => { const v = formatCEP(e.target.value); setForm({ ...form, cep: v }); lookupCep(v); }} placeholder="00000-000" maxLength={9} />
-              {fetchingCep && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
+
+      {/* CEP input — always visible */}
+      <div>
+        <Label className="text-sm font-medium">Digite seu CEP *</Label>
+        <div className="relative mt-1">
+          <Input
+            value={form.cep}
+            onChange={(e) => { const v = formatCEP(e.target.value); setForm({ ...form, cep: v }); lookupCep(v); }}
+            placeholder="00000-000"
+            maxLength={9}
+            className="h-12 text-lg text-center tracking-widest font-mono"
+            autoFocus
+          />
+          {fetchingCep && <Loader2 className="absolute right-3 top-3.5 h-5 w-5 animate-spin text-primary" />}
+        </div>
+        {cepDigits.length > 0 && cepDigits.length < 8 && (
+          <p className="text-xs text-muted-foreground mt-1 text-center">Digite os 8 dígitos do CEP</p>
+        )}
+      </div>
+
+      {/* Address fields — appear after CEP lookup */}
+      {addressLoaded && (
+        <div className="animate-in slide-in-from-top-3 duration-300 space-y-3">
+          {/* Auto-filled address summary */}
+          <div className="p-3 bg-secondary/40 rounded-lg space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Endereço encontrado</p>
+            <p className="text-sm font-medium">{form.address || "—"}</p>
+            <p className="text-sm text-muted-foreground">
+              {form.neighborhood}{form.neighborhood && form.city ? " — " : ""}{form.city}{form.state ? ` / ${form.state}` : ""}
+            </p>
+          </div>
+
+          {/* Editable: number + complement */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-sm">Número *</Label>
+              <Input
+                value={form.addressNumber}
+                onChange={(e) => setForm({ ...form, addressNumber: e.target.value })}
+                placeholder="Nº"
+                className="h-11"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label className="text-sm">Complemento</Label>
+              <Input
+                value={form.complement}
+                onChange={(e) => setForm({ ...form, complement: e.target.value })}
+                placeholder="Apto, Bloco..."
+                className="h-11"
+              />
             </div>
           </div>
-          <div className="col-span-2">
-            <Label className="text-sm">Rua *</Label>
-            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-          </div>
+
+          {/* Editable fallback: if ViaCEP didn't return street/neighborhood */}
+          {(!form.address.trim() || !form.neighborhood.trim()) && (
+            <div className="space-y-3 border-t pt-3">
+              <p className="text-xs text-amber-600 font-medium">⚠️ CEP não retornou todos os dados. Preencha manualmente:</p>
+              {!form.address.trim() && (
+                <div>
+                  <Label className="text-sm">Rua *</Label>
+                  <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Nome da rua" />
+                </div>
+              )}
+              {!form.neighborhood.trim() && (
+                <div>
+                  <Label className="text-sm">Bairro *</Label>
+                  <Input value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} placeholder="Bairro" />
+                </div>
+              )}
+              {!form.city.trim() && (
+                <div>
+                  <Label className="text-sm">Cidade *</Label>
+                  <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Cidade" />
+                </div>
+              )}
+              {!form.state.trim() && (
+                <div>
+                  <Label className="text-sm">UF *</Label>
+                  <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })} maxLength={2} placeholder="SP" />
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <Label className="text-sm">Número *</Label>
-            <Input value={form.addressNumber} onChange={(e) => setForm({ ...form, addressNumber: e.target.value })} />
-          </div>
-          <div>
-            <Label className="text-sm">Complemento</Label>
-            <Input value={form.complement} onChange={(e) => setForm({ ...form, complement: e.target.value })} placeholder="Apto, Bloco" />
-          </div>
-          <div>
-            <Label className="text-sm">Bairro *</Label>
-            <Input value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} />
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2">
-            <Label className="text-sm">Cidade *</Label>
-            <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-          </div>
-          <div>
-            <Label className="text-sm">UF *</Label>
-            <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })} maxLength={2} />
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Freight Options */}
       {loadingFreight && (
