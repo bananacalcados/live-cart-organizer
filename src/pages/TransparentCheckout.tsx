@@ -638,9 +638,11 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
 
       {freightOptions.length > 0 && !loadingFreight && (
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Opção de Frete *</Label>
+          <Label className="text-sm font-medium flex items-center gap-2">
+            <Truck className="h-4 w-4" /> Selecione o frete *
+          </Label>
           <div className="space-y-2">
-            {freightOptions.map((opt) => (
+            {(showAllFreight ? freightOptions : freightOptions.filter(o => o.id === selectedFreight)).map((opt) => (
               <button
                 key={opt.id}
                 type="button"
@@ -678,6 +680,15 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
               </button>
             ))}
           </div>
+          {selectedFreight && !showAllFreight && (
+            <button
+              type="button"
+              onClick={() => setShowAllFreight(true)}
+              className="text-sm text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+            >
+              Alterar meio de envio
+            </button>
+          )}
         </div>
       )}
 
