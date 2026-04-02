@@ -114,12 +114,12 @@ GUIA DE RESPOSTAS POR TIPO DE DÚVIDA:
 
 🎨 CORES: Descreva as cores disponíveis brevemente. Se não souber as cores exatas, diga "Temos algumas opções lindas! Posso te mostrar?"
 
-🚚 ENTREGA/FRETE: 
-${ctx.isFromGV ? '- Cliente de Valadares: "Entregamos aí em Valadares! Pode ser pagamento na entrega também 😉"' : '- "Enviamos pra todo o Brasil com frete grátis!" (se aplicável)'}
+🚚 ENTREGA/FRETE: Regra de frete: ${getShippingRuleText(ctx.campaign)}
+${ctx.isFromGV ? '- Cliente de Valadares: "Entregamos aí em Valadares! Pode ser pagamento na entrega também 😉"' : ''}
 
 📍 DE ONDE SOMOS: "Somos de Governador Valadares - MG!"
 
-💰 FORMA DE PAGAMENTO: "Aceitamos PIX, cartão em até 6x sem juros${ctx.isFromGV ? ' e pagamento na entrega pra quem é de Valadares' : ''}!"
+💰 FORMA DE PAGAMENTO: "Aceitamos PIX com ${ctx.campaign.pix_discount_percent || 5}% de desconto, cartão em até 6x sem juros${ctx.isFromGV ? ' e pagamento na entrega pra quem é de Valadares' : ''}!"
 
 🏷️ DESCONTO: Mencione apenas descontos reais da campanha. Nunca invente.
 
@@ -162,12 +162,12 @@ function getColetaDadosPrompt(ctx: SituationContext): string {
   const nextField = missing[0]; // Collect one at a time
 
   const fieldPrompts: Record<string, string> = {
-    nome: 'Pergunte o nome completo. Ex: "Pra finalizar, qual seu nome completo?"',
-    cidade: 'Pergunte a cidade. Ex: "De qual cidade você é?"',
-    endereco: 'Peça o endereço completo com CEP. Ex: "Me passa o endereço completo com CEP pra entrega?"',
-    cep: 'Peça o CEP. Ex: "Qual seu CEP?"',
+    cep: 'Peça o CEP. Ex: "Qual seu CEP pra eu calcular o frete?"',
+    endereco: 'Peça o endereço completo com número. Ex: "Me passa o endereço completo com número pra entrega?"',
+    nome: 'Pergunte o nome completo. Ex: "Qual seu nome completo?"',
     cpf: 'Peça o CPF. Ex: "E o CPF?"',
-    email: 'Peça o e-mail. Ex: "E um e-mail pra enviar a nota fiscal?"',
+    email: 'Peça o e-mail (OPCIONAL). Ex: "Tem um email pra nota fiscal? Se não tiver, sem problemas!"',
+    cidade: 'Pergunte a cidade. Ex: "De qual cidade você é?"',
     tamanho: 'Pergunte o tamanho/número. Ex: "Qual número você calça?"',
     calcado: 'Pergunte o tamanho/número. Ex: "Qual número você calça?"',
   };
@@ -175,6 +175,8 @@ function getColetaDadosPrompt(ctx: SituationContext): string {
   return `SITUAÇÃO: COLETA DE DADOS
 
 Colete UM dado por vez de forma natural. Não faça interrogatório.
+
+ORDEM DE COLETA: CEP > Endereço completo > Nome completo > CPF > Email (opcional)
 
 PRÓXIMO DADO A COLETAR: ${nextField}
 ${fieldPrompts[nextField] || `Pergunte: "${nextField}"`}
@@ -184,24 +186,31 @@ Dados faltando: ${missing.join(', ')}
 
 REGRAS:
 - UMA pergunta por mensagem. Máximo 1 linha.
+- O email NÃO é obrigatório. Se o cliente não quiser, pule.
 - NÃO mencione live, evento ou qualquer outro assunto. Foco TOTAL na coleta de dados.
 - Se o cliente informar vários dados de uma vez, extraia todos e pergunte o próximo faltante.`;
 }
 
 function getPagamentoPrompt(ctx: SituationContext): string {
-  const paymentConditions = ctx.campaign.payment_conditions || '6x sem juros no cartão ou PIX';
+  const paymentConditions = ctx.campaign.payment_conditions || 'até 6x sem juros';
+  const shippingRule = getShippingRuleText(ctx.campaign);
+  const pixDiscount = ctx.campaign.pix_discount_percent || 5;
 
   return `SITUAÇÃO: PAGAMENTO
 
 Todos os dados foram coletados! Agora pergunte a forma de pagamento.
 
 ${ctx.isFromGV
-    ? `O cliente é de GOVERNADOR VALADARES. Ofereça: PIX, Cartão (${paymentConditions}) ou Pagamento na Entrega.`
-    : `Ofereça: PIX ou Cartão (${paymentConditions}).`}
+    ? `O cliente é de GOVERNADOR VALADARES. Ofereça: PIX (com ${pixDiscount}% de desconto), Cartão (${paymentConditions}) ou Pagamento na Entrega.`
+    : `Ofereça: PIX (com ${pixDiscount}% de desconto) ou Cartão (${paymentConditions}).`}
+
+REGRA DE FRETE: ${shippingRule}
+Se o frete for grátis, mencione: "Com frete grátis!"
+Se o frete for fixo, mencione o valor.
 
 FORMATO: 
 "Como prefere pagar? 😊
-${ctx.isFromGV ? '1️⃣ PIX\n2️⃣ Cartão (6x sem juros)\n3️⃣ Pagamento na entrega' : '1️⃣ PIX\n2️⃣ Cartão (6x sem juros)'}"
+${ctx.isFromGV ? `1️⃣ PIX (${pixDiscount}% de desconto!)\n2️⃣ Cartão (${paymentConditions})\n3️⃣ Pagamento na entrega` : `1️⃣ PIX (${pixDiscount}% de desconto!)\n2️⃣ Cartão (${paymentConditions})`}"
 
 Se o cliente escolher PIX: responda com a chave PIX em mensagem separada usando [ACAO:enviar_pix]
 Se o cliente escolher Cartão: use [ACAO:gerar_link_cartao]
@@ -255,6 +264,17 @@ Máximo 2 linhas + pergunta.`;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getShippingRuleText(campaign: any): string {
+  const rule = campaign.shipping_rule;
+  if (!rule) return 'Calcular frete pelo CEP do cliente';
+  switch (rule.type) {
+    case 'free': return 'FRETE GRÁTIS para esta campanha';
+    case 'fixed': return `Frete fixo de R$ ${rule.value || '0,00'}`;
+    case 'calculate':
+    default: return 'Calcular frete pelo CEP do cliente';
+  }
+}
 
 function getMatchedProduct(campaign: any, messageText: string): any | null {
   const catalog = campaign.product_info?.catalogo;
@@ -491,7 +511,9 @@ serve(async (req) => {
         .replace(/\{\{dados_faltando\}\}/gi, missingFields.join(', ') || 'Nenhum')
         .replace(/\{\{proximo_campo\}\}/gi, missingFields[0] || '')
         .replace(/\{\{eh_gv\}\}/gi, clientIsFromGV ? 'SIM - Cliente de Governador Valadares' : 'NÃO')
-        .replace(/\{\{condicoes_pagamento\}\}/gi, campaign.payment_conditions || '6x sem juros no cartão ou PIX')
+        .replace(/\{\{condicoes_pagamento\}\}/gi, campaign.payment_conditions || 'até 6x sem juros')
+        .replace(/\{\{regra_frete\}\}/gi, getShippingRuleText(campaign))
+        .replace(/\{\{pix_desconto\}\}/gi, String(campaign.pix_discount_percent || 5))
         .replace(/\{\{nome_cliente\}\}/gi, collectedData.nome || 'não informado')
         .replace(/\{\{followup_count\}\}/gi, String(existingLead?.followup_count || 0))
         .replace(/\{\{evento_nome\}\}/gi, eventData?.name || '')
