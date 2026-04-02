@@ -116,10 +116,12 @@ export type Database = {
           name: string
           objective: string
           payment_conditions: string | null
+          pix_discount_percent: number | null
           post_capture_action: string | null
           post_sale_action: string | null
           product_info: Json | null
           prompt: string
+          shipping_rule: Json | null
           updated_at: string
           whatsapp_number_id: string | null
         }
@@ -133,10 +135,12 @@ export type Database = {
           name: string
           objective?: string
           payment_conditions?: string | null
+          pix_discount_percent?: number | null
           post_capture_action?: string | null
           post_sale_action?: string | null
           product_info?: Json | null
           prompt?: string
+          shipping_rule?: Json | null
           updated_at?: string
           whatsapp_number_id?: string | null
         }
@@ -150,10 +154,12 @@ export type Database = {
           name?: string
           objective?: string
           payment_conditions?: string | null
+          pix_discount_percent?: number | null
           post_capture_action?: string | null
           post_sale_action?: string | null
           product_info?: Json | null
           prompt?: string
+          shipping_rule?: Json | null
           updated_at?: string
           whatsapp_number_id?: string | null
         }
