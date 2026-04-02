@@ -61,6 +61,50 @@ export type Database = {
           },
         ]
       }
+      ad_campaign_situation_prompts: {
+        Row: {
+          campaign_id: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          prompt_text: string
+          situation: string
+          sort_order: number
+          sub_situation: string | null
+          updated_at: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          prompt_text: string
+          situation: string
+          sort_order?: number
+          sub_situation?: string | null
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          prompt_text?: string
+          situation?: string
+          sort_order?: number
+          sub_situation?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_campaign_situation_prompts_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns_ai"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ad_campaigns_ai: {
         Row: {
           activation_keywords: string[]
