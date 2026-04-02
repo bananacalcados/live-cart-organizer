@@ -838,12 +838,11 @@ export async function executeAdsToolCall(
 
       try {
         await supabase.from('support_tickets').insert({
-          phone,
+          customer_phone: phone,
           source: 'jess_ai',
           subject: `Dúvida de produto: ${question.substring(0, 100)}`,
-          summary: `Cliente perguntou: "${question}"\nContexto: ${context}\nDados do lead: ${JSON.stringify(collectedData)}`,
+          description: `Cliente perguntou: "${question}"\nContexto: ${context}\nDados do lead: ${JSON.stringify(collectedData)}`,
           priority: 'normal',
-          whatsapp_number_id: ctx.whatsappNumberId || lead?.whatsapp_number_id || null,
           customer_name: collectedData.nome || null,
         });
 
