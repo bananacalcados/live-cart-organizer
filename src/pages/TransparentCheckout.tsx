@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, Clock, Trophy, User, MapPin, Wallet, ChevronRight } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, Clock, Trophy, User, MapPin, Wallet, ChevronRight, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -437,6 +437,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
   const [freightOptions, setFreightOptions] = useState<FreightOption[]>([]);
   const [loadingFreight, setLoadingFreight] = useState(false);
   const [selectedFreight, setSelectedFreight] = useState<string | null>(null);
+  const [showAllFreight, setShowAllFreight] = useState(true);
   const freightQuotedCep = useRef<string>("");
 
   const lookupCep = async (cepValue: string) => {
@@ -513,6 +514,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const handleSelectFreight = (option: FreightOption) => {
     setSelectedFreight(option.id);
+    setShowAllFreight(false);
     onShippingSelected(option);
   };
 
@@ -636,9 +638,11 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
 
       {freightOptions.length > 0 && !loadingFreight && (
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Opção de Frete *</Label>
+          <Label className="text-sm font-medium flex items-center gap-2">
+            <Truck className="h-4 w-4" /> Selecione o frete *
+          </Label>
           <div className="space-y-2">
-            {freightOptions.map((opt) => (
+            {(showAllFreight ? freightOptions : freightOptions.filter(o => o.id === selectedFreight)).map((opt) => (
               <button
                 key={opt.id}
                 type="button"
@@ -676,6 +680,15 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
               </button>
             ))}
           </div>
+          {selectedFreight && !showAllFreight && (
+            <button
+              type="button"
+              onClick={() => setShowAllFreight(true)}
+              className="text-sm text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+            >
+              Alterar meio de envio
+            </button>
+          )}
         </div>
       )}
 
