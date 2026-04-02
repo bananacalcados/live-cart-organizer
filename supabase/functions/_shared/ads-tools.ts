@@ -271,6 +271,10 @@ export async function executeAdsToolCall(
       try {
         // 1. Find or create customer
         const phoneDigits = phone.replace(/\D/g, '');
+        // Remove DDI 55 for checkout display (expects DDD+number)
+        const phoneLocal = phoneDigits.startsWith('55') && phoneDigits.length >= 12
+          ? phoneDigits.slice(2)
+          : phoneDigits;
         let customerId: string | null = null;
 
         // Search by phone (last 8 digits)
