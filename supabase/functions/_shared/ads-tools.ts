@@ -232,7 +232,7 @@ export async function executeAdsToolCall(
         const data = await resp.json();
         const products = (data?.data?.products?.edges || []).map((e: any) => ({
           title: e.node.title,
-          description: (e.node.description || '').substring(0, 200),
+          description: (e.node.description || '').substring(0, 1000),
           image: e.node.images?.edges?.[0]?.node?.url || null,
           variants: (e.node.variants?.edges || []).map((v: any) => ({
             title: v.node.title,
