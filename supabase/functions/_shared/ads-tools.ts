@@ -100,7 +100,7 @@ export const adsTools = [
     type: "function",
     function: {
       name: "send_product_image",
-      description: "Enviar foto do produto para o cliente via WhatsApp. Use quando o cliente pedir para ver fotos, ou após apresentar o produto para reforçar visualmente. Busca a imagem diretamente da Shopify. Se o cliente pedir fotos de cores específicas, chame esta ferramenta UMA VEZ para cada cor desejada.",
+      description: "Enviar foto do produto para o cliente via WhatsApp. Use quando o cliente pedir para ver fotos, ou após apresentar o produto para reforçar visualmente. Busca a imagem diretamente da Shopify. Se o cliente pedir uma cor específica, envie essa cor. Se o cliente NÃO especificar a cor, esta ferramenta deve enviar automaticamente uma foto de CADA cor disponível do produto.",
       parameters: {
         type: "object",
         properties: {
@@ -145,6 +145,112 @@ export const adsTools = [
     },
   },
 ];
+
+const PRODUCT_TYPE_KEYWORDS = ['tenis', 'mocassim', 'sandalia', 'papete', 'tamanco', 'sapato', 'bota', 'chinelo'];
+const SEARCH_STOP_WORDS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'com', 'para', 'por', 'no', 'na', 'o', 'a']);
+
+function normalizeShopifyText(value: string | null | undefined): string {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildShopifySearchQueries(query: string): string[] {
+  const original = (query || '').trim();
+  const normalized = normalizeShopifyText(original);
+  const strippedOriginal = original.replace(/\bt[eê]nis\b/gi, '').trim();
+  const strippedNormalized = normalized.replace(/\btenis\b/g, '').trim();
+
+  return Array.from(new Set([
+    original,
+    normalized,
+    strippedOriginal,
+    strippedNormalized,
+  ].filter(Boolean)));
+}
+
+function getVariantColorLabel(variant: any): string {
+  const selectedColor = variant?.selectedOptions?.find((o: any) => {
+    const name = normalizeShopifyText(o?.name);
+    return name === 'cor' || name === 'color';
+  })?.value;
+
+  if (selectedColor) return selectedColor;
+
+  const titleParts = String(variant?.title || '').split('/').map((part) => part.trim()).filter(Boolean);
+  return titleParts.length > 1 ? titleParts[titleParts.length - 1] : '';
+}
+
+function collectProductImageCandidates(product: any): Array<{ url: string; color: string | null; altText: string | null; source: 'variant' | 'product'; }> {
+  const seen = new Set<string>();
+  const candidates: Array<{ url: string; color: string | null; altText: string | null; source: 'variant' | 'product'; }> = [];
+
+  for (const { node: variant } of product?.variants?.edges || []) {
+    const url = variant?.image?.url;
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    candidates.push({
+      url,
+      color: getVariantColorLabel(variant) || null,
+      altText: null,
+      source: 'variant',
+    });
+  }
+
+  for (const { node: image } of product?.images?.edges || []) {
+    const url = image?.url;
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    candidates.push({
+      url,
+      color: image?.altText || null,
+      altText: image?.altText || null,
+      source: 'product',
+    });
+  }
+
+  return candidates;
+}
+
+function scoreShopifyProduct(product: any, query: string, color?: string): number {
+  const title = normalizeShopifyText(product?.title);
+  const queryNorm = normalizeShopifyText(query);
+  const queryTokens = queryNorm.split(' ').filter((token) => token.length > 1 && !SEARCH_STOP_WORDS.has(token));
+  const candidates = collectProductImageCandidates(product);
+
+  let score = 0;
+
+  if (title === queryNorm) score += 120;
+  if (queryNorm && title.includes(queryNorm)) score += 90;
+
+  const matchedTokens = queryTokens.filter((token) => title.includes(token));
+  score += matchedTokens.length * 20;
+  if (queryTokens.length > 0 && matchedTokens.length === queryTokens.length) score += 30;
+
+  const requestedTypes = queryTokens.filter((token) => PRODUCT_TYPE_KEYWORDS.includes(token));
+  if (requestedTypes.length > 0) {
+    if (requestedTypes.some((token) => title.includes(token))) score += 30;
+    else score -= 40;
+  }
+
+  if (candidates.length > 0) score += 40;
+  else score -= 60;
+
+  if (color) {
+    const colorNorm = normalizeShopifyText(color);
+    const hasColorMatch = candidates.some((candidate) => {
+      const candidateColor = normalizeShopifyText(candidate.color);
+      return candidateColor && (candidateColor.includes(colorNorm) || colorNorm.includes(candidateColor));
+    });
+    if (hasColorMatch) score += 35;
+  }
+
+  return score;
+}
 
 interface AdsToolContext {
   supabase: any;
@@ -563,96 +669,106 @@ export async function executeAdsToolCall(
       const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
       const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
 
-      let imageUrl: string | null = null;
       let productTitle = query;
+      let matchedProduct: any = null;
+      let imageTargets: Array<{ url: string; color: string | null; caption: string; }> = [];
 
       if (shopifyDomain && shopifyToken) {
         try {
-          // Fetch product with ALL variant images so we can match by color
-          const graphql = `{
-            products(first: 3, query: "${query.replace(/"/g, '\\"')}") {
-              edges {
-                node {
-                  title
-                  images(first: 20) {
-                    edges { node { url altText } }
-                  }
-                  variants(first: 50) {
-                    edges {
-                      node {
-                        title
-                        selectedOptions { name value }
-                        image { url }
+          const aggregatedProducts = new Map<string, any>();
+
+          for (const searchQuery of buildShopifySearchQueries(query)) {
+            const graphql = `{
+              products(first: 8, query: "${searchQuery.replace(/"/g, '\\"')}") {
+                edges {
+                  node {
+                    id
+                    title
+                    images(first: 20) {
+                      edges { node { url altText } }
+                    }
+                    variants(first: 50) {
+                      edges {
+                        node {
+                          title
+                          selectedOptions { name value }
+                          image { url }
+                        }
                       }
                     }
                   }
                 }
               }
+            }`;
+
+            const resp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
+              method: 'POST',
+              headers: {
+                'X-Shopify-Access-Token': shopifyToken,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ query: graphql }),
+            });
+
+            const data = await resp.json();
+            const products = data?.data?.products?.edges || [];
+            console.log('[send_product_image] Shopify returned', products.length, 'products for query:', searchQuery);
+
+            for (const { node: product } of products) {
+              aggregatedProducts.set(product.id, product);
             }
-          }`;
+          }
 
-          const resp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
-            method: 'POST',
-            headers: {
-              'X-Shopify-Access-Token': shopifyToken,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ query: graphql }),
-          });
+          const rankedProducts = Array.from(aggregatedProducts.values())
+            .map((product: any) => ({
+              product,
+              score: scoreShopifyProduct(product, query, color),
+            }))
+            .sort((a, b) => b.score - a.score);
 
-          const data = await resp.json();
-          const products = data?.data?.products?.edges || [];
-          console.log('[send_product_image] Shopify returned', products.length, 'products for query:', query);
+          matchedProduct = rankedProducts[0]?.product || null;
 
-          for (const { node: product } of products) {
-            productTitle = product.title;
+          if (matchedProduct) {
+            productTitle = matchedProduct.title;
+            const imageCandidates = collectProductImageCandidates(matchedProduct);
+            console.log('[send_product_image] Selected product:', productTitle, 'with', imageCandidates.length, 'image candidates');
 
-            // If a color was requested, try to find the variant image for that color
             if (color) {
-              const colorLower = color.toLowerCase();
-              const variants = product.variants?.edges || [];
-              for (const { node: variant } of variants) {
-                const variantColor = variant.selectedOptions?.find(
-                  (o: any) => o.name.toLowerCase() === 'cor' || o.name.toLowerCase() === 'color'
-                )?.value?.toLowerCase() || variant.title?.toLowerCase() || '';
+              const colorNorm = normalizeShopifyText(color);
+              const matchedCandidate = imageCandidates.find((candidate) => {
+                const candidateColor = normalizeShopifyText(candidate.color);
+                return candidateColor && (candidateColor.includes(colorNorm) || colorNorm.includes(candidateColor));
+              });
 
-                if (variantColor.includes(colorLower) || colorLower.includes(variantColor)) {
-                  if (variant.image?.url) {
-                    imageUrl = variant.image.url;
-                    console.log('[send_product_image] Found variant image for color:', color, imageUrl);
-                    break;
-                  }
-                }
+              if (matchedCandidate) {
+                imageTargets = [{
+                  url: matchedCandidate.url,
+                  color: matchedCandidate.color,
+                  caption: caption || `${productTitle} - ${matchedCandidate.color || color}`,
+                }];
+                console.log('[send_product_image] Found variant image for color:', color, matchedCandidate.url);
               }
-
-              // Also try matching via image altText
-              if (!imageUrl) {
-                const images = product.images?.edges || [];
-                for (const { node: img } of images) {
-                  if (img.altText && img.altText.toLowerCase().includes(colorLower)) {
-                    imageUrl = img.url;
-                    console.log('[send_product_image] Found image via altText for color:', color, imageUrl);
-                    break;
-                  }
-                }
+            } else {
+              const perColor = new Map<string, { url: string; color: string | null; caption: string; }>();
+              for (const candidate of imageCandidates) {
+                const colorKey = normalizeShopifyText(candidate.color) || `image-${perColor.size + 1}`;
+                if (perColor.has(colorKey)) continue;
+                perColor.set(colorKey, {
+                  url: candidate.url,
+                  color: candidate.color,
+                  caption: caption || `${productTitle}${candidate.color ? ` - ${candidate.color}` : ''}`,
+                });
               }
+              imageTargets = Array.from(perColor.values());
+              console.log('[send_product_image] Sending all available colors/images:', imageTargets.length);
             }
-
-            // Fallback: use first product image
-            if (!imageUrl) {
-              imageUrl = product.images?.edges?.[0]?.node?.url || null;
-              console.log('[send_product_image] Using first product image:', imageUrl);
-            }
-
-            if (imageUrl) break;
           }
         } catch (err) {
           console.error('[send_product_image] Shopify error:', err);
         }
       }
 
-      // Fallback: check catalog for image
-      if (!imageUrl) {
+      if (imageTargets.length === 0) {
         const catalog = campaign.product_info?.catalogo || [];
         const searchLower = query.toLowerCase();
         const matched = catalog.find((p: any) =>
@@ -660,134 +776,175 @@ export async function executeAdsToolCall(
           (p.keywords || []).some((kw: string) => searchLower.includes(kw.toLowerCase()))
         );
         if (matched?.imagem) {
-          imageUrl = matched.imagem;
           productTitle = matched.nome || query;
+          imageTargets = [{
+            url: matched.imagem,
+            color: color || null,
+            caption: caption || productTitle,
+          }];
         }
       }
 
-      if (!imageUrl) {
+      if (imageTargets.length === 0) {
+        try {
+          await supabase.from('support_tickets').insert({
+            customer_phone: phone,
+            source: 'jess_ai',
+            subject: `Imagem não encontrada: ${String(productTitle || query).substring(0, 100)}`,
+            description: color
+              ? `A Shopify não retornou imagem para o produto ${productTitle || query} na cor ${color}.`
+              : `A Shopify não retornou imagens para o produto ${productTitle || query}.`,
+            priority: 'normal',
+            customer_name: collectedData.nome || null,
+          });
+        } catch (ticketErr) {
+          console.error('[send_product_image] support ticket error:', ticketErr);
+        }
+
         return {
           success: false,
-          error: 'Não encontrei imagem para esse produto. Descreva o produto por texto.',
+          error: color
+            ? `Não encontrei imagem cadastrada na Shopify para ${productTitle || query} na cor ${color}.`
+            : `Não encontrei imagens cadastradas na Shopify para ${productTitle || query}.`,
         };
       }
 
-      // Send image via edge function (supports both Z-API and Meta)
       try {
-        const sendPayload: any = {
-          phone,
-          mediaUrl: imageUrl,
-          mediaType: 'image',
-          caption: caption || productTitle,
-        };
-
-        // Determine which channel to use based on lead
         const leadChannel = ctx.channel || lead?.channel || 'zapi';
         const whatsappNumberId = ctx.whatsappNumberId || lead?.whatsapp_number_id;
-        sendPayload.whatsapp_number_id = whatsappNumberId;
+        const sentTargets: Array<{ url: string; color: string | null }> = [];
+        const failedTargets: Array<{ url: string; color: string | null }> = [];
 
-        let sendSuccess = false;
+        for (const target of imageTargets.slice(0, 8)) {
+          const sendPayload: any = {
+            phone,
+            mediaUrl: target.url,
+            mediaType: 'image',
+            caption: target.caption,
+            whatsapp_number_id: whatsappNumberId,
+          };
 
-        if (leadChannel === 'meta') {
-          const metaResp = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(sendPayload),
-          });
-          const metaData = await metaResp.json().catch(() => ({}));
-          sendSuccess = metaResp.ok && !metaData?.error;
-          console.log('[send_product_image] Meta response:', metaResp.status, JSON.stringify(metaData));
-        } else {
-          // First attempt via zapi-send-media (already converts to base64 for images)
-          const zapiResp = await fetch(`${supabaseUrl}/functions/v1/zapi-send-media`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(sendPayload),
-          });
-          const zapiData = await zapiResp.json().catch(() => ({}));
-          console.log('[send_product_image] Z-API attempt 1 response:', zapiResp.status, JSON.stringify(zapiData));
+          let sendSuccess = false;
 
-          sendSuccess = zapiResp.ok && zapiData?.success === true;
+          if (leadChannel === 'meta') {
+            const metaResp = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${supabaseKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(sendPayload),
+            });
+            const metaData = await metaResp.json().catch(() => ({}));
+            sendSuccess = metaResp.ok && !metaData?.error;
+            console.log('[send_product_image] Meta response:', metaResp.status, JSON.stringify(metaData));
+          } else {
+            const zapiResp = await fetch(`${supabaseUrl}/functions/v1/zapi-send-media`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${supabaseKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(sendPayload),
+            });
+            const zapiData = await zapiResp.json().catch(() => ({}));
+            console.log('[send_product_image] Z-API attempt 1 response:', zapiResp.status, JSON.stringify(zapiData));
+            sendSuccess = zapiResp.ok && zapiData?.success === true;
 
-          // If first attempt failed, retry by downloading the image and sending as base64 inline
-          if (!sendSuccess) {
-            console.log('[send_product_image] First attempt failed, retrying with direct base64 download...');
-            try {
-              const imgResp = await fetch(imageUrl!);
-              if (imgResp.ok) {
-                const contentType = imgResp.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg';
-                const bytes = new Uint8Array(await imgResp.arrayBuffer());
-                // Convert to base64
-                let binary = '';
-                const chunkSize = 0x8000;
-                for (let i = 0; i < bytes.length; i += chunkSize) {
-                  const chunk = bytes.subarray(i, i + chunkSize);
-                  binary += String.fromCharCode(...chunk);
+            if (!sendSuccess) {
+              console.log('[send_product_image] First attempt failed, retrying with direct base64 download...');
+              try {
+                const imgResp = await fetch(target.url);
+                if (imgResp.ok) {
+                  const contentType = imgResp.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg';
+                  const bytes = new Uint8Array(await imgResp.arrayBuffer());
+                  let binary = '';
+                  const chunkSize = 0x8000;
+                  for (let i = 0; i < bytes.length; i += chunkSize) {
+                    const chunk = bytes.subarray(i, i + chunkSize);
+                    binary += String.fromCharCode(...chunk);
+                  }
+                  const base64 = btoa(binary);
+                  const dataUri = `data:${contentType};base64,${base64}`;
+
+                  const retryResp = await fetch(`${supabaseUrl}/functions/v1/zapi-send-media`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${supabaseKey}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ ...sendPayload, mediaUrl: dataUri }),
+                  });
+                  const retryData = await retryResp.json().catch(() => ({}));
+                  console.log('[send_product_image] Z-API retry response:', retryResp.status, JSON.stringify(retryData));
+                  sendSuccess = retryResp.ok && retryData?.success === true;
                 }
-                const base64 = btoa(binary);
-                const dataUri = `data:${contentType};base64,${base64}`;
-
-                // Send directly with base64 image URL
-                const retryPayload = {
-                  ...sendPayload,
-                  mediaUrl: dataUri,
-                };
-                const retryResp = await fetch(`${supabaseUrl}/functions/v1/zapi-send-media`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${supabaseKey}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify(retryPayload),
-                });
-                const retryData = await retryResp.json().catch(() => ({}));
-                console.log('[send_product_image] Z-API retry response:', retryResp.status, JSON.stringify(retryData));
-                sendSuccess = retryResp.ok && retryData?.success === true;
+              } catch (retryErr) {
+                console.error('[send_product_image] Retry base64 error:', retryErr);
               }
-            } catch (retryErr) {
-              console.error('[send_product_image] Retry base64 error:', retryErr);
             }
           }
+
+          await supabase.from('whatsapp_messages').insert({
+            phone,
+            message: `[IA-ADS] 📷 ${target.caption}`,
+            direction: 'outgoing',
+            media_type: 'image',
+            media_url: target.url,
+            whatsapp_number_id: whatsappNumberId,
+            is_mass_dispatch: false,
+            channel: leadChannel,
+          });
+
+          if (sendSuccess) sentTargets.push({ url: target.url, color: target.color });
+          else failedTargets.push({ url: target.url, color: target.color });
         }
 
-        // Save message to DB regardless (so chat history shows the image)
-        await supabase.from('whatsapp_messages').insert({
-          phone,
-          message: `[IA-ADS] 📷 ${caption || productTitle}`,
-          direction: 'outgoing',
-          media_type: 'image',
-          media_url: imageUrl,
-          whatsapp_number_id: whatsappNumberId,
-          is_mass_dispatch: false,
-          channel: leadChannel,
-        });
+        if (sentTargets.length === 0) {
+          console.error('[send_product_image] All send attempts failed for', imageTargets.map((target) => target.url));
+          try {
+            await supabase.from('support_tickets').insert({
+              customer_phone: phone,
+              source: 'jess_ai',
+              subject: `Falha ao enviar imagem: ${String(productTitle).substring(0, 100)}`,
+              description: `A Shopify retornou ${imageTargets.length} imagem(ns), mas nenhuma foi entregue ao cliente. Cor solicitada: ${color || 'não informada'}.`,
+              priority: 'normal',
+              customer_name: collectedData.nome || null,
+            });
+          } catch (ticketErr) {
+            console.error('[send_product_image] support ticket error:', ticketErr);
+          }
 
-        if (!sendSuccess) {
-          console.error('[send_product_image] All send attempts failed for', imageUrl);
           return {
             success: false,
-            error: 'Não consegui entregar a foto agora. Tente descrever o produto por texto.',
+            error: 'Não consegui entregar as fotos agora.',
+            data: {
+              product_title: productTitle,
+              requested_color: color || null,
+              available_images_found: imageTargets.length,
+              failed_images: failedTargets.length,
+            },
           };
         }
 
         return {
-          success: true,
+          success: failedTargets.length === 0,
           data: {
             image_sent: true,
             product_title: productTitle,
-            image_url: imageUrl,
-            message: `Foto do ${productTitle} enviada com sucesso!`,
+            requested_color: color || null,
+            sent_count: sentTargets.length,
+            failed_count: failedTargets.length,
+            colors_sent: sentTargets.map((target) => target.color).filter(Boolean),
+            image_urls: sentTargets.map((target) => target.url),
+            message: color
+              ? `Foto do ${productTitle} enviada com sucesso!`
+              : `${sentTargets.length} foto(s) do ${productTitle} enviada(s) com sucesso!`,
           },
         };
       } catch (err) {
         console.error('[send_product_image] Send error:', err);
-        return { success: false, error: 'Erro ao enviar foto. Tente descrever o produto por texto.' };
+        return { success: false, error: 'Erro ao enviar foto. Tente novamente em instantes.' };
       }
     }
 

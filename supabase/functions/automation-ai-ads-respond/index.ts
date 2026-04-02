@@ -672,7 +672,8 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
 - Se o cliente perguntar sobre material, composição, caimento ou qualquer detalhe que você NÃO tem certeza, use a ferramenta open_support_ticket para abrir um chamado e diga: "Vou verificar com a equipe e te retorno!"
 - O termo correto é "ortopédico" (pés/saúde), NUNCA "ortodôntico" (dentes).
 - NUNCA diga que um produto é de couro, camurça, tecido ou qualquer material se essa informação não vier da descrição do produto na Shopify.
-- Se a ferramenta send_product_image retornar erro, NÃO diga que enviou a foto. Diga que está verificando e tente novamente.
+- Se a ferramenta send_product_image falhar, NÃO diga que a foto foi enviada, NÃO culpe "instabilidade" genérica e NÃO descreva o produto visualmente.
+- Se a Shopify não tiver imagem do produto/cor pedido, explique isso com clareza e abra open_support_ticket para a equipe humana.
 - NUNCA invente informações sobre a loja, endereço, horários ou produtos. Use APENAS as informações da BASE DE CONHECIMENTO e do catálogo.`;
 
 
@@ -999,9 +1000,10 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[ads-ai] Error:', error);
-    return new Response(JSON.stringify({ error: error.message || 'Internal error' }), {
+    const errorMessage = error instanceof Error ? error.message : 'Internal error';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
