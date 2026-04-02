@@ -388,9 +388,44 @@ export default function AdCampaignManager() {
                   <Input
                     value={editingCampaign.payment_conditions || ''}
                     onChange={e => setEditingCampaign({ ...editingCampaign, payment_conditions: e.target.value })}
-                    placeholder="Ex: PIX, cartão até 3x, boleto..."
+                    placeholder="Ex: até 6x sem juros"
                     className="text-sm"
                   />
+                </div>
+
+                {/* Shipping Rule */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">🚚 Regra de Frete</Label>
+                    <Select
+                      value={(editingCampaign as any).shipping_rule?.type || 'calculate'}
+                      onValueChange={v => setEditingCampaign({
+                        ...editingCampaign,
+                        ...(({ shipping_rule: { ...((editingCampaign as any).shipping_rule || {}), type: v, ...(v === 'fixed' ? {} : { value: undefined }) } }) as any),
+                      } as any)}
+                    >
+                      <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="free">🎉 Frete Grátis</SelectItem>
+                        <SelectItem value="fixed">💰 Frete Fixo</SelectItem>
+                        <SelectItem value="calculate">📊 Calcular por CEP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(editingCampaign as any).shipping_rule?.type === 'fixed' && (
+                    <div>
+                      <Label className="text-xs">Valor do Frete (R$)</Label>
+                      <Input
+                        value={(editingCampaign as any).shipping_rule?.value || ''}
+                        onChange={e => setEditingCampaign({
+                          ...editingCampaign,
+                          ...(({ shipping_rule: { ...((editingCampaign as any).shipping_rule || {}), value: e.target.value } }) as any),
+                        } as any)}
+                        placeholder="29,90"
+                        className="text-sm"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Product Catalog */}
