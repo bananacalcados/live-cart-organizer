@@ -14,7 +14,7 @@ type Situation =
   | 'duvidas'             // Answer questions only when asked
   | 'followup_1'          // Client not responding
   | 'coleta_dados'        // Collect address, name, CPF, email
-  | 'pagamento'           // Ask payment method + send link/PIX
+  | 'pagamento'           // Generate or resend transparent checkout link
   | 'followup_2'          // Post-payment or post-ghosting → pivot to Live
   | 'requalificacao';     // Client asks about different product
 
@@ -40,6 +40,12 @@ function detectSituation(ctx: {
   const { lead, messageText, campaign, isFirstMessage, collectedData, hasAllRequiredData } = ctx;
   const msgLower = (messageText || '').toLowerCase().trim();
   const currentStage = lead?.conversation_stage || 'info_qualificacao';
+  const normalizedMessage = (messageText || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  const paymentRecoveryRequested = /(link|checkout|pagamento|pagar|cartao|pix|visa|mastercard|elo|hipercard|mercado pago|transparente|manda de novo|me manda de novo|reenvia|reenvia|novo link|link certo|link correto|link de pagamento|nao veio|nao abriu|nao funcionou|link errado|link antigo)/i.test(normalizedMessage);
 
   // Check if client asks about a DIFFERENT product (requalificacao)
   if (!isFirstMessage && currentStage !== 'info_qualificacao') {
@@ -57,6 +63,10 @@ function detectSituation(ctx: {
 
   // First message → info + qualification
   if (isFirstMessage) return 'info_qualificacao';
+
+  // If the client asks for the payment link again, always re-enter payment flow.
+  // This is critical for old conversations that still carry a legacy Mercado Pago link.
+  if (lead?.payment_link_sent && paymentRecoveryRequested) return 'pagamento';
 
   // If payment was already sent and we're following up
   if (lead?.payment_link_sent && currentStage === 'pagamento') return 'followup_2';
