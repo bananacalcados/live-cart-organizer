@@ -304,11 +304,15 @@ export async function executeAdsToolCall(
 
         // 3. Build product entry
         const quantity = args.quantity || 1;
+        const variantLabel = args.variant || collectedData.tamanho || '';
+        const colorLabel = args.color || collectedData.cor || '';
         const product = {
           title: args.product_name,
           price: args.amount,
           quantity,
-          variant: args.variant || collectedData.tamanho || '',
+          variant: [variantLabel, colorLabel].filter(Boolean).join(' / '),
+          size: variantLabel,
+          color: colorLabel,
         };
 
         // 4. Determine shipping
