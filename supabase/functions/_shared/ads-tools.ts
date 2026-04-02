@@ -665,6 +665,46 @@ export async function executeAdsToolCall(
       }
     }
 
+    // ─── SCHEDULE FOLLOWUP ───
+    case 'schedule_followup': {
+      const date = args.date; // YYYY-MM-DD
+      const time = args.time || '09:00';
+      const reason = args.reason || '';
+      const situationHint = args.situation_hint || null;
+
+      try {
+        // Parse date/time in São Paulo timezone
+        const scheduledAt = new Date(`${date}T${time}:00-03:00`);
+
+        // Validate it's in the future
+        if (scheduledAt <= new Date()) {
+          // If in the past, schedule for tomorrow at the same time
+          scheduledAt.setDate(scheduledAt.getDate() + 1);
+        }
+
+        await supabase.from('chat_scheduled_followups').insert({
+          phone,
+          scheduled_at: scheduledAt.toISOString(),
+          reason,
+          situation_hint: situationHint,
+          campaign_id: campaign.id,
+          whatsapp_number_id: lead?.whatsapp_number_id || null,
+        });
+
+        return {
+          success: true,
+          data: {
+            scheduled_at: scheduledAt.toISOString(),
+            reason,
+            message: `Follow-up agendado para ${scheduledAt.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${scheduledAt.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`,
+          },
+        };
+      } catch (err) {
+        console.error('[schedule_followup] Error:', err);
+        return { success: false, error: 'Erro ao agendar follow-up' };
+      }
+    }
+
     default:
       return { success: false, error: `Tool desconhecida: ${toolName}` };
   }
