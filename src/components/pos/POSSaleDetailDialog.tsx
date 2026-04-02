@@ -513,7 +513,11 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     Não criado no Tiny
                   </Badge>
                 )}
-                {sale.sale_type === 'online' ? (
+                {sale.sale_type === 'live' ? (
+                  <Badge className="bg-pink-100 text-pink-700 border-pink-300 font-bold text-xs flex items-center gap-1">
+                    🔴 Live
+                  </Badge>
+                ) : sale.sale_type === 'online' ? (
                   <Badge className="bg-blue-100 text-blue-700 border-blue-300 font-bold text-xs flex items-center gap-1">
                     <Globe className="h-3 w-3" /> Online
                   </Badge>
