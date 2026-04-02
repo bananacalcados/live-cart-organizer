@@ -200,9 +200,21 @@ serve(async (req) => {
 
       if (fromMe) {
         // Dedup: match by phone + message + whatsapp_number_id
-        // Also try matching with [IA] prefix (concierge saves "[IA] msg" but webhook echo has just "msg")
+        // Echoes from API-sent messages must resolve to the pre-saved AI row,
+        // otherwise they are incorrectly treated as manual operator messages.
         if (messageId && displayMessage) {
-          const messagesToMatch = [displayMessage, `[IA] ${displayMessage}`];
+          const aiPrefixes = ['[IA]', '[IA-ADS]', '[IA-CONCIERGE]', '[IA-LIVETE]'];
+          const messagesToMatch = [
+            displayMessage,
+            ...aiPrefixes.map((prefix) => `${prefix} ${displayMessage}`),
+          ];
+
+          if (mediaInfo?.mediaType === 'image') {
+            messagesToMatch.push(
+              ...aiPrefixes.map((prefix) => `${prefix} 📷 ${displayMessage}`)
+            );
+          }
+
           // Also match the frontend label for media messages (e.g. "[áudio]" vs "📎 audio")
           const mediaLabelMap: Record<string, string> = { audio: '[áudio]', image: '[imagem]', video: '[vídeo]', document: '[documento]' };
           if (mediaInfo?.mediaType && mediaLabelMap[mediaInfo.mediaType]) {
