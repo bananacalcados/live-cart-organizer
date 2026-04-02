@@ -353,6 +353,7 @@ function StepDelivery({ form, setForm, onNext, onBack, saleData, onShippingSelec
   const [freightOptions, setFreightOptions] = useState<FreightOption[]>([]);
   const [loadingFreight, setLoadingFreight] = useState(false);
   const [selectedFreight, setSelectedFreight] = useState<string | null>(null);
+  const [showAllFreight, setShowAllFreight] = useState(true);
   const freightQuotedCep = useRef<string>("");
 
   const lookupCep = async (cepValue: string) => {
@@ -396,6 +397,7 @@ function StepDelivery({ form, setForm, onNext, onBack, saleData, onShippingSelec
 
   const handleSelectFreight = (option: FreightOption) => {
     setSelectedFreight(option.id);
+    setShowAllFreight(false);
     onShippingSelected(option);
   };
 
@@ -500,7 +502,7 @@ function StepDelivery({ form, setForm, onNext, onBack, saleData, onShippingSelec
         <div className="space-y-2">
           <Label className="text-sm font-medium">Opção de Frete *</Label>
           <div className="space-y-2">
-            {freightOptions.map((opt) => (
+            {(showAllFreight ? freightOptions : freightOptions.filter(o => o.id === selectedFreight)).map((opt) => (
               <button
                 key={opt.id}
                 type="button"
@@ -536,6 +538,14 @@ function StepDelivery({ form, setForm, onNext, onBack, saleData, onShippingSelec
                 )}
               </button>
             ))}
+            {selectedFreight && !showAllFreight && (
+              <button
+                onClick={() => setShowAllFreight(true)}
+                className="w-full text-center text-sm text-primary font-medium py-2 hover:underline transition-all"
+              >
+                Alterar meio de envio
+              </button>
+            )}
           </div>
         </div>
       )}
