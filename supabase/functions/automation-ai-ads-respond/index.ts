@@ -731,7 +731,7 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
     const situationTools = adsTools.filter(t => {
       const name = t.function.name;
       // Always offer save_lead_data, search_product, and send_product_image
-      if (name === 'save_lead_data' || name === 'search_product' || name === 'send_product_image') return true;
+      if (name === 'save_lead_data' || name === 'search_product' || name === 'send_product_image' || name === 'open_support_ticket') return true;
       // Schedule followup in objections, followup_1, followup_2, or duvidas
       if (name === 'schedule_followup') {
         return ['objecoes', 'followup_1', 'followup_2', 'duvidas', 'checkout_abandonado'].includes(situation);
