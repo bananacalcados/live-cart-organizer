@@ -397,6 +397,7 @@ function StepDelivery({ form, setForm, onNext, onBack, saleData, onShippingSelec
 
   const handleSelectFreight = (option: FreightOption) => {
     setSelectedFreight(option.id);
+    setShowAllFreight(false);
     onShippingSelected(option);
   };
 
