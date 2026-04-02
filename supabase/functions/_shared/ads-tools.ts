@@ -107,6 +107,21 @@ export const adsTools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "send_product_image",
+      description: "Enviar foto do produto para o cliente via WhatsApp. Use quando o cliente pedir para ver fotos, ou após apresentar o produto para reforçar visualmente. Busca a imagem diretamente da Shopify.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Nome ou termo de busca do produto para encontrar a imagem" },
+          caption: { type: "string", description: "Legenda curta para acompanhar a foto (ex: 'Tênis Jess Ortopédico 😍')" },
+        },
+        required: ["query"],
+      },
+    },
+  },
 ];
 
 // ─── Tool Execution ───
