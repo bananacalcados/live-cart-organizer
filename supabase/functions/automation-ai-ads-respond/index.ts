@@ -162,12 +162,12 @@ function getColetaDadosPrompt(ctx: SituationContext): string {
   const nextField = missing[0]; // Collect one at a time
 
   const fieldPrompts: Record<string, string> = {
-    nome: 'Pergunte o nome completo. Ex: "Pra finalizar, qual seu nome completo?"',
-    cidade: 'Pergunte a cidade. Ex: "De qual cidade você é?"',
-    endereco: 'Peça o endereço completo com CEP. Ex: "Me passa o endereço completo com CEP pra entrega?"',
-    cep: 'Peça o CEP. Ex: "Qual seu CEP?"',
+    cep: 'Peça o CEP. Ex: "Qual seu CEP pra eu calcular o frete?"',
+    endereco: 'Peça o endereço completo com número. Ex: "Me passa o endereço completo com número pra entrega?"',
+    nome: 'Pergunte o nome completo. Ex: "Qual seu nome completo?"',
     cpf: 'Peça o CPF. Ex: "E o CPF?"',
-    email: 'Peça o e-mail. Ex: "E um e-mail pra enviar a nota fiscal?"',
+    email: 'Peça o e-mail (OPCIONAL). Ex: "Tem um email pra nota fiscal? Se não tiver, sem problemas!"',
+    cidade: 'Pergunte a cidade. Ex: "De qual cidade você é?"',
     tamanho: 'Pergunte o tamanho/número. Ex: "Qual número você calça?"',
     calcado: 'Pergunte o tamanho/número. Ex: "Qual número você calça?"',
   };
@@ -175,6 +175,8 @@ function getColetaDadosPrompt(ctx: SituationContext): string {
   return `SITUAÇÃO: COLETA DE DADOS
 
 Colete UM dado por vez de forma natural. Não faça interrogatório.
+
+ORDEM DE COLETA: CEP > Endereço completo > Nome completo > CPF > Email (opcional)
 
 PRÓXIMO DADO A COLETAR: ${nextField}
 ${fieldPrompts[nextField] || `Pergunte: "${nextField}"`}
@@ -184,6 +186,7 @@ Dados faltando: ${missing.join(', ')}
 
 REGRAS:
 - UMA pergunta por mensagem. Máximo 1 linha.
+- O email NÃO é obrigatório. Se o cliente não quiser, pule.
 - NÃO mencione live, evento ou qualquer outro assunto. Foco TOTAL na coleta de dados.
 - Se o cliente informar vários dados de uma vez, extraia todos e pergunte o próximo faltante.`;
 }
