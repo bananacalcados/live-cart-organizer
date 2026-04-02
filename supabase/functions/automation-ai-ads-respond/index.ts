@@ -290,6 +290,66 @@ MISSÃO:
 Máximo 2 linhas + pergunta.`;
 }
 
+function getObjecoesPrompt(ctx: SituationContext, subSituation: string | null): string {
+  const hasEvent = !!ctx.event;
+  const eventInfo = hasEvent
+    ? `\n\nEVENTO DISPONÍVEL: ${ctx.event.name} em ${new Date(ctx.event.starts_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às ${new Date(ctx.event.starts_at).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}`
+    : '';
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const subPrompts: Record<string, string> = {
+    objecao_financeira: `SITUAÇÃO: OBJEÇÃO FINANCEIRA
+O cliente mencionou questão de dinheiro/cartão.
+
+1. Acolha: "Entendo perfeitamente!"
+2. Se mencionou DATA (ex: "cartão vira dia 15"): "Quer que eu te mande uma mensagem no dia [data]?" → Use schedule_followup com a data informada
+3. Se disse "tá caro": destaque parcelamento 6x sem juros, custo-benefício
+4. Se possível, busque alternativas mais acessíveis (use search_product)
+
+HOJE É: ${today}
+Use a tool schedule_followup para agendar quando o cliente informar uma data.
+Máximo 2 linhas.`,
+
+    objecao_consulta: `SITUAÇÃO: CLIENTE VAI CONSULTAR ALGUÉM
+O cliente quer falar com marido/mãe/amigo antes de decidir.
+
+1. Valide: "Claro! É sempre bom decidir junto 😊"
+2. Pergunte: "Qual o melhor horário pra eu voltar a falar com você?"
+3. Se informar horário → Use schedule_followup com data e hora
+4. Se NÃO informar → Use schedule_followup para o próximo dia útil às 09:00
+5. Reforce que o preço/oferta pode mudar
+
+HOJE É: ${today}
+Máximo 2 linhas + pergunta do horário.`,
+
+    objecao_pensar: `SITUAÇÃO: "VOU PENSAR"
+O cliente quer tempo pra decidir. Descubra o motivo REAL de forma sutil.
+
+1. Acolha: "Claro, sem pressa! 😊"
+2. Sonde: "Posso te ajudar com alguma informação pra facilitar a decisão?"
+3. Se o motivo for preço → ofereça parcelamento ou alternativas
+4. Se for dúvida → responda
+5. Se realmente quiser tempo: "Quer que eu te mande uma mensagem amanhã?" → Use schedule_followup
+
+HOJE É: ${today}
+Tom leve. NUNCA insistir. Máximo 2 linhas.`,
+
+    objecao_recusa: `SITUAÇÃO: CLIENTE NÃO QUER
+O cliente disse claramente que não quer.
+
+1. Respeite: "Tudo bem! Agradeço seu tempo 😊"
+${hasEvent ? `2. PIVOTE para o evento: "Ah, mas antes de ir... ${ctx.event?.name || 'teremos uma Live'} com promoções exclusivas! Quer que eu te avise quando começar?"
+3. Se aceitar → use register_live_reminder
+4. Se recusar → agradeça e encerre com elegância` : '2. Agradeça e encerre com elegância.'}
+${eventInfo}
+
+Máximo 2 linhas.`,
+  };
+
+  return subPrompts[subSituation || 'objecao_pensar'] || subPrompts.objecao_pensar;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getShippingRuleText(campaign: any): string {
