@@ -192,19 +192,25 @@ REGRAS:
 }
 
 function getPagamentoPrompt(ctx: SituationContext): string {
-  const paymentConditions = ctx.campaign.payment_conditions || '6x sem juros no cartão ou PIX';
+  const paymentConditions = ctx.campaign.payment_conditions || 'até 6x sem juros';
+  const shippingRule = getShippingRuleText(ctx.campaign);
+  const pixDiscount = ctx.campaign.pix_discount_percent || 5;
 
   return `SITUAÇÃO: PAGAMENTO
 
 Todos os dados foram coletados! Agora pergunte a forma de pagamento.
 
 ${ctx.isFromGV
-    ? `O cliente é de GOVERNADOR VALADARES. Ofereça: PIX, Cartão (${paymentConditions}) ou Pagamento na Entrega.`
-    : `Ofereça: PIX ou Cartão (${paymentConditions}).`}
+    ? `O cliente é de GOVERNADOR VALADARES. Ofereça: PIX (com ${pixDiscount}% de desconto), Cartão (${paymentConditions}) ou Pagamento na Entrega.`
+    : `Ofereça: PIX (com ${pixDiscount}% de desconto) ou Cartão (${paymentConditions}).`}
+
+REGRA DE FRETE: ${shippingRule}
+Se o frete for grátis, mencione: "Com frete grátis!"
+Se o frete for fixo, mencione o valor.
 
 FORMATO: 
 "Como prefere pagar? 😊
-${ctx.isFromGV ? '1️⃣ PIX\n2️⃣ Cartão (6x sem juros)\n3️⃣ Pagamento na entrega' : '1️⃣ PIX\n2️⃣ Cartão (6x sem juros)'}"
+${ctx.isFromGV ? `1️⃣ PIX (${pixDiscount}% de desconto!)\n2️⃣ Cartão (${paymentConditions})\n3️⃣ Pagamento na entrega` : `1️⃣ PIX (${pixDiscount}% de desconto!)\n2️⃣ Cartão (${paymentConditions})`}"
 
 Se o cliente escolher PIX: responda com a chave PIX em mensagem separada usando [ACAO:enviar_pix]
 Se o cliente escolher Cartão: use [ACAO:gerar_link_cartao]
