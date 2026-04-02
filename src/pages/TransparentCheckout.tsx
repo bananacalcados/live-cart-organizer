@@ -720,7 +720,8 @@ function StepPayment({
   onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
   onBack: () => void;
 }) {
-  const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | null>(null);
+   const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | null>(null);
+   const [showAllMethods, setShowAllMethods] = useState(true);
   const [pixDiscountPercent, setPixDiscountPercent] = useState(0);
 
   useEffect(() => {
@@ -745,83 +746,101 @@ function StepPayment({
         <Badge variant="secondary" className="text-[10px]">3 de 3</Badge>
       </div>
 
-      <div className="space-y-2">
-        {/* Cartão de crédito */}
-        <button
-          onClick={() => setSelectedMethod("card")}
-          className={`w-full flex items-center gap-3 p-3.5 rounded-lg border transition-all text-left ${
-            selectedMethod === "card"
-              ? "border-foreground bg-card shadow-sm"
-              : "border-border bg-card hover:border-muted-foreground"
-          }`}
-        >
-          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-            selectedMethod === "card" ? "border-foreground" : "border-muted-foreground"
-          }`}>
-            {selectedMethod === "card" && <div className="w-2.5 h-2.5 rounded-full bg-foreground" />}
-          </div>
-          <span className="text-sm font-semibold">Cartão de crédito</span>
-        </button>
+       <div className="space-y-2">
+         {/* Cartão de crédito */}
+         {(showAllMethods || selectedMethod === "card") && (
+           <>
+             <button
+               onClick={() => { setSelectedMethod("card"); setShowAllMethods(false); }}
+               className={`w-full flex items-center gap-3 p-3.5 rounded-lg border transition-all text-left ${
+                 selectedMethod === "card"
+                   ? "border-foreground bg-card shadow-sm"
+                   : "border-border bg-card hover:border-muted-foreground"
+               }`}
+             >
+               <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                 selectedMethod === "card" ? "border-foreground" : "border-muted-foreground"
+               }`}>
+                 {selectedMethod === "card" && <div className="w-2.5 h-2.5 rounded-full bg-foreground" />}
+               </div>
+               <span className="text-sm font-semibold">Cartão de crédito</span>
+             </button>
 
-        {selectedMethod === "card" && (
-          <div className="animate-in slide-in-from-top-2 duration-200 border border-border rounded-lg p-4 bg-card">
-            <CardPaymentForm
-              orderId={orderId}
-              amount={amount}
-              products={products}
-              form={form}
-              installmentConfig={installmentConfig}
-              onPaymentConfirmed={onPaymentConfirmed}
-            />
-          </div>
-        )}
+             {selectedMethod === "card" && (
+               <div className="animate-in slide-in-from-top-2 duration-200 border border-border rounded-lg p-4 bg-card">
+                 <CardPaymentForm
+                   orderId={orderId}
+                   amount={amount}
+                   products={products}
+                   form={form}
+                   installmentConfig={installmentConfig}
+                   onPaymentConfirmed={onPaymentConfirmed}
+                 />
+               </div>
+             )}
+           </>
+         )}
 
-        {/* PIX */}
-        <button
-          onClick={() => setSelectedMethod("pix")}
-          className={`w-full flex items-center justify-between p-3.5 rounded-lg border transition-all text-left ${
-            selectedMethod === "pix"
-              ? "border-foreground bg-card shadow-sm"
-              : "border-border bg-card hover:border-muted-foreground"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-              selectedMethod === "pix" ? "border-foreground" : "border-muted-foreground"
-            }`}>
-              {selectedMethod === "pix" && <div className="w-2.5 h-2.5 rounded-full bg-foreground" />}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <QrCode className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-semibold">Pix</span>
-            </div>
-          </div>
-          {pixDiscountPercent > 0 && (
-            <Badge className="bg-green-600 text-white text-[8px] px-1.5 py-0.5 border-0 font-bold leading-none">
-              {pixDiscountPercent}% OFF
-            </Badge>
-          )}
-        </button>
+         {/* PIX */}
+         {(showAllMethods || selectedMethod === "pix") && (
+           <>
+             <button
+               onClick={() => { setSelectedMethod("pix"); setShowAllMethods(false); }}
+               className={`w-full flex items-center justify-between p-3.5 rounded-lg border transition-all text-left ${
+                 selectedMethod === "pix"
+                   ? "border-foreground bg-card shadow-sm"
+                   : "border-border bg-card hover:border-muted-foreground"
+               }`}
+             >
+               <div className="flex items-center gap-3">
+                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                   selectedMethod === "pix" ? "border-foreground" : "border-muted-foreground"
+                 }`}>
+                   {selectedMethod === "pix" && <div className="w-2.5 h-2.5 rounded-full bg-foreground" />}
+                 </div>
+                 <div className="flex items-center gap-1.5">
+                   <QrCode className="h-4 w-4 text-muted-foreground" />
+                   <span className="text-sm font-semibold">Pix</span>
+                 </div>
+               </div>
+               {pixDiscountPercent > 0 && (
+                 <Badge className="bg-green-600 text-white text-[8px] px-1.5 py-0.5 border-0 font-bold leading-none">
+                   {pixDiscountPercent}% OFF
+                 </Badge>
+               )}
+             </button>
 
-        {selectedMethod === "pix" && (
-          <div className="animate-in slide-in-from-top-2 duration-200 border border-border rounded-lg p-4 bg-card">
-            {pixDiscountPercent > 0 && (
-              <div className="mb-3">
-                <p className="text-sm text-muted-foreground">A confirmação de pagamento é realizada em poucos minutos. Utilize o aplicativo do seu banco para pagar.</p>
-                <p className="text-base font-bold text-green-600 mt-2">
-                  Valor no Pix: R$ {pixAmount.toFixed(2).replace(".", ",")}
-                </p>
-              </div>
-            )}
-            <PixPaymentForm
-              orderId={orderId}
-              amount={pixAmount}
-              form={form}
-              onPaymentConfirmed={onPaymentConfirmed}
-            />
-          </div>
-        )}
-      </div>
+             {selectedMethod === "pix" && (
+               <div className="animate-in slide-in-from-top-2 duration-200 border border-border rounded-lg p-4 bg-card">
+                 {pixDiscountPercent > 0 && (
+                   <div className="mb-3">
+                     <p className="text-sm text-muted-foreground">A confirmação de pagamento é realizada em poucos minutos. Utilize o aplicativo do seu banco para pagar.</p>
+                     <p className="text-base font-bold text-green-600 mt-2">
+                       Valor no Pix: R$ {pixAmount.toFixed(2).replace(".", ",")}
+                     </p>
+                   </div>
+                 )}
+                 <PixPaymentForm
+                   orderId={orderId}
+                   amount={pixAmount}
+                   form={form}
+                   onPaymentConfirmed={onPaymentConfirmed}
+                 />
+               </div>
+             )}
+           </>
+         )}
+
+         {/* Botão para trocar forma de pagamento */}
+         {selectedMethod && !showAllMethods && (
+           <button
+             onClick={() => setShowAllMethods(true)}
+             className="w-full text-center text-sm text-primary font-medium py-2 hover:underline transition-all"
+           >
+             Alterar forma de pagamento
+           </button>
+         )}
+       </div>
 
       <Button variant="ghost" onClick={onBack} className="w-full text-sm text-muted-foreground">
         ← Voltar para Entrega
