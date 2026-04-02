@@ -312,7 +312,79 @@ serve(async (req) => {
       await new Promise(r => setTimeout(r, 1000));
     }
 
-    return new Response(JSON.stringify({ success: true, processed: followups.length, sent, abandonedSent }), {
+    // ── PART 3: Scheduled followups (personalized date/time) ──
+    const { data: scheduledItems } = await supabase
+      .from('chat_scheduled_followups')
+      .select('*')
+      .eq('is_sent', false)
+      .lte('scheduled_at', new Date().toISOString())
+      .order('scheduled_at')
+      .limit(50);
+
+    let scheduledSent = 0;
+    if (scheduledItems?.length) {
+      for (const item of scheduledItems) {
+        // Build contextual message based on reason/situation_hint
+        let message = `Oi! 😊 Passando aqui como combinamos. `;
+        
+        if (item.situation_hint === 'objecao_financeira') {
+          message += `Lembra que você mencionou que ia verificar sobre o pagamento? Conseguiu resolver? Estou aqui pra te ajudar! 💳`;
+        } else if (item.situation_hint === 'objecao_consulta') {
+          message += `Conseguiu conversar sobre aquele produto que te mostrei? Se tiver alguma dúvida, estou à disposição! 😊`;
+        } else if (item.reason) {
+          message += item.reason;
+        } else {
+          message += `Tudo bem por aí? Ainda posso te ajudar com aquele pedido! 🛍️`;
+        }
+
+        // Try to get campaign-specific prompt
+        if (item.campaign_id) {
+          const situationKey = item.situation_hint || 'followup_1';
+          const { data: prompt } = await supabase
+            .from('ad_campaign_situation_prompts')
+            .select('prompt_text')
+            .eq('campaign_id', item.campaign_id)
+            .eq('situation', situationKey)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          // Campaign prompt is instructional, so we keep the default contextual message
+          // but log the prompt for AI context if needed
+        }
+
+        const sendNumberId = item.whatsapp_number_id;
+
+        if (sendNumberId) {
+          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: item.phone, message, whatsappNumberId: sendNumberId }),
+          });
+        } else {
+          await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: item.phone, message }),
+          });
+        }
+
+        await supabase.from('whatsapp_messages').insert({
+          phone: item.phone, message, direction: 'outgoing', status: 'sent',
+          whatsapp_number_id: sendNumberId || null,
+        });
+
+        await supabase.from('chat_scheduled_followups').update({
+          is_sent: true,
+          sent_at: new Date().toISOString(),
+        }).eq('id', item.id);
+
+        scheduledSent++;
+        console.log(`[followup] Scheduled followup sent to ${item.phone} (reason: ${item.situation_hint || item.reason})`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, processed: followups?.length || 0, sent, abandonedSent, scheduledSent }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
