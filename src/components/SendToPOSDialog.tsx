@@ -3,10 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Store, Loader2, CheckCircle } from "lucide-react";
+import { Store, Loader2, CheckCircle, Radio } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DbOrder } from "@/types/database";
+import { Badge } from "@/components/ui/badge";
 
 interface SendToPOSDialogProps {
   open: boolean;
@@ -49,8 +50,9 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
           discount: discountAmount,
           total: finalValue,
           status: "pending_pickup",
+          sale_type: "live",
           source_order_id: order.id,
-          notes: `Retirada na loja - Live ${order.customer?.instagram_handle || ""}. Pedido CRM: ${order.id.slice(0, 8)}`,
+          notes: `Venda da Live - ${order.customer?.instagram_handle || ""}. Pedido CRM: ${order.id.slice(0, 8)}`,
           payment_details: {
             source: "live_event",
             customer_instagram: order.customer?.instagram_handle,
@@ -78,6 +80,31 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
         .insert(items);
 
       if (itemsError) throw itemsError;
+
+      // Create Tiny ERP order
+      try {
+        const storeName = STORES.find(s => s.id === selectedStore)?.name || "";
+        await supabase.functions.invoke("pos-tiny-create-sale", {
+          body: {
+            store_id: selectedStore,
+            customer: {
+              name: order.customer?.instagram_handle || "Cliente Live",
+              whatsapp: order.customer?.whatsapp || "",
+            },
+            items: order.products.map(p => ({
+              sku: p.sku || "",
+              name: p.title,
+              variant: p.variant,
+              quantity: p.quantity,
+              price: p.price,
+            })),
+            payment_method_name: "Venda Live - Retirada",
+            notes: `Venda da Live - Retirada ${storeName}`,
+          },
+        });
+      } catch (tinyErr) {
+        console.warn("Tiny order creation failed (sale saved locally):", tinyErr);
+      }
 
       // Update the CRM order with the POS sale reference
       await supabase

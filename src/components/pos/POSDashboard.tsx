@@ -255,8 +255,8 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       setAvgTicket(count > 0 ? revenue / count : 0);
 
       // Online vs Physical breakdown
-      const online = completedSales.filter((s: any) => s.sale_type === 'online');
-      const physical = completedSales.filter((s: any) => s.sale_type !== 'online');
+      const online = completedSales.filter((s: any) => s.sale_type === 'online' || s.sale_type === 'live');
+      const physical = completedSales.filter((s: any) => s.sale_type !== 'online' && s.sale_type !== 'live');
       setOnlineRevenue(online.reduce((sum, s) => sum + (s.total || 0), 0));
       setOnlineSalesCount(online.length);
       setPhysicalRevenue(physical.reduce((sum, s) => sum + (s.total || 0), 0));
