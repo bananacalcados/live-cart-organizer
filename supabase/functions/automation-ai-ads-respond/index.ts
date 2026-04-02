@@ -467,7 +467,7 @@ serve(async (req) => {
       isFromGV: clientIsFromGV,
     };
 
-    // Detect sub-situation for "duvidas"
+    // Detect sub-situation for "duvidas" and "objecoes"
     let subSituation: string | null = null;
     if (situation === 'duvidas') {
       const ml = (messageText || '').toLowerCase();
@@ -479,6 +479,17 @@ serve(async (req) => {
       else if (/foto|imag|ver|mostr/i.test(ml)) subSituation = 'fotos';
       else if (/descont|promo|cupon|oferta|barato|mais barato/i.test(ml)) subSituation = 'desconto';
       else subSituation = 'geral';
+    } else if (situation === 'objecoes') {
+      const ml = (messageText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (/(caro|cartao.*vir|nao tenho|sem dinheiro|apertado|dia \d|vira dia|so (no|dia)|proximo mes|salario|nao posso agora|muito caro|ta caro|valor alto)/i.test(ml)) {
+        subSituation = 'objecao_financeira';
+      } else if (/(marido|esposa|mae|pai|irma|filho|amig|ver com|falar com|consultar|perguntar pr|familia|parente)/i.test(ml)) {
+        subSituation = 'objecao_consulta';
+      } else if (/(nao quero|nao preciso|obrigad|nao.*interesse|hoje nao|agora nao|dispenso|nao.*momento|desculpa mas|passa dessa)/i.test(ml)) {
+        subSituation = 'objecao_recusa';
+      } else {
+        subSituation = 'objecao_pensar';
+      }
     }
 
     // Try to load from DB: campaign-specific first, then global
