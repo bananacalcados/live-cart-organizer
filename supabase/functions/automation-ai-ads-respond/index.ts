@@ -408,7 +408,7 @@ serve(async (req) => {
       eventData = event;
     }
 
-    // 5. Build situation-specific prompt
+    // 5. Load DB prompts (campaign-specific override OR global default)
     const sitCtx: SituationContext = {
       situation,
       lead: existingLead,
@@ -420,15 +420,97 @@ serve(async (req) => {
       isFromGV: clientIsFromGV,
     };
 
+    // Detect sub-situation for "duvidas"
+    let subSituation: string | null = null;
+    if (situation === 'duvidas') {
+      const ml = (messageText || '').toLowerCase();
+      if (/taman|numer|n[uú]mero|calç/i.test(ml)) subSituation = 'tamanho';
+      else if (/cor|cores|colorid/i.test(ml)) subSituation = 'cores';
+      else if (/frete|entreg|envi|ship/i.test(ml)) subSituation = 'frete';
+      else if (/onde|localiz|endere[çc]o da loja|cidade|valadares/i.test(ml)) subSituation = 'localizacao';
+      else if (/pag|pix|cart[aã]o|boleto|parcela/i.test(ml)) subSituation = 'pagamento';
+      else if (/foto|imag|ver|mostr/i.test(ml)) subSituation = 'fotos';
+      else if (/descont|promo|cupon|oferta|barato|mais barato/i.test(ml)) subSituation = 'desconto';
+      else subSituation = 'geral';
+    }
+
+    // Try to load from DB: campaign-specific first, then global
+    let dbPromptText: string | null = null;
+    const promptQueries = [];
+
+    // Query 1: campaign-specific for this situation+sub
+    promptQueries.push(
+      supabase.from('ad_campaign_situation_prompts')
+        .select('prompt_text')
+        .eq('campaign_id', campaign.id)
+        .eq('situation', situation)
+        .eq('is_active', true)
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            const match = subSituation
+              ? data.find((d: any) => d.sub_situation === subSituation) || data.find((d: any) => !d.sub_situation)
+              : data.find((d: any) => !d.sub_situation) || data[0];
+            if (match) return (match as any).prompt_text as string;
+          }
+          return null;
+        })
+    );
+
+    // Query 2: global default
+    promptQueries.push(
+      supabase.from('ad_campaign_situation_prompts')
+        .select('prompt_text, sub_situation')
+        .is('campaign_id', null)
+        .eq('situation', situation)
+        .eq('is_active', true)
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            const match = subSituation
+              ? data.find((d: any) => d.sub_situation === subSituation) || data.find((d: any) => !d.sub_situation)
+              : data.find((d: any) => !d.sub_situation) || data[0];
+            if (match) return (match as any).prompt_text as string;
+          }
+          return null;
+        })
+    );
+
+    const [campaignPrompt, globalPrompt] = await Promise.all(promptQueries);
+    dbPromptText = campaignPrompt || globalPrompt;
+
+    // Build the final situation prompt — use DB text if available, fallback to hardcoded
     let situationPrompt = '';
-    switch (situation) {
-      case 'info_qualificacao': situationPrompt = getInfoQualificacaoPrompt(sitCtx); break;
-      case 'duvidas': situationPrompt = getDuvidasPrompt(sitCtx); break;
-      case 'followup_1': situationPrompt = getFollowup1Prompt(sitCtx); break;
-      case 'coleta_dados': situationPrompt = getColetaDadosPrompt(sitCtx); break;
-      case 'pagamento': situationPrompt = getPagamentoPrompt(sitCtx); break;
-      case 'followup_2': situationPrompt = getFollowup2Prompt(sitCtx); break;
-      case 'requalificacao': situationPrompt = getRequalificacaoPrompt(sitCtx); break;
+    if (dbPromptText) {
+      // Inject dynamic variables into the DB prompt template
+      situationPrompt = dbPromptText
+        .replace(/\{\{produto_info\}\}/gi, formatProductList(campaign))
+        .replace(/\{\{produto_match\}\}/gi, (() => {
+          const p = getMatchedProduct(campaign, messageText);
+          return p ? `${p.nome} — R$ ${p.preco}${p.detalhes ? ` (${p.detalhes})` : ''}` : '';
+        })())
+        .replace(/\{\{dados_coletados\}\}/gi, JSON.stringify(collectedData))
+        .replace(/\{\{dados_faltando\}\}/gi, missingFields.join(', ') || 'Nenhum')
+        .replace(/\{\{proximo_campo\}\}/gi, missingFields[0] || '')
+        .replace(/\{\{eh_gv\}\}/gi, clientIsFromGV ? 'SIM - Cliente de Governador Valadares' : 'NÃO')
+        .replace(/\{\{condicoes_pagamento\}\}/gi, campaign.payment_conditions || '6x sem juros no cartão ou PIX')
+        .replace(/\{\{nome_cliente\}\}/gi, collectedData.nome || 'não informado')
+        .replace(/\{\{followup_count\}\}/gi, String(existingLead?.followup_count || 0))
+        .replace(/\{\{evento_nome\}\}/gi, eventData?.name || '')
+        .replace(/\{\{evento_data\}\}/gi, eventData?.starts_at ? new Date(eventData.starts_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '')
+        .replace(/\{\{evento_hora\}\}/gi, eventData?.starts_at ? new Date(eventData.starts_at).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }) : '');
+
+      console.log(`[ads-ai] Using DB prompt for ${situation}${subSituation ? '/' + subSituation : ''} (${campaignPrompt ? 'campaign' : 'global'})`);
+    } else {
+      // Fallback to hardcoded prompts
+      switch (situation) {
+        case 'info_qualificacao': situationPrompt = getInfoQualificacaoPrompt(sitCtx); break;
+        case 'duvidas': situationPrompt = getDuvidasPrompt(sitCtx); break;
+        case 'followup_1': situationPrompt = getFollowup1Prompt(sitCtx); break;
+        case 'coleta_dados': situationPrompt = getColetaDadosPrompt(sitCtx); break;
+        case 'pagamento': situationPrompt = getPagamentoPrompt(sitCtx); break;
+        case 'followup_2': situationPrompt = getFollowup2Prompt(sitCtx); break;
+        case 'requalificacao': situationPrompt = getRequalificacaoPrompt(sitCtx); break;
+      }
+      console.log(`[ads-ai] Using hardcoded prompt for ${situation}`);
     }
 
     // 6. Base persona prompt

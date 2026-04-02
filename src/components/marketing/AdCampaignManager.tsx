@@ -22,6 +22,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import AdCampaignPromptEditor from "./AdCampaignPromptEditor";
 
 interface CatalogProduct {
   nome: string;
@@ -504,6 +505,9 @@ export default function AdCampaignManager() {
                     <p className="text-xs text-muted-foreground text-center py-2">Nenhum produto. Clique em "+ Produto" para adicionar ao catálogo.</p>
                   )}
                 </div>
+
+                {/* Situation Prompts Editor */}
+                <AdCampaignPromptEditor campaignId={editingCampaign.id} />
 
 
                 <div className="grid grid-cols-2 gap-3">
