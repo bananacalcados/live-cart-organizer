@@ -577,43 +577,66 @@ export default function CustomerRegister() {
               <MapPin className="h-4 w-4" />
               Endereço de Entrega
             </div>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="cep">CEP *</Label>
-                  <div className="relative">
-                    <Input id="cep" value={cep} onChange={(e) => handleCepChange(e.target.value)} placeholder="00000-000" />
-                    {fetchingCep && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin" />}
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="state">Estado *</Label>
-                  <Input id="state" value={state} onChange={(e) => setState(e.target.value)} placeholder="SP" maxLength={2} />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="city">Cidade *</Label>
-                <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="São Paulo" />
-              </div>
-              <div>
-                <Label htmlFor="neighborhood">Bairro *</Label>
-                <Input id="neighborhood" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} placeholder="Centro" />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <Label htmlFor="address">Endereço *</Label>
-                  <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Rua das Flores" />
-                </div>
-                <div>
-                  <Label htmlFor="addressNumber">Número *</Label>
-                  <Input id="addressNumber" value={addressNumber} onChange={(e) => setAddressNumber(e.target.value)} placeholder="123" />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="complement">Complemento</Label>
-                <Input id="complement" value={complement} onChange={(e) => setComplement(e.target.value)} placeholder="Apto 101, Bloco A" />
-              </div>
-            </div>
+             <div className="space-y-3">
+               {/* CEP field - always visible */}
+               <div className="max-w-[200px]">
+                 <Label htmlFor="cep">CEP *</Label>
+                 <div className="relative">
+                   <Input id="cep" value={cep} onChange={(e) => handleCepChange(e.target.value)} placeholder="00000-000" className="text-lg h-12" />
+                   {fetchingCep && <Loader2 className="absolute right-3 top-3.5 h-4 w-4 animate-spin" />}
+                 </div>
+               </div>
+
+               {/* Address fields - appear after CEP lookup */}
+               {(() => {
+                 const cepDigits = cep.replace(/\D/g, "");
+                 const addressLoaded = cepDigits.length === 8 && !fetchingCep && (address.trim() || city.trim());
+                 if (!addressLoaded) return null;
+
+                 const hasMissingStreet = !address.trim();
+                 const hasMissingNeighborhood = !neighborhood.trim();
+
+                 return (
+                   <div className="animate-in slide-in-from-top-2 duration-200 space-y-3">
+                     <div className="bg-secondary/40 rounded-lg p-3 border border-border">
+                       <p className="text-xs text-muted-foreground mb-1">Endereço encontrado</p>
+                       <p className="text-sm font-medium">
+                         {address && `${address}, `}{neighborhood && `${neighborhood} - `}{city}/{state}
+                       </p>
+                     </div>
+
+                     {/* Manual fields for generic CEPs */}
+                     {(hasMissingStreet || hasMissingNeighborhood) && (
+                       <div className="space-y-3">
+                         {hasMissingStreet && (
+                           <div>
+                             <Label htmlFor="address">Endereço *</Label>
+                             <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Rua das Flores" />
+                           </div>
+                         )}
+                         {hasMissingNeighborhood && (
+                           <div>
+                             <Label htmlFor="neighborhood">Bairro *</Label>
+                             <Input id="neighborhood" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} placeholder="Centro" />
+                           </div>
+                         )}
+                       </div>
+                     )}
+
+                     <div className="grid grid-cols-2 gap-3">
+                       <div>
+                         <Label htmlFor="addressNumber">Número *</Label>
+                         <Input id="addressNumber" value={addressNumber} onChange={(e) => setAddressNumber(e.target.value)} placeholder="123" autoFocus />
+                       </div>
+                       <div>
+                         <Label htmlFor="complement">Complemento</Label>
+                         <Input id="complement" value={complement} onChange={(e) => setComplement(e.target.value)} placeholder="Apto 101, Bloco A" />
+                       </div>
+                     </div>
+                   </div>
+                 );
+               })()}
+             </div>
           </div>
         )}
 
