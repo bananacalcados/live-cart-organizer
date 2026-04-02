@@ -24,6 +24,7 @@ interface SituationPrompt {
 const SITUATION_META: Record<string, { label: string; icon: string; description: string }> = {
   info_qualificacao: { label: "Informação + Qualificação", icon: "👋", description: "Primeiro contato: saudar, apresentar produto e perguntar tamanho" },
   duvidas: { label: "Dúvidas", icon: "❓", description: "Responder perguntas do cliente (ativado por sub-situações)" },
+  objecoes: { label: "Objeções", icon: "🛡️", description: "Cliente apresenta resistência ou adia a compra" },
   followup_1: { label: "Follow-up 1", icon: "🔔", description: "Cliente não respondeu — retomar conversa" },
   coleta_dados: { label: "Coleta de Dados", icon: "📋", description: "Coletar nome, CPF, endereço, email (um por vez)" },
   pagamento: { label: "Pagamento", icon: "💳", description: "Perguntar forma de pagamento e enviar link/PIX" },
