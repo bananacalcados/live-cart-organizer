@@ -189,15 +189,19 @@ function PixPaymentSection({
     }
   };
 
-  const handleGeneratePix = async () => {
-    if (!firstName.trim() || !cpf.trim() || !email.trim()) {
-      toast.error("Preencha nome, CPF e e-mail para continuar");
-      return;
-    }
-    if (cpf.replace(/\D/g, "").length !== 11) {
-      toast.error("CPF inválido");
-      return;
-    }
+   const handleGeneratePix = async () => {
+     if (!firstName.trim()) {
+       toast.error("Preencha o nome para continuar");
+       return;
+     }
+     if (!email.trim() || !isValidEmail(email.trim())) {
+       toast.error("E-mail inválido (ex: nome@email.com)");
+       return;
+     }
+     if (!cpf.trim() || !isValidCPF(cpf)) {
+       toast.error("CPF inválido");
+       return;
+     }
 
     setIsGenerating(true);
     try {
