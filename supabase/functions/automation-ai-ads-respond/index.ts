@@ -621,9 +621,13 @@ REGRAS OBRIGATÓRIAS:
       const name = t.function.name;
       // Always offer save_lead_data, search_product, and send_product_image
       if (name === 'save_lead_data' || name === 'search_product' || name === 'send_product_image') return true;
-      // Payment tools only in payment situation
-      if (['generate_pix', 'generate_card_link', 'confirm_delivery_payment'].includes(name)) {
+      // Checkout link only in payment situation
+      if (name === 'generate_checkout_link') {
         return situation === 'pagamento' || situation === 'duvidas';
+      }
+      // Delivery payment only in payment for GV clients
+      if (name === 'confirm_delivery_payment') {
+        return (situation === 'pagamento' || situation === 'duvidas') && clientIsFromGV;
       }
       // CEP lookup in coleta or duvidas
       if (name === 'lookup_cep') return situation === 'coleta_dados' || situation === 'duvidas';
