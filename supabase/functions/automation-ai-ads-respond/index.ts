@@ -535,12 +535,25 @@ serve(async (req) => {
       console.log(`[ads-ai] Using hardcoded prompt for ${situation}`);
     }
 
-    // 6. Base persona prompt
+    // 6. Load knowledge base for ads agent
+    let knowledgeContext = '';
+    const { data: kbEntries } = await supabase
+      .from('ai_knowledge_base')
+      .select('title, content, category')
+      .contains('agents', ['ads'])
+      .eq('is_active', true)
+      .order('sort_order');
+    if (kbEntries && kbEntries.length > 0) {
+      knowledgeContext = '\n\nBASE DE CONHECIMENTO:\n' + kbEntries.map((e: any) => `[${e.category}] ${e.title}: ${e.content}`).join('\n');
+    }
+
+    // 7. Base persona prompt
     const basePrompt = campaign.prompt || 'Você é uma atendente simpática e consultora de vendas.';
 
     const systemPrompt = `${basePrompt}
 
 ${situationPrompt}
+${knowledgeContext}
 
 REGRAS OBRIGATÓRIAS:
 - Mensagens ULTRA CURTAS: máximo 2 linhas. Parece WhatsApp real.
@@ -552,6 +565,7 @@ REGRAS OBRIGATÓRIAS:
 - Quando o cliente pedir fotos ou quiser ver o produto, use send_product_image para enviar a foto direto pelo WhatsApp.
 - Após apresentar o produto na primeira mensagem, use send_product_image para enviar a foto junto (reforço visual).
 - Quando gerar PIX, envie o código copia-e-cola em uma mensagem SEPARADA (apenas o código, sem texto).
+- NUNCA invente informações sobre a loja, endereço, horários ou produtos. Use APENAS as informações da BASE DE CONHECIMENTO e do catálogo.
 - NUNCA invente informações de produto. Se não souber, use search_product.`;
 
     // 7. Build chat history
