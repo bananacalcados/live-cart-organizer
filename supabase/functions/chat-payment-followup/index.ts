@@ -54,7 +54,7 @@ serve(async (req) => {
 
         if (!customer?.whatsapp) continue;
         const phone = customer.whatsapp;
-        const phoneSuffix = phone.replace(/\D/g, '').slice(-8);
+        // phoneSuffix already computed above
 
         // Check if we already sent for this phone suffix
         if (alreadySentPhones.has(phoneSuffix)) continue;
