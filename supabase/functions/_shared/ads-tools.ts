@@ -4,7 +4,7 @@ export const adsTools = [
     type: "function",
     function: {
       name: "search_product",
-      description: "Buscar produto na loja por nome, cor, tipo, tamanho ou descrição. Use quando o cliente perguntar sobre detalhes do produto (tamanhos disponíveis, cores, variações, preço). Retorna variantes com estoque.",
+      description: "Buscar produto na loja por nome, cor, tipo, tamanho ou descrição. Use quando o cliente perguntar sobre detalhes do produto (tamanhos disponíveis, cores, variações, preço). Use TAMBÉM quando o cliente quiser explorar opções (ex: 'quero ver tênis', 'tênis casual', 'sandália'). Retorna variantes com estoque. DICA: use termos simples e curtos para melhores resultados (ex: 'tenis', 'sandalia', 'papete').",
       parameters: {
         type: "object",
         properties: {
