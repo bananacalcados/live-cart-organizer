@@ -57,12 +57,42 @@ export function POSAiAssistanceRequests({ storeId }: Props) {
   const [filter, setFilter] = useState<"pending" | "all">("pending");
 
   useEffect(() => {
+    // Request notification permission
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
     loadRequests();
 
     const channel = supabase
       .channel("ai-assistance-realtime")
       .on("postgres_changes", {
-        event: "*",
+        event: "INSERT",
+        schema: "public",
+        table: "ai_assistance_requests",
+      }, (payload) => {
+        loadRequests();
+        // Push browser notification
+        const req = payload.new as any;
+        if (req.status === "pending") {
+          const typeLabel = TYPE_CONFIG[req.request_type]?.label || "Solicitação";
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("🤖 Nova solicitação da IA", {
+              body: `${typeLabel}: ${req.ai_summary?.slice(0, 100)}`,
+              icon: "/placeholder.svg",
+              tag: `ai-request-${req.id}`,
+            });
+          }
+          // Also play a sound
+          try {
+            const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2JkZeYl5KNiIaCgoSIjZKWmJmXk46JhYKBgoaLkJWYmZiUj4qGgoGChYuQlZiZmJSPioWCgYKGi5CVmJmYlI+KhYKBgoaLkJWYmZiUj4qFgoGChg==");
+            audio.volume = 0.3;
+            audio.play().catch(() => {});
+          } catch {}
+        }
+      })
+      .on("postgres_changes", {
+        event: "UPDATE",
         schema: "public",
         table: "ai_assistance_requests",
       }, () => {
