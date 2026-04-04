@@ -68,7 +68,8 @@ export function POSInterStoreRequests({ storeId }: Props) {
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
-  const [tab, setTab] = useState<"sent" | "received">("received");
+  const [tab, setTab] = useState<"sent" | "received" | "ai">("ai");
+  const [aiPendingCount, setAiPendingCount] = useState(0);
 
   // Form
   const [targetStoreId, setTargetStoreId] = useState("");
