@@ -72,6 +72,36 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function createAiAssistanceRequest(
+  supabase: any,
+  payload: {
+    phone: string;
+    customerName?: string | null;
+    whatsappNumberId?: string | null;
+    requestType: 'product_photo' | 'takeover_chat' | 'technical_info' | 'verify_stock';
+    summary: string;
+    priority?: 'low' | 'normal' | 'high' | 'urgent';
+    productTitle?: string | null;
+  },
+) {
+  try {
+    await supabase.from('ai_assistance_requests').insert({
+      request_type: payload.requestType,
+      status: 'pending',
+      customer_phone: payload.phone,
+      customer_name: payload.customerName || null,
+      product_title: payload.productTitle || null,
+      ai_agent: 'bia',
+      ai_summary: payload.summary,
+      priority: payload.priority || 'normal',
+      whatsapp_number_id: payload.whatsappNumberId || null,
+      store_id: null,
+    });
+  } catch (error) {
+    console.error('[concierge] ai assistance request error:', error);
+  }
+}
+
 function firstNonEmptyString(...values: unknown[]): string | null {
   for (const value of values) {
     if (typeof value === 'string' && value.trim()) return value.trim();
@@ -907,6 +937,15 @@ async function executeToolCall(
     } catch (e) {
       console.error('[concierge] Ticket creation error:', e);
     }
+
+    await createAiAssistanceRequest(supabase, {
+      phone,
+      customerName,
+      whatsappNumberId,
+      requestType: 'takeover_chat',
+      summary: ticketDescription || ticketSubject,
+      priority: ticketPriority,
+    });
 
     // Also create chat assignment for routing
     try {
