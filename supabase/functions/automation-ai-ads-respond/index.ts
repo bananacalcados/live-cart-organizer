@@ -550,7 +550,7 @@ serve(async (req) => {
     } else {
       situation = detectSituation({
         lead: existingLead,
-        messageText,
+        messageText: effectiveMessageText,
         campaign,
         isFirstMessage,
         collectedData,
