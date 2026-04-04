@@ -314,53 +314,66 @@ export async function executeAdsToolCall(
       }
 
       try {
-        const graphql = `{
-          products(first: 5, query: "${query.replace(/"/g, '\\"')}") {
-            edges {
-              node {
-                id
-                title
-                description
-                variants(first: 20) {
-                  edges {
-                    node {
-                      id
-                      title
-                      price
-                      sku
-                      availableForSale
+        const searchQueries = buildShopifySearchQueries(query);
+        const allProducts = new Map<string, any>();
+        
+        for (const sq of searchQueries) {
+          const graphql = `{
+            products(first: 5, query: "${sq.replace(/"/g, '\\"')}") {
+              edges {
+                node {
+                  id
+                  title
+                  description
+                  variants(first: 20) {
+                    edges {
+                      node {
+                        id
+                        title
+                        price
+                        sku
+                        availableForSale
+                      }
                     }
                   }
-                }
-                images(first: 1) {
-                  edges { node { url } }
+                  images(first: 1) {
+                    edges { node { url } }
+                  }
                 }
               }
             }
+          }`;
+
+          const resp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopifyToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: graphql }),
+          });
+
+          const data = await resp.json();
+          for (const edge of (data?.data?.products?.edges || [])) {
+            if (!allProducts.has(edge.node.id)) {
+              allProducts.set(edge.node.id, edge.node);
+            }
           }
-        }`;
+          // Stop searching if we found results
+          if (allProducts.size > 0) break;
+        }
 
-        const resp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
-          method: 'POST',
-          headers: {
-            'X-Shopify-Access-Token': shopifyToken,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ query: graphql }),
-        });
-
-        const data = await resp.json();
-        const products = (data?.data?.products?.edges || []).map((e: any) => ({
-          title: e.node.title,
-          description: (e.node.description || '').substring(0, 1000),
-          image: e.node.images?.edges?.[0]?.node?.url || null,
-          variants: (e.node.variants?.edges || []).map((v: any) => ({
+        const products = Array.from(allProducts.values()).slice(0, 5).map((node: any) => ({
+          title: node.title,
+          description: (node.description || '').substring(0, 1000),
+          image: node.images?.edges?.[0]?.node?.url || null,
+          variants: (node.variants?.edges || []).map((v: any) => ({
             title: v.node.title,
             price: v.node.price,
             sku: v.node.sku,
             available: v.node.availableForSale,
           })),
-          available_sizes: (e.node.variants?.edges || [])
+          available_sizes: (node.variants?.edges || [])
             .filter((v: any) => v.node.availableForSale)
             .map((v: any) => v.node.title),
         }));
