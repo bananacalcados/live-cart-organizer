@@ -656,7 +656,7 @@ serve(async (req) => {
       situationPrompt = dbPromptText
         .replace(/\{\{produto_info\}\}/gi, formatProductList(campaign))
         .replace(/\{\{produto_match\}\}/gi, (() => {
-          const p = getMatchedProduct(campaign, messageText);
+          const p = getMatchedProduct(campaign, effectiveMessageText);
           return p ? `${p.nome} — R$ ${p.preco}${p.detalhes ? ` (${p.detalhes})` : ''}` : '';
         })())
         .replace(/\{\{dados_coletados\}\}/gi, JSON.stringify(collectedData))
