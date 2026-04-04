@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import {
   ArrowRightLeft, Plus, Search, Package, Check, X, Loader2,
-  Clock, Truck, AlertCircle, Send, Bell, Phone
+  Clock, Truck, AlertCircle, Send, Bell, Phone, Bot
 } from "lucide-react";
+import { POSAiAssistanceRequests } from "./POSAiAssistanceRequests";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,7 +68,8 @@ export function POSInterStoreRequests({ storeId }: Props) {
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
-  const [tab, setTab] = useState<"sent" | "received">("received");
+  const [tab, setTab] = useState<"sent" | "received" | "ai">("ai");
+  const [aiPendingCount, setAiPendingCount] = useState(0);
 
   // Form
   const [targetStoreId, setTargetStoreId] = useState("");
@@ -88,16 +90,29 @@ export function POSInterStoreRequests({ storeId }: Props) {
 
   useEffect(() => {
     loadData();
+    loadAiPendingCount();
 
     const channel = supabase
       .channel("pos-requests-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "pos_inter_store_requests" }, () => {
         loadRequests();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "ai_assistance_requests" }, () => {
+        loadAiPendingCount();
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [storeId]);
+
+  const loadAiPendingCount = async () => {
+    const { count } = await supabase
+      .from("ai_assistance_requests")
+      .select("*", { count: "exact", head: true })
+      .or(`store_id.eq.${storeId},store_id.is.null`)
+      .eq("status", "pending");
+    setAiPendingCount(count || 0);
+  };
 
   const loadData = async () => {
     await Promise.all([loadRequests(), loadStores(), loadSellers()]);
@@ -238,7 +253,8 @@ export function POSInterStoreRequests({ storeId }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-pos-white flex items-center gap-2">
-            <ArrowRightLeft className="h-5 w-5 text-pos-orange" /> Solicitações entre Lojas
+            <ArrowRightLeft className="h-5 w-5 text-pos-orange" /> Solicitações
+            {aiPendingCount > 0 && <Badge className="bg-red-500 text-white border-0 text-xs animate-pulse">{aiPendingCount} IA</Badge>}
           </h2>
           <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={() => setShowNew(true)}>
             <Plus className="h-4 w-4" /> Nova Solicitação
@@ -247,7 +263,10 @@ export function POSInterStoreRequests({ storeId }: Props) {
 
         {/* Tabs */}
         <div className="flex gap-2">
-          <button onClick={() => setTab("received")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "received" ? "bg-pos-orange text-pos-white" : "bg-pos-white/5 text-pos-white/50"}`}>
+          <button onClick={() => setTab("ai")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "ai" ? "bg-pos-orange text-pos-black" : "bg-pos-white/5 text-pos-white/50"}`}>
+            🤖 IA {aiPendingCount > 0 && <Badge className="ml-1 bg-red-500 text-white border-0 text-[10px]">{aiPendingCount}</Badge>}
+          </button>
+          <button onClick={() => setTab("received")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "received" ? "bg-pos-orange text-pos-black" : "bg-pos-white/5 text-pos-white/50"}`}>
             📥 Recebidas {pendingReceivedCount > 0 && <Badge className="ml-1 bg-red-500 text-white border-0 text-[10px]">{pendingReceivedCount}</Badge>}
           </button>
           <button onClick={() => setTab("sent")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "sent" ? "bg-pos-orange text-pos-black" : "bg-pos-white/5 text-pos-white/50"}`}>
@@ -255,79 +274,82 @@ export function POSInterStoreRequests({ storeId }: Props) {
           </button>
         </div>
 
-        {/* List */}
-        {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-pos-orange" /></div>
-        ) : displayedRequests.length === 0 ? (
-          <div className="text-center py-12 text-pos-white/40">
-            <ArrowRightLeft className="h-12 w-12 mx-auto mb-2 opacity-30" />
-            <p>Nenhuma solicitação {tab === "sent" ? "enviada" : "recebida"}</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {displayedRequests.map(req => {
-              const statusInfo = STATUS_MAP[req.status] || STATUS_MAP.pending;
-              const StatusIcon = statusInfo.icon;
-              const isSent = req.from_store_id === storeId;
-              return (
-                <Card key={req.id} className={`border-pos-orange/10 ${req.status === "pending" && !isSent ? "bg-pos-orange/10 border-pos-orange/30" : "bg-pos-white/5"}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {req.priority === "urgent" && <Badge className="bg-red-500 text-white border-0 text-[10px]">URGENTE</Badge>}
-                        <Badge className={`text-[10px] ${statusInfo.color} border-0`}>
-                          <StatusIcon className="h-3 w-3 mr-1" />{statusInfo.label}
-                        </Badge>
-                        <span className="text-xs text-pos-white/60">
-                          {isSent ? `→ ${storeName(req.to_store_id)}` : `← ${storeName(req.from_store_id)}`}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-pos-white/40">{new Date(req.created_at).toLocaleString("pt-BR")}</span>
-                    </div>
+        {/* AI Assistance Tab */}
+        {tab === "ai" && <POSAiAssistanceRequests storeId={storeId} />}
 
-                    {/* Items */}
-                    <div className="space-y-1 mb-2">
-                      {(req.items || []).map((it, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm text-pos-white">
-                          <Package className="h-3 w-3 text-pos-orange" />
-                          <span>{it.quantity}x {it.product_name}</span>
-                          {it.size && <Badge variant="outline" className="text-[10px] border-pos-white/20 text-pos-white/60">{it.size}</Badge>}
-                          {it.color && <Badge variant="outline" className="text-[10px] border-pos-white/20 text-pos-white/60">{it.color}</Badge>}
+        {/* Inter-store List */}
+        {tab !== "ai" && (
+          loading ? (
+            <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-pos-orange" /></div>
+          ) : displayedRequests.length === 0 ? (
+            <div className="text-center py-12 text-pos-white/40">
+              <ArrowRightLeft className="h-12 w-12 mx-auto mb-2 opacity-30" />
+              <p>Nenhuma solicitação {tab === "sent" ? "enviada" : "recebida"}</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {displayedRequests.map(req => {
+                const statusInfo = STATUS_MAP[req.status] || STATUS_MAP.pending;
+                const StatusIcon = statusInfo.icon;
+                const isSent = req.from_store_id === storeId;
+                return (
+                  <Card key={req.id} className={`border-pos-orange/10 ${req.status === "pending" && !isSent ? "bg-pos-orange/10 border-pos-orange/30" : "bg-pos-white/5"}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {req.priority === "urgent" && <Badge className="bg-red-500 text-white border-0 text-[10px]">URGENTE</Badge>}
+                          <Badge className={`text-[10px] ${statusInfo.color} border-0`}>
+                            <StatusIcon className="h-3 w-3 mr-1" />{statusInfo.label}
+                          </Badge>
+                          <span className="text-xs text-pos-white/60">
+                            {isSent ? `→ ${storeName(req.to_store_id)}` : `← ${storeName(req.from_store_id)}`}
+                          </span>
                         </div>
-                      ))}
-                    </div>
-
-                    {req.customer_name && <p className="text-xs text-pos-white/50">👤 Cliente: {req.customer_name} {req.customer_phone && `(${req.customer_phone})`}</p>}
-                    {req.courier_name && <p className="text-xs text-pos-white/50">🏍️ Motoboy: {req.courier_name} {req.courier_phone && `(${req.courier_phone})`}</p>}
-                    {req.estimated_arrival && <p className="text-xs text-pos-white/50">⏰ Previsão: {req.estimated_arrival}</p>}
-                    {req.notes && <p className="text-[10px] text-pos-white/40 mt-1">📝 {req.notes}</p>}
-
-                    {/* Actions */}
-                    {!isSent && req.status === "pending" && (
-                      <div className="flex gap-2 mt-3">
-                        <Button size="sm" className="bg-green-600 text-white hover:bg-green-700 gap-1 text-xs" onClick={() => { setRespondingId(req.id); setResponseStatus("confirmed"); }}>
-                          <Check className="h-3 w-3" /> Confirmar
-                        </Button>
-                        <Button size="sm" variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10 gap-1 text-xs" onClick={() => { setRespondingId(req.id); setResponseStatus("unavailable"); }}>
-                          <X className="h-3 w-3" /> Indisponível
-                        </Button>
+                        <span className="text-[10px] text-pos-white/40">{new Date(req.created_at).toLocaleString("pt-BR")}</span>
                       </div>
-                    )}
-                    {!isSent && req.status === "confirmed" && (
-                      <Button size="sm" className="mt-3 bg-purple-600 text-white hover:bg-purple-700 gap-1 text-xs" onClick={() => { setRespondingId(req.id); setResponseStatus("in_transit"); }}>
-                        <Truck className="h-3 w-3" /> Enviar c/ Motoboy
-                      </Button>
-                    )}
-                    {isSent && req.status === "in_transit" && (
-                      <Button size="sm" className="mt-3 bg-green-600 text-white hover:bg-green-700 gap-1 text-xs" onClick={() => handleRespond(req.id)}>
-                        <Check className="h-3 w-3" /> Confirmar Recebimento
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+
+                      <div className="space-y-1 mb-2">
+                        {(req.items || []).map((it, i) => (
+                          <div key={i} className="flex items-center gap-2 text-sm text-pos-white">
+                            <Package className="h-3 w-3 text-pos-orange" />
+                            <span>{it.quantity}x {it.product_name}</span>
+                            {it.size && <Badge variant="outline" className="text-[10px] border-pos-white/20 text-pos-white/60">{it.size}</Badge>}
+                            {it.color && <Badge variant="outline" className="text-[10px] border-pos-white/20 text-pos-white/60">{it.color}</Badge>}
+                          </div>
+                        ))}
+                      </div>
+
+                      {req.customer_name && <p className="text-xs text-pos-white/50">👤 Cliente: {req.customer_name} {req.customer_phone && `(${req.customer_phone})`}</p>}
+                      {req.courier_name && <p className="text-xs text-pos-white/50">🏍️ Motoboy: {req.courier_name} {req.courier_phone && `(${req.courier_phone})`}</p>}
+                      {req.estimated_arrival && <p className="text-xs text-pos-white/50">⏰ Previsão: {req.estimated_arrival}</p>}
+                      {req.notes && <p className="text-[10px] text-pos-white/40 mt-1">📝 {req.notes}</p>}
+
+                      {!isSent && req.status === "pending" && (
+                        <div className="flex gap-2 mt-3">
+                          <Button size="sm" className="bg-green-600 text-white hover:bg-green-700 gap-1 text-xs" onClick={() => { setRespondingId(req.id); setResponseStatus("confirmed"); }}>
+                            <Check className="h-3 w-3" /> Confirmar
+                          </Button>
+                          <Button size="sm" variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10 gap-1 text-xs" onClick={() => { setRespondingId(req.id); setResponseStatus("unavailable"); }}>
+                            <X className="h-3 w-3" /> Indisponível
+                          </Button>
+                        </div>
+                      )}
+                      {!isSent && req.status === "confirmed" && (
+                        <Button size="sm" className="mt-3 bg-purple-600 text-white hover:bg-purple-700 gap-1 text-xs" onClick={() => { setRespondingId(req.id); setResponseStatus("in_transit"); }}>
+                          <Truck className="h-3 w-3" /> Enviar c/ Motoboy
+                        </Button>
+                      )}
+                      {isSent && req.status === "in_transit" && (
+                        <Button size="sm" className="mt-3 bg-green-600 text-white hover:bg-green-700 gap-1 text-xs" onClick={() => handleRespond(req.id)}>
+                          <Check className="h-3 w-3" /> Confirmar Recebimento
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )
         )}
 
         {/* New Request Dialog */}
