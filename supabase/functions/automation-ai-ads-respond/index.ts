@@ -584,7 +584,7 @@ serve(async (req) => {
     // Detect sub-situation for "duvidas" and "objecoes"
     let subSituation: string | null = null;
     if (situation === 'duvidas') {
-      const ml = (messageText || '').toLowerCase();
+      const ml = (effectiveMessageText || '').toLowerCase();
       if (/taman|numer|n[uú]mero|calç/i.test(ml)) subSituation = 'tamanho';
       else if (/cor|cores|colorid/i.test(ml)) subSituation = 'cores';
       else if (/frete|entreg|envi|ship/i.test(ml)) subSituation = 'frete';
