@@ -5,52 +5,47 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const SEARCH_STOP_WORDS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'com', 'para', 'por', 'no', 'na', 'o', 'a']);
+
+function normalizeShopifyText(value: string): string {
+  return (value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function buildShopifySearchQueries(query: string): string[] {
+  const original = (query || '').trim();
+  const normalized = normalizeShopifyText(original);
+  const strippedOriginal = original.replace(/\bt[eê]nis\b/gi, '').trim();
+  const strippedNormalized = normalized.replace(/\btenis\b/g, '').trim();
+  const tokens = normalized.split(' ').filter((t) => t.length > 2 && !SEARCH_STOP_WORDS.has(t));
+  const queries = [original, normalized, strippedOriginal, strippedNormalized];
+  for (const token of tokens) {
+    if (token !== normalized && token !== strippedNormalized) {
+      queries.push(token);
+    }
+  }
+  return Array.from(new Set(queries.filter(Boolean)));
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')!;
+  const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')!;
 
-  const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
-  const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+  const testQuery = "Tênis Jess Ortopédico";
+  const searchQueries = buildShopifySearchQueries(testQuery);
+  const results: any = { testQuery, searchQueries, found: [] };
 
-  const results: any = {
-    domain_set: !!shopifyDomain,
-    token_set: !!shopifyToken,
-    domain_preview: shopifyDomain ? shopifyDomain.substring(0, 15) + '...' : null,
-  };
-
-  if (shopifyDomain && shopifyToken) {
-    // Test 1: list first 3 products (no search filter)
-    const graphql1 = `{ products(first: 3) { edges { node { id title } } } }`;
-    const resp1 = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
+  for (const sq of searchQueries) {
+    const graphql = `{ products(first: 3, query: "${sq.replace(/"/g, '\\"')}") { edges { node { id title } } } }`;
+    const resp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
       method: 'POST',
       headers: { 'X-Shopify-Access-Token': shopifyToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: graphql1 }),
+      body: JSON.stringify({ query: graphql }),
     });
-    const data1 = await resp1.json();
-    results.list_status = resp1.status;
-    results.list_products = data1?.data?.products?.edges?.map((e: any) => e.node.title) || [];
-    results.list_errors = data1?.errors || null;
-
-    // Test 2: search "tenis"
-    const graphql2 = `{ products(first: 3, query: "tenis") { edges { node { id title } } } }`;
-    const resp2 = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
-      method: 'POST',
-      headers: { 'X-Shopify-Access-Token': shopifyToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: graphql2 }),
-    });
-    const data2 = await resp2.json();
-    results.search_status = resp2.status;
-    results.search_products = data2?.data?.products?.edges?.map((e: any) => e.node.title) || [];
-    results.search_errors = data2?.errors || null;
-
-    // Test 3: search "jess"
-    const graphql3 = `{ products(first: 3, query: "jess") { edges { node { id title } } } }`;
-    const resp3 = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
-      method: 'POST',
-      headers: { 'X-Shopify-Access-Token': shopifyToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: graphql3 }),
-    });
-    const data3 = await resp3.json();
-    results.search_jess_products = data3?.data?.products?.edges?.map((e: any) => e.node.title) || [];
+    const data = await resp.json();
+    const products = data?.data?.products?.edges?.map((e: any) => e.node.title) || [];
+    results.found.push({ query: sq, count: products.length, products });
+    if (products.length > 0) break;
   }
 
   return new Response(JSON.stringify(results, null, 2), {
