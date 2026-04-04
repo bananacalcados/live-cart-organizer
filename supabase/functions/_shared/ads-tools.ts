@@ -291,8 +291,96 @@ export async function executeAdsToolCall(
     // ─── SEARCH PRODUCT ───
     case 'search_product': {
       const query = args.query;
+      const visualTagsFilter: string[] = args.visual_tags || [];
       const shopifyDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN');
       const shopifyToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+
+      // ─── Visual tags search: if tags provided, search by visual tags first ───
+      if (visualTagsFilter.length > 0) {
+        try {
+          // Find products matching ALL requested visual tags
+          const { data: taggedProducts } = await supabase
+            .from('product_visual_tags')
+            .select('shopify_product_id, product_title, visual_tags, ai_description')
+            .contains('visual_tags', visualTagsFilter);
+
+          if (taggedProducts && taggedProducts.length > 0) {
+            // If we also have a text query, filter by it
+            const queryNorm = query ? query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '';
+            let filtered = taggedProducts;
+            if (queryNorm && queryNorm.length > 2) {
+              filtered = taggedProducts.filter((p: any) => {
+                const titleNorm = (p.product_title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return titleNorm.includes(queryNorm) || queryNorm.split(' ').some((t: string) => t.length > 2 && titleNorm.includes(t));
+              });
+              if (filtered.length === 0) filtered = taggedProducts; // fallback to all tag matches
+            }
+
+            // Fetch full product details from Shopify for the matched products
+            const productIds = filtered.slice(0, 5).map((p: any) => p.shopify_product_id);
+            const shopifyProducts: any[] = [];
+
+            if (shopifyDomain && shopifyToken) {
+              for (const pid of productIds) {
+                const gql = `{
+                  node(id: "${pid}") {
+                    ... on Product {
+                      id title description
+                      variants(first: 20) { edges { node { id title price sku availableForSale } } }
+                      images(first: 1) { edges { node { url } } }
+                    }
+                  }
+                }`;
+                const resp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
+                  method: 'POST',
+                  headers: { 'X-Shopify-Access-Token': shopifyToken, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ query: gql }),
+                });
+                const d = await resp.json();
+                const node = d?.data?.node;
+                if (node?.title) shopifyProducts.push(node);
+              }
+            }
+
+            const products = shopifyProducts.length > 0
+              ? shopifyProducts.map((node: any) => {
+                  const tagInfo = filtered.find((t: any) => t.shopify_product_id === node.id);
+                  return {
+                    title: node.title,
+                    description: (node.description || '').substring(0, 500),
+                    visual_description: tagInfo?.ai_description || '',
+                    visual_tags: tagInfo?.visual_tags || [],
+                    image: node.images?.edges?.[0]?.node?.url || null,
+                    variants: (node.variants?.edges || []).map((v: any) => ({
+                      title: v.node.title, price: v.node.price, sku: v.node.sku, available: v.node.availableForSale,
+                    })),
+                    available_sizes: (node.variants?.edges || [])
+                      .filter((v: any) => v.node.availableForSale)
+                      .map((v: any) => v.node.title),
+                  };
+                })
+              : filtered.slice(0, 5).map((p: any) => ({
+                  title: p.product_title,
+                  visual_description: p.ai_description,
+                  visual_tags: p.visual_tags,
+                }));
+
+            return {
+              success: true,
+              data: {
+                source: 'visual_tags',
+                results: products,
+                count: products.length,
+                matched_tags: visualTagsFilter,
+                message: `Encontrei ${products.length} produto(s) com as características: ${visualTagsFilter.join(', ')}`,
+              },
+            };
+          }
+        } catch (tagErr) {
+          console.error('[search_product] Visual tags search error:', tagErr);
+          // Fall through to regular Shopify search
+        }
+      }
 
       if (!shopifyDomain || !shopifyToken) {
         // Fallback: use catalog info from campaign
@@ -364,20 +452,38 @@ export async function executeAdsToolCall(
           if (allProducts.size > 0) break;
         }
 
-        const products = Array.from(allProducts.values()).slice(0, 5).map((node: any) => ({
-          title: node.title,
-          description: (node.description || '').substring(0, 1000),
-          image: node.images?.edges?.[0]?.node?.url || null,
-          variants: (node.variants?.edges || []).map((v: any) => ({
-            title: v.node.title,
-            price: v.node.price,
-            sku: v.node.sku,
-            available: v.node.availableForSale,
-          })),
-          available_sizes: (node.variants?.edges || [])
-            .filter((v: any) => v.node.availableForSale)
-            .map((v: any) => v.node.title),
-        }));
+        // Enrich results with visual tags if available
+        const productIds = Array.from(allProducts.keys());
+        let visualTagsMap = new Map<string, any>();
+        if (productIds.length > 0) {
+          const { data: tags } = await supabase
+            .from('product_visual_tags')
+            .select('shopify_product_id, visual_tags, ai_description')
+            .in('shopify_product_id', productIds);
+          for (const t of tags || []) {
+            visualTagsMap.set(t.shopify_product_id, t);
+          }
+        }
+
+        const products = Array.from(allProducts.values()).slice(0, 5).map((node: any) => {
+          const tagInfo = visualTagsMap.get(node.id);
+          return {
+            title: node.title,
+            description: (node.description || '').substring(0, 1000),
+            visual_description: tagInfo?.ai_description || undefined,
+            visual_tags: tagInfo?.visual_tags || undefined,
+            image: node.images?.edges?.[0]?.node?.url || null,
+            variants: (node.variants?.edges || []).map((v: any) => ({
+              title: v.node.title,
+              price: v.node.price,
+              sku: v.node.sku,
+              available: v.node.availableForSale,
+            })),
+            available_sizes: (node.variants?.edges || [])
+              .filter((v: any) => v.node.availableForSale)
+              .map((v: any) => v.node.title),
+          };
+        });
 
         return {
           success: true,
