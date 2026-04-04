@@ -575,7 +575,7 @@ serve(async (req) => {
       lead: existingLead,
       campaign,
       event: eventData,
-      messageText,
+      messageText: effectiveMessageText,
       collectedData,
       missingFields,
       isFromGV: clientIsFromGV,
