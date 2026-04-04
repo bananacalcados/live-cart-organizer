@@ -416,6 +416,58 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // ─── DEBOUNCE: wait 5s then check if a newer message arrived ─────
+    if (!isFollowup && messageText) {
+      await sleep(5000);
+
+      const normalizedPhoneDebounce = phone.replace(/\D/g, '');
+      const phoneVariants = [normalizedPhoneDebounce];
+      if (normalizedPhoneDebounce.startsWith('55') && normalizedPhoneDebounce.length >= 12) {
+        phoneVariants.push(normalizedPhoneDebounce.slice(2));
+      } else {
+        phoneVariants.push('55' + normalizedPhoneDebounce);
+      }
+
+      const cutoff = new Date(Date.now() - 30000).toISOString();
+      const { data: recentMsgs } = await supabase
+        .from('whatsapp_messages')
+        .select('id, message, created_at')
+        .in('phone', phoneVariants)
+        .eq('direction', 'incoming')
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const latestText = recentMsgs?.[0]?.message?.trim() || '';
+      if (latestText && messageText.trim() && latestText !== messageText.trim()) {
+        console.log(`[ads-respond] Debounced: newer message detected for ${normalizedPhoneDebounce}. Current="${messageText.trim().slice(0,40)}" Latest="${latestText.slice(0,40)}"`);
+        return new Response(JSON.stringify({ handled: false, reason: 'debounced' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Aggregate fragmented messages from last 30s
+      const { data: aggregatedMsgs } = await supabase
+        .from('whatsapp_messages')
+        .select('message')
+        .in('phone', phoneVariants)
+        .eq('direction', 'incoming')
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: true });
+
+      if (aggregatedMsgs && aggregatedMsgs.length > 1) {
+        const combined = aggregatedMsgs.map((m: any) => m.message?.trim()).filter(Boolean).join('\n');
+        if (combined) {
+          console.log(`[ads-respond] Aggregated ${aggregatedMsgs.length} messages for ${normalizedPhoneDebounce}`);
+          // Override messageText with combined text — reassign via object spread won't work, so we use a mutable ref
+          (req as any).__aggregatedText = combined;
+        }
+      }
+    }
+
+    // Use aggregated text if available
+    const effectiveMessageText = (req as any).__aggregatedText || messageText;
+
     // 1. Load campaign
     let campaign: any = null;
     if (campaignId) {
