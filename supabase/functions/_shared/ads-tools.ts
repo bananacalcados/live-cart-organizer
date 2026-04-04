@@ -100,11 +100,11 @@ export const adsTools = [
     type: "function",
     function: {
       name: "send_product_image",
-      description: "Enviar foto do produto para o cliente via WhatsApp. Use quando o cliente pedir para ver fotos, ou após apresentar o produto para reforçar visualmente. Busca a imagem diretamente da Shopify. Se o cliente pedir uma cor específica, envie essa cor. Se o cliente NÃO especificar a cor, esta ferramenta deve enviar automaticamente uma foto de CADA cor disponível do produto.",
+      description: "Enviar foto do produto para o cliente via WhatsApp. Use quando o cliente pedir para ver fotos, ou após apresentar o produto para reforçar visualmente. Busca a imagem diretamente da Shopify. IMPORTANTE: No campo 'query', use termos CURTOS e SIMPLES que correspondam ao nome real do produto na loja (ex: 'jess', 'melim', 'debora', 'papete'). NÃO invente nomes — use o nome que apareceu na busca anterior (search_product). Se o cliente pedir uma cor específica, envie essa cor. Se o cliente NÃO especificar a cor, esta ferramenta deve enviar automaticamente uma foto de CADA cor disponível do produto.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Nome ou termo de busca do produto para encontrar a imagem" },
+          query: { type: "string", description: "Nome CURTO do produto conforme aparece na Shopify (ex: 'jess', 'melim', 'valentina'). Use o nome retornado por search_product, NÃO invente nomes." },
           color: { type: "string", description: "Cor específica da variante desejada (ex: 'Preto', 'Verde Militar'). Se informada, busca a imagem da variante dessa cor." },
           caption: { type: "string", description: "Legenda curta para acompanhar a foto (ex: 'Tênis Jess Ortopédico - Preto 😍')" },
         },
