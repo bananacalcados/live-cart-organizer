@@ -904,7 +904,7 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
           const firstReminder = new Date();
           firstReminder.setMinutes(firstReminder.getMinutes() + 30); // 30min inactivity trigger
 
-          await supabase.from('chat_payment_followups').upsert({
+          const { error: insertErr } = await supabase.from('chat_payment_followups').insert({
             phone: normalizedPhone,
             type: `ads_${nextStage}`,
             is_active: true,
@@ -913,9 +913,12 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
             reminder_count: 0,
             next_reminder_at: firstReminder.toISOString(),
             whatsapp_number_id: whatsappNumberId || null,
-          }, { onConflict: 'phone' }).then(() => {
-            console.log(`[ads-ai] Funnel followup registered for ${normalizedPhone} at stage ${nextStage}`);
           });
+          if (insertErr) {
+            console.warn(`[ads-ai] Followup insert error:`, insertErr);
+          } else {
+            console.log(`[ads-ai] Funnel followup registered for ${normalizedPhone} at stage ${nextStage}`);
+          }
 
           // Ensure chat_awaiting_payment exists
           await supabase.from('chat_awaiting_payment').upsert(
