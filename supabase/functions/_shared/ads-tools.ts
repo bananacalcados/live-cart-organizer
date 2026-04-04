@@ -165,12 +165,26 @@ function buildShopifySearchQueries(query: string): string[] {
   const strippedOriginal = original.replace(/\bt[eê]nis\b/gi, '').trim();
   const strippedNormalized = normalized.replace(/\btenis\b/g, '').trim();
 
-  return Array.from(new Set([
+  // Split into individual meaningful tokens for fallback searches
+  const tokens = normalized.split(' ').filter((t) => t.length > 2 && !SEARCH_STOP_WORDS.has(t));
+  
+  // Build progressive search queries: full phrase first, then individual tokens
+  const queries = [
     original,
     normalized,
     strippedOriginal,
     strippedNormalized,
-  ].filter(Boolean)));
+  ];
+  
+  // Add individual token searches as fallback (e.g. "jess" alone, "ortopedico" alone)
+  // This handles cases where the AI invents product names that don't match Shopify titles
+  for (const token of tokens) {
+    if (token !== normalized && token !== strippedNormalized) {
+      queries.push(token);
+    }
+  }
+  
+  return Array.from(new Set(queries.filter(Boolean)));
 }
 
 function getVariantColorLabel(variant: any): string {
