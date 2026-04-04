@@ -515,7 +515,7 @@ serve(async (req) => {
 
     if (!existingLead) {
       // Detect product keywords from first message
-      const matchedProduct = getMatchedProduct(campaign, messageText);
+      const matchedProduct = getMatchedProduct(campaign, effectiveMessageText);
       const productKeywords = matchedProduct?.keywords || [];
 
       const { data: newLead } = await supabase
