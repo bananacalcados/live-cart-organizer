@@ -90,16 +90,29 @@ export function POSInterStoreRequests({ storeId }: Props) {
 
   useEffect(() => {
     loadData();
+    loadAiPendingCount();
 
     const channel = supabase
       .channel("pos-requests-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "pos_inter_store_requests" }, () => {
         loadRequests();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "ai_assistance_requests" }, () => {
+        loadAiPendingCount();
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [storeId]);
+
+  const loadAiPendingCount = async () => {
+    const { count } = await supabase
+      .from("ai_assistance_requests")
+      .select("*", { count: "exact", head: true })
+      .or(`store_id.eq.${storeId},store_id.is.null`)
+      .eq("status", "pending");
+    setAiPendingCount(count || 0);
+  };
 
   const loadData = async () => {
     await Promise.all([loadRequests(), loadStores(), loadSellers()]);
