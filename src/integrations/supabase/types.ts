@@ -299,6 +299,80 @@ export type Database = {
           },
         ]
       }
+      ai_assistance_requests: {
+        Row: {
+          ai_agent: string
+          ai_summary: string
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          priority: string
+          product_title: string | null
+          request_type: string
+          response_media_url: string | null
+          response_notes: string | null
+          seller_id: string | null
+          shopify_product_id: string | null
+          status: string
+          store_id: string | null
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          ai_agent?: string
+          ai_summary: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          priority?: string
+          product_title?: string | null
+          request_type: string
+          response_media_url?: string | null
+          response_notes?: string | null
+          seller_id?: string | null
+          shopify_product_id?: string | null
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          ai_agent?: string
+          ai_summary?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          priority?: string
+          product_title?: string | null
+          request_type?: string
+          response_media_url?: string | null
+          response_notes?: string | null
+          seller_id?: string | null
+          shopify_product_id?: string | null
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_assistance_requests_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_conversation_logs: {
         Row: {
           ai_decision: string | null
