@@ -102,6 +102,23 @@ async function createAiAssistanceRequest(
   }
 }
 
+function classifyConciergeRequestType(text: string): 'product_photo' | 'takeover_chat' | 'technical_info' | 'verify_stock' {
+  const normalized = text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ' ');
+
+  if (/(estoque|disponivel|disponível|tem\s+no|tem\s+na|tamanho|cor)/i.test(normalized)) {
+    return 'verify_stock';
+  }
+
+  if (/(foto|fotos|imagem|imagens|video|vídeo)/i.test(normalized)) {
+    return 'product_photo';
+  }
+
+  return 'takeover_chat';
+}
+
 function firstNonEmptyString(...values: unknown[]): string | null {
   for (const value of values) {
     if (typeof value === 'string' && value.trim()) return value.trim();
@@ -942,7 +959,7 @@ async function executeToolCall(
       phone,
       customerName,
       whatsappNumberId,
-      requestType: 'takeover_chat',
+      requestType: classifyConciergeRequestType(`${ticketSubject}\n${ticketDescription}`),
       summary: ticketDescription || ticketSubject,
       priority: ticketPriority,
     });
