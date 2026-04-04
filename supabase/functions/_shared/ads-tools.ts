@@ -516,6 +516,35 @@ export async function executeAdsToolCall(
           };
         });
 
+        // ── Proactive AI assistance requests ──
+        for (const product of products) {
+          // Product exists in Shopify but has NO images → request photo
+          if (!product.image) {
+            try {
+              await createAiAssistanceRequest(ctx, {
+                requestType: 'product_photo',
+                summary: `Produto "${product.title}" está cadastrado na Shopify mas NÃO possui fotos. Vendedora precisa fotografar e cadastrar.`,
+                priority: 'normal',
+                productTitle: product.title,
+              });
+            } catch (_) { /* non-blocking */ }
+          }
+
+          // All variants unavailable → request stock verification
+          const totalVariants = product.variants?.length || 0;
+          const availableVariants = product.variants?.filter((v: any) => v.available)?.length || 0;
+          if (totalVariants > 0 && availableVariants === 0) {
+            try {
+              await createAiAssistanceRequest(ctx, {
+                requestType: 'verify_stock',
+                summary: `Produto "${product.title}" aparece com TODAS as variantes esgotadas na Shopify (${totalVariants} variantes). Verificar estoque físico na loja.`,
+                priority: 'high',
+                productTitle: product.title,
+              });
+            } catch (_) { /* non-blocking */ }
+          }
+        }
+
         return {
           success: true,
           data: {
