@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import {
   ArrowRightLeft, Plus, Search, Package, Check, X, Loader2,
-  Clock, Truck, AlertCircle, Send, Bell, Phone
+  Clock, Truck, AlertCircle, Send, Bell, Phone, Bot
 } from "lucide-react";
+import { POSAiAssistanceRequests } from "./POSAiAssistanceRequests";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
