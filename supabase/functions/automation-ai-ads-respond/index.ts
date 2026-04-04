@@ -480,13 +480,13 @@ serve(async (req) => {
       campaign = data;
     }
 
-    if (!campaign && messageText) {
+    if (!campaign && effectiveMessageText) {
       const { data: campaigns } = await supabase
         .from('ad_campaigns_ai')
         .select('*')
         .eq('is_active', true);
       if (campaigns) {
-        const msgLower = (messageText || '').toLowerCase().trim();
+        const msgLower = (effectiveMessageText || '').toLowerCase().trim();
         campaign = campaigns.find((c: any) =>
           (c.activation_keywords || []).some((kw: string) =>
             msgLower.includes(kw.toLowerCase())
