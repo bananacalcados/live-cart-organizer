@@ -1858,6 +1858,40 @@ REGRAS GERAIS:
       tool_params: toolExecutions.length > 0 ? { toolExecutions } : null,
     });
 
+    // ── ALWAYS create a review ticket for human oversight ──
+    // Even when Bia resolves the issue, the team needs to verify the response quality
+    try {
+      const toolsCalled = toolExecutions.map((exec) => exec.name).join(', ') || 'nenhuma';
+      const wasTransferred = toolExecutions.some((exec) => exec.name === 'transfer_to_human');
+
+      // Skip if transfer_to_human already created a ticket
+      if (!wasTransferred) {
+        const reviewPriority = toolExecutions.length > 0 ? 'low' : 'low';
+        const reviewSubject = `Revisão de atendimento Bia - ${normalizedPhone}`;
+        const reviewDescription = `A Bia respondeu a um cliente e a equipe precisa revisar se a resposta foi adequada.\n\nMensagem do cliente: "${combinedMessage.substring(0, 200)}"\n\nResposta da Bia: "${finalReply.substring(0, 300)}"\n\nFerramentas utilizadas: ${toolsCalled}`;
+
+        await supabase.from('support_tickets').insert({
+          subject: reviewSubject,
+          description: reviewDescription,
+          priority: reviewPriority,
+          customer_phone: normalizedPhone,
+          source: 'bia_ai_review',
+          deadline_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        });
+
+        await createAiAssistanceRequest(supabase, {
+          phone: normalizedPhone,
+          customerName: null,
+          whatsappNumberId,
+          requestType: classifyConciergeRequestType(`${combinedMessage}\n${finalReply}`),
+          summary: `Revisão: "${combinedMessage.substring(0, 120)}" → Bia respondeu: "${finalReply.substring(0, 120)}"`,
+          priority: 'low',
+        });
+      }
+    } catch (reviewErr) {
+      console.warn('[concierge] Review ticket creation error (non-blocking):', reviewErr);
+    }
+
     console.log(`[concierge] Reply sent to ${phone}: ${finalReply.slice(0, 80)}...`);
 
     return new Response(JSON.stringify({
