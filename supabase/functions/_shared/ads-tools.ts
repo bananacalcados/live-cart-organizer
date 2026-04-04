@@ -749,8 +749,12 @@ export async function executeAdsToolCall(
                 console.log('[send_product_image] Found variant image for color:', color, matchedCandidate.url);
               }
             } else {
+              // When no color specified, send only VARIANT images (not general product gallery)
+              // This avoids sending store photos, size charts, etc.
+              const variantCandidates = imageCandidates.filter(c => c.source === 'variant');
+              const candidatesToUse = variantCandidates.length > 0 ? variantCandidates : imageCandidates;
               const perColor = new Map<string, { url: string; color: string | null; caption: string; }>();
-              for (const candidate of imageCandidates) {
+              for (const candidate of candidatesToUse) {
                 const colorKey = normalizeShopifyText(candidate.color) || `image-${perColor.size + 1}`;
                 if (perColor.has(colorKey)) continue;
                 perColor.set(colorKey, {
@@ -758,9 +762,11 @@ export async function executeAdsToolCall(
                   color: candidate.color,
                   caption: caption || `${productTitle}${candidate.color ? ` - ${candidate.color}` : ''}`,
                 });
+                // Cap at 4 images max to avoid flooding the client
+                if (perColor.size >= 4) break;
               }
               imageTargets = Array.from(perColor.values());
-              console.log('[send_product_image] Sending all available colors/images:', imageTargets.length);
+              console.log('[send_product_image] Sending variant colors/images:', imageTargets.length, '(filtered from', imageCandidates.length, 'total candidates)');
             }
           }
         } catch (err) {
