@@ -974,11 +974,6 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
             console.log(`[ads-ai] Funnel followup registered for ${normalizedPhone} at stage ${nextStage}`);
           }
 
-          // Ensure chat_awaiting_payment exists
-          await supabase.from('chat_awaiting_payment').upsert(
-            { phone: normalizedPhone, type: `ads_${nextStage}` },
-            { onConflict: 'phone' }
-          );
         }
       } catch (fuErr) {
         console.warn('[ads-ai] Funnel followup error (non-blocking):', fuErr);

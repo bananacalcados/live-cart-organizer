@@ -280,6 +280,37 @@ interface AdsToolContext {
   channel?: string;
 }
 
+async function createAiAssistanceRequest(
+  ctx: AdsToolContext,
+  payload: {
+    requestType: 'product_photo' | 'takeover_chat' | 'technical_info' | 'verify_stock';
+    summary: string;
+    priority?: 'low' | 'normal' | 'high' | 'urgent';
+    productTitle?: string | null;
+    shopifyProductId?: string | null;
+  },
+) {
+  const { supabase, phone, collectedData, lead, whatsappNumberId } = ctx;
+
+  try {
+    await supabase.from('ai_assistance_requests').insert({
+      request_type: payload.requestType,
+      status: 'pending',
+      customer_phone: phone,
+      customer_name: collectedData.nome || lead?.name || null,
+      product_title: payload.productTitle || null,
+      shopify_product_id: payload.shopifyProductId || null,
+      ai_agent: 'jess',
+      ai_summary: payload.summary,
+      priority: payload.priority || 'normal',
+      whatsapp_number_id: whatsappNumberId || lead?.whatsapp_number_id || null,
+      store_id: null,
+    });
+  } catch (error) {
+    console.error('[ads-tools] ai assistance request error:', error);
+  }
+}
+
 export async function executeAdsToolCall(
   toolName: string,
   args: Record<string, any>,
@@ -927,6 +958,16 @@ export async function executeAdsToolCall(
 
       if (imageTargets.length === 0) {
         try {
+          await createAiAssistanceRequest(ctx, {
+            requestType: 'product_photo',
+            summary: color
+              ? `Produto sem foto cadastrada na Shopify para envio: ${productTitle || query} na cor ${color}.`
+              : `Produto sem fotos cadastradas na Shopify para envio: ${productTitle || query}.`,
+            priority: 'high',
+            productTitle: productTitle || query,
+            shopifyProductId: matchedProduct?.id || null,
+          });
+
           await supabase.from('support_tickets').insert({
             customer_phone: phone,
             source: 'jess_ai',
@@ -1043,6 +1084,14 @@ export async function executeAdsToolCall(
         if (sentTargets.length === 0) {
           console.error('[send_product_image] All send attempts failed for', imageTargets.map((target) => target.url));
           try {
+            await createAiAssistanceRequest(ctx, {
+              requestType: 'takeover_chat',
+              summary: `As fotos do produto ${String(productTitle || query)} existem, mas não foram entregues ao cliente. Assumir atendimento e enviar manualmente.`,
+              priority: 'high',
+              productTitle: productTitle || query,
+              shopifyProductId: matchedProduct?.id || null,
+            });
+
             await supabase.from('support_tickets').insert({
               customer_phone: phone,
               source: 'jess_ai',
@@ -1134,6 +1183,12 @@ export async function executeAdsToolCall(
       const context = args.context || '';
 
       try {
+        await createAiAssistanceRequest(ctx, {
+          requestType: 'technical_info',
+          summary: `Cliente pediu informação técnica que a IA não conseguiu confirmar: ${question.substring(0, 160)}`,
+          priority: 'normal',
+        });
+
         await supabase.from('support_tickets').insert({
           customer_phone: phone,
           source: 'jess_ai',

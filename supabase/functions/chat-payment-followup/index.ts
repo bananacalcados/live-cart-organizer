@@ -321,13 +321,15 @@ serve(async (req) => {
           }
         }
 
+        const isGeneralAdsFollowup = typeof fu.type === 'string' && fu.type.startsWith('ads_') && fu.type !== 'ads_checkout';
+
         const { data: awp } = await supabase
           .from('chat_awaiting_payment')
           .select('id')
           .eq('phone', fu.phone)
           .maybeSingle();
 
-        if (isPaid || !awp) {
+        if (isPaid || (!isGeneralAdsFollowup && !awp)) {
           if (awp) {
             await supabase.from('chat_awaiting_payment').delete().eq('id', awp.id);
           }
