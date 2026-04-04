@@ -108,12 +108,16 @@ function classifyConciergeRequestType(text: string): 'product_photo' | 'takeover
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, ' ');
 
-  if (/(estoque|disponivel|disponível|tem\s+no|tem\s+na|tamanho|cor)/i.test(normalized)) {
+  if (/(estoque|disponivel|disponível|tem\s+no|tem\s+na|tamanho\s+\d|numero\s+\d|esgotado|indisponivel|falta|acabou|quantidade)/i.test(normalized)) {
     return 'verify_stock';
   }
 
-  if (/(foto|fotos|imagem|imagens|video|vídeo)/i.test(normalized)) {
+  if (/(foto|fotos|imagem|imagens|video|vídeo|ver\s+o\s+produto|mostrar|visualizar|como\s+e\s+o|como\s+que\s+e|sem\s+foto)/i.test(normalized)) {
     return 'product_photo';
+  }
+
+  if (/(material|composicao|composição|tecido|couro|sintetico|caimento|medida|largura|solado|palmilha|peso|lavagem|garantia|troca|defeito|problema|reclamacao)/i.test(normalized)) {
+    return 'technical_info';
   }
 
   return 'takeover_chat';
