@@ -376,18 +376,50 @@ serve(async (req) => {
           }
         }
 
-        const standardMessages = [
-          `Olá! 😊 Vi que seu link de pagamento ainda está pendente. Precisa de ajuda para finalizar? Estou aqui!`,
-          `Oi! Passando pra lembrar do seu pedido 🛍️ O link ainda está ativo, é só clicar para concluir. Qualquer dúvida, estou à disposição!`,
-          `Olá! Último aviso sobre seu pedido pendente ⏰ Se tiver alguma dificuldade com o pagamento, me avise que ajudo! 😊`,
-        ];
+        // ── Stage-aware follow-up messages ──
+        const stageFromType = (fu.type || '').replace('ads_', '');
+
+        const stageMessages: Record<string, string[]> = {
+          qualificacao: [
+            `E então, quer que eu comece a montar seu pedido? 😊 Posso te ajudar a escolher o tamanho e a cor certinha!`,
+            `Oi! Ainda tá de olho naquele produto? Me conta que te ajudo a escolher o melhor pra você! 🛍️`,
+            `Olá! Vi que você se interessou pelos nossos produtos. Quer que eu te mostre as opções disponíveis? 😊`,
+          ],
+          duvidas: [
+            `Oi! Consegui esclarecer sua dúvida? Se quiser, posso te ajudar a montar o pedido agora! 😊`,
+            `E aí, ficou com mais alguma dúvida sobre o produto? Estou aqui pra te ajudar! 🛍️`,
+            `Olá! Só passando pra saber se resolveu aquela dúvida. Posso te ajudar com mais alguma coisa? 😊`,
+          ],
+          coleta: [
+            `Oi! Faltam só alguns dados pra gente finalizar seu pedido 😊 Quer continuar de onde paramos?`,
+            `E aí, consegue me passar aqueles dados que faltam? Tô quase finalizando seu pedido! 🛍️`,
+            `Olá! Seu pedido tá quase pronto, só preciso de mais algumas informações. Vamos concluir? 😊`,
+          ],
+          pagamento: [
+            `Olá! 😊 Vi que seu link de pagamento ainda está pendente. Precisa de ajuda para finalizar? Estou aqui!`,
+            `Oi! Passando pra lembrar do seu pedido 🛍️ O link ainda está ativo, é só clicar para concluir!`,
+            `Último aviso sobre seu pedido pendente ⏰ Se tiver dificuldade com o pagamento, me avise! 😊`,
+          ],
+          followup_1: [
+            `Oi! Passando aqui de novo 😊 Ainda tá pensando naquele produto? Posso te ajudar!`,
+            `E aí, decidiu sobre o pedido? Qualquer dúvida estou aqui! 🛍️`,
+          ],
+          followup_2: [
+            `Oi! Só passando pra avisar que ainda temos disponibilidade 😊 Quer que eu monte seu pedido?`,
+            `Olá! Ainda posso te ajudar com aquele produto que você se interessou! 🛍️`,
+          ],
+        };
+
         const checkoutOpenedMessages = [
-          `Oi! 😊 Vi que você abriu o link do pedido mas não finalizou. Teve alguma dificuldade? Estou aqui pra te ajudar!`,
-          `Ei! Notei que você chegou a acessar o checkout 🛒 Se precisar de ajuda com alguma etapa do pagamento, é só me chamar!`,
-          `Olá! Percebi que você acessou o link mas não concluiu ⏰ Posso te ajudar com alguma dúvida sobre o pagamento?`,
+          `Oi! 😊 Vi que você abriu o link do pedido mas não finalizou. Teve alguma dificuldade?`,
+          `Ei! Notei que você chegou a acessar o checkout 🛒 Precisa de ajuda com o pagamento?`,
+          `Olá! Percebi que você acessou o link mas não concluiu ⏰ Posso te ajudar?`,
         ];
 
-        const messagePool = checkoutOpened ? checkoutOpenedMessages : standardMessages;
+        const defaultMessages = stageMessages['qualificacao'];
+        const messagePool = checkoutOpened
+          ? checkoutOpenedMessages
+          : (stageMessages[stageFromType] || defaultMessages);
         const message = messagePool[Math.min(reminderNum - 1, messagePool.length - 1)];
         const sendNumberId = fu.whatsapp_number_id;
 
