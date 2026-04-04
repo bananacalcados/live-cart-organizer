@@ -759,10 +759,10 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
       });
     }
 
-    if (messageText) {
+    if (effectiveMessageText) {
       const last = chatMessages[chatMessages.length - 1];
-      if (!last || last.role !== 'user' || last.content !== messageText) {
-        chatMessages.push({ role: 'user', content: messageText });
+      if (!last || last.role !== 'user' || last.content !== effectiveMessageText) {
+        chatMessages.push({ role: 'user', content: effectiveMessageText });
       }
     }
 
