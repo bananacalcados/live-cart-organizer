@@ -594,7 +594,7 @@ serve(async (req) => {
       else if (/descont|promo|cupon|oferta|barato|mais barato/i.test(ml)) subSituation = 'desconto';
       else subSituation = 'geral';
     } else if (situation === 'objecoes') {
-      const ml = (messageText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const ml = (effectiveMessageText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       if (/(caro|cartao.*vir|nao tenho|sem dinheiro|apertado|dia \d|vira dia|so (no|dia)|proximo mes|salario|nao posso agora|muito caro|ta caro|valor alto)/i.test(ml)) {
         subSituation = 'objecao_financeira';
       } else if (/(marido|esposa|mae|pai|irma|filho|amig|ver com|falar com|consultar|perguntar pr|familia|parente)/i.test(ml)) {
