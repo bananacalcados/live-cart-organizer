@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 import { adsTools, executeAdsToolCall } from "../_shared/ads-tools.ts";
 
 const corsHeaders = {
@@ -414,6 +416,58 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // ─── DEBOUNCE: wait 5s then check if a newer message arrived ─────
+    if (!isFollowup && messageText) {
+      await sleep(5000);
+
+      const normalizedPhoneDebounce = phone.replace(/\D/g, '');
+      const phoneVariants = [normalizedPhoneDebounce];
+      if (normalizedPhoneDebounce.startsWith('55') && normalizedPhoneDebounce.length >= 12) {
+        phoneVariants.push(normalizedPhoneDebounce.slice(2));
+      } else {
+        phoneVariants.push('55' + normalizedPhoneDebounce);
+      }
+
+      const cutoff = new Date(Date.now() - 30000).toISOString();
+      const { data: recentMsgs } = await supabase
+        .from('whatsapp_messages')
+        .select('id, message, created_at')
+        .in('phone', phoneVariants)
+        .eq('direction', 'incoming')
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const latestText = recentMsgs?.[0]?.message?.trim() || '';
+      if (latestText && messageText.trim() && latestText !== messageText.trim()) {
+        console.log(`[ads-respond] Debounced: newer message detected for ${normalizedPhoneDebounce}. Current="${messageText.trim().slice(0,40)}" Latest="${latestText.slice(0,40)}"`);
+        return new Response(JSON.stringify({ handled: false, reason: 'debounced' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Aggregate fragmented messages from last 30s
+      const { data: aggregatedMsgs } = await supabase
+        .from('whatsapp_messages')
+        .select('message')
+        .in('phone', phoneVariants)
+        .eq('direction', 'incoming')
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: true });
+
+      if (aggregatedMsgs && aggregatedMsgs.length > 1) {
+        const combined = aggregatedMsgs.map((m: any) => m.message?.trim()).filter(Boolean).join('\n');
+        if (combined) {
+          console.log(`[ads-respond] Aggregated ${aggregatedMsgs.length} messages for ${normalizedPhoneDebounce}`);
+          // Override messageText with combined text — reassign via object spread won't work, so we use a mutable ref
+          (req as any).__aggregatedText = combined;
+        }
+      }
+    }
+
+    // Use aggregated text if available
+    const effectiveMessageText = (req as any).__aggregatedText || messageText;
+
     // 1. Load campaign
     let campaign: any = null;
     if (campaignId) {
@@ -426,13 +480,13 @@ serve(async (req) => {
       campaign = data;
     }
 
-    if (!campaign && messageText) {
+    if (!campaign && effectiveMessageText) {
       const { data: campaigns } = await supabase
         .from('ad_campaigns_ai')
         .select('*')
         .eq('is_active', true);
       if (campaigns) {
-        const msgLower = (messageText || '').toLowerCase().trim();
+        const msgLower = (effectiveMessageText || '').toLowerCase().trim();
         campaign = campaigns.find((c: any) =>
           (c.activation_keywords || []).some((kw: string) =>
             msgLower.includes(kw.toLowerCase())
@@ -461,7 +515,7 @@ serve(async (req) => {
 
     if (!existingLead) {
       // Detect product keywords from first message
-      const matchedProduct = getMatchedProduct(campaign, messageText);
+      const matchedProduct = getMatchedProduct(campaign, effectiveMessageText);
       const productKeywords = matchedProduct?.keywords || [];
 
       const { data: newLead } = await supabase
@@ -496,7 +550,7 @@ serve(async (req) => {
     } else {
       situation = detectSituation({
         lead: existingLead,
-        messageText,
+        messageText: effectiveMessageText,
         campaign,
         isFirstMessage,
         collectedData,
@@ -521,7 +575,7 @@ serve(async (req) => {
       lead: existingLead,
       campaign,
       event: eventData,
-      messageText,
+      messageText: effectiveMessageText,
       collectedData,
       missingFields,
       isFromGV: clientIsFromGV,
@@ -530,7 +584,7 @@ serve(async (req) => {
     // Detect sub-situation for "duvidas" and "objecoes"
     let subSituation: string | null = null;
     if (situation === 'duvidas') {
-      const ml = (messageText || '').toLowerCase();
+      const ml = (effectiveMessageText || '').toLowerCase();
       if (/taman|numer|n[uú]mero|calç/i.test(ml)) subSituation = 'tamanho';
       else if (/cor|cores|colorid/i.test(ml)) subSituation = 'cores';
       else if (/frete|entreg|envi|ship/i.test(ml)) subSituation = 'frete';
@@ -540,7 +594,7 @@ serve(async (req) => {
       else if (/descont|promo|cupon|oferta|barato|mais barato/i.test(ml)) subSituation = 'desconto';
       else subSituation = 'geral';
     } else if (situation === 'objecoes') {
-      const ml = (messageText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const ml = (effectiveMessageText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       if (/(caro|cartao.*vir|nao tenho|sem dinheiro|apertado|dia \d|vira dia|so (no|dia)|proximo mes|salario|nao posso agora|muito caro|ta caro|valor alto)/i.test(ml)) {
         subSituation = 'objecao_financeira';
       } else if (/(marido|esposa|mae|pai|irma|filho|amig|ver com|falar com|consultar|perguntar pr|familia|parente)/i.test(ml)) {
@@ -602,7 +656,7 @@ serve(async (req) => {
       situationPrompt = dbPromptText
         .replace(/\{\{produto_info\}\}/gi, formatProductList(campaign))
         .replace(/\{\{produto_match\}\}/gi, (() => {
-          const p = getMatchedProduct(campaign, messageText);
+          const p = getMatchedProduct(campaign, effectiveMessageText);
           return p ? `${p.nome} — R$ ${p.preco}${p.detalhes ? ` (${p.detalhes})` : ''}` : '';
         })())
         .replace(/\{\{dados_coletados\}\}/gi, JSON.stringify(collectedData))
@@ -705,10 +759,10 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
       });
     }
 
-    if (messageText) {
+    if (effectiveMessageText) {
       const last = chatMessages[chatMessages.length - 1];
-      if (!last || last.role !== 'user' || last.content !== messageText) {
-        chatMessages.push({ role: 'user', content: messageText });
+      if (!last || last.role !== 'user' || last.content !== effectiveMessageText) {
+        chatMessages.push({ role: 'user', content: effectiveMessageText });
       }
     }
 
