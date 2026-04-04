@@ -4,11 +4,12 @@ export const adsTools = [
     type: "function",
     function: {
       name: "search_product",
-      description: "Buscar produto na loja por nome, cor, tipo, tamanho ou descrição. Use quando o cliente perguntar sobre detalhes do produto (tamanhos disponíveis, cores, variações, preço). Use TAMBÉM quando o cliente quiser explorar opções (ex: 'quero ver tênis', 'tênis casual', 'sandália'). Retorna variantes com estoque. DICA: use termos simples e curtos para melhores resultados (ex: 'tenis', 'sandalia', 'papete').",
+      description: "Buscar produto na loja por nome, cor, tipo, tamanho, descrição ou CARACTERÍSTICA VISUAL. Use quando o cliente perguntar sobre detalhes do produto (tamanhos, cores, preço). Use TAMBÉM quando quiser explorar opções (ex: 'quero ver tênis', 'tênis casual'). Agora também aceita buscas por características visuais como 'solado baixo', 'chunky', 'plataforma', 'minimalista', 'salto alto', etc. — o sistema tem tags visuais pré-analisadas por IA das fotos dos produtos. DICA: use termos simples.",
       parameters: {
         type: "object",
         properties: {
           query: { type: "string", description: "Termo de busca: nome, cor, tipo do produto" },
+          visual_tags: { type: "array", items: { type: "string" }, description: "Tags visuais para filtrar (ex: ['solado_baixo', 'casual']). Tags disponíveis: solado_baixo, solado_alto, chunky, plataforma, bico_fino, bico_redondo, bico_quadrado, minimalista, casual, esportivo, social, elegante, salto_alto, salto_baixo, rasteira, sem_salto, tira, fivela, cadarco, slip_on, velcro, couro, sintetico, tecido, camurca, aberto, fechado, meia_pata, ortopedico, conforto, anatomico, leve, robusto, delicado, cores_neutras, cores_vibrantes, estampado, metalizado" },
         },
         required: ["query"],
       },
