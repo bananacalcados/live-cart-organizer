@@ -262,7 +262,10 @@ export function POSInterStoreRequests({ storeId }: Props) {
 
         {/* Tabs */}
         <div className="flex gap-2">
-          <button onClick={() => setTab("received")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "received" ? "bg-pos-orange text-pos-white" : "bg-pos-white/5 text-pos-white/50"}`}>
+          <button onClick={() => setTab("ai")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "ai" ? "bg-pos-orange text-pos-black" : "bg-pos-white/5 text-pos-white/50"}`}>
+            🤖 IA {aiPendingCount > 0 && <Badge className="ml-1 bg-red-500 text-white border-0 text-[10px]">{aiPendingCount}</Badge>}
+          </button>
+          <button onClick={() => setTab("received")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "received" ? "bg-pos-orange text-pos-black" : "bg-pos-white/5 text-pos-white/50"}`}>
             📥 Recebidas {pendingReceivedCount > 0 && <Badge className="ml-1 bg-red-500 text-white border-0 text-[10px]">{pendingReceivedCount}</Badge>}
           </button>
           <button onClick={() => setTab("sent")} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${tab === "sent" ? "bg-pos-orange text-pos-black" : "bg-pos-white/5 text-pos-white/50"}`}>
@@ -270,8 +273,11 @@ export function POSInterStoreRequests({ storeId }: Props) {
           </button>
         </div>
 
-        {/* List */}
-        {loading ? (
+        {/* AI Assistance Tab */}
+        {tab === "ai" && <POSAiAssistanceRequests storeId={storeId} />}
+
+        {/* Inter-store List */}
+        {tab !== "ai" && (
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-pos-orange" /></div>
         ) : displayedRequests.length === 0 ? (
           <div className="text-center py-12 text-pos-white/40">
