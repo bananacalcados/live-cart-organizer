@@ -4,7 +4,7 @@ export const adsTools = [
     type: "function",
     function: {
       name: "search_product",
-      description: "Buscar produto na loja por nome, cor, tipo, tamanho ou descrição. Use quando o cliente perguntar sobre detalhes do produto (tamanhos disponíveis, cores, variações, preço). Retorna variantes com estoque.",
+      description: "Buscar produto na loja por nome, cor, tipo, tamanho ou descrição. Use quando o cliente perguntar sobre detalhes do produto (tamanhos disponíveis, cores, variações, preço). Use TAMBÉM quando o cliente quiser explorar opções (ex: 'quero ver tênis', 'tênis casual', 'sandália'). Retorna variantes com estoque. DICA: use termos simples e curtos para melhores resultados (ex: 'tenis', 'sandalia', 'papete').",
       parameters: {
         type: "object",
         properties: {
@@ -100,11 +100,11 @@ export const adsTools = [
     type: "function",
     function: {
       name: "send_product_image",
-      description: "Enviar foto do produto para o cliente via WhatsApp. Use quando o cliente pedir para ver fotos, ou após apresentar o produto para reforçar visualmente. Busca a imagem diretamente da Shopify. Se o cliente pedir uma cor específica, envie essa cor. Se o cliente NÃO especificar a cor, esta ferramenta deve enviar automaticamente uma foto de CADA cor disponível do produto.",
+      description: "Enviar foto do produto para o cliente via WhatsApp. Use quando o cliente pedir para ver fotos, ou após apresentar o produto para reforçar visualmente. Busca a imagem diretamente da Shopify. IMPORTANTE: No campo 'query', use termos CURTOS e SIMPLES que correspondam ao nome real do produto na loja (ex: 'jess', 'melim', 'debora', 'papete'). NÃO invente nomes — use o nome que apareceu na busca anterior (search_product). Se o cliente pedir uma cor específica, envie essa cor. Se o cliente NÃO especificar a cor, esta ferramenta deve enviar automaticamente uma foto de CADA cor disponível do produto.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Nome ou termo de busca do produto para encontrar a imagem" },
+          query: { type: "string", description: "Nome CURTO do produto conforme aparece na Shopify (ex: 'jess', 'melim', 'valentina'). Use o nome retornado por search_product, NÃO invente nomes." },
           color: { type: "string", description: "Cor específica da variante desejada (ex: 'Preto', 'Verde Militar'). Se informada, busca a imagem da variante dessa cor." },
           caption: { type: "string", description: "Legenda curta para acompanhar a foto (ex: 'Tênis Jess Ortopédico - Preto 😍')" },
         },
@@ -165,12 +165,26 @@ function buildShopifySearchQueries(query: string): string[] {
   const strippedOriginal = original.replace(/\bt[eê]nis\b/gi, '').trim();
   const strippedNormalized = normalized.replace(/\btenis\b/g, '').trim();
 
-  return Array.from(new Set([
+  // Split into individual meaningful tokens for fallback searches
+  const tokens = normalized.split(' ').filter((t) => t.length > 2 && !SEARCH_STOP_WORDS.has(t));
+  
+  // Build progressive search queries: full phrase first, then individual tokens
+  const queries = [
     original,
     normalized,
     strippedOriginal,
     strippedNormalized,
-  ].filter(Boolean)));
+  ];
+  
+  // Add individual token searches as fallback (e.g. "jess" alone, "ortopedico" alone)
+  // This handles cases where the AI invents product names that don't match Shopify titles
+  for (const token of tokens) {
+    if (token !== normalized && token !== strippedNormalized) {
+      queries.push(token);
+    }
+  }
+  
+  return Array.from(new Set(queries.filter(Boolean)));
 }
 
 function getVariantColorLabel(variant: any): string {
@@ -300,53 +314,66 @@ export async function executeAdsToolCall(
       }
 
       try {
-        const graphql = `{
-          products(first: 5, query: "${query.replace(/"/g, '\\"')}") {
-            edges {
-              node {
-                id
-                title
-                description
-                variants(first: 20) {
-                  edges {
-                    node {
-                      id
-                      title
-                      price
-                      sku
-                      availableForSale
+        const searchQueries = buildShopifySearchQueries(query);
+        const allProducts = new Map<string, any>();
+        
+        for (const sq of searchQueries) {
+          const graphql = `{
+            products(first: 5, query: "${sq.replace(/"/g, '\\"')}") {
+              edges {
+                node {
+                  id
+                  title
+                  description
+                  variants(first: 20) {
+                    edges {
+                      node {
+                        id
+                        title
+                        price
+                        sku
+                        availableForSale
+                      }
                     }
                   }
-                }
-                images(first: 1) {
-                  edges { node { url } }
+                  images(first: 1) {
+                    edges { node { url } }
+                  }
                 }
               }
             }
+          }`;
+
+          const resp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
+            method: 'POST',
+            headers: {
+              'X-Shopify-Access-Token': shopifyToken,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: graphql }),
+          });
+
+          const data = await resp.json();
+          for (const edge of (data?.data?.products?.edges || [])) {
+            if (!allProducts.has(edge.node.id)) {
+              allProducts.set(edge.node.id, edge.node);
+            }
           }
-        }`;
+          // Stop searching if we found results
+          if (allProducts.size > 0) break;
+        }
 
-        const resp = await fetch(`https://${shopifyDomain}/admin/api/2024-01/graphql.json`, {
-          method: 'POST',
-          headers: {
-            'X-Shopify-Access-Token': shopifyToken,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ query: graphql }),
-        });
-
-        const data = await resp.json();
-        const products = (data?.data?.products?.edges || []).map((e: any) => ({
-          title: e.node.title,
-          description: (e.node.description || '').substring(0, 1000),
-          image: e.node.images?.edges?.[0]?.node?.url || null,
-          variants: (e.node.variants?.edges || []).map((v: any) => ({
+        const products = Array.from(allProducts.values()).slice(0, 5).map((node: any) => ({
+          title: node.title,
+          description: (node.description || '').substring(0, 1000),
+          image: node.images?.edges?.[0]?.node?.url || null,
+          variants: (node.variants?.edges || []).map((v: any) => ({
             title: v.node.title,
             price: v.node.price,
             sku: v.node.sku,
             available: v.node.availableForSale,
           })),
-          available_sizes: (e.node.variants?.edges || [])
+          available_sizes: (node.variants?.edges || [])
             .filter((v: any) => v.node.availableForSale)
             .map((v: any) => v.node.title),
         }));
