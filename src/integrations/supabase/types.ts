@@ -8148,6 +8148,42 @@ export type Database = {
           },
         ]
       }
+      product_visual_tags: {
+        Row: {
+          ai_description: string | null
+          analyzed_image_urls: string[]
+          created_at: string
+          id: string
+          last_analyzed_at: string
+          product_title: string
+          shopify_product_id: string
+          updated_at: string
+          visual_tags: string[]
+        }
+        Insert: {
+          ai_description?: string | null
+          analyzed_image_urls?: string[]
+          created_at?: string
+          id?: string
+          last_analyzed_at?: string
+          product_title: string
+          shopify_product_id: string
+          updated_at?: string
+          visual_tags?: string[]
+        }
+        Update: {
+          ai_description?: string | null
+          analyzed_image_urls?: string[]
+          created_at?: string
+          id?: string
+          last_analyzed_at?: string
+          product_title?: string
+          shopify_product_id?: string
+          updated_at?: string
+          visual_tags?: string[]
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
