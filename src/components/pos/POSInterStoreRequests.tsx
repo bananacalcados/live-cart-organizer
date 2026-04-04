@@ -253,7 +253,8 @@ export function POSInterStoreRequests({ storeId }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-pos-white flex items-center gap-2">
-            <ArrowRightLeft className="h-5 w-5 text-pos-orange" /> Solicitações entre Lojas
+            <ArrowRightLeft className="h-5 w-5 text-pos-orange" /> Solicitações
+            {aiPendingCount > 0 && <Badge className="bg-red-500 text-white border-0 text-xs animate-pulse">{aiPendingCount} IA</Badge>}
           </h2>
           <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={() => setShowNew(true)}>
             <Plus className="h-4 w-4" /> Nova Solicitação
