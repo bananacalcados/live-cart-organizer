@@ -41,6 +41,7 @@ import {
   TestTube2, StopCircle, Volume2, GitBranch, AlertTriangle,
   ShoppingCart, Sparkles, Package, ExternalLink, LayoutGrid,
   ChevronDown, ChevronUp, Filter, MapPin,
+  Bookmark,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 
@@ -1536,6 +1537,7 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
   const [loading, setLoading] = useState(false);
   const [showCityFilter, setShowCityFilter] = useState(false);
   const [citySearch, setCitySearch] = useState("");
+  const [savedPresets, setSavedPresets] = useState<{ id: string; key: string; value: any }[]>([]);
 
   const audienceSource: string = triggerConfig.audience_source || "rfm"; // "leads" | "rfm" | "both" | "crm"
   const selectedCampaigns: string[] = triggerConfig.audience_campaigns || [];
@@ -1545,6 +1547,8 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
   const selectedRegions: string[] = triggerConfig.audience_regions || [];
   const selectedGenders: string[] = triggerConfig.audience_genders || [];
   const rfmSelectAll: boolean = triggerConfig.audience_rfm_all ?? false;
+
+  const selectedPresetKeys: string[] = triggerConfig.audience_rfm_preset_keys || [];
 
   useEffect(() => { loadAll(); }, []);
 
@@ -1565,14 +1569,17 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
 
   const loadAll = async () => {
     setLoading(true);
-    const [campaignsData, rfmData, statesData, citiesData, regionsData, gendersData] = await Promise.all([
+    const [campaignsData, rfmData, statesData, citiesData, regionsData, gendersData, presetsRes] = await Promise.all([
       fetchAllRows("lp_leads", "campaign_tag"),
       fetchAllRows("zoppy_customers", "rfm_segment"),
       fetchAllRows("zoppy_customers", "state"),
       fetchAllRows("zoppy_customers", "city"),
       fetchAllRows("zoppy_customers", "region_type"),
       fetchAllRows("zoppy_customers", "gender"),
+      supabase.from("app_settings").select("id,key,value").like("key", "rfm_filter_preset_%").order("created_at", { ascending: true }),
     ]);
+
+    setSavedPresets((presetsRes.data || []) as any[]);
 
     // Campaigns
     {
@@ -1867,6 +1874,45 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
                 ))}
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ── SAVED RFM PRESETS ── */}
+      {(audienceSource === "rfm" || audienceSource === "both") && savedPresets.length > 0 && (
+        <div className="space-y-1.5 p-2 rounded-lg bg-card border border-border">
+          <div className="flex items-center gap-1.5">
+            <Bookmark className="h-3 w-3 text-amber-500" />
+            <Label className="text-[11px] font-medium">Filtros RFM Salvos</Label>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Selecione filtros salvos na aba Clientes RFM para usar como público do disparo
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {savedPresets.map(p => {
+              const isSelected = selectedPresetKeys.includes(p.key);
+              const presetName = (p.value as any)?.name || "Filtro";
+              return (
+                <Badge
+                  key={p.id}
+                  variant={isSelected ? "default" : "outline"}
+                  className={`cursor-pointer text-[10px] px-2 py-0.5 ${isSelected ? "bg-amber-600 hover:bg-amber-700 border-amber-500" : ""}`}
+                  onClick={() => {
+                    const current = [...selectedPresetKeys];
+                    const idx = current.indexOf(p.key);
+                    const updated = idx >= 0 ? current.filter(k => k !== p.key) : [...current, p.key];
+                    onChange({ ...triggerConfig, audience_rfm_preset_keys: updated });
+                  }}
+                >
+                  {presetName}
+                </Badge>
+              );
+            })}
+          </div>
+          {selectedPresetKeys.length > 0 && (
+            <p className="text-[10px] text-amber-500">
+              {selectedPresetKeys.length} filtro(s) selecionado(s) — os filtros acima de segmento/estado/cidade serão ignorados
+            </p>
           )}
         </div>
       )}
