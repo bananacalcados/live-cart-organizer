@@ -1340,6 +1340,15 @@ export function MassTemplateDispatcher() {
                       <SelectItem value="online">🌐 Online</SelectItem>
                     </SelectContent>
                   </Select>
+                  {crmUniqueTags.length > 0 && (
+                    <Select value={crmTagFilter} onValueChange={v => { setCrmTagFilter(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                      <SelectTrigger className="w-[140px] h-8 text-xs"><Filter className="h-3 w-3 mr-1" /><SelectValue placeholder="Tags" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas Tags</SelectItem>
+                        {crmUniqueTags.map(t => <SelectItem key={t} value={t}>🏷️ {t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Select value={topN} onValueChange={v => { setTopN(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
                     <SelectTrigger className="w-[130px] h-8 text-xs"><Crown className="h-3 w-3 mr-1" /><SelectValue placeholder="Top N" /></SelectTrigger>
                     <SelectContent>
