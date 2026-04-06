@@ -808,7 +808,9 @@ serve(async (req) => {
     }
 
     if (!result.success) {
-      result.error = fallbackErrors[0] || result.error || "Pagamento recusado em todos os gateways";
+      // Log detailed errors for debugging, but show generic message to customer
+      console.log(`[ALL-GATEWAYS-FAILED] Errors: ${fallbackErrors.join(" | ")}`);
+      result.error = "Pagamento não aprovado. Verifique os dados do cartão ou tente outro cartão.";
     }
 
     // ── Update processing record with final status ──
