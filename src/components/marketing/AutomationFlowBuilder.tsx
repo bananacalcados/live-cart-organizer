@@ -2472,6 +2472,19 @@ function FlowEditor({
               <Send className="h-3.5 w-3.5" />Disparar Audiência
             </Button>
           )}
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800">
+            <Sparkles className="h-3 w-3 text-purple-500" />
+            <span className="text-[10px] text-purple-700 dark:text-purple-300">Jess</span>
+            <Switch checked={useJessAgent} onCheckedChange={setUseJessAgent} className="scale-75" />
+          </div>
+          {useJessAgent && (
+            <Input
+              value={jessCampaignName}
+              onChange={e => setJessCampaignName(e.target.value)}
+              placeholder="Nome da campanha (leads)"
+              className="max-w-[180px] h-7 text-xs"
+            />
+          )}
           <span className="text-xs text-muted-foreground">{isActive ? "Ativa" : "Inativa"}</span>
           <Switch checked={isActive} onCheckedChange={setIsActive} />
           <Button size="sm" onClick={saveFlow} disabled={saving} className="gap-1">
