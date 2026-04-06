@@ -149,6 +149,7 @@ function TriggerNode({ data }: { data: any }) {
           {data.audience_rfm_segments?.length > 0 && ` · ${data.audience_rfm_segments.length} seg.`}
           {data.audience_states?.length > 0 && ` · ${data.audience_states.join(",")}`}
           {data.audience_campaigns?.length > 0 && ` · ${data.audience_campaigns.length} camp.`}
+          {data.audience_rfm_preset_keys?.length > 0 && ` · 🔖 ${data.audience_rfm_preset_keys.length} filtro(s)`}
         </p>
       )}
       {!isMassAudience && data.campaign_id && <p className="text-[10px] opacity-70 mt-1">Campanha: {data.campaign_id}</p>}
