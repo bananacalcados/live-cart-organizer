@@ -1754,6 +1754,7 @@ export default function TransparentCheckout() {
                       installmentConfig={installmentConfig}
                       onPaymentConfirmed={handlePaymentConfirmed}
                       onBack={() => setCurrentStep(2)}
+                      onProcessingChange={setIsPaymentProcessing}
                     />
                   )}
                 </div>
