@@ -783,6 +783,7 @@ export default function Marketing() {
 
   const regionCounts = customers.reduce((acc, c) => { acc[c.region_type] = (acc[c.region_type] || 0) + 1; return acc; }, {} as Record<string, number>);
   const uniqueDdds = [...new Set(customers.map(c => c.ddd).filter(Boolean))].sort();
+  const uniqueTags = [...new Set(customers.flatMap(c => c.tags || []).filter(Boolean))].sort();
   const totalRevenue = customers.reduce((s, c) => s + c.total_spent, 0);
   const toggleSort = (field: string) => { if (sortField === field) setSortDir(d => d === "desc" ? "asc" : "desc"); else { setSortField(field); setSortDir("desc"); } };
   const formatCurrency = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
