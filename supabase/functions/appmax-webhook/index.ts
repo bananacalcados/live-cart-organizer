@@ -255,7 +255,7 @@ serve(async (req) => {
     const data = payload.data || payload;
     const appmaxOrderId = data.order_id || data.id;
     const status = (data.status || "").toLowerCase();
-    const telephone = data.telephone || data.phone || null;
+    const telephone = data.telephone || data.phone || data.customer?.telephone || data.customer?.phone || null;
     const transactionId = data.transaction_id || data.id || appmaxOrderId;
 
     console.log(`AppMax Event: ${event}, Status: ${status}, AppmaxOrderId: ${appmaxOrderId}, Phone: ${telephone}`);

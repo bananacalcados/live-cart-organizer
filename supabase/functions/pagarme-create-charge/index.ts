@@ -455,12 +455,14 @@ async function chargeAppmax(
     const isPreAuth = appmaxText.toLowerCase().includes("pre autorização realizada com sucesso") || appmaxText.toLowerCase().includes("pré autorização realizada com sucesso");
     const appmaxTxId = String(payData.data?.id || appmaxOrderId);
 
-    if (appmaxStatus === "approved") {
+    if (appmaxStatus === "approved" || appmaxStatus === "paid") {
       return { success: true, gateway: "appmax", transactionId: appmaxTxId };
     }
 
-    if (payData.success && (appmaxStatus === "paid" || appmaxStatus === "pre_authorized" || isPreAuth) && appmaxStatus !== "recusado_por_risco") {
-      return { success: false, pending: true, gateway: "appmax", transactionId: appmaxTxId, error: `AppMax status: ${appmaxStatus}` };
+    // Pre-authorization = payment accepted, waiting capture/antifraud
+    // We treat this as success so appmax_order_id gets saved and webhook can match later
+    if (payData.success && (appmaxStatus === "pre_authorized" || isPreAuth) && appmaxStatus !== "recusado_por_risco") {
+      return { success: true, gateway: "appmax", transactionId: appmaxTxId };
     }
 
     return {
