@@ -1175,6 +1175,17 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         />
       )}
 
+      {/* Send Template Dialog */}
+      {selectedPhone && selectedSendNumber?.provider === 'meta' && (
+        <POSSendTemplateDialog
+          open={showSendTemplate}
+          onOpenChange={setShowSendTemplate}
+          phone={selectedPhone}
+          customerName={selectedConversation?.customerName}
+          whatsappNumberId={selectedSendNumberId}
+        />
+      )}
+
       {/* New Conversation Dialog */}
       <NewConversationDialog
         open={showNewConversation}
