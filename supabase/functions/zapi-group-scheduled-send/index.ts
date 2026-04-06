@@ -80,10 +80,18 @@ serve(async (req) => {
       );
     }
 
-    // Mark as sending
+    // Mark as sending with lock (90s per batch to prevent cron overlap)
+    const lockUntil = new Date(Date.now() + 90_000).toISOString();
     await supabase.from('group_campaign_scheduled_messages')
-      .update({ status: 'sending' })
+      .update({ status: 'sending', locked_until: lockUntil })
       .eq('id', scheduledMessageId);
+
+    // Also lock sibling blocks
+    if (msg.message_group_id) {
+      await supabase.from('group_campaign_scheduled_messages')
+        .update({ locked_until: lockUntil })
+        .eq('message_group_id', msg.message_group_id);
+    }
 
     const campaign = msg.group_campaigns;
     const campaignId = campaign.id;
