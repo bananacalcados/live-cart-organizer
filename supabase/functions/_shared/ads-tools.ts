@@ -147,6 +147,42 @@ export const adsTools = [
   },
 ];
 
+// ─── Extra tools available when Jess runs inside Automations ───
+export const automationExtraTools = [
+  {
+    type: "function",
+    function: {
+      name: "tag_or_register_contact",
+      description: "Adicionar uma tag a um cliente existente OU registrar como novo lead. Use quando o cliente demonstrar interesse em algo específico (ex: 'quero ser avisada da live', 'me avisa de novidades'). A ferramenta decide automaticamente se a pessoa já é cliente ou se precisa criar um lead novo.",
+      parameters: {
+        type: "object",
+        properties: {
+          tag: { type: "string", description: "Tag a adicionar (ex: 'quer_live', 'avise_novidades', 'interesse_ortopedico')" },
+          campaign_name: { type: "string", description: "Nome da campanha para vincular o lead (se não for cliente). Se não informado, usa a campanha configurada na automação." },
+          name: { type: "string", description: "Nome do contato (se disponível na conversa)" },
+        },
+        required: ["tag"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_assistance_request",
+      description: "Criar uma solicitação de atendimento humano no PDV. Use quando o cliente responder positivamente e precisar ser transferido para uma vendedora. Também cria uma transferência de conversa.",
+      parameters: {
+        type: "object",
+        properties: {
+          summary: { type: "string", description: "Resumo do que o cliente precisa (ex: 'Cliente quer experimentar tênis ortopédico na loja')" },
+          request_type: { type: "string", description: "Tipo: 'takeover_chat' (transferir chat), 'technical_info' (dúvida técnica), 'verify_stock' (verificar estoque)" },
+          priority: { type: "string", description: "Prioridade: 'low', 'normal', 'high', 'urgent'" },
+        },
+        required: ["summary"],
+      },
+    },
+  },
+];
+
 const PRODUCT_TYPE_KEYWORDS = ['tenis', 'mocassim', 'sandalia', 'papete', 'tamanco', 'sapato', 'bota', 'chinelo'];
 const SEARCH_STOP_WORDS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'com', 'para', 'por', 'no', 'na', 'o', 'a']);
 
