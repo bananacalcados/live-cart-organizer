@@ -690,10 +690,12 @@ export type Database = {
           event_id: string | null
           id: string
           is_active: boolean
+          jess_campaign_name: string | null
           name: string
           trigger_config: Json | null
           trigger_type: string
           updated_at: string
+          use_jess_agent: boolean | null
         }
         Insert: {
           created_at?: string
@@ -701,10 +703,12 @@ export type Database = {
           event_id?: string | null
           id?: string
           is_active?: boolean
+          jess_campaign_name?: string | null
           name: string
           trigger_config?: Json | null
           trigger_type?: string
           updated_at?: string
+          use_jess_agent?: boolean | null
         }
         Update: {
           created_at?: string
@@ -712,10 +716,12 @@ export type Database = {
           event_id?: string | null
           id?: string
           is_active?: boolean
+          jess_campaign_name?: string | null
           name?: string
           trigger_config?: Json | null
           trigger_type?: string
           updated_at?: string
+          use_jess_agent?: boolean | null
         }
         Relationships: [
           {
@@ -9642,6 +9648,7 @@ export type Database = {
           source: string | null
           state: string | null
           store_id: string | null
+          tags: string[] | null
           total_orders: number | null
           total_spent: number | null
           updated_at: string
@@ -9693,6 +9700,7 @@ export type Database = {
           source?: string | null
           state?: string | null
           store_id?: string | null
+          tags?: string[] | null
           total_orders?: number | null
           total_spent?: number | null
           updated_at?: string
@@ -9744,6 +9752,7 @@ export type Database = {
           source?: string | null
           state?: string | null
           store_id?: string | null
+          tags?: string[] | null
           total_orders?: number | null
           total_spent?: number | null
           updated_at?: string
