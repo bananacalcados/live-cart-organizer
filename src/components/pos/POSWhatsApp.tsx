@@ -28,6 +28,7 @@ import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
 import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
 import { POSWhatsAppDashboard } from "./POSWhatsAppDashboard";
 import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
+import { POSSendTemplateDialog } from "./POSSendTemplateDialog";
 import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
@@ -89,6 +90,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
 
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
   // Store-specific WhatsApp number IDs
