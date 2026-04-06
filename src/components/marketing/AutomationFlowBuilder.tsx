@@ -55,6 +55,8 @@ interface AutomationFlow {
   event_id: string | null;
   is_active: boolean;
   created_at: string;
+  use_jess_agent?: boolean;
+  jess_campaign_name?: string | null;
 }
 
 interface AutomationStep {
@@ -2054,6 +2056,8 @@ function FlowEditor({
     return rest;
   });
   const [isActive, setIsActive] = useState(flow.is_active);
+  const [useJessAgent, setUseJessAgent] = useState(flow.use_jess_agent || false);
+  const [jessCampaignName, setJessCampaignName] = useState(flow.jess_campaign_name || '');
   const [editingStep, setEditingStep] = useState<AutomationStep | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [steps, setSteps] = useState<AutomationStep[]>([]);
@@ -2443,7 +2447,7 @@ function FlowEditor({
     const configWithPositions = { ...triggerConfig, node_positions: nodePositionsRef.current };
     const { error } = await supabase
       .from("automation_flows")
-      .update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive })
+      .update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive, use_jess_agent: useJessAgent, jess_campaign_name: jessCampaignName || null })
       .eq("id", flow.id);
     setSaving(false);
     if (error) { toast.error("Erro ao salvar"); return; }
