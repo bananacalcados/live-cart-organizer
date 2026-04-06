@@ -1280,6 +1280,172 @@ export async function executeAdsToolCall(
       }
     }
 
+    // ─── TAG OR REGISTER CONTACT ───
+    case 'tag_or_register_contact': {
+      const tag = args.tag;
+      const campaignName = args.campaign_name || ctx.campaign?.jess_campaign_name || null;
+      const contactName = args.name || collectedData.nome || lead?.name || null;
+
+      try {
+        // Normalize phone for matching
+        let normalizedPhone = phone.replace(/\D/g, '');
+        if (!normalizedPhone.startsWith('55') && normalizedPhone.length <= 11) {
+          normalizedPhone = '55' + normalizedPhone;
+        }
+
+        // Extract DDD and last 8 digits for flexible matching (handles 9th digit issue)
+        const ddd = normalizedPhone.startsWith('55') && normalizedPhone.length >= 12
+          ? normalizedPhone.substring(2, 4)
+          : null;
+        const last8 = normalizedPhone.slice(-8);
+
+        // Search zoppy_customers with flexible phone matching
+        const { data: customers } = await supabase
+          .from('zoppy_customers')
+          .select('id, first_name, last_name, phone, tags')
+          .not('phone', 'is', null);
+
+        // Find match considering 9th digit variations
+        let matchedCustomer = null;
+        if (customers) {
+          for (const cust of customers) {
+            const custPhone = (cust.phone || '').replace(/\D/g, '');
+            if (!custPhone) continue;
+            const custLast8 = custPhone.slice(-8);
+            const custDdd = custPhone.startsWith('55') && custPhone.length >= 12
+              ? custPhone.substring(2, 4)
+              : custPhone.length >= 10 ? custPhone.substring(0, 2) : null;
+
+            // Match: same last 8 digits AND same DDD
+            if (custLast8 === last8 && ddd && custDdd === ddd) {
+              matchedCustomer = cust;
+              break;
+            }
+          }
+        }
+
+        if (matchedCustomer) {
+          // Customer found → add tag
+          const currentTags = matchedCustomer.tags || [];
+          if (!currentTags.includes(tag)) {
+            await supabase
+              .from('zoppy_customers')
+              .update({ tags: [...currentTags, tag] })
+              .eq('id', matchedCustomer.id);
+          }
+          const custName = [matchedCustomer.first_name, matchedCustomer.last_name].filter(Boolean).join(' ').trim();
+          console.log(`[tag_or_register] Tagged existing customer ${matchedCustomer.id} (${custName}) with "${tag}"`);
+          return {
+            success: true,
+            data: {
+              action: 'tagged_customer',
+              customer_name: custName,
+              tag,
+              message: `Cliente ${custName || 'existente'} marcado com a tag "${tag}" com sucesso!`,
+            },
+          };
+        } else {
+          // Not a customer → register as lead
+          let campaignId: string | null = null;
+          if (campaignName) {
+            // Find or match campaign by name
+            const { data: campaigns } = await supabase
+              .from('ad_campaigns_ai')
+              .select('id, name')
+              .ilike('name', `%${campaignName}%`)
+              .limit(1);
+            campaignId = campaigns?.[0]?.id || null;
+          }
+
+          // Check if lead already exists
+          const { data: existingLeads } = await supabase
+            .from('ad_leads')
+            .select('id, name, phone')
+            .or(`phone.eq.${normalizedPhone},phone.eq.${normalizedPhone.replace(/^55/, '')}`)
+            .limit(1);
+
+          if (existingLeads && existingLeads.length > 0) {
+            // Update existing lead
+            const updateData: any = {};
+            if (contactName) updateData.name = contactName;
+            if (campaignId) updateData.campaign_id = campaignId;
+            updateData.temperature = 'warm';
+            updateData.interested_product_keywords = [tag];
+            await supabase.from('ad_leads').update(updateData).eq('id', existingLeads[0].id);
+            console.log(`[tag_or_register] Updated existing lead ${existingLeads[0].id} with tag "${tag}"`);
+            return {
+              success: true,
+              data: {
+                action: 'updated_lead',
+                lead_name: contactName || existingLeads[0].name,
+                tag,
+                message: `Lead atualizado com interesse "${tag}"!`,
+              },
+            };
+          }
+
+          // Create new lead
+          await supabase.from('ad_leads').insert({
+            phone: normalizedPhone,
+            name: contactName,
+            source: 'automation',
+            temperature: 'warm',
+            campaign_id: campaignId,
+            interested_product_keywords: [tag],
+            is_active: true,
+          });
+          console.log(`[tag_or_register] Created new lead for ${normalizedPhone} with tag "${tag}", campaign=${campaignId}`);
+          return {
+            success: true,
+            data: {
+              action: 'created_lead',
+              lead_name: contactName,
+              tag,
+              campaign_name: campaignName,
+              message: `Novo lead registrado com interesse "${tag}"${campaignName ? ` na campanha "${campaignName}"` : ''}!`,
+            },
+          };
+        }
+      } catch (err) {
+        console.error('[tag_or_register_contact] Error:', err);
+        return { success: false, error: 'Erro ao registrar contato' };
+      }
+    }
+
+    // ─── CREATE ASSISTANCE REQUEST (automation mode) ───
+    case 'create_assistance_request': {
+      const summary = args.summary || 'Solicitação de atendimento via automação';
+      const requestType = args.request_type || 'takeover_chat';
+      const priority = args.priority || 'normal';
+
+      try {
+        await createAiAssistanceRequest(ctx, {
+          requestType: requestType as any,
+          summary,
+          priority: priority as any,
+        });
+
+        // Also deactivate AI session so human can take over
+        await supabase
+          .from('automation_ai_sessions')
+          .update({ is_active: false })
+          .eq('phone', phone)
+          .eq('is_active', true);
+
+        console.log(`[create_assistance_request] Created request for ${phone}: ${summary}`);
+        return {
+          success: true,
+          data: {
+            message: 'Solicitação criada! Uma vendedora será notificada para atender este cliente.',
+            request_type: requestType,
+          },
+        };
+      } catch (err) {
+        console.error('[create_assistance_request] Error:', err);
+        return { success: false, error: 'Erro ao criar solicitação' };
+      }
+    }
+
     default:
       return { success: false, error: `Tool desconhecida: ${toolName}` };
   }
