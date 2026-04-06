@@ -47,8 +47,15 @@ serve(async (req) => {
     }
 
     // Deduplicate: for grouped messages, only dispatch the first block
+    // Also skip messages that are still locked by another invocation
+    const nowMs = Date.now();
     const seenGroupIds = new Set<string>();
     const deduped = pendingMessages.filter(msg => {
+      // Skip if locked (another invocation is actively processing)
+      if (msg.locked_until && new Date(msg.locked_until).getTime() > nowMs) {
+        console.log(`Skipping ${msg.id}: locked until ${msg.locked_until}`);
+        return false;
+      }
       if (msg.message_group_id) {
         if (seenGroupIds.has(msg.message_group_id)) return false;
         seenGroupIds.add(msg.message_group_id);
