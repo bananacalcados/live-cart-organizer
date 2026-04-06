@@ -118,6 +118,7 @@ serve(async (req) => {
     const selectedRegions = (triggerConfig.audience_regions as string[]) || [];
     const selectedGenders = (triggerConfig.audience_genders as string[]) || [];
     const whatsappInstances = (triggerConfig.whatsapp_instances as string[]) || [];
+    const presetKeys = (triggerConfig.audience_rfm_preset_keys as string[]) || [];
 
     // Fetch already-sent phones for this flow to avoid duplicates
     const alreadySentRows = await fetchAllRows(supabase, 'automation_dispatch_sent', 'phone', { flow_id: [flowId] });
@@ -128,7 +129,23 @@ serve(async (req) => {
     let rfmData: any[] = [];
     let leadsData: any[] = [];
 
-    if (audienceSource === 'rfm' || audienceSource === 'both' || audienceSource === 'crm') {
+    // If preset keys are selected, load all RFM customers and filter by presets
+    const presetFilters: any[] = [];
+    if (presetKeys.length > 0 && (audienceSource === 'rfm' || audienceSource === 'both')) {
+      const { data: presetRows } = await supabase
+        .from('app_settings')
+        .select('key, value')
+        .in('key', presetKeys);
+      if (presetRows) {
+        for (const p of presetRows) {
+          const f = (p.value as any)?.filters || p.value;
+          if (f) presetFilters.push(f);
+        }
+      }
+      console.log(`[dispatch] Using ${presetFilters.length} saved RFM preset filter(s)`);
+      // Fetch all customers when using presets (filtering happens in-memory)
+      rfmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, rfm_segment, region_type, gender, ddd, avg_ticket, total_orders, last_purchase_at, rfm_recency_score');
+    } else if (audienceSource === 'rfm' || audienceSource === 'both' || audienceSource === 'crm') {
       if (audienceSource === 'crm' || rfmSelectAll) {
         rfmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, rfm_segment, region_type, gender');
       } else if (selectedRfmSegments.length > 0) {
@@ -148,7 +165,28 @@ serve(async (req) => {
       }
     }
 
-    const filters = { selectedStates, selectedCities, selectedRegions, selectedGenders };
+    // Apply preset filters if present
+    if (presetFilters.length > 0) {
+      rfmData = rfmData.filter(c => {
+        return presetFilters.some(f => {
+          if (f.rfmFilter && f.rfmFilter !== 'all' && c.rfm_segment !== f.rfmFilter) return false;
+          if (f.recencyFilter && f.recencyFilter !== 'all' && (c.rfm_recency_score || 0) !== parseInt(f.recencyFilter)) return false;
+          if (f.regionFilter && f.regionFilter !== 'all' && c.region_type !== f.regionFilter) return false;
+          if (f.dddFilter && f.dddFilter !== 'all' && c.ddd !== f.dddFilter) return false;
+          if (f.dateFrom && c.last_purchase_at && c.last_purchase_at < f.dateFrom) return false;
+          if (f.dateTo && c.last_purchase_at && c.last_purchase_at > f.dateTo + 'T23:59:59') return false;
+          if ((f.dateFrom || f.dateTo) && !c.last_purchase_at) return false;
+          if (f.ticketMin && (c.avg_ticket || 0) < parseFloat(f.ticketMin)) return false;
+          if (f.ticketMax && (c.avg_ticket || 0) > parseFloat(f.ticketMax)) return false;
+          if (f.ordersMin && (c.total_orders || 0) < parseInt(f.ordersMin)) return false;
+          if (f.ordersMax && (c.total_orders || 0) > parseInt(f.ordersMax)) return false;
+          return true;
+        });
+      });
+      console.log(`[dispatch] After preset filtering: ${rfmData.length} customers`);
+    }
+
+    const filters = { selectedStates: presetFilters.length > 0 ? [] : selectedStates, selectedCities: presetFilters.length > 0 ? [] : selectedCities, selectedRegions: presetFilters.length > 0 ? [] : selectedRegions, selectedGenders: presetFilters.length > 0 ? [] : selectedGenders };
     const fullAudience = buildAudience(rfmData, leadsData, filters, seenPhones);
     const totalAudience = fullAudience.length;
 
