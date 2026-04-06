@@ -1002,6 +1002,11 @@ function CardPaymentForm({
   const processingRef = useRef(false);
   const attemptIdRef = useRef<string | null>(null);
 
+  // Propagate processing state to parent for full-screen overlay
+  useEffect(() => {
+    onProcessingChange?.(isProcessing);
+  }, [isProcessing, onProcessingChange]);
+
   // Restore processing state from sessionStorage on mount
   useEffect(() => {
     const stored = sessionStorage.getItem(`checkout_payment_${orderId}`);
