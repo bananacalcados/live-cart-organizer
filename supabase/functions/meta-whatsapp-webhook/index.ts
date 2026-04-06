@@ -371,7 +371,7 @@ serve(async (req) => {
               }
 
               // ===== CENTRAL ROUTER =====
-              if (messageText || mediaType !== 'text') {
+              if (!automationFlowHandled && (messageText || mediaType !== 'text')) {
                 const routeText = messageText || `[${mediaType}]`;
                 const referralInput = referralData || null;
                 const route = await routeMessage(supabase, {
