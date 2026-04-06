@@ -5,7 +5,7 @@ import {
   Users, Search, RefreshCw, Upload, Download, Filter, BarChart3,
   MapPin, Phone, Mail, ShoppingBag, Crown, AlertTriangle, Clock,
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
-  FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2,
+  FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2, Tag,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles,
   Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon
 } from "lucide-react";
@@ -75,6 +75,7 @@ interface ZoppyCustomer {
   avg_ticket: number;
   last_purchase_at: string | null;
   first_purchase_at: string | null;
+  tags: string[] | null;
 }
 
 interface Campaign {
@@ -205,6 +206,7 @@ export default function Marketing() {
    const [excludedPresetIds, setExcludedPresetIds] = useState<string[]>([]);
    const [includedPresetIds, setIncludedPresetIds] = useState<string[]>([]);
    const [presetOpsOpen, setPresetOpsOpen] = useState(false);
+   const [tagFilter, setTagFilter] = useState<string>("all");
 
   // ─── Fetch data ──────────────────────────────
 
@@ -732,6 +734,7 @@ export default function Marketing() {
     if (regionFilter !== "all" && c.region_type !== regionFilter) return false;
     if (rfmFilter !== "all" && c.rfm_segment !== rfmFilter) return false;
     if (dddFilter !== "all" && c.ddd !== dddFilter) return false;
+    if (tagFilter !== "all" && !(c.tags || []).includes(tagFilter)) return false;
     if (recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(recencyFilter)) return false;
     if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) return false;
     if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo + 'T23:59:59') return false;
@@ -780,6 +783,7 @@ export default function Marketing() {
 
   const regionCounts = customers.reduce((acc, c) => { acc[c.region_type] = (acc[c.region_type] || 0) + 1; return acc; }, {} as Record<string, number>);
   const uniqueDdds = [...new Set(customers.map(c => c.ddd).filter(Boolean))].sort();
+  const uniqueTags = [...new Set(customers.flatMap(c => c.tags || []).filter(Boolean))].sort();
   const totalRevenue = customers.reduce((s, c) => s + c.total_spent, 0);
   const toggleSort = (field: string) => { if (sortField === field) setSortDir(d => d === "desc" ? "asc" : "desc"); else { setSortField(field); setSortDir("desc"); } };
   const formatCurrency = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -925,6 +929,15 @@ export default function Marketing() {
                     {uniqueDdds.map(ddd => (<SelectItem key={ddd} value={ddd!}>DDD {ddd}</SelectItem>))}
                   </SelectContent>
                 </Select>
+                {uniqueTags.length > 0 && (
+                  <Select value={tagFilter} onValueChange={setTagFilter}>
+                    <SelectTrigger className="h-9"><Tag className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Tags</SelectItem>
+                      {uniqueTags.map(tag => (<SelectItem key={tag} value={tag}>🏷️ {tag}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {!(dateFrom || dateTo) ? (

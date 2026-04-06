@@ -292,9 +292,10 @@ serve(async (req) => {
                 }
               }
 
-              // Check for pending automation flow continuation (button reply)
-              if (msg.type === 'button' || msg.type === 'interactive') {
+              // Check for pending automation flow continuation (button reply OR any text reply)
+              {
                 const buttonText = messageText.trim().toLowerCase();
+                const isButtonReply = msg.type === 'button' || msg.type === 'interactive';
                 try {
                   const { data: pendingReply } = await supabase
                     .from('automation_pending_replies')
@@ -307,7 +308,7 @@ serve(async (req) => {
                     .maybeSingle();
 
                   if (pendingReply) {
-                    console.log(`Found pending reply for ${phone}, button: "${buttonText}", branches:`, JSON.stringify(pendingReply.button_branches));
+                    console.log(`Found pending reply for ${phone}, type=${msg.type}, text: "${buttonText}", branches:`, JSON.stringify(pendingReply.button_branches));
                     // Mark as consumed
                     await supabase.from('automation_pending_replies').update({ is_active: false }).eq('id', pendingReply.id);
 
@@ -316,12 +317,15 @@ serve(async (req) => {
                     let targetStepId: string | null = null;
                     
                     // Check if button text matches any branch (text→stepId format)
-                    for (const [branchLabel, branchTarget] of Object.entries(branches)) {
-                      if (branchLabel.toLowerCase() === buttonText) {
-                        targetStepId = branchTarget;
-                        break;
+                    if (isButtonReply) {
+                      for (const [branchLabel, branchTarget] of Object.entries(branches)) {
+                        if (branchLabel.toLowerCase() === buttonText) {
+                          targetStepId = branchTarget;
+                          break;
+                        }
                       }
                     }
+                    // For text replies without branch match, just continue to next step (default)
 
                     // Resolve target: find step index by step ID, or default to next step
                     const { data: flowSteps } = await supabase
@@ -330,7 +334,7 @@ serve(async (req) => {
                       .eq('flow_id', pendingReply.flow_id)
                       .order('step_order');
 
-                    let startFromStep = pendingReply.pending_step_index + 1; // default
+                    let startFromStep = pendingReply.pending_step_index + 1; // default: next step
                     if (targetStepId && flowSteps) {
                       const targetIdx = flowSteps.findIndex(s => s.id === targetStepId);
                       if (targetIdx >= 0) {

@@ -184,6 +184,55 @@ serve(async (req) => {
         console.log(`[continue-flow] Tag: ${JSON.stringify(config.tags)}`);
       }
 
+      // Handle AI response step: create AI session (the webhook will auto-respond on subsequent messages)
+      if (step.action_type === 'ai_response') {
+        const prompt = (config.prompt as string) || '';
+        const maxInteractions = (config.maxInteractions as number) || 5;
+        const aiNumberId = (config.whatsappNumberId as string) || whatsappNumberId;
+
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        await supabase.from('automation_ai_sessions').upsert({
+          phone,
+          prompt,
+          is_active: true,
+          max_messages: maxInteractions,
+          messages_sent: 0,
+          expires_at: expiresAt,
+          whatsapp_number_id: aiNumberId,
+          flow_id: flowId,
+        }, { onConflict: 'phone' });
+
+        // Generate first AI response immediately (since the customer just replied, we're in the 24h window)
+        const aiRes = await fetch(`${supabaseUrl}/functions/v1/automation-ai-respond`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, phone, enableRouting: true, enableTracking: true, whatsappNumberId: aiNumberId, flowId }),
+        });
+        const aiData = await aiRes.json();
+
+        if (aiRes.ok && aiData.reply) {
+          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, message: aiData.reply, whatsappNumberId: aiNumberId }),
+          });
+
+          await supabase.from('whatsapp_messages').insert({
+            phone, message: `[IA] ${aiData.reply}`, direction: 'outgoing', status: 'sent',
+            whatsapp_number_id: aiNumberId,
+          });
+        }
+
+        await supabase.from('automation_executions').insert({
+          flow_id: flowId, step_id: step.id, status: 'success',
+          result: { phone, action: 'ai_response', replied: !!aiData?.reply, continued: true },
+        });
+
+        console.log(`[continue-flow] AI session created for ${phone}, replied=${!!aiData?.reply}`);
+        // After AI response, the session handles further messages via the router
+        break;
+      }
+
       await new Promise(r => setTimeout(r, 500));
     }
 

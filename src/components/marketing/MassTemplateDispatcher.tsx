@@ -114,6 +114,8 @@ export function MassTemplateDispatcher() {
   const [ordersMin, setOrdersMin] = useState("");
   const [ordersMax, setOrdersMax] = useState("");
   const [topN, setTopN] = useState<string>("all");
+  const [crmTagFilter, setCrmTagFilter] = useState<string>("all");
+  const [crmUniqueTags, setCrmUniqueTags] = useState<string[]>([]);
 
   // Store/seller mapping
   const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
@@ -319,7 +321,7 @@ export function MassTemplateDispatcher() {
       while (keepFetching) {
         const { data, error } = await supabase
           .from('zoppy_customers')
-          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type, total_orders, total_spent, avg_ticket, last_purchase_at')
+          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type, total_orders, total_spent, avg_ticket, last_purchase_at, tags')
           .not('phone', 'is', null)
           .order('total_spent', { ascending: false })
           .range(from, from + 999);
@@ -332,6 +334,9 @@ export function MassTemplateDispatcher() {
         if (allCustomers.length >= 25000) keepFetching = false;
       }
       setCrmCustomers(allCustomers);
+      // Extract unique tags from CRM customers
+      const allTags: string[] = [...new Set(allCustomers.flatMap((c: any) => c.tags || []).filter(Boolean))].sort();
+      setCrmUniqueTags(allTags);
 
       // Fetch leads (paginated to get ALL)
       const allLeads: any[] = [];
@@ -453,6 +458,7 @@ export function MassTemplateDispatcher() {
         if (stateFilter !== 'all' && c.state !== stateFilter) continue;
         if (cityFilter !== 'all' && c.city !== cityFilter) continue;
         if (dddFilter !== 'all' && c.ddd !== dddFilter) continue;
+        if (crmTagFilter !== 'all' && !(c.tags || []).includes(crmTagFilter)) continue;
         if (regionFilter !== 'all' && c.region_type !== regionFilter) continue;
 
         // Store/seller filters via mapping
@@ -517,7 +523,7 @@ export function MassTemplateDispatcher() {
     // Apply topN limit
     const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
     return finalList;
-  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap]);
+  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter]);
 
   // Unique filter options
   const uniqueSegments = useMemo(() => [...new Set(crmCustomers.map(c => c.rfm_segment).filter(Boolean))].sort(), [crmCustomers]);
@@ -1334,6 +1340,15 @@ export function MassTemplateDispatcher() {
                       <SelectItem value="online">🌐 Online</SelectItem>
                     </SelectContent>
                   </Select>
+                  {crmUniqueTags.length > 0 && (
+                    <Select value={crmTagFilter} onValueChange={v => { setCrmTagFilter(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                      <SelectTrigger className="w-[140px] h-8 text-xs"><Filter className="h-3 w-3 mr-1" /><SelectValue placeholder="Tags" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas Tags</SelectItem>
+                        {crmUniqueTags.map(t => <SelectItem key={t} value={t}>🏷️ {t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Select value={topN} onValueChange={v => { setTopN(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
                     <SelectTrigger className="w-[130px] h-8 text-xs"><Crown className="h-3 w-3 mr-1" /><SelectValue placeholder="Top N" /></SelectTrigger>
                     <SelectContent>
