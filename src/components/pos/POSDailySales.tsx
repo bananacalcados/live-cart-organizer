@@ -366,7 +366,7 @@ export function POSDailySales({ storeId }: Props) {
           const custIds = allCustomers.map((c: any) => c.id);
           const { data: salesData } = await supabase
             .from("pos_sales")
-            .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, store_id")
+            .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, store_id, customer_name, checkout_step, payment_details")
             .in("customer_id", custIds)
             .order("created_at", { ascending: false })
             .limit(50);
