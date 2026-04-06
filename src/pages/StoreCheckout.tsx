@@ -711,7 +711,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
 }
 
 // ── Card Payment ────────────────────────────────────────────────
-function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { saleId: string; amount: number; form: CustomerFormData; installmentConfig: InstallmentConfig; onPaid: () => void }) {
+function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid, onProcessingChange }: { saleId: string; amount: number; form: CustomerFormData; installmentConfig: InstallmentConfig; onPaid: () => void; onProcessingChange?: (v: boolean) => void }) {
   const [cardNumber, setCardNumber] = useState("");
   const [cardName, setCardName] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -749,6 +749,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
           sessionStorage.removeItem(`checkout_payment_${saleId}`);
           setPaymentError((attempt as any).error_message || "A operadora do seu cartão não aprovou a compra. Revise os dados ou tente com outro cartão.");
           setProcessing(false);
+          onProcessingChange?.(false);
           processingRef.current = false;
           return;
         }
@@ -763,6 +764,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
     sessionStorage.removeItem(`checkout_payment_${saleId}`);
     setPaymentError("Tempo esgotado. Verifique se o pagamento foi aprovado ou tente novamente.");
     setProcessing(false);
+    onProcessingChange?.(false);
     processingRef.current = false;
   };
 
@@ -788,6 +790,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
 
     processingRef.current = true;
     setProcessing(true);
+    onProcessingChange?.(true);
     setPaymentError(null);
 
     const attemptId = crypto.randomUUID();
@@ -881,6 +884,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid }: { 
       sessionStorage.removeItem(`checkout_payment_${saleId}`);
       setPaymentError(e.message || "Erro no pagamento");
       setProcessing(false);
+      onProcessingChange?.(false);
       processingRef.current = false;
     }
   };
