@@ -5,7 +5,7 @@ import {
   Users, Search, RefreshCw, Upload, Download, Filter, BarChart3,
   MapPin, Phone, Mail, ShoppingBag, Crown, AlertTriangle, Clock,
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
-  FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2,
+  FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2, Tag,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles,
   Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon
 } from "lucide-react";
