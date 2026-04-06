@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
