@@ -114,6 +114,8 @@ export function MassTemplateDispatcher() {
   const [ordersMin, setOrdersMin] = useState("");
   const [ordersMax, setOrdersMax] = useState("");
   const [topN, setTopN] = useState<string>("all");
+  const [crmTagFilter, setCrmTagFilter] = useState<string>("all");
+  const [crmUniqueTags, setCrmUniqueTags] = useState<string[]>([]);
 
   // Store/seller mapping
   const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
@@ -319,7 +321,7 @@ export function MassTemplateDispatcher() {
       while (keepFetching) {
         const { data, error } = await supabase
           .from('zoppy_customers')
-          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type, total_orders, total_spent, avg_ticket, last_purchase_at')
+          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type, total_orders, total_spent, avg_ticket, last_purchase_at, tags')
           .not('phone', 'is', null)
           .order('total_spent', { ascending: false })
           .range(from, from + 999);
@@ -332,6 +334,9 @@ export function MassTemplateDispatcher() {
         if (allCustomers.length >= 25000) keepFetching = false;
       }
       setCrmCustomers(allCustomers);
+      // Extract unique tags from CRM customers
+      const allTags: string[] = [...new Set(allCustomers.flatMap((c: any) => c.tags || []).filter(Boolean))].sort();
+      setCrmUniqueTags(allTags);
 
       // Fetch leads (paginated to get ALL)
       const allLeads: any[] = [];
@@ -453,6 +458,7 @@ export function MassTemplateDispatcher() {
         if (stateFilter !== 'all' && c.state !== stateFilter) continue;
         if (cityFilter !== 'all' && c.city !== cityFilter) continue;
         if (dddFilter !== 'all' && c.ddd !== dddFilter) continue;
+        if (crmTagFilter !== 'all' && !(c.tags || []).includes(crmTagFilter)) continue;
         if (regionFilter !== 'all' && c.region_type !== regionFilter) continue;
 
         // Store/seller filters via mapping
