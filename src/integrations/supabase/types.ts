@@ -3998,6 +3998,7 @@ export type Database = {
           created_at: string
           failed_count: number
           id: string
+          locked_until: string | null
           media_url: string | null
           mention_all: boolean
           message_content: string | null
@@ -4019,6 +4020,7 @@ export type Database = {
           created_at?: string
           failed_count?: number
           id?: string
+          locked_until?: string | null
           media_url?: string | null
           mention_all?: boolean
           message_content?: string | null
@@ -4040,6 +4042,7 @@ export type Database = {
           created_at?: string
           failed_count?: number
           id?: string
+          locked_until?: string | null
           media_url?: string | null
           mention_all?: boolean
           message_content?: string | null
