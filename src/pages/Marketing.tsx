@@ -734,6 +734,7 @@ export default function Marketing() {
     if (regionFilter !== "all" && c.region_type !== regionFilter) return false;
     if (rfmFilter !== "all" && c.rfm_segment !== rfmFilter) return false;
     if (dddFilter !== "all" && c.ddd !== dddFilter) return false;
+    if (tagFilter !== "all" && !(c.tags || []).includes(tagFilter)) return false;
     if (recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(recencyFilter)) return false;
     if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) return false;
     if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo + 'T23:59:59') return false;
