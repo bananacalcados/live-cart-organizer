@@ -293,21 +293,29 @@ serve(async (req) => {
               }
 
               // Check for pending automation flow continuation (button reply OR any text reply)
+              let automationFlowHandled = false;
               {
                 const buttonText = messageText.trim().toLowerCase();
                 const isButtonReply = msg.type === 'button' || msg.type === 'interactive';
                 try {
-                  const { data: pendingReply } = await supabase
+                  // Also try matching with/without 9th digit for phone normalization
+                  const phoneSuffix = phone.replace(/\D/g, '').slice(-8);
+                  const { data: pendingReplies } = await supabase
                     .from('automation_pending_replies')
                     .select('*')
-                    .eq('phone', phone)
                     .eq('is_active', true)
                     .gt('expires_at', new Date().toISOString())
                     .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
+                    .limit(20);
+
+                  // Find matching pending reply by phone suffix (handles 9th digit mismatch)
+                  const pendingReply = pendingReplies?.find(pr => {
+                    const prSuffix = pr.phone.replace(/\D/g, '').slice(-8);
+                    return prSuffix === phoneSuffix;
+                  }) || null;
 
                   if (pendingReply) {
+                    automationFlowHandled = true;
                     console.log(`Found pending reply for ${phone}, type=${msg.type}, text: "${buttonText}", branches:`, JSON.stringify(pendingReply.button_branches));
                     // Mark as consumed
                     await supabase.from('automation_pending_replies').update({ is_active: false }).eq('id', pendingReply.id);
@@ -355,6 +363,7 @@ serve(async (req) => {
                         whatsappNumberId: pendingReply.whatsapp_number_id,
                       }),
                     }).catch(err => console.error('automation-continue-flow error:', err));
+                    console.log(`[meta-webhook] Automation flow handled, skipping router for ${phone}`);
                   }
                 } catch (prErr) {
                   console.error('Pending reply check error:', prErr);
@@ -362,7 +371,7 @@ serve(async (req) => {
               }
 
               // ===== CENTRAL ROUTER =====
-              if (messageText || mediaType !== 'text') {
+              if (!automationFlowHandled && (messageText || mediaType !== 'text')) {
                 const routeText = messageText || `[${mediaType}]`;
                 const referralInput = referralData || null;
                 const route = await routeMessage(supabase, {
