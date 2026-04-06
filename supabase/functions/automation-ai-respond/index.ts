@@ -2,17 +2,20 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { analyzeIncomingAttachment } from "../_shared/media-understanding.ts";
 import { isVisualReferenceMessage, sanitizeMediaPlaceholderText } from "../_shared/media-message-utils.ts";
+import { adsTools, automationExtraTools, executeAdsToolCall } from "../_shared/ads-tools.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const MAX_TOOL_TURNS = 3;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { prompt, messages, mode = 'chat', phone, historyLimit = 30, enableRouting = false, enableTracking = false, messageText, mediaUrl, mediaType, whatsappNumberId } = await req.json();
+    const { prompt, messages, mode = 'chat', phone, historyLimit = 30, enableRouting = false, enableTracking = false, messageText, mediaUrl, mediaType, whatsappNumberId, flowId } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -24,6 +27,35 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // ─── Check if this flow uses Jess agent mode ───
+    let useJessAgent = false;
+    let jessCampaignName: string | null = null;
+    let resolvedFlowId = flowId || null;
+
+    // If no flowId passed, try to get it from the active session
+    if (!resolvedFlowId && phone) {
+      const normalizedForSession = phone.replace(/\D/g, '');
+      const { data: session } = await supabase
+        .from('automation_ai_sessions')
+        .select('flow_id')
+        .eq('phone', normalizedForSession)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      resolvedFlowId = session?.flow_id || null;
+    }
+
+    if (resolvedFlowId) {
+      const { data: flow } = await supabase
+        .from('automation_flows')
+        .select('use_jess_agent, jess_campaign_name')
+        .eq('id', resolvedFlowId)
+        .maybeSingle();
+      useJessAgent = flow?.use_jess_agent === true;
+      jessCampaignName = flow?.jess_campaign_name || null;
+    }
 
     // Append anti-repetition instruction to whatever prompt the flow provides
     const basePrompt = prompt || 'Você é um assistente da Banana Calçados. Responda de forma simpática, curta e objetiva em português brasileiro.';
@@ -214,8 +246,14 @@ ANÁLISE DE IMAGENS E DOCUMENTOS:
       chatMessages.push(...messages);
     }
 
-    console.log(`AI responding for phone=${phone || 'N/A'}, history=${chatMessages.length - 1} msgs, routing=${enableRouting}, tracking=${enableTracking}`);
+    console.log(`AI responding for phone=${phone || 'N/A'}, history=${chatMessages.length - 1} msgs, routing=${enableRouting}, tracking=${enableTracking}, jessMode=${useJessAgent}`);
 
+    // ─── Jess mode: use tool calling ───
+    if (useJessAgent) {
+      return await handleJessMode(chatMessages, phone, supabase, supabaseUrl, supabaseKey, whatsappNumberId, jessCampaignName, LOVABLE_API_KEY);
+    }
+
+    // ─── Standard mode: simple chat completion ───
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -230,22 +268,7 @@ ANÁLISE DE IMAGENS E DOCUMENTOS:
     });
 
     if (!response.ok) {
-      const status = response.status;
-      if (status === 429) {
-        return new Response(JSON.stringify({ error: 'Rate limit excedido. Tente novamente em alguns segundos.' }), {
-          status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (status === 402) {
-        return new Response(JSON.stringify({ error: 'Créditos insuficientes. Adicione créditos no workspace.' }), {
-          status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      const errorText = await response.text();
-      console.error('AI gateway error:', status, errorText);
-      return new Response(JSON.stringify({ error: 'Erro no serviço de IA' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return handleAiError(response);
     }
 
     const data = await response.json();
@@ -258,49 +281,13 @@ ANÁLISE DE IMAGENS E DOCUMENTOS:
     if (sectorMatch) {
       sectorId = sectorMatch[1];
       aiClassification = sectorMatch[2];
-      // Remove the tag from the visible reply
       reply = reply.replace(sectorMatch[0], '').trim();
     }
 
     // If routing detected, create assignment with round-robin
     let assignedTo: string | null = null;
     if (sectorId && phone) {
-      try {
-        // Get agents for this sector
-        const { data: sectorAgents } = await supabase
-          .from('chat_sector_agents')
-          .select('user_id')
-          .eq('sector_id', sectorId)
-          .eq('is_active', true)
-          .eq('is_online', true)
-          .order('last_assigned_at', { ascending: true, nullsFirst: true });
-
-        if (sectorAgents && sectorAgents.length > 0) {
-          // Round-robin: pick the agent with oldest last_assigned_at
-          const nextAgent = sectorAgents[0];
-          assignedTo = nextAgent.user_id;
-
-          // Update last_assigned_at
-          await supabase.from('chat_sector_agents')
-            .update({ last_assigned_at: new Date().toISOString(), current_load: 1 })
-            .eq('sector_id', sectorId)
-            .eq('user_id', assignedTo);
-        }
-
-        // Create assignment
-        await supabase.from('chat_assignments').insert({
-          phone: phone.replace(/\D/g, ''),
-          sector_id: sectorId,
-          assigned_to: assignedTo,
-          assigned_by: 'ai',
-          status: assignedTo ? 'active' : 'pending',
-          ai_classification: aiClassification,
-        });
-
-        console.log(`Routed phone=${phone} to sector=${sectorId}, agent=${assignedTo}, classification=${aiClassification}`);
-      } catch (routeErr) {
-        console.error('Routing error:', routeErr);
-      }
+      assignedTo = await handleSectorRouting(supabase, phone, sectorId, aiClassification);
     }
 
     return new Response(JSON.stringify({ 
@@ -319,3 +306,179 @@ ANÁLISE DE IMAGENS E DOCUMENTOS:
     });
   }
 });
+
+// ─── Jess Mode: Tool Calling ───
+async function handleJessMode(
+  chatMessages: Array<{ role: string; content: any }>,
+  phone: string,
+  supabase: any,
+  supabaseUrl: string,
+  supabaseKey: string,
+  whatsappNumberId: string | null,
+  jessCampaignName: string | null,
+  apiKey: string,
+) {
+  // Build tool context for Jess
+  const toolCtx = {
+    supabase,
+    supabaseUrl,
+    supabaseKey,
+    phone: phone || '',
+    leadId: '',
+    lead: null,
+    campaign: { jess_campaign_name: jessCampaignName },
+    collectedData: {},
+    whatsappNumberId,
+    channel: 'whatsapp',
+  };
+
+  // Use a subset of Jess tools + automation extras
+  // The prompt controls which tools the AI actually uses
+  const availableTools = [...adsTools, ...automationExtraTools];
+
+  let currentMessages = [...chatMessages];
+  let finalReply = '';
+
+  for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: currentMessages,
+        tools: availableTools,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      return handleAiError(response);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    const message = choice?.message;
+
+    if (!message) break;
+
+    // If the model wants to call tools
+    if (message.tool_calls && message.tool_calls.length > 0) {
+      currentMessages.push(message);
+
+      for (const tc of message.tool_calls) {
+        const toolName = tc.function.name;
+        let toolArgs: Record<string, any> = {};
+        try {
+          toolArgs = typeof tc.function.arguments === 'string'
+            ? JSON.parse(tc.function.arguments)
+            : tc.function.arguments || {};
+        } catch {
+          toolArgs = {};
+        }
+
+        console.log(`[jess-automation] Tool call: ${toolName}(${JSON.stringify(toolArgs).substring(0, 200)})`);
+
+        const result = await executeAdsToolCall(toolName, toolArgs, toolCtx);
+
+        currentMessages.push({
+          role: 'tool',
+          content: JSON.stringify(result),
+          // @ts-ignore - tool_call_id needed for OpenAI-compatible API
+          tool_call_id: tc.id,
+        });
+      }
+      continue; // Next turn with tool results
+    }
+
+    // No tool calls → final text response
+    finalReply = message.content || '';
+    break;
+  }
+
+  // Parse sector routing from reply (same as standard mode)
+  let sectorId: string | null = null;
+  let aiClassification: string | null = null;
+  const sectorMatch = finalReply.match(/\[SETOR:([a-f0-9-]+):([^\]]+)\]/);
+  if (sectorMatch) {
+    sectorId = sectorMatch[1];
+    aiClassification = sectorMatch[2];
+    finalReply = finalReply.replace(sectorMatch[0], '').trim();
+  }
+
+  let assignedTo: string | null = null;
+  if (sectorId && phone) {
+    assignedTo = await handleSectorRouting(supabase, phone, sectorId, aiClassification);
+  }
+
+  return new Response(JSON.stringify({
+    success: true,
+    reply: finalReply,
+    sectorId,
+    aiClassification,
+    assignedTo,
+    jessMode: true,
+  }), {
+    status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+// ─── Sector Routing Helper ───
+async function handleSectorRouting(supabase: any, phone: string, sectorId: string, aiClassification: string | null): Promise<string | null> {
+  let assignedTo: string | null = null;
+  try {
+    const { data: sectorAgents } = await supabase
+      .from('chat_sector_agents')
+      .select('user_id')
+      .eq('sector_id', sectorId)
+      .eq('is_active', true)
+      .eq('is_online', true)
+      .order('last_assigned_at', { ascending: true, nullsFirst: true });
+
+    if (sectorAgents && sectorAgents.length > 0) {
+      const nextAgent = sectorAgents[0];
+      assignedTo = nextAgent.user_id;
+
+      await supabase.from('chat_sector_agents')
+        .update({ last_assigned_at: new Date().toISOString(), current_load: 1 })
+        .eq('sector_id', sectorId)
+        .eq('user_id', assignedTo);
+    }
+
+    await supabase.from('chat_assignments').insert({
+      phone: phone.replace(/\D/g, ''),
+      sector_id: sectorId,
+      assigned_to: assignedTo,
+      assigned_by: 'ai',
+      status: assignedTo ? 'active' : 'pending',
+      ai_classification: aiClassification,
+    });
+
+    console.log(`Routed phone=${phone} to sector=${sectorId}, agent=${assignedTo}, classification=${aiClassification}`);
+  } catch (routeErr) {
+    console.error('Routing error:', routeErr);
+  }
+  return assignedTo;
+}
+
+// ─── AI Error Handler ───
+async function handleAiError(response: Response) {
+  const status = response.status;
+  if (status === 429) {
+    return new Response(JSON.stringify({ error: 'Rate limit excedido. Tente novamente em alguns segundos.' }), {
+      status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  if (status === 402) {
+    return new Response(JSON.stringify({ error: 'Créditos insuficientes. Adicione créditos no workspace.' }), {
+      status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const errorText = await response.text();
+  console.error('AI gateway error:', status, errorText);
+  return new Response(JSON.stringify({ error: 'Erro no serviço de IA' }), {
+    status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
