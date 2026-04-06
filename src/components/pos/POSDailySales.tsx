@@ -44,6 +44,7 @@ interface SaleSummary {
   sale_type: string | null;
   customer_name?: string | null;
   checkout_step?: number | null;
+  payment_details?: any;
 }
 
 interface TinyOnlyOrder {
@@ -175,7 +176,7 @@ export function POSDailySales({ storeId }: Props) {
     try {
       const { start, end } = getDateRange();
 
-      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step";
+      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details";
       
       // Query 1: Sales created in date range (pending, online_pending, failed, etc.)
       // Query 2: Sales PAID in date range (paid/completed) — appear on payment date
@@ -365,7 +366,7 @@ export function POSDailySales({ storeId }: Props) {
           const custIds = allCustomers.map((c: any) => c.id);
           const { data: salesData } = await supabase
             .from("pos_sales")
-            .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, store_id")
+            .select("id, created_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, store_id, customer_name, checkout_step, payment_details")
             .in("customer_id", custIds)
             .order("created_at", { ascending: false })
             .limit(50);
@@ -837,6 +838,9 @@ export function POSDailySales({ storeId }: Props) {
             <p className="text-[10px] text-pos-white/40">
               {sale.payment_method || "—"}
               {sellerName && ` • ${sellerName}`}
+              {sale.sale_type === 'online' && sale.payment_details?.customer_phone && (
+                <span className="ml-1">📱 {sale.payment_details.customer_phone}</span>
+              )}
             </p>
           </div>
         </div>
