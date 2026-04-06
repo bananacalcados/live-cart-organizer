@@ -20,10 +20,11 @@ serve(async (req) => {
 
     // Pick up PENDING messages whose scheduled_at has passed
     // AND SENDING messages that need continuation (batch processing)
+    // Skip messages that are currently locked (another invocation is processing them)
     // For grouped blocks, only pick the first block (block_order = 0 or lowest)
     const { data: pendingMessages, error: fetchErr } = await supabase
       .from('group_campaign_scheduled_messages')
-      .select('id, scheduled_at, campaign_id, status, message_group_id, block_order')
+      .select('id, scheduled_at, campaign_id, status, message_group_id, block_order, locked_until')
       .or(`and(status.eq.pending,scheduled_at.lte.${now}),status.eq.sending`)
       .neq('status', 'grouped') // skip grouped blocks
       .order('block_order', { ascending: true })
@@ -46,8 +47,15 @@ serve(async (req) => {
     }
 
     // Deduplicate: for grouped messages, only dispatch the first block
+    // Also skip messages that are still locked by another invocation
+    const nowMs = Date.now();
     const seenGroupIds = new Set<string>();
     const deduped = pendingMessages.filter(msg => {
+      // Skip if locked (another invocation is actively processing)
+      if (msg.locked_until && new Date(msg.locked_until).getTime() > nowMs) {
+        console.log(`Skipping ${msg.id}: locked until ${msg.locked_until}`);
+        return false;
+      }
       if (msg.message_group_id) {
         if (seenGroupIds.has(msg.message_group_id)) return false;
         seenGroupIds.add(msg.message_group_id);
