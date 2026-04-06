@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
 import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
 import { POSWhatsAppDashboard } from "./POSWhatsAppDashboard";
 import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
+import { POSSendTemplateDialog } from "./POSSendTemplateDialog";
 import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
@@ -89,6 +90,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
 
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
   // Store-specific WhatsApp number IDs
@@ -1019,6 +1021,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                   <ShoppingBag className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Catálogo</span>
                 </Button>
+                {selectedSendNumber?.provider === 'meta' && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
+                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-violet-600 hover:text-violet-500" onClick={() => setShowSendTemplate(true)} title="Enviar Template Meta">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">Template</span>
+                  </Button>
+                )}
                 <CreateSupportTicketDialog phone={selectedPhone} customerName={selectedConversation?.customerName} />
                 <Button
                   variant="ghost"
@@ -1164,6 +1172,17 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           customerName={selectedConversation?.customerName}
           sendVia={selectedSendNumber?.provider === 'meta' ? 'meta' : 'zapi'}
           selectedNumberId={selectedSendNumberId}
+        />
+      )}
+
+      {/* Send Template Dialog */}
+      {selectedPhone && selectedSendNumber?.provider === 'meta' && (
+        <POSSendTemplateDialog
+          open={showSendTemplate}
+          onOpenChange={setShowSendTemplate}
+          phone={selectedPhone}
+          customerName={selectedConversation?.customerName}
+          whatsappNumberId={selectedSendNumberId}
         />
       )}
 
