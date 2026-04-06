@@ -986,10 +986,11 @@ function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId
 
 // ── Credit Card Payment Form (step 3) ───────────────────────────
 function CardPaymentForm({
-  orderId, amount, products, form, installmentConfig, onPaymentConfirmed,
+  orderId, amount, products, form, installmentConfig, onPaymentConfirmed, onProcessingChange,
 }: {
   orderId: string; amount: number; products: OrderProduct[]; form: CustomerFormData;
   installmentConfig: InstallmentConfig; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
+  onProcessingChange?: (processing: boolean) => void;
 }) {
   const [cardNumber, setCardNumber] = useState("");
   const [cardName, setCardName] = useState("");
