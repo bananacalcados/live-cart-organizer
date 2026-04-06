@@ -21,6 +21,30 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // === IDEMPOTENCY CHECK ===
+    // If sale_id already has a tiny_order_id, return it immediately (avoid duplicates)
+    if (sale_id) {
+      const { data: existingSale } = await supabase
+        .from('pos_sales')
+        .select('tiny_order_id, tiny_order_number')
+        .eq('id', sale_id)
+        .maybeSingle();
+
+      if (existingSale?.tiny_order_id) {
+        console.log(`[IDEMPOTENCY] Sale ${sale_id} already has tiny_order_id=${existingSale.tiny_order_id}, skipping creation`);
+        return new Response(JSON.stringify({
+          success: true,
+          tiny_order_id: existingSale.tiny_order_id,
+          tiny_order_number: existingSale.tiny_order_number,
+          sale_id,
+          tiny_failed: false,
+          skipped_duplicate: true,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const { data: store } = await supabase
       .from('pos_stores')
       .select('tiny_token')
