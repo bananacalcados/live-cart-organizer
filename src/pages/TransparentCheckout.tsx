@@ -1694,7 +1694,30 @@ export default function TransparentCheckout() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-background p-4 relative">
+      {/* Full-screen processing overlay */}
+      {isPaymentProcessing && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6" style={{ pointerEvents: 'all' }}>
+          <div className="bg-card rounded-2xl border-2 border-amber-400 shadow-2xl p-8 max-w-sm w-full text-center space-y-4 animate-in fade-in zoom-in-95 duration-300">
+            <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+            </div>
+            <h3 className="font-bold text-xl">Processando pagamento...</h3>
+            <p className="text-sm text-muted-foreground">
+              Estamos verificando com a operadora do seu cartão. Isso pode levar alguns segundos.
+            </p>
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 p-3">
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center justify-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                Não feche nem recarregue esta página
+              </p>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Você será redirecionado automaticamente após a confirmação.
+            </p>
+          </div>
+        </div>
+      )}
       {liveVideoId && <LiveMiniPlayer videoId={liveVideoId} />}
       <div className="max-w-4xl mx-auto">
         {/* Header */}
