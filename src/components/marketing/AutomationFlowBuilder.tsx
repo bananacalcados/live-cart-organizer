@@ -55,6 +55,8 @@ interface AutomationFlow {
   event_id: string | null;
   is_active: boolean;
   created_at: string;
+  use_jess_agent?: boolean;
+  jess_campaign_name?: string | null;
 }
 
 interface AutomationStep {
@@ -2054,6 +2056,8 @@ function FlowEditor({
     return rest;
   });
   const [isActive, setIsActive] = useState(flow.is_active);
+  const [useJessAgent, setUseJessAgent] = useState(flow.use_jess_agent || false);
+  const [jessCampaignName, setJessCampaignName] = useState(flow.jess_campaign_name || '');
   const [editingStep, setEditingStep] = useState<AutomationStep | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [steps, setSteps] = useState<AutomationStep[]>([]);
@@ -2332,7 +2336,7 @@ function FlowEditor({
     setAlreadySentCount(0);
     setDispatchDialogOpen(true);
     const configWithPositions = { ...triggerConfig, node_positions: nodePositionsRef.current };
-    await supabase.from("automation_flows").update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive }).eq("id", flow.id);
+    await supabase.from("automation_flows").update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive, use_jess_agent: useJessAgent, jess_campaign_name: jessCampaignName || null }).eq("id", flow.id);
     setLoadingAudienceCount(true);
     try {
       const res = await supabase.functions.invoke("automation-dispatch-audience", {
@@ -2443,7 +2447,7 @@ function FlowEditor({
     const configWithPositions = { ...triggerConfig, node_positions: nodePositionsRef.current };
     const { error } = await supabase
       .from("automation_flows")
-      .update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive })
+      .update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive, use_jess_agent: useJessAgent, jess_campaign_name: jessCampaignName || null })
       .eq("id", flow.id);
     setSaving(false);
     if (error) { toast.error("Erro ao salvar"); return; }
@@ -2467,6 +2471,19 @@ function FlowEditor({
             <Button variant="default" size="sm" onClick={openDispatchDialog} disabled={steps.length === 0 || dispatching} className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white">
               <Send className="h-3.5 w-3.5" />Disparar Audiência
             </Button>
+          )}
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800">
+            <Sparkles className="h-3 w-3 text-purple-500" />
+            <span className="text-[10px] text-purple-700 dark:text-purple-300">Jess</span>
+            <Switch checked={useJessAgent} onCheckedChange={setUseJessAgent} className="scale-75" />
+          </div>
+          {useJessAgent && (
+            <Input
+              value={jessCampaignName}
+              onChange={e => setJessCampaignName(e.target.value)}
+              placeholder="Nome da campanha (leads)"
+              className="max-w-[180px] h-7 text-xs"
+            />
           )}
           <span className="text-xs text-muted-foreground">{isActive ? "Ativa" : "Inativa"}</span>
           <Switch checked={isActive} onCheckedChange={setIsActive} />
