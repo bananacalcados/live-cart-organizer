@@ -770,14 +770,15 @@ function StepPayment({
 
              {selectedMethod === "card" && (
                <div className="animate-in slide-in-from-top-2 duration-200 border border-border rounded-lg p-4 bg-card">
-                 <CardPaymentForm
-                   orderId={orderId}
-                   amount={amount}
-                   products={products}
-                   form={form}
-                   installmentConfig={installmentConfig}
-                   onPaymentConfirmed={onPaymentConfirmed}
-                 />
+                <CardPaymentForm
+                    orderId={orderId}
+                    amount={amount}
+                    products={products}
+                    form={form}
+                    installmentConfig={installmentConfig}
+                    onPaymentConfirmed={onPaymentConfirmed}
+                    onProcessingChange={onProcessingChange}
+                  />
                </div>
              )}
            </>
