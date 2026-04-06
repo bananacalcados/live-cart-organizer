@@ -711,6 +711,7 @@ function StepPayment({
   installmentConfig,
   onPaymentConfirmed,
   onBack,
+  onProcessingChange,
 }: {
   orderId: string;
   amount: number;
@@ -719,6 +720,7 @@ function StepPayment({
   installmentConfig: InstallmentConfig;
   onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void;
   onBack: () => void;
+  onProcessingChange?: (processing: boolean) => void;
 }) {
    const [selectedMethod, setSelectedMethod] = useState<"pix" | "card" | null>(null);
    const [showAllMethods, setShowAllMethods] = useState(true);
@@ -1290,6 +1292,7 @@ export default function TransparentCheckout() {
   const [orderData, setOrderData] = useState<OrderData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success">("pending");
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [isEligibleForPrize, setIsEligibleForPrize] = useState(false);
   const [liveCartRaw, setLiveCartRaw] = useState<{ items: any[]; customer: any } | null>(null);
   const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
