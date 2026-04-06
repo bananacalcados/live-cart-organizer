@@ -229,7 +229,7 @@ serve(async (req) => {
     let failed = 0;
     let skipped = 0;
 
-    const CONCURRENCY = 50;
+    const CONCURRENCY = 10;
 
     async function processRecipient(recipient: typeof batch[0]): Promise<void> {
       const firstName = recipient.name.split(' ')[0];
@@ -332,6 +332,15 @@ serve(async (req) => {
             if (cards.length > 0) components.push({ type: 'CAROUSEL', cards });
           }
 
+          // Build rendered message for chat display
+          let renderedMessage = (config.renderedMessage as string) || '';
+          if (!renderedMessage && templateVars) {
+            const varValues = Object.keys(templateVars)
+              .sort((a, b) => parseInt(a) - parseInt(b))
+              .map(k => replaceVars(templateVars[k]));
+            renderedMessage = `[Template: ${templateName}]\n${varValues.join(' | ')}`;
+          }
+
           try {
             const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send-template`, {
               method: 'POST',
@@ -342,6 +351,7 @@ serve(async (req) => {
                 language: (config.language as string) || 'pt_BR',
                 whatsappNumberId: sendNumberId,
                 components: components.length > 0 ? components : undefined,
+                renderedMessage: renderedMessage || undefined,
               }),
             });
 
@@ -419,7 +429,7 @@ serve(async (req) => {
       }
     }
 
-    // Process batch with concurrency pool
+    // Process batch with concurrency pool + delay between chunks to avoid Meta rate limits
     for (let i = 0; i < batch.length; i += CONCURRENCY) {
       if (Date.now() - startTime > MAX_RUNTIME_MS) {
         console.log(`[dispatch] Time limit hit at chunk starting ${offset + i}`);
@@ -428,6 +438,10 @@ serve(async (req) => {
       const chunk = batch.slice(i, i + CONCURRENCY);
       await Promise.all(chunk.map(r => processRecipient(r)));
       console.log(`[dispatch] Chunk done: ${i + chunk.length}/${batch.length}, sent=${sent}, failed=${failed}`);
+      // Throttle: wait 2s between chunks to respect Meta API rate limits
+      if (i + CONCURRENCY < batch.length) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
 
     const processed = sent + failed + skipped;
