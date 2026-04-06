@@ -69,7 +69,7 @@ serve(async (req) => {
         await supabase.from('automation_pending_replies').insert({
           phone,
           flow_id: flowId,
-          pending_step_index: i,
+          pending_step_index: i + 1, // points to the step AFTER wait_for_reply
           step_id: step.id,
           button_branches: config.timeoutAction ? { __timeout_action__: config.timeoutAction, __timeout_message__: config.timeoutMessage || '', __timeout_template__: config.timeoutTemplateName || '', __timeout_tag__: config.timeoutTag || '' } : {},
           whatsapp_number_id: whatsappNumberId,

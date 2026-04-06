@@ -342,7 +342,9 @@ serve(async (req) => {
                       .eq('flow_id', pendingReply.flow_id)
                       .order('step_order');
 
-                    let startFromStep = pendingReply.pending_step_index + 1; // default: next step
+                    // pending_step_index already points to the next step to execute
+                    // (saved as current_index + 1 by test-flow, or current_index by continue-flow for wait_for_reply)
+                    let startFromStep = pendingReply.pending_step_index;
                     if (targetStepId && flowSteps) {
                       const targetIdx = flowSteps.findIndex(s => s.id === targetStepId);
                       if (targetIdx >= 0) {
