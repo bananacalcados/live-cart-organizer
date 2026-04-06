@@ -75,6 +75,7 @@ interface ZoppyCustomer {
   avg_ticket: number;
   last_purchase_at: string | null;
   first_purchase_at: string | null;
+  tags: string[] | null;
 }
 
 interface Campaign {
