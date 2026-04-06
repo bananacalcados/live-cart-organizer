@@ -64,17 +64,19 @@ serve(async (req) => {
 
       // If we hit another wait_for_reply, create a new pending reply and stop
       if (step.action_type === 'wait_for_reply') {
-        const branches = (config.branches || {}) as Record<string, number>;
+        const timeoutHours = (config.timeoutHours as number) || 24;
+        const expiresAt = new Date(Date.now() + timeoutHours * 60 * 60 * 1000).toISOString();
         await supabase.from('automation_pending_replies').insert({
           phone,
           flow_id: flowId,
           pending_step_index: i,
           step_id: step.id,
-          button_branches: branches,
+          button_branches: config.timeoutAction ? { __timeout_action__: config.timeoutAction, __timeout_message__: config.timeoutMessage || '', __timeout_template__: config.timeoutTemplateName || '', __timeout_tag__: config.timeoutTag || '' } : {},
           whatsapp_number_id: whatsappNumberId,
           recipient_data: recipientData || {},
+          expires_at: expiresAt,
         });
-        console.log(`[continue-flow] Created pending reply at step ${i} for ${phone}`);
+        console.log(`[continue-flow] Created pending reply at step ${i} for ${phone}, expires: ${expiresAt}`);
         break;
       }
 
