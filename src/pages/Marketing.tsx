@@ -206,6 +206,7 @@ export default function Marketing() {
    const [excludedPresetIds, setExcludedPresetIds] = useState<string[]>([]);
    const [includedPresetIds, setIncludedPresetIds] = useState<string[]>([]);
    const [presetOpsOpen, setPresetOpsOpen] = useState(false);
+   const [tagFilter, setTagFilter] = useState<string>("all");
 
   // ─── Fetch data ──────────────────────────────
 
