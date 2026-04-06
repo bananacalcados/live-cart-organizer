@@ -2336,7 +2336,7 @@ function FlowEditor({
     setAlreadySentCount(0);
     setDispatchDialogOpen(true);
     const configWithPositions = { ...triggerConfig, node_positions: nodePositionsRef.current };
-    await supabase.from("automation_flows").update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive }).eq("id", flow.id);
+    await supabase.from("automation_flows").update({ name: flowName, trigger_type: triggerType, trigger_config: configWithPositions, is_active: isActive, use_jess_agent: useJessAgent, jess_campaign_name: jessCampaignName || null }).eq("id", flow.id);
     setLoadingAudienceCount(true);
     try {
       const res = await supabase.functions.invoke("automation-dispatch-audience", {
