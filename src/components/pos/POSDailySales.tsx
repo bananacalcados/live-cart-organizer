@@ -236,6 +236,14 @@ export function POSDailySales({ storeId }: Props) {
         } else {
           setCustomers(new Map());
         }
+
+        // Enrich online sales missing customer_phone by looking up whatsapp_messages
+        const salesToEnrich = salesData.filter(
+          s => s.sale_type === 'online' && !s.payment_details?.customer_phone
+        );
+        if (salesToEnrich.length > 0) {
+          enrichSalesWithPhone(salesToEnrich, salesData);
+        }
       } else {
         setSaleItems([]);
         setCustomers(new Map());
