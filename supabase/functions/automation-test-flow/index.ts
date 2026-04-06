@@ -87,11 +87,33 @@ serve(async (req) => {
         continue;
       }
 
-      // Skip wait_for_reply in test mode (but template-level branching is handled below)
+      // wait_for_reply — create pending reply so webhook can activate the next step
       if (step.action_type === 'wait_for_reply') {
-        // If previous step was a template with buttonBranches, pending reply was already created
-        results.push({ step: i + 1, type: 'wait_for_reply', status: 'skipped', detail: 'Espera ignorada no teste' });
-        continue;
+        const timeoutSeconds = config.timeoutSeconds || 86400;
+        const timeoutAction = config.timeoutAction || 'stop';
+        const timeoutTargetStepId = config.timeoutTargetStepId || null;
+
+        const branches: Record<string, string> = {};
+        if (timeoutTargetStepId) {
+          branches['__timeout__'] = timeoutTargetStepId;
+        }
+
+        // Find the next step to continue to when client replies
+        const nextStepIndex = i + 1;
+
+        await supabase.from('automation_pending_replies').insert({
+          phone: formattedPhone,
+          flow_id: flowId,
+          pending_step_index: nextStepIndex,
+          step_id: step.id,
+          button_branches: Object.keys(branches).length > 0 ? branches : null,
+          whatsapp_number_id: config.whatsappNumberId || null,
+          recipient_data: { name: testName || 'Teste', firstName },
+          expires_at: new Date(Date.now() + timeoutSeconds * 1000).toISOString(),
+        });
+
+        results.push({ step: i + 1, type: 'wait_for_reply', status: 'created', detail: `Aguardando resposta (timeout: ${Math.round(timeoutSeconds/3600)}h)` });
+        break; // Stop execution here, wait for client reply
       }
 
       // AI response — call with phone so it reads conversation history
