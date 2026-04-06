@@ -207,7 +207,7 @@ export function POSDailySales({ storeId }: Props) {
     }
   };
 
-
+  const loadData = async () => {
     setLoading(true);
     try {
       const { start, end } = getDateRange();
