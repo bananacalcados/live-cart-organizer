@@ -171,7 +171,43 @@ export function POSDailySales({ storeId }: Props) {
     return { start, end };
   };
 
-  const loadData = async () => {
+  const enrichSalesWithPhone = async (salesToEnrich: SaleSummary[], allSales: SaleSummary[]) => {
+    try {
+      // Search whatsapp_messages for outgoing messages containing the sale ID in the URL
+      const saleIds = salesToEnrich.map(s => s.id);
+      const results = new Map<string, string>();
+      
+      // Query in batches to avoid too-long filters
+      for (const saleId of saleIds) {
+        const { data } = await supabase
+          .from("whatsapp_messages")
+          .select("phone")
+          .eq("direction", "outgoing")
+          .ilike("message", `%${saleId}%`)
+          .limit(1);
+        if (data && data.length > 0) {
+          results.set(saleId, data[0].phone);
+        }
+      }
+
+      if (results.size > 0) {
+        setSales(prev => prev.map(s => {
+          const phone = results.get(s.id);
+          if (phone && !s.payment_details?.customer_phone) {
+            return {
+              ...s,
+              payment_details: { ...(s.payment_details || {}), customer_phone: phone, phone_source: 'whatsapp_message' }
+            };
+          }
+          return s;
+        }));
+      }
+    } catch (e) {
+      console.error("Error enriching sales with phone:", e);
+    }
+  };
+
+
     setLoading(true);
     try {
       const { start, end } = getDateRange();
