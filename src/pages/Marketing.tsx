@@ -929,6 +929,15 @@ export default function Marketing() {
                     {uniqueDdds.map(ddd => (<SelectItem key={ddd} value={ddd!}>DDD {ddd}</SelectItem>))}
                   </SelectContent>
                 </Select>
+                {uniqueTags.length > 0 && (
+                  <Select value={tagFilter} onValueChange={setTagFilter}>
+                    <SelectTrigger className="h-9"><Tag className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Tags</SelectItem>
+                      {uniqueTags.map(tag => (<SelectItem key={tag} value={tag}>🏷️ {tag}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {!(dateFrom || dateTo) ? (
