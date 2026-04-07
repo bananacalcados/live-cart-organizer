@@ -280,7 +280,7 @@ async function chargeVindi(
     customer: {
       name: params.customer.name,
       cpf,
-      email: params.customer.email,
+      email: params.customer.email || `${cpf}@cliente.bananacalcados.com.br`,
       contacts: [
         { type_contact: "M", number_contact: phone },
       ],
