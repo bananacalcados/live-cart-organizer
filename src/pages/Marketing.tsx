@@ -1598,7 +1598,7 @@ export default function Marketing() {
                                       )}
                                       <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar lead"
                                         onClick={() => setEditingLead({ ...lead })}>
-                                        <Eye className="h-3.5 w-3.5" />
+                                        <Pencil className="h-3.5 w-3.5" />
                                       </Button>
                                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="Excluir lead"
                                         onClick={() => deleteLead(lead.id)}>
