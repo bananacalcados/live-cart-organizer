@@ -6,7 +6,7 @@ import {
   MapPin, Phone, Mail, ShoppingBag, Crown, AlertTriangle, Clock,
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2, Tag,
-  Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles,
+  Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles, Pencil,
   Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -191,6 +191,8 @@ export default function Marketing() {
   const [ticketMax, setTicketMax] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<ZoppyCustomer | null>(null);
   const [whatsAppMessage, setWhatsAppMessage] = useState("");
+  const [editingCustomer, setEditingCustomer] = useState<ZoppyCustomer | null>(null);
+  const [editingLead, setEditingLead] = useState<any | null>(null);
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [sellerFilter, setSellerFilter] = useState<string>("all");
   const [ordersMin, setOrdersMin] = useState("");
@@ -276,6 +278,56 @@ export default function Marketing() {
     } catch (err) { console.error(err); }
     finally { setLeadsLoading(false); }
   }, []);
+
+  const deleteCustomer = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+    const { error } = await supabase.from('zoppy_customers').delete().eq('id', id);
+    if (error) { toast.error('Erro ao excluir: ' + error.message); return; }
+    setCustomers(prev => prev.filter(c => c.id !== id));
+    setSelectedCustomer(null);
+    toast.success('Cliente excluído!');
+  };
+
+  const saveCustomerEdit = async () => {
+    if (!editingCustomer) return;
+    const { id, ...rest } = editingCustomer;
+    const { error } = await supabase.from('zoppy_customers').update({
+      first_name: rest.first_name,
+      last_name: rest.last_name,
+      phone: rest.phone,
+      email: rest.email,
+      city: rest.city,
+      state: rest.state,
+    } as any).eq('id', id);
+    if (error) { toast.error('Erro ao salvar: ' + error.message); return; }
+    setCustomers(prev => prev.map(c => c.id === id ? { ...c, ...editingCustomer } : c));
+    setSelectedCustomer(prev => prev?.id === id ? { ...prev, ...editingCustomer } : prev);
+    setEditingCustomer(null);
+    toast.success('Cliente atualizado!');
+  };
+
+  const deleteLead = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este lead?')) return;
+    const { error } = await supabase.from('lp_leads').delete().eq('id', id);
+    if (error) { toast.error('Erro ao excluir: ' + error.message); return; }
+    setLeads(prev => prev.filter(l => l.id !== id));
+    toast.success('Lead excluído!');
+  };
+
+  const saveLeadEdit = async () => {
+    if (!editingLead) return;
+    const { id, ...rest } = editingLead;
+    const { error } = await supabase.from('lp_leads').update({
+      name: rest.name,
+      phone: rest.phone,
+      email: rest.email,
+      instagram: rest.instagram,
+    } as any).eq('id', id);
+    if (error) { toast.error('Erro ao salvar: ' + error.message); return; }
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, ...editingLead } : l));
+    setEditingLead(null);
+    toast.success('Lead atualizado!');
+  };
 
   useEffect(() => { fetchCustomers(); fetchCampaigns(); fetchLandingPages(); fetchLeads(); }, [fetchCustomers, fetchCampaigns, fetchLandingPages, fetchLeads]);
 
@@ -1522,7 +1574,7 @@ export default function Marketing() {
                                 <TableHead>Fonte</TableHead>
                                 <TableHead>Data</TableHead>
                                 <TableHead>Convertido</TableHead>
-                                <TableHead className="w-10"></TableHead>
+                                <TableHead className="w-24">Ações</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1537,12 +1589,22 @@ export default function Marketing() {
                                   <TableCell className="text-xs">{new Date(lead.created_at).toLocaleDateString('pt-BR')}</TableCell>
                                   <TableCell>{lead.converted ? <CheckCircle className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-muted-foreground/40" />}</TableCell>
                                   <TableCell>
-                                    {lead.phone && (
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Ver chat WhatsApp"
-                                        onClick={() => { setLeadChatPhone(lead.phone); setLeadChatName(lead.name || ''); }}>
-                                        <MessageSquare className="h-4 w-4 text-stage-paid" />
+                                    <div className="flex gap-0.5">
+                                      {lead.phone && (
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Ver chat WhatsApp"
+                                          onClick={() => { setLeadChatPhone(lead.phone); setLeadChatName(lead.name || ''); }}>
+                                          <MessageSquare className="h-4 w-4 text-stage-paid" />
+                                        </Button>
+                                      )}
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar lead"
+                                        onClick={() => setEditingLead({ ...lead })}>
+                                        <Pencil className="h-3.5 w-3.5" />
                                       </Button>
-                                    )}
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="Excluir lead"
+                                        onClick={() => deleteLead(lead.id)}>
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -1621,9 +1683,19 @@ export default function Marketing() {
       <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setWhatsAppMessage(""); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              {selectedCustomer?.first_name} {selectedCustomer?.last_name}
+            <DialogTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                {selectedCustomer?.first_name} {selectedCustomer?.last_name}
+              </span>
+              <div className="flex gap-1 mr-6">
+                <Button variant="outline" size="icon" className="h-7 w-7" title="Editar" onClick={() => setEditingCustomer(selectedCustomer ? { ...selectedCustomer } : null)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="Excluir" onClick={() => selectedCustomer && deleteCustomer(selectedCustomer.id)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </DialogTitle>
           </DialogHeader>
           {selectedCustomer && (
@@ -1827,6 +1899,80 @@ export default function Marketing() {
         existingCampaignTags={[...new Set(leads.map((lead) => lead.campaign_tag).filter(Boolean))].sort()}
         onImported={fetchLeads}
       />
+
+      {/* Edit Customer Dialog */}
+      <Dialog open={!!editingCustomer} onOpenChange={(open) => { if (!open) setEditingCustomer(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Editar Cliente</DialogTitle></DialogHeader>
+          {editingCustomer && (
+            <div className="space-y-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Nome</label>
+                  <Input value={editingCustomer.first_name || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, first_name: e.target.value } : null)} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Sobrenome</label>
+                  <Input value={editingCustomer.last_name || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, last_name: e.target.value } : null)} />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Telefone</label>
+                <Input value={editingCustomer.phone || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, phone: e.target.value } : null)} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Email</label>
+                <Input value={editingCustomer.email || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, email: e.target.value } : null)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Cidade</label>
+                  <Input value={editingCustomer.city || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, city: e.target.value } : null)} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Estado</label>
+                  <Input value={editingCustomer.state || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, state: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setEditingCustomer(null)}>Cancelar</Button>
+                <Button onClick={saveCustomerEdit} className="gap-1"><CheckCircle2 className="h-3.5 w-3.5" />Salvar</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Lead Dialog */}
+      <Dialog open={!!editingLead} onOpenChange={(open) => { if (!open) setEditingLead(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Target className="h-5 w-5" />Editar Lead</DialogTitle></DialogHeader>
+          {editingLead && (
+            <div className="space-y-3 py-2">
+              <div>
+                <label className="text-xs text-muted-foreground">Nome</label>
+                <Input value={editingLead.name || ''} onChange={e => setEditingLead((prev: any) => prev ? { ...prev, name: e.target.value } : null)} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Telefone</label>
+                <Input value={editingLead.phone || ''} onChange={e => setEditingLead((prev: any) => prev ? { ...prev, phone: e.target.value } : null)} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Email</label>
+                <Input value={editingLead.email || ''} onChange={e => setEditingLead((prev: any) => prev ? { ...prev, email: e.target.value } : null)} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Instagram</label>
+                <Input value={editingLead.instagram || ''} onChange={e => setEditingLead((prev: any) => prev ? { ...prev, instagram: e.target.value } : null)} />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setEditingLead(null)}>Cancelar</Button>
+                <Button onClick={saveLeadEdit} className="gap-1"><CheckCircle2 className="h-3.5 w-3.5" />Salvar</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
