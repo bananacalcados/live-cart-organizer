@@ -189,7 +189,7 @@ async function chargePagarme(
     items,
     customer: {
       name: params.customer.name,
-      email: params.customer.email,
+      email: params.customer.email || `${params.customer.cpf.replace(/\D/g, "")}@cliente.bananacalcados.com.br`,
       type: "individual",
       document: params.customer.cpf.replace(/\D/g, ""),
       phones: {
@@ -280,7 +280,7 @@ async function chargeVindi(
     customer: {
       name: params.customer.name,
       cpf,
-      email: params.customer.email,
+      email: params.customer.email || `${cpf}@cliente.bananacalcados.com.br`,
       contacts: [
         { type_contact: "M", number_contact: phone },
       ],
@@ -369,7 +369,7 @@ async function chargeAppmax(
         "access-token": accessToken,
         firstname: params.customer.name.split(" ")[0],
         lastname: params.customer.name.split(" ").slice(1).join(" ") || ".",
-        email: params.customer.email,
+        email: params.customer.email || `${cpf}@cliente.bananacalcados.com.br`,
         telephone: phone,
         cpf,
         postcode: params.billingAddress.zipCode.replace(/\D/g, ""),
