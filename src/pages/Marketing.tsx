@@ -6,7 +6,7 @@ import {
   MapPin, Phone, Mail, ShoppingBag, Crown, AlertTriangle, Clock,
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2, Tag,
-  Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles,
+  Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles, Pencil,
   Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
