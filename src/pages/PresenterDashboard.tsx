@@ -506,6 +506,24 @@ export default function PresenterDashboard() {
       <div className="w-80 lg:w-96 border-l border-zinc-700 bg-zinc-900/50 flex flex-col min-h-screen">
         <PresenterTeamChat eventId={eventId!} presenterMode={true} />
       </div>
+
+      {/* WhatsApp Chat Dialog */}
+      <Dialog open={!!chatOrder} onOpenChange={(open) => !open && setChatOrder(null)}>
+        <DialogContent className="max-w-md h-[600px] p-0 overflow-hidden gap-0 border-0 bg-transparent shadow-2xl">
+          {chatOrder?.whatsapp && (
+            <WhatsAppChat
+              order={{
+                id: chatOrder.id,
+                instagramHandle: chatOrder.customer_name,
+                whatsapp: chatOrder.whatsapp,
+                products: chatOrder.products,
+                stage: chatOrder.stage,
+              } as any}
+              onBack={() => setChatOrder(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
