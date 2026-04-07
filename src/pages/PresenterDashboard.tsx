@@ -413,7 +413,13 @@ export default function PresenterDashboard() {
                       </CardContent>
                     </Card>
                   )}
-                  {pendingPaymentOrders.map(order => (
+                  {pendingPaymentOrders.map(order => {
+                    const replyStatus = !order.lastSentAt
+                      ? "not_sent"
+                      : order.customerReplied
+                        ? "replied"
+                        : "awaiting";
+                    return (
                     <Card key={order.id} className="bg-muted-foreground/5 border-muted-foreground/15 hover:bg-muted-foreground/10 transition-colors">
                       <CardContent className="p-3">
                         <div className="flex items-center justify-between mb-1">
@@ -433,6 +439,39 @@ export default function PresenterDashboard() {
                             R$ {order.total.toFixed(2)}
                           </span>
                         </div>
+
+                        {/* Reply status + WhatsApp button */}
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center gap-1.5">
+                            {replyStatus === "replied" && (
+                              <Badge className="bg-green-600/20 text-green-400 border-green-600/30 text-[10px] gap-1">
+                                <CheckCheck className="h-3 w-3" /> Respondeu
+                              </Badge>
+                            )}
+                            {replyStatus === "awaiting" && (
+                              <Badge className="bg-orange-600/20 text-orange-400 border-orange-600/30 text-[10px] gap-1">
+                                <Send className="h-3 w-3" /> Aguardando resposta
+                              </Badge>
+                            )}
+                            {replyStatus === "not_sent" && (
+                              <Badge className="bg-zinc-600/20 text-zinc-400 border-zinc-600/30 text-[10px] gap-1">
+                                <MessageSquareX className="h-3 w-3" /> Não contatada
+                              </Badge>
+                            )}
+                          </div>
+                          {order.whatsapp && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-[10px] text-green-400 hover:bg-green-500/20 gap-1 px-2"
+                              onClick={() => setChatOrder(order)}
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" />
+                              Ver conversa
+                            </Button>
+                          )}
+                        </div>
+
                         {order.products.length > 0 && (
                           <p className="text-[10px] text-muted-foreground mt-1 truncate">
                             {order.products.map((p: any) => p.title).join(", ")}
@@ -440,7 +479,8 @@ export default function PresenterDashboard() {
                         )}
                       </CardContent>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </div>
