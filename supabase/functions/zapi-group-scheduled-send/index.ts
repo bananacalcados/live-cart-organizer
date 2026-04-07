@@ -38,14 +38,15 @@ serve(async (req) => {
       );
     }
 
-    // Fetch scheduled message
-    const { data: msg, error: msgErr } = await supabase
-      .from('group_campaign_scheduled_messages')
-      .select('*, group_campaigns!inner(id, target_groups, send_speed, whatsapp_number_id)')
-      .eq('id', scheduledMessageId)
-      .single();
+    const nowIso = new Date().toISOString();
 
-    if (msgErr || !msg) {
+    const { data: existingMsg, error: existingMsgErr } = await supabase
+      .from('group_campaign_scheduled_messages')
+      .select('id, status, locked_until, message_group_id')
+      .eq('id', scheduledMessageId)
+      .maybeSingle();
+
+    if (existingMsgErr || !existingMsg) {
       return new Response(
         JSON.stringify({ error: 'Scheduled message not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -54,10 +55,10 @@ serve(async (req) => {
 
     const pausedBeforeStart = await getPausedGroupSendUntil(supabase);
     if (pausedBeforeStart) {
-      if (msg.message_group_id) {
+      if (existingMsg.message_group_id) {
         await supabase.from('group_campaign_scheduled_messages')
           .update({ status: 'cancelled' })
-          .eq('message_group_id', msg.message_group_id)
+          .eq('message_group_id', existingMsg.message_group_id)
           .in('status', ['pending', 'sending']);
       } else {
         await supabase.from('group_campaign_scheduled_messages')
@@ -72,25 +73,59 @@ serve(async (req) => {
       );
     }
 
-    // Allow pending and sending (for batch continuation)
-    if (msg.status !== 'pending' && msg.status !== 'sending') {
+    // Atomically claim this batch before reading the full payload.
+    // This prevents the manual trigger and cron from sending the same groups simultaneously.
+    const lockUntil = new Date(Date.now() + 90_000).toISOString();
+    const { data: claimedRows, error: claimErr } = await supabase
+      .from('group_campaign_scheduled_messages')
+      .update({ status: 'sending', locked_until: lockUntil })
+      .eq('id', scheduledMessageId)
+      .in('status', ['pending', 'sending'])
+      .or(`locked_until.is.null,locked_until.lte.${nowIso}`)
+      .select('id, message_group_id');
+
+    if (claimErr) {
       return new Response(
-        JSON.stringify({ error: 'Message already processed', status: msg.status }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Failed to claim scheduled message', details: claimErr.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Mark as sending with lock (90s per batch to prevent cron overlap)
-    const lockUntil = new Date(Date.now() + 90_000).toISOString();
-    await supabase.from('group_campaign_scheduled_messages')
-      .update({ status: 'sending', locked_until: lockUntil })
-      .eq('id', scheduledMessageId);
+    const claimedMsg = claimedRows?.[0] ?? null;
 
-    // Also lock sibling blocks
-    if (msg.message_group_id) {
+    if (!claimedMsg) {
+      if (existingMsg.status !== 'pending' && existingMsg.status !== 'sending') {
+        return new Response(
+          JSON.stringify({ error: 'Message already processed', status: existingMsg.status }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ error: 'Message is already being processed', status: existingMsg.status, lockedUntil: existingMsg.locked_until }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Also lock sibling blocks immediately so cron cannot pick another block from the same grouped message.
+    if (claimedMsg.message_group_id) {
       await supabase.from('group_campaign_scheduled_messages')
         .update({ locked_until: lockUntil })
-        .eq('message_group_id', msg.message_group_id);
+        .eq('message_group_id', claimedMsg.message_group_id);
+    }
+
+    // Fetch scheduled message after the claim succeeds.
+    const { data: msg, error: msgErr } = await supabase
+      .from('group_campaign_scheduled_messages')
+      .select('*, group_campaigns!inner(id, target_groups, send_speed, whatsapp_number_id)')
+      .eq('id', scheduledMessageId)
+      .single();
+
+    if (msgErr || !msg) {
+      return new Response(
+        JSON.stringify({ error: 'Scheduled message not found after claim' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const campaign = msg.group_campaigns;
