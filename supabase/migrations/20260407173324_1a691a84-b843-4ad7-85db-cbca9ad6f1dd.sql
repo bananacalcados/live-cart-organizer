@@ -1,0 +1,1 @@
+ALTER TABLE public.group_campaign_scheduled_messages ADD COLUMN IF NOT EXISTS locked_until timestamptz DEFAULT NULL;
