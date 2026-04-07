@@ -283,24 +283,29 @@ export default function ChatPage() {
     return { convs, phoneMessages };
   }, [orders, customers, getContactName, crmMap]);
 
-  // ── Load conversations via RPC - separate calls for regular and dispatch ──
+  // ── Load conversations via RPC - only load dispatch when that tab is active ──
   const loadConversations = useCallback(async () => {
     // Multi-instance: if specific instances selected, load all and filter client-side
     // Single instance legacy: use numberFilter for backward compat
     const useMulti = multiInstanceFilter.length > 0;
     const numberId = (!useMulti && numberFilter !== 'all') ? numberFilter : undefined;
 
-    // Load regular (non-dispatch) and dispatch conversations in parallel
-    const [regularResult, dispatchResult] = await Promise.all([
-      supabase.rpc('get_conversations', {
-        p_number_id: numberId || null,
-        p_dispatch_only: false,
-      }),
-      supabase.rpc('get_conversations', {
-        p_number_id: numberId || null,
-        p_dispatch_only: true,
-      }),
-    ]);
+    const needsDispatch = statusFilter === 'dispatch';
+
+    // Load regular conversations always; dispatch only when tab is active
+    const regularPromise = supabase.rpc('get_conversations', {
+      p_number_id: numberId || null,
+      p_dispatch_only: false,
+    });
+
+    const dispatchPromise = needsDispatch
+      ? supabase.rpc('get_conversations', {
+          p_number_id: numberId || null,
+          p_dispatch_only: true,
+        })
+      : Promise.resolve({ data: [], error: null });
+
+    const [regularResult, dispatchResult] = await Promise.all([regularPromise, dispatchPromise]);
 
     if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
 
@@ -316,7 +321,7 @@ export default function ChatPage() {
     const { convs, phoneMessages } = mapRowsToConvs(allRows);
 
     setConversations(filterByAssignment(enrichConversations(convs, phoneMessages)));
-  }, [numberFilter, multiInstanceFilter, mapRowsToConvs, enrichConversations, filterByAssignment]);
+  }, [numberFilter, multiInstanceFilter, statusFilter, mapRowsToConvs, enrichConversations, filterByAssignment]);
 
   useEffect(() => {
     loadConversations();
