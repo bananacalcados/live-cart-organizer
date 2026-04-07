@@ -114,11 +114,12 @@ serve(async (req) => {
       );
     }
 
-    // Also lock sibling blocks immediately so cron cannot pick another block from the same grouped message.
+    // Also mark sibling blocks as sending so cron cannot pick another block from the same grouped message.
     if (claimedMsg.message_group_id) {
       await supabase.from('group_campaign_scheduled_messages')
-        .update({ locked_until: lockUntil })
-        .eq('message_group_id', claimedMsg.message_group_id);
+        .update({ status: 'sending' })
+        .eq('message_group_id', claimedMsg.message_group_id)
+        .in('status', ['pending', 'grouped']);
     }
 
     // Fetch scheduled message after the claim succeeds.
