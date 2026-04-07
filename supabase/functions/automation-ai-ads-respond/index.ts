@@ -561,6 +561,28 @@ serve(async (req) => {
         .select()
         .single();
       existingLead = newLead;
+
+      // Also register in lp_leads so it appears in the Marketing > Leads tab
+      try {
+        const { data: existingLpLead } = await supabase
+          .from('lp_leads')
+          .select('id')
+          .eq('phone', normalizedPhone)
+          .eq('campaign_tag', `ads_${campaign.name}`)
+          .maybeSingle();
+
+        if (!existingLpLead) {
+          await supabase.from('lp_leads').insert({
+            phone: normalizedPhone,
+            campaign_tag: `ads_${campaign.name}`,
+            source: 'ia_ads',
+            converted: false,
+          });
+          console.log(`[ads-ai] Lead also registered in lp_leads for campaign "${campaign.name}"`);
+        }
+      } catch (lpErr) {
+        console.warn('[ads-ai] lp_leads insert error (non-blocking):', lpErr);
+      }
     }
 
     const collectedData = (existingLead?.collected_data as Record<string, any>) || {};
