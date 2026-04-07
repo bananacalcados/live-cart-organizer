@@ -1407,7 +1407,17 @@ export default function TransparentCheckout() {
 
       if (orderReg) {
         setRegistrationId(orderReg.id);
-        setCustomerForm(mapRegistrationToCustomerForm(orderReg));
+        const formData = mapRegistrationToCustomerForm(orderReg);
+        setCustomerForm(formData);
+
+        // Auto-advance to the last completed step
+        const hasIdentification = formData.fullName && formData.cpf && formData.whatsapp;
+        const hasAddress = formData.cep && formData.city && formData.state && formData.address;
+        if (hasIdentification && hasAddress) {
+          setCurrentStep(3);
+        } else if (hasIdentification) {
+          setCurrentStep(2);
+        }
       } else if (order.customer_id) {
         const { data: prevReg } = await supabase
           .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
