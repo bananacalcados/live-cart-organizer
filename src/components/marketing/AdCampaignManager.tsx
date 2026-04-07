@@ -24,6 +24,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import AdCampaignPromptEditor from "./AdCampaignPromptEditor";
 import KeywordMediaManager from "./KeywordMediaManager";
+import CampaignFileUpload from "./CampaignFileUpload";
 
 interface CatalogProduct {
   nome: string;
@@ -334,6 +335,9 @@ export default function AdCampaignManager() {
                     }}>+</Button>
                   </div>
                 </div>
+
+                {/* Campaign-level file upload (catalog) */}
+                <CampaignFileUpload campaignId={editingCampaign.id} />
 
                 {/* Keyword Media Attachments */}
                 <KeywordMediaManager
