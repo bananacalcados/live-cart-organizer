@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import AdCampaignPromptEditor from "./AdCampaignPromptEditor";
+import KeywordMediaManager from "./KeywordMediaManager";
 
 interface CatalogProduct {
   nome: string;
@@ -333,6 +334,12 @@ export default function AdCampaignManager() {
                     }}>+</Button>
                   </div>
                 </div>
+
+                {/* Keyword Media Attachments */}
+                <KeywordMediaManager
+                  campaignId={editingCampaign.id}
+                  keywords={editingCampaign.activation_keywords}
+                />
 
                 {/* Prompt */}
                 <div>
