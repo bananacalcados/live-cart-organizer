@@ -1056,9 +1056,12 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
       tool_called: allToolCalls.length > 0 ? allToolCalls.join(',') : null,
     });
 
+    // Determine if reply should be suppressed due to keyword media send_mode
+    const suppressReply = keywordMedia?.send_mode === 'media_only';
+
     return new Response(JSON.stringify({
       success: true,
-      reply,
+      reply: suppressReply ? '' : reply,
       campaignId: campaign.id,
       campaignName: campaign.name,
       leadId: existingLead?.id,
@@ -1066,6 +1069,12 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
       situation,
       extractedData,
       toolsCalled: allToolCalls,
+      // Keyword media attachment
+      ...(keywordMedia && keywordMedia.send_mode !== 'text_only' ? {
+        keywordMediaUrl: keywordMedia.media_url,
+        keywordMediaType: keywordMedia.media_type,
+        keywordMediaCaption: keywordMedia.caption || keywordMedia.filename || undefined,
+      } : {}),
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
