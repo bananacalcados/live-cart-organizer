@@ -189,7 +189,7 @@ async function chargePagarme(
     items,
     customer: {
       name: params.customer.name,
-      email: params.customer.email,
+      email: params.customer.email || `${params.customer.cpf.replace(/\D/g, "")}@cliente.bananacalcados.com.br`,
       type: "individual",
       document: params.customer.cpf.replace(/\D/g, ""),
       phones: {
