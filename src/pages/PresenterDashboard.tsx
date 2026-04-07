@@ -6,12 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Bell, BellRing, DollarSign, ShoppingCart, Clock, AlertTriangle,
-  Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package
+  Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package,
+  MessageCircle, CheckCheck, MessageSquareX, Send
 } from "lucide-react";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
+import { WhatsAppChat } from "@/components/WhatsAppChat";
 
 interface PresenterAlert {
   id: string;
