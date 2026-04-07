@@ -279,6 +279,56 @@ export default function Marketing() {
     finally { setLeadsLoading(false); }
   }, []);
 
+  const deleteCustomer = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+    const { error } = await supabase.from('zoppy_customers').delete().eq('id', id);
+    if (error) { toast.error('Erro ao excluir: ' + error.message); return; }
+    setCustomers(prev => prev.filter(c => c.id !== id));
+    setSelectedCustomer(null);
+    toast.success('Cliente excluído!');
+  };
+
+  const saveCustomerEdit = async () => {
+    if (!editingCustomer) return;
+    const { id, ...rest } = editingCustomer;
+    const { error } = await supabase.from('zoppy_customers').update({
+      first_name: rest.first_name,
+      last_name: rest.last_name,
+      phone: rest.phone,
+      email: rest.email,
+      city: rest.city,
+      state: rest.state,
+    } as any).eq('id', id);
+    if (error) { toast.error('Erro ao salvar: ' + error.message); return; }
+    setCustomers(prev => prev.map(c => c.id === id ? { ...c, ...editingCustomer } : c));
+    setSelectedCustomer(prev => prev?.id === id ? { ...prev, ...editingCustomer } : prev);
+    setEditingCustomer(null);
+    toast.success('Cliente atualizado!');
+  };
+
+  const deleteLead = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este lead?')) return;
+    const { error } = await supabase.from('lp_leads').delete().eq('id', id);
+    if (error) { toast.error('Erro ao excluir: ' + error.message); return; }
+    setLeads(prev => prev.filter(l => l.id !== id));
+    toast.success('Lead excluído!');
+  };
+
+  const saveLeadEdit = async () => {
+    if (!editingLead) return;
+    const { id, ...rest } = editingLead;
+    const { error } = await supabase.from('lp_leads').update({
+      name: rest.name,
+      phone: rest.phone,
+      email: rest.email,
+      instagram: rest.instagram,
+    } as any).eq('id', id);
+    if (error) { toast.error('Erro ao salvar: ' + error.message); return; }
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, ...editingLead } : l));
+    setEditingLead(null);
+    toast.success('Lead atualizado!');
+  };
+
   useEffect(() => { fetchCustomers(); fetchCampaigns(); fetchLandingPages(); fetchLeads(); }, [fetchCustomers, fetchCampaigns, fetchLandingPages, fetchLeads]);
 
   // Fetch store/seller mapping for filters
