@@ -75,13 +75,20 @@ serve(async (req) => {
 
     // Atomically claim this batch before reading the full payload.
     // This prevents the manual trigger and cron from sending the same groups simultaneously.
+    // Check lock in code (PostgREST schema cache may not know about locked_until yet)
+    if (existingMsg.locked_until && new Date(existingMsg.locked_until).getTime() > Date.now()) {
+      return new Response(
+        JSON.stringify({ error: 'Message is already being processed', status: existingMsg.status, lockedUntil: existingMsg.locked_until }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const lockUntil = new Date(Date.now() + 90_000).toISOString();
     const { data: claimedRows, error: claimErr } = await supabase
       .from('group_campaign_scheduled_messages')
-      .update({ status: 'sending', locked_until: lockUntil })
+      .update({ status: 'sending' })
       .eq('id', scheduledMessageId)
       .in('status', ['pending', 'sending'])
-      .or(`locked_until.is.null,locked_until.lte.${nowIso}`)
       .select('id, message_group_id');
 
     if (claimErr) {
@@ -107,11 +114,12 @@ serve(async (req) => {
       );
     }
 
-    // Also lock sibling blocks immediately so cron cannot pick another block from the same grouped message.
+    // Also mark sibling blocks as sending so cron cannot pick another block from the same grouped message.
     if (claimedMsg.message_group_id) {
       await supabase.from('group_campaign_scheduled_messages')
-        .update({ locked_until: lockUntil })
-        .eq('message_group_id', claimedMsg.message_group_id);
+        .update({ status: 'sending' })
+        .eq('message_group_id', claimedMsg.message_group_id)
+        .in('status', ['pending', 'grouped']);
     }
 
     // Fetch scheduled message after the claim succeeds.
