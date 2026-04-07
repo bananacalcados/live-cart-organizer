@@ -96,8 +96,17 @@ function formatCEP(value: string) {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
+function stripDDI(digits: string): string {
+  // Remove Brazilian country code (55) if present, keeping only DDD+number
+  if (digits.length >= 12 && digits.startsWith("55")) {
+    return digits.slice(2);
+  }
+  return digits;
+}
+
 function formatPhone(value: string) {
-  const d = value.replace(/\D/g, "").slice(0, 11);
+  const raw = value.replace(/\D/g, "");
+  const d = stripDDI(raw).slice(0, 11);
   if (d.length <= 2) return `(${d}`;
   if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
