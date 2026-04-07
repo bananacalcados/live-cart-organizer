@@ -1574,7 +1574,7 @@ export default function Marketing() {
                                 <TableHead>Fonte</TableHead>
                                 <TableHead>Data</TableHead>
                                 <TableHead>Convertido</TableHead>
-                                <TableHead className="w-10"></TableHead>
+                                <TableHead className="w-24">Ações</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1589,12 +1589,22 @@ export default function Marketing() {
                                   <TableCell className="text-xs">{new Date(lead.created_at).toLocaleDateString('pt-BR')}</TableCell>
                                   <TableCell>{lead.converted ? <CheckCircle className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-muted-foreground/40" />}</TableCell>
                                   <TableCell>
-                                    {lead.phone && (
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Ver chat WhatsApp"
-                                        onClick={() => { setLeadChatPhone(lead.phone); setLeadChatName(lead.name || ''); }}>
-                                        <MessageSquare className="h-4 w-4 text-stage-paid" />
+                                    <div className="flex gap-0.5">
+                                      {lead.phone && (
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Ver chat WhatsApp"
+                                          onClick={() => { setLeadChatPhone(lead.phone); setLeadChatName(lead.name || ''); }}>
+                                          <MessageSquare className="h-4 w-4 text-stage-paid" />
+                                        </Button>
+                                      )}
+                                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar lead"
+                                        onClick={() => setEditingLead({ ...lead })}>
+                                        <Eye className="h-3.5 w-3.5" />
                                       </Button>
-                                    )}
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="Excluir lead"
+                                        onClick={() => deleteLead(lead.id)}>
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               ))}
