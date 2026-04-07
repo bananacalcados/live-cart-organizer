@@ -58,6 +58,7 @@ export default function PresenterDashboard() {
   const [metrics, setMetrics] = useState({ totalPaid: 0, totalRevenue: 0, avgTicket: 0, pendingCount: 0 });
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [eventName, setEventName] = useState("");
+  const [chatOrder, setChatOrder] = useState<OrderSummary | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Create audio element for notifications
