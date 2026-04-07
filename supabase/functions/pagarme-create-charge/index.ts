@@ -369,7 +369,7 @@ async function chargeAppmax(
         "access-token": accessToken,
         firstname: params.customer.name.split(" ")[0],
         lastname: params.customer.name.split(" ").slice(1).join(" ") || ".",
-        email: params.customer.email,
+        email: params.customer.email || `${cpf}@cliente.bananacalcados.com.br`,
         telephone: phone,
         cpf,
         postcode: params.billingAddress.zipCode.replace(/\D/g, ""),
