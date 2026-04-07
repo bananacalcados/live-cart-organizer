@@ -874,7 +874,7 @@ function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId
     name: form.fullName,
     email: form.email,
     cpf: form.cpf.replace(/\D/g, ""),
-    phone: form.whatsapp.replace(/\D/g, ""),
+    phone: stripDDI(form.whatsapp.replace(/\D/g, "")),
     address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
   };
 
@@ -1063,7 +1063,7 @@ function CardPaymentForm({
   };
 
   const buildCustomerData = () => ({
-    name: form.fullName, email: form.email, cpf: form.cpf.replace(/\D/g, ""), phone: form.whatsapp.replace(/\D/g, ""),
+    name: form.fullName, email: form.email, cpf: form.cpf.replace(/\D/g, ""), phone: stripDDI(form.whatsapp.replace(/\D/g, "")),
     address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
   });
 
