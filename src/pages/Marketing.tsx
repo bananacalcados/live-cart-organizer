@@ -1899,6 +1899,80 @@ export default function Marketing() {
         existingCampaignTags={[...new Set(leads.map((lead) => lead.campaign_tag).filter(Boolean))].sort()}
         onImported={fetchLeads}
       />
+
+      {/* Edit Customer Dialog */}
+      <Dialog open={!!editingCustomer} onOpenChange={(open) => { if (!open) setEditingCustomer(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Editar Cliente</DialogTitle></DialogHeader>
+          {editingCustomer && (
+            <div className="space-y-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Nome</label>
+                  <Input value={editingCustomer.first_name || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, first_name: e.target.value } : null)} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Sobrenome</label>
+                  <Input value={editingCustomer.last_name || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, last_name: e.target.value } : null)} />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Telefone</label>
+                <Input value={editingCustomer.phone || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, phone: e.target.value } : null)} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Email</label>
+                <Input value={editingCustomer.email || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, email: e.target.value } : null)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Cidade</label>
+                  <Input value={editingCustomer.city || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, city: e.target.value } : null)} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Estado</label>
+                  <Input value={editingCustomer.state || ''} onChange={e => setEditingCustomer(prev => prev ? { ...prev, state: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setEditingCustomer(null)}>Cancelar</Button>
+                <Button onClick={saveCustomerEdit} className="gap-1"><CheckCircle2 className="h-3.5 w-3.5" />Salvar</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Lead Dialog */}
+      <Dialog open={!!editingLead} onOpenChange={(open) => { if (!open) setEditingLead(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Target className="h-5 w-5" />Editar Lead</DialogTitle></DialogHeader>
+          {editingLead && (
+            <div className="space-y-3 py-2">
+              <div>
+                <label className="text-xs text-muted-foreground">Nome</label>
+                <Input value={editingLead.name || ''} onChange={e => setEditingLead((prev: any) => prev ? { ...prev, name: e.target.value } : null)} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Telefone</label>
+                <Input value={editingLead.phone || ''} onChange={e => setEditingLead((prev: any) => prev ? { ...prev, phone: e.target.value } : null)} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Email</label>
+                <Input value={editingLead.email || ''} onChange={e => setEditingLead((prev: any) => prev ? { ...prev, email: e.target.value } : null)} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Instagram</label>
+                <Input value={editingLead.instagram || ''} onChange={e => setEditingLead((prev: any) => prev ? { ...prev, instagram: e.target.value } : null)} />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setEditingLead(null)}>Cancelar</Button>
+                <Button onClick={saveLeadEdit} className="gap-1"><CheckCircle2 className="h-3.5 w-3.5" />Salvar</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
