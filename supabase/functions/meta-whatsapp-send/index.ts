@@ -123,6 +123,21 @@ function resolveMediaCaption(message?: string, caption?: string): string | undef
   return undefined;
 }
 
+// Meta API does not accept audio/webm; remap to audio/ogg (opus codec is compatible)
+function normalizeContentTypeForMeta(contentType: string, mediaType: string): string {
+  if (mediaType === 'audio' && contentType.includes('webm')) {
+    return 'audio/ogg';
+  }
+  return contentType;
+}
+
+function normalizeFileNameForMeta(fileName: string, mediaType: string, contentType: string): string {
+  if (mediaType === 'audio' && contentType.includes('webm')) {
+    return fileName.replace(/\.webm$/i, '.ogg');
+  }
+  return fileName;
+}
+
 async function uploadMediaToMeta(
   mediaUrl: string,
   mediaType: string,
@@ -136,9 +151,11 @@ async function uploadMediaToMeta(
     throw new Error(`Failed to download media (${downloadResponse.status})`);
   }
 
-  const contentType = downloadResponse.headers.get('content-type') || getMimeType(mediaType, mediaUrl);
+  const rawContentType = downloadResponse.headers.get('content-type') || getMimeType(mediaType, mediaUrl);
+  const contentType = normalizeContentTypeForMeta(rawContentType, mediaType);
   const mediaBytes = new Uint8Array(await downloadResponse.arrayBuffer());
-  const fileName = getFileName(mediaUrl, mediaType);
+  const rawFileName = getFileName(mediaUrl, mediaType);
+  const fileName = normalizeFileNameForMeta(rawFileName, mediaType, rawContentType);
 
   const formData = new FormData();
   formData.append('messaging_product', 'whatsapp');
@@ -146,7 +163,7 @@ async function uploadMediaToMeta(
   formData.append('file', new Blob([mediaBytes], { type: contentType }), fileName);
 
   const uploadUrl = `https://graph.facebook.com/v21.0/${phoneNumberId}/media`;
-  console.log(`[meta-whatsapp-send] uploading media to Meta (${contentType}, ${mediaBytes.length} bytes)`);
+  console.log(`[meta-whatsapp-send] uploading media to Meta (${contentType}, ${mediaBytes.length} bytes, original: ${rawContentType})`);
 
   const uploadResponse = await fetch(uploadUrl, {
     method: 'POST',
