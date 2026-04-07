@@ -130,11 +130,17 @@ export async function routeMessage(
 
   // 3. Check for ad referral (Click-to-WhatsApp) OR ad keyword match
   if (referral && referral.source_url) {
-    // Check if there's an active ad campaign matching
+    // Check if there's an active ad campaign matching by keyword
     const matchedCampaign = await matchAdCampaign(supabase, input.messageText);
     if (matchedCampaign) {
       console.log(`[router] Ad referral + campaign match for ${phone}, campaign=${matchedCampaign.name}`);
       return { agent: 'ads', reason: 'ad_referral_campaign', referral, adCampaignId: matchedCampaign.id };
+    }
+    // Fallback: if referral present but no keyword match, try any active campaign
+    const fallbackCampaign = await findAnyActiveCampaign(supabase);
+    if (fallbackCampaign) {
+      console.log(`[router] Ad referral fallback to campaign ${fallbackCampaign.name} for ${phone}`);
+      return { agent: 'ads', reason: 'ad_referral_fallback', referral, adCampaignId: fallbackCampaign.id };
     }
     console.log(`[router] Ad referral detected for ${phone}, no campaign match`);
     return { agent: 'legacy', reason: 'ad_referral_legacy', referral };
@@ -343,6 +349,25 @@ export async function isOperatorCooldownActive(
   } catch (err) {
     console.error('[router] Error checking operator cooldown:', err);
     return false; // Don't block AI on error
+  }
+}
+
+// ─── Helper: Find any active ad campaign (fallback for referral without keyword match) ─
+
+async function findAnyActiveCampaign(
+  supabase: SupabaseClient
+): Promise<{ id: string; name: string } | null> {
+  try {
+    const { data } = await supabase
+      .from('ad_campaigns_ai')
+      .select('id, name')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+    return data ? { id: data.id, name: data.name } : null;
+  } catch (err) {
+    console.error('[router] Error finding fallback campaign:', err);
+    return null;
   }
 }
 
