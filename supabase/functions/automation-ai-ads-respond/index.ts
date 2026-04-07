@@ -501,19 +501,28 @@ serve(async (req) => {
       });
     }
 
-    // Check for keyword media attachments
+    // Check for keyword media attachments (specific keyword match OR general campaign file)
     let keywordMedia: { media_url: string; media_type: string; filename: string | null; send_mode: string; caption: string | null; keyword: string } | null = null;
-    if (effectiveMessageText && campaign.id) {
+    if (campaign.id) {
       const { data: allKeywordMedia } = await supabase
         .from('ad_keyword_media')
         .select('media_url, media_type, filename, send_mode, caption, keyword')
         .eq('campaign_id', campaign.id);
       if (allKeywordMedia && allKeywordMedia.length > 0) {
         const msgLower = (effectiveMessageText || '').toLowerCase().trim();
+        // First try specific keyword match
         keywordMedia = allKeywordMedia.find((km: any) =>
-          msgLower.includes(km.keyword.toLowerCase())
+          km.keyword !== '__geral__' && msgLower.includes(km.keyword.toLowerCase())
         ) || null;
-        if (keywordMedia) {
+        // If no specific match, use general campaign file (always send on first contact)
+        if (!keywordMedia) {
+          const generalMedia = allKeywordMedia.find((km: any) => km.keyword === '__geral__');
+          if (generalMedia) {
+            keywordMedia = generalMedia as any;
+            console.log(`[ads-ai] Using general campaign file: ${generalMedia.media_type}`);
+          }
+        }
+        if (keywordMedia && keywordMedia.keyword !== '__geral__') {
           console.log(`[ads-ai] Keyword media found for "${keywordMedia.keyword}": ${keywordMedia.media_type} (${keywordMedia.send_mode})`);
         }
       }
