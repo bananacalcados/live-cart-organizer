@@ -35,6 +35,10 @@ interface OrderSummary {
   stage: string;
   stage_atendimento: string;
   created_at: string;
+  whatsapp: string | null;
+  customerReplied: boolean;
+  lastSentAt: string | null;
+  lastCustomerAt: string | null;
 }
 
 const alertTypeConfig: Record<string, { label: string; color: string; icon: typeof Bell }> = {
