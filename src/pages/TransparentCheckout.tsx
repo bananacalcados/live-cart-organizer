@@ -909,7 +909,7 @@ function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId
           full_name: form.fullName,
           email: form.email,
           cpf: form.cpf.replace(/\D/g, ""),
-          whatsapp: form.whatsapp.replace(/\D/g, ""),
+          whatsapp: stripDDI(form.whatsapp.replace(/\D/g, "")),
           cep: form.cep.replace(/\D/g, ""),
           address: form.address,
           address_number: form.addressNumber,
