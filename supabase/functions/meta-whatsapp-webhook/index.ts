@@ -450,16 +450,61 @@ serve(async (req) => {
                           const typingDelay = Math.min(Math.max(adsData.reply.length * 50, 2000), 12000);
                           await new Promise(r => setTimeout(r, typingDelay));
 
-                          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-                            method: 'POST',
-                            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ phone, message: adsData.reply, whatsappNumberId: whatsappNumberDbId }),
-                          });
+                          // Send keyword media via Meta if present
+                          if (adsData.keywordMediaUrl) {
+                            try {
+                              await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  phone,
+                                  mediaUrl: adsData.keywordMediaUrl,
+                                  mediaType: adsData.keywordMediaType || 'document',
+                                  caption: adsData.keywordMediaCaption || '',
+                                  whatsappNumberId: whatsappNumberDbId,
+                                }),
+                              });
+                              await supabase.from('whatsapp_messages').insert({
+                                phone, message: `[IA-ADS] 📎 ${adsData.keywordMediaCaption || 'arquivo'}`, direction: 'outgoing',
+                                status: 'sent', whatsapp_number_id: whatsappNumberDbId, media_url: adsData.keywordMediaUrl, media_type: adsData.keywordMediaType,
+                              });
+                            } catch (mediaErr) {
+                              console.error('[meta-router] keyword media send error:', mediaErr);
+                            }
+                          }
 
-                          await supabase.from('whatsapp_messages').insert({
-                            phone, message: `[IA-ADS] ${adsData.reply}`, direction: 'outgoing',
-                            status: 'sent', whatsapp_number_id: whatsappNumberDbId,
-                          });
+                          if (adsData.reply.trim()) {
+                            await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+                              method: 'POST',
+                              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ phone, message: adsData.reply, whatsappNumberId: whatsappNumberDbId }),
+                            });
+
+                            await supabase.from('whatsapp_messages').insert({
+                              phone, message: `[IA-ADS] ${adsData.reply}`, direction: 'outgoing',
+                              status: 'sent', whatsapp_number_id: whatsappNumberDbId,
+                            });
+                          }
+                        } else if (adsRes.ok && adsData.keywordMediaUrl) {
+                          try {
+                            await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+                              method: 'POST',
+                              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                phone,
+                                mediaUrl: adsData.keywordMediaUrl,
+                                mediaType: adsData.keywordMediaType || 'document',
+                                caption: adsData.keywordMediaCaption || '',
+                                whatsappNumberId: whatsappNumberDbId,
+                              }),
+                            });
+                            await supabase.from('whatsapp_messages').insert({
+                              phone, message: `[IA-ADS] 📎 ${adsData.keywordMediaCaption || 'arquivo'}`, direction: 'outgoing',
+                              status: 'sent', whatsapp_number_id: whatsappNumberDbId, media_url: adsData.keywordMediaUrl, media_type: adsData.keywordMediaType,
+                            });
+                          } catch (mediaErr) {
+                            console.error('[meta-router] keyword media send error:', mediaErr);
+                          }
                         }
                       } catch (err) {
                         console.error('[meta-router] ads-respond error:', err);
