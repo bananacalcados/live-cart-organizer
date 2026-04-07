@@ -515,16 +515,63 @@ serve(async (req) => {
                       const typingDelay = Math.min(Math.max(adsData.reply.length * 50, 2000), 12000);
                       await new Promise(r => setTimeout(r, typingDelay));
 
-                      await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ phone, message: adsData.reply, whatsapp_number_id: whatsappNumberId }),
-                      });
+                      // Send keyword media attachment if present
+                      if (adsData.keywordMediaUrl) {
+                        try {
+                          await fetch(`${supabaseUrl}/functions/v1/zapi-send-media`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              phone,
+                              mediaUrl: adsData.keywordMediaUrl,
+                              mediaType: adsData.keywordMediaType || 'document',
+                              caption: adsData.keywordMediaCaption || '',
+                              whatsapp_number_id: whatsappNumberId,
+                            }),
+                          });
+                          await supabase.from('whatsapp_messages').insert({
+                            phone, message: `[IA-ADS] 📎 ${adsData.keywordMediaCaption || 'arquivo'}`, direction: 'outgoing',
+                            status: 'sent', whatsapp_number_id: whatsappNumberId, media_url: adsData.keywordMediaUrl, media_type: adsData.keywordMediaType,
+                          });
+                        } catch (mediaErr) {
+                          console.error('[zapi-router] keyword media send error:', mediaErr);
+                        }
+                      }
 
-                      await supabase.from('whatsapp_messages').insert({
-                        phone, message: `[IA-ADS] ${adsData.reply}`, direction: 'outgoing',
-                        status: 'sent', whatsapp_number_id: whatsappNumberId,
-                      });
+                      // Send text reply (may be empty if send_mode is media_only)
+                      if (adsData.reply.trim()) {
+                        await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ phone, message: adsData.reply, whatsapp_number_id: whatsappNumberId }),
+                        });
+
+                        await supabase.from('whatsapp_messages').insert({
+                          phone, message: `[IA-ADS] ${adsData.reply}`, direction: 'outgoing',
+                          status: 'sent', whatsapp_number_id: whatsappNumberId,
+                        });
+                      }
+                    } else if (adsRes.ok && adsData.keywordMediaUrl) {
+                      // Reply is empty but we have media to send (media_only mode)
+                      try {
+                        await fetch(`${supabaseUrl}/functions/v1/zapi-send-media`, {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            phone,
+                            mediaUrl: adsData.keywordMediaUrl,
+                            mediaType: adsData.keywordMediaType || 'document',
+                            caption: adsData.keywordMediaCaption || '',
+                            whatsapp_number_id: whatsappNumberId,
+                          }),
+                        });
+                        await supabase.from('whatsapp_messages').insert({
+                          phone, message: `[IA-ADS] 📎 ${adsData.keywordMediaCaption || 'arquivo'}`, direction: 'outgoing',
+                          status: 'sent', whatsapp_number_id: whatsappNumberId, media_url: adsData.keywordMediaUrl, media_type: adsData.keywordMediaType,
+                        });
+                      } catch (mediaErr) {
+                        console.error('[zapi-router] keyword media send error:', mediaErr);
+                      }
                     }
                   } catch (err) {
                     console.error('[zapi-router] ads-respond error:', err);

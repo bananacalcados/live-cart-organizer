@@ -173,6 +173,53 @@ export type Database = {
           },
         ]
       }
+      ad_keyword_media: {
+        Row: {
+          campaign_id: string
+          caption: string | null
+          created_at: string
+          filename: string | null
+          id: string
+          keyword: string
+          media_type: string
+          media_url: string
+          send_mode: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          caption?: string | null
+          created_at?: string
+          filename?: string | null
+          id?: string
+          keyword: string
+          media_type?: string
+          media_url: string
+          send_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          caption?: string | null
+          created_at?: string
+          filename?: string | null
+          id?: string
+          keyword?: string
+          media_type?: string
+          media_url?: string
+          send_mode?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_keyword_media_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns_ai"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ad_leads: {
         Row: {
           campaign_id: string | null

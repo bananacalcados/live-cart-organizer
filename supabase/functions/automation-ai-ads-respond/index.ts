@@ -501,6 +501,24 @@ serve(async (req) => {
       });
     }
 
+    // Check for keyword media attachments
+    let keywordMedia: { media_url: string; media_type: string; filename: string | null; send_mode: string; caption: string | null; keyword: string } | null = null;
+    if (effectiveMessageText && campaign.id) {
+      const { data: allKeywordMedia } = await supabase
+        .from('ad_keyword_media')
+        .select('media_url, media_type, filename, send_mode, caption, keyword')
+        .eq('campaign_id', campaign.id);
+      if (allKeywordMedia && allKeywordMedia.length > 0) {
+        const msgLower = (effectiveMessageText || '').toLowerCase().trim();
+        keywordMedia = allKeywordMedia.find((km: any) =>
+          msgLower.includes(km.keyword.toLowerCase())
+        ) || null;
+        if (keywordMedia) {
+          console.log(`[ads-ai] Keyword media found for "${keywordMedia.keyword}": ${keywordMedia.media_type} (${keywordMedia.send_mode})`);
+        }
+      }
+    }
+
     // 2. Find or create lead
     const normalizedPhone = phone.replace(/\D/g, '');
     let { data: existingLead } = await supabase
@@ -1038,9 +1056,12 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
       tool_called: allToolCalls.length > 0 ? allToolCalls.join(',') : null,
     });
 
+    // Determine if reply should be suppressed due to keyword media send_mode
+    const suppressReply = keywordMedia?.send_mode === 'media_only';
+
     return new Response(JSON.stringify({
       success: true,
-      reply,
+      reply: suppressReply ? '' : reply,
       campaignId: campaign.id,
       campaignName: campaign.name,
       leadId: existingLead?.id,
@@ -1048,6 +1069,12 @@ REGRA ANTI-ALUCINAÇÃO (CRÍTICA):
       situation,
       extractedData,
       toolsCalled: allToolCalls,
+      // Keyword media attachment
+      ...(keywordMedia && keywordMedia.send_mode !== 'text_only' ? {
+        keywordMediaUrl: keywordMedia.media_url,
+        keywordMediaType: keywordMedia.media_type,
+        keywordMediaCaption: keywordMedia.caption || keywordMedia.filename || undefined,
+      } : {}),
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
