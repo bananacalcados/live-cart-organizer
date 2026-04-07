@@ -96,8 +96,17 @@ function formatCEP(value: string) {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
+function stripDDI(digits: string): string {
+  // Remove Brazilian country code (55) if present, keeping only DDD+number
+  if (digits.length >= 12 && digits.startsWith("55")) {
+    return digits.slice(2);
+  }
+  return digits;
+}
+
 function formatPhone(value: string) {
-  const d = value.replace(/\D/g, "").slice(0, 11);
+  const raw = value.replace(/\D/g, "");
+  const d = stripDDI(raw).slice(0, 11);
   if (d.length <= 2) return `(${d}`;
   if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
@@ -865,7 +874,7 @@ function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId
     name: form.fullName,
     email: form.email,
     cpf: form.cpf.replace(/\D/g, ""),
-    phone: form.whatsapp.replace(/\D/g, ""),
+    phone: stripDDI(form.whatsapp.replace(/\D/g, "")),
     address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
   };
 
@@ -900,7 +909,7 @@ function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId
           full_name: form.fullName,
           email: form.email,
           cpf: form.cpf.replace(/\D/g, ""),
-          whatsapp: form.whatsapp.replace(/\D/g, ""),
+          whatsapp: stripDDI(form.whatsapp.replace(/\D/g, "")),
           cep: form.cep.replace(/\D/g, ""),
           address: form.address,
           address_number: form.addressNumber,
@@ -1054,7 +1063,7 @@ function CardPaymentForm({
   };
 
   const buildCustomerData = () => ({
-    name: form.fullName, email: form.email, cpf: form.cpf.replace(/\D/g, ""), phone: form.whatsapp.replace(/\D/g, ""),
+    name: form.fullName, email: form.email, cpf: form.cpf.replace(/\D/g, ""), phone: stripDDI(form.whatsapp.replace(/\D/g, "")),
     address: { street: form.address, number: form.addressNumber, neighborhood: form.neighborhood, city: form.city, state: form.state, cep: form.cep.replace(/\D/g, "") },
   });
 
@@ -1459,7 +1468,7 @@ export default function TransparentCheckout() {
         full_name: customerForm.fullName.trim(),
         email: customerForm.email.trim(),
         cpf: customerForm.cpf.replace(/\D/g, ""),
-        whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
+        whatsapp: stripDDI(customerForm.whatsapp.replace(/\D/g, "")),
         cep: isAddressStep ? customerForm.cep.replace(/\D/g, "") : (customerForm.cep.replace(/\D/g, "") || "00000000"),
         address: isAddressStep ? customerForm.address.trim() : (normalizeTextField(customerForm.address) || "Pendente"),
         address_number: isAddressStep ? customerForm.addressNumber.trim() : (normalizeAddressNumber(customerForm.addressNumber) || "0"),
