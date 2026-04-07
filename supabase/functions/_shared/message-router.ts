@@ -352,6 +352,25 @@ export async function isOperatorCooldownActive(
   }
 }
 
+// ─── Helper: Find any active ad campaign (fallback for referral without keyword match) ─
+
+async function findAnyActiveCampaign(
+  supabase: SupabaseClient
+): Promise<{ id: string; name: string } | null> {
+  try {
+    const { data } = await supabase
+      .from('ad_campaigns_ai')
+      .select('id, name')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+    return data ? { id: data.id, name: data.name } : null;
+  } catch (err) {
+    console.error('[router] Error finding fallback campaign:', err);
+    return null;
+  }
+}
+
 // ─── Helper: Match ad campaign by keyword ────────────────────────────────────
 
 async function matchAdCampaign(
