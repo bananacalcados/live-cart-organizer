@@ -1468,7 +1468,7 @@ export default function TransparentCheckout() {
         full_name: customerForm.fullName.trim(),
         email: customerForm.email.trim(),
         cpf: customerForm.cpf.replace(/\D/g, ""),
-        whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
+        whatsapp: stripDDI(customerForm.whatsapp.replace(/\D/g, "")),
         cep: isAddressStep ? customerForm.cep.replace(/\D/g, "") : (customerForm.cep.replace(/\D/g, "") || "00000000"),
         address: isAddressStep ? customerForm.address.trim() : (normalizeTextField(customerForm.address) || "Pendente"),
         address_number: isAddressStep ? customerForm.addressNumber.trim() : (normalizeAddressNumber(customerForm.addressNumber) || "0"),
