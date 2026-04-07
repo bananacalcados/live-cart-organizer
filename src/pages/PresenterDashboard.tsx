@@ -6,12 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Bell, BellRing, DollarSign, ShoppingCart, Clock, AlertTriangle,
-  Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package
+  Eye, CheckCircle, X, Volume2, VolumeX, ArrowLeft, Users, TrendingUp, Package,
+  MessageCircle, CheckCheck, MessageSquareX, Send
 } from "lucide-react";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
+import { WhatsAppChat } from "@/components/WhatsAppChat";
 
 interface PresenterAlert {
   id: string;
@@ -32,6 +35,10 @@ interface OrderSummary {
   stage: string;
   stage_atendimento: string;
   created_at: string;
+  whatsapp: string | null;
+  customerReplied: boolean;
+  lastSentAt: string | null;
+  lastCustomerAt: string | null;
 }
 
 const alertTypeConfig: Record<string, { label: string; color: string; icon: typeof Bell }> = {
@@ -51,6 +58,7 @@ export default function PresenterDashboard() {
   const [metrics, setMetrics] = useState({ totalPaid: 0, totalRevenue: 0, avgTicket: 0, pendingCount: 0 });
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [eventName, setEventName] = useState("");
+  const [chatOrder, setChatOrder] = useState<OrderSummary | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Create audio element for notifications
@@ -103,7 +111,7 @@ export default function PresenterDashboard() {
     if (!eventId) return;
     const { data: ordersData } = await supabase
       .from("orders")
-      .select("id, customer_id, products, stage, stage_atendimento, is_paid, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at")
+      .select("id, customer_id, products, stage, stage_atendimento, is_paid, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at")
       .eq("event_id", eventId)
       .order("created_at", { ascending: false });
 
@@ -113,22 +121,29 @@ export default function PresenterDashboard() {
     const customerIds = [...new Set(ordersData.map(o => o.customer_id))];
     const { data: customers } = await supabase
       .from("customers")
-      .select("id, instagram_handle")
+      .select("id, instagram_handle, whatsapp")
       .in("id", customerIds);
 
-    const customerMap = new Map((customers || []).map(c => [c.id, c.instagram_handle]));
+    const customerMap = new Map((customers || []).map(c => [c.id, { name: c.instagram_handle, whatsapp: c.whatsapp }]));
 
     const mapped: OrderSummary[] = ordersData.map(o => {
       const products = (o.products as any[]) || [];
       const subtotal = products.reduce((s: number, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
+      const cust = customerMap.get(o.customer_id);
+      const lastSent = o.last_sent_message_at as string | null;
+      const lastCustomer = o.last_customer_message_at as string | null;
       return {
         id: o.id,
-        customer_name: customerMap.get(o.customer_id) || "Cliente",
+        customer_name: cust?.name || "Cliente",
+        whatsapp: cust?.whatsapp || null,
         products,
         total: subtotal,
         stage: o.stage,
         stage_atendimento: o.stage_atendimento || "",
         created_at: o.created_at,
+        customerReplied: !!lastCustomer && !!lastSent && new Date(lastCustomer) > new Date(lastSent),
+        lastSentAt: lastSent,
+        lastCustomerAt: lastCustomer,
       };
     });
 
@@ -398,7 +413,13 @@ export default function PresenterDashboard() {
                       </CardContent>
                     </Card>
                   )}
-                  {pendingPaymentOrders.map(order => (
+                  {pendingPaymentOrders.map(order => {
+                    const replyStatus = !order.lastSentAt
+                      ? "not_sent"
+                      : order.customerReplied
+                        ? "replied"
+                        : "awaiting";
+                    return (
                     <Card key={order.id} className="bg-muted-foreground/5 border-muted-foreground/15 hover:bg-muted-foreground/10 transition-colors">
                       <CardContent className="p-3">
                         <div className="flex items-center justify-between mb-1">
@@ -418,6 +439,39 @@ export default function PresenterDashboard() {
                             R$ {order.total.toFixed(2)}
                           </span>
                         </div>
+
+                        {/* Reply status + WhatsApp button */}
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center gap-1.5">
+                            {replyStatus === "replied" && (
+                              <Badge className="bg-green-600/20 text-green-400 border-green-600/30 text-[10px] gap-1">
+                                <CheckCheck className="h-3 w-3" /> Respondeu
+                              </Badge>
+                            )}
+                            {replyStatus === "awaiting" && (
+                              <Badge className="bg-orange-600/20 text-orange-400 border-orange-600/30 text-[10px] gap-1">
+                                <Send className="h-3 w-3" /> Aguardando resposta
+                              </Badge>
+                            )}
+                            {replyStatus === "not_sent" && (
+                              <Badge className="bg-zinc-600/20 text-zinc-400 border-zinc-600/30 text-[10px] gap-1">
+                                <MessageSquareX className="h-3 w-3" /> Não contatada
+                              </Badge>
+                            )}
+                          </div>
+                          {order.whatsapp && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-[10px] text-green-400 hover:bg-green-500/20 gap-1 px-2"
+                              onClick={() => setChatOrder(order)}
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" />
+                              Ver conversa
+                            </Button>
+                          )}
+                        </div>
+
                         {order.products.length > 0 && (
                           <p className="text-[10px] text-muted-foreground mt-1 truncate">
                             {order.products.map((p: any) => p.title).join(", ")}
@@ -425,7 +479,8 @@ export default function PresenterDashboard() {
                         )}
                       </CardContent>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </div>
@@ -451,6 +506,24 @@ export default function PresenterDashboard() {
       <div className="w-80 lg:w-96 border-l border-zinc-700 bg-zinc-900/50 flex flex-col min-h-screen">
         <PresenterTeamChat eventId={eventId!} presenterMode={true} />
       </div>
+
+      {/* WhatsApp Chat Dialog */}
+      <Dialog open={!!chatOrder} onOpenChange={(open) => !open && setChatOrder(null)}>
+        <DialogContent className="max-w-md h-[600px] p-0 overflow-hidden gap-0 border-0 bg-transparent shadow-2xl">
+          {chatOrder?.whatsapp && (
+            <WhatsAppChat
+              order={{
+                id: chatOrder.id,
+                instagramHandle: chatOrder.customer_name,
+                whatsapp: chatOrder.whatsapp,
+                products: chatOrder.products,
+                stage: chatOrder.stage,
+              } as any}
+              onBack={() => setChatOrder(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
