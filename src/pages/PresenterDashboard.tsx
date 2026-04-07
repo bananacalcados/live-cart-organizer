@@ -110,7 +110,7 @@ export default function PresenterDashboard() {
     if (!eventId) return;
     const { data: ordersData } = await supabase
       .from("orders")
-      .select("id, customer_id, products, stage, stage_atendimento, is_paid, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at")
+      .select("id, customer_id, products, stage, stage_atendimento, is_paid, paid_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at")
       .eq("event_id", eventId)
       .order("created_at", { ascending: false });
 
