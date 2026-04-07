@@ -501,6 +501,24 @@ serve(async (req) => {
       });
     }
 
+    // Check for keyword media attachments
+    let keywordMedia: { media_url: string; media_type: string; filename: string | null; send_mode: string; caption: string | null; keyword: string } | null = null;
+    if (effectiveMessageText && campaign.id) {
+      const { data: allKeywordMedia } = await supabase
+        .from('ad_keyword_media')
+        .select('media_url, media_type, filename, send_mode, caption, keyword')
+        .eq('campaign_id', campaign.id);
+      if (allKeywordMedia && allKeywordMedia.length > 0) {
+        const msgLower = (effectiveMessageText || '').toLowerCase().trim();
+        keywordMedia = allKeywordMedia.find((km: any) =>
+          msgLower.includes(km.keyword.toLowerCase())
+        ) || null;
+        if (keywordMedia) {
+          console.log(`[ads-ai] Keyword media found for "${keywordMedia.keyword}": ${keywordMedia.media_type} (${keywordMedia.send_mode})`);
+        }
+      }
+    }
+
     // 2. Find or create lead
     const normalizedPhone = phone.replace(/\D/g, '');
     let { data: existingLead } = await supabase
