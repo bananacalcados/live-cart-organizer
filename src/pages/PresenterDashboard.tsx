@@ -120,22 +120,29 @@ export default function PresenterDashboard() {
     const customerIds = [...new Set(ordersData.map(o => o.customer_id))];
     const { data: customers } = await supabase
       .from("customers")
-      .select("id, instagram_handle")
+      .select("id, instagram_handle, whatsapp")
       .in("id", customerIds);
 
-    const customerMap = new Map((customers || []).map(c => [c.id, c.instagram_handle]));
+    const customerMap = new Map((customers || []).map(c => [c.id, { name: c.instagram_handle, whatsapp: c.whatsapp }]));
 
     const mapped: OrderSummary[] = ordersData.map(o => {
       const products = (o.products as any[]) || [];
       const subtotal = products.reduce((s: number, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
+      const cust = customerMap.get(o.customer_id);
+      const lastSent = o.last_sent_message_at as string | null;
+      const lastCustomer = o.last_customer_message_at as string | null;
       return {
         id: o.id,
-        customer_name: customerMap.get(o.customer_id) || "Cliente",
+        customer_name: cust?.name || "Cliente",
+        whatsapp: cust?.whatsapp || null,
         products,
         total: subtotal,
         stage: o.stage,
         stage_atendimento: o.stage_atendimento || "",
         created_at: o.created_at,
+        customerReplied: !!lastCustomer && !!lastSent && new Date(lastCustomer) > new Date(lastSent),
+        lastSentAt: lastSent,
+        lastCustomerAt: lastCustomer,
       };
     });
 
