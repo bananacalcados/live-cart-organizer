@@ -126,6 +126,7 @@ interface ChatContact {
 export default function ChatPage() {
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [stickyConversationKeys, setStickyConversationKeys] = useState<Set<string>>(new Set());
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null | undefined>(undefined);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
@@ -227,6 +228,10 @@ export default function ChatPage() {
     if (contact?.display_name) return contact.display_name;
     return null;
   }, [chatContacts]);
+
+  const getConversationKey = useCallback((conversation: Pick<Conversation, 'conversationKey' | 'phone' | 'whatsapp_number_id'>) => {
+    return conversation.conversationKey || `${conversation.phone}__${conversation.whatsapp_number_id || 'none'}`;
+  }, []);
 
   useEffect(() => {
     activeConversationRef.current = {
@@ -402,9 +407,16 @@ export default function ChatPage() {
   const handleSelectConversation = (conv: Conversation) => {
     const phone = conv.phone;
     const numberId = conv.whatsapp_number_id;
+    const conversationKey = getConversationKey(conv);
     setSelectedPhone(phone);
     setSelectedConvNumberId(numberId);
-    setSelectedConvKey(conv?.conversationKey || `${phone}__${numberId || 'none'}`);
+    setSelectedConvKey(conversationKey);
+    setStickyConversationKeys(prev => {
+      if (prev.has(conversationKey)) return prev;
+      const next = new Set(prev);
+      next.add(conversationKey);
+      return next;
+    });
     setSelectedConvChannel(conv.channel || null);
     loadMessages(phone, false, numberId);
     const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
@@ -763,7 +775,14 @@ export default function ChatPage() {
     .filter(c =>
       c.phone.includes(searchQuery) ||
       c.customerName?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    )
+    .sort((a, b) => {
+      const aSticky = stickyConversationKeys.has(getConversationKey(a));
+      const bSticky = stickyConversationKeys.has(getConversationKey(b));
+
+      if (aSticky !== bSticky) return aSticky ? -1 : 1;
+      return b.lastMessageAt.getTime() - a.lastMessageAt.getTime();
+    });
 
   const selectedConv = conversations.find(c => c.conversationKey === selectedConvKey) || conversations.find(c => c.phone === selectedPhone);
   const contactsCount = conversations.filter(c => !c.isGroup).length;
@@ -1459,6 +1478,13 @@ export default function ChatPage() {
         onFinish={async (reason) => {
           if (selectedPhone) {
             await finishConversation(selectedPhone, reason);
+            const conversationKey = selectedConvKey || `${selectedPhone}__${selectedConvNumberId || 'none'}`;
+            setStickyConversationKeys(prev => {
+              if (!prev.has(conversationKey)) return prev;
+              const next = new Set(prev);
+              next.delete(conversationKey);
+              return next;
+            });
             // Immediately update conversations state so UI reflects the change
             setConversations(prev => prev.map(c =>
               c.phone === selectedPhone ? { ...c, isFinished: true } : c
