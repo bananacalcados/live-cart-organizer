@@ -660,6 +660,7 @@ ${stageSpecificRules}
 
     console.log(`[livete-respond] Done: order=${orderId}, stage=${currentStage}→${effectiveStage}, tools=[${toolsExecuted.join(',')}], time=${responseTime}ms`);
 
+    await releaseLock();
     return new Response(JSON.stringify({
       handled: true, orderId,
       stage: effectiveStage, previousStage: currentStage,
@@ -667,6 +668,12 @@ ${stageSpecificRules}
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
+    } catch (innerError) {
+      // Release lock on any error within the locked section
+      await releaseLock();
+      throw innerError;
+    }
 
   } catch (error) {
     console.error('[livete-respond] Error:', error);
