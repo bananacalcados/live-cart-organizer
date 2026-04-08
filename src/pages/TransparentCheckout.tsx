@@ -494,17 +494,35 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
       });
       if (error) throw error;
       if (data?.quotes) {
-        setFreightOptions(data.quotes);
-        // Auto-select: repeat_free first, then event_fixed
-        if (data.repeat_customer_free_shipping) {
-          const freeOpt = data.quotes.find((q: FreightOption) => q.type === 'repeat_free');
+        let quotes = data.quotes as FreightOption[];
+        
+        // If order has free_shipping, inject a "Frete Grátis" option at the top
+        if (orderData?.freeShipping) {
+          quotes = [
+            { id: 'order-free', carrier: 'Frete Grátis ✅', service: 'Cortesia', price: 0, delivery_days: null, type: 'order_free' },
+            ...quotes,
+          ];
+        }
+        
+        setFreightOptions(quotes);
+        
+        // Auto-select priority: order_free > repeat_free > event_fixed
+        if (orderData?.freeShipping) {
+          const freeOpt = quotes.find((q: FreightOption) => q.type === 'order_free');
+          if (freeOpt) {
+            setSelectedFreight(freeOpt.id);
+            setShowAllFreight(false);
+            onShippingSelected(freeOpt);
+          }
+        } else if (data.repeat_customer_free_shipping) {
+          const freeOpt = quotes.find((q: FreightOption) => q.type === 'repeat_free');
           if (freeOpt) {
             setSelectedFreight(freeOpt.id);
             setShowAllFreight(false);
             onShippingSelected(freeOpt);
           }
         } else {
-          const eventFixed = data.quotes.find((q: FreightOption) => q.type === 'event_fixed');
+          const eventFixed = quotes.find((q: FreightOption) => q.type === 'event_fixed');
           if (eventFixed) {
             setSelectedFreight(eventFixed.id);
             setShowAllFreight(false);
