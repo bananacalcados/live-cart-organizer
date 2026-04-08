@@ -135,7 +135,6 @@ Deno.serve(async (req) => {
 
     if (posSales.length > 0) {
       const customerIds = [...new Set(posSales.filter(s => s.customer_id).map(s => s.customer_id))];
-      console.log(`[attribution] POS Sales: ${posSales.length}, unique customers: ${customerIds.length}`);
       
       // Batch fetch customers
       const customerMap = new Map<string, { name: string; whatsapp: string; suffix: string }>();
@@ -156,23 +155,10 @@ Deno.serve(async (req) => {
         }
       }
 
-      console.log(`[attribution] Customer map size: ${customerMap.size}`);
-      let posMatchCount = 0;
-      let posSkipNoCustomer = 0;
-      let posSkipNoMatch = 0;
-
       for (const sale of posSales) {
-        if (!sale.customer_id) { posSkipNoCustomer++; continue; }
+        if (!sale.customer_id) continue;
         const customer = customerMap.get(sale.customer_id);
-        if (!customer || !phoneSuffixes.has(customer.suffix)) { 
-          if (customer) {
-            // Log first few misses for debugging
-            if (posSkipNoMatch < 3) console.log(`[attribution] POS miss: suffix=${customer.suffix}, phone=${customer.whatsapp}`);
-          }
-          posSkipNoMatch++; 
-          continue; 
-        }
-        posMatchCount++;
+        if (!customer || !phoneSuffixes.has(customer.suffix)) continue;
 
         // Dedup: if there's a later dispatch for this phone before the purchase, skip
         const laterDate = dedupMap.get(customer.suffix);
