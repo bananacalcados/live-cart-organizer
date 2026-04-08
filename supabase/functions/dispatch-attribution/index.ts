@@ -61,6 +61,8 @@ Deno.serve(async (req) => {
     const dispatchDate = dispatch.created_at || dispatch.started_at;
     const windowEnd = new Date(new Date(dispatchDate).getTime() + window_days * 24 * 60 * 60 * 1000).toISOString();
 
+    console.log(`[attribution] Recipients fetched: ${recipients.length}, dispatch_date: ${dispatchDate}, window_end: ${windowEnd}`);
+
     // Build phone suffix map (last 8 digits) for matching
     const phoneSuffixes = new Map<string, string>(); // suffix -> original phone
     const recipientNames = new Map<string, string>(); // suffix -> name
@@ -71,6 +73,7 @@ Deno.serve(async (req) => {
       if (r.recipient_name) recipientNames.set(suffix, r.recipient_name);
     }
     const suffixArray = Array.from(phoneSuffixes.keys());
+    console.log(`[attribution] Unique phone suffixes: ${phoneSuffixes.size}`);
 
     // 3. Check for NEWER dispatches that also reached these phones (for dedup)
     // Get all dispatches AFTER this one
@@ -134,6 +137,7 @@ Deno.serve(async (req) => {
 
     if (posSales.length > 0) {
       const customerIds = [...new Set(posSales.filter(s => s.customer_id).map(s => s.customer_id))];
+      console.log(`[attribution] POS Sales: ${posSales.length}, unique customers: ${customerIds.length}`);
       
       // Batch fetch customers
       const customerMap = new Map<string, { name: string; whatsapp: string; suffix: string }>();
