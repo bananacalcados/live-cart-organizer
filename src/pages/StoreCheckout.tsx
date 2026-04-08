@@ -387,7 +387,16 @@ function StepDelivery({ form, setForm, onNext, onBack, saleData, onShippingSelec
         body: { recipient_cep: cepDigits, store, total_value: subtotal, weight_kg: 0.3, items_count: totalQty, store_id: saleData?.store_id },
       });
       if (error) throw error;
-      if (data?.quotes) setFreightOptions(data.quotes);
+      if (data?.quotes) {
+        setFreightOptions(data.quotes);
+        // Auto-select store fixed option if available
+        const storeFixed = data.quotes.find((q: FreightOption) => q.type === 'event_fixed');
+        if (storeFixed) {
+          setSelectedFreight(storeFixed.id);
+          setShowAllFreight(false);
+          onShippingSelected(storeFixed);
+        }
+      }
     } catch (err) {
       console.error("Error quoting freight:", err);
       setFreightOptions([{ id: 'pickup', carrier: 'Retirada na Loja', service: 'Grátis', price: 0, delivery_days: 0, type: 'pickup' }]);
