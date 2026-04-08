@@ -1316,7 +1316,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         open={showBulkMessageDialog}
         onOpenChange={setShowBulkMessageDialog}
         phones={bulkMessagePhones}
-        whatsappNumberId={numberIdToUse}
+        whatsappNumberId={selectedSendNumberId}
         onDone={() => setBulkMessagePhones([])}
       />
     </div>
