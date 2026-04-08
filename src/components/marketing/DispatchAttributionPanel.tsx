@@ -39,7 +39,10 @@ interface AttributionResult {
   total_buyers: number;
   total_orders: number;
   cost: number;
+  cost_per_message: number;
+  template_category: string;
   roi: string | null;
+  roas: string | null;
   window_days: number;
 }
 
