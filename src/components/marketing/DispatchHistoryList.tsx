@@ -195,7 +195,7 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
       // Fetch ALL recipients (up to 50k) using pagination
       let allRecipients: RecipientRow[] = [];
       let page = 0;
-      const PAGE_SIZE = 5000;
+      const PAGE_SIZE = 1000;
       while (true) {
         const { data: batch } = await supabase
           .from('dispatch_recipients')
