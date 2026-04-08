@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
       posPage++;
     }
 
-    if (posSales && posSales.length > 0) {
+    if (posSales.length > 0) {
       const customerIds = [...new Set(posSales.filter(s => s.customer_id).map(s => s.customer_id))];
       
       // Batch fetch customers
