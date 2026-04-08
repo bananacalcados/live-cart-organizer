@@ -32,7 +32,7 @@ import { POSSendTemplateDialog } from "./POSSendTemplateDialog";
 import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
-import { BulkMessageDialog } from "@/components/chat/BulkMessageDialog";
+import { BulkMessageDialog, BulkRecipient } from "@/components/chat/BulkMessageDialog";
 
 interface Props {
   storeId: string;
@@ -88,7 +88,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [bulkFinishPhones, setBulkFinishPhones] = useState<string[]>([]);
   const [showBulkFinishDialog, setShowBulkFinishDialog] = useState(false);
-  const [bulkMessagePhones, setBulkMessagePhones] = useState<string[]>([]);
+  const [bulkMessageRecipients, setBulkMessageRecipients] = useState<BulkRecipient[]>([]);
   const [showBulkMessageDialog, setShowBulkMessageDialog] = useState(false);
   const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
 
@@ -973,7 +973,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               setShowBulkFinishDialog(true);
             }}
             onBulkMessage={(phones) => {
-              setBulkMessagePhones(phones);
+              const recs = phones.map(p => {
+                const conv = conversations.find(c => c.phone === p);
+                return { phone: p, whatsappNumberId: conv?.whatsapp_number_id || null };
+              });
+              setBulkMessageRecipients(recs);
               setShowBulkMessageDialog(true);
             }}
             hasActiveSupport={hasActiveSupport}
@@ -1315,9 +1319,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       <BulkMessageDialog
         open={showBulkMessageDialog}
         onOpenChange={setShowBulkMessageDialog}
-        phones={bulkMessagePhones}
-        whatsappNumberId={selectedSendNumberId}
-        onDone={() => setBulkMessagePhones([])}
+        recipients={bulkMessageRecipients}
+        onDone={() => setBulkMessageRecipients([])}
       />
     </div>
   );

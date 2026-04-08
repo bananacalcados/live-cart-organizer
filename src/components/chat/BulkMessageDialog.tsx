@@ -28,19 +28,22 @@ interface MetaTemplate {
   components: any[];
 }
 
+export interface BulkRecipient {
+  phone: string;
+  whatsappNumberId: string | null;
+}
+
 interface BulkMessageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  phones: string[];
-  whatsappNumberId?: string | null;
+  recipients: BulkRecipient[];
   onDone?: () => void;
 }
 
 export function BulkMessageDialog({
   open,
   onOpenChange,
-  phones,
-  whatsappNumberId,
+  recipients,
   onDone,
 }: BulkMessageDialogProps) {
   const [tab, setTab] = useState("quick");
@@ -81,8 +84,9 @@ export function BulkMessageDialog({
     if (metaTemplates.length > 0) return;
     setLoadingTemplates(true);
     try {
+      const firstNumberId = recipients[0]?.whatsappNumberId || null;
       const { data, error } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
-        body: { whatsapp_number_id: whatsappNumberId },
+        body: { whatsapp_number_id: firstNumberId },
       });
       if (!error && data?.templates) {
         setMetaTemplates(
@@ -104,26 +108,27 @@ export function BulkMessageDialog({
     }
 
     const msg = messageToSend.trim();
-    if (!msg || phones.length === 0) return;
+    if (!msg || recipients.length === 0) return;
 
     setIsSending(true);
     let sentCount = 0;
     let failCount = 0;
 
-    for (let i = 0; i < phones.length; i++) {
+    for (let i = 0; i < recipients.length; i++) {
+      const r = recipients[i];
       try {
         const { error } = await supabase.functions.invoke("zapi-send-message", {
-          body: { phone: phones[i], message: msg, whatsapp_number_id: whatsappNumberId },
+          body: { phone: r.phone, message: msg, whatsapp_number_id: r.whatsappNumberId },
         });
 
         if (error) throw error;
 
         await supabase.from("whatsapp_messages").insert({
-          phone: phones[i],
+          phone: r.phone,
           message: msg,
           direction: "outgoing",
           status: "sent",
-          whatsapp_number_id: whatsappNumberId || null,
+          whatsapp_number_id: r.whatsappNumberId || null,
         });
 
         sentCount++;
@@ -133,10 +138,9 @@ export function BulkMessageDialog({
 
       setSent(sentCount);
       setFailed(failCount);
-      setProgress(((i + 1) / phones.length) * 100);
+      setProgress(((i + 1) / recipients.length) * 100);
 
-      // Small delay to avoid overloading API
-      if (i < phones.length - 1) await new Promise((r) => setTimeout(r, 200));
+      if (i < recipients.length - 1) await new Promise((res) => setTimeout(res, 200));
     }
 
     setIsSending(false);
@@ -146,20 +150,21 @@ export function BulkMessageDialog({
   };
 
   const sendTemplates = async () => {
-    if (!selectedTemplate || phones.length === 0) return;
+    if (!selectedTemplate || recipients.length === 0) return;
 
     setIsSending(true);
     let sentCount = 0;
     let failCount = 0;
 
-    for (let i = 0; i < phones.length; i++) {
+    for (let i = 0; i < recipients.length; i++) {
+      const r = recipients[i];
       try {
         const { error } = await supabase.functions.invoke("meta-whatsapp-send-template", {
           body: {
-            phone: phones[i],
+            phone: r.phone,
             template_name: selectedTemplate.name,
             language_code: selectedTemplate.language || "pt_BR",
-            whatsapp_number_id: whatsappNumberId,
+            whatsapp_number_id: r.whatsappNumberId,
           },
         });
 
@@ -171,9 +176,9 @@ export function BulkMessageDialog({
 
       setSent(sentCount);
       setFailed(failCount);
-      setProgress(((i + 1) / phones.length) * 100);
+      setProgress(((i + 1) / recipients.length) * 100);
 
-      if (i < phones.length - 1) await new Promise((r) => setTimeout(r, 200));
+      if (i < recipients.length - 1) await new Promise((res) => setTimeout(res, 200));
     }
 
     setIsSending(false);
@@ -193,7 +198,7 @@ export function BulkMessageDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <Send className="h-4 w-4" />
-            Enviar para {phones.length} conversa{phones.length !== 1 ? "s" : ""}
+            Enviar para {recipients.length} conversa{recipients.length !== 1 ? "s" : ""}
           </DialogTitle>
         </DialogHeader>
 
@@ -201,7 +206,7 @@ export function BulkMessageDialog({
           <div className="space-y-4 py-4">
             <Progress value={progress} className="h-2" />
             <div className="text-center text-sm text-muted-foreground">
-              Enviando... {sent + failed}/{phones.length}
+              Enviando... {sent + failed}/{recipients.length}
               {failed > 0 && <span className="text-destructive ml-2">({failed} falha{failed !== 1 ? "s" : ""})</span>}
             </div>
           </div>
@@ -296,7 +301,7 @@ export function BulkMessageDialog({
             </Button>
             <Button size="sm" onClick={handleSend} disabled={!canSend} className="gap-1">
               <Send className="h-3 w-3" />
-              Enviar ({phones.length})
+              Enviar ({recipients.length})
             </Button>
           </DialogFooter>
         )}
