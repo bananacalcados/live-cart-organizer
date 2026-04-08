@@ -343,19 +343,125 @@ ${stageSpecificRules}
       registration, eventId: order.event_id,
     };
 
+    // Determine if we need vision (image) → use Gemini; otherwise → use Anthropic (Claude)
+    const hasImageContent = attachmentAnalysis?.mediaKind === 'image' && attachmentAnalysis.inlineDataUrl && (mediaType === 'image' || referencesVisual);
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+    const useAnthropic = !hasImageContent && !!ANTHROPIC_API_KEY;
+
+    console.log(`[livete-respond] AI engine: ${useAnthropic ? 'Anthropic Claude' : 'Gemini (vision)'}`);
+
     for (let turn = 0; turn < 3; turn++) {
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages,
-          tools: liveteTools,
-        }),
-      });
+      let aiData: any;
+
+      if (useAnthropic) {
+        // ─── ANTHROPIC CLAUDE ───
+        // Convert OpenAI-style messages to Anthropic format
+        const anthropicMessages = messages
+          .filter((m: any) => m.role !== 'system')
+          .map((m: any) => {
+            if (m.role === 'tool') {
+              return {
+                role: 'user',
+                content: [{
+                  type: 'tool_result',
+                  tool_use_id: m.tool_call_id,
+                  content: m.content,
+                }],
+              };
+            }
+            if (m.role === 'assistant' && m.tool_calls) {
+              const content: any[] = [];
+              if (m.content) content.push({ type: 'text', text: m.content });
+              for (const tc of m.tool_calls) {
+                content.push({
+                  type: 'tool_use',
+                  id: tc.id,
+                  name: tc.function.name,
+                  input: JSON.parse(tc.function.arguments || '{}'),
+                });
+              }
+              return { role: 'assistant', content };
+            }
+            return { role: m.role, content: typeof m.content === 'string' ? m.content : m.content };
+          });
+
+        // Convert tools to Anthropic format
+        const anthropicTools = liveteTools.map((t: any) => ({
+          name: t.function.name,
+          description: t.function.description,
+          input_schema: t.function.parameters,
+        }));
+
+        const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': ANTHROPIC_API_KEY!,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1024,
+            system: systemPrompt,
+            messages: anthropicMessages,
+            tools: anthropicTools,
+          }),
+        });
+
+        if (!anthropicResponse.ok) {
+          const errBody = await anthropicResponse.text();
+          console.error(`[livete-respond] Anthropic error ${anthropicResponse.status}: ${errBody}`);
+          return new Response(JSON.stringify({ handled: false, reason: 'ai_error' }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const anthropicData = await anthropicResponse.json();
+
+        // Convert Anthropic response to OpenAI-compatible format
+        const textBlocks = anthropicData.content?.filter((b: any) => b.type === 'text') || [];
+        const toolBlocks = anthropicData.content?.filter((b: any) => b.type === 'tool_use') || [];
+
+        const toolCalls = toolBlocks.map((tb: any) => ({
+          id: tb.id,
+          type: 'function',
+          function: { name: tb.name, arguments: JSON.stringify(tb.input) },
+        }));
+
+        aiData = {
+          choices: [{
+            message: {
+              role: 'assistant',
+              content: textBlocks.map((b: any) => b.text).join('\n') || null,
+              tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+            },
+          }],
+        };
+      } else {
+        // ─── GEMINI (for vision/image analysis) ───
+        const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages,
+            tools: liveteTools,
+          }),
+        });
+
+        if (!aiResponse.ok) {
+          const errBody = await aiResponse.text();
+          console.error(`[livete-respond] AI error ${aiResponse.status}: ${errBody}`);
+          return new Response(JSON.stringify({ handled: false, reason: 'ai_error' }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        aiData = await aiResponse.json();
+      }
 
       if (!aiResponse.ok) {
         const errBody = await aiResponse.text();
