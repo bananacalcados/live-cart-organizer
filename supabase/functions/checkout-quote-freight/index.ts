@@ -234,33 +234,61 @@ serve(async (req) => {
       console.warn('Error fetching shipping rules:', e.message);
     }
 
-    // Apply rules to carrier quotes
+    // Apply rules to carrier quotes AND generate standalone event_fixed quotes
     if (shippingRules.length > 0) {
+      // Sort rules: event-specific first, then by priority
+      const sortedRules = [...shippingRules].sort((a: any, b: any) => {
+        if (a.event_id && !b.event_id) return -1;
+        if (!a.event_id && b.event_id) return 1;
+        return (b.priority || 0) - (a.priority || 0);
+      });
+
+      // 1. Create standalone "Frete Especial Live" for fixed_price event rules
+      if (event_id) {
+        const eventFixedRules = sortedRules.filter((rule: any) =>
+          rule.event_id === event_id &&
+          rule.rule_type === 'fixed_price' &&
+          rule.fixed_price != null
+        );
+
+        for (const rule of eventFixedRules) {
+          // Check region match
+          if (rule.region_states && rule.region_states.length > 0) {
+            const destState = cepToState(cepDigits);
+            if (!destState || !rule.region_states.includes(destState)) continue;
+          }
+
+          const regionLabel = rule.region_states?.length > 0
+            ? ` (${rule.region_states.join(', ')})`
+            : '';
+
+          quotes.push({
+            id: `event-fixed-${rule.id}`,
+            carrier: `Frete Especial Live${regionLabel}`,
+            service: rule.carrier_match || 'Padrão',
+            price: rule.fixed_price,
+            delivery_days: null,
+            type: 'event_fixed',
+          });
+        }
+      }
+
+      // 2. Apply modifier rules to Frenet carrier quotes
       for (let i = 0; i < quotes.length; i++) {
         const q = quotes[i];
-        if (q.type !== 'carrier') continue; // only apply to Frenet quotes
+        if (q.type !== 'carrier') continue;
 
-        // Find first matching rule (highest priority first, event rules > global)
-        const matchingRule = shippingRules
-          .sort((a: any, b: any) => {
-            // Event-specific rules have priority over global
-            if (a.event_id && !b.event_id) return -1;
-            if (!a.event_id && b.event_id) return 1;
-            return (b.priority || 0) - (a.priority || 0);
-          })
-          .find((rule: any) => {
-            // Check carrier match
-            if (rule.carrier_match) {
-              const carrierLower = (q.carrier + ' ' + q.service).toLowerCase();
-              if (!carrierLower.includes(rule.carrier_match.toLowerCase())) return false;
-            }
-            // Check region (state) match via CEP-to-state mapping
-            if (rule.region_states && rule.region_states.length > 0) {
-              const destState = cepToState(cepDigits);
-              if (!destState || !rule.region_states.includes(destState)) return false;
-            }
-            return true;
-          });
+        const matchingRule = sortedRules.find((rule: any) => {
+          if (rule.carrier_match) {
+            const carrierLower = (q.carrier + ' ' + q.service).toLowerCase();
+            if (!carrierLower.includes(rule.carrier_match.toLowerCase())) return false;
+          }
+          if (rule.region_states && rule.region_states.length > 0) {
+            const destState = cepToState(cepDigits);
+            if (!destState || !rule.region_states.includes(destState)) return false;
+          }
+          return true;
+        });
 
         if (matchingRule) {
           if (matchingRule.rule_type === 'fixed_price' && matchingRule.fixed_price != null) {
@@ -275,10 +303,12 @@ serve(async (req) => {
       }
     }
 
-    // Sort: repeat_free first, then pickup, then local, then by price
+    // Sort: repeat_free first, then event_fixed, then pickup, then local, then by price
     quotes.sort((a, b) => {
       if (a.type === 'repeat_free') return -1;
       if (b.type === 'repeat_free') return 1;
+      if (a.type === 'event_fixed') return -1;
+      if (b.type === 'event_fixed') return 1;
       if (a.type === 'pickup') return -1;
       if (b.type === 'pickup') return 1;
       if (a.type === 'local') return -1;
