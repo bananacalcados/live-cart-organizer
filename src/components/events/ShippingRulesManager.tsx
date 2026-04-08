@@ -109,6 +109,7 @@ export function ShippingRulesManager({ eventId, storeId }: Props) {
       discount_fixed: null,
       priority: editing.priority || 0,
       event_id: eventId || null,
+      store_id: storeId || null,
     };
 
     let error;
