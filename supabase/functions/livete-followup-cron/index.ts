@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getFollowupPrompt } from "../_shared/livete-stage-prompts.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,52 +18,43 @@ function getNextDay10am(fromDate: Date): Date {
   return next;
 }
 
-// Contextual messages by stage_atendimento and level
-const STAGE_MESSAGES: Record<string, string[]> = {
-  endereco: [
-    'Oi! 😊 Só preciso confirmar seu endereço pra dar andamento no pedido. Pode me passar?',
-    'Oi! Ainda tô aguardando seu endereço pra continuar 📦 Qualquer dúvida, é só falar!',
-    'Olá! Seu produto tá separadinho aqui esperando, só falta o endereço! Precisa de ajuda?',
-    'Oi! Último aviso sobre seu pedido ⏰ Me passa seu endereço pra eu conseguir finalizar, tá?',
-  ],
-  dados_pessoais: [
-    'Oi! Falta só seus dados (nome completo, CPF e email) pra gerar o pagamento! 😊',
-    'Oi! Tô aguardando seus dados pra finalizar. É bem rapidinho! Precisa de ajuda?',
-    'Olá! Seu pedido tá quase pronto, só falta CPF e email pra gerar o pagamento 💳',
-    'Oi! Último aviso ⏰ Me manda seus dados (CPF e email) pra eu não perder o seu pedido!',
-  ],
-  forma_pagamento: [
-    'Oi! Qual forma de pagamento prefere? PIX ou cartão? 💳',
-    'Oi! Só falta escolher a forma de pagamento! PIX tem desconto especial 😊',
-    'Olá! Tô com seu pedido prontinho, só preciso que escolha: PIX ou cartão?',
-    'Oi! Último aviso sobre o pagamento ⏰ Me diz se prefere PIX ou cartão que já gero pra você!',
-  ],
-  aguardando_pix: [
-    'Oi! Vi que o PIX ainda tá pendente 😊 O código tá ativo, é só copiar e colar no app do banco!',
-    'Oi! Tá tendo dificuldade com o PIX? Posso gerar um novo código se precisar!',
-    'Olá! O prazo do PIX tá acabando ⏰ Quer que eu gere um novo ou prefere pagar no cartão?',
-    'Oi! Último aviso sobre o PIX pendente. Quer que eu cancele ou gere um novo código? Me avisa!',
-  ],
-  aguardando_cartao: [
-    'Oi! Vi que o pagamento no cartão ainda não foi concluído. Tá tendo alguma dificuldade? 😊',
-    'Oi! O link de pagamento ainda tá ativo! Precisa de ajuda pra finalizar?',
-    'Olá! Se o cartão não tá passando, posso gerar um PIX pra você! O que acha?',
-    'Oi! Último aviso ⏰ Me avisa se quer continuar com o cartão ou se prefere PIX!',
-  ],
-  contatado: [
-    'Oi! Tudo bem? Vi que você separou um produto na live 😊 Posso te ajudar a finalizar?',
-    'Oi! Seu produto ainda tá separadinho aqui! Quer continuar com a compra?',
-    'Olá! Passando pra lembrar do seu pedido da live 🛍️ Posso te ajudar?',
-    'Oi! Último aviso sobre o produto que você separou na live ⏰ Ainda tem interesse?',
-  ],
-};
+async function generateFollowupMessage(
+  stage: string,
+  productsSummary: string,
+  conversationHistory: string,
+  customerName: string,
+  apiKey: string,
+): Promise<string> {
+  const prompt = getFollowupPrompt(stage, productsSummary, conversationHistory, customerName);
 
-const DEFAULT_MESSAGES = [
-  'Oi! Tudo bem? Posso te ajudar com alguma coisa? 😊',
-  'Oi! Ainda tô por aqui caso precise de ajuda!',
-  'Olá! Precisa de alguma ajuda pra finalizar? Estou à disposição!',
-  'Oi! Último aviso ⏰ Me avisa se ainda precisa de ajuda!',
-];
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 150,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`[livete-followup] AI error ${response.status}`);
+      return '';
+    }
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content?.trim() || '';
+    // Remove quotes if AI wraps in them
+    return text.replace(/^["']|["']$/g, '').trim();
+  } catch (err) {
+    console.error('[livete-followup] AI generation error:', err);
+    return '';
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -72,6 +64,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const now = new Date();
@@ -80,7 +73,6 @@ serve(async (req) => {
     let deactivated = 0;
 
     // ── STEP 1: Auto-create followups for active orders without one ──
-    // Find orders in active events that are NOT paid and have a stage_atendimento
     const { data: activeEvents } = await supabase
       .from('events')
       .select('id')
@@ -99,13 +91,10 @@ serve(async (req) => {
       for (const order of (unpaidOrders || [])) {
         const phone = (order as any).customers?.whatsapp;
         if (!phone) continue;
-
-        // Skip if AI is paused for this order
         if ((order as any).ai_paused) continue;
 
         const normalizedPhone = phone.replace(/\D/g, '');
 
-        // Check if followup already exists for this order
         const { data: existing } = await supabase
           .from('livete_followups')
           .select('id')
@@ -115,7 +104,6 @@ serve(async (req) => {
 
         if (existing) continue;
 
-        // Check last message - if outgoing and old enough, create followup
         const { data: lastMsg } = await supabase
           .from('whatsapp_messages')
           .select('direction, created_at')
@@ -128,11 +116,8 @@ serve(async (req) => {
 
         const lastMsgTime = new Date(lastMsg.created_at);
         const minutesSince = (now.getTime() - lastMsgTime.getTime()) / 60000;
-
-        // Only create if last outgoing message was sent > 5 min ago
         if (minutesSince < LEVEL_INTERVALS[0]) continue;
 
-        // Create followup entry - next reminder is NOW (will be processed below)
         await supabase.from('livete_followups').insert({
           phone: normalizedPhone,
           order_id: order.id,
@@ -141,7 +126,7 @@ serve(async (req) => {
           reminder_level: 0,
           next_reminder_at: now.toISOString(),
           last_client_message_at: null,
-          whatsapp_number_id: null, // Will be determined from order context
+          whatsapp_number_id: null,
         });
 
         created++;
@@ -180,7 +165,7 @@ serve(async (req) => {
         }
       }
 
-      // Check if AI is paused for this order
+      // Check if AI is paused
       if (fu.order_id) {
         const { data: order } = await supabase
           .from('orders')
@@ -193,7 +178,7 @@ serve(async (req) => {
         }
       }
 
-      // Check if client has responded since last followup was set
+      // Check if client responded
       const { data: lastIncoming } = await supabase
         .from('whatsapp_messages')
         .select('created_at')
@@ -206,8 +191,6 @@ serve(async (req) => {
       if (lastIncoming) {
         const incomingTime = new Date(lastIncoming.created_at);
         const followupUpdated = new Date(fu.updated_at || fu.created_at);
-
-        // Client responded after followup was created/updated → deactivate
         if (incomingTime > followupUpdated) {
           await supabase.from('livete_followups').update({
             is_active: false, completed_at: now.toISOString(),
@@ -219,14 +202,13 @@ serve(async (req) => {
         }
       }
 
-      // Check max levels — tag customer as non-responsive
+      // Check max levels
       if (fu.reminder_level >= fu.max_levels) {
         await supabase.from('livete_followups').update({
           is_active: false, completed_at: now.toISOString(),
         }).eq('id', fu.id);
         deactivated++;
 
-        // Tag customer as non-responsive for future nurturing funnels
         if (fu.order_id) {
           const { data: orderForTag } = await supabase
             .from('orders')
@@ -252,29 +234,73 @@ serve(async (req) => {
         continue;
       }
 
-      // Get current stage from order (may have changed)
+      // Get current stage and order data for context
       let currentStage = fu.stage_atendimento || 'contatado';
+      let productsSummary = '';
+      let customerName = '';
+
       if (fu.order_id) {
         const { data: orderData } = await supabase
           .from('orders')
-          .select('stage_atendimento')
+          .select('stage_atendimento, products, customer_id')
           .eq('id', fu.order_id)
           .maybeSingle();
         if (orderData?.stage_atendimento) {
           currentStage = orderData.stage_atendimento;
         }
+        if (orderData?.products) {
+          const products = orderData.products as any[];
+          productsSummary = products.map((p: any) =>
+            `${p.quantity || 1}x ${p.title}${p.variant ? ` (${p.variant})` : ''}`
+          ).join(', ');
+        }
+        if (orderData?.customer_id) {
+          const { data: cust } = await supabase
+            .from('customers')
+            .select('instagram_handle')
+            .eq('id', orderData.customer_id)
+            .maybeSingle();
+          customerName = cust?.instagram_handle || '';
+
+          // Also check registration for real name
+          const { data: reg } = await supabase
+            .from('customer_registrations')
+            .select('full_name')
+            .eq('order_id', fu.order_id)
+            .maybeSingle();
+          if (reg?.full_name) customerName = reg.full_name;
+        }
       }
 
-      // Select message based on stage and level
-      const stageMessages = STAGE_MESSAGES[currentStage] || DEFAULT_MESSAGES;
-      const level = fu.reminder_level;
-      const message = stageMessages[Math.min(level, stageMessages.length - 1)];
+      // Load recent conversation history for AI context
+      const { data: history } = await supabase
+        .from('whatsapp_messages')
+        .select('message, direction')
+        .eq('phone', fu.phone)
+        .order('created_at', { ascending: false })
+        .limit(8);
 
-      // Determine send method - check if order has a whatsapp_number_id or use session
+      const conversationHistory = (history || [])
+        .reverse()
+        .map((m: any) => `${m.direction === 'outgoing' ? 'Livete' : 'Cliente'}: ${m.message}`)
+        .filter(Boolean)
+        .join('\n');
+
+      // Generate AI message
+      let message = await generateFollowupMessage(
+        currentStage, productsSummary, conversationHistory, customerName, LOVABLE_API_KEY
+      );
+
+      // Fallback if AI fails
+      if (!message) {
+        message = customerName
+          ? `Oi ${customerName.split(' ')[0]}! Ainda posso te ajudar com seu pedido da live? 😊`
+          : 'Oi! Ainda posso te ajudar com seu pedido da live? 😊';
+      }
+
+      // Determine send method
       let sendNumberId = fu.whatsapp_number_id;
-
       if (!sendNumberId) {
-        // Try to find the whatsapp number from the AI session
         const { data: session } = await supabase
           .from('automation_ai_sessions')
           .select('whatsapp_number_id')
@@ -312,10 +338,10 @@ serve(async (req) => {
         });
 
         // Calculate next reminder
+        const level = fu.reminder_level;
         const nextLevel = level + 1;
         if (nextLevel < LEVEL_INTERVALS.length) {
           const intervalVal = LEVEL_INTERVALS[nextLevel];
-          // -1 means "next day at 10am"
           const nextReminder = intervalVal === -1
             ? getNextDay10am(now)
             : new Date(now.getTime() + intervalVal * 60000);
@@ -326,7 +352,6 @@ serve(async (req) => {
             updated_at: now.toISOString(),
           }).eq('id', fu.id);
         } else {
-          // Max levels reached after this send — tag will happen on next cron tick
           await supabase.from('livete_followups').update({
             reminder_level: nextLevel,
             is_active: false,
@@ -337,7 +362,7 @@ serve(async (req) => {
         }
 
         sent++;
-        console.log(`[livete-followup] Sent level ${level} to ${fu.phone} (stage=${currentStage})`);
+        console.log(`[livete-followup] AI sent level ${level} to ${fu.phone} (stage=${currentStage}): "${message.slice(0, 80)}"`);
       } catch (sendErr) {
         console.error(`[livete-followup] Send error for ${fu.phone}:`, sendErr);
       }
