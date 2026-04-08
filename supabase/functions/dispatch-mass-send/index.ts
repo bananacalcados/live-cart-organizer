@@ -6,9 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 50;
-const CONCURRENCY = 10;
-const MAX_EXECUTION_MS = 45_000; // 45s safety margin
+const BATCH_SIZE = 30;
+const CONCURRENCY = 5;
+const MAX_EXECUTION_MS = 25_000; // 25s safety margin
 
 interface VariableConfig {
   mode: string;
@@ -381,6 +381,11 @@ serve(async (req) => {
           failedIds.push(r.id);
         }
       }
+
+      // Small delay between chunks to avoid Meta rate limits
+      if (i + CONCURRENCY < pendingRecipients.length) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
     }
 
     // Batch DB updates in chunks of 20
@@ -459,17 +464,15 @@ serve(async (req) => {
 });
 
 function scheduleNextBatch(supabaseUrl: string, supabaseKey: string, dispatchId: string) {
-  // Add 3-second delay between batches to spread DB load and reduce webhook storm
-  setTimeout(() => {
-    const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
-    void fetch(nextUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseKey}`,
-        'apikey': supabaseKey,
-      },
-      body: JSON.stringify({ dispatchId }),
-    }).catch(err => console.error('Failed to chain next batch:', err));
-  }, 3000);
+  // Chain immediately — no setTimeout to avoid losing the call on shutdown
+  const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
+  void fetch(nextUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseKey}`,
+      'apikey': supabaseKey,
+    },
+    body: JSON.stringify({ dispatchId }),
+  }).catch(err => console.error('Failed to chain next batch:', err));
 }
