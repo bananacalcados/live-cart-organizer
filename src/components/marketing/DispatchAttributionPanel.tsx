@@ -49,12 +49,11 @@ interface AttributionResult {
 interface DispatchAttributionPanelProps {
   dispatchId: string;
   sentCount: number;
-  costPerMessage: number | null;
 }
 
 const WINDOW_OPTIONS = [7, 14, 21, 30];
 
-export function DispatchAttributionPanel({ dispatchId, sentCount, costPerMessage }: DispatchAttributionPanelProps) {
+export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttributionPanelProps) {
   const [windowDays, setWindowDays] = useState(7);
   const [result, setResult] = useState<AttributionResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
