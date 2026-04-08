@@ -59,6 +59,7 @@ const EMPTY_RULE: EditingRule = {
 
 interface Props {
   eventId?: string;
+  storeId?: string;
 }
 
 export function ShippingRulesManager({ eventId }: Props) {
