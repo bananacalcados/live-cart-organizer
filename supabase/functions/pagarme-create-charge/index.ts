@@ -27,7 +27,7 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-async function notifyPaymentConfirmed(orderId: string, gateway: string, transactionId: string) {
+async function notifyPaymentConfirmedLocal(orderId: string, gateway: string, transactionId: string) {
   try {
     const webhookUrl = Deno.env.get("AGENTE2_PAGAMENTO_CONFIRMADO") || "https://api.bananacalcados.com.br/webhook/pagamento-confirmado";
     const response = await fetch(webhookUrl, {
@@ -46,9 +46,24 @@ async function notifyPaymentConfirmed(orderId: string, gateway: string, transact
       throw new Error(`payment-confirmado ${response.status}: ${errorBody}`);
     }
 
-    console.log(`[payment-confirmado] Livete notified for order ${orderId} via ${gateway}`);
+    console.log(`[payment-confirmado] Agente2 notified for order ${orderId} via ${gateway}`);
   } catch (error) {
-    console.error("[payment-confirmado] Failed to notify Livete:", error);
+    console.error("[payment-confirmado] Failed to notify Agente2:", error);
+  }
+
+  // Also trigger Livete payment confirmation (sends WhatsApp confirmation to customer)
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (supabaseUrl && supabaseKey) {
+      fetch(`${supabaseUrl}/functions/v1/livete-payment-confirmation`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      }).catch(err => console.error("[payment-confirmado] livete confirmation error:", err));
+    }
+  } catch (err) {
+    console.error("[payment-confirmado] livete trigger error:", err);
   }
 }
 
@@ -852,7 +867,7 @@ serve(async (req) => {
             console.log(`[${result.gateway}] Vinculado ${field}=${val} ao pedido ${params.orderId}`);
           }
 
-          await notifyPaymentConfirmed(params.orderId, result.gateway || "unknown", String(result.transactionId || params.orderId));
+          await notifyPaymentConfirmedLocal(params.orderId, result.gateway || "unknown", String(result.transactionId || params.orderId));
           await autoCreateShopifyOrder(params.orderId, orderSource, supabaseUrl, supabaseKey);
         }
       } else {

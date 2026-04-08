@@ -16,10 +16,14 @@ export function getStagePrompt(stage: string): string {
 
     confirmar_endereco: `## Sua Missão Agora: Confirmar Endereço
 - Monte o endereço completo e pergunte: "Ficou assim: [endereço]. Tá certinho?"
-- Se confirmar → advance_stage para dados_pessoais.
+- Se confirmar → use quote_freight com o CEP do cliente para calcular o frete.
+- Informe o valor do frete ao cliente antes de avançar.
+- Se a cidade for Governador Valadares, ofereça retirada na loja (Centro ou Pérola) como opção.
+- Se escolher retirada → use update_order_shipping com free_shipping=true e save_customer_data com delivery_method="pickup".
+- MESMO para retirada, o endereço já coletado será usado na NFe.
+- Após confirmar endereço + frete → advance_stage para dados_pessoais.
 - Se algo estiver errado → corrija com save_customer_data e confirme novamente.
-- NÃO peça cidade/estado separado se já tem o CEP preenchido.
-- Se a cidade for Governador Valadares e o cliente preferir retirar na loja, AGORA sim ofereça essa opção. Pergunte qual loja: Centro ou Pérola. Use update_order_shipping com free_shipping=true e save_customer_data com delivery_method="pickup". MESMO para retirada, o endereço já coletado será usado na NFe.`,
+- NÃO peça cidade/estado separado se já tem o CEP preenchido.`,
 
     dados_pessoais: `## Sua Missão Agora: Coletar Dados Pessoais
 - Precisa de: Nome Completo, CPF. Email é OPCIONAL.
