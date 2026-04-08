@@ -198,7 +198,7 @@ export function BulkMessageDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <Send className="h-4 w-4" />
-            Enviar para {phones.length} conversa{phones.length !== 1 ? "s" : ""}
+            Enviar para {recipients.length} conversa{recipients.length !== 1 ? "s" : ""}
           </DialogTitle>
         </DialogHeader>
 
@@ -206,7 +206,7 @@ export function BulkMessageDialog({
           <div className="space-y-4 py-4">
             <Progress value={progress} className="h-2" />
             <div className="text-center text-sm text-muted-foreground">
-              Enviando... {sent + failed}/{phones.length}
+              Enviando... {sent + failed}/{recipients.length}
               {failed > 0 && <span className="text-destructive ml-2">({failed} falha{failed !== 1 ? "s" : ""})</span>}
             </div>
           </div>
@@ -301,7 +301,7 @@ export function BulkMessageDialog({
             </Button>
             <Button size="sm" onClick={handleSend} disabled={!canSend} className="gap-1">
               <Send className="h-3 w-3" />
-              Enviar ({phones.length})
+              Enviar ({recipients.length})
             </Button>
           </DialogFooter>
         )}
