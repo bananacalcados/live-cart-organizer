@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     // 1. Get dispatch info
     const { data: dispatch, error: dErr } = await supabase
       .from("dispatch_history")
-      .select("id, started_at, created_at, completed_at, cost_per_message, sent_count")
+      .select("id, started_at, created_at, completed_at, cost_per_message, sent_count, template_category")
       .eq("id", dispatch_id)
       .single();
 
@@ -410,7 +410,12 @@ Deno.serve(async (req) => {
 
     const totalRevenue = buyers.reduce((sum, b) => sum + b.total, 0);
     const uniqueBuyerPhones = new Set(buyers.map(b => b.phone.replace(/\D/g, "").slice(-8)));
-    const cost = (dispatch.cost_per_message || 0) * (dispatch.sent_count || 0);
+    
+    // Calculate cost based on template category
+    const category = (dispatch.template_category || "MARKETING").toUpperCase();
+    const costPerMsg = category === "UTILITY" ? 0.05 : 0.40;
+    const cost = costPerMsg * (dispatch.sent_count || 0);
+    const roas = cost > 0 ? (totalRevenue / cost).toFixed(2) : null;
 
     return new Response(JSON.stringify({
       buyers,
@@ -418,7 +423,10 @@ Deno.serve(async (req) => {
       total_buyers: uniqueBuyerPhones.size,
       total_orders: buyers.length,
       cost,
+      cost_per_message: costPerMsg,
+      template_category: category,
       roi: cost > 0 ? ((totalRevenue - cost) / cost * 100).toFixed(1) : null,
+      roas,
       window_days,
       dispatch_date: dispatchDate,
       window_end: windowEnd,

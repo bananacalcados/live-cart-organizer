@@ -1,0 +1,1 @@
+ALTER TABLE public.dispatch_history ADD COLUMN IF NOT EXISTS template_category text DEFAULT 'MARKETING';

@@ -39,19 +39,21 @@ interface AttributionResult {
   total_buyers: number;
   total_orders: number;
   cost: number;
+  cost_per_message: number;
+  template_category: string;
   roi: string | null;
+  roas: string | null;
   window_days: number;
 }
 
 interface DispatchAttributionPanelProps {
   dispatchId: string;
   sentCount: number;
-  costPerMessage: number | null;
 }
 
 const WINDOW_OPTIONS = [7, 14, 21, 30];
 
-export function DispatchAttributionPanel({ dispatchId, sentCount, costPerMessage }: DispatchAttributionPanelProps) {
+export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttributionPanelProps) {
   const [windowDays, setWindowDays] = useState(7);
   const [result, setResult] = useState<AttributionResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,8 +77,6 @@ export function DispatchAttributionPanel({ dispatchId, sentCount, costPerMessage
       setIsLoading(false);
     }
   };
-
-  const cost = (costPerMessage || 0) * (sentCount || 0);
 
   return (
     <div className="space-y-3">
@@ -137,22 +137,36 @@ export function DispatchAttributionPanel({ dispatchId, sentCount, costPerMessage
             <Card className="p-3 text-center">
               <BarChart3 className="h-4 w-4 mx-auto mb-1 text-amber-600" />
               <div className="text-xl font-bold text-amber-600">
-                R$ {cost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                R$ {result.cost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-xs text-muted-foreground">Custo Envio</div>
+              <div className="text-xs text-muted-foreground">
+                Custo Envio ({result.template_category === 'UTILITY' ? 'Utilidade' : 'Marketing'})
+              </div>
             </Card>
           </div>
 
-          {result.roi && (
-            <Card className={`p-3 text-center ${Number(result.roi) > 0 ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-destructive/10'}`}>
-              <div className={`text-lg font-bold ${Number(result.roi) > 0 ? 'text-emerald-600' : 'text-destructive'}`}>
-                ROI: {result.roi}%
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Retorno sobre investimento (janela {result.window_days} dias)
-              </div>
-            </Card>
-          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {result.roas && (
+              <Card className={`p-3 text-center ${Number(result.roas) >= 1 ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-destructive/10'}`}>
+                <div className={`text-lg font-bold ${Number(result.roas) >= 1 ? 'text-emerald-600' : 'text-destructive'}`}>
+                  ROAS: {result.roas}x
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Faturamento ÷ Custo (janela {result.window_days} dias)
+                </div>
+              </Card>
+            )}
+            {result.roi && (
+              <Card className={`p-3 text-center ${Number(result.roi) > 0 ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-destructive/10'}`}>
+                <div className={`text-lg font-bold ${Number(result.roi) > 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+                  ROI: {result.roi}%
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Retorno sobre investimento
+                </div>
+              </Card>
+            )}
+          </div>
 
           {result.buyers.length > 0 ? (
             <div>

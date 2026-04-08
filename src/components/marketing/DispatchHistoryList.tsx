@@ -684,7 +684,6 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                 <DispatchAttributionPanel
                   dispatchId={selectedDispatch.id}
                   sentCount={selectedDispatch.sent_count || selectedDispatch.stats?.dispatched || 0}
-                  costPerMessage={(selectedDispatch as any).cost_per_message || 0}
                 />
 
                 {/* Recipients Table */}
