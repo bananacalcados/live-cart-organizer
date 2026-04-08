@@ -545,6 +545,80 @@ export async function executeToolCall(
       };
     }
 
+    // ─── QUOTE FREIGHT ───
+    case 'quote_freight': {
+      const cep = (args.cep || '').replace(/\D/g, '');
+      if (cep.length !== 8) {
+        return { success: false, error: 'CEP inválido. Deve ter 8 dígitos.' };
+      }
+
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+        // Get order products for weight/value calculation
+        const products = (ctx.order?.products as any[]) || [];
+        const subtotal = products.reduce((sum: number, p: any) =>
+          sum + (Number(p.price || 0) * Number(p.quantity || 1)), 0);
+        const itemsCount = products.reduce((sum: number, p: any) => sum + (Number(p.quantity || 1)), 0);
+
+        const quoteResp = await fetch(`${supabaseUrl}/functions/v1/checkout-quote-freight`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipient_cep: cep,
+            store: 'centro',
+            total_value: subtotal,
+            weight_kg: itemsCount * 0.5,
+            items_count: itemsCount,
+            order_id: orderId,
+            event_id: ctx.eventId,
+          }),
+        });
+
+        const quoteData = await quoteResp.json();
+
+        if (!quoteData?.quotes || quoteData.quotes.length === 0) {
+          return { success: false, error: 'Não consegui cotar o frete para esse CEP.' };
+        }
+
+        // Find cheapest non-pickup shipping option
+        const shippingOptions = quoteData.quotes.filter((q: any) => q.type !== 'pickup');
+        const cheapest = shippingOptions.sort((a: any, b: any) => a.price - b.price)[0];
+        const hasPickup = quoteData.quotes.some((q: any) => q.type === 'pickup');
+
+        if (cheapest && cheapest.price > 0) {
+          // Auto-save shipping cost to order
+          await supabase.from('orders').update({
+            shipping_cost: cheapest.price,
+            updated_at: new Date().toISOString(),
+          }).eq('id', orderId);
+        }
+
+        const optionLines = quoteData.quotes
+          .filter((q: any) => q.type !== 'pickup')
+          .map((q: any) => `${q.carrier} - ${q.service}: R$${q.price.toFixed(2)}${q.delivery_days ? ` (${q.delivery_days} dias úteis)` : ''}`)
+          .join('\n');
+
+        return {
+          success: true,
+          data: {
+            cheapest_price: cheapest?.price || 0,
+            cheapest_carrier: cheapest ? `${cheapest.carrier} - ${cheapest.service}` : null,
+            cheapest_days: cheapest?.delivery_days || null,
+            has_pickup: hasPickup,
+            all_options: optionLines,
+            shipping_saved: cheapest?.price > 0,
+            message: cheapest?.price > 0
+              ? `Frete mais barato: R$${cheapest.price.toFixed(2)} via ${cheapest.carrier}. Já salvo no pedido.${hasPickup ? ' Retirada na loja também disponível.' : ''}`
+              : `Frete grátis ou retirada disponível.`,
+          },
+        };
+      } catch (e) {
+        return { success: false, error: `Erro ao cotar frete: ${(e as Error).message}` };
+      }
+    }
+
     // ─── LOOKUP CEP ───
     case 'lookup_cep': {
       const cep = (args.cep || '').replace(/\D/g, '');
