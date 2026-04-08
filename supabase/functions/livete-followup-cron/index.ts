@@ -101,6 +101,20 @@ serve(async (req) => {
     let sent = 0;
     let deactivated = 0;
 
+    // ── QUIET HOURS: Block follow-ups between 22h and 8h BRT ──
+    const brNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const brHour = brNow.getHours();
+    if (brHour >= 22 || brHour < 8) {
+      console.log(`[livete-followup] Quiet hours (${brHour}h BRT), skipping all follow-ups`);
+      return new Response(JSON.stringify({
+        message: 'Quiet hours — no follow-ups sent',
+        brHour,
+        created: 0, sent: 0, deactivated: 0,
+      }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // ── STEP 1: Auto-create followups for active orders without one ──
     const { data: activeEvents } = await supabase
       .from('events')
