@@ -80,6 +80,7 @@ export function ConversationList({
   selectedPhone,
   selectedConversationKey,
   onBulkFinish,
+  onBulkMessage,
   hasActiveSupport,
   supportFilterActive,
   onSupportFilterToggle,
@@ -332,6 +333,20 @@ export function ConversationList({
               <span className="text-[11px] text-muted-foreground flex-1">
                 {selectedPhones.size} selecionada{selectedPhones.size !== 1 ? 's' : ''}
               </span>
+              {onBulkMessage && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-7 text-[11px] gap-1"
+                  disabled={selectedPhones.size === 0}
+                  onClick={() => {
+                    onBulkMessage(Array.from(selectedPhones));
+                  }}
+                >
+                  <Send className="h-3 w-3" />
+                  Enviar ({selectedPhones.size})
+                </Button>
+              )}
               <Button
                 variant="destructive"
                 size="sm"
