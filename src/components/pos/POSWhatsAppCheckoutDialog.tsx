@@ -339,6 +339,7 @@ export function POSWhatsAppCheckoutDialog({
                     <span>Total</span><span className="text-primary">{fmt(orderTotal)}</span>
                   </div>
                 </div>
+                </div>
 
                 <Button onClick={handleGenerate} disabled={generating || cart.length === 0} className="w-full h-9 text-sm bg-[#00a884] hover:bg-[#008c6f]">
                   {generating ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Link2 className="h-4 w-4 mr-1" />}
