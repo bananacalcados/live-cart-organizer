@@ -625,6 +625,13 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                   </Card>
                 )}
 
+                {/* Attribution Panel */}
+                <DispatchAttributionPanel
+                  dispatchId={selectedDispatch.id}
+                  sentCount={selectedDispatch.sent_count || selectedDispatch.stats?.dispatched || 0}
+                  costPerMessage={(selectedDispatch as any).cost_per_message || 0}
+                />
+
                 {/* Recipients Table */}
                 <div>
                   <div className="text-sm font-medium mb-2">Destinatários ({recipients.length})</div>
