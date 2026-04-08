@@ -141,23 +141,23 @@ serve(async (req) => {
 
         // Build lookup indexes
         const cpfIndex = new Map<string, any>(); // normalized CPF -> rfm record
-        const phoneIndex = new Map<string, any[]>(); // normalized phone -> rfm records
+        const phoneIndex = new Map<string, any[]>(); // DDD+suffix -> rfm records
         for (const rfm of existingRfm) {
           if (rfm.cpf) {
             const normCpf = rfm.cpf.replace(/\D/g, '');
             if (normCpf.length >= 11) cpfIndex.set(normCpf, rfm);
           }
           if (rfm.phone) {
-            const normPhone = normalizeBRPhone(rfm.phone);
-            if (normPhone) {
-              const arr = phoneIndex.get(normPhone) || [];
+            const phoneKey = extractPhoneKey(rfm.phone);
+            if (phoneKey) {
+              const arr = phoneIndex.get(phoneKey) || [];
               arr.push(rfm);
-              phoneIndex.set(normPhone, arr);
+              phoneIndex.set(phoneKey, arr);
             }
           }
         }
 
-        console.log(`RFM index loaded: ${existingRfm.length} records, ${cpfIndex.size} with CPF, ${phoneIndex.size} unique phones`);
+        console.log(`RFM index loaded: ${existingRfm.length} records, ${cpfIndex.size} with CPF, ${phoneIndex.size} unique phone keys`);
 
         // 1e. Process each POS customer with CPF-first rematching
         const upsertBatch: any[] = [];
@@ -167,6 +167,7 @@ serve(async (req) => {
           const cust = customerMap.get(custId);
           if (!cust) continue;
           const phone = normalizeBRPhone(cust.whatsapp || '');
+          const phoneKey = phone ? extractPhoneKey(phone) : null;
           const cpf = (cust.cpf || '').replace(/\D/g, '') || null;
           const custName = (cust.name || '').trim();
           if (!phone && !cust.email && !cpf) continue;
