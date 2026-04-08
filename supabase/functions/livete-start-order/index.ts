@@ -185,7 +185,7 @@ serve(async (req) => {
       .select('id, created_at')
       .eq('phone', phone)
       .eq('direction', 'outgoing')
-      .eq('message', firstMessage)
+      .ilike('message', `%já estamos separando seu pedido%`)
       .gte('created_at', recentThreshold)
       .order('created_at', { ascending: false })
       .limit(1);
