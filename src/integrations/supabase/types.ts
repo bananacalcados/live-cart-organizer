@@ -2472,6 +2472,7 @@ export type Database = {
           sent_count: number | null
           started_at: string
           status: string | null
+          template_category: string | null
           template_components: Json | null
           template_language: string | null
           template_name: string
@@ -2498,6 +2499,7 @@ export type Database = {
           sent_count?: number | null
           started_at?: string
           status?: string | null
+          template_category?: string | null
           template_components?: Json | null
           template_language?: string | null
           template_name: string
@@ -2524,6 +2526,7 @@ export type Database = {
           sent_count?: number | null
           started_at?: string
           status?: string | null
+          template_category?: string | null
           template_components?: Json | null
           template_language?: string | null
           template_name?: string
