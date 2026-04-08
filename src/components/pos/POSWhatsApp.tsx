@@ -87,6 +87,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [bulkFinishPhones, setBulkFinishPhones] = useState<string[]>([]);
   const [showBulkFinishDialog, setShowBulkFinishDialog] = useState(false);
+  const [bulkMessagePhones, setBulkMessagePhones] = useState<string[]>([]);
+  const [showBulkMessageDialog, setShowBulkMessageDialog] = useState(false);
   const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
 
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -968,6 +970,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             onBulkFinish={(phones) => {
               setBulkFinishPhones(phones);
               setShowBulkFinishDialog(true);
+            }}
+            onBulkMessage={(phones) => {
+              setBulkMessagePhones(phones);
+              setShowBulkMessageDialog(true);
             }}
             hasActiveSupport={hasActiveSupport}
             supportFilterActive={supportFilterActive}
