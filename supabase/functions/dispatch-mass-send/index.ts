@@ -381,6 +381,11 @@ serve(async (req) => {
           failedIds.push(r.id);
         }
       }
+
+      // Small delay between chunks to avoid Meta rate limits
+      if (i + CONCURRENCY < pendingRecipients.length) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
     }
 
     // Batch DB updates in chunks of 20
