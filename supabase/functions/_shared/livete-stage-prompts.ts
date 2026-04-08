@@ -10,10 +10,9 @@ export function getStagePrompt(stage: string): string {
 - Peça o CEP ao cliente.
 - Quando receber o CEP, use lookup_cep IMEDIATAMENTE para preencher rua, bairro, cidade e estado.
 - Depois peça APENAS número e complemento (se necessário).
-- Se o cliente disse "retirada na loja", aceite, dê frete grátis (use update_order_shipping com free_shipping=true) e pergunte qual loja: Centro ou Pérola.
+- NÃO ofereça retirada na loja nesta etapa. Só ofereça DEPOIS de confirmar que o endereço é em Governador Valadares.
 - Se o endereço já estiver nos dados coletados, NÃO peça novamente. Confirme e avance.
-- Quando tiver o endereço completo, use save_customer_data e advance_stage para confirmar_endereco.
-- MESMO para retirada na loja, colete endereço completo (necessário para NFe).`,
+- Quando tiver o endereço completo, use save_customer_data e advance_stage para confirmar_endereco.`,
 
     confirmar_endereco: `## Sua Missão Agora: Confirmar Endereço
 - Monte o endereço completo e pergunte: "Ficou assim: [endereço]. Tá certinho?"
