@@ -312,8 +312,8 @@ export function POSWhatsAppCheckoutDialog({
                     <div className="flex items-end gap-1.5 pb-0.5">
                       <Checkbox checked={freeShipping} onCheckedChange={(v) => { setFreeShipping(!!v); if (v) setShippingValue(""); }} id="free-ship" />
                       <Label htmlFor="free-ship" className="text-[10px] cursor-pointer">Frete Grátis</Label>
+                    </div>
                   </div>
-                </div>
 
                 {/* Totals */}
                 <div className="border-t pt-2 space-y-1">
