@@ -34,11 +34,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2. Get recipients
-    const { data: recipients } = await supabase
-      .from("dispatch_recipients")
-      .select("phone, recipient_name")
-      .eq("dispatch_id", dispatch_id);
+    // 2. Get ALL recipients (paginated to bypass 1000-row limit)
+    let recipients: { phone: string; recipient_name: string | null }[] = [];
+    let page = 0;
+    const PAGE_SIZE = 5000;
+    while (true) {
+      const { data: batch } = await supabase
+        .from("dispatch_recipients")
+        .select("phone, recipient_name")
+        .eq("dispatch_id", dispatch_id)
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      if (!batch || batch.length === 0) break;
+      recipients = recipients.concat(batch);
+      if (batch.length < PAGE_SIZE) break;
+      page++;
+    }
 
     if (!recipients || recipients.length === 0) {
       return new Response(JSON.stringify({
