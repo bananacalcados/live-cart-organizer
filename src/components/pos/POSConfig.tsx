@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle, Phone, Trophy, Target, ListChecks, Check, Sparkles, Calendar, Star, Gift, Pencil, DollarSign } from "lucide-react";
+import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle, Phone, Trophy, Target, ListChecks, Check, Sparkles, Calendar, Star, Gift, Pencil, DollarSign, Truck } from "lucide-react";
+import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -909,6 +910,9 @@ export function POSConfig({ storeId }: Props) {
             <Settings className="h-5 w-5 text-pos-orange" /> Configurações
           </h2>
         </div>
+
+        {/* Shipping Rules */}
+        <ShippingRulesManager storeId={storeId} />
 
         {/* Product Sync */}
         <Card className="bg-pos-white/5 border-pos-orange/20">

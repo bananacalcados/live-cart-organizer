@@ -541,7 +541,14 @@ const Events = () => {
           </TabsContent>
 
           <TabsContent value="shipping">
-            <ShippingRulesManager />
+            <div className="space-y-4">
+              {events.map(event => (
+                <ShippingRulesManager key={event.id} eventId={event.id} />
+              ))}
+              {events.length === 0 && (
+                <p className="text-center text-muted-foreground py-6">Crie um evento primeiro para configurar fretes.</p>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </main>

@@ -59,9 +59,10 @@ const EMPTY_RULE: EditingRule = {
 
 interface Props {
   eventId?: string;
+  storeId?: string;
 }
 
-export function ShippingRulesManager({ eventId }: Props) {
+export function ShippingRulesManager({ eventId, storeId }: Props) {
   const [rules, setRules] = useState<ShippingRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -73,9 +74,11 @@ export function ShippingRulesManager({ eventId }: Props) {
     setLoading(true);
     let query = supabase.from('shipping_rules').select('*').order('priority', { ascending: false });
     if (eventId) {
-      query = query.or(`event_id.eq.${eventId},event_id.is.null`);
+      query = query.eq('event_id', eventId);
+    } else if (storeId) {
+      query = query.eq('store_id', storeId);
     } else {
-      query = query.is('event_id', null);
+      query = query.is('event_id', null).is('store_id', null);
     }
     const { data, error } = await query;
     if (error) {
@@ -86,7 +89,7 @@ export function ShippingRulesManager({ eventId }: Props) {
     setLoading(false);
   };
 
-  useEffect(() => { fetchRules(); }, [eventId]);
+  useEffect(() => { fetchRules(); }, [eventId, storeId]);
 
   const handleSave = async () => {
     if (!editing.name) { toast.error('Nome é obrigatório'); return; }
@@ -106,6 +109,7 @@ export function ShippingRulesManager({ eventId }: Props) {
       discount_fixed: null,
       priority: editing.priority || 0,
       event_id: eventId || null,
+      store_id: storeId || null,
     };
 
     let error;
@@ -168,7 +172,7 @@ export function ShippingRulesManager({ eventId }: Props) {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <Truck className="h-5 w-5" />
-          Opções de Frete {eventId ? 'da Live' : '(Global)'}
+          Opções de Frete {eventId ? 'da Live' : storeId ? 'da Loja' : '(Global)'}
         </CardTitle>
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditing({ ...EMPTY_RULE }); }}>
           <DialogTrigger asChild>

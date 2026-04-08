@@ -61,7 +61,7 @@ serve(async (req) => {
   }
 
   try {
-    const { recipient_cep, store, total_value, weight_kg, items_count, order_id, event_id } = await req.json();
+    const { recipient_cep, store, total_value, weight_kg, items_count, order_id, event_id, store_id } = await req.json();
     if (!recipient_cep) throw new Error('recipient_cep is required');
 
     const cepDigits = recipient_cep.replace(/\D/g, '');
@@ -225,8 +225,10 @@ serve(async (req) => {
       let query = sb.from('shipping_rules').select('*').eq('is_active', true).order('priority', { ascending: false });
       if (event_id) {
         query = query.or(`event_id.eq.${event_id},event_id.is.null`);
+      } else if (store_id) {
+        query = query.or(`store_id.eq.${store_id},store_id.is.null`);
       } else {
-        query = query.is('event_id', null);
+        query = query.is('event_id', null).is('store_id', null);
       }
       const { data: rulesData } = await query;
       shippingRules = rulesData || [];
@@ -243,15 +245,17 @@ serve(async (req) => {
         return (b.priority || 0) - (a.priority || 0);
       });
 
-      // 1. Create standalone "Frete Especial Live" for fixed_price event rules
-      if (event_id) {
-        const eventFixedRules = sortedRules.filter((rule: any) =>
-          rule.event_id === event_id &&
+      // 1. Create standalone fixed-price quotes for event or store rules
+      const contextId = event_id || store_id;
+      const contextType = event_id ? 'event' : 'store';
+      if (contextId) {
+        const fixedRules = sortedRules.filter((rule: any) =>
+          (rule.event_id === contextId || rule.store_id === contextId) &&
           rule.rule_type === 'fixed_price' &&
           rule.fixed_price != null
         );
 
-        for (const rule of eventFixedRules) {
+        for (const rule of fixedRules) {
           // Check region match
           if (rule.region_states && rule.region_states.length > 0) {
             const destState = cepToState(cepDigits);
@@ -262,10 +266,14 @@ serve(async (req) => {
             ? ` (${rule.region_states.join(', ')})`
             : '';
 
+          const label = contextType === 'event' 
+            ? `Frete Especial Live${regionLabel}`
+            : `${rule.name}${regionLabel}`;
+
           quotes.push({
-            id: `event-fixed-${rule.id}`,
-            carrier: `Frete Especial Live${regionLabel}`,
-            service: rule.carrier_match || 'Padrão',
+            id: `${contextType}-fixed-${rule.id}`,
+            carrier: label,
+            service: rule.name || 'Padrão',
             price: rule.fixed_price,
             delivery_days: null,
             type: 'event_fixed',

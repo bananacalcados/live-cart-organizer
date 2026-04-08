@@ -1,0 +1,1 @@
+ALTER TABLE public.shipping_rules ADD COLUMN store_id uuid REFERENCES public.pos_stores(id) ON DELETE CASCADE;
