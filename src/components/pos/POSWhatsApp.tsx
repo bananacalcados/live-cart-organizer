@@ -1311,6 +1311,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           setBulkFinishPhones([]);
         }}
       />
+      {/* Bulk Message Dialog */}
+      <BulkMessageDialog
+        open={showBulkMessageDialog}
+        onOpenChange={setShowBulkMessageDialog}
+        phones={bulkMessagePhones}
+        whatsappNumberId={numberIdToUse}
+        onDone={() => setBulkMessagePhones([])}
+      />
     </div>
   );
 }
