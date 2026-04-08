@@ -28,19 +28,22 @@ interface MetaTemplate {
   components: any[];
 }
 
+export interface BulkRecipient {
+  phone: string;
+  whatsappNumberId: string | null;
+}
+
 interface BulkMessageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  phones: string[];
-  whatsappNumberId?: string | null;
+  recipients: BulkRecipient[];
   onDone?: () => void;
 }
 
 export function BulkMessageDialog({
   open,
   onOpenChange,
-  phones,
-  whatsappNumberId,
+  recipients,
   onDone,
 }: BulkMessageDialogProps) {
   const [tab, setTab] = useState("quick");
