@@ -16,6 +16,7 @@ import {
   MessageSquare, BarChart3, Users, ChevronDown, ChevronUp,
   Pause, Play, CalendarClock, Trash2, Copy, Pencil, Check, X,
 } from "lucide-react";
+import { DispatchAttributionPanel } from "./DispatchAttributionPanel";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
