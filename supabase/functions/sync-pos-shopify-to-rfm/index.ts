@@ -37,6 +37,18 @@ function normalizeBRPhone(raw: string): string {
   return digits;
 }
 
+// Extract DDD + last 8 digits as unique matching key
+function extractPhoneKey(raw: string): string | null {
+  let digits = raw.replace(/\D/g, '');
+  if (!digits || digits.length < 10) return null;
+  // Remove country code 55 if present
+  if (digits.length >= 12 && digits.startsWith('55')) {
+    digits = digits.slice(2);
+  }
+  // DDD = first 2, suffix = last 8
+  return digits.slice(0, 2) + digits.slice(-8);
+}
+
 // Simple name similarity: compare normalized tokens overlap
 function nameSimilarity(a: string, b: string): number {
   const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
