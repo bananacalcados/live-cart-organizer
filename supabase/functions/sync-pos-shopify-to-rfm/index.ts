@@ -184,9 +184,9 @@ serve(async (req) => {
             if (matchedRfm) matchType = 'cpf';
           }
 
-          // Strategy 2: Match by phone + name similarity
-          if (!matchedRfm && phone) {
-            const phoneMatches = phoneIndex.get(phone);
+          // Strategy 2: Match by DDD+suffix phone key + name similarity
+          if (!matchedRfm && phoneKey) {
+            const phoneMatches = phoneIndex.get(phoneKey);
             if (phoneMatches && phoneMatches.length > 0) {
               if (custName) {
                 // Find best name match
