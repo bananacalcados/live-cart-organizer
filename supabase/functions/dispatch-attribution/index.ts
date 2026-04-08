@@ -60,7 +60,6 @@ Deno.serve(async (req) => {
     }
 
     const dispatchDate = dispatch.created_at || dispatch.started_at;
-    const windowEnd = new Date(new Date(dispatchDate).getTime() + window_days * 24 * 60 * 60 * 1000).toISOString();
 
     console.log(`[attribution] Recipients fetched: ${recipients.length}, dispatch_date: ${dispatchDate}, window_end: ${windowEnd}`);
 
