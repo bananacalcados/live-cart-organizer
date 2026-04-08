@@ -191,13 +191,25 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     setSelectedDispatch(dispatch);
     setIsLoadingDetail(true);
     try {
-      const { data } = await supabase
-        .from('dispatch_recipients')
-        .select('phone, recipient_name, status, message_wamid')
-        .eq('dispatch_id', dispatch.id)
-        .order('created_at', { ascending: true });
+      // Fetch ALL recipients (up to 50k) using pagination
+      let allRecipients: RecipientRow[] = [];
+      let page = 0;
+      const PAGE_SIZE = 5000;
+      while (true) {
+        const { data: batch } = await supabase
+          .from('dispatch_recipients')
+          .select('phone, recipient_name, status, message_wamid')
+          .eq('dispatch_id', dispatch.id)
+          .order('created_at', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        if (!batch || batch.length === 0) break;
+        allRecipients = allRecipients.concat(batch);
+        if (batch.length < PAGE_SIZE) break;
+        page++;
+        if (allRecipients.length >= 50000) break;
+      }
 
-      setRecipients(data || []);
+      setRecipients(allRecipients);
 
       // Get live statuses
       if (data && data.length > 0) {
