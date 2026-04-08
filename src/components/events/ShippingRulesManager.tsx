@@ -62,7 +62,7 @@ interface Props {
   storeId?: string;
 }
 
-export function ShippingRulesManager({ eventId }: Props) {
+export function ShippingRulesManager({ eventId, storeId }: Props) {
   const [rules, setRules] = useState<ShippingRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -74,9 +74,11 @@ export function ShippingRulesManager({ eventId }: Props) {
     setLoading(true);
     let query = supabase.from('shipping_rules').select('*').order('priority', { ascending: false });
     if (eventId) {
-      query = query.or(`event_id.eq.${eventId},event_id.is.null`);
+      query = query.eq('event_id', eventId);
+    } else if (storeId) {
+      query = query.eq('store_id', storeId);
     } else {
-      query = query.is('event_id', null);
+      query = query.is('event_id', null).is('store_id', null);
     }
     const { data, error } = await query;
     if (error) {
@@ -87,7 +89,7 @@ export function ShippingRulesManager({ eventId }: Props) {
     setLoading(false);
   };
 
-  useEffect(() => { fetchRules(); }, [eventId]);
+  useEffect(() => { fetchRules(); }, [eventId, storeId]);
 
   const handleSave = async () => {
     if (!editing.name) { toast.error('Nome é obrigatório'); return; }
