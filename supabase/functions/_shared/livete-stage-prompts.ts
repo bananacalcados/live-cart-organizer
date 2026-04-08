@@ -18,7 +18,8 @@ export function getStagePrompt(stage: string): string {
 - Monte o endereço completo e pergunte: "Ficou assim: [endereço]. Tá certinho?"
 - Se confirmar → advance_stage para dados_pessoais.
 - Se algo estiver errado → corrija com save_customer_data e confirme novamente.
-- NÃO peça cidade/estado separado se já tem o CEP preenchido.`,
+- NÃO peça cidade/estado separado se já tem o CEP preenchido.
+- Se a cidade for Governador Valadares e o cliente preferir retirar na loja, AGORA sim ofereça essa opção. Pergunte qual loja: Centro ou Pérola. Use update_order_shipping com free_shipping=true e save_customer_data com delivery_method="pickup". MESMO para retirada, o endereço já coletado será usado na NFe.`,
 
     dados_pessoais: `## Sua Missão Agora: Coletar Dados Pessoais
 - Precisa de: Nome Completo, CPF. Email é OPCIONAL.
