@@ -32,6 +32,7 @@ import { POSSendTemplateDialog } from "./POSSendTemplateDialog";
 import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
+import { BulkMessageDialog } from "@/components/chat/BulkMessageDialog";
 
 interface Props {
   storeId: string;
@@ -87,6 +88,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [bulkFinishPhones, setBulkFinishPhones] = useState<string[]>([]);
   const [showBulkFinishDialog, setShowBulkFinishDialog] = useState(false);
+  const [bulkMessagePhones, setBulkMessagePhones] = useState<string[]>([]);
+  const [showBulkMessageDialog, setShowBulkMessageDialog] = useState(false);
   const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
 
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -969,6 +972,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               setBulkFinishPhones(phones);
               setShowBulkFinishDialog(true);
             }}
+            onBulkMessage={(phones) => {
+              setBulkMessagePhones(phones);
+              setShowBulkMessageDialog(true);
+            }}
             hasActiveSupport={hasActiveSupport}
             supportFilterActive={supportFilterActive}
             onSupportFilterToggle={() => setSupportFilterActive(prev => !prev)}
@@ -1303,6 +1310,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           toast.success(`${bulkFinishPhones.length} conversa${bulkFinishPhones.length !== 1 ? 's' : ''} finalizada${bulkFinishPhones.length !== 1 ? 's' : ''}`);
           setBulkFinishPhones([]);
         }}
+      />
+      {/* Bulk Message Dialog */}
+      <BulkMessageDialog
+        open={showBulkMessageDialog}
+        onOpenChange={setShowBulkMessageDialog}
+        phones={bulkMessagePhones}
+        whatsappNumberId={selectedSendNumberId}
+        onDone={() => setBulkMessagePhones([])}
       />
     </div>
   );

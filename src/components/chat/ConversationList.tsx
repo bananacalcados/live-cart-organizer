@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon } from "lucide-react";
+import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -39,6 +39,7 @@ interface ConversationListProps {
   selectedPhone?: string | null;
   selectedConversationKey?: string | null;
   onBulkFinish?: (phones: string[]) => void;
+  onBulkMessage?: (phones: string[]) => void;
   /** Optional: function to check if a phone has active support tickets */
   hasActiveSupport?: (phone: string) => boolean;
   /** Optional: whether support filter is active */
@@ -79,6 +80,7 @@ export function ConversationList({
   selectedPhone,
   selectedConversationKey,
   onBulkFinish,
+  onBulkMessage,
   hasActiveSupport,
   supportFilterActive,
   onSupportFilterToggle,
@@ -331,6 +333,20 @@ export function ConversationList({
               <span className="text-[11px] text-muted-foreground flex-1">
                 {selectedPhones.size} selecionada{selectedPhones.size !== 1 ? 's' : ''}
               </span>
+              {onBulkMessage && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-7 text-[11px] gap-1"
+                  disabled={selectedPhones.size === 0}
+                  onClick={() => {
+                    onBulkMessage(Array.from(selectedPhones));
+                  }}
+                >
+                  <Send className="h-3 w-3" />
+                  Enviar ({selectedPhones.size})
+                </Button>
+              )}
               <Button
                 variant="destructive"
                 size="sm"
