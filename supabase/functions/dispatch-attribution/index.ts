@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     // 2. Get ALL recipients (paginated to bypass 1000-row limit)
     let recipients: { phone: string; recipient_name: string | null }[] = [];
     let page = 0;
-    const PAGE_SIZE = 5000;
+    const PAGE_SIZE = 1000;
     while (true) {
       const { data: batch } = await supabase
         .from("dispatch_recipients")
@@ -48,6 +48,7 @@ Deno.serve(async (req) => {
       recipients = recipients.concat(batch);
       if (batch.length < PAGE_SIZE) break;
       page++;
+      if (recipients.length >= 50000) break;
     }
 
     if (!recipients || recipients.length === 0) {
