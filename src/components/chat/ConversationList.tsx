@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon } from "lucide-react";
+import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -39,6 +39,7 @@ interface ConversationListProps {
   selectedPhone?: string | null;
   selectedConversationKey?: string | null;
   onBulkFinish?: (phones: string[]) => void;
+  onBulkMessage?: (phones: string[]) => void;
   /** Optional: function to check if a phone has active support tickets */
   hasActiveSupport?: (phone: string) => boolean;
   /** Optional: whether support filter is active */
