@@ -341,6 +341,15 @@ serve(async (req) => {
         }
       }
 
+      // ── LOCK: Move next_reminder_at far ahead BEFORE sending to prevent duplicates ──
+      const level = fu.reminder_level;
+      const nextLevel = level + 1;
+      const lockTime = new Date(now.getTime() + 30 * 60000).toISOString(); // 30 min lock
+      await supabase.from('livete_followups').update({
+        next_reminder_at: lockTime,
+        updated_at: now.toISOString(),
+      }).eq('id', fu.id);
+
       // Send message
       try {
         if (sendNumberId) {
@@ -366,9 +375,7 @@ serve(async (req) => {
           whatsapp_number_id: sendNumberId || null,
         });
 
-        // Calculate next reminder
-        const level = fu.reminder_level;
-        const nextLevel = level + 1;
+        // Calculate real next reminder
         if (nextLevel < LEVEL_INTERVALS.length) {
           const intervalVal = LEVEL_INTERVALS[nextLevel];
           const nextReminder = intervalVal === -1
