@@ -40,6 +40,25 @@ serve(async (req) => {
 
     console.log(`[livete-respond] phone=${phone}, msg="${(messageText || '').slice(0, 80)}", media=${mediaType || 'none'}`);
 
+    // ─── CONCURRENCY LOCK: Prevent duplicate responses for same phone ───
+    const messageHash = `${(messageText || '').slice(0, 50)}_${mediaType || 'text'}`;
+    const { error: lockError } = await supabase
+      .from('livete_processing_locks')
+      .insert({ phone, message_hash: messageHash });
+
+    if (lockError) {
+      // Lock already exists → another invocation is handling this
+      console.log(`[livete-respond] Duplicate blocked for ${phone} (lock exists)`);
+      return new Response(JSON.stringify({ handled: false, reason: 'duplicate_locked' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Ensure lock is released when we finish
+    const releaseLock = () => supabase.from('livete_processing_locks').delete().eq('phone', phone);
+
+    try {
+
     // ─── DEBOUNCE ───
     await sleep(4000);
 
@@ -55,6 +74,7 @@ serve(async (req) => {
     const isMediaMessage = mediaType === 'audio' || mediaType === 'image';
     if (!isMediaMessage && latestMsg && messageText && latestMsg.message !== messageText) {
       console.log(`[livete-respond] Skipping: newer message detected for ${phone}`);
+      await releaseLock();
       return new Response(JSON.stringify({ handled: false, reason: 'debounced' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -640,6 +660,7 @@ ${stageSpecificRules}
 
     console.log(`[livete-respond] Done: order=${orderId}, stage=${currentStage}→${effectiveStage}, tools=[${toolsExecuted.join(',')}], time=${responseTime}ms`);
 
+    await releaseLock();
     return new Response(JSON.stringify({
       handled: true, orderId,
       stage: effectiveStage, previousStage: currentStage,
@@ -647,6 +668,12 @@ ${stageSpecificRules}
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
+    } catch (innerError) {
+      // Release lock on any error within the locked section
+      await releaseLock();
+      throw innerError;
+    }
 
   } catch (error) {
     console.error('[livete-respond] Error:', error);
