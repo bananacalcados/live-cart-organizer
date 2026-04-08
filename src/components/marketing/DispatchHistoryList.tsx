@@ -319,11 +319,20 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     e.stopPropagation();
     if (!onDuplicate) return;
     try {
-      // Fetch recipients from this dispatch
-      const { data: recs } = await supabase
-        .from('dispatch_recipients')
-        .select('phone, recipient_name')
-        .eq('dispatch_id', dispatch.id);
+      // Fetch ALL recipients from this dispatch (paginated)
+      let recs: { phone: string; recipient_name: string | null }[] = [];
+      let dupPage = 0;
+      while (true) {
+        const { data: batch } = await supabase
+          .from('dispatch_recipients')
+          .select('phone, recipient_name')
+          .eq('dispatch_id', dispatch.id)
+          .range(dupPage * 1000, (dupPage + 1) * 1000 - 1);
+        if (!batch || batch.length === 0) break;
+        recs = recs.concat(batch);
+        if (batch.length < 1000) break;
+        dupPage++;
+      }
 
       const d = dispatch as any;
       onDuplicate({
