@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/shopify";
 import { toast } from "sonner";
@@ -47,6 +48,7 @@ export function POSWhatsAppCheckoutDialog({
   const [discountValue, setDiscountValue] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
   const [shippingValue, setShippingValue] = useState("");
+  const [freeShipping, setFreeShipping] = useState(false);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -106,7 +108,7 @@ export function POSWhatsAppCheckoutDialog({
     if (!val || val <= 0) return 0;
     return discountType === "percent" ? Math.min(cartSubtotal, cartSubtotal * (val / 100)) : Math.min(cartSubtotal, val);
   })();
-  const shippingAmount = parseFloat(shippingValue) || 0;
+  const shippingAmount = freeShipping ? 0 : (parseFloat(shippingValue) || 0);
   const orderTotal = Math.max(0, cartSubtotal - discountAmount) + shippingAmount;
 
   const handleGenerate = async () => {
@@ -128,6 +130,7 @@ export function POSWhatsAppCheckoutDialog({
           discount_type: discountType,
           discount_value: discountValue,
           shipping_amount: shippingAmount,
+          free_shipping: freeShipping,
           items_detail: cart.map(c => ({
             title: c.title, variant: c.variantLabel, unit_price: c.price, quantity: c.quantity,
           })),
@@ -305,10 +308,13 @@ export function POSWhatsAppCheckoutDialog({
                     </div>
                     <div className="flex-1">
                       <Label className="text-[10px]">Frete</Label>
-                      <Input value={shippingValue} onChange={(e) => setShippingValue(e.target.value)} placeholder="0" className="h-7 text-xs" type="number" />
+                      <Input value={shippingValue} onChange={(e) => setShippingValue(e.target.value)} placeholder="0" className="h-7 text-xs" type="number" disabled={freeShipping} />
+                    </div>
+                    <div className="flex items-end gap-1.5 pb-0.5">
+                      <Checkbox checked={freeShipping} onCheckedChange={(v) => { setFreeShipping(!!v); if (v) setShippingValue(""); }} id="free-ship" />
+                      <Label htmlFor="free-ship" className="text-[10px] cursor-pointer">Frete Grátis</Label>
                     </div>
                   </div>
-                </div>
 
                 {/* Totals */}
                 <div className="border-t pt-2 space-y-1">
@@ -320,14 +326,19 @@ export function POSWhatsAppCheckoutDialog({
                       <span>Desconto</span><span>-{fmt(discountAmount)}</span>
                     </div>
                   )}
-                  {shippingAmount > 0 && (
-                    <div className="flex justify-between text-xs">
-                      <span>Frete</span><span>{fmt(shippingAmount)}</span>
-                    </div>
-                  )}
+                   {freeShipping ? (
+                     <div className="flex justify-between text-xs">
+                       <span>Frete</span><span className="text-green-600 font-medium">GRÁTIS ✅</span>
+                     </div>
+                   ) : shippingAmount > 0 ? (
+                     <div className="flex justify-between text-xs">
+                       <span>Frete</span><span>{fmt(shippingAmount)}</span>
+                     </div>
+                   ) : null}
                   <div className="flex justify-between text-sm font-bold">
                     <span>Total</span><span className="text-primary">{fmt(orderTotal)}</span>
                   </div>
+                </div>
                 </div>
 
                 <Button onClick={handleGenerate} disabled={generating || cart.length === 0} className="w-full h-9 text-sm bg-[#00a884] hover:bg-[#008c6f]">

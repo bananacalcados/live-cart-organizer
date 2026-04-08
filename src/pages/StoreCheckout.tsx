@@ -26,6 +26,7 @@ interface SaleData {
   total: number;
   discount_amount: number;
   shipping_amount: number;
+  free_shipping: boolean;
   customer_name: string;
   customer_phone: string;
   items: SaleItem[];
@@ -388,13 +389,33 @@ function StepDelivery({ form, setForm, onNext, onBack, saleData, onShippingSelec
       });
       if (error) throw error;
       if (data?.quotes) {
-        setFreightOptions(data.quotes);
-        // Auto-select store fixed option if available
-        const storeFixed = data.quotes.find((q: FreightOption) => q.type === 'event_fixed');
-        if (storeFixed) {
-          setSelectedFreight(storeFixed.id);
-          setShowAllFreight(false);
-          onShippingSelected(storeFixed);
+        let quotes = data.quotes as FreightOption[];
+        
+        // If sale has free_shipping, inject option at top
+        if (saleData?.free_shipping) {
+          quotes = [
+            { id: 'order-free', carrier: 'Frete Grátis ✅', service: 'Cortesia', price: 0, delivery_days: null, type: 'order_free' },
+            ...quotes,
+          ];
+        }
+        
+        setFreightOptions(quotes);
+        
+        // Auto-select priority: order_free > store fixed > normal
+        if (saleData?.free_shipping) {
+          const freeOpt = quotes.find((q: FreightOption) => q.type === 'order_free');
+          if (freeOpt) {
+            setSelectedFreight(freeOpt.id);
+            setShowAllFreight(false);
+            onShippingSelected(freeOpt);
+          }
+        } else {
+          const storeFixed = quotes.find((q: FreightOption) => q.type === 'event_fixed');
+          if (storeFixed) {
+            setSelectedFreight(storeFixed.id);
+            setShowAllFreight(false);
+            onShippingSelected(storeFixed);
+          }
         }
       }
     } catch (err) {
@@ -1027,7 +1048,8 @@ export default function StoreCheckout() {
         store_name: store?.name || "Loja",
         total: Number(sale.total || 0),
         discount_amount: Number((sale as any).discount_amount ?? (sale as any).discount ?? 0),
-        shipping_amount: Number(paymentDetails.shipping_amount ?? 0),
+         shipping_amount: Number(paymentDetails.shipping_amount ?? 0),
+         free_shipping: Boolean(paymentDetails.free_shipping),
         customer_name: customerName,
         customer_phone: customerPhone,
         items: saleItems,
