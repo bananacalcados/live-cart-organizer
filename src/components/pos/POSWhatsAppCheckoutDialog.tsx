@@ -108,7 +108,7 @@ export function POSWhatsAppCheckoutDialog({
     if (!val || val <= 0) return 0;
     return discountType === "percent" ? Math.min(cartSubtotal, cartSubtotal * (val / 100)) : Math.min(cartSubtotal, val);
   })();
-  const shippingAmount = parseFloat(shippingValue) || 0;
+  const shippingAmount = freeShipping ? 0 : (parseFloat(shippingValue) || 0);
   const orderTotal = Math.max(0, cartSubtotal - discountAmount) + shippingAmount;
 
   const handleGenerate = async () => {
