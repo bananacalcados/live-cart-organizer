@@ -85,7 +85,7 @@ async function createAiAssistanceRequest(
   },
 ) {
   try {
-    await supabase.from('ai_assistance_requests').insert({
+    const insertData = {
       request_type: payload.requestType,
       status: 'pending',
       customer_phone: payload.phone,
@@ -96,9 +96,16 @@ async function createAiAssistanceRequest(
       priority: payload.priority || 'normal',
       whatsapp_number_id: payload.whatsappNumberId || null,
       store_id: null,
-    });
+    };
+    console.log('[concierge] Creating ai_assistance_request:', JSON.stringify(insertData));
+    const { error } = await supabase.from('ai_assistance_requests').insert(insertData);
+    if (error) {
+      console.error('[concierge] ai_assistance_requests INSERT error:', JSON.stringify(error));
+    } else {
+      console.log('[concierge] ai_assistance_request created successfully for', payload.phone);
+    }
   } catch (error) {
-    console.error('[concierge] ai assistance request error:', error);
+    console.error('[concierge] ai assistance request exception:', error);
   }
 }
 

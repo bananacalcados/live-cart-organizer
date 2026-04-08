@@ -226,7 +226,7 @@ export async function routeMessage(
   // no longer contains support keywords (e.g. CPF, name, yes/no confirmation).
   if (conciergeAvailableForPhone) {
     try {
-      const recentCutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const recentCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
       const { data: recentConciergeLogs } = await supabase
         .from('ai_conversation_logs')
         .select('created_at, tool_called')
