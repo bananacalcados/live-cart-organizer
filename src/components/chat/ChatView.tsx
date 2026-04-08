@@ -28,6 +28,7 @@ import { CreateSupportTicketDialog } from "../CreateSupportTicketDialog";
 import { MessageStatusIcon } from "./MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./WhatsAppMediaAttachment";
 import { InstagramReferralCard } from "./InstagramReferralCard";
+import { QuickReplyPicker } from "./QuickReplyPicker";
 
 interface ChatViewProps {
   messages: Message[];
@@ -511,6 +512,7 @@ export function ChatView({
           </>
         ) : (
           <>
+            <QuickReplyPicker onSelect={(text) => onNewMessageChange(text)} />
             <EmojiPickerButton 
               onEmojiSelect={(emoji) => onNewMessageChange(newMessage + emoji)} 
             />
