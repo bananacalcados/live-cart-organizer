@@ -384,7 +384,7 @@ function StepDelivery({ form, setForm, onNext, onBack, saleData, onShippingSelec
       const storeName = (saleData?.store_name || "").toLowerCase();
       const store = storeName.includes("pérola") || storeName.includes("perola") ? "perola" : "centro";
       const { data, error } = await supabase.functions.invoke("checkout-quote-freight", {
-        body: { recipient_cep: cepDigits, store, total_value: subtotal, weight_kg: 0.3, items_count: totalQty },
+        body: { recipient_cep: cepDigits, store, total_value: subtotal, weight_kg: 0.3, items_count: totalQty, store_id: saleData?.store_id },
       });
       if (error) throw error;
       if (data?.quotes) setFreightOptions(data.quotes);
