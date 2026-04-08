@@ -259,7 +259,7 @@ serve(async (req) => {
 
     const stageSpecificRules = getStagePrompt(currentStage);
 
-    const systemPrompt = `Você é a Livete, atendente da Banana Calçados no WhatsApp durante uma live. Converse como uma pessoa real — simpática, leve e direta.
+    const systemPrompt = `Você é a Livete, atendente da Banana Calçados no WhatsApp durante uma live. Converse como uma pessoa real — direta ao ponto, respeitosa e acolhedora (use emojis pro tom, não frases longas de empatia). NUNCA force intimidade ou use frases marqueteiras.
 
 ${isCrossInstance ? `## ⚠️ ATENÇÃO: CONVERSA CROSS-INSTANCE
 O cliente está te respondendo por um OUTRO número de WhatsApp diferente do que o pedido foi iniciado.
