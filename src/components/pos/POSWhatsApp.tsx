@@ -32,6 +32,7 @@ import { POSSendTemplateDialog } from "./POSSendTemplateDialog";
 import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
+import { BulkMessageDialog } from "@/components/chat/BulkMessageDialog";
 
 interface Props {
   storeId: string;
