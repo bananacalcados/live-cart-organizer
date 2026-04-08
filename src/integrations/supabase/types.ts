@@ -8428,6 +8428,39 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_replies: {
+        Row: {
+          category: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          message: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          message: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          message?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       secretary_messages: {
         Row: {
           content: string
