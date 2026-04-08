@@ -463,15 +463,6 @@ ${stageSpecificRules}
         aiData = await aiResponse.json();
       }
 
-      if (!aiResponse.ok) {
-        const errBody = await aiResponse.text();
-        console.error(`[livete-respond] AI error ${aiResponse.status}: ${errBody}`);
-        return new Response(JSON.stringify({ handled: false, reason: 'ai_error' }), {
-          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      const aiData = await aiResponse.json();
       const choice = aiData.choices?.[0];
       const assistantMessage = choice?.message;
 
