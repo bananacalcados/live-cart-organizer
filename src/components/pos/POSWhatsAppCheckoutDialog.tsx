@@ -47,6 +47,7 @@ export function POSWhatsAppCheckoutDialog({
   const [discountValue, setDiscountValue] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
   const [shippingValue, setShippingValue] = useState("");
+  const [freeShipping, setFreeShipping] = useState(false);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -128,6 +129,7 @@ export function POSWhatsAppCheckoutDialog({
           discount_type: discountType,
           discount_value: discountValue,
           shipping_amount: shippingAmount,
+          free_shipping: freeShipping,
           items_detail: cart.map(c => ({
             title: c.title, variant: c.variantLabel, unit_price: c.price, quantity: c.quantity,
           })),
@@ -305,8 +307,11 @@ export function POSWhatsAppCheckoutDialog({
                     </div>
                     <div className="flex-1">
                       <Label className="text-[10px]">Frete</Label>
-                      <Input value={shippingValue} onChange={(e) => setShippingValue(e.target.value)} placeholder="0" className="h-7 text-xs" type="number" />
+                      <Input value={shippingValue} onChange={(e) => setShippingValue(e.target.value)} placeholder="0" className="h-7 text-xs" type="number" disabled={freeShipping} />
                     </div>
+                    <div className="flex items-end gap-1.5 pb-0.5">
+                      <Checkbox checked={freeShipping} onCheckedChange={(v) => { setFreeShipping(!!v); if (v) setShippingValue(""); }} id="free-ship" />
+                      <Label htmlFor="free-ship" className="text-[10px] cursor-pointer">Frete Grátis</Label>
                   </div>
                 </div>
 
