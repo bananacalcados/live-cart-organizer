@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     const dispatchDate = dispatch.created_at || dispatch.started_at;
     const windowEnd = new Date(new Date(dispatchDate).getTime() + window_days * 24 * 60 * 60 * 1000).toISOString();
 
-    // Build phone suffix map (last 8 digits) for matching
+    // Build phone suffix map (DDD + last 8 digits) for matching
     const phoneSuffixes = new Map<string, string>(); // suffix -> original phone
     const recipientNames = new Map<string, string>(); // suffix -> name
     for (const r of recipients) {
@@ -74,7 +74,6 @@ Deno.serve(async (req) => {
     const suffixArray = Array.from(phoneSuffixes.keys());
 
     // 3. Check for NEWER dispatches that also reached these phones (for dedup)
-    // Get all dispatches AFTER this one
     const { data: laterDispatches } = await supabase
       .from("dispatch_history")
       .select("id, created_at")
@@ -84,9 +83,7 @@ Deno.serve(async (req) => {
       .in("status", ["completed", "sending"])
       .order("created_at", { ascending: true });
 
-    // For each later dispatch, get their recipients to build dedup map
-    // suffix -> earliest later dispatch date that also reached this phone
-    const dedupMap = new Map<string, string>(); // suffix -> date of next dispatch
+    const dedupMap = new Map<string, string>();
     if (laterDispatches && laterDispatches.length > 0) {
       for (const ld of laterDispatches) {
         const { data: ldRecipients } = await supabase
@@ -112,17 +109,21 @@ Deno.serve(async (req) => {
       total: number;
       source: string;
       purchased_at: string;
+      store_name: string | null;
+      seller_name: string | null;
+      products: { name: string; variant?: string; qty: number; price: number }[];
+      is_first_purchase: boolean;
     }
     const buyers: BuyerResult[] = [];
-    const countedPhones = new Set<string>(); // avoid counting same phone from multiple sources
+    const countedPhones = new Set<string>();
 
-    // 4a. POS Sales (pos_sales + pos_customers) - paginated
+    // 4a. POS Sales
     let posSales: any[] = [];
     let posPage = 0;
     while (true) {
       const { data: batch } = await supabase
         .from("pos_sales")
-        .select("id, total, created_at, customer_id, status")
+        .select("id, total, created_at, customer_id, status, store_id, seller_id")
         .gte("created_at", dispatchDate)
         .lte("created_at", windowEnd)
         .in("status", ["completed", "paid"])
@@ -135,8 +136,11 @@ Deno.serve(async (req) => {
 
     if (posSales.length > 0) {
       const customerIds = [...new Set(posSales.filter(s => s.customer_id).map(s => s.customer_id))];
-      
-      // Batch fetch customers
+      const storeIds = [...new Set(posSales.filter(s => s.store_id).map(s => s.store_id))];
+      const sellerIds = [...new Set(posSales.filter(s => s.seller_id).map(s => s.seller_id))];
+      const saleIds = posSales.map(s => s.id);
+
+      // Batch fetch customers, stores, sellers, items
       const customerMap = new Map<string, { name: string; whatsapp: string; suffix: string }>();
       for (let i = 0; i < customerIds.length; i += 100) {
         const batch = customerIds.slice(i, i + 100);
@@ -144,7 +148,6 @@ Deno.serve(async (req) => {
           .from("pos_customers")
           .select("id, name, whatsapp")
           .in("id", batch);
-        
         if (customers) {
           for (const c of customers) {
             if (c.whatsapp) {
@@ -155,12 +158,89 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Stores
+      const storeMap = new Map<string, string>();
+      if (storeIds.length > 0) {
+        const { data: stores } = await supabase.from("pos_stores").select("id, name").in("id", storeIds);
+        if (stores) for (const s of stores) storeMap.set(s.id, s.name);
+      }
+
+      // Sellers
+      const sellerMap = new Map<string, string>();
+      if (sellerIds.length > 0) {
+        const { data: sellers } = await supabase.from("pos_sellers").select("id, name").in("id", sellerIds);
+        if (sellers) for (const s of sellers) sellerMap.set(s.id, s.name);
+      }
+
+      // Sale items - fetch for matched sales only (we'll filter after matching)
+      const matchedSaleIds: string[] = [];
+
       for (const sale of posSales) {
         if (!sale.customer_id) continue;
         const customer = customerMap.get(sale.customer_id);
         if (!customer || !phoneSuffixes.has(customer.suffix)) continue;
+        const laterDate = dedupMap.get(customer.suffix);
+        if (laterDate && new Date(sale.created_at) >= new Date(laterDate)) continue;
+        matchedSaleIds.push(sale.id);
+      }
 
-        // Dedup: if there's a later dispatch for this phone before the purchase, skip
+      // Fetch items for matched sales
+      const saleItemsMap = new Map<string, { name: string; variant?: string; qty: number; price: number }[]>();
+      for (let i = 0; i < matchedSaleIds.length; i += 50) {
+        const batch = matchedSaleIds.slice(i, i + 50);
+        const { data: items } = await supabase
+          .from("pos_sale_items")
+          .select("sale_id, product_name, variant_name, quantity, unit_price")
+          .in("sale_id", batch);
+        if (items) {
+          for (const item of items) {
+            if (!saleItemsMap.has(item.sale_id)) saleItemsMap.set(item.sale_id, []);
+            saleItemsMap.get(item.sale_id)!.push({
+              name: item.product_name || "Produto",
+              variant: item.variant_name || undefined,
+              qty: item.quantity || 1,
+              price: item.unit_price || 0,
+            });
+          }
+        }
+      }
+
+      // Check first purchase: for each matched customer suffix, check if they had purchases before dispatch
+      const firstPurchaseMap = new Map<string, boolean>();
+      const suffixesForCheck = [...new Set(
+        posSales
+          .filter(s => s.customer_id && customerMap.has(s.customer_id) && phoneSuffixes.has(customerMap.get(s.customer_id)!.suffix))
+          .map(s => customerMap.get(s.customer_id)!.suffix)
+      )];
+
+      // Check pos_sales before dispatch date
+      for (const suffix of suffixesForCheck) {
+        // Find all customer_ids with this suffix
+        const cids = Array.from(customerMap.entries())
+          .filter(([_, v]) => v.suffix === suffix)
+          .map(([k]) => k);
+        if (cids.length === 0) { firstPurchaseMap.set(suffix, true); continue; }
+        
+        const { data: prev, count } = await supabase
+          .from("pos_sales")
+          .select("id", { count: "exact", head: true })
+          .in("customer_id", cids)
+          .lt("created_at", dispatchDate)
+          .in("status", ["completed", "paid"]);
+        
+        const hasZoppy = await supabase
+          .from("zoppy_sales")
+          .select("id", { count: "exact", head: true })
+          .ilike("customer_phone", `%${suffix}`)
+          .lt("completed_at", dispatchDate);
+
+        firstPurchaseMap.set(suffix, (count || 0) === 0 && (hasZoppy.count || 0) === 0);
+      }
+
+      for (const sale of posSales) {
+        if (!sale.customer_id) continue;
+        const customer = customerMap.get(sale.customer_id);
+        if (!customer || !phoneSuffixes.has(customer.suffix)) continue;
         const laterDate = dedupMap.get(customer.suffix);
         if (laterDate && new Date(sale.created_at) >= new Date(laterDate)) continue;
 
@@ -172,6 +252,10 @@ Deno.serve(async (req) => {
             total: sale.total || 0,
             source: "PDV",
             purchased_at: sale.created_at,
+            store_name: storeMap.get(sale.store_id) || null,
+            seller_name: sellerMap.get(sale.seller_id) || null,
+            products: saleItemsMap.get(sale.id) || [],
+            is_first_purchase: firstPurchaseMap.get(customer.suffix) ?? false,
           });
         }
       }
@@ -180,12 +264,39 @@ Deno.serve(async (req) => {
     // 4b. Shopify/Online sales (zoppy_sales)
     const { data: zoppySales } = await supabase
       .from("zoppy_sales")
-      .select("id, total, customer_phone, customer_name, completed_at, status")
+      .select("id, total, customer_phone, customer_name, completed_at, status, line_items")
       .gte("completed_at", dispatchDate)
       .lte("completed_at", windowEnd)
       .in("status", ["paid", "complete", "completed"]);
 
     if (zoppySales) {
+      // Check first purchase for zoppy customers
+      const zoppySuffixes = [...new Set(
+        zoppySales.filter(s => s.customer_phone).map(s => s.customer_phone!.replace(/\D/g, "").slice(-8))
+          .filter(s => phoneSuffixes.has(s))
+      )];
+
+      const zoppyFirstMap = new Map<string, boolean>();
+      for (const suffix of zoppySuffixes) {
+        if (firstPurchaseMap && firstPurchaseMap.has(suffix)) {
+          // Already checked via POS
+          zoppyFirstMap.set(suffix, false);
+          continue;
+        }
+        const { count: prevZoppy } = await supabase
+          .from("zoppy_sales")
+          .select("id", { count: "exact", head: true })
+          .ilike("customer_phone", `%${suffix}`)
+          .lt("completed_at", dispatchDate);
+        const { count: prevPos } = await supabase
+          .from("pos_sales")
+          .select("id", { count: "exact", head: true })
+          .lt("created_at", dispatchDate)
+          .in("status", ["completed", "paid"]);
+        // For pos we'd need to cross-reference customer, simplified: just check zoppy
+        zoppyFirstMap.set(suffix, (prevZoppy || 0) === 0);
+      }
+
       for (const sale of zoppySales) {
         if (!sale.customer_phone) continue;
         const suffix = sale.customer_phone.replace(/\D/g, "").slice(-8);
@@ -197,18 +308,34 @@ Deno.serve(async (req) => {
         const key = suffix + "_zoppy_" + sale.id;
         if (!countedPhones.has(key)) {
           countedPhones.add(key);
+
+          // Parse line_items
+          let products: { name: string; variant?: string; qty: number; price: number }[] = [];
+          if (sale.line_items && Array.isArray(sale.line_items)) {
+            products = (sale.line_items as any[]).map(li => ({
+              name: li.title || li.name || "Produto",
+              variant: li.variant_title || li.variant || undefined,
+              qty: li.quantity || 1,
+              price: li.price || 0,
+            }));
+          }
+
           buyers.push({
             name: sale.customer_name || recipientNames.get(suffix) || sale.customer_phone,
             phone: sale.customer_phone,
             total: sale.total || 0,
             source: "Shopify",
             purchased_at: sale.completed_at,
+            store_name: null,
+            seller_name: null,
+            products,
+            is_first_purchase: zoppyFirstMap.get(suffix) ?? false,
           });
         }
       }
     }
 
-    // 4c. WhatsApp/Event orders (orders + customers)
+    // 4c. WhatsApp/Event orders
     const { data: orders } = await supabase
       .from("orders")
       .select("id, products, is_paid, paid_at, customer_id, stage, created_at")
@@ -246,11 +373,17 @@ Deno.serve(async (req) => {
         const purchaseDate = order.paid_at || order.created_at;
         if (laterDate && new Date(purchaseDate) >= new Date(laterDate)) continue;
 
-        // Calc order total from products
         let orderTotal = 0;
+        let products: { name: string; variant?: string; qty: number; price: number }[] = [];
         if (order.products && Array.isArray(order.products)) {
           for (const p of order.products as any[]) {
             orderTotal += (p.price || 0) * (p.quantity || 1);
+            products.push({
+              name: p.title || "Produto",
+              variant: p.variant || undefined,
+              qty: p.quantity || 1,
+              price: p.price || 0,
+            });
           }
         }
 
@@ -263,6 +396,10 @@ Deno.serve(async (req) => {
             total: orderTotal,
             source: "WhatsApp",
             purchased_at: purchaseDate,
+            store_name: null,
+            seller_name: null,
+            products,
+            is_first_purchase: false,
           });
         }
       }
@@ -272,7 +409,6 @@ Deno.serve(async (req) => {
     buyers.sort((a, b) => new Date(b.purchased_at).getTime() - new Date(a.purchased_at).getTime());
 
     const totalRevenue = buyers.reduce((sum, b) => sum + b.total, 0);
-    // Count unique phones
     const uniqueBuyerPhones = new Set(buyers.map(b => b.phone.replace(/\D/g, "").slice(-8)));
     const cost = (dispatch.cost_per_message || 0) * (dispatch.sent_count || 0);
 

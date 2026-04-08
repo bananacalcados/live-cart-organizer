@@ -9,9 +9,17 @@ import {
 } from "@/components/ui/table";
 import {
   ShoppingCart, DollarSign, Users, TrendingUp, Loader2, BarChart3,
+  ChevronDown, ChevronUp, Store, UserCheck, Star, Package,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+interface BuyerProduct {
+  name: string;
+  variant?: string;
+  qty: number;
+  price: number;
+}
 
 interface Buyer {
   name: string;
@@ -19,6 +27,10 @@ interface Buyer {
   total: number;
   source: string;
   purchased_at: string;
+  store_name: string | null;
+  seller_name: string | null;
+  products: BuyerProduct[];
+  is_first_purchase: boolean;
 }
 
 interface AttributionResult {
@@ -44,10 +56,12 @@ export function DispatchAttributionPanel({ dispatchId, sentCount, costPerMessage
   const [result, setResult] = useState<AttributionResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadedWindow, setLoadedWindow] = useState<number | null>(null);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   const fetchAttribution = async (days: number) => {
     setWindowDays(days);
     setIsLoading(true);
+    setExpandedIndex(null);
     try {
       const { data, error } = await supabase.functions.invoke("dispatch-attribution", {
         body: { dispatch_id: dispatchId, window_days: days },
@@ -145,10 +159,11 @@ export function DispatchAttributionPanel({ dispatchId, sentCount, costPerMessage
               <div className="text-sm font-medium mb-2">
                 Clientes que compraram ({result.buyers.length} pedidos)
               </div>
-              <ScrollArea className="max-h-[250px]">
+              <ScrollArea className="h-[350px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="text-xs w-8"></TableHead>
                       <TableHead className="text-xs">Cliente</TableHead>
                       <TableHead className="text-xs">Telefone</TableHead>
                       <TableHead className="text-xs">Valor</TableHead>
@@ -158,19 +173,113 @@ export function DispatchAttributionPanel({ dispatchId, sentCount, costPerMessage
                   </TableHeader>
                   <TableBody>
                     {result.buyers.map((b, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="text-xs font-medium">{b.name}</TableCell>
-                        <TableCell className="text-xs font-mono">{b.phone}</TableCell>
-                        <TableCell className="text-xs font-semibold text-green-600">
-                          R$ {b.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-[10px]">{b.source}</Badge>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {format(new Date(b.purchased_at), "dd/MM HH:mm", { locale: ptBR })}
-                        </TableCell>
-                      </TableRow>
+                      <>
+                        <TableRow
+                          key={`row-${i}`}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
+                        >
+                          <TableCell className="px-1">
+                            {expandedIndex === i
+                              ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                              : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                          </TableCell>
+                          <TableCell className="text-xs font-medium">
+                            <div className="flex items-center gap-1.5">
+                              {b.name}
+                              {b.is_first_purchase && (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-500 text-amber-600">
+                                  <Star className="h-2.5 w-2.5 mr-0.5" />
+                                  1ª compra
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs font-mono">{b.phone}</TableCell>
+                          <TableCell className="text-xs font-semibold text-green-600">
+                            R$ {b.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-[10px]">{b.source}</Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {format(new Date(b.purchased_at), "dd/MM HH:mm", { locale: ptBR })}
+                          </TableCell>
+                        </TableRow>
+
+                        {expandedIndex === i && (
+                          <TableRow key={`detail-${i}`} className="bg-muted/30">
+                            <TableCell colSpan={6} className="p-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                {/* Store & Seller */}
+                                <div className="space-y-1.5">
+                                  {b.store_name && (
+                                    <div className="flex items-center gap-1.5">
+                                      <Store className="h-3.5 w-3.5 text-muted-foreground" />
+                                      <span className="text-muted-foreground">Loja:</span>
+                                      <span className="font-medium">{b.store_name}</span>
+                                    </div>
+                                  )}
+                                  {b.seller_name && (
+                                    <div className="flex items-center gap-1.5">
+                                      <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                                      <span className="text-muted-foreground">Vendedora:</span>
+                                      <span className="font-medium">{b.seller_name}</span>
+                                    </div>
+                                  )}
+                                  {!b.store_name && !b.seller_name && b.source !== "PDV" && (
+                                    <span className="text-muted-foreground">Venda online</span>
+                                  )}
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    {b.is_first_purchase ? (
+                                      <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">
+                                        <Star className="h-2.5 w-2.5 mr-0.5" />
+                                        Primeira compra — Cliente novo!
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="secondary" className="text-[10px]">
+                                        Cliente recorrente
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Products */}
+                                <div className="sm:col-span-2">
+                                  {b.products && b.products.length > 0 ? (
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-1.5 mb-1">
+                                        <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <span className="text-muted-foreground font-medium">
+                                          Produtos ({b.products.length})
+                                        </span>
+                                      </div>
+                                      {b.products.map((p, pi) => (
+                                        <div key={pi} className="flex justify-between items-center bg-background/50 rounded px-2 py-1">
+                                          <div>
+                                            <span className="font-medium">{p.name}</span>
+                                            {p.variant && (
+                                              <span className="text-muted-foreground ml-1">({p.variant})</span>
+                                            )}
+                                            {p.qty > 1 && (
+                                              <span className="text-muted-foreground ml-1">x{p.qty}</span>
+                                            )}
+                                          </div>
+                                          <span className="text-green-600 font-medium">
+                                            R$ {(p.price * p.qty).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground">Produtos não disponíveis</span>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
                     ))}
                   </TableBody>
                 </Table>
