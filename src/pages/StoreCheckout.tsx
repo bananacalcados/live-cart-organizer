@@ -26,6 +26,7 @@ interface SaleData {
   total: number;
   discount_amount: number;
   shipping_amount: number;
+  free_shipping: boolean;
   customer_name: string;
   customer_phone: string;
   items: SaleItem[];
