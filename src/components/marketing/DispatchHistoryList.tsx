@@ -15,6 +15,7 @@ import {
   History, Send, CheckCircle, XCircle, Eye, Clock, RefreshCw,
   MessageSquare, BarChart3, Users, ChevronDown, ChevronUp,
   Pause, Play, CalendarClock, Trash2, Copy, Pencil, Check, X,
+  Download, FileSpreadsheet, FileText,
 } from "lucide-react";
 import { DispatchAttributionPanel } from "./DispatchAttributionPanel";
 import { format } from "date-fns";
@@ -191,17 +192,29 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     setSelectedDispatch(dispatch);
     setIsLoadingDetail(true);
     try {
-      const { data } = await supabase
-        .from('dispatch_recipients')
-        .select('phone, recipient_name, status, message_wamid')
-        .eq('dispatch_id', dispatch.id)
-        .order('created_at', { ascending: true });
+      // Fetch ALL recipients (up to 50k) using pagination
+      let allRecipients: RecipientRow[] = [];
+      let page = 0;
+      const PAGE_SIZE = 5000;
+      while (true) {
+        const { data: batch } = await supabase
+          .from('dispatch_recipients')
+          .select('phone, recipient_name, status, message_wamid')
+          .eq('dispatch_id', dispatch.id)
+          .order('created_at', { ascending: true })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        if (!batch || batch.length === 0) break;
+        allRecipients = allRecipients.concat(batch);
+        if (batch.length < PAGE_SIZE) break;
+        page++;
+        if (allRecipients.length >= 50000) break;
+      }
 
-      setRecipients(data || []);
+      setRecipients(allRecipients);
 
       // Get live statuses
-      if (data && data.length > 0) {
-        const phones = data.map((r: any) => {
+      if (allRecipients.length > 0) {
+        const phones = allRecipients.map((r: any) => {
           let p = r.phone.replace(/\D/g, '');
           if (!p.startsWith('55')) p = '55' + p;
           return p;
@@ -364,7 +377,40 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     }
   };
 
-  if (dispatches.length === 0 && !isLoading) return null;
+  const exportRecipients = (format: 'csv' | 'xls') => {
+    if (recipients.length === 0) return;
+    const header = ['Telefone', 'Nome', 'Status'];
+    const rows = recipients.map((r) => {
+      let formattedPhone = r.phone.replace(/\D/g, '');
+      if (!formattedPhone.startsWith('55')) formattedPhone = '55' + formattedPhone;
+      const liveStatus = recipientStats[formattedPhone] || r.status || 'pending';
+      return [r.phone, r.recipient_name || '', liveStatus];
+    });
+
+    if (format === 'csv') {
+      const csvContent = [header, ...rows].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `destinatarios_${selectedDispatch?.template_name || 'disparo'}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`CSV exportado com ${recipients.length} destinatários`);
+    } else {
+      // XLS (tab-separated, opens in Excel)
+      const xlsContent = [header, ...rows].map(row => row.join('\t')).join('\n');
+      const blob = new Blob(['\uFEFF' + xlsContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `destinatarios_${selectedDispatch?.template_name || 'disparo'}.xls`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`XLS exportado com ${recipients.length} destinatários`);
+    }
+  };
+
 
   return (
     <Card className="mt-6">
@@ -634,13 +680,25 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
 
                 {/* Recipients Table */}
                 <div>
-                  <div className="text-sm font-medium mb-2">Destinatários ({recipients.length})</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-medium">Destinatários ({recipients.length})</div>
+                    {recipients.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => exportRecipients('csv')}>
+                          <Download className="h-3 w-3" />CSV
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => exportRecipients('xls')}>
+                          <FileSpreadsheet className="h-3 w-3" />XLS
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   {isLoadingDetail ? (
                     <div className="text-center py-4 text-muted-foreground text-sm">
                       <RefreshCw className="h-4 w-4 animate-spin inline mr-2" />Carregando...
                     </div>
                   ) : (
-                    <ScrollArea className="max-h-[300px]">
+                    <ScrollArea className="h-[400px]">
                       <Table>
                         <TableHeader>
                           <TableRow>

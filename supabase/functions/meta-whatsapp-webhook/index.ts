@@ -576,7 +576,6 @@ serve(async (req) => {
         }
 
         // Process status updates
-        // Skip delivered/read for mass dispatch messages to avoid DB overload during bulk sends
         if (value.statuses) {
           for (const status of value.statuses) {
             const messageId = status.id;
@@ -586,17 +585,6 @@ serve(async (req) => {
               case 'delivered': newStatus = 'delivered'; break;
               case 'read': newStatus = 'read'; break;
               case 'failed': newStatus = 'failed'; break;
-            }
-
-            // For delivered/read, only update non-mass-dispatch messages (individual chat)
-            // For sent/failed, always update (failed is critical for error tracking)
-            if (newStatus === 'delivered' || newStatus === 'read') {
-              await supabase
-                .from('whatsapp_messages')
-                .update({ status: newStatus })
-                .eq('message_id', messageId)
-                .eq('is_mass_dispatch', false);
-              continue;
             }
 
             const updateData: Record<string, unknown> = { status: newStatus };
