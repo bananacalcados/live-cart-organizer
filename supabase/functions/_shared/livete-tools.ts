@@ -114,7 +114,7 @@ export const liveteTools = [
         properties: {
           alert_type: {
             type: "string",
-            enum: ["show_product_again", "new_order_unpaid", "customer_issue", "general", "returning_desistente"],
+            enum: ["show_product_again", "new_order_unpaid", "customer_issue", "customer_objection_confidence", "general", "returning_desistente"],
             description: "Tipo do alerta",
           },
           message: { type: "string", description: "Mensagem do alerta para a apresentadora" },
