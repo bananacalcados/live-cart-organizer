@@ -495,12 +495,20 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
       if (error) throw error;
       if (data?.quotes) {
         setFreightOptions(data.quotes);
-        // Auto-select free shipping for repeat customers
+        // Auto-select: repeat_free first, then event_fixed
         if (data.repeat_customer_free_shipping) {
           const freeOpt = data.quotes.find((q: FreightOption) => q.type === 'repeat_free');
           if (freeOpt) {
             setSelectedFreight(freeOpt.id);
+            setShowAllFreight(false);
             onShippingSelected(freeOpt);
+          }
+        } else {
+          const eventFixed = data.quotes.find((q: FreightOption) => q.type === 'event_fixed');
+          if (eventFixed) {
+            setSelectedFreight(eventFixed.id);
+            setShowAllFreight(false);
+            onShippingSelected(eventFixed);
           }
         }
       }
@@ -667,6 +675,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
                     <span className="font-medium text-sm">{opt.carrier}</span>
                     {opt.type === 'pickup' && <Badge variant="secondary" className="text-[10px]">🏪</Badge>}
                     {opt.type === 'local' && <Badge variant="secondary" className="text-[10px]">🏍️</Badge>}
+                    {opt.type === 'event_fixed' && <Badge className="text-[10px] bg-amber-500/20 text-amber-700 border-amber-500/30">⭐ Live</Badge>}
                     {opt.type === 'repeat_free' && <Badge className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">🎉 2ª compra</Badge>}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
