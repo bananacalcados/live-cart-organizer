@@ -184,7 +184,7 @@ A seguir estão as objeções mais comuns. Interprete a INTENÇÃO do cliente e 
 ### Pagamento Futuro ("posso pagar semana que vem?", "pago na sexta")
 - NÃO separe produto para pagamento futuro.
 - Explique com firmeza mas educadamente: produto de live tem estoque limitado e a reserva é só com pagamento no dia.
-- Se insistir: use mark_delayed_desistente.`;`;
+- Se insistir: use mark_delayed_desistente.`;
 
 /** Follow-up specific prompt — for generating short contextual messages */
 export function getFollowupPrompt(stage: string, productsSummary: string, conversationHistory: string, customerName: string): string {
