@@ -280,7 +280,6 @@ serve(async (req) => {
           });
         }
       }
-      }
 
       // 2. Apply modifier rules to Frenet carrier quotes
       for (let i = 0; i < quotes.length; i++) {
