@@ -118,7 +118,15 @@ serve(async (req) => {
     const igHandle = customer.instagram_handle || 'Cliente';
     const igName = igHandle.startsWith('@') ? igHandle : `@${igHandle}`;
 
-    let firstMessage: string;
+    const checkoutLink = order.cart_link || `https://checkout.bananacalcados.com.br/checkout/order/${orderId}`;
+
+    // Messages sent as separate blocks
+    const messageParts: string[] = [];
+
+    messageParts.push(`Oii ${igName} já estamos separando seu pedido. Inclusive já criei o link do seu carrinho 😁\n\nNo link tem todas as informações do seu pedido, inclusive fotos. Só clicar e preencher pra finalizar a compra.\n\nSó clicar abaixo pra entrar 👇`);
+
+    messageParts.push(checkoutLink);
+
     let initialStage: string;
 
     if (savedAddress) {
@@ -131,19 +139,14 @@ serve(async (req) => {
         savedAddress.cep ? `CEP: ${savedAddress.cep}` : '',
       ].filter(Boolean).join(', ');
 
-      firstMessage = `Olá ${igName}! 😊 Já separamos seu pedido:\n\n` +
-        `${productLines}\n\n` +
-        `${pricingBlock}\n\n` +
-        `O endereço pra envio ainda é este?\n📍 ${addrStr}\n\n` +
-        `Posso confirmar esse endereço ou prefere atualizar?`;
+      messageParts.push(`Pra eu ir agilizando seu pedido, o endereço pra envio ainda é este?\n📍 ${addrStr}\n\nPosso confirmar ou prefere atualizar?`);
       initialStage = 'confirmar_endereco';
     } else {
-      firstMessage = `Olá ${igName}! 😊 Já separamos seu pedido:\n\n` +
-        `${productLines}\n\n` +
-        `${pricingBlock}\n\n` +
-        `Pra onde devemos enviar? Me manda o endereço completo (Rua, número, bairro, cidade, estado e CEP) ou prefere *retirar na loja*?`;
+      messageParts.push(`Pra eu ir agilizando seu pedido, pode me passar seu endereço por aqui também? 😊`);
       initialStage = 'endereco';
     }
+
+    const firstMessage = messageParts.join('\n\n');
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const sessionPayload = {
