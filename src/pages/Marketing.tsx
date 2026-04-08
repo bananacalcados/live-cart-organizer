@@ -22,6 +22,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -76,6 +77,7 @@ interface ZoppyCustomer {
   last_purchase_at: string | null;
   first_purchase_at: string | null;
   tags: string[] | null;
+  opt_out_mass_dispatch?: boolean;
 }
 
 interface Campaign {
