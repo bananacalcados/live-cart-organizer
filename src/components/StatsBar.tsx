@@ -23,7 +23,7 @@ export function StatsBar({ orders }: StatsBarProps) {
   const totalOrders = orders.length;
   
   const paidOrders = orders.filter(
-    (o) => o.stage === "paid" || o.stage === "shipped"
+    (o) => o.stage === "paid" || o.stage === "shipped" || o.stage === "awaiting_shipment" || o.stage === "store_pickup" || o.stage === "awaiting_mototaxi"
   );
   const paidOrdersCount = paidOrders.length;
   const unpaidOrdersCount = totalOrders - paidOrdersCount;
