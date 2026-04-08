@@ -459,17 +459,15 @@ serve(async (req) => {
 });
 
 function scheduleNextBatch(supabaseUrl: string, supabaseKey: string, dispatchId: string) {
-  // Add 3-second delay between batches to spread DB load and reduce webhook storm
-  setTimeout(() => {
-    const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
-    void fetch(nextUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseKey}`,
-        'apikey': supabaseKey,
-      },
-      body: JSON.stringify({ dispatchId }),
-    }).catch(err => console.error('Failed to chain next batch:', err));
-  }, 3000);
+  // Chain immediately — no setTimeout to avoid losing the call on shutdown
+  const nextUrl = `${supabaseUrl}/functions/v1/dispatch-mass-send`;
+  void fetch(nextUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${supabaseKey}`,
+      'apikey': supabaseKey,
+    },
+    body: JSON.stringify({ dispatchId }),
+  }).catch(err => console.error('Failed to chain next batch:', err));
 }
