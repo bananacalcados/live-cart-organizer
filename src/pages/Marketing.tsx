@@ -1700,12 +1700,47 @@ export default function Marketing() {
           </DialogHeader>
           {selectedCustomer && (
             <div className="space-y-4">
-              {/* RFM Badge */}
-              {selectedCustomer.rfm_segment && (
-                <Badge className={`${RFM_SEGMENT_COLORS[selectedCustomer.rfm_segment] || ''}`}>
-                  {selectedCustomer.rfm_segment}
-                </Badge>
-              )}
+              {/* RFM Badge + Opt-out */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {selectedCustomer.rfm_segment && (
+                    <Badge className={`${RFM_SEGMENT_COLORS[selectedCustomer.rfm_segment] || ''}`}>
+                      {selectedCustomer.rfm_segment}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="opt-out-toggle" className={`text-xs font-medium ${selectedCustomer.opt_out_mass_dispatch ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {selectedCustomer.opt_out_mass_dispatch ? '🚫 Bloqueado p/ disparos' : 'Recebe disparos'}
+                  </label>
+                  <Switch
+                    id="opt-out-toggle"
+                    checked={!!selectedCustomer.opt_out_mass_dispatch}
+                    onCheckedChange={async (checked) => {
+                      const { error } = await supabase.from('zoppy_customers').update({ opt_out_mass_dispatch: checked }).eq('id', selectedCustomer.id);
+                      if (error) { toast.error('Erro ao atualizar'); return; }
+                      setSelectedCustomer(prev => prev ? { ...prev, opt_out_mass_dispatch: checked } as any : prev);
+                      setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, opt_out_mass_dispatch: checked } : c));
+                      toast.success(checked ? '🚫 Cliente bloqueado para disparos em massa' : '✅ Cliente desbloqueado para disparos');
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Store & Seller Info */}
+              {(() => {
+                const suffix = (selectedCustomer.phone || '').replace(/\D/g, '').slice(-8);
+                const mapping = suffix ? customerStoreMap.get(suffix) : undefined;
+                const storeName = mapping?.store_name;
+                const sellerName = (selectedCustomer as any)._lastSellerName || mapping?.seller_name;
+                if (!storeName && !sellerName) return null;
+                return (
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 text-sm">
+                    {storeName && <span className="flex items-center gap-1.5 text-muted-foreground"><Store className="h-3.5 w-3.5" />{storeName}</span>}
+                    {sellerName && <span className="flex items-center gap-1.5 text-muted-foreground"><Users className="h-3.5 w-3.5" />{sellerName}</span>}
+                  </div>
+                );
+              })()}
 
               {/* Info Grid */}
               <div className="grid grid-cols-2 gap-3 text-sm">
