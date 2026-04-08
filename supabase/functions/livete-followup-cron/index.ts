@@ -26,29 +26,58 @@ async function generateFollowupMessage(
   apiKey: string,
 ): Promise<string> {
   const prompt = getFollowupPrompt(stage, productsSummary, conversationHistory, customerName);
+  const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 
   try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 150,
-      }),
-    });
+    let text = '';
 
-    if (!response.ok) {
-      console.error(`[livete-followup] AI error ${response.status}`);
-      return '';
+    if (ANTHROPIC_API_KEY) {
+      // Use Anthropic Claude for follow-ups
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 150,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!response.ok) {
+        console.error(`[livete-followup] Anthropic error ${response.status}`);
+        return '';
+      }
+
+      const data = await response.json();
+      text = data.content?.[0]?.text?.trim() || '';
+    } else {
+      // Fallback to Lovable AI Gateway
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash-lite',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 150,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error(`[livete-followup] AI error ${response.status}`);
+        return '';
+      }
+
+      const data = await response.json();
+      text = data.choices?.[0]?.message?.content?.trim() || '';
     }
 
-    const data = await response.json();
-    const text = data.choices?.[0]?.message?.content?.trim() || '';
-    // Remove quotes if AI wraps in them
     return text.replace(/^["']|["']$/g, '').trim();
   } catch (err) {
     console.error('[livete-followup] AI generation error:', err);
