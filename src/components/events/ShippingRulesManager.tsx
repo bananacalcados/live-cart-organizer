@@ -172,7 +172,7 @@ export function ShippingRulesManager({ eventId, storeId }: Props) {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <Truck className="h-5 w-5" />
-          Opções de Frete {eventId ? 'da Live' : '(Global)'}
+          Opções de Frete {eventId ? 'da Live' : storeId ? 'da Loja' : '(Global)'}
         </CardTitle>
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditing({ ...EMPTY_RULE }); }}>
           <DialogTrigger asChild>
