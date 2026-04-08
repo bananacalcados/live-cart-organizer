@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -29,6 +29,7 @@ import { MessageStatusIcon } from "./MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./WhatsAppMediaAttachment";
 import { InstagramReferralCard } from "./InstagramReferralCard";
 import { QuickReplyPicker } from "./QuickReplyPicker";
+import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
 
 interface ChatViewProps {
   messages: Message[];
@@ -79,6 +80,7 @@ export function ChatView({
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -560,14 +562,25 @@ export function ChatView({
               }}
             />
             {newMessage.trim() ? (
-              <Button
-                size="icon"
-                onClick={onSendMessage}
-                disabled={isSending}
-                className="bg-stage-paid hover:bg-stage-paid/90"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-10 w-10 shrink-0"
+                  title="Agendar mensagem"
+                  onClick={() => setShowScheduleDialog(true)}
+                >
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </Button>
+                <Button
+                  size="icon"
+                  onClick={onSendMessage}
+                  disabled={isSending}
+                  className="bg-stage-paid hover:bg-stage-paid/90"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
             ) : (
               <Button
                 size="icon"
@@ -581,6 +594,16 @@ export function ChatView({
           </>
         )}
       </div>
+      {conversation && (
+        <ScheduleMessageDialog
+          open={showScheduleDialog}
+          onOpenChange={setShowScheduleDialog}
+          phone={conversation.phone}
+          message={newMessage}
+          whatsappNumberId={conversation.whatsapp_number_id}
+          onScheduled={() => onNewMessageChange("")}
+        />
+      )}
     </div>
   );
 }
