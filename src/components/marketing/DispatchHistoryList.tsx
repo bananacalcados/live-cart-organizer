@@ -647,13 +647,25 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
 
                 {/* Recipients Table */}
                 <div>
-                  <div className="text-sm font-medium mb-2">Destinatários ({recipients.length})</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-medium">Destinatários ({recipients.length})</div>
+                    {recipients.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => exportRecipients('csv')}>
+                          <Download className="h-3 w-3" />CSV
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => exportRecipients('xls')}>
+                          <FileSpreadsheet className="h-3 w-3" />XLS
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   {isLoadingDetail ? (
                     <div className="text-center py-4 text-muted-foreground text-sm">
                       <RefreshCw className="h-4 w-4 animate-spin inline mr-2" />Carregando...
                     </div>
                   ) : (
-                    <ScrollArea className="max-h-[300px]">
+                    <ScrollArea className="h-[400px]">
                       <Table>
                         <TableHeader>
                           <TableRow>
