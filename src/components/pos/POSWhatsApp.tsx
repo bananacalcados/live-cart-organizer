@@ -348,72 +348,86 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     loadCrmData();
   }, [selectedPhone, chatContacts, contactPhotos]);
 
-  // Load conversations
+  // Helper to map RPC rows to Conversation objects (same pattern as Chat page)
+  const mapRowsToConvs = useMemo(() => (rows: any[]) => {
+    const convs: Conversation[] = [];
+    const phoneMessages = new Map<string, { direction: string }[]>();
+    for (const row of rows) {
+      const phone = row.phone;
+      const rowNumberId = row.whatsapp_number_id || null;
+      const convKey = `${phone}__${rowNumberId || 'none'}`;
+      const isGroup = row.is_group || phone.includes('@g.us') || phone.includes('-');
+
+      // Build minimal direction list for enrichment
+      const msgs: { direction: string }[] = [{ direction: row.direction }];
+      if (row.has_outgoing && row.direction === 'incoming') {
+        msgs.push({ direction: 'outgoing' });
+      }
+      phoneMessages.set(convKey, msgs);
+
+      const senderNameFromRPC = row.sender_name || null;
+      convs.push({
+        phone,
+        lastMessage: row.last_message,
+        lastMessageAt: new Date(row.last_message_at),
+        unreadCount: Number(row.unread_count),
+        customerName: chatContacts[phone] || crmMap.get(phone)?.name || senderNameFromRPC,
+        isGroup,
+        hasUnansweredMessage: row.direction === 'incoming',
+        whatsapp_number_id: rowNumberId,
+        isDispatchOnly: row.is_dispatch_only || false,
+        channel: (row as any).channel || null,
+      });
+    }
+    return { convs, phoneMessages };
+  }, [chatContacts, crmMap]);
+
+  // Load conversations via RPC (summaries, not raw messages)
   useEffect(() => {
     const loadConversations = async () => {
-      const { data } = await supabase
-        .from("whatsapp_messages")
-        .select("*")
-        .order("created_at", { ascending: false });
+      // Determine which number IDs to query (store-specific filtering)
+      // If store has specific numbers assigned, query each; otherwise query all
+      const needsDispatch = statusFilter === 'dispatch';
 
-      // Group by phone + whatsapp_number_id to create separate conversations per instance
-      const convMap = new Map<string, { messages: Message[]; unread: number; isGroup: boolean; phone: string; numberId: string | null; hasIncoming: boolean; lastIsMassDispatch: boolean }>();
-      for (const msg of data || []) {
-        // Filter by store's assigned WhatsApp numbers
-        if (storeNumberIds.length > 0) {
-          const msgNumberId = msg.whatsapp_number_id;
-          if (msgNumberId && !storeNumberIds.includes(msgNumberId)) continue;
-          if (!msgNumberId) {
-            const hasZapiInStore = storeNumbers.some(n => n.provider === 'zapi');
-            if (!hasZapiInStore) continue;
-          }
-        }
-        const convKey = `${msg.phone}__${msg.whatsapp_number_id || 'none'}`;
-        if (!convMap.has(convKey)) convMap.set(convKey, { messages: [], unread: 0, isGroup: msg.is_group || false, phone: msg.phone, numberId: msg.whatsapp_number_id || null, hasIncoming: false, lastIsMassDispatch: false });
-        const entry = convMap.get(convKey)!;
-        entry.messages.push(msg);
-        if (msg.direction === "incoming") {
-          entry.hasIncoming = true;
-          if (msg.status !== "read") entry.unread++;
-        }
-        if (msg.is_group) entry.isGroup = true;
-        // Track if latest message is a mass dispatch
-        if (entry.messages.length === 1 && (msg as any).is_mass_dispatch) entry.lastIsMassDispatch = true;
-      }
+      // Use first store number as filter if only one; otherwise load all and filter client-side
+      const numberId = storeNumberIds.length === 1 ? storeNumberIds[0] : null;
 
-      const convs: Conversation[] = [];
-      const phoneMessages = new Map<string, { direction: string }[]>();
-      convMap.forEach((value, convKey) => {
-        const phone = value.phone;
-        const lastMsg = value.messages[0];
-        const lastIncoming = value.messages.find(m => m.direction === "incoming");
-        const lastIncomingInstance: "zapi" | "meta" | undefined = (() => {
-          if (!lastIncoming) return undefined;
-          if (!lastIncoming.whatsapp_number_id) return "zapi";
-          const matchedNumber = storeNumbers.find(n => n.id === lastIncoming.whatsapp_number_id);
-          if (matchedNumber) return (matchedNumber.provider === 'meta' ? 'meta' : 'zapi') as "zapi" | "meta";
-          return "zapi";
-        })();
-
-        phoneMessages.set(convKey, value.messages.map(m => ({ direction: m.direction })));
-
-        const isDispatchOnly = (value.lastIsMassDispatch && lastMsg.direction === 'outgoing') || (lastMsg.direction === 'outgoing' && !value.hasIncoming);
-
-        convs.push({
-          phone,
-          lastMessage: lastMsg.message,
-          lastMessageAt: new Date(lastMsg.created_at),
-          unreadCount: value.unread,
-          customerName: chatContacts[phone] || crmMap.get(phone)?.name,
-          isGroup: value.isGroup || phone.includes("@g.us"),
-          hasUnansweredMessage: lastMsg.direction === "incoming",
-          whatsapp_number_id: value.numberId,
-          lastIncomingInstance,
-          isDispatchOnly,
-          channel: (lastMsg as any).channel || null,
-        });
+      const regularPromise = supabase.rpc('get_conversations', {
+        p_number_id: numberId,
+        p_dispatch_only: false,
       });
 
+      const dispatchPromise = needsDispatch
+        ? supabase.rpc('get_conversations', {
+            p_number_id: numberId,
+            p_dispatch_only: true,
+          })
+        : Promise.resolve({ data: [], error: null });
+
+      const [regularResult, dispatchResult] = await Promise.all([regularPromise, dispatchPromise]);
+
+      if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
+
+      let allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
+
+      // Client-side filter by store's assigned WhatsApp numbers (when more than 1)
+      if (storeNumberIds.length > 1) {
+        allRows = allRows.filter((row: any) => {
+          const rowNumId = row.whatsapp_number_id;
+          if (rowNumId) return storeNumberIds.includes(rowNumId);
+          // Allow null whatsapp_number_id if store has Z-API numbers
+          return storeNumbers.some(n => n.provider === 'zapi');
+        });
+      }
+
+      // Multi-instance filter (user-selected)
+      if (multiInstanceFilter.length > 0) {
+        allRows = allRows.filter((row: any) =>
+          multiInstanceFilter.includes(row.whatsapp_number_id)
+        );
+      }
+
+      const { convs, phoneMessages } = mapRowsToConvs(allRows);
       convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
       setConversations(filterByAssignment(enrichConversations(convs, phoneMessages)));
     };
@@ -434,7 +448,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, enrichConversations, filterByAssignment]);
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, filterByAssignment, mapRowsToConvs]);
 
   // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
   // This handles cross-device realtime updates without disrupting the current UI

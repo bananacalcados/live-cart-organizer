@@ -60,68 +60,69 @@ export function GlobalWhatsAppChat() {
     loadChatContacts();
   }, [isOpen]);
 
+  // Helper to map RPC rows to Conversation objects
+  const mapRowsToConvs = (rows: any[]) => {
+    const convs: Conversation[] = [];
+    const phoneMessages = new Map<string, { direction: string }[]>();
+    for (const row of rows) {
+      const phone = row.phone;
+      const rowNumberId = row.whatsapp_number_id || null;
+      const convKey = `${phone}__${rowNumberId || 'none'}`;
+      const isGroup = row.is_group || phone.includes('@g.us') || phone.includes('-');
+
+      const msgs: { direction: string }[] = [{ direction: row.direction }];
+      if (row.has_outgoing && row.direction === 'incoming') {
+        msgs.push({ direction: 'outgoing' });
+      }
+      phoneMessages.set(convKey, msgs);
+
+      const lastIncomingInstance: 'zapi' | 'meta' | undefined = (() => {
+        if (row.direction !== 'incoming' && !row.has_incoming) return undefined;
+        if (!rowNumberId) return 'zapi';
+        const matchedNumber = metaNumbers.find(n => n.id === rowNumberId);
+        if (matchedNumber) return (matchedNumber.provider === 'meta' ? 'meta' : 'zapi') as 'zapi' | 'meta';
+        return 'zapi';
+      })();
+
+      const senderNameFromRPC = row.sender_name || null;
+      const order = orders.find(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
+      const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
+      const matchingOrders = orders.filter(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
+      const eventNames = matchingOrders.map(o => events.find(e => e.id === o.event_id)?.name).filter(Boolean) as string[];
+
+      convs.push({
+        phone,
+        lastMessage: row.last_message,
+        lastMessageAt: new Date(row.last_message_at),
+        unreadCount: Number(row.unread_count),
+        customerName: chatContacts[phone] || senderNameFromRPC || order?.customer?.instagram_handle || customer?.instagram_handle,
+        isGroup,
+        hasUnansweredMessage: row.direction === 'incoming',
+        stage: order?.stage,
+        customerId: order?.customer_id || customer?.id,
+        customerTags: customer?.tags,
+        whatsapp_number_id: rowNumberId,
+        lastIncomingInstance,
+        isDispatchOnly: row.is_dispatch_only || false,
+        eventNames: [...new Set(eventNames)],
+        channel: (row as any).channel || null,
+      });
+    }
+    return { convs, phoneMessages };
+  };
+
   useEffect(() => {
     if (!isOpen) return;
 
     const loadConversations = async () => {
-      const { data, error } = await supabase
-        .from('whatsapp_messages')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) { console.error('Error loading messages:', error); return; }
-
-      // Group by phone + whatsapp_number_id for separate conversations per instance
-      const convMap = new Map<string, { messages: Message[], unread: number, isGroup: boolean, phone: string, numberId: string | null }>();
-      
-      for (const msg of data || []) {
-        const convKey = `${msg.phone}__${msg.whatsapp_number_id || 'none'}`;
-        if (!convMap.has(convKey)) convMap.set(convKey, { messages: [], unread: 0, isGroup: msg.is_group || false, phone: msg.phone, numberId: msg.whatsapp_number_id || null });
-        const entry = convMap.get(convKey)!;
-        entry.messages.push(msg);
-        if (msg.direction === 'incoming' && msg.status !== 'read') entry.unread++;
-        if (msg.is_group) entry.isGroup = true;
-      }
-
-      const convs: Conversation[] = [];
-      const phoneMessages = new Map<string, { direction: string }[]>();
-      
-      convMap.forEach((value, convKey) => {
-        const phone = value.phone;
-        const lastMsg = value.messages[0];
-        const matchingOrders = orders.filter(o => o.customer?.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
-        const order = matchingOrders[0];
-        const customer = customers.find(c => c.whatsapp?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
-        const isGroup = value.isGroup || phone.includes('@g.us') || phone.includes('-');
-        const lastIncoming = value.messages.find(m => m.direction === 'incoming');
-        const lastIncomingInstance: 'zapi' | 'meta' | undefined = (() => {
-          if (!lastIncoming) return undefined;
-          if (!lastIncoming.whatsapp_number_id) return 'zapi';
-          const matchedNumber = metaNumbers.find(n => n.id === lastIncoming.whatsapp_number_id);
-          if (matchedNumber) return (matchedNumber.provider === 'meta' ? 'meta' : 'zapi') as 'zapi' | 'meta';
-          return 'zapi';
-        })();
-        const eventNames = matchingOrders.map(o => events.find(e => e.id === o.event_id)?.name).filter(Boolean) as string[];
-        
-        phoneMessages.set(convKey, value.messages.map(m => ({ direction: m.direction })));
-        
-        convs.push({
-          phone,
-          lastMessage: lastMsg.message,
-          lastMessageAt: new Date(lastMsg.created_at),
-          unreadCount: value.unread,
-          customerName: chatContacts[phone] || order?.customer?.instagram_handle || customer?.instagram_handle,
-          isGroup,
-          hasUnansweredMessage: lastMsg.direction === 'incoming',
-          stage: order?.stage,
-          customerId: order?.customer_id || customer?.id,
-          customerTags: customer?.tags,
-          whatsapp_number_id: value.numberId,
-          lastIncomingInstance,
-          eventNames: [...new Set(eventNames)],
-        });
+      const regularResult = await supabase.rpc('get_conversations', {
+        p_number_id: null,
+        p_dispatch_only: false,
       });
 
+      if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
+
+      const { convs, phoneMessages } = mapRowsToConvs(regularResult.data || []);
       convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
       setConversations(enrichConversations(convs, phoneMessages));
     };
@@ -138,7 +139,7 @@ export function GlobalWhatsAppChat() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [isOpen, orders, selectedPhone, selectedConvNumberId, customers, events, chatContacts, enrichConversations]);
+  }, [isOpen, orders, selectedPhone, selectedConvNumberId, customers, events, chatContacts, enrichConversations, metaNumbers]);
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
     let query = supabase.from('whatsapp_messages').select('*').eq('phone', phone).order('created_at', { ascending: true });
