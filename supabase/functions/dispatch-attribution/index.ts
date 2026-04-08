@@ -115,13 +115,22 @@ Deno.serve(async (req) => {
     const buyers: BuyerResult[] = [];
     const countedPhones = new Set<string>(); // avoid counting same phone from multiple sources
 
-    // 4a. POS Sales (pos_sales + pos_customers)
-    const { data: posSales } = await supabase
-      .from("pos_sales")
-      .select("id, total, created_at, customer_id, status")
-      .gte("created_at", dispatchDate)
-      .lte("created_at", windowEnd)
-      .in("status", ["completed", "paid"]);
+    // 4a. POS Sales (pos_sales + pos_customers) - paginated
+    let posSales: any[] = [];
+    let posPage = 0;
+    while (true) {
+      const { data: batch } = await supabase
+        .from("pos_sales")
+        .select("id, total, created_at, customer_id, status")
+        .gte("created_at", dispatchDate)
+        .lte("created_at", windowEnd)
+        .in("status", ["completed", "paid"])
+        .range(posPage * 1000, (posPage + 1) * 1000 - 1);
+      if (!batch || batch.length === 0) break;
+      posSales = posSales.concat(batch);
+      if (batch.length < 1000) break;
+      posPage++;
+    }
 
     if (posSales && posSales.length > 0) {
       const customerIds = [...new Set(posSales.filter(s => s.customer_id).map(s => s.customer_id))];
