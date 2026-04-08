@@ -9792,6 +9792,7 @@ export type Database = {
           last_name: string | null
           last_purchase_at: string | null
           lead_status: string | null
+          opt_out_mass_dispatch: boolean
           phone: string | null
           postcode: string | null
           preferred_style: string | null
@@ -9844,6 +9845,7 @@ export type Database = {
           last_name?: string | null
           last_purchase_at?: string | null
           lead_status?: string | null
+          opt_out_mass_dispatch?: boolean
           phone?: string | null
           postcode?: string | null
           preferred_style?: string | null
@@ -9896,6 +9898,7 @@ export type Database = {
           last_name?: string | null
           last_purchase_at?: string | null
           lead_status?: string | null
+          opt_out_mass_dispatch?: boolean
           phone?: string | null
           postcode?: string | null
           preferred_style?: string | null
@@ -10030,6 +10033,7 @@ export type Database = {
         }[]
       }
       check_order_paid: { Args: { p_order_id: string }; Returns: boolean }
+      extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       generate_ean13_barcode: { Args: never; Returns: string }
       get_conversation_counts: {
         Args: never
@@ -10243,6 +10247,13 @@ export type Database = {
         }[]
       }
       mark_lead_as_paid: { Args: { p_whatsapp: string }; Returns: undefined }
+      merge_duplicate_zoppy_customers: {
+        Args: never
+        Returns: {
+          duplicates_found: number
+          records_deleted: number
+        }[]
+      }
       save_customer_registration: {
         Args: {
           p_address: string

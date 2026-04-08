@@ -37,6 +37,18 @@ function normalizeBRPhone(raw: string): string {
   return digits;
 }
 
+// Extract DDD + last 8 digits as unique matching key
+function extractPhoneKey(raw: string): string | null {
+  let digits = raw.replace(/\D/g, '');
+  if (!digits || digits.length < 10) return null;
+  // Remove country code 55 if present
+  if (digits.length >= 12 && digits.startsWith('55')) {
+    digits = digits.slice(2);
+  }
+  // DDD = first 2, suffix = last 8
+  return digits.slice(0, 2) + digits.slice(-8);
+}
+
 // Simple name similarity: compare normalized tokens overlap
 function nameSimilarity(a: string, b: string): number {
   const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -129,23 +141,23 @@ serve(async (req) => {
 
         // Build lookup indexes
         const cpfIndex = new Map<string, any>(); // normalized CPF -> rfm record
-        const phoneIndex = new Map<string, any[]>(); // normalized phone -> rfm records
+        const phoneIndex = new Map<string, any[]>(); // DDD+suffix -> rfm records
         for (const rfm of existingRfm) {
           if (rfm.cpf) {
             const normCpf = rfm.cpf.replace(/\D/g, '');
             if (normCpf.length >= 11) cpfIndex.set(normCpf, rfm);
           }
           if (rfm.phone) {
-            const normPhone = normalizeBRPhone(rfm.phone);
-            if (normPhone) {
-              const arr = phoneIndex.get(normPhone) || [];
+            const phoneKey = extractPhoneKey(rfm.phone);
+            if (phoneKey) {
+              const arr = phoneIndex.get(phoneKey) || [];
               arr.push(rfm);
-              phoneIndex.set(normPhone, arr);
+              phoneIndex.set(phoneKey, arr);
             }
           }
         }
 
-        console.log(`RFM index loaded: ${existingRfm.length} records, ${cpfIndex.size} with CPF, ${phoneIndex.size} unique phones`);
+        console.log(`RFM index loaded: ${existingRfm.length} records, ${cpfIndex.size} with CPF, ${phoneIndex.size} unique phone keys`);
 
         // 1e. Process each POS customer with CPF-first rematching
         const upsertBatch: any[] = [];
@@ -155,6 +167,7 @@ serve(async (req) => {
           const cust = customerMap.get(custId);
           if (!cust) continue;
           const phone = normalizeBRPhone(cust.whatsapp || '');
+          const phoneKey = phone ? extractPhoneKey(phone) : null;
           const cpf = (cust.cpf || '').replace(/\D/g, '') || null;
           const custName = (cust.name || '').trim();
           if (!phone && !cust.email && !cpf) continue;
@@ -171,9 +184,9 @@ serve(async (req) => {
             if (matchedRfm) matchType = 'cpf';
           }
 
-          // Strategy 2: Match by phone + name similarity
-          if (!matchedRfm && phone) {
-            const phoneMatches = phoneIndex.get(phone);
+          // Strategy 2: Match by DDD+suffix phone key + name similarity
+          if (!matchedRfm && phoneKey) {
+            const phoneMatches = phoneIndex.get(phoneKey);
             if (phoneMatches && phoneMatches.length > 0) {
               if (custName) {
                 // Find best name match
