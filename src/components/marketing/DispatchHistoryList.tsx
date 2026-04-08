@@ -212,8 +212,8 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
       setRecipients(allRecipients);
 
       // Get live statuses
-      if (data && data.length > 0) {
-        const phones = data.map((r: any) => {
+      if (allRecipients.length > 0) {
+        const phones = allRecipients.map((r: any) => {
           let p = r.phone.replace(/\D/g, '');
           if (!p.startsWith('55')) p = '55' + p;
           return p;
