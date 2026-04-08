@@ -60,8 +60,7 @@ Deno.serve(async (req) => {
     }
 
     const dispatchDate = dispatch.created_at || dispatch.started_at;
-
-    console.log(`[attribution] Recipients fetched: ${recipients.length}, dispatch_date: ${dispatchDate}, window_end: ${windowEnd}`);
+    const windowEnd = new Date(new Date(dispatchDate).getTime() + window_days * 24 * 60 * 60 * 1000).toISOString();
 
     // Build phone suffix map (last 8 digits) for matching
     const phoneSuffixes = new Map<string, string>(); // suffix -> original phone
@@ -73,7 +72,6 @@ Deno.serve(async (req) => {
       if (r.recipient_name) recipientNames.set(suffix, r.recipient_name);
     }
     const suffixArray = Array.from(phoneSuffixes.keys());
-    console.log(`[attribution] Unique phone suffixes: ${phoneSuffixes.size}`);
 
     // 3. Check for NEWER dispatches that also reached these phones (for dedup)
     // Get all dispatches AFTER this one
