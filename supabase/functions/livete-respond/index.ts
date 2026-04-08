@@ -303,6 +303,7 @@ ${stageSpecificRules}
 - find_product: buscar produto
 - swap_product: trocar produto
 - update_order_shipping: atualizar frete
+- quote_freight: cotar frete pelo CEP (usar SEMPRE antes de definir pagamento)
 - cancel_order: cancelar pedido
 - notify_presenter: notificar apresentadora
 - generate_boleto: gerar boleto bancário
