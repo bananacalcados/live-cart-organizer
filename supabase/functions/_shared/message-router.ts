@@ -227,17 +227,25 @@ export async function routeMessage(
   if (conciergeAvailableForPhone) {
     try {
       const recentCutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-      const { data: recentConciergeLog } = await supabase
+      const { data: recentConciergeLogs } = await supabase
         .from('ai_conversation_logs')
-        .select('created_at')
+        .select('created_at, tool_called')
         .eq('phone', phone)
         .eq('stage', 'concierge')
         .gt('created_at', recentCutoff)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(5);
 
-      if (recentConciergeLog) {
+      if (recentConciergeLogs && recentConciergeLogs.length > 0) {
+        // If ANY recent concierge interaction called transfer_to_human,
+        // the conversation was handed off — don't reactivate AI
+        const wasTransferred = recentConciergeLogs.some(
+          (log: any) => log.tool_called && log.tool_called.includes('transfer_to_human')
+        );
+        if (wasTransferred) {
+          console.log(`[router] Concierge transferred to human for ${phone}, skipping AI`);
+          return { agent: 'none', reason: 'concierge_transferred' };
+        }
         console.log(`[router] Recent concierge context found for ${phone}`);
         return { agent: 'concierge', reason: 'recent_concierge_context' };
       }
