@@ -145,12 +145,12 @@ serve(async (req) => {
       }
       console.log(`[dispatch] Using ${presetFilters.length} saved RFM preset filter(s)`);
       // Fetch all customers when using presets (filtering happens in-memory)
-      rfmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, rfm_segment, region_type, gender, ddd, avg_ticket, total_orders, last_purchase_at, rfm_recency_score');
+      rfmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, rfm_segment, region_type, gender, ddd, avg_ticket, total_orders, last_purchase_at, rfm_recency_score, opt_out_mass_dispatch');
     } else if (audienceSource === 'rfm' || audienceSource === 'both' || audienceSource === 'crm') {
       if (audienceSource === 'crm' || rfmSelectAll) {
-        rfmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, rfm_segment, region_type, gender');
+        rfmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, rfm_segment, region_type, gender, opt_out_mass_dispatch');
       } else if (selectedRfmSegments.length > 0) {
-        rfmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, rfm_segment, region_type, gender', {
+        rfmData = await fetchAllRows(supabase, 'zoppy_customers', 'phone, first_name, last_name, email, city, state, rfm_segment, region_type, gender, opt_out_mass_dispatch', {
           rfm_segment: selectedRfmSegments,
         });
       }
