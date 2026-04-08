@@ -16,6 +16,7 @@ import {
   MessageSquare, BarChart3, Users, ChevronDown, ChevronUp,
   Pause, Play, CalendarClock, Trash2, Copy, Pencil, Check, X,
 } from "lucide-react";
+import { DispatchAttributionPanel } from "./DispatchAttributionPanel";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -623,6 +624,13 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                     </div>
                   </Card>
                 )}
+
+                {/* Attribution Panel */}
+                <DispatchAttributionPanel
+                  dispatchId={selectedDispatch.id}
+                  sentCount={selectedDispatch.sent_count || selectedDispatch.stats?.dispatched || 0}
+                  costPerMessage={(selectedDispatch as any).cost_per_message || 0}
+                />
 
                 {/* Recipients Table */}
                 <div>
