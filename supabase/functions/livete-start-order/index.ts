@@ -200,28 +200,34 @@ serve(async (req) => {
     if (shouldSkipSend) {
       console.log(`[livete-start] Duplicate start skipped for order ${orderId} / ${phone}`);
     } else {
-      if (metaPhoneNumberId) {
-        await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone,
-            message: firstMessage,
-            whatsappNumberId: whatsappNumberId,
-          }),
-        });
-      } else {
-        await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone,
-            message: firstMessage,
-            whatsapp_number_id: whatsappNumberId,
-          }),
-        });
+      // Send each message part separately with a small delay
+      for (const part of messageParts) {
+        if (metaPhoneNumberId) {
+          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone,
+              message: part,
+              whatsappNumberId: whatsappNumberId,
+            }),
+          });
+        } else {
+          await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone,
+              message: part,
+              whatsapp_number_id: whatsappNumberId,
+            }),
+          });
+        }
+        // Small delay between messages to maintain order
+        await new Promise(r => setTimeout(r, 1000));
       }
 
+      // Log all parts as a single combined message for history
       await supabase.from('whatsapp_messages').insert({
         phone,
         message: firstMessage,
