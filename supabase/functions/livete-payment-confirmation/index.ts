@@ -95,12 +95,11 @@ serve(async (req) => {
       return parts.join('\n');
     }).join('\n\n');
 
-    // 5. Build confirmation message
-    const message = `Oi, ${customerName}! 🎉\n\n` +
-      `*Pagamento confirmado!* ✅\n\n` +
-      `Antes de enviar, preciso que você confirme os itens do seu pedido pra garantir que está tudo certinho:\n\n` +
+    // 5. Build confirmation message (direct, no fluff)
+    const message = `Oi ${customerName}! Pagamento confirmado ✅\n\n` +
+      `Confere os itens do seu pedido antes de enviar:\n\n` +
       `${productLines}\n\n` +
-      `👆 *Está tudo certo?* Responda com *SIM* pra confirmar ou me avise se precisa corrigir alguma coisa (cor, tamanho, etc).`;
+      `Tá tudo certo? Responde *SIM* pra confirmar ou me avisa se precisa corrigir algo 😊`;
 
     // 6. Find the WhatsApp number used for this event
     const { data: event } = await supabase
