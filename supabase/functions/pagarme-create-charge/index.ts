@@ -867,7 +867,7 @@ serve(async (req) => {
             console.log(`[${result.gateway}] Vinculado ${field}=${val} ao pedido ${params.orderId}`);
           }
 
-          await notifyPaymentConfirmed(params.orderId, result.gateway || "unknown", String(result.transactionId || params.orderId));
+          await notifyPaymentConfirmedLocal(params.orderId, result.gateway || "unknown", String(result.transactionId || params.orderId));
           await autoCreateShopifyOrder(params.orderId, orderSource, supabaseUrl, supabaseKey);
         }
       } else {
