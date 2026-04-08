@@ -8543,6 +8543,7 @@ export type Database = {
           priority: number
           region_states: string[] | null
           rule_type: string
+          store_id: string | null
           updated_at: string
         }
         Insert: {
@@ -8560,6 +8561,7 @@ export type Database = {
           priority?: number
           region_states?: string[] | null
           rule_type?: string
+          store_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -8577,6 +8579,7 @@ export type Database = {
           priority?: number
           region_states?: string[] | null
           rule_type?: string
+          store_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -8585,6 +8588,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shipping_rules_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
             referencedColumns: ["id"]
           },
         ]
