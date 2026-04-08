@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     // 1. Get dispatch info
     const { data: dispatch, error: dErr } = await supabase
       .from("dispatch_history")
-      .select("id, started_at, created_at, completed_at, cost_per_message, sent_count")
+      .select("id, started_at, created_at, completed_at, cost_per_message, sent_count, template_category")
       .eq("id", dispatch_id)
       .single();
 
