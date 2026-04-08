@@ -326,11 +326,15 @@ export function POSWhatsAppCheckoutDialog({
                       <span>Desconto</span><span>-{fmt(discountAmount)}</span>
                     </div>
                   )}
-                  {shippingAmount > 0 && (
-                    <div className="flex justify-between text-xs">
-                      <span>Frete</span><span>{fmt(shippingAmount)}</span>
-                    </div>
-                  )}
+                   {freeShipping ? (
+                     <div className="flex justify-between text-xs">
+                       <span>Frete</span><span className="text-green-600 font-medium">GRÁTIS ✅</span>
+                     </div>
+                   ) : shippingAmount > 0 ? (
+                     <div className="flex justify-between text-xs">
+                       <span>Frete</span><span>{fmt(shippingAmount)}</span>
+                     </div>
+                   ) : null}
                   <div className="flex justify-between text-sm font-bold">
                     <span>Total</span><span className="text-primary">{fmt(orderTotal)}</span>
                   </div>
