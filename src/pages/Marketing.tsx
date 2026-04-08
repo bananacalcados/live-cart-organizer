@@ -194,6 +194,8 @@ export default function Marketing() {
   const [selectedCustomer, setSelectedCustomer] = useState<ZoppyCustomer | null>(null);
   const [whatsAppMessage, setWhatsAppMessage] = useState("");
   const [editingCustomer, setEditingCustomer] = useState<ZoppyCustomer | null>(null);
+  const [purchaseDates, setPurchaseDates] = useState<{ date: string; total: number; source: string }[] | null>(null);
+  const [purchaseDatesLoading, setPurchaseDatesLoading] = useState(false);
   const [editingLead, setEditingLead] = useState<any | null>(null);
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [sellerFilter, setSellerFilter] = useState<string>("all");
@@ -1682,7 +1684,7 @@ export default function Marketing() {
       />
 
       {/* Customer Detail Dialog */}
-      <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setWhatsAppMessage(""); } }}>
+      <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setWhatsAppMessage(""); setPurchaseDates(null); (window as any).__purchaseDatesOpen = false; } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
@@ -1756,8 +1758,79 @@ export default function Marketing() {
                     <Mail className="h-4 w-4" />{selectedCustomer.email}
                   </div>
                 )}
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <ShoppingBag className="h-4 w-4" />{selectedCustomer.total_orders} pedidos
+                <div className="relative">
+                  <button
+                    onClick={async () => {
+                      if ((window as any).__purchaseDatesOpen) {
+                        (window as any).__purchaseDatesOpen = false;
+                        setPurchaseDates(null);
+                        return;
+                      }
+                      (window as any).__purchaseDatesOpen = true;
+                      setPurchaseDatesLoading(true);
+                      setPurchaseDates([]);
+                      try {
+                        const phoneDigits = (selectedCustomer.phone || '').replace(/\D/g, '');
+                        const suffix8 = phoneDigits.slice(-8);
+                        if (!suffix8) { setPurchaseDatesLoading(false); return; }
+                        // Query zoppy_sales + pos_sales + orders for dates
+                        const [zRes, pRes] = await Promise.all([
+                          supabase.from('zoppy_sales').select('completed_at, total, status').ilike('customer_phone', `%${suffix8}`).order('completed_at', { ascending: false }).limit(50),
+                          supabase.from('pos_sales').select('created_at, total, status, store_id').order('created_at', { ascending: false }).limit(200),
+                        ]);
+                        const dates: { date: string; total: number; source: string }[] = [];
+                        (zRes.data || []).forEach((s: any) => {
+                          if (s.completed_at) dates.push({ date: s.completed_at, total: s.total || 0, source: 'Shopify' });
+                        });
+                        // Filter pos_sales by phone suffix match via customer
+                        const posCustomersRes = await supabase.from('pos_customers').select('id, whatsapp').ilike('whatsapp', `%${suffix8}`);
+                        const posCustomerIds = new Set((posCustomersRes.data || []).map((c: any) => c.id));
+                        if (posCustomerIds.size > 0) {
+                          const posFiltered = await supabase.from('pos_sales').select('created_at, total, status, customer_id').in('customer_id', Array.from(posCustomerIds)).order('created_at', { ascending: false }).limit(50);
+                          (posFiltered.data || []).forEach((s: any) => {
+                            if (s.created_at) dates.push({ date: s.created_at, total: s.total || 0, source: 'PDV' });
+                          });
+                        }
+                        dates.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                        setPurchaseDates(dates);
+                      } catch (err) {
+                        console.error('Error fetching purchase dates:', err);
+                      } finally {
+                        setPurchaseDatesLoading(false);
+                      }
+                    }}
+                    className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  >
+                    <ShoppingBag className="h-4 w-4" />{selectedCustomer.total_orders} pedidos
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                  {purchaseDates !== null && (
+                    <Card className="absolute z-50 top-7 left-0 w-72 p-3 shadow-lg border">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold">Histórico de Compras</span>
+                        <button onClick={() => { setPurchaseDates(null); (window as any).__purchaseDatesOpen = false; }} className="text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /></button>
+                      </div>
+                      {purchaseDatesLoading ? (
+                        <div className="flex items-center justify-center py-4 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin mr-1" />Carregando...</div>
+                      ) : purchaseDates.length === 0 ? (
+                        <div className="text-xs text-muted-foreground text-center py-3">Nenhuma data de compra encontrada</div>
+                      ) : (
+                        <ScrollArea className="max-h-[200px]">
+                          <div className="space-y-1">
+                            {purchaseDates.map((p, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-border/50 last:border-0">
+                                <span>{new Date(p.date).toLocaleDateString('pt-BR')} {new Date(p.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-[9px] px-1">{p.source}</Badge>
+                                  <span className="font-medium text-green-600">R$ {Number(p.total).toFixed(2)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </Card>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <TrendingUp className="h-4 w-4" />{formatCurrency(selectedCustomer.total_spent)}
