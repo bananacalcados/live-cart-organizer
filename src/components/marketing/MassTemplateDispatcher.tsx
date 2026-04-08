@@ -781,7 +781,8 @@ export function MassTemplateDispatcher() {
           template_components: selectedTemplate.components as any,
           has_dynamic_vars: hasDynamicVars,
           header_media_url: headerMediaUrl || null,
-        })
+          template_category: selectedTemplate.category || 'MARKETING',
+        } as any)
         .select('id')
         .single();
       dispatchId = dispatchData?.id || null;
@@ -892,6 +893,7 @@ export function MassTemplateDispatcher() {
         template_components: selectedTemplate.components as any,
         has_dynamic_vars: hasDynamicVars,
         header_media_url: headerMediaUrl || null,
+        template_category: selectedTemplate.category || 'MARKETING',
       };
 
       if (mode === 'schedule') {
