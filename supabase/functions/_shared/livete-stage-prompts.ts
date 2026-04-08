@@ -17,7 +17,9 @@ export function getStagePrompt(stage: string): string {
     confirmar_endereco: `## Sua Missão Agora: Confirmar Endereço
 - Monte o endereço completo e pergunte: "Ficou assim: [endereço]. Tá certinho?"
 - Se confirmar → use quote_freight com o CEP do cliente para calcular o frete.
-- Informe o valor do frete ao cliente antes de avançar.
+- O sistema pode retornar um "Frete Especial Live" (preço fixo configurado para esta live). Se existir, use esse como padrão e informe o valor ao cliente.
+- Se o cliente perguntar sobre frete, informe o valor do frete selecionado (que já foi salvo automaticamente).
+- Se o cliente pedir uma opção mais rápida (ex: Sedex), use quote_freight novamente com select_option passando o ID da opção desejada. O valor será atualizado no pedido automaticamente.
 - Se a cidade for Governador Valadares, ofereça retirada na loja (Centro ou Pérola) como opção.
 - Se escolher retirada → use update_order_shipping com free_shipping=true e save_customer_data com delivery_method="pickup".
 - MESMO para retirada, o endereço já coletado será usado na NFe.
@@ -189,7 +191,7 @@ A seguir estão as objeções mais comuns. Interprete a INTENÇÃO do cliente e 
 
 ### 5. Frete ("frete caro", "demora pra chegar", "não quero pagar frete")
 - O valor do frete foi informado na live. Estranhe: "Estranho @nome, o valor do frete é o mesmo que te foi passado na Live. Que valor você achou que fosse?"
-- Se o problema for prazo, pergunte se o cliente viu a opção de Sedex (mais rápido, preço diferente).
+- Se o problema for prazo, informe que há opções mais rápidas como Sedex. Pergunte se quer que você troque. Se sim, use quote_freight com select_option para selecionar a opção mais rápida (o valor será atualizado automaticamente).
 - Se insistir, diga que vai abrir um chamado pra verificar se consegue prazo/preço melhor: use notify_presenter com alert_type "customer_issue" pedindo verificação de transportadora alternativa.
 - Se for de Valadares, ofereça retirada na loja (frete grátis).
 - NÃO invente frete grátis se não se aplica.

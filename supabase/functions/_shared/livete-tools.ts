@@ -149,15 +149,16 @@ export const liveteTools = [
       },
     },
   },
-  {
+   {
     type: "function",
     function: {
       name: "quote_freight",
-      description: "Cotar frete pelo CEP do cliente. Use SEMPRE após confirmar o endereço e ANTES de perguntar forma de pagamento. Retorna o valor do frete e já salva no pedido automaticamente.",
+      description: "Cotar frete pelo CEP do cliente. Use SEMPRE após confirmar o endereço. Retorna todas as opções incluindo Frete Especial Live (se configurado). Por padrão salva a opção mais barata ou o frete especial da live. Se o cliente pedir frete mais rápido (ex: Sedex), use select_option com o ID da opção desejada.",
       parameters: {
         type: "object",
         properties: {
           cep: { type: "string", description: "CEP do cliente (8 dígitos)" },
+          select_option: { type: "string", description: "ID da opção de frete a selecionar (ex: 'event-fixed-xxx', 'frenet-SEDEX'). Se omitido, seleciona automaticamente o frete especial da live ou o mais barato." },
         },
         required: ["cep"],
       },
@@ -582,35 +583,58 @@ export async function executeToolCall(
           return { success: false, error: 'Não consegui cotar o frete para esse CEP.' };
         }
 
-        // Find cheapest non-pickup shipping option
+        // Find the best shipping option to auto-select
         const shippingOptions = quoteData.quotes.filter((q: any) => q.type !== 'pickup');
-        const cheapest = shippingOptions.sort((a: any, b: any) => a.price - b.price)[0];
+        const eventFixed = shippingOptions.find((q: any) => q.type === 'event_fixed');
+        const selectedOptionId = args.select_option;
+
+        let selected: any;
+        if (selectedOptionId) {
+          // User explicitly requested a specific option
+          selected = quoteData.quotes.find((q: any) => q.id === selectedOptionId);
+          if (!selected) {
+            // Try partial match
+            selected = quoteData.quotes.find((q: any) => q.id.toLowerCase().includes(selectedOptionId.toLowerCase()) || 
+              (q.carrier + ' ' + q.service).toLowerCase().includes(selectedOptionId.toLowerCase()));
+          }
+        } else if (eventFixed) {
+          // Prefer event fixed shipping
+          selected = eventFixed;
+        } else {
+          // Fallback to cheapest
+          selected = shippingOptions.sort((a: any, b: any) => a.price - b.price)[0];
+        }
+
         const hasPickup = quoteData.quotes.some((q: any) => q.type === 'pickup');
 
-        if (cheapest && cheapest.price > 0) {
+        if (selected && selected.price >= 0) {
           // Auto-save shipping cost to order
           await supabase.from('orders').update({
-            shipping_cost: cheapest.price,
+            shipping_cost: selected.price,
+            free_shipping: selected.price === 0 && selected.type !== 'pickup',
             updated_at: new Date().toISOString(),
           }).eq('id', orderId);
         }
 
         const optionLines = quoteData.quotes
           .filter((q: any) => q.type !== 'pickup')
-          .map((q: any) => `${q.carrier} - ${q.service}: R$${q.price.toFixed(2)}${q.delivery_days ? ` (${q.delivery_days} dias úteis)` : ''}`)
+          .map((q: any) => `[${q.id}] ${q.carrier} - ${q.service}: R$${q.price.toFixed(2)}${q.delivery_days ? ` (${q.delivery_days} dias úteis)` : ''}${q.type === 'event_fixed' ? ' ⭐ SELECIONADO' : ''}`)
           .join('\n');
 
         return {
           success: true,
           data: {
-            cheapest_price: cheapest?.price || 0,
-            cheapest_carrier: cheapest ? `${cheapest.carrier} - ${cheapest.service}` : null,
-            cheapest_days: cheapest?.delivery_days || null,
+            selected_price: selected?.price || 0,
+            selected_carrier: selected ? `${selected.carrier} - ${selected.service}` : null,
+            selected_id: selected?.id || null,
+            selected_type: selected?.type || null,
+            selected_days: selected?.delivery_days || null,
+            has_event_fixed: !!eventFixed,
             has_pickup: hasPickup,
             all_options: optionLines,
-            shipping_saved: cheapest?.price > 0,
-            message: cheapest?.price > 0
-              ? `Frete mais barato: R$${cheapest.price.toFixed(2)} via ${cheapest.carrier}. Já salvo no pedido.${hasPickup ? ' Retirada na loja também disponível.' : ''}`
+            shipping_saved: true,
+            message: selected
+              ? `Frete selecionado: R$${selected.price.toFixed(2)} via ${selected.carrier}.${selected.type === 'event_fixed' ? ' (Frete Especial Live ⭐)' : ''} Já salvo no pedido.${hasPickup ? ' Retirada na loja também disponível.' : ''}`
               : `Frete grátis ou retirada disponível.`,
           },
         };
