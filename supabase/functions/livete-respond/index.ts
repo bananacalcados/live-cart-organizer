@@ -233,7 +233,8 @@ serve(async (req) => {
       if (order.discount_type === 'fixed') discountAmount = Number(order.discount_value);
       else if (order.discount_type === 'percentage') discountAmount = subtotal * (Number(order.discount_value) / 100);
     }
-    const total = Math.max(0, subtotal - discountAmount);
+    const shippingCost = order.free_shipping ? 0 : Number(order.shipping_cost || 0);
+    const total = Math.max(0, subtotal - discountAmount + shippingCost);
 
     const productsSummary = products.map((p: any) =>
       `${p.quantity || 1}x ${p.title}${p.variant ? ` (${p.variant})` : ''} — R$${Number(p.price || 0).toFixed(2)}`
@@ -282,8 +283,10 @@ ${knowledgeText}
 - Produtos: ${productsSummary}
 - Subtotal: R$${subtotal.toFixed(2)}
 ${discountAmount > 0 ? `- Desconto: -R$${discountAmount.toFixed(2)}` : ''}
+${shippingCost > 0 ? `- Frete: R$${shippingCost.toFixed(2)}` : ''}
 - Total: R$${total.toFixed(2)}
 - Frete grátis: ${order.free_shipping ? 'Sim' : 'Não'}
+- Frete calculado: ${shippingCost > 0 ? `R$${shippingCost.toFixed(2)}` : 'Ainda não calculado'}
 - Link pagamento cartão: ${order.cart_link || 'não gerado'}
 
 ## Dados já coletados
