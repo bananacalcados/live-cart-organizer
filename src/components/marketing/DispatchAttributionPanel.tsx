@@ -78,8 +78,6 @@ export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttr
     }
   };
 
-  const cost = (costPerMessage || 0) * (sentCount || 0);
-
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
