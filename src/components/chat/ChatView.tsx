@@ -600,7 +600,7 @@ export function ChatView({
           onOpenChange={setShowScheduleDialog}
           phone={conversation.phone}
           message={newMessage}
-          whatsappNumberId={conversation.whatsappNumberId}
+          whatsappNumberId={conversation.whatsapp_number_id}
           onScheduled={() => onNewMessageChange("")}
         />
       )}
