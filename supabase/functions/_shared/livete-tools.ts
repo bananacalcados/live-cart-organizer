@@ -149,15 +149,16 @@ export const liveteTools = [
       },
     },
   },
-  {
+   {
     type: "function",
     function: {
       name: "quote_freight",
-      description: "Cotar frete pelo CEP do cliente. Use SEMPRE após confirmar o endereço e ANTES de perguntar forma de pagamento. Retorna o valor do frete e já salva no pedido automaticamente.",
+      description: "Cotar frete pelo CEP do cliente. Use SEMPRE após confirmar o endereço. Retorna todas as opções incluindo Frete Especial Live (se configurado). Por padrão salva a opção mais barata ou o frete especial da live. Se o cliente pedir frete mais rápido (ex: Sedex), use select_option com o ID da opção desejada.",
       parameters: {
         type: "object",
         properties: {
           cep: { type: "string", description: "CEP do cliente (8 dígitos)" },
+          select_option: { type: "string", description: "ID da opção de frete a selecionar (ex: 'event-fixed-xxx', 'frenet-SEDEX'). Se omitido, seleciona automaticamente o frete especial da live ou o mais barato." },
         },
         required: ["cep"],
       },
