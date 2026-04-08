@@ -377,7 +377,40 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     }
   };
 
-  if (dispatches.length === 0 && !isLoading) return null;
+  const exportRecipients = (format: 'csv' | 'xls') => {
+    if (recipients.length === 0) return;
+    const header = ['Telefone', 'Nome', 'Status'];
+    const rows = recipients.map((r) => {
+      let formattedPhone = r.phone.replace(/\D/g, '');
+      if (!formattedPhone.startsWith('55')) formattedPhone = '55' + formattedPhone;
+      const liveStatus = recipientStats[formattedPhone] || r.status || 'pending';
+      return [r.phone, r.recipient_name || '', liveStatus];
+    });
+
+    if (format === 'csv') {
+      const csvContent = [header, ...rows].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `destinatarios_${selectedDispatch?.template_name || 'disparo'}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`CSV exportado com ${recipients.length} destinatários`);
+    } else {
+      // XLS (tab-separated, opens in Excel)
+      const xlsContent = [header, ...rows].map(row => row.join('\t')).join('\n');
+      const blob = new Blob(['\uFEFF' + xlsContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `destinatarios_${selectedDispatch?.template_name || 'disparo'}.xls`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`XLS exportado com ${recipients.length} destinatários`);
+    }
+  };
+
 
   return (
     <Card className="mt-6">
