@@ -5327,6 +5327,24 @@ export type Database = {
           },
         ]
       }
+      livete_processing_locks: {
+        Row: {
+          locked_at: string
+          message_hash: string | null
+          phone: string
+        }
+        Insert: {
+          locked_at?: string
+          message_hash?: string | null
+          phone: string
+        }
+        Update: {
+          locked_at?: string
+          message_hash?: string | null
+          phone?: string
+        }
+        Relationships: []
+      }
       loyalty_config: {
         Row: {
           created_at: string
