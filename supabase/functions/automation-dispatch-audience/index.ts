@@ -52,6 +52,7 @@ function buildAudience(
 
   for (const row of rfmData) {
     if (!row.phone) continue;
+    if (row.opt_out_mass_dispatch) continue;
     if (filters.selectedStates.length > 0 && !filters.selectedStates.includes(row.state)) continue;
     if (filters.selectedCities.length > 0 && !filters.selectedCities.includes(row.city)) continue;
     if (filters.selectedRegions.length > 0 && !filters.selectedRegions.includes(row.region_type)) continue;
