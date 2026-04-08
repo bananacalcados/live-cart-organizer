@@ -594,6 +594,16 @@ export function ChatView({
           </>
         )}
       </div>
+      {conversation && (
+        <ScheduleMessageDialog
+          open={showScheduleDialog}
+          onOpenChange={setShowScheduleDialog}
+          phone={conversation.phone}
+          message={newMessage}
+          whatsappNumberId={conversation.whatsappNumberId}
+          onScheduled={() => onNewMessageChange("")}
+        />
+      )}
     </div>
   );
 }
