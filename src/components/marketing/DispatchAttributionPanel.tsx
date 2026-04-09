@@ -141,6 +141,7 @@ export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttr
             </div>
           )}
 
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Card className="p-3 text-center">
               <Users className="h-4 w-4 mx-auto mb-1 text-primary" />
               <div className="text-2xl font-bold">{result.total_buyers}</div>
