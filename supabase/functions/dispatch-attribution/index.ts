@@ -275,11 +275,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4c. WhatsApp/Event orders
+    // 4c. WhatsApp/Event orders (only truly paid & not cancelled)
+    const PAID_STAGES = ["paid", "shipped", "awaiting_shipment", "awaiting_shipping", "store_pickup", "awaiting_mototaxi", "awaiting_pickup", "completed"];
     const { data: orders } = await supabase
       .from("orders")
       .select("id, products, is_paid, paid_at, customer_id, stage, created_at")
       .eq("is_paid", true)
+      .in("stage", PAID_STAGES)
       .gte("paid_at", dispatchDate)
       .lte("paid_at", windowEnd);
 
