@@ -24,9 +24,24 @@ Deno.serve(async (req) => {
     // 1. Get dispatch info
     const { data: dispatch, error: dErr } = await supabase
       .from("dispatch_history")
-      .select("id, started_at, created_at, completed_at, cost_per_message, sent_count, template_category")
+      .select("id, started_at, created_at, completed_at, cost_per_message, sent_count, template_category, template_name, whatsapp_number_id")
       .eq("id", dispatch_id)
       .single();
+
+    // Fetch WhatsApp number label
+    let whatsapp_label: string | null = null;
+    let whatsapp_phone: string | null = null;
+    if (dispatch?.whatsapp_number_id) {
+      const { data: wn } = await supabase
+        .from("whatsapp_numbers")
+        .select("label, phone_display")
+        .eq("id", dispatch.whatsapp_number_id)
+        .single();
+      if (wn) {
+        whatsapp_label = wn.label;
+        whatsapp_phone = wn.phone_display;
+      }
+    }
 
     if (dErr || !dispatch) {
       return new Response(JSON.stringify({ error: "Dispatch not found" }), {
