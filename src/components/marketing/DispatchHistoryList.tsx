@@ -638,8 +638,13 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <BarChart3 className="h-5 w-5" />
-                  Relatório: {selectedDispatch.template_name}
+                  Relatório: {selectedDispatch.campaign_name || selectedDispatch.template_name}
                 </DialogTitle>
+                {selectedDispatch.campaign_name && (
+                  <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                    Template: {selectedDispatch.template_name}
+                  </div>
+                )}
               </DialogHeader>
 
               <div className="space-y-4">
@@ -701,17 +706,14 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                 })()}
 
                 {/* Metadata */}
-                <Card className="p-3 space-y-1 text-sm">
-                  <div><strong>Início:</strong> {format(new Date(selectedDispatch.created_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
-                  {selectedDispatch.completed_at && (
-                    <div><strong>Fim:</strong> {format(new Date(selectedDispatch.completed_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
-                  )}
-                  <div><strong>Instância WhatsApp:</strong> {selectedDispatch.whatsapp_instance_label || '—'}{selectedDispatch.whatsapp_phone_display ? ` (${selectedDispatch.whatsapp_phone_display})` : ''}</div>
-                  <div><strong>Template:</strong> {selectedDispatch.template_name || '—'}</div>
-                  <div><strong>Categoria:</strong> {selectedDispatch.template_category === 'UTILITY' ? 'Utilidade' : selectedDispatch.template_category === 'MARKETING' ? 'Marketing' : '—'}</div>
-                  <div><strong>Público:</strong> {getAudienceLabel(selectedDispatch.audience_source, selectedDispatch.audience_filters)}</div>
-                  <div><strong>Reenvio forçado:</strong> {selectedDispatch.force_resend ? 'Sim' : 'Não'}</div>
-                </Card>
+                <DispatchMetadataCard
+                  dispatch={selectedDispatch}
+                  getAudienceLabel={getAudienceLabel}
+                  onCostUpdate={(newCost) => {
+                    setSelectedDispatch(prev => prev ? { ...prev, cost_per_message: newCost } as any : null);
+                    setDispatches(prev => prev.map(d => d.id === selectedDispatch.id ? { ...d, cost_per_message: newCost } as any : d));
+                  }}
+                />
 
                 {/* Message Preview */}
                 {selectedDispatch.rendered_message && (
