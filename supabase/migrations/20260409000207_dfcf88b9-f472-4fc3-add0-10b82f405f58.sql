@@ -1,0 +1,1 @@
+UPDATE public.dispatch_history SET template_category = 'UTILITY' WHERE template_name IN ('arq_1', 'arq_2', 'arq_3', 'arq_pdf', 'confirmacao_pedidosite');
