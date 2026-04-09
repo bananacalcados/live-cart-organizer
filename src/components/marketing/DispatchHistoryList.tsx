@@ -77,6 +77,80 @@ interface DispatchHistoryListProps {
   onDuplicate?: (data: DuplicateDispatchData) => void;
 }
 
+function DispatchMetadataCard({ dispatch, getAudienceLabel, onCostUpdate }: {
+  dispatch: DispatchRecord;
+  getAudienceLabel: (source: string, filters: any) => string;
+  onCostUpdate: (newCost: number) => void;
+}) {
+  const [editingCost, setEditingCost] = useState(false);
+  const [costValue, setCostValue] = useState("");
+
+  const currentCost = (dispatch as any).cost_per_message;
+  const categoryDefault = dispatch.template_category === 'UTILITY' ? 0.05 : 0.40;
+  const displayCost = currentCost != null ? Number(currentCost) : categoryDefault;
+
+  const handleSaveCost = async () => {
+    const parsed = parseFloat(costValue.replace(",", "."));
+    if (isNaN(parsed) || parsed < 0) { toast.error("Valor inválido"); return; }
+    try {
+      await supabase.from('dispatch_history').update({ cost_per_message: parsed } as any).eq('id', dispatch.id);
+      onCostUpdate(parsed);
+      setEditingCost(false);
+      toast.success(`Custo atualizado para R$ ${parsed.toFixed(2)}/msg`);
+    } catch { toast.error("Erro ao salvar custo"); }
+  };
+
+  return (
+    <Card className="p-3 space-y-1 text-sm">
+      <div><strong>Início:</strong> {format(new Date(dispatch.created_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
+      {dispatch.completed_at && (
+        <div><strong>Fim:</strong> {format(new Date(dispatch.completed_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
+      )}
+      <div><strong>Instância WhatsApp:</strong> {dispatch.whatsapp_instance_label || '—'}{dispatch.whatsapp_phone_display ? ` (${dispatch.whatsapp_phone_display})` : ''}</div>
+      <div><strong>Template:</strong> {dispatch.template_name || '—'}</div>
+      <div><strong>Categoria (no envio):</strong> {dispatch.template_category === 'UTILITY' ? 'Utilidade' : dispatch.template_category === 'MARKETING' ? 'Marketing' : '—'}</div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <strong>Custo/msg:</strong>
+        {editingCost ? (
+          <div className="flex items-center gap-1">
+            <span className="text-xs">R$</span>
+            <Input
+              className="h-6 w-[80px] text-xs"
+              value={costValue}
+              onChange={e => setCostValue(e.target.value)}
+              placeholder="0.05"
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveCost(); if (e.key === 'Escape') setEditingCost(false); }}
+            />
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleSaveCost}>
+              <Check className="h-3 w-3 text-emerald-500" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingCost(false)}>
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        ) : (
+          <span className="flex items-center gap-1">
+            R$ {displayCost.toFixed(2)}
+            <Button
+              variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-40 hover:opacity-100"
+              onClick={() => { setEditingCost(true); setCostValue(displayCost.toFixed(2)); }}
+              title="Alterar custo por mensagem"
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+            {currentCost != null && currentCost !== categoryDefault && (
+              <Badge variant="outline" className="text-[9px] px-1 py-0">personalizado</Badge>
+            )}
+          </span>
+        )}
+      </div>
+      <div><strong>Público:</strong> {getAudienceLabel(dispatch.audience_source, dispatch.audience_filters)}</div>
+      <div><strong>Reenvio forçado:</strong> {dispatch.force_resend ? 'Sim' : 'Não'}</div>
+    </Card>
+  );
+}
+
 export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = {}) {
   const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
