@@ -10,6 +10,7 @@ import {
 import {
   ShoppingCart, DollarSign, Users, TrendingUp, Loader2, BarChart3,
   ChevronDown, ChevronUp, Store, UserCheck, Star, Package, Phone, Tag,
+  History, Info,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -19,6 +20,17 @@ interface BuyerProduct {
   variant?: string;
   qty: number;
   price: number;
+}
+
+interface PreviousPurchase {
+  reference_id?: string;
+  source: string;
+  purchased_at: string;
+  total: number | null;
+  store_name: string | null;
+  seller_name: string | null;
+  products: BuyerProduct[];
+  note?: string | null;
 }
 
 interface Buyer {
@@ -31,6 +43,7 @@ interface Buyer {
   seller_name: string | null;
   products: BuyerProduct[];
   is_first_purchase: boolean;
+  previous_purchases?: PreviousPurchase[];
 }
 
 interface AttributionResult {
@@ -198,7 +211,7 @@ export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttr
               <div className="text-sm font-medium mb-2">
                 Clientes que compraram ({result.buyers.length} pedidos)
               </div>
-              <ScrollArea className="h-[350px]">
+              <ScrollArea className="h-[400px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -249,71 +262,133 @@ export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttr
                         {expandedIndex === i && (
                           <TableRow key={`detail-${i}`} className="bg-muted/30">
                             <TableCell colSpan={6} className="p-3">
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                                {/* Store & Seller */}
-                                <div className="space-y-1.5">
-                                  {b.store_name && (
-                                    <div className="flex items-center gap-1.5">
-                                      <Store className="h-3.5 w-3.5 text-muted-foreground" />
-                                      <span className="text-muted-foreground">Loja:</span>
-                                      <span className="font-medium">{b.store_name}</span>
+                              <div className="space-y-3">
+                                {/* Current purchase details */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                  <div className="space-y-1.5">
+                                    {b.store_name && (
+                                      <div className="flex items-center gap-1.5">
+                                        <Store className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <span className="text-muted-foreground">Loja:</span>
+                                        <span className="font-medium">{b.store_name}</span>
+                                      </div>
+                                    )}
+                                    {b.seller_name && (
+                                      <div className="flex items-center gap-1.5">
+                                        <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <span className="text-muted-foreground">Vendedora:</span>
+                                        <span className="font-medium">{b.seller_name}</span>
+                                      </div>
+                                    )}
+                                    {!b.store_name && !b.seller_name && b.source !== "PDV" && (
+                                      <span className="text-muted-foreground">Venda online</span>
+                                    )}
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                      {b.is_first_purchase ? (
+                                        <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">
+                                          <Star className="h-2.5 w-2.5 mr-0.5" />
+                                          Primeira compra — Cliente novo!
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="secondary" className="text-[10px]">
+                                          Cliente recorrente
+                                        </Badge>
+                                      )}
                                     </div>
-                                  )}
-                                  {b.seller_name && (
-                                    <div className="flex items-center gap-1.5">
-                                      <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                                      <span className="text-muted-foreground">Vendedora:</span>
-                                      <span className="font-medium">{b.seller_name}</span>
-                                    </div>
-                                  )}
-                                  {!b.store_name && !b.seller_name && b.source !== "PDV" && (
-                                    <span className="text-muted-foreground">Venda online</span>
-                                  )}
-                                  <div className="flex items-center gap-1.5 mt-1">
-                                    {b.is_first_purchase ? (
-                                      <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">
-                                        <Star className="h-2.5 w-2.5 mr-0.5" />
-                                        Primeira compra — Cliente novo!
-                                      </Badge>
+                                  </div>
+
+                                  <div className="sm:col-span-2">
+                                    {b.products && b.products.length > 0 ? (
+                                      <div className="space-y-1">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                                          <span className="text-muted-foreground font-medium">
+                                            Produtos ({b.products.length})
+                                          </span>
+                                        </div>
+                                        {b.products.map((p, pi) => (
+                                          <div key={pi} className="flex justify-between items-center bg-background/50 rounded px-2 py-1">
+                                            <div>
+                                              <span className="font-medium">{p.name}</span>
+                                              {p.variant && <span className="text-muted-foreground ml-1">({p.variant})</span>}
+                                              {p.qty > 1 && <span className="text-muted-foreground ml-1">x{p.qty}</span>}
+                                            </div>
+                                            <span className="text-green-600 font-medium">
+                                              R$ {(p.price * p.qty).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
                                     ) : (
-                                      <Badge variant="secondary" className="text-[10px]">
-                                        Cliente recorrente
-                                      </Badge>
+                                      <span className="text-muted-foreground">Produtos não disponíveis</span>
                                     )}
                                   </div>
                                 </div>
 
-                                {/* Products */}
-                                <div className="sm:col-span-2">
-                                  {b.products && b.products.length > 0 ? (
-                                    <div className="space-y-1">
-                                      <div className="flex items-center gap-1.5 mb-1">
-                                        <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                                        <span className="text-muted-foreground font-medium">
-                                          Produtos ({b.products.length})
-                                        </span>
-                                      </div>
-                                      {b.products.map((p, pi) => (
-                                        <div key={pi} className="flex justify-between items-center bg-background/50 rounded px-2 py-1">
-                                          <div>
-                                            <span className="font-medium">{p.name}</span>
-                                            {p.variant && (
-                                              <span className="text-muted-foreground ml-1">({p.variant})</span>
-                                            )}
-                                            {p.qty > 1 && (
-                                              <span className="text-muted-foreground ml-1">x{p.qty}</span>
+                                {/* Previous purchases */}
+                                {b.previous_purchases && b.previous_purchases.length > 0 && (
+                                  <div className="border-t pt-2 mt-2">
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                      <History className="h-3.5 w-3.5 text-blue-500" />
+                                      <span className="text-xs font-medium text-blue-600">
+                                        Compras anteriores ({b.previous_purchases.length})
+                                      </span>
+                                    </div>
+                                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                                      {b.previous_purchases.map((pp, ppi) => (
+                                        <div key={ppi} className="bg-background/60 rounded-md p-2 text-xs border border-border/50">
+                                          <div className="flex items-center justify-between mb-1">
+                                            <div className="flex items-center gap-2">
+                                              <Badge variant="outline" className="text-[9px]">{pp.source}</Badge>
+                                              <span className="text-muted-foreground">
+                                                {format(new Date(pp.purchased_at), "dd/MM/yyyy", { locale: ptBR })}
+                                              </span>
+                                            </div>
+                                            {pp.total != null && (
+                                              <span className="font-semibold text-green-600">
+                                                R$ {pp.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                              </span>
                                             )}
                                           </div>
-                                          <span className="text-green-600 font-medium">
-                                            R$ {(p.price * p.qty).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                                          </span>
+                                          {pp.store_name && (
+                                            <div className="flex items-center gap-1 text-muted-foreground">
+                                              <Store className="h-3 w-3" />
+                                              <span>{pp.store_name}</span>
+                                              {pp.seller_name && <span>• {pp.seller_name}</span>}
+                                            </div>
+                                          )}
+                                          {pp.note && (
+                                            <div className="flex items-center gap-1 text-muted-foreground mt-0.5">
+                                              <Info className="h-3 w-3" />
+                                              <span className="italic">{pp.note}</span>
+                                            </div>
+                                          )}
+                                          {pp.products && pp.products.length > 0 && (
+                                            <div className="mt-1 space-y-0.5">
+                                              {pp.products.slice(0, 5).map((p, pi) => (
+                                                <div key={pi} className="flex justify-between text-[10px]">
+                                                  <span>
+                                                    {p.name}
+                                                    {p.variant && <span className="text-muted-foreground"> ({p.variant})</span>}
+                                                    {p.qty > 1 && <span className="text-muted-foreground"> x{p.qty}</span>}
+                                                  </span>
+                                                  <span className="text-muted-foreground">
+                                                    R$ {(p.price * p.qty).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                                  </span>
+                                                </div>
+                                              ))}
+                                              {pp.products.length > 5 && (
+                                                <span className="text-[10px] text-muted-foreground">
+                                                  +{pp.products.length - 5} produto(s)
+                                                </span>
+                                              )}
+                                            </div>
+                                          )}
                                         </div>
                                       ))}
                                     </div>
-                                  ) : (
-                                    <span className="text-muted-foreground">Produtos não disponíveis</span>
-                                  )}
-                                </div>
+                                  </div>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
