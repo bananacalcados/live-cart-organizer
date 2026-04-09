@@ -221,6 +221,29 @@ serve(async (req) => {
         }
       }
 
+      // Check if a human operator is actively chatting
+      const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+      const { data: recentOut } = await supabase
+        .from('whatsapp_messages')
+        .select('created_at')
+        .eq('phone', fu.phone)
+        .eq('direction', 'outgoing')
+        .gte('created_at', thirtyMinAgo)
+        .limit(1)
+        .maybeSingle();
+      const { data: recentIn } = await supabase
+        .from('whatsapp_messages')
+        .select('created_at')
+        .eq('phone', fu.phone)
+        .eq('direction', 'incoming')
+        .gte('created_at', thirtyMinAgo)
+        .limit(1)
+        .maybeSingle();
+      if (recentOut && recentIn) {
+        console.log(`[livete-followup] ${fu.phone} active conversation detected, skipping`);
+        continue;
+      }
+
       // Check if client responded
       const { data: lastIncoming } = await supabase
         .from('whatsapp_messages')

@@ -68,6 +68,38 @@ async function hasCustomerPaidRecently(supabase: any, customerId: string): Promi
   return false;
 }
 
+/** Check if a human operator is actively chatting with this phone (outgoing msg in last 30min) */
+async function isHumanActivelyChattingWith(supabase: any, phone: string): Promise<boolean> {
+  const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const normalizedPhone = phone.replace(/\D/g, '');
+  
+  // Check if there's a recent outgoing message (human or AI)
+  const { data: recentOutgoing } = await supabase
+    .from('whatsapp_messages')
+    .select('created_at, message')
+    .eq('phone', normalizedPhone)
+    .eq('direction', 'outgoing')
+    .gte('created_at', thirtyMinAgo)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!recentOutgoing) return false;
+
+  // Check if there's also a recent incoming message (active conversation)
+  const { data: recentIncoming } = await supabase
+    .from('whatsapp_messages')
+    .select('created_at')
+    .eq('phone', normalizedPhone)
+    .eq('direction', 'incoming')
+    .gte('created_at', thirtyMinAgo)
+    .limit(1)
+    .maybeSingle();
+
+  // If both directions have recent messages → active conversation, don't interrupt
+  return !!recentIncoming;
+}
+
 /** Send message via appropriate channel with human-like behavior */
 async function sendMessage(
   supabaseUrl: string, supabaseKey: string, supabase: any,
@@ -187,6 +219,13 @@ serve(async (req) => {
 
         if (alreadySentPhones.has(pSuffix)) continue;
 
+        // ── Check if human operator is actively chatting ──
+        const humanActive = await isHumanActivelyChattingWith(supabase, phone);
+        if (humanActive) {
+          console.log(`[followup] ${phone} has active human conversation, skipping checkout_abandonado`);
+          continue;
+        }
+
         // ── CRITICAL: Only follow up if this phone has an active ad_lead ──
         // This restricts followups to keyword-initiated conversations only
         const { data: adLead } = await supabase
@@ -284,7 +323,13 @@ serve(async (req) => {
       for (const fu of followups) {
         if (sent + abandonedSent >= MAX_SENDS_PER_RUN) break;
 
-        // Check if payment was already made
+        // ── Check if human operator is actively chatting ──
+        const humanActiveChat = await isHumanActivelyChattingWith(supabase, fu.phone);
+        if (humanActiveChat) {
+          console.log(`[followup] ${fu.phone} has active human conversation, skipping followup`);
+          continue;
+        }
+
         let isPaid = false;
         if (fu.sale_id) {
           const { data: sale } = await supabase
@@ -462,6 +507,16 @@ serve(async (req) => {
     if (scheduledItems?.length) {
       for (const item of scheduledItems) {
         if (abandonedSent + sent + scheduledSent >= MAX_SENDS_PER_RUN) break;
+
+        // ── Check if human operator is actively chatting ──
+        const humanActiveScheduled = await isHumanActivelyChattingWith(supabase, item.phone);
+        if (humanActiveScheduled) {
+          console.log(`[followup] ${item.phone} has active human conversation, skipping scheduled followup`);
+          await supabase.from('chat_scheduled_followups').update({
+            scheduled_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          }).eq('id', item.id);
+          continue;
+        }
 
         let message = `Oi! 😊 Passando aqui como combinamos. `;
         if (item.situation_hint === 'objecao_financeira') {
