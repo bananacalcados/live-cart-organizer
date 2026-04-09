@@ -505,7 +505,10 @@ Deno.serve(async (req) => {
     }));
 
     const category = (dispatch.template_category || "MARKETING").toUpperCase();
-    const costPerMsg = category === "UTILITY" ? 0.05 : 0.40;
+    // Use saved cost_per_message if set (manual override), otherwise derive from category
+    const costPerMsg = dispatch.cost_per_message != null
+      ? Number(dispatch.cost_per_message)
+      : (category === "UTILITY" ? 0.05 : 0.40);
     const cost = costPerMsg * (dispatch.sent_count || 0);
     const roas = cost > 0 ? (totalRevenue / cost).toFixed(2) : null;
 
