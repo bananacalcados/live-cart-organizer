@@ -454,7 +454,8 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     return true;
   });
 
-
+  return (
+    <Card className="mt-6">
       <CardHeader className="pb-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <CardTitle className="text-sm flex items-center justify-between gap-3">
           <span className="flex items-center gap-2">
@@ -705,6 +706,9 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                   {selectedDispatch.completed_at && (
                     <div><strong>Fim:</strong> {format(new Date(selectedDispatch.completed_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
                   )}
+                  <div><strong>Instância WhatsApp:</strong> {selectedDispatch.whatsapp_instance_label || '—'}{selectedDispatch.whatsapp_phone_display ? ` (${selectedDispatch.whatsapp_phone_display})` : ''}</div>
+                  <div><strong>Template:</strong> {selectedDispatch.template_name || '—'}</div>
+                  <div><strong>Categoria:</strong> {selectedDispatch.template_category === 'UTILITY' ? 'Utilidade' : selectedDispatch.template_category === 'MARKETING' ? 'Marketing' : '—'}</div>
                   <div><strong>Público:</strong> {getAudienceLabel(selectedDispatch.audience_source, selectedDispatch.audience_filters)}</div>
                   <div><strong>Reenvio forçado:</strong> {selectedDispatch.force_resend ? 'Sim' : 'Não'}</div>
                 </Card>
