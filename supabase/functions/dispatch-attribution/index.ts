@@ -105,17 +105,23 @@ Deno.serve(async (req) => {
     const dedupMap = new Map<string, string>();
     if (laterDispatches && laterDispatches.length > 0) {
       for (const ld of laterDispatches) {
-        const { data: ldRecipients } = await supabase
-          .from("dispatch_recipients")
-          .select("phone")
-          .eq("dispatch_id", ld.id);
-        if (ldRecipients) {
+        // Paginate ALL recipients of later dispatches (fix for >1000 recipients)
+        let ldPage = 0;
+        while (true) {
+          const { data: ldRecipients } = await supabase
+            .from("dispatch_recipients")
+            .select("phone")
+            .eq("dispatch_id", ld.id)
+            .range(ldPage * PAGE_SIZE, (ldPage + 1) * PAGE_SIZE - 1);
+          if (!ldRecipients || ldRecipients.length === 0) break;
           for (const lr of ldRecipients) {
             const s = extractPhoneKey(lr.phone);
             if (s && phoneSuffixes.has(s) && !dedupMap.has(s)) {
               dedupMap.set(s, ld.created_at);
             }
           }
+          if (ldRecipients.length < PAGE_SIZE) break;
+          ldPage++;
         }
       }
     }
