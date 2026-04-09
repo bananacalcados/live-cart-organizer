@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import {
   ShoppingCart, DollarSign, Users, TrendingUp, Loader2, BarChart3,
-  ChevronDown, ChevronUp, Store, UserCheck, Star, Package,
+  ChevronDown, ChevronUp, Store, UserCheck, Star, Package, Phone, Tag,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -119,7 +119,28 @@ export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttr
 
       {!isLoading && result && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {/* Dispatch info */}
+          {(result.whatsapp_label || result.template_name) && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {result.whatsapp_label && (
+                <div className="flex items-center gap-1">
+                  <Phone className="h-3 w-3" />
+                  <span>{result.whatsapp_label}</span>
+                  {result.whatsapp_phone && <span className="font-mono">({result.whatsapp_phone})</span>}
+                </div>
+              )}
+              {result.template_name && (
+                <div className="flex items-center gap-1">
+                  <Tag className="h-3 w-3" />
+                  <span className="font-mono">{result.template_name}</span>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0">
+                    {result.template_category === 'UTILITY' ? 'Utilidade' : 'Marketing'}
+                  </Badge>
+                </div>
+              )}
+            </div>
+          )}
+
             <Card className="p-3 text-center">
               <Users className="h-4 w-4 mx-auto mb-1 text-primary" />
               <div className="text-2xl font-bold">{result.total_buyers}</div>
