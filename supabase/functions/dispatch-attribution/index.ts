@@ -249,7 +249,17 @@ Deno.serve(async (req) => {
           .ilike("customer_phone", `%${suffix}`)
           .lt("completed_at", dispatchDate);
 
-        firstPurchaseMap.set(suffix, (count || 0) === 0 && (hasZoppy.count || 0) === 0);
+        // Also check zoppy_customers for historical purchase data (synced from ERP)
+        const { data: zoppyCust } = await supabase
+          .from("zoppy_customers")
+          .select("total_orders, first_purchase_at")
+          .ilike("phone", `%${suffix}`)
+          .gt("total_orders", 0)
+          .limit(1);
+        const hasZoppyHistory = zoppyCust && zoppyCust.length > 0 && 
+          zoppyCust[0].first_purchase_at && new Date(zoppyCust[0].first_purchase_at) < new Date(dispatchDate);
+
+        firstPurchaseMap.set(suffix, (count || 0) === 0 && (hasZoppy.count || 0) === 0 && !hasZoppyHistory);
       }
 
       for (const sale of posSales) {
@@ -440,6 +450,9 @@ Deno.serve(async (req) => {
       cost,
       cost_per_message: costPerMsg,
       template_category: category,
+      template_name: dispatch.template_name || null,
+      whatsapp_label: whatsapp_label,
+      whatsapp_phone: whatsapp_phone,
       roi: cost > 0 ? ((totalRevenue - cost) / cost * 100).toFixed(1) : null,
       roas,
       window_days,
