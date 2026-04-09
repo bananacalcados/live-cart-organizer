@@ -221,14 +221,15 @@ serve(async (req) => {
         }
       }
 
-      // Check if a human operator is actively chatting
-      const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+      // Check if a human operator is actively chatting (48h window)
+      const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
       const { data: recentOut } = await supabase
         .from('whatsapp_messages')
         .select('created_at')
         .eq('phone', fu.phone)
         .eq('direction', 'outgoing')
-        .gte('created_at', thirtyMinAgo)
+        .eq('is_mass_dispatch', false)
+        .gte('created_at', fortyEightHoursAgo)
         .limit(1)
         .maybeSingle();
       const { data: recentIn } = await supabase
@@ -236,11 +237,11 @@ serve(async (req) => {
         .select('created_at')
         .eq('phone', fu.phone)
         .eq('direction', 'incoming')
-        .gte('created_at', thirtyMinAgo)
+        .gte('created_at', fortyEightHoursAgo)
         .limit(1)
         .maybeSingle();
       if (recentOut && recentIn) {
-        console.log(`[livete-followup] ${fu.phone} active conversation detected, skipping`);
+        console.log(`[livete-followup] ${fu.phone} active conversation detected (48h window), skipping`);
         continue;
       }
 
