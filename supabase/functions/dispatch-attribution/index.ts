@@ -313,13 +313,16 @@ Deno.serve(async (req) => {
           .select("id", { count: "exact", head: true })
           .ilike("customer_phone", `%${suffix}`)
           .lt("completed_at", dispatchDate);
-        const { count: prevPos } = await supabase
-          .from("pos_sales")
-          .select("id", { count: "exact", head: true })
-          .lt("created_at", dispatchDate)
-          .in("status", ["completed", "paid"]);
-        // For pos we'd need to cross-reference customer, simplified: just check zoppy
-        zoppyFirstMap.set(suffix, (prevZoppy || 0) === 0);
+        // Also check zoppy_customers for ERP history
+        const { data: zCust } = await supabase
+          .from("zoppy_customers")
+          .select("total_orders, first_purchase_at")
+          .ilike("phone", `%${suffix}`)
+          .gt("total_orders", 0)
+          .limit(1);
+        const hasHistory = zCust && zCust.length > 0 && 
+          zCust[0].first_purchase_at && new Date(zCust[0].first_purchase_at) < new Date(dispatchDate);
+        zoppyFirstMap.set(suffix, (prevZoppy || 0) === 0 && !hasHistory);
       }
 
       for (const sale of zoppySales) {
