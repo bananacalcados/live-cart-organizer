@@ -323,7 +323,13 @@ serve(async (req) => {
       for (const fu of followups) {
         if (sent + abandonedSent >= MAX_SENDS_PER_RUN) break;
 
-        // Check if payment was already made
+        // ── Check if human operator is actively chatting ──
+        const humanActiveChat = await isHumanActivelyChattingWith(supabase, fu.phone);
+        if (humanActiveChat) {
+          console.log(`[followup] ${fu.phone} has active human conversation, skipping followup`);
+          continue;
+        }
+
         let isPaid = false;
         if (fu.sale_id) {
           const { data: sale } = await supabase
