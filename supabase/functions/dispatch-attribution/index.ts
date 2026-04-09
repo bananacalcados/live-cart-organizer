@@ -24,9 +24,24 @@ Deno.serve(async (req) => {
     // 1. Get dispatch info
     const { data: dispatch, error: dErr } = await supabase
       .from("dispatch_history")
-      .select("id, started_at, created_at, completed_at, cost_per_message, sent_count, template_category")
+      .select("id, started_at, created_at, completed_at, cost_per_message, sent_count, template_category, template_name, whatsapp_number_id")
       .eq("id", dispatch_id)
       .single();
+
+    // Fetch WhatsApp number label
+    let whatsapp_label: string | null = null;
+    let whatsapp_phone: string | null = null;
+    if (dispatch?.whatsapp_number_id) {
+      const { data: wn } = await supabase
+        .from("whatsapp_numbers")
+        .select("label, phone_display")
+        .eq("id", dispatch.whatsapp_number_id)
+        .single();
+      if (wn) {
+        whatsapp_label = wn.label;
+        whatsapp_phone = wn.phone_display;
+      }
+    }
 
     if (dErr || !dispatch) {
       return new Response(JSON.stringify({ error: "Dispatch not found" }), {
@@ -234,7 +249,17 @@ Deno.serve(async (req) => {
           .ilike("customer_phone", `%${suffix}`)
           .lt("completed_at", dispatchDate);
 
-        firstPurchaseMap.set(suffix, (count || 0) === 0 && (hasZoppy.count || 0) === 0);
+        // Also check zoppy_customers for historical purchase data (synced from ERP)
+        const { data: zoppyCust } = await supabase
+          .from("zoppy_customers")
+          .select("total_orders, first_purchase_at")
+          .ilike("phone", `%${suffix}`)
+          .gt("total_orders", 0)
+          .limit(1);
+        const hasZoppyHistory = zoppyCust && zoppyCust.length > 0 && 
+          zoppyCust[0].first_purchase_at && new Date(zoppyCust[0].first_purchase_at) < new Date(dispatchDate);
+
+        firstPurchaseMap.set(suffix, (count || 0) === 0 && (hasZoppy.count || 0) === 0 && !hasZoppyHistory);
       }
 
       for (const sale of posSales) {
@@ -288,13 +313,16 @@ Deno.serve(async (req) => {
           .select("id", { count: "exact", head: true })
           .ilike("customer_phone", `%${suffix}`)
           .lt("completed_at", dispatchDate);
-        const { count: prevPos } = await supabase
-          .from("pos_sales")
-          .select("id", { count: "exact", head: true })
-          .lt("created_at", dispatchDate)
-          .in("status", ["completed", "paid"]);
-        // For pos we'd need to cross-reference customer, simplified: just check zoppy
-        zoppyFirstMap.set(suffix, (prevZoppy || 0) === 0);
+        // Also check zoppy_customers for ERP history
+        const { data: zCust } = await supabase
+          .from("zoppy_customers")
+          .select("total_orders, first_purchase_at")
+          .ilike("phone", `%${suffix}`)
+          .gt("total_orders", 0)
+          .limit(1);
+        const hasHistory = zCust && zCust.length > 0 && 
+          zCust[0].first_purchase_at && new Date(zCust[0].first_purchase_at) < new Date(dispatchDate);
+        zoppyFirstMap.set(suffix, (prevZoppy || 0) === 0 && !hasHistory);
       }
 
       for (const sale of zoppySales) {
@@ -425,6 +453,9 @@ Deno.serve(async (req) => {
       cost,
       cost_per_message: costPerMsg,
       template_category: category,
+      template_name: dispatch.template_name || null,
+      whatsapp_label: whatsapp_label,
+      whatsapp_phone: whatsapp_phone,
       roi: cost > 0 ? ((totalRevenue - cost) / cost * 100).toFixed(1) : null,
       roas,
       window_days,
