@@ -41,6 +41,9 @@ interface AttributionResult {
   cost: number;
   cost_per_message: number;
   template_category: string;
+  template_name: string | null;
+  whatsapp_label: string | null;
+  whatsapp_phone: string | null;
   roi: string | null;
   roas: string | null;
   window_days: number;
