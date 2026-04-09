@@ -70,33 +70,34 @@ async function hasCustomerPaidRecently(supabase: any, customerId: string): Promi
 
 /** Check if a human operator is actively chatting with this phone (outgoing msg in last 30min) */
 async function isHumanActivelyChattingWith(supabase: any, phone: string): Promise<boolean> {
-  const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const normalizedPhone = phone.replace(/\D/g, '');
   
-  // Check if there's a recent outgoing message (human or AI)
+  // Check if there's an outgoing message from a human operator in last 48h
+  // We detect "human" by checking outgoing messages that are NOT mass dispatches
   const { data: recentOutgoing } = await supabase
     .from('whatsapp_messages')
-    .select('created_at, message')
+    .select('created_at')
     .eq('phone', normalizedPhone)
     .eq('direction', 'outgoing')
-    .gte('created_at', thirtyMinAgo)
+    .eq('is_mass_dispatch', false)
+    .gte('created_at', fortyEightHoursAgo)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (!recentOutgoing) return false;
 
-  // Check if there's also a recent incoming message (active conversation)
+  // If there's also a recent incoming message → conversation is active
   const { data: recentIncoming } = await supabase
     .from('whatsapp_messages')
     .select('created_at')
     .eq('phone', normalizedPhone)
     .eq('direction', 'incoming')
-    .gte('created_at', thirtyMinAgo)
+    .gte('created_at', fortyEightHoursAgo)
     .limit(1)
     .maybeSingle();
 
-  // If both directions have recent messages → active conversation, don't interrupt
   return !!recentIncoming;
 }
 
