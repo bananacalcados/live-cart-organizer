@@ -577,6 +577,8 @@ serve(async (req) => {
 
         // Process status updates
         if (value.statuses) {
+          const statusRank: Record<string, number> = { failed: 0, sent: 1, delivered: 2, read: 3 };
+
           for (const status of value.statuses) {
             const messageId = status.id;
             let newStatus = 'sent';
@@ -598,10 +600,39 @@ serve(async (req) => {
               console.log(`Message ${messageId} failed: code=${err.code}, title=${err.title}, details=${details}`);
             }
 
-            await supabase
+            // Prevent status downgrade (e.g. don't overwrite 'read' with 'delivered')
+            // First check current status
+            const { data: existingMsg } = await supabase
               .from('whatsapp_messages')
-              .update(updateData)
-              .eq('message_id', messageId);
+              .select('status')
+              .eq('message_id', messageId)
+              .maybeSingle();
+
+            if (existingMsg) {
+              const currentRank = statusRank[existingMsg.status] ?? -1;
+              const newRank = statusRank[newStatus] ?? -1;
+              // Only update if new status is higher rank (or it's a failure)
+              if (newRank > currentRank || newStatus === 'failed') {
+                const { error: updateError, count } = await supabase
+                  .from('whatsapp_messages')
+                  .update(updateData)
+                  .eq('message_id', messageId);
+
+                if (updateError) {
+                  console.error(`Status update failed for ${messageId}: ${updateError.message}`);
+                }
+
+                // Also update dispatch_recipients if this is a mass dispatch message
+                if (newStatus === 'delivered' || newStatus === 'read' || newStatus === 'failed') {
+                  await supabase
+                    .from('dispatch_recipients')
+                    .update({ status: newStatus })
+                    .eq('message_wamid', messageId);
+                }
+              }
+            } else {
+              console.log(`Status update: no message found for wamid ${messageId.substring(0, 30)}...`);
+            }
           }
         }
       }
