@@ -508,6 +508,16 @@ serve(async (req) => {
       for (const item of scheduledItems) {
         if (abandonedSent + sent + scheduledSent >= MAX_SENDS_PER_RUN) break;
 
+        // ── Check if human operator is actively chatting ──
+        const humanActiveScheduled = await isHumanActivelyChattingWith(supabase, item.phone);
+        if (humanActiveScheduled) {
+          console.log(`[followup] ${item.phone} has active human conversation, skipping scheduled followup`);
+          await supabase.from('chat_scheduled_followups').update({
+            scheduled_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          }).eq('id', item.id);
+          continue;
+        }
+
         let message = `Oi! 😊 Passando aqui como combinamos. `;
         if (item.situation_hint === 'objecao_financeira') {
           message += `Lembra que você mencionou que ia verificar sobre o pagamento? Conseguiu resolver? Estou aqui pra te ajudar! 💳`;
