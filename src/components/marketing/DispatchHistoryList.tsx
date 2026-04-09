@@ -193,12 +193,12 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
         });
       }
 
-      // For each dispatch, get live stats from whatsapp_messages
+      // For each dispatch, get live stats from whatsapp_messages + dispatch_recipients fallback
       const enriched = await Promise.all(data.map(async (d: any) => {
-        // Get phones for this dispatch
+        // Get recipients with their status from dispatch_recipients
         const { data: recs } = await supabase
           .from('dispatch_recipients')
-          .select('phone')
+          .select('phone, status')
           .eq('dispatch_id', d.id);
 
         if (!recs || recs.length === 0) {
@@ -211,6 +211,15 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
           return p;
         });
 
+        // Start with dispatch_recipients status as baseline
+        const statusRank: Record<string, number> = { failed: 0, sent: 1, delivered: 2, read: 3 };
+        const phoneStatus = new Map<string, string>();
+        for (let i = 0; i < recs.length; i++) {
+          let p = recs[i].phone.replace(/\D/g, '');
+          if (!p.startsWith('55')) p = '55' + p;
+          if (recs[i].status) phoneStatus.set(p, recs[i].status);
+        }
+
         // FIX: Use created_at (dispatch creation) instead of started_at (last lock timestamp)
         const startTime = new Date(d.created_at);
         startTime.setMinutes(startTime.getMinutes() - 2);
@@ -218,8 +227,7 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
           ? new Date(new Date(d.completed_at).getTime() + 24 * 60 * 60 * 1000)
           : new Date();
 
-        // Batch phones in groups of 100 for the IN query
-        let allStatuses: { phone: string; status: string }[] = [];
+        // Overlay whatsapp_messages status (higher rank wins)
         let interactionCount = 0;
         for (let i = 0; i < phones.length; i += 100) {
           const batch = phones.slice(i, i + 100);
@@ -230,7 +238,14 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
             .in('phone', batch)
             .gte('created_at', startTime.toISOString())
             .lte('created_at', endTime.toISOString());
-          if (msgs) allStatuses.push(...msgs);
+          if (msgs) {
+            for (const msg of msgs) {
+              const current = phoneStatus.get(msg.phone);
+              if (!current || (statusRank[msg.status] || 0) > (statusRank[current] || 0)) {
+                phoneStatus.set(msg.phone, msg.status);
+              }
+            }
+          }
 
           // Count interactions (incoming replies from these phones after dispatch)
           const { count: replies } = await supabase
@@ -241,16 +256,6 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
             .gte('created_at', startTime.toISOString())
             .lte('created_at', endTime.toISOString());
           interactionCount += replies || 0;
-        }
-
-        // Use best status per phone
-        const phoneStatus = new Map<string, string>();
-        const statusRank: Record<string, number> = { failed: 0, sent: 1, delivered: 2, read: 3 };
-        for (const msg of allStatuses) {
-          const current = phoneStatus.get(msg.phone);
-          if (!current || (statusRank[msg.status] || 0) > (statusRank[current] || 0)) {
-            phoneStatus.set(msg.phone, msg.status);
-          }
         }
 
         const stats = {
