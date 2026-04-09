@@ -219,6 +219,13 @@ serve(async (req) => {
 
         if (alreadySentPhones.has(pSuffix)) continue;
 
+        // ── Check if human operator is actively chatting ──
+        const humanActive = await isHumanActivelyChattingWith(supabase, phone);
+        if (humanActive) {
+          console.log(`[followup] ${phone} has active human conversation, skipping checkout_abandonado`);
+          continue;
+        }
+
         // ── CRITICAL: Only follow up if this phone has an active ad_lead ──
         // This restricts followups to keyword-initiated conversations only
         const { data: adLead } = await supabase
