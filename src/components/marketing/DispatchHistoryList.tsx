@@ -25,6 +25,7 @@ import { toast } from "sonner";
 interface DispatchRecord {
   id: string;
   template_name: string;
+  template_category?: string | null;
   campaign_name: string | null;
   audience_source: string;
   audience_filters: any;
@@ -37,7 +38,9 @@ interface DispatchRecord {
   started_at: string;
   completed_at: string | null;
   status: string;
-  // Live stats from whatsapp_messages
+  whatsapp_number_id?: string | null;
+  whatsapp_instance_label?: string | null;
+  whatsapp_phone_display?: string | null;
   stats?: {
     delivered: number;
     read: number;
@@ -84,6 +87,8 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
   const [expanded, setExpanded] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
@@ -92,12 +97,26 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
         .from('dispatch_history')
         .select('*')
         .order('started_at', { ascending: false })
-        .limit(50);
+        .limit(200);
 
       if (error) throw error;
       if (!data || data.length === 0) {
         setDispatches([]);
         return;
+      }
+
+      const numberIds = [...new Set((data as any[]).map((d) => d.whatsapp_number_id).filter(Boolean))];
+      const numberMap = new Map<string, { label: string | null; phone_display: string | null }>();
+
+      if (numberIds.length > 0) {
+        const { data: numbers } = await supabase
+          .from('whatsapp_numbers')
+          .select('id, label, phone_display')
+          .in('id', numberIds);
+
+        numbers?.forEach((n: any) => {
+          numberMap.set(n.id, { label: n.label || null, phone_display: n.phone_display || null });
+        });
       }
 
       // For each dispatch, get live stats from whatsapp_messages
@@ -173,7 +192,12 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
           else if (status === 'failed') stats.failed++;
         }
 
-        return { ...d, stats };
+        return {
+          ...d,
+          whatsapp_instance_label: numberMap.get(d.whatsapp_number_id)?.label || null,
+          whatsapp_phone_display: numberMap.get(d.whatsapp_number_id)?.phone_display || null,
+          stats,
+        };
       }));
 
       setDispatches(enriched);
@@ -420,20 +444,34 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     }
   };
 
+  const filteredDispatches = dispatches.filter((dispatch) => {
+    const createdAt = new Date(dispatch.created_at).getTime();
+    const fromTime = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+    const toTime = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
+
+    if (fromTime && createdAt < fromTime) return false;
+    if (toTime && createdAt > toTime) return false;
+    return true;
+  });
 
   return (
     <Card className="mt-6">
       <CardHeader className="pb-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <CardTitle className="text-sm flex items-center justify-between">
+        <CardTitle className="text-sm flex items-center justify-between gap-3">
           <span className="flex items-center gap-2">
             <History className="h-4 w-4" />
-            Histórico de Disparos ({dispatches.length})
+            Histórico de Disparos ({filteredDispatches.length}/{dispatches.length})
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-8 w-[150px] text-xs" />
+            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-8 w-[150px] text-xs" />
+            <Button variant="ghost" size="sm" onClick={() => { setDateFrom(""); setDateTo(""); }} className="h-7 px-2 text-xs">
+              Limpar
+            </Button>
             <Button
               variant="ghost"
               size="sm"
-              onClick={(e) => { e.stopPropagation(); loadHistory(); }}
+              onClick={() => loadHistory()}
               disabled={isLoading}
               className="h-7 px-2"
             >
@@ -451,9 +489,11 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
               <RefreshCw className="h-4 w-4 animate-spin mr-2" /> Carregando histórico...
             </div>
           ) : (
-            <ScrollArea className="max-h-[500px]">
+            <ScrollArea className="h-[620px] pr-3">
               <div className="space-y-2">
-                {dispatches.map((d) => {
+                {filteredDispatches.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">Nenhum disparo encontrado no período.</div>
+                ) : filteredDispatches.map((d) => {
                   const s = d.stats || { delivered: 0, read: 0, sent: 0, failed: 0, total: 0, dispatched: 0, interactions: 0 };
                   const dispatched = s.dispatched || d.sent_count || 0;
                   const deliveryRate = calcRate(s.delivered + s.read, dispatched);
@@ -666,6 +706,9 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                   {selectedDispatch.completed_at && (
                     <div><strong>Fim:</strong> {format(new Date(selectedDispatch.completed_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</div>
                   )}
+                  <div><strong>Instância WhatsApp:</strong> {selectedDispatch.whatsapp_instance_label || '—'}{selectedDispatch.whatsapp_phone_display ? ` (${selectedDispatch.whatsapp_phone_display})` : ''}</div>
+                  <div><strong>Template:</strong> {selectedDispatch.template_name || '—'}</div>
+                  <div><strong>Categoria:</strong> {selectedDispatch.template_category === 'UTILITY' ? 'Utilidade' : selectedDispatch.template_category === 'MARKETING' ? 'Marketing' : '—'}</div>
                   <div><strong>Público:</strong> {getAudienceLabel(selectedDispatch.audience_source, selectedDispatch.audience_filters)}</div>
                   <div><strong>Reenvio forçado:</strong> {selectedDispatch.force_resend ? 'Sim' : 'Não'}</div>
                 </Card>
