@@ -68,6 +68,38 @@ async function hasCustomerPaidRecently(supabase: any, customerId: string): Promi
   return false;
 }
 
+/** Check if a human operator is actively chatting with this phone (outgoing msg in last 30min) */
+async function isHumanActivelyChattingWith(supabase: any, phone: string): Promise<boolean> {
+  const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const normalizedPhone = phone.replace(/\D/g, '');
+  
+  // Check if there's a recent outgoing message (human or AI)
+  const { data: recentOutgoing } = await supabase
+    .from('whatsapp_messages')
+    .select('created_at, message')
+    .eq('phone', normalizedPhone)
+    .eq('direction', 'outgoing')
+    .gte('created_at', thirtyMinAgo)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!recentOutgoing) return false;
+
+  // Check if there's also a recent incoming message (active conversation)
+  const { data: recentIncoming } = await supabase
+    .from('whatsapp_messages')
+    .select('created_at')
+    .eq('phone', normalizedPhone)
+    .eq('direction', 'incoming')
+    .gte('created_at', thirtyMinAgo)
+    .limit(1)
+    .maybeSingle();
+
+  // If both directions have recent messages → active conversation, don't interrupt
+  return !!recentIncoming;
+}
+
 /** Send message via appropriate channel with human-like behavior */
 async function sendMessage(
   supabaseUrl: string, supabaseKey: string, supabase: any,
