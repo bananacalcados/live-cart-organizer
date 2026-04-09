@@ -1064,6 +1064,34 @@ serve(async (req) => {
     }
 
     const incomingMessageText = effectiveMessageText.trim().slice(0, 500);
+
+    // ─── Auto-reply detection: skip automated WhatsApp messages ────────
+    const autoReplyPatterns = [
+      /agra(deço|decemos)\s+(o\s+)?(seu\s+)?contato/i,
+      /como\s+posso\s+te\s+ajudar\??/i,
+      /em\s+breve\s+(retornaremos|responderemos|entraremos)/i,
+      /hor[áa]rio\s+de\s+(atendimento|funcionamento)/i,
+      /mensagem\s+autom[áa]tica/i,
+      /resposta\s+autom[áa]tica/i,
+      /no\s+momento\s+n[ãa]o\s+(estamos|podemos)/i,
+      /fora\s+do\s+hor[áa]rio/i,
+      /obrigad[oa]\s+p(or|elo)\s+(seu\s+)?contato/i,
+      /atendimento\s+das?\s+\d{1,2}/i,
+      /retornar(emos)?\s+(em\s+breve|o\s+mais\s+r[áa]pido)/i,
+      /aguarde\s+(que\s+)?(um\s+)?(de\s+nossos|nosso)/i,
+      /bem.?vind[oa]\s+(à|a|ao)/i,
+      /ol[áa]!?\s*(seja\s+)?bem.?vind/i,
+      /n[ãa]o\s+estamos\s+dispon[íi]veis/i,
+    ];
+
+    const isAutoReply = autoReplyPatterns.some(p => p.test(incomingMessageText));
+    if (isAutoReply) {
+      console.log(`[concierge] Auto-reply detected for ${normalizedPhone}: "${incomingMessageText.slice(0, 80)}". Ignoring.`);
+      return new Response(JSON.stringify({ success: true, handled: false, reason: 'auto_reply_ignored' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const aggregationCutoff = new Date(Date.now() - 30000).toISOString();
 
     // ─── 0. Debounce + aggregate fragmented messages ───────────────────

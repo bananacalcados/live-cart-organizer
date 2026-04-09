@@ -35,6 +35,27 @@ serve(async (req) => {
 
     console.log(`[incoming-message-trigger] phone=${phone}, instance=${instance}`);
 
+    // ─── Auto-reply detection: skip automated WhatsApp messages ────────
+    const autoReplyPatterns = [
+      /agra(deço|decemos)\s+(o\s+)?(seu\s+)?contato/i,
+      /como\s+posso\s+te\s+ajudar\??/i,
+      /em\s+breve\s+(retornaremos|responderemos|entraremos)/i,
+      /mensagem\s+autom[áa]tica/i,
+      /resposta\s+autom[áa]tica/i,
+      /fora\s+do\s+hor[áa]rio/i,
+      /obrigad[oa]\s+p(or|elo)\s+(seu\s+)?contato/i,
+      /retornar(emos)?\s+(em\s+breve|o\s+mais\s+r[áa]pido)/i,
+      /aguarde\s+(que\s+)?(um\s+)?(de\s+nossos|nosso)/i,
+      /n[ãa]o\s+estamos\s+dispon[íi]veis/i,
+    ];
+
+    if (messageText && autoReplyPatterns.some(p => p.test(messageText))) {
+      console.log(`[incoming-message-trigger] Auto-reply detected for ${phone}. Ignoring.`);
+      return new Response(JSON.stringify({ triggered: 0, reason: 'auto_reply_ignored' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // 1. Fetch active flows with trigger_type = incoming_message
     const { data: flows } = await supabase
       .from('automation_flows')
