@@ -308,6 +308,41 @@ serve(async (req) => {
       });
     }
 
+    // Enrich recipients with WhatsApp display_name (prioritize over CRM name)
+    // Build phone variations to match chat_contacts (with/without 55, with/without 9th digit)
+    const phoneVariations: string[] = [];
+    for (const r of pendingRecipients) {
+      const digits = r.phone.replace(/\D/g, '');
+      phoneVariations.push(digits);
+      if (digits.startsWith('55')) phoneVariations.push(digits.slice(2));
+      else phoneVariations.push('55' + digits);
+    }
+    const { data: chatContacts } = await supabase
+      .from('chat_contacts')
+      .select('phone, display_name, custom_name')
+      .in('phone', phoneVariations);
+
+    // Build a suffix -> display_name map from chat_contacts
+    const whatsappNameMap = new Map<string, string>();
+    if (chatContacts) {
+      for (const cc of chatContacts) {
+        if (!cc.phone || (!cc.display_name && !cc.custom_name)) continue;
+        const suffix = cc.phone.replace(/\D/g, '').slice(-8);
+        whatsappNameMap.set(suffix, cc.custom_name || cc.display_name);
+      }
+    }
+
+    // Override recipient names when WhatsApp display_name exists
+    for (const r of pendingRecipients) {
+      const suffix = r.phone.replace(/\D/g, '').slice(-8);
+      const waName = whatsappNameMap.get(suffix);
+      if (waName && waName.trim()) {
+        // Set first_name from WhatsApp display name
+        (r as any).first_name = waName.split(' ')[0];
+        (r as any).recipient_name = waName;
+      }
+    }
+
     // Process batch
     let batchSent = 0, batchFailed = 0;
     const sentIds: { id: string; wamid: string | null; phone: string; rendered: string }[] = [];
