@@ -323,20 +323,11 @@ serve(async (req) => {
         }
 
         // Reopen any finished conversation when customer sends a new message
-        // Use suffix matching to handle phone format variations (with/without 9th digit)
+        // Uses suffix matching to handle phone format variations (with/without 9th digit)
         if (!isGroup && !skipInsert) {
-          const phoneSuffix = phone.replace(/\D/g, '').slice(-8);
-          const { data: finishedList } = await supabase
-            .from('chat_finished_conversations')
-            .select('id, phone, finish_reason');
-          if (finishedList && finishedList.length > 0) {
-            const matches = finishedList.filter((f: any) => 
-              f.phone.replace(/\D/g, '').slice(-8) === phoneSuffix
-            );
-            for (const finished of matches) {
-              await supabase.from('chat_finished_conversations').delete().eq('id', finished.id);
-              console.log(`Reopened finished conversation for ${finished.phone} (was: ${finished.finish_reason})`);
-            }
+          const { data: reopenCount } = await supabase.rpc('reopen_finished_conversation', { p_phone: phone });
+          if (reopenCount && reopenCount > 0) {
+            console.log(`Reopened ${reopenCount} finished conversation(s) for ${phone}`);
           }
         }
 
