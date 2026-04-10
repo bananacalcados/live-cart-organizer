@@ -617,8 +617,10 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   // ── Audio Recording ──
   const startRecording = useCallback(async () => {
     try {
+      const { getAudioMimeType, getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const mimeType = getAudioMimeType();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -630,10 +632,12 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         stream.getTracks().forEach(t => t.stop());
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
 
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const ct = getAudioContentType(mimeType);
+        const ext = getAudioExtension(mimeType);
+        const audioBlob = new Blob(audioChunksRef.current, { type: ct });
         if (audioBlob.size === 0) { setIsRecording(false); setRecordingTime(0); return; }
 
-        const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
+        const file = new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: ct });
         const mediaUrl = await uploadMediaToStorage(file);
         if (mediaUrl) {
           const result = await sendMessage(phone, '[Áudio]', 'audio', mediaUrl);

@@ -377,16 +377,20 @@ function AudioRecorder({ onRecorded }: { onRecorded: (url: string) => void }) {
 
   const start = async () => {
     try {
+      const { getAudioMimeType, getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const mimeType = getAudioMimeType();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       const chunks: Blob[] = [];
       recorder.ondataavailable = e => chunks.push(e.data);
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(chunks, { type: "audio/webm" });
+        const ct = getAudioContentType(mimeType);
+        const ext = getAudioExtension(mimeType);
+        const blob = new Blob(chunks, { type: ct });
         setUploading(true);
-        const fileName = `automation-audio-${Date.now()}.webm`;
-        const { data, error } = await supabase.storage.from("chat-media").upload(fileName, blob, { contentType: "audio/webm" });
+        const fileName = `automation-audio-${Date.now()}.${ext}`;
+        const { data, error } = await supabase.storage.from("chat-media").upload(fileName, blob, { contentType: ct });
         setUploading(false);
         if (error) { toast.error("Erro ao enviar áudio"); return; }
         const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(fileName);

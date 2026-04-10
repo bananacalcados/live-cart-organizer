@@ -212,8 +212,10 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
   // ── Audio recording ──
   const startRecording = async () => {
     try {
+      const { getAudioMimeType, getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const mimeType = getAudioMimeType();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       audioChunksRef.current = [];
       mediaRecorderRef.current = mediaRecorder;
 
@@ -223,12 +225,14 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
 
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(track => track.stop());
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const ct = getAudioContentType(mimeType);
+        const ext = getAudioExtension(mimeType);
+        const audioBlob = new Blob(audioChunksRef.current, { type: ct });
         if (audioBlob.size === 0) return;
 
         setIsUploadingMedia(true);
         try {
-          const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: "audio/webm" });
+          const file = new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: ct });
           const publicUrl = await uploadMediaToStorage(file);
           if (!publicUrl) throw new Error("Upload falhou");
 
