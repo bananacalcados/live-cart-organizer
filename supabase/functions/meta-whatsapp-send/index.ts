@@ -124,8 +124,7 @@ function resolveMediaCaption(message?: string, caption?: string): string | undef
   return undefined;
 }
 
-// Meta API accepts audio/ogg natively. If we receive webm, remap to ogg (best-effort).
-// With the frontend fix, most recordings are now natively OGG, so this is a fallback.
+// Meta API accepts audio/ogg natively. If we receive webm, do a real remux.
 function normalizeContentTypeForMeta(contentType: string, mediaType: string): string {
   if (mediaType === 'audio' && contentType.includes('webm')) {
     return 'audio/ogg';
@@ -154,10 +153,36 @@ async function uploadMediaToMeta(
   }
 
   const rawContentType = downloadResponse.headers.get('content-type') || getMimeType(mediaType, mediaUrl);
-  const contentType = normalizeContentTypeForMeta(rawContentType, mediaType);
-  const mediaBytes = new Uint8Array(await downloadResponse.arrayBuffer());
+  let mediaBytes = new Uint8Array(await downloadResponse.arrayBuffer());
   const rawFileName = getFileName(mediaUrl, mediaType);
-  const fileName = normalizeFileNameForMeta(rawFileName, mediaType, rawContentType);
+
+  // ── Real WebM→OGG remux for audio ──
+  let contentType = rawContentType;
+  let fileName = rawFileName;
+
+  if (mediaType === 'audio') {
+    if (isWebmContainer(mediaBytes)) {
+      console.log(`[meta-whatsapp-send] detected WebM container – remuxing to OGG/Opus (${mediaBytes.length} bytes)`);
+      try {
+        mediaBytes = webmToOgg(mediaBytes);
+        contentType = 'audio/ogg';
+        fileName = rawFileName.replace(/\.webm$/i, '.ogg');
+        console.log(`[meta-whatsapp-send] remux OK – OGG size: ${mediaBytes.length} bytes`);
+      } catch (e) {
+        console.error('[meta-whatsapp-send] remux failed, sending as-is:', e);
+        contentType = normalizeContentTypeForMeta(rawContentType, mediaType);
+        fileName = normalizeFileNameForMeta(rawFileName, mediaType, rawContentType);
+      }
+    } else if (isOggContainer(mediaBytes)) {
+      contentType = 'audio/ogg';
+      if (!fileName.endsWith('.ogg')) fileName = fileName.replace(/\.\w+$/, '.ogg');
+      console.log(`[meta-whatsapp-send] already OGG container (${mediaBytes.length} bytes)`);
+    } else {
+      contentType = normalizeContentTypeForMeta(rawContentType, mediaType);
+      fileName = normalizeFileNameForMeta(rawFileName, mediaType, rawContentType);
+      console.log(`[meta-whatsapp-send] unknown audio container, sending with ${contentType}`);
+    }
+  }
 
   const formData = new FormData();
   formData.append('messaging_product', 'whatsapp');
