@@ -609,9 +609,15 @@ export function MassTemplateDispatcher() {
     }
 
     // Apply topN limit
-    const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
+    let finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
+
+    // Apply cooldown exclusion
+    if (cooldownApplied && cooldownExcludedPhones.size > 0) {
+      finalList = finalList.filter(r => !cooldownExcludedPhones.has(r.phone));
+    }
+
     return finalList;
-  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter]);
+  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, cooldownApplied, cooldownExcludedPhones]);
 
   // Unique filter options
   const uniqueSegments = useMemo(() => [...new Set(crmCustomers.map(c => c.rfm_segment).filter(Boolean))].sort(), [crmCustomers]);
