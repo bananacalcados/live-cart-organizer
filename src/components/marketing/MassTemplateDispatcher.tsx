@@ -148,6 +148,13 @@ export function MassTemplateDispatcher() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [campaignName, setCampaignName] = useState("");
 
+  // Cooldown filter
+  const [cooldownDays, setCooldownDays] = useState<string>("");
+  const [cooldownExcludedPhones, setCooldownExcludedPhones] = useState<Set<string>>(new Set());
+  const [cooldownRecentRecipients, setCooldownRecentRecipients] = useState<Array<{ phone: string; name: string; sentAt: string; campaign: string }>>([]);
+  const [isLoadingCooldown, setIsLoadingCooldown] = useState(false);
+  const [cooldownApplied, setCooldownApplied] = useState(false);
+
   // Check for active dispatches on mount (resume monitoring)
   useEffect(() => {
     const checkActiveDispatch = async () => {
