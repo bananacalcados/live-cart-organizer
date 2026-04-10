@@ -478,20 +478,33 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       logStoreId = sale.store_id;
     }
 
-    await supabase.from("pos_checkout_attempts").insert({
-      sale_id: orderId,
-      store_id: logStoreId,
-      payment_method: "pix",
-      status: "success",
-      amount: logAmount,
-      customer_name: logCustomerName,
-      customer_phone: logCustomerPhone,
-      customer_email: logCustomerEmail,
-      error_message: `Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
-      gateway: "mercadopago",
-      transaction_id: mpIdStr,
-      metadata: { source: "webhook", status, gateway: "mercadopago" },
-    });
+    // Skip if a success record already exists for this sale+pix
+    const { data: existingPix } = await supabase
+      .from("pos_checkout_attempts")
+      .select("id")
+      .eq("sale_id", orderId)
+      .eq("status", "success")
+      .eq("payment_method", "pix")
+      .limit(1);
+
+    if (!existingPix || existingPix.length === 0) {
+      await supabase.from("pos_checkout_attempts").insert({
+        sale_id: orderId,
+        store_id: logStoreId,
+        payment_method: "pix",
+        status: "success",
+        amount: logAmount,
+        customer_name: logCustomerName,
+        customer_phone: logCustomerPhone,
+        customer_email: logCustomerEmail,
+        error_message: `Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
+        gateway: "mercadopago",
+        transaction_id: mpIdStr,
+        metadata: { source: "webhook", status, gateway: "mercadopago" },
+      });
+    } else {
+      console.log(`Skipping duplicate PIX checkout attempt for sale ${orderId} - success already logged`);
+    }
   }
 
   return new Response(

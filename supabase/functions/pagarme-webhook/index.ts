@@ -295,21 +295,38 @@ serve(async (req) => {
       console.log(`Order ${ourOrderId} not found in orders or pos_sales`);
     }
 
-    // Log to pos_checkout_attempts
+    // Log to pos_checkout_attempts (skip if success record already exists for this sale)
     const logStatus = isPaid ? "success" : "error";
     const logMessage = isPaid
       ? `Webhook: pagamento confirmado (${transactionId})`
       : `Webhook: pagamento ${status} - ${chargeObj?.last_transaction?.acquirer_message || eventType}`;
 
-    await supabase.from("pos_checkout_attempts").insert({
-      sale_id: resolvedOrderId,
-      payment_method: "credit_card",
-      status: logStatus,
-      error_message: logMessage,
-      gateway: "pagarme",
-      transaction_id: String(transactionId),
-      metadata: { source: "webhook", event: eventType, pagarme_status: status },
-    });
+    let skipInsert = false;
+    if (isPaid) {
+      const { data: existing } = await supabase
+        .from("pos_checkout_attempts")
+        .select("id")
+        .eq("sale_id", resolvedOrderId)
+        .eq("status", "success")
+        .eq("payment_method", "credit_card")
+        .limit(1);
+      if (existing && existing.length > 0) {
+        skipInsert = true;
+        console.log(`Skipping duplicate checkout attempt for sale ${resolvedOrderId} - success already logged`);
+      }
+    }
+
+    if (!skipInsert) {
+      await supabase.from("pos_checkout_attempts").insert({
+        sale_id: resolvedOrderId,
+        payment_method: "credit_card",
+        status: logStatus,
+        error_message: logMessage,
+        gateway: "pagarme",
+        transaction_id: String(transactionId),
+        metadata: { source: "webhook", event: eventType, pagarme_status: status },
+      });
+    }
 
     return new Response(
       JSON.stringify({ ok: true, updated }),
