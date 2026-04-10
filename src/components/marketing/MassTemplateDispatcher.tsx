@@ -1509,6 +1509,80 @@ export function MassTemplateDispatcher() {
               </div>
             )}
 
+            {/* Cooldown Filter */}
+            <div className="border rounded-lg p-3 space-y-2 bg-muted/20">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-medium">Filtro de Cooldown</span>
+                <span className="text-[10px] text-muted-foreground">(evitar disparos repetidos)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  className="w-[100px] h-8 text-xs"
+                  placeholder="Dias"
+                  value={cooldownDays}
+                  onChange={e => { setCooldownDays(e.target.value); if (cooldownApplied) clearCooldownFilter(); }}
+                  min={1}
+                />
+                <span className="text-xs text-muted-foreground">dias</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1"
+                  onClick={applyCooldownFilter}
+                  disabled={isLoadingCooldown || !cooldownDays}
+                >
+                  {isLoadingCooldown ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />}
+                  Aplicar Cooldown
+                </Button>
+                {cooldownApplied && (
+                  <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearCooldownFilter}>
+                    <X className="h-3 w-3" />Remover
+                  </Button>
+                )}
+              </div>
+              {cooldownApplied && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-3 text-xs">
+                    <Badge variant="destructive" className="text-[10px]">
+                      {cooldownExcludedPhones.size} excluídos
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {filteredRecipients.length} restantes
+                    </Badge>
+                  </div>
+                  {cooldownRecentRecipients.length > 0 && (
+                    <Accordion type="single" collapsible className="w-full">
+                      <AccordionItem value="cooldown-list" className="border-none">
+                        <AccordionTrigger className="text-[10px] text-muted-foreground py-1 hover:no-underline">
+                          Ver {cooldownExcludedPhones.size} pessoas que receberam disparos nos últimos {cooldownDays} dias
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <ScrollArea className="h-[150px]">
+                            <div className="space-y-0.5">
+                              {cooldownRecentRecipients.slice(0, 200).map((r, i) => (
+                                <div key={`${r.phone}-${i}`} className="flex items-center justify-between text-[10px] px-1 py-0.5 hover:bg-muted/50 rounded">
+                                  <span className="truncate flex-1">{r.name}</span>
+                                  <span className="text-muted-foreground font-mono mx-2">{r.phone}</span>
+                                  <Badge variant="outline" className="text-[8px] h-3.5 shrink-0">{r.campaign}</Badge>
+                                </div>
+                              ))}
+                              {cooldownRecentRecipients.length > 200 && (
+                                <p className="text-[9px] text-muted-foreground text-center py-1">
+                                  +{cooldownRecentRecipients.length - 200} mais...
+                                </p>
+                              )}
+                            </div>
+                          </ScrollArea>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Select all */}
             <div className="flex items-center gap-2 py-1">
               <Checkbox
