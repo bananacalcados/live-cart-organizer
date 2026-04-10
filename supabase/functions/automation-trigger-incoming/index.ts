@@ -173,7 +173,7 @@ serve(async (req) => {
 
       // Determine which WhatsApp number to use for sending
       let sendInstance = instance; // default: same instance that received
-      let whatsappNumberId: string | null = null;
+      let whatsappNumberId: string | null = whatsappNumberIdFromBody || null;
 
       if (instance !== 'zapi') {
         whatsappNumberId = instance; // It's a Meta number ID
