@@ -479,7 +479,7 @@ serve(async (req) => {
                     await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
                       method: 'POST',
                       headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ phone, message: aiData.reply }),
+                      body: JSON.stringify({ phone, message: aiData.reply, whatsapp_number_id: whatsappNumberId }),
                     });
 
                     await supabase.from('whatsapp_messages').insert({
@@ -593,7 +593,7 @@ serve(async (req) => {
                 fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
                   method: 'POST',
                   headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ phone, messageText: displayMessage, instance: 'zapi', isGroup }),
+                  body: JSON.stringify({ phone, messageText: displayMessage, instance: 'zapi', isGroup, whatsappNumberId }),
                 }).catch(err => console.error('automation-trigger-incoming error:', err));
                 break;
 
@@ -604,7 +604,7 @@ serve(async (req) => {
             fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ phone, messageText: displayMessage, instance: 'zapi', isGroup }),
+              body: JSON.stringify({ phone, messageText: displayMessage, instance: 'zapi', isGroup, whatsappNumberId }),
             }).catch(err => console.error('automation-trigger-incoming error:', err));
           }
           // ===== END CENTRAL ROUTER =====

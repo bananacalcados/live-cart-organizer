@@ -16,8 +16,9 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { phone, messageText, instance, isGroup } = await req.json();
+    const { phone, messageText, instance, isGroup, whatsappNumberId: whatsappNumberIdFromBody } = await req.json();
     // instance: 'zapi' | whatsapp_number_id (Meta)
+    // whatsappNumberId may be passed explicitly from zapi-webhook
 
     if (!phone) {
       return new Response(JSON.stringify({ error: 'phone required' }), {
@@ -172,7 +173,7 @@ serve(async (req) => {
 
       // Determine which WhatsApp number to use for sending
       let sendInstance = instance; // default: same instance that received
-      let whatsappNumberId: string | null = null;
+      let whatsappNumberId: string | null = whatsappNumberIdFromBody || null;
 
       if (instance !== 'zapi') {
         whatsappNumberId = instance; // It's a Meta number ID
@@ -240,7 +241,7 @@ serve(async (req) => {
               await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, message: text }),
+                body: JSON.stringify({ phone, message: text, whatsapp_number_id: whatsappNumberId }),
               });
             } else {
               await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
@@ -292,7 +293,7 @@ serve(async (req) => {
                 await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
                   method: 'POST',
                   headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ phone, message: aiData.reply }),
+                  body: JSON.stringify({ phone, message: aiData.reply, whatsapp_number_id: whatsappNumberId }),
                 });
               } else {
                 await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
