@@ -1572,6 +1572,26 @@ export default function Marketing() {
                     <Button variant="outline" size="sm" onClick={fetchLeads} className="gap-1">
                       <RefreshCw className="h-3.5 w-3.5" />Atualizar
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={async () => {
+                        if (!confirm('Isso vai cadastrar retroativamente todos os contatos orgânicos dos últimos 3 meses como leads. Continuar?')) return;
+                        toast.info('Executando backfill de leads orgânicos...');
+                        try {
+                          const res = await supabase.functions.invoke('backfill-organic-leads');
+                          if (res.error) throw res.error;
+                          const data = res.data as any;
+                          toast.success(`✅ Backfill concluído: ${data.inserted} leads criados`);
+                          fetchLeads();
+                        } catch (err: any) {
+                          toast.error('Erro no backfill: ' + (err.message || 'Erro desconhecido'));
+                        }
+                      }}
+                    >
+                      <Zap className="h-3.5 w-3.5" />Backfill Orgânicos
+                    </Button>
                   </div>
 
                   <Card>
