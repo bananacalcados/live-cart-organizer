@@ -339,7 +339,7 @@ export function MassTemplateDispatcher() {
         while (true) {
           const { data: recipients, error } = await supabase
             .from('dispatch_recipients')
-            .select('phone, recipient_name, sent_at')
+            .select('phone, recipient_name, created_at')
             .eq('dispatch_id', d.id)
             .eq('status', 'sent')
             .range(from, from + pageSize - 1);
@@ -351,7 +351,7 @@ export function MassTemplateDispatcher() {
               recentList.push({
                 phone,
                 name: r.recipient_name || phone,
-                sentAt: r.sent_at || d.started_at || '',
+                sentAt: r.created_at || d.started_at || '',
                 campaign: d.campaign_name || d.template_name || 'Sem nome',
               });
             }
