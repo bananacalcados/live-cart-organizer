@@ -185,8 +185,8 @@ export async function routeMessage(
     }
   }
 
-  // 4. Operator cooldown — if a human replied recently, don't activate AI
-  const cooldownActive = await isOperatorCooldownActive(supabase, phone, 10);
+  // 4. Operator cooldown — if a human replied recently, don't activate AI (48h window)
+  const cooldownActive = await isOperatorCooldownActive(supabase, phone, 2880);
   if (cooldownActive) {
     console.log(`[router] Operator cooldown active for ${phone}, skipping AI`);
     return { agent: 'none', reason: 'operator_cooldown' };
