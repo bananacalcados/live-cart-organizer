@@ -424,6 +424,71 @@ serve(async (req) => {
             console.error('[AD-LEAD] Erro geral (não-crítico):', adLeadErr);
           }
           // ========== [FIM] Captura de lead de anúncio WhatsApp ==========
+
+          // ========== [ORGANIC LEAD CAPTURE] ==========
+          // Save any non-customer incoming contact as an organic lead
+          try {
+            const phoneSuffix8 = phone.slice(-8);
+
+            // Check if already a known customer (zoppy_customers or pos_customers)
+            const [{ data: zoppyMatch }, { data: posMatch }] = await Promise.all([
+              supabase.from('zoppy_customers').select('id').or(`phone.ilike.%${phoneSuffix8}`).limit(1).maybeSingle(),
+              supabase.from('pos_customers').select('id').or(`whatsapp.ilike.%${phoneSuffix8}`).limit(1).maybeSingle(),
+            ]);
+
+            if (!zoppyMatch && !posMatch) {
+              // Calculate week-based campaign tag: contato-whats-W-MM-YY
+              const now = new Date();
+              const dayOfMonth = now.getDate();
+              const weekNum = dayOfMonth <= 7 ? 1 : dayOfMonth <= 14 ? 2 : dayOfMonth <= 21 ? 3 : 4;
+              const mm = String(now.getMonth() + 1).padStart(2, '0');
+              const yy = String(now.getFullYear()).slice(-2);
+              const campaignTag = `contato-whats-${weekNum}-${mm}-${yy}`;
+
+              // Check if lead already exists in ANY weekly campaign
+              const { data: existingLead } = await supabase
+                .from('lp_leads')
+                .select('id, campaign_tag')
+                .eq('phone', phone)
+                .like('campaign_tag', 'contato-whats-%')
+                .limit(1)
+                .maybeSingle();
+
+              if (existingLead) {
+                // If exists but in a DIFFERENT week, move to current week
+                if (existingLead.campaign_tag !== campaignTag) {
+                  await supabase.from('lp_leads')
+                    .update({ campaign_tag: campaignTag, name: senderName || existingLead.campaign_tag } as any)
+                    .eq('id', existingLead.id);
+                  console.log(`[ORGANIC-LEAD] Moved ${phone} from ${existingLead.campaign_tag} to ${campaignTag}`);
+                }
+                // Same week → do nothing
+              } else {
+                // Also skip if already a lead from an ad campaign
+                const { data: adLead } = await supabase
+                  .from('lp_leads')
+                  .select('id')
+                  .eq('phone', phone)
+                  .not('campaign_tag', 'like', 'contato-whats-%')
+                  .limit(1)
+                  .maybeSingle();
+
+                // Insert new organic lead (even if they have an ad lead — it's a different campaign)
+                await supabase.from('lp_leads').insert({
+                  name: senderName || null,
+                  phone: phone,
+                  campaign_tag: campaignTag,
+                  source: 'organic_whatsapp',
+                  converted: false,
+                  metadata: { captured_at: new Date().toISOString() },
+                });
+                console.log(`[ORGANIC-LEAD] Saved ${phone} to ${campaignTag}`);
+              }
+            }
+          } catch (organicErr) {
+            console.error('[ORGANIC-LEAD] Erro (não-crítico):', organicErr);
+          }
+          // ========== [FIM ORGANIC LEAD CAPTURE] ==========
         }
 
         // For groups, save the group name

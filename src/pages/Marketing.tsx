@@ -1534,6 +1534,21 @@ export default function Marketing() {
 
               return (
                 <>
+                  {/* Total vs Unique leads info */}
+                  {(() => {
+                    const uniquePhones = new Set(leads.filter(l => l.phone).map(l => l.phone.replace(/\D/g, '')));
+                    const convertedCount = leads.filter(l => l.converted).length;
+                    return (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        <Badge variant="outline" className="text-xs">📊 Total cadastros: {leads.length}</Badge>
+                        <Badge variant="secondary" className="text-xs">👤 Leads únicos: {uniquePhones.size}</Badge>
+                        <Badge className="text-xs bg-emerald-600 text-white">✅ Convertidos: {convertedCount}</Badge>
+                        {leads.length > uniquePhones.size && (
+                          <Badge variant="destructive" className="text-xs">⚠️ {leads.length - uniquePhones.size} duplicados entre campanhas</Badge>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="flex flex-wrap items-center gap-2">
                     <Select value={leadsCampaignFilter} onValueChange={setLeadsCampaignFilter}>
                       <SelectTrigger className="w-[250px]">
@@ -1556,6 +1571,26 @@ export default function Marketing() {
                     </Button>
                     <Button variant="outline" size="sm" onClick={fetchLeads} className="gap-1">
                       <RefreshCw className="h-3.5 w-3.5" />Atualizar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={async () => {
+                        if (!confirm('Isso vai cadastrar retroativamente todos os contatos orgânicos dos últimos 3 meses como leads. Continuar?')) return;
+                        toast.info('Executando backfill de leads orgânicos...');
+                        try {
+                          const res = await supabase.functions.invoke('backfill-organic-leads');
+                          if (res.error) throw res.error;
+                          const data = res.data as any;
+                          toast.success(`✅ Backfill concluído: ${data.inserted} leads criados`);
+                          fetchLeads();
+                        } catch (err: any) {
+                          toast.error('Erro no backfill: ' + (err.message || 'Erro desconhecido'));
+                        }
+                      }}
+                    >
+                      <Zap className="h-3.5 w-3.5" />Backfill Orgânicos
                     </Button>
                   </div>
 
