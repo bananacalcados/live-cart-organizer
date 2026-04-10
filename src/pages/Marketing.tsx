@@ -1534,6 +1534,21 @@ export default function Marketing() {
 
               return (
                 <>
+                  {/* Total vs Unique leads info */}
+                  {(() => {
+                    const uniquePhones = new Set(leads.filter(l => l.phone).map(l => l.phone.replace(/\D/g, '')));
+                    const convertedCount = leads.filter(l => l.converted).length;
+                    return (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        <Badge variant="outline" className="text-xs">📊 Total cadastros: {leads.length}</Badge>
+                        <Badge variant="secondary" className="text-xs">👤 Leads únicos: {uniquePhones.size}</Badge>
+                        <Badge className="text-xs bg-emerald-600 text-white">✅ Convertidos: {convertedCount}</Badge>
+                        {leads.length > uniquePhones.size && (
+                          <Badge variant="destructive" className="text-xs">⚠️ {leads.length - uniquePhones.size} duplicados entre campanhas</Badge>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="flex flex-wrap items-center gap-2">
                     <Select value={leadsCampaignFilter} onValueChange={setLeadsCampaignFilter}>
                       <SelectTrigger className="w-[250px]">
