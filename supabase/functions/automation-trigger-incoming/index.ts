@@ -240,7 +240,7 @@ serve(async (req) => {
               await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, message: text }),
+                body: JSON.stringify({ phone, message: text, whatsapp_number_id: whatsappNumberId }),
               });
             } else {
               await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
@@ -292,7 +292,7 @@ serve(async (req) => {
                 await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
                   method: 'POST',
                   headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ phone, message: aiData.reply }),
+                  body: JSON.stringify({ phone, message: aiData.reply, whatsapp_number_id: whatsappNumberId }),
                 });
               } else {
                 await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {

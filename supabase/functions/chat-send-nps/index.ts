@@ -70,7 +70,7 @@ serve(async (req) => {
       await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, message }),
+        body: JSON.stringify({ phone, message, whatsapp_number_id: whatsappNumberId }),
       });
     }
 
