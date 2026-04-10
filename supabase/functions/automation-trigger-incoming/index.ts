@@ -16,8 +16,9 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { phone, messageText, instance, isGroup } = await req.json();
+    const { phone, messageText, instance, isGroup, whatsappNumberId: whatsappNumberIdFromBody } = await req.json();
     // instance: 'zapi' | whatsapp_number_id (Meta)
+    // whatsappNumberId may be passed explicitly from zapi-webhook
 
     if (!phone) {
       return new Response(JSON.stringify({ error: 'phone required' }), {
