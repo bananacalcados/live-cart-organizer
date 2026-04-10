@@ -309,19 +309,25 @@ serve(async (req) => {
     }
 
     // Enrich recipients with WhatsApp display_name (prioritize over CRM name)
-    const phoneSuffixes = pendingRecipients.map(r => r.phone.replace(/\D/g, '').slice(-8));
+    // Build phone variations to match chat_contacts (with/without 55, with/without 9th digit)
+    const phoneVariations: string[] = [];
+    for (const r of pendingRecipients) {
+      const digits = r.phone.replace(/\D/g, '');
+      phoneVariations.push(digits);
+      if (digits.startsWith('55')) phoneVariations.push(digits.slice(2));
+      else phoneVariations.push('55' + digits);
+    }
     const { data: chatContacts } = await supabase
       .from('chat_contacts')
       .select('phone, display_name, custom_name')
-      .not('display_name', 'is', null);
+      .in('phone', phoneVariations);
 
     // Build a suffix -> display_name map from chat_contacts
     const whatsappNameMap = new Map<string, string>();
     if (chatContacts) {
       for (const cc of chatContacts) {
-        if (!cc.phone || !cc.display_name) continue;
+        if (!cc.phone || (!cc.display_name && !cc.custom_name)) continue;
         const suffix = cc.phone.replace(/\D/g, '').slice(-8);
-        // Prefer custom_name if set, then display_name
         whatsappNameMap.set(suffix, cc.custom_name || cc.display_name);
       }
     }
