@@ -211,14 +211,17 @@ function BlockEditor({
   // Audio recording
   const startRecording = useCallback(async () => {
     try {
+      const { getAudioMimeType, getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const mimeType = getAudioMimeType();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const ct = getAudioContentType(mimeType);
+        const blob = new Blob(audioChunksRef.current, { type: ct });
         if (blob.size === 0) return;
         const previewUrl = URL.createObjectURL(blob);
         setAudioPreviewUrl(previewUrl);

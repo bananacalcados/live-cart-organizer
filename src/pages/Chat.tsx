@@ -445,16 +445,20 @@ export default function ChatPage() {
   // ── Audio recording ──
   const startRecording = async () => {
     try {
+      const { getAudioMimeType, getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const mimeType = getAudioMimeType();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       audioChunksRef.current = [];
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
         setRecordingDuration(0);
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioFile = new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
+        const ct = getAudioContentType(mimeType);
+        const ext = getAudioExtension(mimeType);
+        const audioBlob = new Blob(audioChunksRef.current, { type: ct });
+        const audioFile = new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: ct });
         setSelectedMedia({ file: audioFile, type: 'audio', previewUrl: URL.createObjectURL(audioBlob) });
         setIsRecording(false);
       };

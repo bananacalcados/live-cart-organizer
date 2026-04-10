@@ -264,18 +264,22 @@ export function POSTeamChat({ storeId }: Props) {
   // Audio recording
   const startRecording = async () => {
     try {
+      const { getAudioMimeType, getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const mimeType = getAudioMimeType();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       audioChunksRef.current = [];
       
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
       
+      const ct = getAudioContentType(mimeType);
+      const ext = getAudioExtension(mimeType);
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await uploadAudio(blob);
+        const blob = new Blob(audioChunksRef.current, { type: ct });
+        await uploadAudio(blob, ct, ext);
       };
       
       recorder.start();
@@ -295,12 +299,12 @@ export function POSTeamChat({ storeId }: Props) {
     setMediaRecorder(null);
   };
 
-  const uploadAudio = async (blob: Blob) => {
+  const uploadAudio = async (blob: Blob, contentType = 'audio/ogg', ext = 'ogg') => {
     try {
-      const fileName = `team-chat/${Date.now()}-audio.webm`;
+      const fileName = `team-chat/${Date.now()}-audio.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from('chat-media')
-        .upload(fileName, blob, { contentType: 'audio/webm' });
+        .upload(fileName, blob, { contentType });
       
       if (uploadError) throw uploadError;
 

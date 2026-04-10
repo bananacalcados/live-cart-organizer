@@ -123,7 +123,8 @@ function resolveMediaCaption(message?: string, caption?: string): string | undef
   return undefined;
 }
 
-// Meta API does not accept audio/webm; remap to audio/ogg (opus codec is compatible)
+// Meta API accepts audio/ogg natively. If we receive webm, remap to ogg (best-effort).
+// With the frontend fix, most recordings are now natively OGG, so this is a fallback.
 function normalizeContentTypeForMeta(contentType: string, mediaType: string): string {
   if (mediaType === 'audio' && contentType.includes('webm')) {
     return 'audio/ogg';

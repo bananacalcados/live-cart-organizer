@@ -154,8 +154,10 @@ export function ChatView({
 
   const startRecording = useCallback(async () => {
     try {
+      const { getAudioMimeType, getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const mimeType = getAudioMimeType();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -168,13 +170,14 @@ export function ChatView({
       mediaRecorder.onstop = async () => {
         // Stop all tracks
         stream.getTracks().forEach(t => t.stop());
-        
         if (timerRef.current) {
           clearInterval(timerRef.current);
           timerRef.current = null;
         }
 
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const ct = getAudioContentType(mimeType);
+        const ext = getAudioExtension(mimeType);
+        const audioBlob = new Blob(audioChunksRef.current, { type: ct });
         if (audioBlob.size === 0) {
           setIsRecording(false);
           setRecordingTime(0);
@@ -182,7 +185,7 @@ export function ChatView({
         }
 
         // Upload audio
-        const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
+        const file = new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: ct });
         const url = await uploadMediaToStorage(file);
         
         if (url && onSendAudio) {
