@@ -684,6 +684,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
       // Log PIX generation error
       await supabase.from("pos_checkout_attempts").insert({
         sale_id: saleId,
+        store_id: storeId,
         payment_method: "pix",
         status: "failed",
         error_message: e.message || "Erro ao gerar PIX",
@@ -741,7 +742,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
 }
 
 // ── Card Payment ────────────────────────────────────────────────
-function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid, onProcessingChange }: { saleId: string; amount: number; form: CustomerFormData; installmentConfig: InstallmentConfig; onPaid: () => void; onProcessingChange?: (v: boolean) => void }) {
+function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onPaid, onProcessingChange }: { saleId: string; storeId: string; amount: number; form: CustomerFormData; installmentConfig: InstallmentConfig; onPaid: () => void; onProcessingChange?: (v: boolean) => void }) {
   const [cardNumber, setCardNumber] = useState("");
   const [cardName, setCardName] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -879,7 +880,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid, onPr
       if (error || !data?.success || !data?.transactionId) {
         const errMsg = data?.error || (error && typeof error === "object" && "message" in error ? String((error as any).message) : null) || "Erro no pagamento";
         await supabase.from("pos_checkout_attempts").insert({
-          sale_id: saleId, payment_method: "card", status: "failed", error_message: errMsg,
+          sale_id: saleId, store_id: storeId, payment_method: "card", status: "failed", error_message: errMsg,
           amount: totalWithInterest, customer_name: form.fullName, customer_phone: form.whatsapp,
           customer_email: form.email, gateway: data?.gateway || "pagarme",
         } as any).then(() => {});
@@ -887,7 +888,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid, onPr
       }
       // Log success
       await supabase.from("pos_checkout_attempts").insert({
-        sale_id: saleId, payment_method: "card", status: "success", amount: totalWithInterest,
+        sale_id: saleId, store_id: storeId, payment_method: "card", status: "success", amount: totalWithInterest,
         customer_name: form.fullName, customer_phone: form.whatsapp, customer_email: form.email,
         gateway: data.gateway || "pagarme", transaction_id: data.transactionId || null,
         metadata: { cpf: form.cpf, cep: form.cep, address: form.address, address_number: form.addressNumber, complement: form.complement, neighborhood: form.neighborhood, city: form.city, state: form.state },
@@ -1556,7 +1557,7 @@ export default function StoreCheckout() {
 
                                {selectedMethod === "card" && (
                                  <div className="animate-in slide-in-from-top-2 duration-200 border border-border rounded-lg p-4 bg-card">
-                                   <CardPaymentForm saleId={saleData.id} amount={totalWithShipping} form={customerForm} installmentConfig={installmentConfig} onPaid={handlePaymentConfirmed} onProcessingChange={setIsPaymentProcessing} />
+                                   <CardPaymentForm saleId={saleData.id} storeId={storeId!} amount={totalWithShipping} form={customerForm} installmentConfig={installmentConfig} onPaid={handlePaymentConfirmed} onProcessingChange={setIsPaymentProcessing} />
                                  </div>
                                )}
                              </>
