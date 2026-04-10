@@ -185,8 +185,8 @@ export async function routeMessage(
     }
   }
 
-  // 4. Operator cooldown — if a human replied recently, don't activate AI
-  const cooldownActive = await isOperatorCooldownActive(supabase, phone, 10);
+  // 4. Operator cooldown — if a human replied recently, don't activate AI (48h window)
+  const cooldownActive = await isOperatorCooldownActive(supabase, phone, 2880);
   if (cooldownActive) {
     console.log(`[router] Operator cooldown active for ${phone}, skipping AI`);
     return { agent: 'none', reason: 'operator_cooldown' };
@@ -317,9 +317,10 @@ export async function routeMessage(
 export async function isOperatorCooldownActive(
   supabase: SupabaseClient,
   phone: string,
-  cooldownMinutes = 10
+  cooldownMinutes = 2880
 ): Promise<boolean> {
   try {
+    // Use a 48h window to detect any human interaction
     const cooldownCutoff = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
     const { data: recentOutgoing } = await supabase
       .from('whatsapp_messages')
@@ -328,7 +329,7 @@ export async function isOperatorCooldownActive(
       .eq('direction', 'outgoing')
       .gt('created_at', cooldownCutoff)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(30);
 
     if (!recentOutgoing?.length) return false;
 
@@ -339,6 +340,7 @@ export async function isOperatorCooldownActive(
         normalizedMessage: normalizeAutomatedMessage(msg.message),
       }));
 
+    // Find the most recent manual (human) message
     const recentManual = recentOutgoing.find((msg) => {
       if (isAiTaggedMessage(msg.message)) return false;
 
@@ -353,7 +355,40 @@ export async function isOperatorCooldownActive(
       return !duplicatedAutomation;
     });
 
-    return Boolean(recentManual);
+    if (!recentManual) return false;
+
+    const manualAt = new Date(recentManual.created_at).getTime();
+
+    // Check if there was a bidirectional exchange (human sent + customer replied)
+    // If so, use the full 48h cooldown. Otherwise, use a shorter 2h cooldown.
+    const { data: recentIncoming } = await supabase
+      .from('whatsapp_messages')
+      .select('id, created_at')
+      .eq('phone', phone)
+      .eq('direction', 'incoming')
+      .gt('created_at', cooldownCutoff)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    const hasBidirectional = recentIncoming?.some((inc) => {
+      const incAt = new Date(inc.created_at).getTime();
+      // Customer replied AFTER the human message, completing the bidirectional exchange
+      return incAt > manualAt;
+    });
+
+    if (hasBidirectional) {
+      // Full 48h cooldown — human is actively managing this conversation
+      console.log(`[router] Bidirectional human exchange detected for ${phone}, 48h cooldown active`);
+      return true;
+    }
+
+    // Shorter 2h cooldown for single manual message (no customer reply yet)
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+    const isWithinShortCooldown = (Date.now() - manualAt) < twoHoursMs;
+    if (isWithinShortCooldown) {
+      console.log(`[router] Recent manual message for ${phone}, 2h cooldown active`);
+    }
+    return isWithinShortCooldown;
   } catch (err) {
     console.error('[router] Error checking operator cooldown:', err);
     return false; // Don't block AI on error
