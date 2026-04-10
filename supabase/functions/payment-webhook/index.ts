@@ -407,10 +407,10 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       // await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
     }
   } else {
-    // Try pos_sales
+  // Try pos_sales
     const { data: sale } = await supabase
       .from("pos_sales")
-      .select("id, status, store_id")
+      .select("id, status, store_id, total, customer_name, customer_phone, payment_details")
       .eq("mercadopago_payment_id", mpIdStr)
       .maybeSingle();
 
@@ -447,12 +447,46 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     }
   }
 
-  // Log to pos_checkout_attempts
+  // Log to pos_checkout_attempts — enrich with customer data from order/sale
   if (orderId) {
+    let logAmount: number | null = null;
+    let logCustomerName: string | null = null;
+    let logCustomerPhone: string | null = null;
+    let logCustomerEmail: string | null = null;
+    let logStoreId: string | null = null;
+
+    if (order) {
+      // CRM order — fetch customer data
+      const { data: fullOrder } = await supabase
+        .from("orders")
+        .select("total, store_id, customer:customers(instagram_handle, whatsapp)")
+        .eq("id", orderId)
+        .maybeSingle();
+      if (fullOrder) {
+        logAmount = fullOrder.total ? Number(fullOrder.total) : null;
+        logStoreId = fullOrder.store_id;
+        const cust = fullOrder.customer as any;
+        logCustomerName = cust?.instagram_handle || null;
+        logCustomerPhone = cust?.whatsapp || null;
+      }
+    } else if (sale) {
+      const pd = (sale.payment_details || {}) as Record<string, any>;
+      logAmount = sale.total ? Number(sale.total) : null;
+      logCustomerName = pd.customer_name || sale.customer_name || null;
+      logCustomerPhone = pd.customer_phone || sale.customer_phone || null;
+      logCustomerEmail = pd.customer_email || null;
+      logStoreId = sale.store_id;
+    }
+
     await supabase.from("pos_checkout_attempts").insert({
       sale_id: orderId,
+      store_id: logStoreId,
       payment_method: "pix",
       status: "success",
+      amount: logAmount,
+      customer_name: logCustomerName,
+      customer_phone: logCustomerPhone,
+      customer_email: logCustomerEmail,
       error_message: `Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
       gateway: "mercadopago",
       transaction_id: mpIdStr,
