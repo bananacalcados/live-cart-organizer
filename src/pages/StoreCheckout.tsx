@@ -1557,7 +1557,7 @@ export default function StoreCheckout() {
 
                                {selectedMethod === "card" && (
                                  <div className="animate-in slide-in-from-top-2 duration-200 border border-border rounded-lg p-4 bg-card">
-                                   <CardPaymentForm saleId={saleData.id} amount={totalWithShipping} form={customerForm} installmentConfig={installmentConfig} onPaid={handlePaymentConfirmed} onProcessingChange={setIsPaymentProcessing} />
+                                   <CardPaymentForm saleId={saleData.id} storeId={storeId!} amount={totalWithShipping} form={customerForm} installmentConfig={installmentConfig} onPaid={handlePaymentConfirmed} onProcessingChange={setIsPaymentProcessing} />
                                  </div>
                                )}
                              </>
