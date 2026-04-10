@@ -28,12 +28,12 @@ interface ZApiCredentials {
 export async function resolveZApiCredentials(
   whatsappNumberId?: string | null
 ): Promise<ZApiCredentials> {
-  // If a whatsapp_number_id is provided, look up from DB
-  if (whatsappNumberId) {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabase = supabaseUrl && serviceKey ? createClient(supabaseUrl, serviceKey) : null;
 
+  // If a whatsapp_number_id is provided, look up from DB
+  if (whatsappNumberId && supabase) {
     const { data, error } = await supabase
       .from("whatsapp_numbers")
       .select("zapi_instance_id, zapi_token, zapi_client_token")
@@ -49,6 +49,30 @@ export async function resolveZApiCredentials(
       };
     }
     console.warn(`Could not resolve Z-API credentials for whatsapp_number_id=${whatsappNumberId}, falling back to env vars`);
+  }
+
+  if (supabase) {
+    const { data: activeNumbers, error } = await supabase
+      .from("whatsapp_numbers")
+      .select("zapi_instance_id, zapi_token, zapi_client_token")
+      .eq("provider", "zapi")
+      .eq("is_active", true)
+      .limit(2);
+
+    if (!error && activeNumbers?.length === 1) {
+      const [onlyNumber] = activeNumbers;
+      if (onlyNumber.zapi_instance_id && onlyNumber.zapi_token && onlyNumber.zapi_client_token) {
+        return {
+          instanceId: onlyNumber.zapi_instance_id,
+          token: onlyNumber.zapi_token,
+          clientToken: onlyNumber.zapi_client_token,
+        };
+      }
+    }
+
+    if (!error && (activeNumbers?.length ?? 0) > 1) {
+      throw new Error("Ambiguous Z-API route: whatsapp_number_id is required when multiple active Z-API numbers exist");
+    }
   }
 
   // Fallback to environment variables

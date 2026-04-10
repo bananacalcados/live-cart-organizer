@@ -139,9 +139,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     return metaNumbers.filter(n => storeNumberIds.includes(n.id));
   }, [metaNumbers, storeNumberIds]);
 
+  const conversationBoundNumber = useMemo(
+    () => selectedConvNumberId ? metaNumbers.find((number) => number.id === selectedConvNumberId) ?? null : null,
+    [metaNumbers, selectedConvNumberId]
+  );
+
   const selectedSendNumber = useMemo(
-    () => storeNumbers.find((number) => number.id === selectedSendNumberId) ?? null,
-    [storeNumbers, selectedSendNumberId]
+    () => conversationBoundNumber ?? storeNumbers.find((number) => number.id === selectedSendNumberId) ?? null,
+    [conversationBoundNumber, storeNumbers, selectedSendNumberId]
   );
 
   useEffect(() => {
@@ -150,6 +155,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     if (isSocialConversation) {
       if (selectedSendNumberId !== null) setSelectedSendNumberId(null);
       if (sendVia !== "meta") setSendVia("meta");
+      return;
+    }
+
+    if (selectedConvNumberId) {
+      const matchedNumber = metaNumbers.find((number) => number.id === selectedConvNumberId);
+      if (matchedNumber && sendVia !== (matchedNumber.provider === "meta" ? "meta" : "zapi")) {
+        setSendVia(matchedNumber.provider === "meta" ? "meta" : "zapi");
+      }
       return;
     }
 
@@ -162,12 +175,17 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       return;
     }
 
+    if (storeNumbers.length > 1) {
+      setSelectedSendNumberId(null);
+      return;
+    }
+
     const fallbackNumber = storeNumbers.find((number) => number.provider === sendVia) ?? storeNumbers[0] ?? null;
     setSelectedSendNumberId(fallbackNumber?.id ?? null);
     if (fallbackNumber) {
       setSendVia(fallbackNumber.provider === "meta" ? "meta" : "zapi");
     }
-  }, [storeNumbers, selectedSendNumberId, sendVia, selectedConvChannel]);
+  }, [metaNumbers, storeNumbers, selectedConvNumberId, selectedSendNumberId, sendVia, selectedConvChannel]);
 
   useEffect(() => {
     if (!selectedPhone) {
@@ -498,15 +516,58 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     })?.channel || null;
   };
 
+  const getResolvedSendNumber = () => {
+    if (conversationBoundNumber) return conversationBoundNumber;
+    if (selectedSendNumberId) {
+      return storeNumbers.find((number) => number.id === selectedSendNumberId) ?? null;
+    }
+    if (storeNumbers.length === 1) {
+      return storeNumbers[0] ?? null;
+    }
+    return null;
+  };
+
+  const getCurrentSendRoute = () => {
+    const channel = getSelectedChannel();
+    const isSocialConversation = channel === "instagram" || channel === "messenger";
+
+    if (isSocialConversation) {
+      const metaNumber = conversationBoundNumber
+        ?? storeNumbers.find((number) => number.id === selectedSendNumberId)
+        ?? storeNumbers.find((number) => number.provider === "meta")
+        ?? null;
+
+      return {
+        channel,
+        provider: "meta" as const,
+        number: metaNumber,
+        numberId: metaNumber?.id ?? null,
+      };
+    }
+
+    const number = getResolvedSendNumber();
+    if (!number) return null;
+
+    return {
+      channel: "whatsapp" as const,
+      provider: number.provider === "meta" ? "meta" as const : "zapi" as const,
+      number,
+      numberId: number.id,
+    };
+  };
+
   const sendViaMessenger = async (
     recipientId: string,
     message: string,
     channel: "messenger" | "instagram" = "instagram",
     type: "text" | "image" | "video" | "audio" | "file" = "text",
     mediaUrl?: string,
+    whatsappNumberId?: string | null,
   ) => {
-    // Find a Meta number to get the access token from DB
-    const metaNumberId = storeNumbers.find((n) => n.provider === "meta")?.id || null;
+    const metaNumberId = whatsappNumberId
+      ?? conversationBoundNumber?.id
+      ?? storeNumbers.find((n) => n.provider === "meta")?.id
+      ?? null;
     const { data, error } = await supabase.functions.invoke("meta-messenger-send", {
       body: { recipientId, message, channel, type, mediaUrl, whatsapp_number_id: metaNumberId },
     });
@@ -537,13 +598,18 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       setSelectedSendNumberId(null);
       setSendVia("meta");
     } else if (whatsappNumberId) {
-      const matchedNumber = storeNumbers.find((number) => number.id === whatsappNumberId);
-      setSelectedSendNumberId(whatsappNumberId);
+      const matchedNumber = metaNumbers.find((number) => number.id === whatsappNumberId);
+      const isStoreNumber = storeNumbers.some((number) => number.id === whatsappNumberId);
+      setSelectedSendNumberId(isStoreNumber ? whatsappNumberId : null);
       setSendVia(matchedNumber?.provider === 'meta' ? 'meta' : 'zapi');
     } else {
-      const firstZapi = storeNumbers.find((number) => number.provider === 'zapi') ?? storeNumbers[0] ?? null;
-      setSelectedSendNumberId(firstZapi?.id ?? null);
-      setSendVia(firstZapi?.provider === 'meta' ? 'meta' : 'zapi');
+      if (storeNumbers.length === 1) {
+        setSelectedSendNumberId(storeNumbers[0].id);
+        setSendVia(storeNumbers[0].provider === 'meta' ? 'meta' : 'zapi');
+      } else {
+        setSelectedSendNumberId(null);
+        setSendVia('zapi');
+      }
     }
 
     // Track seller assignment (opened_at)
@@ -563,34 +629,35 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     const selectedChannel = getSelectedChannel();
     const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
     const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
+    const sendRoute = getCurrentSendRoute();
+
+    if (!sendRoute) {
+      toast.error("Selecione a instância correta desta conversa antes de enviar.");
+      return;
+    }
+
+    if (useMessenger && !sendRoute.numberId) {
+      toast.error("Nenhuma conta Meta disponível para esta conversa.");
+      return;
+    }
 
     setIsSending(true);
     setNewMessage("");
 
     try {
-      const numberIdToUse = selectedSendNumberId || storeNumbers.find((number) => number.provider === sendVia)?.id || storeNumbers[0]?.id || null;
-      const numberToUse = storeNumbers.find((number) => number.id === numberIdToUse) ?? null;
-      const effectiveSendVia = numberToUse?.provider === "meta" ? "meta" : "zapi";
-
       let metaMessageId: string | null = null;
       if (useMessenger) {
-        const result = await sendViaMessenger(selectedPhone, messageText, messengerChannel);
+        const result = await sendViaMessenger(selectedPhone, messageText, messengerChannel, "text", undefined, sendRoute.numberId);
         metaMessageId = result.messageId;
-      } else if (effectiveSendVia === "meta") {
-        if (!numberIdToUse) {
-          throw new Error("Nenhum número Meta configurado para esta loja");
-        }
+      } else if (sendRoute.provider === "meta") {
         const res = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: numberIdToUse },
+          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: sendRoute.numberId },
         });
         if (res.error) throw res.error;
         metaMessageId = res.data?.messageId || null;
       } else {
-        if (!numberIdToUse) {
-          throw new Error("Nenhuma instância Z-API configurada para esta loja");
-        }
         const { error } = await supabase.functions.invoke("zapi-send-message", {
-          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: numberIdToUse },
+          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: sendRoute.numberId },
         });
         if (error) throw error;
       }
@@ -600,7 +667,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message: messageText,
         direction: "outgoing",
         status: "sent",
-        whatsapp_number_id: useMessenger ? null : numberIdToUse || null,
+        whatsapp_number_id: sendRoute.numberId,
         message_id: metaMessageId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
       });
@@ -631,30 +698,36 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
   const handleSendAudio = async (audioUrl: string) => {
     if (!selectedPhone) return;
+    const selectedChannel = getSelectedChannel();
+    const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
+    const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
+    const sendRoute = getCurrentSendRoute();
+
+    if (!sendRoute) {
+      toast.error("Selecione a instância correta desta conversa antes de enviar.");
+      return;
+    }
+
+    if (useMessenger && !sendRoute.numberId) {
+      toast.error("Nenhuma conta Meta disponível para esta conversa.");
+      return;
+    }
+
     setIsSending(true);
     try {
-      const selectedChannel = getSelectedChannel();
-      const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
-      const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
-      const numberIdToUse = selectedSendNumberId || storeNumbers.find((number) => number.provider === sendVia)?.id || storeNumbers[0]?.id || null;
-      const numberToUse = storeNumbers.find((number) => number.id === numberIdToUse) ?? null;
-      const effectiveSendVia = numberToUse?.provider === "meta" ? "meta" : "zapi";
-
       let audioMsgId: string | null = null;
       if (useMessenger) {
-        const result = await sendViaMessenger(selectedPhone, "[áudio]", messengerChannel, "audio", audioUrl);
+        const result = await sendViaMessenger(selectedPhone, "[áudio]", messengerChannel, "audio", audioUrl, sendRoute.numberId);
         audioMsgId = result.messageId;
-      } else if (effectiveSendVia === "meta") {
-        if (!numberIdToUse) throw new Error("Nenhum número Meta configurado para esta loja");
+      } else if (sendRoute.provider === "meta") {
         const res = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: selectedPhone, message: "[áudio]", whatsapp_number_id: numberIdToUse, media_url: audioUrl, media_type: "audio" },
+          body: { phone: selectedPhone, message: "[áudio]", whatsapp_number_id: sendRoute.numberId, media_url: audioUrl, media_type: "audio" },
         });
         if (res.error) throw res.error;
         audioMsgId = res.data?.messageId || null;
       } else {
-        if (!numberIdToUse) throw new Error("Nenhuma instância Z-API configurada para esta loja");
         const { error } = await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: numberIdToUse },
+          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: sendRoute.numberId },
         });
         if (error) throw error;
       }
@@ -662,7 +735,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       const { error: insertErr } = await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
         message_id: audioMsgId,
-        whatsapp_number_id: useMessenger ? null : numberIdToUse,
+        whatsapp_number_id: sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
       });
       if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
@@ -677,14 +750,23 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
   const handleSendMedia = async (mediaUrl: string, mediaType: string, caption?: string) => {
     if (!selectedPhone) return;
+    const selectedChannel = getSelectedChannel();
+    const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
+    const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
+    const sendRoute = getCurrentSendRoute();
+
+    if (!sendRoute) {
+      toast.error("Selecione a instância correta desta conversa antes de enviar.");
+      return;
+    }
+
+    if (useMessenger && !sendRoute.numberId) {
+      toast.error("Nenhuma conta Meta disponível para esta conversa.");
+      return;
+    }
+
     setIsSending(true);
     try {
-      const selectedChannel = getSelectedChannel();
-      const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
-      const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
-      const numberIdToUse = selectedSendNumberId || storeNumbers.find((number) => number.provider === sendVia)?.id || storeNumbers[0]?.id || null;
-      const numberToUse = storeNumbers.find((number) => number.id === numberIdToUse) ?? null;
-      const effectiveSendVia = numberToUse?.provider === "meta" ? "meta" : "zapi";
       const msgText = caption || `[${mediaType}]`;
       let mediaMsgId: string | null = null;
 
@@ -695,19 +777,18 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           messengerChannel,
           mediaType === "document" ? "file" : mediaType as "image" | "video" | "audio",
           mediaUrl,
+          sendRoute.numberId,
         );
         mediaMsgId = result.messageId;
-      } else if (effectiveSendVia === "meta") {
-        if (!numberIdToUse) throw new Error("Nenhum número Meta configurado para esta loja");
+      } else if (sendRoute.provider === "meta") {
         const res = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: selectedPhone, message: msgText, whatsapp_number_id: numberIdToUse, media_url: mediaUrl, media_type: mediaType },
+          body: { phone: selectedPhone, message: msgText, whatsapp_number_id: sendRoute.numberId, media_url: mediaUrl, media_type: mediaType },
         });
         if (res.error) throw res.error;
         mediaMsgId = res.data?.messageId || null;
       } else {
-        if (!numberIdToUse) throw new Error("Nenhuma instância Z-API configurada para esta loja");
         const { error } = await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: numberIdToUse },
+          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: sendRoute.numberId },
         });
         if (error) throw error;
       }
@@ -715,7 +796,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
         message_id: mediaMsgId,
-        whatsapp_number_id: useMessenger ? null : numberIdToUse,
+        whatsapp_number_id: sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
       });
       loadMessages(selectedPhone, selectedConvNumberId);
@@ -765,6 +846,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
   const selectedConversation = conversations.find(c => c.conversationKey === selectedConvKey) || conversations.find(c => c.phone === selectedPhone) || null;
   const selectedChannel = getSelectedChannel();
+  const requiresInstanceSelection = selectedChannel !== "instagram" && selectedChannel !== "messenger" && !selectedSendNumber;
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   const statusLabels: Record<string, string> = {
@@ -1034,15 +1116,15 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                 </div>
               )}
               <div className="flex items-center gap-0.5 flex-shrink-0">
-                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#00a884]" onClick={() => setShowCheckout(true)} title="Gerar Link Checkout">
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#00a884]" onClick={() => setShowCheckout(true)} title="Gerar Link Checkout" disabled={requiresInstanceSelection}>
                   <CreditCard className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Checkout</span>
                 </Button>
-                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-emerald-600" onClick={() => setShowPix(true)} title="Gerar PIX">
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-emerald-600" onClick={() => setShowPix(true)} title="Gerar PIX" disabled={requiresInstanceSelection}>
                   <QrCode className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">PIX</span>
                 </Button>
-                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => setShowCatalog(true)} title="Catálogo">
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => setShowCatalog(true)} title="Catálogo" disabled={requiresInstanceSelection}>
                   <ShoppingBag className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Catálogo</span>
                 </Button>
@@ -1104,6 +1186,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                 <Badge variant="secondary" className="text-[10px] px-2 py-0.5">📷 Instagram Direct</Badge>
               ) : selectedChannel === "messenger" ? (
                 <Badge variant="secondary" className="text-[10px] px-2 py-0.5">💬 Messenger</Badge>
+              ) : conversationBoundNumber ? (
+                <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium gap-1">
+                  {conversationBoundNumber.label}
+                  <span className="opacity-70 ml-1">instância da conversa</span>
+                </Badge>
               ) : storeNumbers.length > 1 ? (
                 <WhatsAppNumberSelector
                   className="h-7 min-w-[220px] text-xs"
@@ -1129,6 +1216,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                   ? "Instagram Direct"
                   : selectedChannel === "messenger"
                     ? "Messenger"
+                    : requiresInstanceSelection
+                      ? 'Selecione a instância'
                     : selectedSendNumber?.provider === 'meta'
                       ? 'Meta API'
                       : 'Z-API'}
