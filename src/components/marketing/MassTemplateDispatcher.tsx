@@ -1583,6 +1583,37 @@ export function MassTemplateDispatcher() {
               )}
             </div>
 
+            {/* Dedup info - visual summary */}
+            {audienceSource === 'both' && filteredRecipients.length > 0 && (() => {
+              // Count how many recipients were auto-deduped
+              const totalBeforeDedup = (() => {
+                let crmCount = 0;
+                let leadCount = 0;
+                for (const c of crmCustomers) {
+                  const phone = c.phone?.replace(/\D/g, '');
+                  if (phone && phone.length >= 8) crmCount++;
+                }
+                for (const l of leads) {
+                  const phone = l.phone?.replace(/\D/g, '');
+                  if (phone && phone.length >= 8) {
+                    if (leadCampaignFilter === 'all' || l.campaign_tag === leadCampaignFilter) leadCount++;
+                  }
+                }
+                return crmCount + leadCount;
+              })();
+              const dedupedCount = totalBeforeDedup - filteredRecipients.length;
+              if (dedupedCount <= 0) return null;
+              return (
+                <div className="border rounded-lg p-3 bg-amber-500/10 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <span className="text-xs">
+                    <strong>{dedupedCount}</strong> números duplicados foram removidos automaticamente entre CRM e Leads.
+                  </span>
+                  <Badge variant="outline" className="text-[10px]">{filteredRecipients.length} únicos</Badge>
+                </div>
+              );
+            })()}
+
             {/* Select all */}
             <div className="flex items-center gap-2 py-1">
               <Checkbox
