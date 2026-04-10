@@ -10257,6 +10257,10 @@ export type Database = {
           records_deleted: number
         }[]
       }
+      reopen_finished_conversation: {
+        Args: { p_phone: string }
+        Returns: number
+      }
       save_customer_registration: {
         Args: {
           p_address: string
