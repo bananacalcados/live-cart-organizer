@@ -684,6 +684,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
       // Log PIX generation error
       await supabase.from("pos_checkout_attempts").insert({
         sale_id: saleId,
+        store_id: storeId,
         payment_method: "pix",
         status: "failed",
         error_message: e.message || "Erro ao gerar PIX",
@@ -879,7 +880,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid, onPr
       if (error || !data?.success || !data?.transactionId) {
         const errMsg = data?.error || (error && typeof error === "object" && "message" in error ? String((error as any).message) : null) || "Erro no pagamento";
         await supabase.from("pos_checkout_attempts").insert({
-          sale_id: saleId, payment_method: "card", status: "failed", error_message: errMsg,
+          sale_id: saleId, store_id: storeId, payment_method: "card", status: "failed", error_message: errMsg,
           amount: totalWithInterest, customer_name: form.fullName, customer_phone: form.whatsapp,
           customer_email: form.email, gateway: data?.gateway || "pagarme",
         } as any).then(() => {});
@@ -887,7 +888,7 @@ function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid, onPr
       }
       // Log success
       await supabase.from("pos_checkout_attempts").insert({
-        sale_id: saleId, payment_method: "card", status: "success", amount: totalWithInterest,
+        sale_id: saleId, store_id: storeId, payment_method: "card", status: "success", amount: totalWithInterest,
         customer_name: form.fullName, customer_phone: form.whatsapp, customer_email: form.email,
         gateway: data.gateway || "pagarme", transaction_id: data.transactionId || null,
         metadata: { cpf: form.cpf, cep: form.cep, address: form.address, address_number: form.addressNumber, complement: form.complement, neighborhood: form.neighborhood, city: form.city, state: form.state },
