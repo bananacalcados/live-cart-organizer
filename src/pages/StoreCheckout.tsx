@@ -742,7 +742,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
 }
 
 // ── Card Payment ────────────────────────────────────────────────
-function CardPaymentForm({ saleId, amount, form, installmentConfig, onPaid, onProcessingChange }: { saleId: string; amount: number; form: CustomerFormData; installmentConfig: InstallmentConfig; onPaid: () => void; onProcessingChange?: (v: boolean) => void }) {
+function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onPaid, onProcessingChange }: { saleId: string; storeId: string; amount: number; form: CustomerFormData; installmentConfig: InstallmentConfig; onPaid: () => void; onProcessingChange?: (v: boolean) => void }) {
   const [cardNumber, setCardNumber] = useState("");
   const [cardName, setCardName] = useState("");
   const [expiry, setExpiry] = useState("");
