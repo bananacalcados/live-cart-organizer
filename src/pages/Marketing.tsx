@@ -170,6 +170,20 @@ export default function Marketing() {
   const [leadsSearch, setLeadsSearch] = useState("");
   const [leadChatPhone, setLeadChatPhone] = useState<string | null>(null);
   const [leadChatName, setLeadChatName] = useState<string>("");
+  const [leadBackfillStatus, setLeadBackfillStatus] = useState<{
+    status: "idle" | "processing" | "completed" | "failed";
+    progress: number;
+    stage: string;
+    detail: string;
+    totalPhones?: number;
+    customersExcluded?: number;
+    existingLeadsExcluded?: number;
+    inserted?: number;
+    error?: string;
+    startedAt?: string;
+    finishedAt?: string;
+  } | null>(null);
+  const leadBackfillPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 
   // Customers state
@@ -216,6 +230,13 @@ export default function Marketing() {
    const [tagFilter, setTagFilter] = useState<string>("all");
 
   // ─── Fetch data ──────────────────────────────
+
+  const stopLeadBackfillPolling = useCallback(() => {
+    if (leadBackfillPollingRef.current) {
+      clearInterval(leadBackfillPollingRef.current);
+      leadBackfillPollingRef.current = null;
+    }
+  }, []);
 
   const fetchCustomers = useCallback(async () => {
     setIsLoading(true);
@@ -284,6 +305,79 @@ export default function Marketing() {
     finally { setLeadsLoading(false); }
   }, []);
 
+  const fetchLeadBackfillStatus = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('backfill-organic-leads', {
+        body: { action: 'status' },
+      });
+      if (error) throw error;
+
+      const job = ((data as any)?.job ?? null) as typeof leadBackfillStatus;
+      setLeadBackfillStatus(job);
+
+      if (job?.status && job.status !== 'processing') {
+        stopLeadBackfillPolling();
+      }
+
+      if (job?.status === 'completed') {
+        fetchLeads();
+      }
+
+      if (job?.status === 'failed' && !silent) {
+        toast.error('Erro no backfill: ' + (job.error || 'Erro desconhecido'));
+      }
+
+      return job;
+    } catch (err: any) {
+      if (!silent) {
+        toast.error('Erro ao consultar progresso do backfill: ' + (err.message || 'Erro desconhecido'));
+      }
+      throw err;
+    }
+  }, [fetchLeads, stopLeadBackfillPolling]);
+
+  const startLeadBackfillPolling = useCallback(() => {
+    stopLeadBackfillPolling();
+    leadBackfillPollingRef.current = setInterval(async () => {
+      try {
+        const job = await fetchLeadBackfillStatus({ silent: true });
+        if (job?.status === 'completed') {
+          toast.success(`✅ Backfill concluído: ${job.inserted || 0} leads criados`);
+        } else if (job?.status === 'failed') {
+          toast.error('Erro no backfill: ' + (job.error || 'Erro desconhecido'));
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }, 2000);
+  }, [fetchLeadBackfillStatus, stopLeadBackfillPolling]);
+
+  const handleStartLeadBackfill = useCallback(async () => {
+    if (!confirm('Isso vai cadastrar retroativamente todos os contatos orgânicos dos últimos 3 meses como leads. Continuar?')) return;
+
+    try {
+      toast.info('Iniciando busca retroativa de leads orgânicos...');
+      const { data, error } = await supabase.functions.invoke('backfill-organic-leads', {
+        body: { action: 'start' },
+      });
+      if (error) throw error;
+
+      const job = ((data as any)?.job ?? null) as typeof leadBackfillStatus;
+      setLeadBackfillStatus(job);
+
+      if (job?.status === 'processing') {
+        startLeadBackfillPolling();
+      } else if (job?.status === 'completed') {
+        toast.success(`✅ Backfill concluído: ${job.inserted || 0} leads criados`);
+        fetchLeads();
+      } else if (job?.status === 'failed') {
+        toast.error('Erro no backfill: ' + (job.error || 'Erro desconhecido'));
+      }
+    } catch (err: any) {
+      toast.error('Erro no backfill: ' + (err.message || 'Erro desconhecido'));
+    }
+  }, [fetchLeads, startLeadBackfillPolling]);
+
   const deleteCustomer = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
     const { error } = await supabase.from('zoppy_customers').delete().eq('id', id);
@@ -334,7 +428,21 @@ export default function Marketing() {
     toast.success('Lead atualizado!');
   };
 
-  useEffect(() => { fetchCustomers(); fetchCampaigns(); fetchLandingPages(); fetchLeads(); }, [fetchCustomers, fetchCampaigns, fetchLandingPages, fetchLeads]);
+  useEffect(() => {
+    fetchCustomers();
+    fetchCampaigns();
+    fetchLandingPages();
+    fetchLeads();
+    fetchLeadBackfillStatus({ silent: true })
+      .then((job) => {
+        if (job?.status === 'processing') {
+          startLeadBackfillPolling();
+        }
+      })
+      .catch(() => undefined);
+
+    return () => stopLeadBackfillPolling();
+  }, [fetchCustomers, fetchCampaigns, fetchLandingPages, fetchLeads, fetchLeadBackfillStatus, startLeadBackfillPolling, stopLeadBackfillPolling]);
 
   // Fetch store/seller mapping for filters
   useEffect(() => {
@@ -1577,23 +1685,59 @@ export default function Marketing() {
                       variant="outline"
                       size="sm"
                       className="gap-1"
-                      onClick={async () => {
-                        if (!confirm('Isso vai cadastrar retroativamente todos os contatos orgânicos dos últimos 3 meses como leads. Continuar?')) return;
-                        toast.info('Executando backfill de leads orgânicos...');
-                        try {
-                          const res = await supabase.functions.invoke('backfill-organic-leads');
-                          if (res.error) throw res.error;
-                          const data = res.data as any;
-                          toast.success(`✅ Backfill concluído: ${data.inserted} leads criados`);
-                          fetchLeads();
-                        } catch (err: any) {
-                          toast.error('Erro no backfill: ' + (err.message || 'Erro desconhecido'));
-                        }
-                      }}
+                      disabled={leadBackfillStatus?.status === 'processing'}
+                      onClick={handleStartLeadBackfill}
                     >
-                      <Zap className="h-3.5 w-3.5" />Backfill Orgânicos
+                      {leadBackfillStatus?.status === 'processing' ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />Backfill em andamento
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="h-3.5 w-3.5" />Backfill Orgânicos
+                        </>
+                      )}
                     </Button>
                   </div>
+
+                  {leadBackfillStatus && leadBackfillStatus.status !== 'idle' && (
+                    <Card>
+                      <CardContent className="space-y-3 pt-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold">Busca retroativa de leads</span>
+                              <Badge variant={leadBackfillStatus.status === 'failed' ? 'destructive' : 'secondary'}>
+                                {leadBackfillStatus.status === 'processing' ? 'Processando' : leadBackfillStatus.status === 'completed' ? 'Concluído' : 'Erro'}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{leadBackfillStatus.detail}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-semibold">{leadBackfillStatus.progress ?? 0}%</p>
+                            <p className="text-xs text-muted-foreground">Faltam {Math.max(0, 100 - (leadBackfillStatus.progress ?? 0))}%</p>
+                          </div>
+                        </div>
+
+                        <Progress value={leadBackfillStatus.progress ?? 0} className="h-2.5" />
+
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                          {typeof leadBackfillStatus.totalPhones === 'number' && (
+                            <span>{leadBackfillStatus.totalPhones.toLocaleString('pt-BR')} contatos encontrados</span>
+                          )}
+                          {typeof leadBackfillStatus.customersExcluded === 'number' && (
+                            <span>{leadBackfillStatus.customersExcluded.toLocaleString('pt-BR')} clientes ignorados</span>
+                          )}
+                          {typeof leadBackfillStatus.existingLeadsExcluded === 'number' && (
+                            <span>{leadBackfillStatus.existingLeadsExcluded.toLocaleString('pt-BR')} leads já existentes</span>
+                          )}
+                          {typeof leadBackfillStatus.inserted === 'number' && (
+                            <span>{leadBackfillStatus.inserted.toLocaleString('pt-BR')} leads criados</span>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
                   <Card>
                     <CardContent className="p-0">
