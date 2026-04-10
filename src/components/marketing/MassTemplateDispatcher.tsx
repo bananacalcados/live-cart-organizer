@@ -301,6 +301,87 @@ export function MassTemplateDispatcher() {
     setTicketMin(""); setTicketMax(""); setOrdersMin("");
     setOrdersMax(""); setTopN("all"); setSearchQuery("");
     setSelectAll(false); setSelectedPhones(new Set());
+    setCooldownDays(""); setCooldownExcludedPhones(new Set()); setCooldownRecentRecipients([]); setCooldownApplied(false);
+  };
+
+  // Apply cooldown filter: fetch phones that received dispatches in last X days
+  const applyCooldownFilter = async () => {
+    const days = parseInt(cooldownDays);
+    if (!days || days <= 0) { toast.error("Informe um número de dias válido"); return; }
+    setIsLoadingCooldown(true);
+    try {
+      const sinceDate = new Date();
+      sinceDate.setDate(sinceDate.getDate() - days);
+      const sinceISO = sinceDate.toISOString();
+
+      // Get dispatches in the period
+      const { data: dispatches } = await supabase
+        .from('dispatch_history')
+        .select('id, campaign_name, template_name, started_at')
+        .gte('created_at', sinceISO)
+        .in('status', ['sending', 'completed']);
+
+      if (!dispatches || dispatches.length === 0) {
+        setCooldownExcludedPhones(new Set());
+        setCooldownRecentRecipients([]);
+        setCooldownApplied(true);
+        toast.info("Nenhum disparo encontrado no período");
+        setIsLoadingCooldown(false);
+        return;
+      }
+
+      const excluded = new Set<string>();
+      const recentList: Array<{ phone: string; name: string; sentAt: string; campaign: string }> = [];
+
+      for (const d of dispatches) {
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data: recipients, error } = await supabase
+            .from('dispatch_recipients')
+            .select('phone, recipient_name, sent_at')
+            .eq('dispatch_id', d.id)
+            .eq('status', 'sent')
+            .range(from, from + pageSize - 1);
+          if (error || !recipients || recipients.length === 0) break;
+          for (const r of recipients) {
+            const phone = r.phone?.replace(/\D/g, '');
+            if (phone) {
+              excluded.add(phone);
+              recentList.push({
+                phone,
+                name: r.recipient_name || phone,
+                sentAt: r.sent_at || d.started_at || '',
+                campaign: d.campaign_name || d.template_name || 'Sem nome',
+              });
+            }
+          }
+          if (recipients.length < pageSize) break;
+          from += pageSize;
+        }
+      }
+
+      setCooldownExcludedPhones(excluded);
+      setCooldownRecentRecipients(recentList);
+      setCooldownApplied(true);
+      setSelectAll(false);
+      setSelectedPhones(new Set());
+      toast.success(`🔍 ${excluded.size} números receberam disparos nos últimos ${days} dias`);
+    } catch (err) {
+      console.error('Cooldown filter error:', err);
+      toast.error("Erro ao aplicar filtro de cooldown");
+    } finally {
+      setIsLoadingCooldown(false);
+    }
+  };
+
+  const clearCooldownFilter = () => {
+    setCooldownDays("");
+    setCooldownExcludedPhones(new Set());
+    setCooldownRecentRecipients([]);
+    setCooldownApplied(false);
+    setSelectAll(false);
+    setSelectedPhones(new Set());
   };
 
   const fetchTemplates = async () => {
