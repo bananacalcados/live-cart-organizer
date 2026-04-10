@@ -3,7 +3,7 @@ import {
   Send, Search, Users, Filter, Loader2, CheckCircle, TestTube,
   ChevronDown, ChevronUp, Phone, MapPin, Crown, FileSpreadsheet,
   AlertTriangle, Eye, Zap, RefreshCw, Image, Paperclip, Store,
-  Calendar, ShoppingBag, Bookmark, Trash2, Save, X
+  Calendar, ShoppingBag, Bookmark, Trash2, Save, X, Clock, Ban
 } from "lucide-react";
 import { DispatchHistoryList, DuplicateDispatchData } from "./DispatchHistoryList";
 import { Button } from "@/components/ui/button";
@@ -147,6 +147,13 @@ export function MassTemplateDispatcher() {
   const [scheduleMode, setScheduleMode] = useState<'none' | 'schedule' | 'paused'>('none');
   const [scheduledDate, setScheduledDate] = useState("");
   const [campaignName, setCampaignName] = useState("");
+
+  // Cooldown filter
+  const [cooldownDays, setCooldownDays] = useState<string>("");
+  const [cooldownExcludedPhones, setCooldownExcludedPhones] = useState<Set<string>>(new Set());
+  const [cooldownRecentRecipients, setCooldownRecentRecipients] = useState<Array<{ phone: string; name: string; sentAt: string; campaign: string }>>([]);
+  const [isLoadingCooldown, setIsLoadingCooldown] = useState(false);
+  const [cooldownApplied, setCooldownApplied] = useState(false);
 
   // Check for active dispatches on mount (resume monitoring)
   useEffect(() => {
@@ -294,6 +301,87 @@ export function MassTemplateDispatcher() {
     setTicketMin(""); setTicketMax(""); setOrdersMin("");
     setOrdersMax(""); setTopN("all"); setSearchQuery("");
     setSelectAll(false); setSelectedPhones(new Set());
+    setCooldownDays(""); setCooldownExcludedPhones(new Set()); setCooldownRecentRecipients([]); setCooldownApplied(false);
+  };
+
+  // Apply cooldown filter: fetch phones that received dispatches in last X days
+  const applyCooldownFilter = async () => {
+    const days = parseInt(cooldownDays);
+    if (!days || days <= 0) { toast.error("Informe um número de dias válido"); return; }
+    setIsLoadingCooldown(true);
+    try {
+      const sinceDate = new Date();
+      sinceDate.setDate(sinceDate.getDate() - days);
+      const sinceISO = sinceDate.toISOString();
+
+      // Get dispatches in the period
+      const { data: dispatches } = await supabase
+        .from('dispatch_history')
+        .select('id, campaign_name, template_name, started_at')
+        .gte('created_at', sinceISO)
+        .in('status', ['sending', 'completed']);
+
+      if (!dispatches || dispatches.length === 0) {
+        setCooldownExcludedPhones(new Set());
+        setCooldownRecentRecipients([]);
+        setCooldownApplied(true);
+        toast.info("Nenhum disparo encontrado no período");
+        setIsLoadingCooldown(false);
+        return;
+      }
+
+      const excluded = new Set<string>();
+      const recentList: Array<{ phone: string; name: string; sentAt: string; campaign: string }> = [];
+
+      for (const d of dispatches) {
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data: recipients, error } = await supabase
+            .from('dispatch_recipients')
+            .select('phone, recipient_name, created_at')
+            .eq('dispatch_id', d.id)
+            .eq('status', 'sent')
+            .range(from, from + pageSize - 1);
+          if (error || !recipients || recipients.length === 0) break;
+          for (const r of recipients) {
+            const phone = r.phone?.replace(/\D/g, '');
+            if (phone) {
+              excluded.add(phone);
+              recentList.push({
+                phone,
+                name: r.recipient_name || phone,
+                sentAt: r.created_at || d.started_at || '',
+                campaign: d.campaign_name || d.template_name || 'Sem nome',
+              });
+            }
+          }
+          if (recipients.length < pageSize) break;
+          from += pageSize;
+        }
+      }
+
+      setCooldownExcludedPhones(excluded);
+      setCooldownRecentRecipients(recentList);
+      setCooldownApplied(true);
+      setSelectAll(false);
+      setSelectedPhones(new Set());
+      toast.success(`🔍 ${excluded.size} números receberam disparos nos últimos ${days} dias`);
+    } catch (err) {
+      console.error('Cooldown filter error:', err);
+      toast.error("Erro ao aplicar filtro de cooldown");
+    } finally {
+      setIsLoadingCooldown(false);
+    }
+  };
+
+  const clearCooldownFilter = () => {
+    setCooldownDays("");
+    setCooldownExcludedPhones(new Set());
+    setCooldownRecentRecipients([]);
+    setCooldownApplied(false);
+    setSelectAll(false);
+    setSelectedPhones(new Set());
   };
 
   const fetchTemplates = async () => {
@@ -521,9 +609,15 @@ export function MassTemplateDispatcher() {
     }
 
     // Apply topN limit
-    const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
+    let finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
+
+    // Apply cooldown exclusion
+    if (cooldownApplied && cooldownExcludedPhones.size > 0) {
+      finalList = finalList.filter(r => !cooldownExcludedPhones.has(r.phone));
+    }
+
     return finalList;
-  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter]);
+  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, cooldownApplied, cooldownExcludedPhones]);
 
   // Unique filter options
   const uniqueSegments = useMemo(() => [...new Set(crmCustomers.map(c => c.rfm_segment).filter(Boolean))].sort(), [crmCustomers]);
@@ -1414,6 +1508,80 @@ export function MassTemplateDispatcher() {
                 </Button>
               </div>
             )}
+
+            {/* Cooldown Filter */}
+            <div className="border rounded-lg p-3 space-y-2 bg-muted/20">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-medium">Filtro de Cooldown</span>
+                <span className="text-[10px] text-muted-foreground">(evitar disparos repetidos)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  className="w-[100px] h-8 text-xs"
+                  placeholder="Dias"
+                  value={cooldownDays}
+                  onChange={e => { setCooldownDays(e.target.value); if (cooldownApplied) clearCooldownFilter(); }}
+                  min={1}
+                />
+                <span className="text-xs text-muted-foreground">dias</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1"
+                  onClick={applyCooldownFilter}
+                  disabled={isLoadingCooldown || !cooldownDays}
+                >
+                  {isLoadingCooldown ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />}
+                  Aplicar Cooldown
+                </Button>
+                {cooldownApplied && (
+                  <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearCooldownFilter}>
+                    <X className="h-3 w-3" />Remover
+                  </Button>
+                )}
+              </div>
+              {cooldownApplied && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-3 text-xs">
+                    <Badge variant="destructive" className="text-[10px]">
+                      {cooldownExcludedPhones.size} excluídos
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {filteredRecipients.length} restantes
+                    </Badge>
+                  </div>
+                  {cooldownRecentRecipients.length > 0 && (
+                    <Accordion type="single" collapsible className="w-full">
+                      <AccordionItem value="cooldown-list" className="border-none">
+                        <AccordionTrigger className="text-[10px] text-muted-foreground py-1 hover:no-underline">
+                          Ver {cooldownExcludedPhones.size} pessoas que receberam disparos nos últimos {cooldownDays} dias
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <ScrollArea className="h-[150px]">
+                            <div className="space-y-0.5">
+                              {cooldownRecentRecipients.slice(0, 200).map((r, i) => (
+                                <div key={`${r.phone}-${i}`} className="flex items-center justify-between text-[10px] px-1 py-0.5 hover:bg-muted/50 rounded">
+                                  <span className="truncate flex-1">{r.name}</span>
+                                  <span className="text-muted-foreground font-mono mx-2">{r.phone}</span>
+                                  <Badge variant="outline" className="text-[8px] h-3.5 shrink-0">{r.campaign}</Badge>
+                                </div>
+                              ))}
+                              {cooldownRecentRecipients.length > 200 && (
+                                <p className="text-[9px] text-muted-foreground text-center py-1">
+                                  +{cooldownRecentRecipients.length - 200} mais...
+                                </p>
+                              )}
+                            </div>
+                          </ScrollArea>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Select all */}
             <div className="flex items-center gap-2 py-1">
