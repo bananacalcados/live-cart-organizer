@@ -10036,6 +10036,18 @@ export type Database = {
         }[]
       }
       check_order_paid: { Args: { p_order_id: string }; Returns: boolean }
+      dedup_outgoing_message: {
+        Args: {
+          p_cutoff_minutes?: number
+          p_message: string
+          p_phone: string
+          p_whatsapp_number_id?: string
+        }
+        Returns: {
+          id: string
+          message_id: string
+        }[]
+      }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       generate_ean13_barcode: { Args: never; Returns: string }
       get_conversation_counts: {
