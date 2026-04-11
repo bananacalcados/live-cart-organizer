@@ -2063,7 +2063,19 @@ export default function Marketing() {
                       {purchaseDatesLoading ? (
                         <div className="flex items-center justify-center py-4 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin mr-1" />Carregando...</div>
                       ) : purchaseDates.length === 0 ? (
-                        <div className="text-xs text-muted-foreground text-center py-3">Nenhuma compra encontrada</div>
+                        <div className="text-xs text-muted-foreground text-center py-3">
+                          {selectedCustomer && (selectedCustomer as any).total_orders > 0 ? (
+                            <div className="space-y-2">
+                              <p>📦 {(selectedCustomer as any).total_orders} pedidos registrados</p>
+                              <p className="text-[10px] italic">Detalhes individuais não disponíveis — dados importados do sistema legado sem histórico de transações.</p>
+                              {(selectedCustomer as any).last_purchase_at && (
+                                <p className="text-[10px]">Última compra: {new Date((selectedCustomer as any).last_purchase_at).toLocaleDateString('pt-BR')}</p>
+                              )}
+                            </div>
+                          ) : (
+                            'Nenhuma compra encontrada'
+                          )}
+                        </div>
                       ) : (
                         <ScrollArea className="max-h-[300px]">
                           <div className="space-y-1">
