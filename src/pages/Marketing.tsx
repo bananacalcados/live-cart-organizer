@@ -209,8 +209,11 @@ export default function Marketing() {
   const [selectedCustomer, setSelectedCustomer] = useState<ZoppyCustomer | null>(null);
   const [whatsAppMessage, setWhatsAppMessage] = useState("");
   const [editingCustomer, setEditingCustomer] = useState<ZoppyCustomer | null>(null);
-  const [purchaseDates, setPurchaseDates] = useState<{ date: string; total: number; source: string }[] | null>(null);
+  const [purchaseDates, setPurchaseDates] = useState<{ date: string; total: number; source: string; products: { name: string; qty: number; price: number }[]; store?: string; seller?: string }[] | null>(null);
   const [purchaseDatesLoading, setPurchaseDatesLoading] = useState(false);
+  const [customerCashback, setCustomerCashback] = useState<{ total_points: number; expires_at: string } | null>(null);
+  const [customerPrizes, setCustomerPrizes] = useState<{ prize_label: string; coupon_code: string; is_redeemed: boolean; expires_at: string; prize_value: number }[]>([]);
+  const [expandedPurchase, setExpandedPurchase] = useState<number | null>(null);
   const [editingLead, setEditingLead] = useState<any | null>(null);
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [sellerFilter, setSellerFilter] = useState<string>("all");
@@ -1864,7 +1867,7 @@ export default function Marketing() {
       />
 
       {/* Customer Detail Dialog */}
-      <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setWhatsAppMessage(""); setPurchaseDates(null); (window as any).__purchaseDatesOpen = false; } }}>
+      <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setWhatsAppMessage(""); setPurchaseDates(null); setCustomerCashback(null); setCustomerPrizes([]); setExpandedPurchase(null); (window as any).__purchaseDatesOpen = false; } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
@@ -1944,33 +1947,85 @@ export default function Marketing() {
                       if ((window as any).__purchaseDatesOpen) {
                         (window as any).__purchaseDatesOpen = false;
                         setPurchaseDates(null);
+                        setExpandedPurchase(null);
                         return;
                       }
                       (window as any).__purchaseDatesOpen = true;
                       setPurchaseDatesLoading(true);
                       setPurchaseDates([]);
+                      setExpandedPurchase(null);
                       try {
                         const phoneDigits = (selectedCustomer.phone || '').replace(/\D/g, '');
                         const suffix8 = phoneDigits.slice(-8);
                         if (!suffix8) { setPurchaseDatesLoading(false); return; }
-                        // Query zoppy_sales + pos_sales + orders for dates
-                        const [zRes, pRes] = await Promise.all([
-                          supabase.from('zoppy_sales').select('completed_at, total, status').ilike('customer_phone', `%${suffix8}`).order('completed_at', { ascending: false }).limit(50),
-                          supabase.from('pos_sales').select('created_at, total, status, store_id').order('created_at', { ascending: false }).limit(200),
+
+                        // Fetch zoppy_sales with line_items, pos_sales with items, cashback, and prizes in parallel
+                        const [zRes, posCustomersRes, cashbackRes, prizesRes] = await Promise.all([
+                          supabase.from('zoppy_sales').select('completed_at, total, status, line_items, customer_name').ilike('customer_phone', `%${suffix8}`).order('completed_at', { ascending: false }).limit(50),
+                          supabase.from('pos_customers').select('id, whatsapp').ilike('whatsapp', `%${suffix8}`),
+                          supabase.from('customer_loyalty_points').select('total_points, expires_at').ilike('customer_phone', `%${suffix8}`).limit(1),
+                          supabase.from('customer_prizes').select('prize_label, coupon_code, is_redeemed, expires_at, prize_value').ilike('customer_phone', `%${suffix8}`).order('created_at', { ascending: false }).limit(10),
                         ]);
-                        const dates: { date: string; total: number; source: string }[] = [];
+
+                        // Set cashback & prizes
+                        setCustomerCashback(cashbackRes.data?.[0] || null);
+                        setCustomerPrizes(prizesRes.data || []);
+
+                        const dates: { date: string; total: number; source: string; products: { name: string; qty: number; price: number }[]; store?: string; seller?: string }[] = [];
+
+                        // Process zoppy_sales (online)
                         (zRes.data || []).forEach((s: any) => {
-                          if (s.completed_at) dates.push({ date: s.completed_at, total: s.total || 0, source: 'Shopify' });
+                          if (!s.completed_at) return;
+                          const products: { name: string; qty: number; price: number }[] = [];
+                          if (Array.isArray(s.line_items)) {
+                            s.line_items.forEach((item: any) => {
+                              products.push({
+                                name: item.product?.name || item.name || item.title || 'Produto',
+                                qty: item.quantity || 1,
+                                price: item.product?.price || item.price || 0,
+                              });
+                            });
+                          }
+                          dates.push({ date: s.completed_at, total: s.total || 0, source: 'Online', products });
                         });
-                        // Filter pos_sales by phone suffix match via customer
-                        const posCustomersRes = await supabase.from('pos_customers').select('id, whatsapp').ilike('whatsapp', `%${suffix8}`);
+
+                        // Process pos_sales
                         const posCustomerIds = new Set((posCustomersRes.data || []).map((c: any) => c.id));
                         if (posCustomerIds.size > 0) {
-                          const posFiltered = await supabase.from('pos_sales').select('created_at, total, status, customer_id').in('customer_id', Array.from(posCustomerIds)).order('created_at', { ascending: false }).limit(50);
+                          const posFiltered = await supabase.from('pos_sales').select('id, created_at, total, status, customer_id, store_id, seller_id').in('customer_id', Array.from(posCustomerIds)).order('created_at', { ascending: false }).limit(50);
+                          const saleIds = (posFiltered.data || []).map((s: any) => s.id);
+                          
+                          // Fetch items + store/seller names
+                          const [itemsRes, storesRes, sellersRes] = await Promise.all([
+                            saleIds.length > 0 ? supabase.from('pos_sale_items').select('sale_id, product_name, variant_name, quantity, unit_price').in('sale_id', saleIds) : { data: [] },
+                            supabase.from('pos_stores').select('id, name'),
+                            supabase.from('pos_sellers').select('id, name'),
+                          ]);
+
+                          const itemsBySale = new Map<string, { name: string; qty: number; price: number }[]>();
+                          ((itemsRes as any).data || []).forEach((item: any) => {
+                            if (!itemsBySale.has(item.sale_id)) itemsBySale.set(item.sale_id, []);
+                            itemsBySale.get(item.sale_id)!.push({
+                              name: item.variant_name ? `${item.product_name} - ${item.variant_name}` : item.product_name,
+                              qty: item.quantity || 1,
+                              price: item.unit_price || 0,
+                            });
+                          });
+                          const storeMap = new Map((storesRes.data || []).map((s: any) => [s.id, s.name]));
+                          const sellerMap = new Map((sellersRes.data || []).map((s: any) => [s.id, s.name]));
+
                           (posFiltered.data || []).forEach((s: any) => {
-                            if (s.created_at) dates.push({ date: s.created_at, total: s.total || 0, source: 'PDV' });
+                            if (s.created_at) dates.push({
+                              date: s.created_at,
+                              total: s.total || 0,
+                              source: 'PDV',
+                              products: itemsBySale.get(s.id) || [],
+                              store: storeMap.get(s.store_id) || undefined,
+                              seller: sellerMap.get(s.seller_id) || undefined,
+                            });
                           });
                         }
+
                         dates.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                         setPurchaseDates(dates);
                       } catch (err) {
@@ -1985,29 +2040,79 @@ export default function Marketing() {
                     <ChevronDown className="h-3 w-3" />
                   </button>
                   {purchaseDates !== null && (
-                    <Card className="absolute z-50 top-7 left-0 w-72 p-3 shadow-lg border">
+                    <Card className="absolute z-50 top-7 left-0 w-80 p-3 shadow-lg border">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-semibold">Histórico de Compras</span>
-                        <button onClick={() => { setPurchaseDates(null); (window as any).__purchaseDatesOpen = false; }} className="text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /></button>
+                        <button onClick={() => { setPurchaseDates(null); setExpandedPurchase(null); (window as any).__purchaseDatesOpen = false; }} className="text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /></button>
                       </div>
                       {purchaseDatesLoading ? (
                         <div className="flex items-center justify-center py-4 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin mr-1" />Carregando...</div>
                       ) : purchaseDates.length === 0 ? (
-                        <div className="text-xs text-muted-foreground text-center py-3">Nenhuma data de compra encontrada</div>
+                        <div className="text-xs text-muted-foreground text-center py-3">Nenhuma compra encontrada</div>
                       ) : (
-                        <ScrollArea className="max-h-[200px]">
+                        <ScrollArea className="max-h-[300px]">
                           <div className="space-y-1">
                             {purchaseDates.map((p, i) => (
-                              <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-border/50 last:border-0">
-                                <span>{new Date(p.date).toLocaleDateString('pt-BR')} {new Date(p.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="text-[9px] px-1">{p.source}</Badge>
-                                  <span className="font-medium text-green-600">R$ {Number(p.total).toFixed(2)}</span>
-                                </div>
+                              <div key={i} className="border-b border-border/50 last:border-0">
+                                <button
+                                  onClick={() => setExpandedPurchase(expandedPurchase === i ? null : i)}
+                                  className="flex items-center justify-between text-xs py-1.5 w-full hover:bg-muted/50 rounded px-1 transition-colors"
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <ChevronDown className={`h-3 w-3 transition-transform ${expandedPurchase === i ? 'rotate-180' : ''}`} />
+                                    <span>{new Date(p.date).toLocaleDateString('pt-BR')}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="text-[9px] px-1">{p.source}</Badge>
+                                    <span className="font-medium text-green-600">R$ {Number(p.total).toFixed(2)}</span>
+                                  </div>
+                                </button>
+                                {expandedPurchase === i && (
+                                  <div className="pl-5 pb-2 space-y-1">
+                                    {p.store && <p className="text-[10px] text-muted-foreground">🏪 {p.store}{p.seller ? ` • ${p.seller}` : ''}</p>}
+                                    {p.products.length > 0 ? p.products.map((prod, j) => (
+                                      <div key={j} className="flex justify-between text-[10px] text-muted-foreground">
+                                        <span className="truncate max-w-[180px]">{prod.qty}x {prod.name}</span>
+                                        <span>R$ {(prod.qty * prod.price).toFixed(2)}</span>
+                                      </div>
+                                    )) : (
+                                      <p className="text-[10px] text-muted-foreground italic">Sem detalhes de produtos</p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
                         </ScrollArea>
+                      )}
+
+                      {/* Cashback */}
+                      {customerCashback && customerCashback.total_points > 0 && (
+                        <div className="mt-2 pt-2 border-t border-border/50">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="flex items-center gap-1 font-medium text-amber-500">💰 Cashback</span>
+                            <span className="font-bold text-amber-500">{customerCashback.total_points} pts</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">Expira em {new Date(customerCashback.expires_at).toLocaleDateString('pt-BR')}</p>
+                        </div>
+                      )}
+
+                      {/* Prizes */}
+                      {customerPrizes.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-border/50">
+                          <p className="text-xs font-medium mb-1 flex items-center gap-1">🎁 Premiações</p>
+                          {customerPrizes.map((prize, i) => (
+                            <div key={i} className="flex items-center justify-between text-[10px] py-0.5">
+                              <span className="truncate max-w-[160px]">{prize.prize_label}</span>
+                              <div className="flex items-center gap-1.5">
+                                <code className="bg-muted px-1 rounded text-[9px]">{prize.coupon_code}</code>
+                                <Badge variant={prize.is_redeemed ? "secondary" : "default"} className="text-[8px] px-1">
+                                  {prize.is_redeemed ? "Resgatado" : new Date(prize.expires_at) < new Date() ? "Expirado" : "Ativo"}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </Card>
                   )}
