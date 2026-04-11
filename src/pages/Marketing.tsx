@@ -2028,6 +2028,21 @@ export default function Marketing() {
 
                         dates.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                         setPurchaseDates(dates);
+
+                        // Update selectedCustomer with real data from purchase history
+                        if (dates.length > 0) {
+                          const realLastPurchase = dates[0].date;
+                          const realTotalSpent = dates.reduce((s, d) => s + d.total, 0);
+                          const realTotalOrders = dates.length;
+                          const realAvgTicket = realTotalOrders > 0 ? realTotalSpent / realTotalOrders : 0;
+                          setSelectedCustomer(prev => prev ? {
+                            ...prev,
+                            last_purchase_at: realLastPurchase,
+                            total_spent: realTotalSpent,
+                            total_orders: realTotalOrders,
+                            avg_ticket: realAvgTicket,
+                          } : prev);
+                        }
                       } catch (err) {
                         console.error('Error fetching purchase dates:', err);
                       } finally {
