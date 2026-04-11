@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
+import { webmToOgg, isWebmContainer } from "../_shared/webm-to-ogg.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -60,10 +62,46 @@ serve(async (req) => {
         }
         break;
       }
-      case 'audio':
+      case 'audio': {
         endpoint = 'send-audio';
-        payload = { phone: formattedPhone, audio: mediaUrl };
+
+        // Download audio and remux WebM→OGG if needed so WhatsApp can play it
+        let audioSendUrl = mediaUrl;
+        try {
+          const audioResp = await fetch(mediaUrl);
+          if (audioResp.ok) {
+            const audioBytes = new Uint8Array(await audioResp.arrayBuffer());
+            if (isWebmContainer(audioBytes)) {
+              console.log(`[zapi-send-media] Detected WebM audio (${audioBytes.length} bytes), remuxing to OGG…`);
+              const oggBytes = webmToOgg(audioBytes);
+              console.log(`[zapi-send-media] OGG remux done: ${oggBytes.length} bytes`);
+
+              // Upload OGG to storage
+              const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+              const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+              const sb = createClient(supabaseUrl, serviceKey);
+              const fileName = `audio-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ogg`;
+              const { error: upErr } = await sb.storage
+                .from('whatsapp-media')
+                .upload(fileName, oggBytes, { contentType: 'audio/ogg', upsert: true });
+              if (upErr) {
+                console.error('[zapi-send-media] OGG upload error:', upErr);
+              } else {
+                const { data: pubData } = sb.storage.from('whatsapp-media').getPublicUrl(fileName);
+                audioSendUrl = pubData.publicUrl;
+                console.log(`[zapi-send-media] Using OGG URL: ${audioSendUrl}`);
+              }
+            } else {
+              console.log(`[zapi-send-media] Audio is already OGG/non-WebM, sending as-is`);
+            }
+          }
+        } catch (convErr) {
+          console.error('[zapi-send-media] Audio conversion error, sending original URL:', convErr);
+        }
+
+        payload = { phone: formattedPhone, audio: audioSendUrl };
         break;
+      }
       case 'video':
         endpoint = 'send-video';
         payload = { phone: formattedPhone, video: mediaUrl, caption: caption || '' };
