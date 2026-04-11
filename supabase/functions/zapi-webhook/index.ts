@@ -199,9 +199,8 @@ serve(async (req) => {
       console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}, media=${mediaInfo?.mediaType || 'none'}, numberId=${whatsappNumberId}`);
 
       if (fromMe) {
-        // Dedup: match by phone + message + whatsapp_number_id
-        // Echoes from API-sent messages must resolve to the pre-saved AI row,
-        // otherwise they are incorrectly treated as manual operator messages.
+        // Dedup: match by phone suffix (8 digits) + message + whatsapp_number_id
+        // Uses RPC function to handle phone format variations (with/without country code)
         if (messageId && displayMessage) {
           const aiPrefixes = ['[IA]', '[IA-ADS]', '[IA-CONCIERGE]', '[IA-LIVETE]'];
           const messagesToMatch = [
@@ -221,27 +220,14 @@ serve(async (req) => {
             messagesToMatch.push(mediaLabelMap[mediaInfo.mediaType]);
           }
 
-          // Time window: only match messages from the last 5 minutes to avoid stale dedup
-          const dedupCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-
           for (const matchMsg of messagesToMatch) {
-            let dedupQuery = supabase
-              .from('whatsapp_messages')
-              .select('id, message_id')
-              .eq('phone', phone)
-              .eq('direction', 'outgoing')
-              .eq('message', matchMsg)
-              .gte('created_at', dedupCutoff)
-              .order('created_at', { ascending: false })
-              .limit(1);
+            const { data: existing } = await supabase.rpc('dedup_outgoing_message', {
+              p_phone: phone,
+              p_message: matchMsg,
+              p_whatsapp_number_id: whatsappNumberId || null,
+              p_cutoff_minutes: 5,
+            });
 
-            if (whatsappNumberId) {
-              dedupQuery = dedupQuery.eq('whatsapp_number_id', whatsappNumberId);
-            } else {
-              dedupQuery = dedupQuery.is('whatsapp_number_id', null);
-            }
-
-            const { data: existing } = await dedupQuery;
             const row = existing?.[0];
             if (row) {
               if (!row.message_id) {
@@ -253,6 +239,7 @@ serve(async (req) => {
                   console.error('Error updating outgoing message (dedup):', updateError);
                 }
               }
+              console.log(`Dedup matched via suffix for phone ${phone}, msg: ${matchMsg.substring(0, 50)}`);
               return new Response(JSON.stringify({ success: true, dedup: true }), {
                 status: 200,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
