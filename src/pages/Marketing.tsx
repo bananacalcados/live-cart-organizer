@@ -209,8 +209,11 @@ export default function Marketing() {
   const [selectedCustomer, setSelectedCustomer] = useState<ZoppyCustomer | null>(null);
   const [whatsAppMessage, setWhatsAppMessage] = useState("");
   const [editingCustomer, setEditingCustomer] = useState<ZoppyCustomer | null>(null);
-  const [purchaseDates, setPurchaseDates] = useState<{ date: string; total: number; source: string }[] | null>(null);
+  const [purchaseDates, setPurchaseDates] = useState<{ date: string; total: number; source: string; products: { name: string; qty: number; price: number }[]; store?: string; seller?: string }[] | null>(null);
   const [purchaseDatesLoading, setPurchaseDatesLoading] = useState(false);
+  const [customerCashback, setCustomerCashback] = useState<{ total_points: number; expires_at: string } | null>(null);
+  const [customerPrizes, setCustomerPrizes] = useState<{ prize_label: string; coupon_code: string; is_redeemed: boolean; expires_at: string; prize_value: number }[]>([]);
+  const [expandedPurchase, setExpandedPurchase] = useState<number | null>(null);
   const [editingLead, setEditingLead] = useState<any | null>(null);
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [sellerFilter, setSellerFilter] = useState<string>("all");
