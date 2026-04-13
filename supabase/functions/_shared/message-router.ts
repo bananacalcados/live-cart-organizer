@@ -206,7 +206,8 @@ export async function routeMessage(
   }
 
   // 4. Operator cooldown — if a human replied recently, don't activate AI (48h window)
-  const cooldownActive = await isOperatorCooldownActive(supabase, phone, 2880);
+  const phoneVariants = getPhoneVariants(phone);
+  const cooldownActive = await isOperatorCooldownActive(supabase, phoneVariants, 2880);
   if (cooldownActive) {
     console.log(`[router] Operator cooldown active for ${phone}, skipping AI`);
     return { agent: 'none', reason: 'operator_cooldown' };
@@ -250,7 +251,7 @@ export async function routeMessage(
       const { data: recentConciergeLogs } = await supabase
         .from('ai_conversation_logs')
         .select('created_at, tool_called')
-        .eq('phone', phone)
+        .in('phone', phoneVariants)
         .eq('stage', 'concierge')
         .gt('created_at', recentCutoff)
         .order('created_at', { ascending: false })
@@ -265,7 +266,7 @@ export async function routeMessage(
         const { data: outgoingAfterAi } = await supabase
           .from('whatsapp_messages')
           .select('id, message, created_at')
-          .eq('phone', phone)
+          .in('phone', phoneVariants)
           .eq('direction', 'outgoing')
           .gt('created_at', lastConciergeAt)
           .order('created_at', { ascending: false })
