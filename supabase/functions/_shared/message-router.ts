@@ -23,6 +23,26 @@ function normalizeAutomatedMessage(message: string | null | undefined): string {
     .trim();
 }
 
+/**
+ * Returns all phone variants for DB queries.
+ * Messages can be stored as "5561999..." or "61999..." — we need to search both.
+ */
+function getPhoneVariants(phone: string): string[] {
+  const digits = phone.replace(/\D/g, '');
+  const variants = new Set<string>();
+  variants.add(phone);
+  variants.add(digits);
+  // If starts with 55 and has 12-13 digits, also add without country code
+  if (digits.startsWith('55') && digits.length >= 12) {
+    variants.add(digits.slice(2));
+  }
+  // If doesn't start with 55, also add with country code
+  if (!digits.startsWith('55') && digits.length >= 10) {
+    variants.add('55' + digits);
+  }
+  return Array.from(variants);
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type RouteAgent =
