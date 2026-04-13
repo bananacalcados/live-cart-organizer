@@ -222,8 +222,8 @@ export async function routeMessage(
     return phoneSuffix === testSuffix;
   })();
 
-  // 6. Continue recent concierge conversations even when the follow-up message
-  // no longer contains support keywords (e.g. CPF, name, yes/no confirmation).
+  // 6. Concierge cooldown — once Bia interacted, never auto-reactivate her
+  // for the next 48h unless there is an explicit active AI session handled above.
   if (conciergeAvailableForPhone) {
     try {
       const recentCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
@@ -237,20 +237,12 @@ export async function routeMessage(
         .limit(5);
 
       if (recentConciergeLogs && recentConciergeLogs.length > 0) {
-        // If ANY recent concierge interaction called transfer_to_human,
-        // the conversation was handed off — don't reactivate AI
         const wasTransferred = recentConciergeLogs.some(
           (log: any) => log.tool_called && log.tool_called.includes('transfer_to_human')
         );
-        if (wasTransferred) {
-          console.log(`[router] Concierge transferred to human for ${phone}, skipping AI`);
-          return { agent: 'none', reason: 'concierge_transferred' };
-        }
 
-        // Check if a human operator sent a message AFTER the last concierge AI interaction
-        // If so, the human took over — don't reactivate AI
         const lastConciergeAt = recentConciergeLogs[0].created_at;
-        const { data: humanAfterAi } = await supabase
+        const { data: outgoingAfterAi } = await supabase
           .from('whatsapp_messages')
           .select('id, message, created_at')
           .eq('phone', phone)
@@ -259,33 +251,35 @@ export async function routeMessage(
           .order('created_at', { ascending: false })
           .limit(10);
 
-        if (humanAfterAi && humanAfterAi.length > 0) {
-          const hasHumanMessage = humanAfterAi.some((msg) => {
-            if (isAiTaggedMessage(msg.message)) return false;
-            const normalizedMsg = normalizeAutomatedMessage(msg.message);
-            const msgAt = new Date(msg.created_at).getTime();
-            // Check if this is an echo duplicate of an AI message
-            const isDuplicate = humanAfterAi
-              .filter((m) => isAiTaggedMessage(m.message))
-              .some((ai) => {
-                const aiNorm = normalizeAutomatedMessage(ai.message);
-                const aiAt = new Date(ai.created_at).getTime();
-                return aiNorm === normalizedMsg && Math.abs(aiAt - msgAt) <= AUTOMATED_DUPLICATE_WINDOW_MS;
-              });
-            return !isDuplicate;
-          });
+        const hasHumanMessageAfterConcierge = (outgoingAfterAi || []).some((msg) => {
+          if (isAiTaggedMessage(msg.message)) return false;
+          const normalizedMsg = normalizeAutomatedMessage(msg.message);
+          const msgAt = new Date(msg.created_at).getTime();
+          const isDuplicate = (outgoingAfterAi || [])
+            .filter((m) => isAiTaggedMessage(m.message))
+            .some((ai) => {
+              const aiNorm = normalizeAutomatedMessage(ai.message);
+              const aiAt = new Date(ai.created_at).getTime();
+              return aiNorm === normalizedMsg && Math.abs(aiAt - msgAt) <= AUTOMATED_DUPLICATE_WINDOW_MS;
+            });
+          return !isDuplicate;
+        });
 
-          if (hasHumanMessage) {
-            console.log(`[router] Human sent message after last concierge AI for ${phone}, skipping AI`);
-            return { agent: 'none', reason: 'human_after_concierge' };
-          }
+        if (wasTransferred) {
+          console.log(`[router] Concierge transferred to human for ${phone}, 48h reactivation lock active`);
+          return { agent: 'none', reason: 'concierge_transferred_cooldown' };
         }
 
-        console.log(`[router] Recent concierge context found for ${phone}`);
-        return { agent: 'concierge', reason: 'recent_concierge_context' };
+        if (hasHumanMessageAfterConcierge) {
+          console.log(`[router] Human sent message after concierge for ${phone}, 48h reactivation lock active`);
+          return { agent: 'none', reason: 'human_after_concierge' };
+        }
+
+        console.log(`[router] Recent concierge interaction found for ${phone}, 48h reactivation lock active`);
+        return { agent: 'none', reason: 'recent_concierge_cooldown' };
       }
     } catch (err) {
-      console.error('[router] Error checking recent concierge context:', err);
+      console.error('[router] Error checking recent concierge cooldown:', err);
     }
   }
 
