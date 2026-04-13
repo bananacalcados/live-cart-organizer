@@ -23,6 +23,26 @@ function normalizeAutomatedMessage(message: string | null | undefined): string {
     .trim();
 }
 
+/**
+ * Returns all phone variants for DB queries.
+ * Messages can be stored as "5561999..." or "61999..." — we need to search both.
+ */
+function getPhoneVariants(phone: string): string[] {
+  const digits = phone.replace(/\D/g, '');
+  const variants = new Set<string>();
+  variants.add(phone);
+  variants.add(digits);
+  // If starts with 55 and has 12-13 digits, also add without country code
+  if (digits.startsWith('55') && digits.length >= 12) {
+    variants.add(digits.slice(2));
+  }
+  // If doesn't start with 55, also add with country code
+  if (!digits.startsWith('55') && digits.length >= 10) {
+    variants.add('55' + digits);
+  }
+  return Array.from(variants);
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type RouteAgent =
@@ -186,7 +206,8 @@ export async function routeMessage(
   }
 
   // 4. Operator cooldown — if a human replied recently, don't activate AI (48h window)
-  const cooldownActive = await isOperatorCooldownActive(supabase, phone, 2880);
+  const phoneVariants = getPhoneVariants(phone);
+  const cooldownActive = await isOperatorCooldownActive(supabase, phoneVariants, 2880);
   if (cooldownActive) {
     console.log(`[router] Operator cooldown active for ${phone}, skipping AI`);
     return { agent: 'none', reason: 'operator_cooldown' };
@@ -230,7 +251,7 @@ export async function routeMessage(
       const { data: recentConciergeLogs } = await supabase
         .from('ai_conversation_logs')
         .select('created_at, tool_called')
-        .eq('phone', phone)
+        .in('phone', phoneVariants)
         .eq('stage', 'concierge')
         .gt('created_at', recentCutoff)
         .order('created_at', { ascending: false })
@@ -245,7 +266,7 @@ export async function routeMessage(
         const { data: outgoingAfterAi } = await supabase
           .from('whatsapp_messages')
           .select('id, message, created_at')
-          .eq('phone', phone)
+          .in('phone', phoneVariants)
           .eq('direction', 'outgoing')
           .gt('created_at', lastConciergeAt)
           .order('created_at', { ascending: false })
@@ -345,16 +366,20 @@ export async function routeMessage(
  */
 export async function isOperatorCooldownActive(
   supabase: SupabaseClient,
-  phone: string,
+  phoneOrVariants: string | string[],
   cooldownMinutes = 2880
 ): Promise<boolean> {
   try {
+    const variants = Array.isArray(phoneOrVariants)
+      ? phoneOrVariants
+      : getPhoneVariants(phoneOrVariants);
+
     // Use a 48h window to detect any human interaction
     const cooldownCutoff = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
     const { data: recentOutgoing } = await supabase
       .from('whatsapp_messages')
       .select('id, message, created_at')
-      .eq('phone', phone)
+      .in('phone', variants)
       .eq('direction', 'outgoing')
       .gt('created_at', cooldownCutoff)
       .order('created_at', { ascending: false })
@@ -393,7 +418,7 @@ export async function isOperatorCooldownActive(
     const { data: recentIncoming } = await supabase
       .from('whatsapp_messages')
       .select('id, created_at')
-      .eq('phone', phone)
+      .in('phone', variants)
       .eq('direction', 'incoming')
       .gt('created_at', cooldownCutoff)
       .order('created_at', { ascending: false })
