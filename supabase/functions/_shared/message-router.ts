@@ -10,7 +10,7 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const AI_MESSAGE_PREFIX_REGEX = /^\[IA(?:-[A-Z]+)?\]\s*/i;
-const AUTOMATED_DUPLICATE_WINDOW_MS = 15_000;
+const AUTOMATED_DUPLICATE_WINDOW_MS = 120_000; // 2 min — Z-API echo can arrive with significant delay
 
 function isAiTaggedMessage(message: string | null | undefined): boolean {
   return AI_MESSAGE_PREFIX_REGEX.test((message || '').trim());
@@ -246,6 +246,41 @@ export async function routeMessage(
           console.log(`[router] Concierge transferred to human for ${phone}, skipping AI`);
           return { agent: 'none', reason: 'concierge_transferred' };
         }
+
+        // Check if a human operator sent a message AFTER the last concierge AI interaction
+        // If so, the human took over — don't reactivate AI
+        const lastConciergeAt = recentConciergeLogs[0].created_at;
+        const { data: humanAfterAi } = await supabase
+          .from('whatsapp_messages')
+          .select('id, message, created_at')
+          .eq('phone', phone)
+          .eq('direction', 'outgoing')
+          .gt('created_at', lastConciergeAt)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (humanAfterAi && humanAfterAi.length > 0) {
+          const hasHumanMessage = humanAfterAi.some((msg) => {
+            if (isAiTaggedMessage(msg.message)) return false;
+            const normalizedMsg = normalizeAutomatedMessage(msg.message);
+            const msgAt = new Date(msg.created_at).getTime();
+            // Check if this is an echo duplicate of an AI message
+            const isDuplicate = humanAfterAi
+              .filter((m) => isAiTaggedMessage(m.message))
+              .some((ai) => {
+                const aiNorm = normalizeAutomatedMessage(ai.message);
+                const aiAt = new Date(ai.created_at).getTime();
+                return aiNorm === normalizedMsg && Math.abs(aiAt - msgAt) <= AUTOMATED_DUPLICATE_WINDOW_MS;
+              });
+            return !isDuplicate;
+          });
+
+          if (hasHumanMessage) {
+            console.log(`[router] Human sent message after last concierge AI for ${phone}, skipping AI`);
+            return { agent: 'none', reason: 'human_after_concierge' };
+          }
+        }
+
         console.log(`[router] Recent concierge context found for ${phone}`);
         return { agent: 'concierge', reason: 'recent_concierge_context' };
       }
