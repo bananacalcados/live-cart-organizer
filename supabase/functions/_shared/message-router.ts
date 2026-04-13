@@ -10,7 +10,7 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const AI_MESSAGE_PREFIX_REGEX = /^\[IA(?:-[A-Z]+)?\]\s*/i;
-const AUTOMATED_DUPLICATE_WINDOW_MS = 15_000;
+const AUTOMATED_DUPLICATE_WINDOW_MS = 120_000; // 2 min — Z-API echo can arrive with significant delay
 
 function isAiTaggedMessage(message: string | null | undefined): boolean {
   return AI_MESSAGE_PREFIX_REGEX.test((message || '').trim());
