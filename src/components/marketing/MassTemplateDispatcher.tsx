@@ -366,12 +366,12 @@ export function MassTemplateDispatcher() {
         }
       }
 
-      setCooldownExcludedPhones(excluded);
+      setCooldownExcludedPhones(excludedSuffixes);
       setCooldownRecentRecipients(recentList);
       setCooldownApplied(true);
       setSelectAll(false);
       setSelectedPhones(new Set());
-      toast.success(`🔍 ${excluded.size} números receberam disparos nos últimos ${days} dias`);
+      toast.success(`🔍 ${excludedSuffixes.size} números receberam disparos nos últimos ${days} dias`);
     } catch (err) {
       console.error('Cooldown filter error:', err);
       toast.error("Erro ao aplicar filtro de cooldown");
