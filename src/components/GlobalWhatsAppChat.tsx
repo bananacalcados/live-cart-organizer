@@ -142,13 +142,13 @@ export function GlobalWhatsAppChat() {
   }, [isOpen, orders, selectedPhone, selectedConvNumberId, customers, events, chatContacts, enrichConversations, metaNumbers]);
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
-    let query = supabase.from('whatsapp_messages').select('*').eq('phone', phone).order('created_at', { ascending: true });
-    if (numberId) {
-      query = query.eq('whatsapp_number_id', numberId);
-    } else if (numberId === null) {
-      query = query.is('whatsapp_number_id', null);
-    }
-    const { data } = await query;
+    // Load ALL messages for this phone across all instances so full history is visible
+    const suffix = phone.replace(/\D/g, '').slice(-8);
+    const { data } = await supabase
+      .from('whatsapp_messages')
+      .select('*')
+      .or(`phone.like.%${suffix}`)
+      .order('created_at', { ascending: true });
     if (data) setMessages(data || []);
   };
 
