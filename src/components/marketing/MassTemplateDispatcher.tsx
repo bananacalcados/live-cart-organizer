@@ -341,7 +341,7 @@ export function MassTemplateDispatcher() {
             .from('dispatch_recipients')
             .select('phone, recipient_name, created_at')
             .eq('dispatch_id', d.id)
-            .eq('status', 'sent')
+            .in('status', ['sent', 'delivered', 'read'])
             .range(from, from + pageSize - 1);
           if (error || !recipients || recipients.length === 0) break;
           for (const r of recipients) {
