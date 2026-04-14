@@ -490,20 +490,35 @@ export default function Marketing() {
     setCustomerDispatchesLoading(true);
     (async () => {
       try {
-        const { data: recipients } = await supabase
-          .from('dispatch_recipients')
-          .select('dispatch_id, status, created_at')
-          .ilike('phone', `%${suffix8}`)
-          .order('created_at', { ascending: false })
-          .limit(50);
-        if (!recipients?.length) { setCustomerDispatches([]); setCustomerDispatchesLoading(false); return; }
-        const dispatchIds = [...new Set(recipients.map(r => r.dispatch_id))];
-        const { data: dispatches } = await supabase
-          .from('dispatch_history')
-          .select('id, campaign_name, template_name, started_at, status')
-          .in('id', dispatchIds);
-        const dispatchMap = new Map((dispatches || []).map(d => [d.id, d]));
-        const result = recipients.map(r => {
+        // Exhaustive paginated fetch of ALL dispatch recipients for this phone
+        const allRecipients: { dispatch_id: string; status: string | null; created_at: string }[] = [];
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data: page, error } = await supabase
+            .from('dispatch_recipients')
+            .select('dispatch_id, status, created_at')
+            .ilike('phone', `%${suffix8}`)
+            .order('created_at', { ascending: false })
+            .range(from, from + pageSize - 1);
+          if (error || !page || page.length === 0) break;
+          allRecipients.push(...page);
+          if (page.length < pageSize) break;
+          from += pageSize;
+        }
+        if (!allRecipients.length) { setCustomerDispatches([]); setCustomerDispatchesLoading(false); return; }
+        const dispatchIds = [...new Set(allRecipients.map(r => r.dispatch_id))];
+        // Fetch dispatch details in batches of 50 (Supabase .in() limit)
+        const dispatchMap = new Map<string, any>();
+        for (let i = 0; i < dispatchIds.length; i += 50) {
+          const batch = dispatchIds.slice(i, i + 50);
+          const { data: dispatches } = await supabase
+            .from('dispatch_history')
+            .select('id, campaign_name, template_name, started_at, status')
+            .in('id', batch);
+          (dispatches || []).forEach(d => dispatchMap.set(d.id, d));
+        }
+        const result = allRecipients.map(r => {
           const d = dispatchMap.get(r.dispatch_id);
           return {
             campaign_name: d?.campaign_name || null,
