@@ -330,7 +330,10 @@ export function MassTemplateDispatcher() {
         return;
       }
 
-      const excluded = new Set<string>();
+      // Use last 8 digits (suffix) for matching to catch same person with different DDDs
+      const phoneSuffix = (p: string) => p.replace(/\D/g, '').slice(-8);
+      const excludedSuffixes = new Set<string>();
+      const excludedFullPhones = new Set<string>();
       const recentList: Array<{ phone: string; name: string; sentAt: string; campaign: string }> = [];
 
       for (const d of dispatches) {
@@ -347,7 +350,9 @@ export function MassTemplateDispatcher() {
           for (const r of recipients) {
             const phone = r.phone?.replace(/\D/g, '');
             if (phone) {
-              excluded.add(phone);
+              const suffix = phoneSuffix(phone);
+              excludedSuffixes.add(suffix);
+              excludedFullPhones.add(phone);
               recentList.push({
                 phone,
                 name: r.recipient_name || phone,
@@ -361,12 +366,12 @@ export function MassTemplateDispatcher() {
         }
       }
 
-      setCooldownExcludedPhones(excluded);
+      setCooldownExcludedPhones(excludedSuffixes);
       setCooldownRecentRecipients(recentList);
       setCooldownApplied(true);
       setSelectAll(false);
       setSelectedPhones(new Set());
-      toast.success(`🔍 ${excluded.size} números receberam disparos nos últimos ${days} dias`);
+      toast.success(`🔍 ${excludedSuffixes.size} números receberam disparos nos últimos ${days} dias`);
     } catch (err) {
       console.error('Cooldown filter error:', err);
       toast.error("Erro ao aplicar filtro de cooldown");
@@ -611,9 +616,12 @@ export function MassTemplateDispatcher() {
     // Apply topN limit
     let finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
 
-    // Apply cooldown exclusion
+    // Apply cooldown exclusion (suffix-based to catch same person with different DDDs)
     if (cooldownApplied && cooldownExcludedPhones.size > 0) {
-      finalList = finalList.filter(r => !cooldownExcludedPhones.has(r.phone));
+      finalList = finalList.filter(r => {
+        const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
+        return !cooldownExcludedPhones.has(suffix);
+      });
     }
 
     return finalList;
