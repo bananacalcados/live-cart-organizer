@@ -766,6 +766,7 @@ export default function Marketing() {
         if (ddd === LOCAL_DDD && !hasAddress) regionType = 'local';
         else if (hasAddress) regionType = 'online';
         else if (ddd === LOCAL_DDD) regionType = 'local';
+        else if (ddd && ddd !== LOCAL_DDD) regionType = 'online';
 
         const totalOrders = ordersCol ? Math.round(Number(row[ordersCol]) || 0) : 0;
         const parseMoneyValue = (raw: any): number => {
