@@ -1899,6 +1899,42 @@ export default function Marketing() {
         </Tabs>
       </div>
 
+              {/* Disparos Recebidos */}
+              <div className="border-t pt-3">
+                <p className="text-sm font-medium flex items-center gap-1.5 mb-2">
+                  <Send className="h-4 w-4" />
+                  Disparos Recebidos ({customerDispatches.length})
+                </p>
+                {customerDispatchesLoading ? (
+                  <div className="flex items-center justify-center py-3 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />Carregando...
+                  </div>
+                ) : customerDispatches.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-2">Nenhum disparo recebido</p>
+                ) : (
+                  <ScrollArea className="max-h-[180px]">
+                    <div className="space-y-1">
+                      {customerDispatches.map((d, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs py-1.5 px-2 rounded hover:bg-muted/50">
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className="font-medium truncate">{d.campaign_name || d.template_name}</span>
+                            {d.campaign_name && <span className="text-[10px] text-muted-foreground truncate">{d.template_name}</span>}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <Badge variant={d.status === 'read' ? 'default' : d.status === 'delivered' ? 'secondary' : d.status === 'failed' ? 'destructive' : 'outline'} className="text-[9px] px-1">
+                              {d.status === 'read' ? 'Lido' : d.status === 'delivered' ? 'Entregue' : d.status === 'sent' ? 'Enviado' : d.status === 'failed' ? 'Falha' : d.status || 'Pendente'}
+                            </Badge>
+                            <span className="text-muted-foreground whitespace-nowrap">
+                              {new Date(d.started_at).toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
+
 
       {/* Campaign Detail */}
       <CampaignDetail
