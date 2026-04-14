@@ -330,7 +330,10 @@ export function MassTemplateDispatcher() {
         return;
       }
 
-      const excluded = new Set<string>();
+      // Use last 8 digits (suffix) for matching to catch same person with different DDDs
+      const phoneSuffix = (p: string) => p.replace(/\D/g, '').slice(-8);
+      const excludedSuffixes = new Set<string>();
+      const excludedFullPhones = new Set<string>();
       const recentList: Array<{ phone: string; name: string; sentAt: string; campaign: string }> = [];
 
       for (const d of dispatches) {
@@ -347,7 +350,9 @@ export function MassTemplateDispatcher() {
           for (const r of recipients) {
             const phone = r.phone?.replace(/\D/g, '');
             if (phone) {
-              excluded.add(phone);
+              const suffix = phoneSuffix(phone);
+              excludedSuffixes.add(suffix);
+              excludedFullPhones.add(phone);
               recentList.push({
                 phone,
                 name: r.recipient_name || phone,
