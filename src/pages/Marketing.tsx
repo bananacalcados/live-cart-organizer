@@ -185,6 +185,45 @@ export default function Marketing() {
   } | null>(null);
   const leadBackfillPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Load dispatch history when customer is selected
+  useEffect(() => {
+    if (!selectedCustomer?.phone) { setCustomerDispatches([]); return; }
+    const suffix8 = (selectedCustomer.phone || '').replace(/\D/g, '').slice(-8);
+    if (!suffix8) return;
+    setCustomerDispatchesLoading(true);
+    (async () => {
+      try {
+        const { data: recipients } = await supabase
+          .from('dispatch_recipients')
+          .select('dispatch_id, status, created_at')
+          .ilike('phone', `%${suffix8}`)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (!recipients?.length) { setCustomerDispatches([]); return; }
+        const dispatchIds = [...new Set(recipients.map(r => r.dispatch_id))];
+        const { data: dispatches } = await supabase
+          .from('dispatch_history')
+          .select('id, campaign_name, template_name, started_at, status')
+          .in('id', dispatchIds);
+        const dispatchMap = new Map((dispatches || []).map(d => [d.id, d]));
+        const result = recipients.map(r => {
+          const d = dispatchMap.get(r.dispatch_id);
+          return {
+            campaign_name: d?.campaign_name || null,
+            template_name: d?.template_name || '',
+            started_at: d?.started_at || r.created_at,
+            status: r.status,
+          };
+        }).sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+        setCustomerDispatches(result);
+      } catch (err) {
+        console.error('Error loading customer dispatches:', err);
+      } finally {
+        setCustomerDispatchesLoading(false);
+      }
+    })();
+  }, [selectedCustomer?.id]);
+
 
   // Customers state
   const [customers, setCustomers] = useState<ZoppyCustomer[]>([]);
