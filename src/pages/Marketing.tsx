@@ -214,6 +214,8 @@ export default function Marketing() {
   const [customerCashback, setCustomerCashback] = useState<{ total_points: number; expires_at: string } | null>(null);
   const [customerPrizes, setCustomerPrizes] = useState<{ prize_label: string; coupon_code: string; is_redeemed: boolean; expires_at: string; prize_value: number }[]>([]);
   const [expandedPurchase, setExpandedPurchase] = useState<number | null>(null);
+  const [customerDispatches, setCustomerDispatches] = useState<{ campaign_name: string | null; template_name: string; started_at: string; status: string | null }[]>([]);
+  const [customerDispatchesLoading, setCustomerDispatchesLoading] = useState(false);
   const [editingLead, setEditingLead] = useState<any | null>(null);
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [sellerFilter, setSellerFilter] = useState<string>("all");
@@ -1867,7 +1869,7 @@ export default function Marketing() {
       />
 
       {/* Customer Detail Dialog */}
-      <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setWhatsAppMessage(""); setPurchaseDates(null); setCustomerCashback(null); setCustomerPrizes([]); setExpandedPurchase(null); (window as any).__purchaseDatesOpen = false; } }}>
+      <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setWhatsAppMessage(""); setPurchaseDates(null); setCustomerCashback(null); setCustomerPrizes([]); setExpandedPurchase(null); setCustomerDispatches([]); (window as any).__purchaseDatesOpen = false; } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
