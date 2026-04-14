@@ -214,6 +214,8 @@ export default function Marketing() {
   const [customerCashback, setCustomerCashback] = useState<{ total_points: number; expires_at: string } | null>(null);
   const [customerPrizes, setCustomerPrizes] = useState<{ prize_label: string; coupon_code: string; is_redeemed: boolean; expires_at: string; prize_value: number }[]>([]);
   const [expandedPurchase, setExpandedPurchase] = useState<number | null>(null);
+  const [customerDispatches, setCustomerDispatches] = useState<{ campaign_name: string | null; template_name: string; started_at: string; status: string | null }[]>([]);
+  const [customerDispatchesLoading, setCustomerDispatchesLoading] = useState(false);
   const [editingLead, setEditingLead] = useState<any | null>(null);
   const [storeFilter, setStoreFilter] = useState<string>("all");
   const [sellerFilter, setSellerFilter] = useState<string>("all");
@@ -479,6 +481,45 @@ export default function Marketing() {
   }, []);
 
   useEffect(() => { fetchPresets(); }, [fetchPresets]);
+
+  // Load dispatch history when customer is selected
+  useEffect(() => {
+    if (!selectedCustomer?.phone) { setCustomerDispatches([]); return; }
+    const suffix8 = (selectedCustomer.phone || '').replace(/\D/g, '').slice(-8);
+    if (!suffix8) return;
+    setCustomerDispatchesLoading(true);
+    (async () => {
+      try {
+        const { data: recipients } = await supabase
+          .from('dispatch_recipients')
+          .select('dispatch_id, status, created_at')
+          .ilike('phone', `%${suffix8}`)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (!recipients?.length) { setCustomerDispatches([]); setCustomerDispatchesLoading(false); return; }
+        const dispatchIds = [...new Set(recipients.map(r => r.dispatch_id))];
+        const { data: dispatches } = await supabase
+          .from('dispatch_history')
+          .select('id, campaign_name, template_name, started_at, status')
+          .in('id', dispatchIds);
+        const dispatchMap = new Map((dispatches || []).map(d => [d.id, d]));
+        const result = recipients.map(r => {
+          const d = dispatchMap.get(r.dispatch_id);
+          return {
+            campaign_name: d?.campaign_name || null,
+            template_name: d?.template_name || '',
+            started_at: d?.started_at || r.created_at,
+            status: r.status,
+          };
+        }).sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+        setCustomerDispatches(result);
+      } catch (err) {
+        console.error('Error loading customer dispatches:', err);
+      } finally {
+        setCustomerDispatchesLoading(false);
+      }
+    })();
+  }, [selectedCustomer?.id]);
 
   const saveCurrentPreset = async () => {
     if (!presetName.trim()) { toast.error("Digite um nome para o filtro"); return; }
@@ -1859,6 +1900,7 @@ export default function Marketing() {
       </div>
 
 
+
       {/* Campaign Detail */}
       <CampaignDetail
         campaign={selectedCampaign}
@@ -1867,7 +1909,7 @@ export default function Marketing() {
       />
 
       {/* Customer Detail Dialog */}
-      <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setWhatsAppMessage(""); setPurchaseDates(null); setCustomerCashback(null); setCustomerPrizes([]); setExpandedPurchase(null); (window as any).__purchaseDatesOpen = false; } }}>
+      <Dialog open={!!selectedCustomer} onOpenChange={(open) => { if (!open) { setSelectedCustomer(null); setWhatsAppMessage(""); setPurchaseDates(null); setCustomerCashback(null); setCustomerPrizes([]); setExpandedPurchase(null); setCustomerDispatches([]); (window as any).__purchaseDatesOpen = false; } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
@@ -2176,6 +2218,42 @@ export default function Marketing() {
                   </div>
                 </div>
               )}
+
+              {/* Disparos Recebidos */}
+              <div className="border-t pt-3">
+                <p className="text-sm font-medium flex items-center gap-1.5 mb-2">
+                  <Send className="h-4 w-4" />
+                  Disparos Recebidos ({customerDispatches.length})
+                </p>
+                {customerDispatchesLoading ? (
+                  <div className="flex items-center justify-center py-3 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />Carregando...
+                  </div>
+                ) : customerDispatches.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-2">Nenhum disparo recebido</p>
+                ) : (
+                  <ScrollArea className="max-h-[180px]">
+                    <div className="space-y-1">
+                      {customerDispatches.map((d, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs py-1.5 px-2 rounded hover:bg-muted/50">
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className="font-medium truncate">{d.campaign_name || d.template_name}</span>
+                            {d.campaign_name && <span className="text-[10px] text-muted-foreground truncate">{d.template_name}</span>}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <Badge variant={d.status === 'read' ? 'default' : d.status === 'delivered' ? 'secondary' : d.status === 'failed' ? 'destructive' : 'outline'} className="text-[9px] px-1">
+                              {d.status === 'read' ? 'Lido' : d.status === 'delivered' ? 'Entregue' : d.status === 'sent' ? 'Enviado' : d.status === 'failed' ? 'Falha' : d.status || 'Pendente'}
+                            </Badge>
+                            <span className="text-muted-foreground whitespace-nowrap">
+                              {new Date(d.started_at).toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
 
               {/* Contact Actions */}
               {selectedCustomer.phone && (
