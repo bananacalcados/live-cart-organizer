@@ -156,12 +156,9 @@ export async function routeMessage(
       console.log(`[router] Ad referral + campaign match for ${phone}, campaign=${matchedCampaign.name}`);
       return { agent: 'ads', reason: 'ad_referral_campaign', referral, adCampaignId: matchedCampaign.id };
     }
-    // Fallback: if referral present but no keyword match, try any active campaign
-    const fallbackCampaign = await findAnyActiveCampaign(supabase);
-    if (fallbackCampaign) {
-      console.log(`[router] Ad referral fallback to campaign ${fallbackCampaign.name} for ${phone}`);
-      return { agent: 'ads', reason: 'ad_referral_fallback', referral, adCampaignId: fallbackCampaign.id };
-    }
+    // Fallback: referral present but no keyword match → route to legacy (human/automation handles it)
+    // Previously this activated any active ad campaign, causing unwanted AI responses on ad leads
+    console.log(`[router] Ad referral detected for ${phone} but no keyword match, routing to legacy`);
     console.log(`[router] Ad referral detected for ${phone}, no campaign match`);
     return { agent: 'legacy', reason: 'ad_referral_legacy', referral };
   }
