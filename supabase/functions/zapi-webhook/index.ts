@@ -231,7 +231,10 @@ serve(async (req) => {
     const mediaInfo = getMediaInfo(payload);
 
     if (rawPhone && (messageText || mediaInfo)) {
-      const { phone, isGroup } = normalizePhone(payload);
+      const normalized = normalizePhone(payload);
+      let phone = normalized.phone;
+      const isGroup = normalized.isGroup;
+      const isLid = normalized.isLid;
       const messageId = asString(payload.messageId) || asString(payload.zapiMessageId);
       const fromMe = Boolean(payload.fromMe);
       const statusRaw = asString(payload.status);
@@ -240,7 +243,22 @@ serve(async (req) => {
       // Build display message: use caption/text or fallback to media type label
       const displayMessage = messageText || mediaInfo?.caption || (mediaInfo ? `📎 ${mediaInfo.mediaType}` : '');
 
-      console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}, media=${mediaInfo?.mediaType || 'none'}, numberId=${whatsappNumberId}`);
+      // Resolve WhatsApp LID to real phone number
+      if (isLid && !isGroup) {
+        const senderName = asString(payload.senderName) || asString(payload.chatName) || asString(payload.pushName) || null;
+        const resolvedPhone = await resolveLidToPhone(supabase, phone, senderName);
+        if (resolvedPhone) {
+          phone = resolvedPhone;
+        } else {
+          console.warn(`Skipping message with unresolvable LID phone: ${phone}`);
+          return new Response(JSON.stringify({ success: true, skipped: 'unresolvable_lid' }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
+      console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}, media=${mediaInfo?.mediaType || 'none'}, numberId=${whatsappNumberId}${isLid ? ' (resolved from LID)' : ''}`);
 
       if (fromMe) {
         // Dedup: match by phone suffix (8 digits) + message + whatsapp_number_id
