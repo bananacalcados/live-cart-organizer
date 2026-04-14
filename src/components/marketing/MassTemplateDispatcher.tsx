@@ -616,9 +616,12 @@ export function MassTemplateDispatcher() {
     // Apply topN limit
     let finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
 
-    // Apply cooldown exclusion
+    // Apply cooldown exclusion (suffix-based to catch same person with different DDDs)
     if (cooldownApplied && cooldownExcludedPhones.size > 0) {
-      finalList = finalList.filter(r => !cooldownExcludedPhones.has(r.phone));
+      finalList = finalList.filter(r => {
+        const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
+        return !cooldownExcludedPhones.has(suffix);
+      });
     }
 
     return finalList;
