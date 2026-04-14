@@ -67,8 +67,9 @@ function getMediaInfo(payload: AnyPayload): MediaInfo | null {
 
 /**
  * Normalize phone number for storage and matching.
+ * Returns isLid=true when the phone looks like a WhatsApp Linked ID (>13 digits, not a group).
  */
-function normalizePhone(payload: AnyPayload): { phone: string; isGroup: boolean } {
+function normalizePhone(payload: AnyPayload): { phone: string; isGroup: boolean; isLid: boolean } {
   const rawPhone = asString(payload.phone) || '';
   const chatLid = asString(payload.chatLid);
   
@@ -78,7 +79,7 @@ function normalizePhone(payload: AnyPayload): { phone: string; isGroup: boolean 
   
   if (isGroup) {
     const groupId = rawPhone.replace('@g.us', '').replace('-group', '').replace(/\D/g, '');
-    return { phone: groupId, isGroup: true };
+    return { phone: groupId, isGroup: true, isLid: false };
   }
   
   let phone = rawPhone.replace(/\D/g, '');
@@ -94,11 +95,54 @@ function normalizePhone(payload: AnyPayload): { phone: string; isGroup: boolean 
     console.log(`Normalized 12-digit BR phone to 13: ${rawPhone} -> ${phone}`);
   }
   
-  if (phone.length > 13 || phone.length < 12) {
+  // Detect WhatsApp LID (Linked ID) — these are internal IDs, not real phone numbers
+  const isLid = phone.length > 13;
+  if (isLid) {
+    console.log(`WhatsApp LID detected: ${rawPhone} -> ${phone} (${phone.length} digits)`);
+  } else if (phone.length < 12) {
     console.log(`Unusual phone format detected: ${rawPhone} -> ${phone}`);
   }
   
-  return { phone, isGroup: false };
+  return { phone, isGroup: false, isLid };
+}
+
+/**
+ * Resolve a WhatsApp LID to the real phone number by looking up existing messages
+ * from the same sender_name that have a valid phone (12-13 digits).
+ */
+async function resolveLidToPhone(
+  supabase: any,
+  lidPhone: string,
+  senderName: string | null
+): Promise<string | null> {
+  // First try: check if we already have messages saved with this LID phone and a known real phone mapping
+  // Look in chat_contacts for a LID entry that might have been linked
+  
+  // Best approach: find messages from the same sender_name with a valid phone
+  if (senderName) {
+    const { data } = await supabase
+      .from('whatsapp_messages')
+      .select('phone')
+      .eq('sender_name', senderName)
+      .eq('direction', 'incoming')
+      .neq('phone', lidPhone)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    
+    if (data && data.length > 0) {
+      // Find a phone with valid Brazilian format (12-13 digits)
+      for (const row of data) {
+        const digits = (row.phone || '').replace(/\D/g, '');
+        if (digits.length >= 12 && digits.length <= 13 && digits.startsWith('55')) {
+          console.log(`Resolved LID ${lidPhone} to real phone ${row.phone} via sender_name "${senderName}"`);
+          return row.phone;
+        }
+      }
+    }
+  }
+  
+  console.warn(`Could not resolve LID ${lidPhone} to a real phone number (senderName: ${senderName})`);
+  return null;
 }
 
 /**
@@ -187,7 +231,10 @@ serve(async (req) => {
     const mediaInfo = getMediaInfo(payload);
 
     if (rawPhone && (messageText || mediaInfo)) {
-      const { phone, isGroup } = normalizePhone(payload);
+      const normalized = normalizePhone(payload);
+      let phone = normalized.phone;
+      const isGroup = normalized.isGroup;
+      const isLid = normalized.isLid;
       const messageId = asString(payload.messageId) || asString(payload.zapiMessageId);
       const fromMe = Boolean(payload.fromMe);
       const statusRaw = asString(payload.status);
@@ -196,7 +243,22 @@ serve(async (req) => {
       // Build display message: use caption/text or fallback to media type label
       const displayMessage = messageText || mediaInfo?.caption || (mediaInfo ? `📎 ${mediaInfo.mediaType}` : '');
 
-      console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}, media=${mediaInfo?.mediaType || 'none'}, numberId=${whatsappNumberId}`);
+      // Resolve WhatsApp LID to real phone number
+      if (isLid && !isGroup) {
+        const senderName = asString(payload.senderName) || asString(payload.chatName) || asString(payload.pushName) || null;
+        const resolvedPhone = await resolveLidToPhone(supabase, phone, senderName);
+        if (resolvedPhone) {
+          phone = resolvedPhone;
+        } else {
+          console.warn(`Skipping message with unresolvable LID phone: ${phone}`);
+          return new Response(JSON.stringify({ success: true, skipped: 'unresolvable_lid' }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
+      console.log(`Processing message: phone=${phone}, isGroup=${isGroup}, fromMe=${fromMe}, media=${mediaInfo?.mediaType || 'none'}, numberId=${whatsappNumberId}${isLid ? ' (resolved from LID)' : ''}`);
 
       if (fromMe) {
         // Dedup: match by phone suffix (8 digits) + message + whatsapp_number_id
