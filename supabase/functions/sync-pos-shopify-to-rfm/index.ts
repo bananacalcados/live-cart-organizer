@@ -340,29 +340,107 @@ serve(async (req) => {
 
         console.log(`Tiny scan done: ${totalOrders} orders, ${customerByName.size} unique customers`);
 
-        const batch: any[] = [];
-        for (const [name, stats] of customerByName) {
-          const nameParts = name.split(' ');
-          batch.push({
-            zoppy_id: `tiny-online-${name.toLowerCase().replace(/\s+/g, '-')}`,
-            first_name: nameParts[0] || '', last_name: nameParts.slice(1).join(' ') || '',
-            phone: null, email: null, cpf: null,
-            city: null, state: null,
-            region_type: 'online', ddd: null,
-            source: 'tiny_online', lead_status: 'customer',
-            total_orders: stats.count, total_spent: stats.total,
-            avg_ticket: stats.count > 0 ? stats.total / stats.count : 0,
-            first_purchase_at: stats.first, last_purchase_at: stats.last,
-          });
+        // Build a name index from existing RFM records to avoid duplicates
+        // existingRfm was loaded in the POS sync section above; reload if only tiny mode
+        let nameIndex: Map<string, any> | null = null;
+        if (existingRfm && existingRfm.length > 0) {
+          nameIndex = new Map();
+          for (const rfm of existingRfm) {
+            const rfmName = `${rfm.first_name || ''} ${rfm.last_name || ''}`.trim().toLowerCase();
+            if (rfmName) nameIndex.set(rfmName, rfm);
+          }
+        } else {
+          // Load existing records for name matching
+          let allRfm: any[] = [];
+          let rfmOff = 0;
+          while (true) {
+            const { data: chunk } = await supabase
+              .from('zoppy_customers')
+              .select('id, zoppy_id, first_name, last_name, total_orders, total_spent, first_purchase_at, last_purchase_at')
+              .range(rfmOff, rfmOff + 999);
+            if (!chunk || chunk.length === 0) break;
+            allRfm = allRfm.concat(chunk);
+            if (chunk.length < 1000) break;
+            rfmOff += 1000;
+          }
+          nameIndex = new Map();
+          for (const rfm of allRfm) {
+            const rfmName = `${rfm.first_name || ''} ${rfm.last_name || ''}`.trim().toLowerCase();
+            if (rfmName) nameIndex.set(rfmName, rfm);
+          }
         }
 
-        for (let i = 0; i < batch.length; i += 100) {
-          const chunk = batch.slice(i, i + 100);
+        const newBatch: any[] = [];
+        const tinyUpdateBatch: { id: string; updates: Record<string, any> }[] = [];
+        let tinyMerged = 0;
+
+        for (const [name, stats] of customerByName) {
+          const nameParts = name.split(' ');
+          const nameKey = name.toLowerCase().trim();
+
+          // Check if customer already exists by exact name match
+          const existingByName = nameIndex?.get(nameKey);
+          // Also check with normalized accents
+          const nameKeyNorm = nameKey.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const existingByNormName = !existingByName ? [...(nameIndex?.entries() || [])].find(([k]) =>
+            k.normalize('NFD').replace(/[\u0300-\u036f]/g, '') === nameKeyNorm
+          )?.[1] : null;
+
+          const matched = existingByName || existingByNormName;
+
+          if (matched && !matched.zoppy_id?.startsWith('tiny-online-')) {
+            // Merge into existing record
+            const existingOrders = matched.total_orders || 0;
+            const existingSpent = matched.total_spent || 0;
+            const newTotal = existingOrders + stats.count;
+            const newSpent = existingSpent + stats.total;
+            const firstPurchase = matched.first_purchase_at && matched.first_purchase_at < stats.first
+              ? matched.first_purchase_at : stats.first;
+            const lastPurchase = matched.last_purchase_at && matched.last_purchase_at > stats.last
+              ? matched.last_purchase_at : stats.last;
+
+            tinyUpdateBatch.push({
+              id: matched.id,
+              updates: {
+                total_orders: newTotal,
+                total_spent: newSpent,
+                avg_ticket: newTotal > 0 ? newSpent / newTotal : 0,
+                first_purchase_at: firstPurchase,
+                last_purchase_at: lastPurchase,
+              },
+            });
+            tinyMerged++;
+          } else {
+            // New customer or already a tiny-online record (upsert by zoppy_id)
+            newBatch.push({
+              zoppy_id: `tiny-online-${name.toLowerCase().replace(/\s+/g, '-')}`,
+              first_name: nameParts[0] || '', last_name: nameParts.slice(1).join(' ') || '',
+              phone: null, email: null, cpf: null,
+              city: null, state: null,
+              region_type: 'online', ddd: null,
+              source: 'tiny_online', lead_status: 'customer',
+              total_orders: stats.count, total_spent: stats.total,
+              avg_ticket: stats.count > 0 ? stats.total / stats.count : 0,
+              first_purchase_at: stats.first, last_purchase_at: stats.last,
+            });
+          }
+        }
+
+        // Execute merges
+        for (const { id, updates } of tinyUpdateBatch) {
+          const { error } = await supabase.from('zoppy_customers').update(updates).eq('id', id);
+          if (error) console.error('Tiny merge error:', error);
+          else tinyOnlineCount++;
+        }
+
+        // Upsert truly new records
+        for (let i = 0; i < newBatch.length; i += 100) {
+          const chunk = newBatch.slice(i, i + 100);
           const { error } = await supabase.from('zoppy_customers').upsert(chunk, { onConflict: 'zoppy_id' });
           if (error) console.error('Tiny upsert error:', error);
           else tinyOnlineCount += chunk.length;
         }
-        console.log(`Tiny online sync: ${tinyOnlineCount} customers upserted`);
+        console.log(`Tiny online sync: ${tinyOnlineCount} customers (${tinyMerged} merged with existing)`);
       }
     }
 

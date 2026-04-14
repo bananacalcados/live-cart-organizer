@@ -36,6 +36,8 @@ function classifyRegion(phone: string | null, address1: string | null, city: str
   if (ddd === LOCAL_DDD && !hasAddress) return { regionType: 'local', ddd };
   if (hasAddress) return { regionType: 'online', ddd };
   if (ddd === LOCAL_DDD) return { regionType: 'local', ddd };
+  // If DDD is known and not local, customer is from outside → online
+  if (ddd && ddd !== LOCAL_DDD) return { regionType: 'online', ddd };
   return { regionType: 'unknown', ddd };
 }
 

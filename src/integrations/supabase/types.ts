@@ -10269,6 +10269,14 @@ export type Database = {
           records_deleted: number
         }[]
       }
+      merge_tiny_online_duplicates: {
+        Args: never
+        Returns: {
+          duplicates_found: number
+          records_deleted: number
+          records_merged: number
+        }[]
+      }
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
