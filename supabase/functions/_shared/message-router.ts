@@ -432,7 +432,7 @@ export async function isOperatorCooldownActive(
 
     if (hasBidirectional) {
       // Full 48h cooldown — human is actively managing this conversation
-      console.log(`[router] Bidirectional human exchange detected for ${phone}, 48h cooldown active`);
+      console.log(`[router] Bidirectional human exchange detected for ${variants[0]}, 48h cooldown active`);
       return true;
     }
 
@@ -440,7 +440,7 @@ export async function isOperatorCooldownActive(
     const twoHoursMs = 2 * 60 * 60 * 1000;
     const isWithinShortCooldown = (Date.now() - manualAt) < twoHoursMs;
     if (isWithinShortCooldown) {
-      console.log(`[router] Recent manual message for ${phone}, 2h cooldown active`);
+      console.log(`[router] Recent manual message for ${variants[0]}, 2h cooldown active`);
     }
     return isWithinShortCooldown;
   } catch (err) {
