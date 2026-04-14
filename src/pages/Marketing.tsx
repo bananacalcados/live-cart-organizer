@@ -2247,7 +2247,7 @@ export default function Marketing() {
                 ) : customerDispatches.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-2">Nenhum disparo recebido</p>
                 ) : (
-                  <ScrollArea className="max-h-[180px]">
+                  <ScrollArea className="max-h-[250px]">
                     <div className="space-y-1">
                       {customerDispatches.map((d, i) => (
                         <div key={i} className="flex items-center justify-between text-xs py-1.5 px-2 rounded hover:bg-muted/50">
