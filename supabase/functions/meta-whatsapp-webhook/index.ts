@@ -9,11 +9,28 @@ const corsHeaders = {
 
 function normalizePhone(rawPhone: string): string {
   let phone = rawPhone.replace(/\D/g, '');
+
+  // Meta API sometimes sends phone IDs in non-standard formats.
+  // If the number doesn't start with '55' and has 12+ digits, try to extract
+  // a valid Brazilian number by matching DDD(2) + 9 + 8 digits at the end.
+  if (!phone.startsWith('55') && phone.length >= 12) {
+    // Try to find a valid BR mobile pattern in the last 11 digits: DDD(2) + 9XXXXXXXX
+    const last11 = phone.slice(-11);
+    if (/^\d{2}9\d{8}$/.test(last11)) {
+      phone = '55' + last11;
+    } else {
+      // Try last 10 digits (landline or mobile without 9th digit)
+      const last10 = phone.slice(-10);
+      if (/^\d{2}\d{8}$/.test(last10)) {
+        phone = '55' + last10;
+      }
+    }
+  }
+
   if (phone.length >= 10 && phone.length <= 11) {
     phone = '55' + phone;
   }
   // Brazilian mobile normalization: ensure 13 digits (55 + DDD + 9XXXXXXXX)
-  // Always add 9 prefix for 8-digit local numbers, even if they happen to start with 9
   if (phone.startsWith('55') && phone.length === 12) {
     const ddd = phone.substring(2, 4);
     const number = phone.substring(4);
