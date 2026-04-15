@@ -598,7 +598,7 @@ export default function ChatPage() {
       } else if (useMeta) {
         sendResult = await sendViaMeta(selectedPhone, newMessage.trim() || '', selectedMedia.type, mediaUrl, newMessage.trim() || undefined);
       } else {
-        const result = await zapiSendMedia(selectedPhone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined, numberId || undefined);
+        const result = await zapiSendMedia(selectedPhone, mediaUrl, selectedMedia.type, newMessage.trim() || undefined, numberId || undefined, quotedMessage?.message_id);
         sendResult = { success: result.success, messageId: undefined };
       }
 
@@ -614,12 +614,14 @@ export default function ChatPage() {
           message_id: sendResult.messageId || null,
           channel: useMessenger ? messengerChannel : 'whatsapp',
           sender_user_id: currentUserId || null,
+          quoted_message_id: quotedMessage?.message_id || null,
         } as any);
         loadMessages(selectedPhone, false, selectedConvNumberId);
       }
       URL.revokeObjectURL(selectedMedia.previewUrl);
       setSelectedMedia(null);
       setNewMessage("");
+      setQuotedMessage(null);
       setIsUploading(false);
       return;
     }
@@ -635,7 +637,7 @@ export default function ChatPage() {
     } else if (useMeta) {
       sendResult = await sendViaMeta(selectedPhone, text);
     } else {
-      const result = await zapiSend(selectedPhone, text, numberId || undefined);
+      const result = await zapiSend(selectedPhone, text, numberId || undefined, quotedMessage?.message_id);
       sendResult = { success: result.success, messageId: undefined };
     }
 
@@ -649,10 +651,12 @@ export default function ChatPage() {
         message_id: sendResult.messageId || null,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         sender_user_id: currentUserId || null,
+        quoted_message_id: quotedMessage?.message_id || null,
       } as any);
       loadMessages(selectedPhone, false, selectedConvNumberId);
     }
     setIsSending(false);
+    setQuotedMessage(null);
   };
 
   // ── Fetch Meta templates ──
