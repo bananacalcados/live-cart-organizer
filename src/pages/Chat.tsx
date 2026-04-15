@@ -1316,6 +1316,11 @@ export default function ChatPage() {
                 )}
               </div>
 
+              {/* Quoted message preview */}
+              {quotedMessage && (
+                <QuotedMessagePreview quoted={quotedMessage} onCancel={() => setQuotedMessage(null)} />
+              )}
+
               {/* Media preview */}
               {selectedMedia && (
                 <div className="px-4 py-3 bg-[#1a2228] border-t border-[#2a3942] flex items-center gap-3">
