@@ -196,6 +196,17 @@ export default function ChatPage() {
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
+  // Profiles cache for sender names
+  const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    supabase.from("profiles").select("user_id, display_name").then(({ data }) => {
+      if (data) {
+        const map: Record<string, string> = {};
+        data.forEach((p: any) => { if (p.user_id && p.display_name) map[p.user_id] = p.display_name; });
+        setProfilesMap(map);
+      }
+    });
+  }, []);
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
   const { crmMap, deleteWhatsApp } = useCrmPhoneLookup(conversationPhones);
