@@ -35,6 +35,8 @@ import { POSProductCatalogSender } from "@/components/pos/POSProductCatalogSende
 import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
 import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
+import { AutoReplySettings } from "@/components/chat/AutoReplySettings";
+import { AttendantMetrics } from "@/components/chat/AttendantMetrics";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import {
   Select,
