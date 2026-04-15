@@ -151,6 +151,12 @@ export function ConversationList({
       return true;
     })
     .filter(c => {
+      // Tag filter (AND logic)
+      if (selectedTagFilters.length === 0) return true;
+      const tags = contactTagsMap[c.phone] || [];
+      return selectedTagFilters.every(t => tags.includes(t));
+    })
+    .filter(c => {
       const cleanedQuery = searchQuery.replace(/\D/g, '');
       const nameMatch = c.customerName?.toLowerCase().includes(searchQuery.toLowerCase());
       const phoneMatch = cleanedQuery.length > 0 ? c.phone.includes(cleanedQuery) : false;
