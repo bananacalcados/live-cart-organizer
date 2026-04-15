@@ -1084,6 +1084,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             supportFilterActive={supportFilterActive}
             onSupportFilterToggle={() => setSupportFilterActive(prev => !prev)}
             supportCount={supportCount}
+            contactTagsMap={contactTagsMap}
+            selectedTagFilters={selectedTagFilters}
+            onSelectedTagFiltersChange={setSelectedTagFilters}
           />
         </div>
 
