@@ -72,6 +72,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [contactPhotos, setContactPhotos] = useState<Record<string, string>>({});
+  const [contactTagsMap, setContactTagsMap] = useState<Record<string, string[]>>({});
+  const [selectedTagFilters, setSelectedTagFilters] = useState<string[]>([]);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
