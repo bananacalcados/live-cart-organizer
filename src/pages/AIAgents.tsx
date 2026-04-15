@@ -79,11 +79,11 @@ const AIAgents = () => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data: sales } = await supabase
       .from('pos_sales')
-      .select('total_amount')
+      .select('total')
       .gte('created_at', sevenDaysAgo)
-      .eq('status', 'completed');
+      .neq('status', 'cancelled');
 
-    const revenue = (sales || []).reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const revenue = (sales || []).reduce((sum, s) => sum + (s.total || 0), 0);
     let verba = Math.round(revenue * 0.482 - 71279 / 4.4);
     verba = Math.max(500, Math.min(7000, verba));
     setAutoVerba(verba);
