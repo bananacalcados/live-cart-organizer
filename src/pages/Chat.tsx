@@ -173,6 +173,8 @@ export default function ChatPage() {
   // Quote/reply
   const [quotedMessage, setQuotedMessage] = useState<QuotedMessageData | null>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [selectedMedia, setSelectedMedia] = useState<{ file: File; type: 'image' | 'audio' | 'video' | 'document'; previewUrl: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
