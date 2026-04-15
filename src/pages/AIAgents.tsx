@@ -144,6 +144,51 @@ const AIAgents = () => {
     }
   };
 
+  const loadRfmHealth = async () => {
+    // Get last update timestamp
+    const { data: latest } = await supabase
+      .from('zoppy_customers')
+      .select('rfm_updated_at')
+      .not('rfm_updated_at', 'is', null)
+      .order('rfm_updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // Get segment counts  
+    const { data: allCustomers } = await supabase
+      .from('zoppy_customers')
+      .select('rfm_segment')
+      .not('rfm_segment', 'is', null);
+
+    const segments: Record<string, number> = {};
+    (allCustomers || []).forEach((c: any) => {
+      const seg = c.rfm_segment || 'others';
+      segments[seg] = (segments[seg] || 0) + 1;
+    });
+
+    setRfmHealth({
+      lastUpdate: latest?.rfm_updated_at || null,
+      segments,
+    });
+  };
+
+  const handleRecalculateRfm = async () => {
+    setIsRecalculating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('zoppy-sync-customers', {
+        body: { mode: 'calculate_rfm' },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`RFM recalculado: ${data.count} clientes`);
+      loadRfmHealth();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao recalcular RFM');
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
   const calculateAutoContext = async () => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data: sales } = await supabase
