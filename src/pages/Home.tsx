@@ -12,6 +12,7 @@ import {
   BarChart3,
   Banana,
   Shield,
+  Bot,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,6 +83,13 @@ const modules = [
     description: "Usuários e permissões de acesso",
     icon: Shield,
     path: "/admin",
+    module: "admin",
+  },
+  {
+    title: "Agentes de IA",
+    description: "Análises inteligentes com IA sobre clientes, vendas e marketing",
+    icon: Bot,
+    path: "/ai-agents",
     module: "admin",
   },
 ];
