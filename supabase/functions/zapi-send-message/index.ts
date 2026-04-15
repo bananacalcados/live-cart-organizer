@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { phone, message, whatsapp_number_id } = await req.json();
+    const { phone, message, whatsapp_number_id, quotedMessageId } = await req.json();
 
     if (!phone || !message) {
       return new Response(
@@ -34,16 +34,21 @@ serve(async (req) => {
 
     const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
 
+    const zapiPayload: Record<string, unknown> = {
+      phone: formattedPhone,
+      message: message,
+    };
+    if (quotedMessageId) {
+      zapiPayload.quotedMessageId = quotedMessageId;
+    }
+
     const response = await fetch(zapiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Client-Token': clientToken,
       },
-      body: JSON.stringify({
-        phone: formattedPhone,
-        message: message,
-      }),
+      body: JSON.stringify(zapiPayload),
     });
 
     const data = await response.json();

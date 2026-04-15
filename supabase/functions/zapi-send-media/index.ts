@@ -25,7 +25,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { phone, mediaUrl, mediaType, caption, filename, whatsapp_number_id } = body;
+    const { phone, mediaUrl, mediaType, caption, filename, whatsapp_number_id, quotedMessageId } = body;
 
     console.log('Received body keys:', Object.keys(body), 'whatsapp_number_id:', whatsapp_number_id);
 
