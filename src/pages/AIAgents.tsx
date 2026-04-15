@@ -215,7 +215,7 @@ const AIAgents = () => {
                     <Label htmlFor="novidades" className="flex items-center justify-between">
                       <span>Novidades em estoque</span>
                       {novidadesSaved && (
-                        <Badge variant="outline" className="text-[10px] text-green-600">
+                        <Badge variant="outline" className="text-[10px] text-primary">
                           <Check className="h-3 w-3 mr-1" /> Salvo
                         </Badge>
                       )}
