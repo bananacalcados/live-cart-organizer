@@ -30,7 +30,7 @@ export function POSReceiptUpload({ storeId, cashRegisterId, saleId, paymentMetho
     return 'outro';
   };
 
-  const handleFile = (file: File) => {
+  const handleFile = async (file: File) => {
     const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
     if (file.size > getMaxSizeForType(file.type)) {
       toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`);
