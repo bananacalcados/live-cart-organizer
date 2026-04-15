@@ -10400,6 +10400,7 @@ export type Database = {
           vindi_transaction_id: string
         }[]
       }
+      get_reactivation_candidates: { Args: { p_limit?: number }; Returns: Json }
       get_user_allowed_modules: {
         Args: { p_user_id: string }
         Returns: string[]

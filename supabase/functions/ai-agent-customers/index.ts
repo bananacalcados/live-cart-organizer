@@ -67,12 +67,8 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const lovableKey = Deno.env.get('LOVABLE_API_KEY');
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-    
-    if (!anthropicKey) {
-      return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     const body = await req.json();
@@ -96,7 +92,7 @@ serve(async (req) => {
     // 2. META
     const meta = Math.round(131400 / 4.4);
 
-    // 3. NOVIDADES — manual override or from DB
+    // 3. NOVIDADES
     let novidades = novidadesOverride;
     if (!novidades) {
       const { data: ctxRow } = await supabase
@@ -109,35 +105,20 @@ serve(async (req) => {
       novidades = ctxRow?.value || 'Nenhuma novidade informada para esta semana.';
     }
 
-    // 4. FETCH CUSTOMERS (45-180 days inactive)
-    const daysAgo45 = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
-    const daysAgo180 = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+    // 4. FETCH CUSTOMERS WITH COOLDOWN FILTERING
+    console.log('Calling get_reactivation_candidates...');
+    const { data: filterResult, error: filterErr } = await supabase.rpc('get_reactivation_candidates', { p_limit: 200 });
 
-    const { data: customers, error: custErr } = await supabase
-      .from('zoppy_customers')
-      .select('first_name, last_name, phone, rfm_segment, rfm_total_score, last_purchase_at, total_spent, avg_ticket, total_orders, preferred_style, shoe_size, cashback_balance, tags')
-      .not('phone', 'is', null)
-      .gt('total_orders', 0)
-      .lte('last_purchase_at', daysAgo45.toISOString())
-      .gte('last_purchase_at', daysAgo180.toISOString())
-      .order('rfm_total_score', { ascending: false })
-      .order('total_spent', { ascending: false })
-      .limit(200);
+    if (filterErr) throw filterErr;
 
-    if (custErr) throw custErr;
+    const filterSummary = filterResult?.filter_summary || {};
+    const filteredCustomers = filterResult?.customers || [];
 
-    const { data: segCounts } = await supabase
-      .from('zoppy_customers')
-      .select('rfm_segment')
-      .not('rfm_segment', 'is', null)
-      .gt('total_orders', 0);
+    console.log('Filter summary:', JSON.stringify(filterSummary));
+    console.log(`Eligible customers: ${filteredCustomers.length}`);
 
-    const segmentSummary: Record<string, number> = {};
-    (segCounts || []).forEach(c => {
-      segmentSummary[c.rfm_segment] = (segmentSummary[c.rfm_segment] || 0) + 1;
-    });
-
-    const priorityCustomers = (customers || []).map(c => ({
+    // Build priority customer list
+    const priorityCustomers = filteredCustomers.map((c: any) => ({
       name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Sem nome',
       phone: c.phone,
       rfm_segment: c.rfm_segment || 'Outros',
@@ -155,14 +136,29 @@ serve(async (req) => {
         : 999,
     }));
 
+    // Segment summary from eligible customers
+    const segmentSummary: Record<string, number> = {};
+    priorityCustomers.forEach((c: any) => {
+      segmentSummary[c.rfm_segment] = (segmentSummary[c.rfm_segment] || 0) + 1;
+    });
+
     const today = now.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
     const userPrompt = `Analise a base de clientes da Banana Calçados e entregue um plano de reativação para esta semana.
 
-RESUMO DA BASE POR SEGMENTO:
+IMPORTANTE: Todos os clientes abaixo já passaram por filtragem automática de cooldown. Nenhum deles recebeu mensagem recente, está em atendimento ativo ou comprou nos últimos 30 dias. Você pode incluir todos na sua análise sem preocupação de spam.
+
+RESUMO DA FILTRAGEM AUTOMÁTICA:
+- Total de candidatos (inativos 45-180 dias): ${filterSummary.total_candidates || 0}
+- Bloqueados por cooldown de disparo: ${filterSummary.bloqueados_cooldown || 0}
+- Bloqueados por atendimento ativo: ${filterSummary.bloqueados_atendimento_ativo || 0}
+- Bloqueados por compra recente: ${filterSummary.bloqueados_compra_recente || 0}
+- Clientes elegíveis para reativação: ${filterSummary.clientes_elegiveis || 0}
+
+SEGMENTOS DOS CLIENTES ELEGÍVEIS:
 ${Object.entries(segmentSummary).map(([seg, count]) => `- ${seg}: ${count} clientes`).join('\n')}
 
-DADOS DOS CLIENTES PRIORITÁRIOS (${priorityCustomers.length} clientes inativos entre 45-180 dias):
+DADOS DOS CLIENTES PRIORITÁRIOS (${priorityCustomers.length} clientes elegíveis):
 ${JSON.stringify(priorityCustomers.slice(0, 80), null, 2)}
 
 CONTEXTO DA SEMANA:
@@ -191,33 +187,77 @@ ENTREGUE EXATAMENTE NESTE FORMATO:
 ## 💰 POTENCIAL DE RECEITA
 [Estimativa conservadora: se 10% da lista responder e converter]`;
 
-    // 5. CALL ANTHROPIC
-    console.log(`Calling Anthropic with ${priorityCustomers.length} priority customers...`);
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8000,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
+    // 5. CALL AI (Lovable AI Gateway preferred, Anthropic as fallback)
+    let aiResponse: string;
+    let tokensUsed: any = null;
 
-    if (!anthropicRes.ok) {
-      const errText = await anthropicRes.text();
-      throw new Error(`Anthropic API ${anthropicRes.status}: ${errText}`);
+    if (lovableKey) {
+      console.log(`Calling Lovable AI Gateway with ${priorityCustomers.length} priority customers...`);
+      const aiRes = await fetch('https://ai-gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${lovableKey}`,
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: 8000,
+        }),
+      });
+
+      if (!aiRes.ok) {
+        const errText = await aiRes.text();
+        throw new Error(`Lovable AI Gateway ${aiRes.status}: ${errText}`);
+      }
+
+      const aiData = await aiRes.json();
+      aiResponse = aiData.choices?.[0]?.message?.content || 'Sem resposta do agente.';
+      tokensUsed = aiData.usage;
+    } else if (anthropicKey) {
+      console.log(`Calling Anthropic with ${priorityCustomers.length} priority customers...`);
+      const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 8000,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
+
+      if (!anthropicRes.ok) {
+        const errText = await anthropicRes.text();
+        throw new Error(`Anthropic API ${anthropicRes.status}: ${errText}`);
+      }
+
+      const anthropicData = await anthropicRes.json();
+      aiResponse = anthropicData.content?.[0]?.text || 'Sem resposta do agente.';
+      tokensUsed = anthropicData.usage;
+    } else {
+      throw new Error('No AI API key configured (LOVABLE_API_KEY or ANTHROPIC_API_KEY)');
     }
 
-    const anthropicData = await anthropicRes.json();
-    const aiResponse = anthropicData.content?.[0]?.text || 'Sem resposta do agente.';
-
     // 6. SAVE EXECUTION
-    const inputData = { verba, meta, novidades, customers_count: priorityCustomers.length, segments: segmentSummary, revenue_last_week: revenueLastWeek, tokens: anthropicData.usage };
+    const inputData = {
+      verba,
+      meta,
+      novidades,
+      customers_count: priorityCustomers.length,
+      segments: segmentSummary,
+      revenue_last_week: revenueLastWeek,
+      tokens: tokensUsed,
+      filter_summary: filterSummary,
+    };
+
     await supabase.from('agent_executions').insert({
       agent_name: 'customers_rfm',
       input_data: inputData,
@@ -234,7 +274,8 @@ ENTREGUE EXATAMENTE NESTE FORMATO:
         verba,
         meta,
         revenue_last_week: revenueLastWeek,
-        tokens_used: anthropicData.usage,
+        tokens_used: tokensUsed,
+        filter_summary: filterSummary,
       },
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
