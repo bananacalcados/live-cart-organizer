@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
 import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
+
+  // Quote/reply
+  const [quotedMessage, setQuotedMessage] = useState<QuotedMessageData | null>(null);
 
   // Store-specific WhatsApp number IDs
   const [storeNumberIds, setStoreNumberIds] = useState<string[]>([]);
@@ -590,6 +594,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     }) || null;
     const conversationChannel = selectedConversation?.channel || null;
 
+    setQuotedMessage(null);
     setSelectedPhone(phone);
     setSelectedConvNumberId(whatsappNumberId ?? null);
     setSelectedConvKey(conversationKey);
@@ -659,7 +664,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         metaMessageId = res.data?.messageId || null;
       } else {
         const { error } = await supabase.functions.invoke("zapi-send-message", {
-          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: sendRoute.numberId },
+          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: sendRoute.numberId, quotedMessageId: quotedMessage?.message_id },
         });
         if (error) throw error;
       }
@@ -672,7 +677,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         whatsapp_number_id: sendRoute.numberId,
         message_id: metaMessageId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
-      });
+        quoted_message_id: quotedMessage?.message_id || null,
+      } as any);
 
       await supabase
         .from("automation_ai_sessions")
@@ -688,6 +694,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           .is("first_reply_at", null);
       }
 
+      setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
     } catch (error) {
       console.error("Error sending:", error);
@@ -729,7 +736,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         audioMsgId = res.data?.messageId || null;
       } else {
         const { error } = await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: sendRoute.numberId },
+          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: sendRoute.numberId, quotedMessageId: quotedMessage?.message_id },
         });
         if (error) throw error;
       }
@@ -739,8 +746,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message_id: audioMsgId,
         whatsapp_number_id: sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
-      });
+        quoted_message_id: quotedMessage?.message_id || null,
+      } as any);
       if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
+      setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Áudio enviado!");
     } catch (error) {
@@ -790,7 +799,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         mediaMsgId = res.data?.messageId || null;
       } else {
         const { error } = await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: sendRoute.numberId },
+          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: sendRoute.numberId, quotedMessageId: quotedMessage?.message_id },
         });
         if (error) throw error;
       }
@@ -800,7 +809,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message_id: mediaMsgId,
         whatsapp_number_id: sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
-      });
+        quoted_message_id: quotedMessage?.message_id || null,
+      } as any);
+      setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Mídia enviada!");
     } catch (error) {
@@ -1238,6 +1249,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               onEditMessage={handleEditMessage}
               isSending={isSending}
               customerInfoPanel={customerInfoPanel}
+              quotedMessage={quotedMessage}
+              onQuoteMessage={setQuotedMessage}
+              onCancelQuote={() => setQuotedMessage(null)}
             />
           </div>
         ) : (

@@ -1,5 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply } from "lucide-react";
+import { QuotedMessagePreview, QuotedMessageData } from "./QuotedMessagePreview";
+import { QuotedMessageBubble } from "./QuotedMessageBubble";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -45,6 +47,9 @@ interface ChatViewProps {
   onFinish?: () => void;
   isSending: boolean;
   customerInfoPanel?: React.ReactNode;
+  quotedMessage?: QuotedMessageData | null;
+  onQuoteMessage?: (data: QuotedMessageData) => void;
+  onCancelQuote?: () => void;
 }
 
 const PREDEFINED_TAGS = [
@@ -65,6 +70,9 @@ export function ChatView({
   onFinish,
   isSending,
   customerInfoPanel,
+  quotedMessage,
+  onQuoteMessage,
+  onCancelQuote,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -82,8 +90,42 @@ export function ChatView({
   const [actionLoading, setActionLoading] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
 
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const element = document.getElementById(`msg-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element.classList.add('bg-[#2a3942]/50');
+      setTimeout(() => element.classList.remove('bg-[#2a3942]/50'), 2000);
+    }
+  }, []);
+
+  const handleReplyToMsg = useCallback((msg: Message) => {
+    if (!onQuoteMessage) return;
+    onQuoteMessage({
+      message_id: msg.message_id || '',
+      message: msg.message || '',
+      sender_name: (msg as any).sender_name || undefined,
+      direction: msg.direction,
+      media_type: msg.media_type || undefined,
+    });
+  }, [onQuoteMessage]);
+
+  const handleTouchStart = useCallback((msg: Message) => {
+    if (!onQuoteMessage) return;
+    const timer = setTimeout(() => handleReplyToMsg(msg), 500);
+    longPressTimerRef.current = timer;
+  }, [onQuoteMessage, handleReplyToMsg]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   // Load tags from chat_contacts when conversation changes
@@ -358,19 +400,38 @@ export function ChatView({
             const canDelete = isOutgoing && msg.message_id && onDeleteMessage && (msg.status === 'sent' || msg.status === 'delivered');
             const canEdit = isOutgoing && msg.message_id && onEditMessage && msg.media_type === 'text' && (msg.status === 'sent' || msg.status === 'delivered');
             const isEditing = editingMsgId === msg.id;
-            // Allow actions within 15 min of sending
             const msgAge = Date.now() - new Date(msg.created_at).getTime();
             const withinWindow = msgAge < 15 * 60 * 1000;
+
+            const quotedMsgId = (msg as any).quoted_message_id;
+            const quotedOriginal = quotedMsgId ? messages.find(m => m.message_id === quotedMsgId) : null;
 
             return (
             <div
               key={msg.id}
+              id={`msg-${msg.message_id}`}
               className={cn(
-                "flex group",
+                "flex group transition-colors duration-500",
                 isOutgoing ? 'justify-end' : 'justify-start'
               )}
+              onTouchStart={() => handleTouchStart(msg)}
+              onTouchEnd={handleTouchEnd}
+              onTouchMove={handleTouchEnd}
             >
               <div className={cn("relative max-w-[85%] sm:max-w-[75%]", isOutgoing && "flex items-start gap-1")}>
+                {/* Reply button (hover, desktop) */}
+                {onQuoteMessage && msg.message_id && (
+                  <button
+                    className={cn(
+                      "opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 mt-1 shrink-0",
+                      isOutgoing ? "order-first" : "order-last"
+                    )}
+                    onClick={() => handleReplyToMsg(msg)}
+                    title="Responder"
+                  >
+                    <Reply className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                )}
                 {/* Dropdown menu for outgoing messages */}
                 {isOutgoing && withinWindow && (canDelete || canEdit) && !isEditing && (
                   <DropdownMenu>
@@ -425,6 +486,16 @@ export function ChatView({
                 >
                   {isAuto && (
                     <p className="text-amber-400 text-[10px] mb-0.5">🤖 Automática</p>
+                  )}
+                  {quotedOriginal && (
+                    <QuotedMessageBubble
+                      originalMessage={quotedOriginal.message}
+                      originalDirection={quotedOriginal.direction}
+                      originalSenderName={(quotedOriginal as any).sender_name}
+                      originalMediaType={quotedOriginal.media_type}
+                      contactName={conversation?.customerName}
+                      onClick={() => scrollToMessage(quotedOriginal.message_id || '')}
+                    />
                   )}
                   <InstagramReferralCard referral={msg.referral} />
                   <WhatsAppMediaAttachment
@@ -498,6 +569,15 @@ export function ChatView({
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
+
+      {/* Quoted message preview */}
+      {quotedMessage && onCancelQuote && (
+        <QuotedMessagePreview
+          quoted={quotedMessage}
+          contactName={conversation?.customerName}
+          onCancel={onCancelQuote}
+        />
+      )}
 
       {/* Input */}
       <div className="p-2 border-t bg-[#f0f0f0] dark:bg-[#202c33] flex items-center gap-2 flex-shrink-0">
