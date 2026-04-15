@@ -70,6 +70,9 @@ export function ChatView({
   onFinish,
   isSending,
   customerInfoPanel,
+  quotedMessage,
+  onQuoteMessage,
+  onCancelQuote,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
