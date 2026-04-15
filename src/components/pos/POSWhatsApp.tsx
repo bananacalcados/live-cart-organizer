@@ -57,6 +57,7 @@ interface CrmCustomerData {
 }
 
 export function POSWhatsApp({ storeId, initialFilter }: Props) {
+  const currentUserId = useCurrentUserId();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
