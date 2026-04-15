@@ -555,6 +555,90 @@ serve(async (req) => {
         } else {
           console.log(`Saved incoming ${mediaInfo ? mediaInfo.mediaType : 'text'} message from ${phone}`);
           
+          // ===== AUTO-REPLY LOGIC =====
+          if (!isGroup) {
+            try {
+              const { data: autoReplies } = await supabase
+                .from('whatsapp_auto_replies')
+                .select('*')
+                .eq('whatsapp_number_id', whatsappNumberId)
+                .eq('is_active', true);
+
+              const nowDate = new Date();
+              const currentTime = nowDate.toTimeString().slice(0, 5);
+              const currentDay = nowDate.getDay();
+
+              for (const reply of autoReplies || []) {
+                let shouldSend = false;
+
+                if (reply.type === 'welcome') {
+                  const { data: log } = await supabase
+                    .from('whatsapp_auto_reply_log')
+                    .select('id')
+                    .eq('phone', phone)
+                    .eq('whatsapp_number_id', whatsappNumberId)
+                    .eq('type', 'welcome')
+                    .gte('sent_at', new Date(nowDate.getTime() - 24 * 60 * 60 * 1000).toISOString())
+                    .limit(1);
+                  if (!log || log.length === 0) shouldSend = true;
+                }
+
+                if (reply.type === 'away') {
+                  const isWorkDay = (reply.schedule_days as number[]).includes(currentDay);
+                  const isWorkHour = reply.schedule_start && reply.schedule_end
+                    ? currentTime >= reply.schedule_start && currentTime <= reply.schedule_end
+                    : true;
+                  if (!isWorkDay || !isWorkHour) {
+                    const { data: log } = await supabase
+                      .from('whatsapp_auto_reply_log')
+                      .select('id')
+                      .eq('phone', phone)
+                      .eq('whatsapp_number_id', whatsappNumberId)
+                      .eq('type', 'away')
+                      .gte('sent_at', new Date(nowDate.getTime() - 4 * 60 * 60 * 1000).toISOString())
+                      .limit(1);
+                    if (!log || log.length === 0) shouldSend = true;
+                  }
+                }
+
+                if (shouldSend) {
+                  console.log(`[AUTO-REPLY] Sending ${reply.type} to ${phone}`);
+                  
+                  fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${supabaseKey}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      phone,
+                      message: reply.message,
+                      whatsapp_number_id: whatsappNumberId,
+                    }),
+                  }).catch(err => console.error('[AUTO-REPLY] send error:', err));
+
+                  await supabase.from('whatsapp_messages').insert({
+                    phone,
+                    message: reply.message,
+                    direction: 'outgoing',
+                    status: 'sent',
+                    whatsapp_number_id: whatsappNumberId,
+                    channel: 'whatsapp',
+                  });
+
+                  await supabase.from('whatsapp_auto_reply_log').insert({
+                    phone,
+                    whatsapp_number_id: whatsappNumberId,
+                    type: reply.type,
+                  });
+                }
+              }
+            } catch (autoReplyErr) {
+              console.error('[AUTO-REPLY] Error (non-critical):', autoReplyErr);
+            }
+          }
+          // ===== END AUTO-REPLY LOGIC =====
+
           // ===== CENTRAL ROUTER =====
           if (!isGroup && (messageText || mediaInfo)) {
             const routeText = messageText || mediaInfo?.caption || (mediaInfo ? `[${mediaInfo.mediaType}]` : '');
