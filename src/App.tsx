@@ -80,6 +80,7 @@ const App = () => (
               <Route path="/vip/:slug" element={<VipGroupRedirectPage />} />
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />
               <Route path="/live-ortopedicos" element={<LiveOrtopedicosLP />} />
+              <Route path="/live-ortopedicos-abril" element={<LiveOrtopedicosAbrilLP />} />
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
