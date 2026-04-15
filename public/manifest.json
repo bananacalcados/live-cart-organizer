@@ -1,6 +1,6 @@
 {
-  "name": "Vendix CRM — Gestão de Vendas e WhatsApp",
-  "short_name": "Vendix CRM",
+  "name": "Banana Gestor — Gestão de Vendas e WhatsApp",
+  "short_name": "Banana Gestor",
   "description": "Sistema de gestão de vendas e atendimento via WhatsApp",
   "start_url": "/",
   "display": "standalone",

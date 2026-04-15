@@ -63,7 +63,7 @@ export function InstallPrompt() {
     <div className="fixed top-0 left-0 right-0 z-[9999] bg-[#1a2942] text-white px-4 py-3 flex items-center gap-3 shadow-lg">
       <Download className="h-5 w-5 text-[#00a884] shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">Instale o Vendix CRM no seu celular</p>
+        <p className="text-sm font-medium">Instale o Banana Gestor no seu celular</p>
         {isIOS && (
           <p className="text-xs text-white/70 mt-0.5 flex items-center gap-1">
             Toque em <Share className="h-3 w-3 inline" /> Compartilhar e depois "Adicionar à Tela de Início"
