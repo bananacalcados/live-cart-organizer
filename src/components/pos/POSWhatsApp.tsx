@@ -239,6 +239,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         }
         setChatContacts(nameMap);
         setContactPhotos(photoMap);
+        setContactTagsMap(tagsMap);
 
         // Fetch missing profile pics from Z-API (batch of 20)
         if (phonesWithoutPhotos.length > 0) {
