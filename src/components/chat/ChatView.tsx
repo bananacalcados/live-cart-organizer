@@ -593,6 +593,7 @@ export function ChatView({
                       mediaUrl={msg.media_url}
                       mediaType={msg.media_type}
                       message={msg.message}
+                      direction={msg.direction}
                       imageClassName="max-w-[200px] max-h-[200px] rounded mb-1 object-cover cursor-pointer"
                       videoClassName="max-w-full rounded mb-1"
                       videoStyle={{ maxHeight: 200 }}
