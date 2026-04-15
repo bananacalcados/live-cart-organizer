@@ -2534,6 +2534,56 @@ export default function Marketing() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Create Landing Page Dialog */}
+      <Dialog open={showCreateLandingPage} onOpenChange={setShowCreateLandingPage}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Criar Landing Page</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Campanha *</label>
+              <Select value={newLpCampaignId} onValueChange={setNewLpCampaignId}>
+                <SelectTrigger><SelectValue placeholder="Selecione a campanha" /></SelectTrigger>
+                <SelectContent>
+                  {campaigns.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Título *</label>
+              <Input value={newLpTitle} onChange={e => { setNewLpTitle(e.target.value); if (!newLpSlug) setNewLpSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '')); }} placeholder="Ex: Black Friday 2026" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Slug (URL) *</label>
+              <Input value={newLpSlug} onChange={e => setNewLpSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="ex: black-friday-2026" />
+              <p className="text-[10px] text-muted-foreground mt-0.5">URL: /lp/{newLpSlug || '...'}</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Descrição</label>
+              <Textarea value={newLpDescription} onChange={e => setNewLpDescription(e.target.value)} placeholder="Texto de apoio abaixo do título" rows={2} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Mensagem de agradecimento</label>
+              <Input value={newLpThankYou} onChange={e => setNewLpThankYou(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Redirect WhatsApp (opcional)</label>
+              <Input value={newLpWhatsapp} onChange={e => setNewLpWhatsapp(e.target.value)} placeholder="https://wa.me/5533..." />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setShowCreateLandingPage(false)}>Cancelar</Button>
+              <Button onClick={handleCreateLandingPage} disabled={creatingLp} className="gap-1">
+                {creatingLp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                Criar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
