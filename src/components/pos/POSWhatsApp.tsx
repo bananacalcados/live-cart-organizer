@@ -72,6 +72,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [contactPhotos, setContactPhotos] = useState<Record<string, string>>({});
+  const [contactTagsMap, setContactTagsMap] = useState<Record<string, string[]>>({});
+  const [selectedTagFilters, setSelectedTagFilters] = useState<string[]>([]);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
@@ -205,7 +207,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       let from = 0;
       const PAGE = 1000;
       while (true) {
-        const { data: page } = await supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url").range(from, from + PAGE - 1);
+        const { data: page } = await supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url, tags").range(from, from + PAGE - 1);
         if (!page || page.length === 0) break;
         allContactData = allContactData.concat(page);
         if (page.length < PAGE) break;
@@ -218,12 +220,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       if (data) {
         const nameMap: Record<string, string> = {};
         const photoMap: Record<string, string> = {};
+        const tagsMap: Record<string, string[]> = {};
         const phonesWithoutPhotos: string[] = [];
         for (const c of data as any[]) {
           if (c.custom_name) nameMap[c.phone] = c.custom_name;
           else if (c.display_name) nameMap[c.phone] = c.display_name;
           if (c.profile_pic_url) photoMap[c.phone] = c.profile_pic_url;
           else phonesWithoutPhotos.push(c.phone);
+          if (c.tags && Array.isArray(c.tags) && c.tags.length > 0) tagsMap[c.phone] = c.tags;
         }
         // Map group names from whatsapp_groups table
         if (groupsRes.data) {
@@ -235,6 +239,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         }
         setChatContacts(nameMap);
         setContactPhotos(photoMap);
+        setContactTagsMap(tagsMap);
 
         // Fetch missing profile pics from Z-API (batch of 20)
         if (phonesWithoutPhotos.length > 0) {
@@ -1079,6 +1084,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             supportFilterActive={supportFilterActive}
             onSupportFilterToggle={() => setSupportFilterActive(prev => !prev)}
             supportCount={supportCount}
+            contactTagsMap={contactTagsMap}
+            selectedTagFilters={selectedTagFilters}
+            onSelectedTagFiltersChange={setSelectedTagFilters}
           />
         </div>
 

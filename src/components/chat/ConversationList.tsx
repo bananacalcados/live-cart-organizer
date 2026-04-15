@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,14 +40,16 @@ interface ConversationListProps {
   selectedConversationKey?: string | null;
   onBulkFinish?: (phones: string[]) => void;
   onBulkMessage?: (phones: string[]) => void;
-  /** Optional: function to check if a phone has active support tickets */
   hasActiveSupport?: (phone: string) => boolean;
-  /** Optional: whether support filter is active */
   supportFilterActive?: boolean;
-  /** Optional: toggle support filter */
   onSupportFilterToggle?: () => void;
-  /** Optional: count of conversations with active support */
   supportCount?: number;
+  /** Map of phone → tags array for tag filtering */
+  contactTagsMap?: Record<string, string[]>;
+  /** Currently selected tag filters */
+  selectedTagFilters?: string[];
+  /** Callback when tag filters change */
+  onSelectedTagFiltersChange?: (tags: string[]) => void;
 }
 
 const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel: string }[] = [
@@ -85,9 +87,22 @@ export function ConversationList({
   supportFilterActive,
   onSupportFilterToggle,
   supportCount,
+  contactTagsMap = {},
+  selectedTagFilters = [],
+  onSelectedTagFiltersChange,
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
+
+  // Compute all unique tags from the map
+  const allUniqueTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    for (const tags of Object.values(contactTagsMap)) {
+      if (tags) for (const t of tags) tagSet.add(t);
+    }
+    return Array.from(tagSet).sort();
+  }, [contactTagsMap]);
+
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) return format(date, 'HH:mm', { locale: ptBR });
     if (isYesterday(date)) return 'Ontem';
@@ -134,6 +149,12 @@ export function ConversationList({
         return hasActiveSupport(c.phone);
       }
       return true;
+    })
+    .filter(c => {
+      // Tag filter (AND logic)
+      if (selectedTagFilters.length === 0) return true;
+      const tags = contactTagsMap[c.phone] || [];
+      return selectedTagFilters.every(t => tags.includes(t));
     })
     .filter(c => {
       const cleanedQuery = searchQuery.replace(/\D/g, '');
@@ -258,8 +279,44 @@ export function ConversationList({
             </button>
           ))}
         </div>
-        
-        {/* Chat type filter */}
+
+        {/* Tag filter chips */}
+        {allUniqueTags.length > 0 && onSelectedTagFiltersChange && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 whitespace-nowrap">
+            {selectedTagFilters.length > 0 && (
+              <button
+                onClick={() => onSelectedTagFiltersChange([])}
+                className="px-2 py-1 rounded-full text-[10px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 flex-shrink-0 transition-colors"
+              >
+                ✕ Limpar
+              </button>
+            )}
+            {allUniqueTags.map(tag => {
+              const isSelected = selectedTagFilters.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  onClick={() => {
+                    if (isSelected) {
+                      onSelectedTagFiltersChange(selectedTagFilters.filter(t => t !== tag));
+                    } else {
+                      onSelectedTagFiltersChange([...selectedTagFilters, tag]);
+                    }
+                  }}
+                  className={cn(
+                    "px-3 py-1 rounded-full text-[11px] font-medium flex-shrink-0 transition-colors",
+                    isSelected
+                      ? "bg-[#00a884] text-white"
+                      : "bg-[#1a2228] text-gray-400 hover:bg-[#2a3942]"
+                  )}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="flex gap-1">
           {(['all', 'contacts', 'groups'] as const).map(f => (
             <button
