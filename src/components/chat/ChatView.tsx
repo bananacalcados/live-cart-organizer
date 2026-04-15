@@ -489,6 +489,8 @@ export function ChatView({
                     {isOutgoing && <MessageStatusIcon status={msg.status} />}
                   </p>
                 </div>
+                  );
+                })()}
               </div>
             </div>
             );
