@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Users, Loader2, Send, Copy, Check } from "lucide-react";
+import { Bot, Users, Loader2, Send, Copy, Check, Save, Clock, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -19,10 +19,102 @@ const AIAgents = () => {
   const [meta, setMeta] = useState<any>(null);
   const [copied, setCopied] = useState(false);
 
-  // Agent 01 form
+  // Novidades
   const [novidades, setNovidades] = useState("");
-  const [verba, setVerba] = useState("");
-  const [metaValue, setMetaValue] = useState("");
+  const [novidadesSaved, setNovidadesSaved] = useState(false);
+  const [isSavingNovidades, setIsSavingNovidades] = useState(false);
+
+  // Auto-calculated (read-only display)
+  const [autoVerba, setAutoVerba] = useState<number | null>(null);
+  const [autoMeta, setAutoMeta] = useState<number | null>(null);
+
+  // Execution history
+  const [lastExecution, setLastExecution] = useState<any>(null);
+
+  useEffect(() => {
+    loadNovidades();
+    loadLastExecution();
+    calculateAutoContext();
+  }, []);
+
+  const loadNovidades = async () => {
+    const { data } = await supabase
+      .from('agent_weekly_context')
+      .select('value')
+      .eq('key', 'novidades_estoque')
+      .order('week_start', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.value) {
+      setNovidades(data.value);
+      setNovidadesSaved(true);
+    }
+  };
+
+  const loadLastExecution = async () => {
+    const { data } = await supabase
+      .from('agent_executions')
+      .select('*')
+      .eq('agent_name', 'customers_rfm')
+      .order('executed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      setLastExecution(data);
+      if (data.output_result) setResponse(data.output_result);
+      if (data.input_data) {
+        const input = data.input_data as any;
+        setMeta({
+          customers_analyzed: input.customers_count,
+          segments: input.segments,
+          verba: input.verba,
+          meta: input.meta,
+          tokens_used: input.tokens,
+        });
+      }
+    }
+  };
+
+  const calculateAutoContext = async () => {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: sales } = await supabase
+      .from('pos_sales')
+      .select('total')
+      .gte('created_at', sevenDaysAgo)
+      .neq('status', 'cancelled');
+
+    const revenue = (sales || []).reduce((sum, s) => sum + (s.total || 0), 0);
+    let verba = Math.round(revenue * 0.482 - 71279 / 4.4);
+    verba = Math.max(500, Math.min(7000, verba));
+    setAutoVerba(verba);
+    setAutoMeta(Math.round(131400 / 4.4));
+  };
+
+  const handleSaveNovidades = async () => {
+    setIsSavingNovidades(true);
+    try {
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
+      const weekStartStr = weekStart.toISOString().split('T')[0];
+
+      const { error } = await supabase
+        .from('agent_weekly_context')
+        .upsert({
+          key: 'novidades_estoque',
+          value: novidades,
+          week_start: weekStartStr,
+        }, { onConflict: 'key,week_start' });
+
+      if (error) throw error;
+      setNovidadesSaved(true);
+      toast.success("Novidades da semana salvas!");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar");
+    } finally {
+      setIsSavingNovidades(false);
+    }
+  };
 
   const handleRunAgent = async () => {
     setIsLoading(true);
@@ -31,7 +123,7 @@ const AIAgents = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke("ai-agent-customers", {
-        body: { novidades, verba, meta: metaValue },
+        body: { novidades: novidades || undefined },
       });
 
       if (error) throw error;
@@ -40,6 +132,7 @@ const AIAgents = () => {
       setResponse(data.response);
       setMeta(data.meta);
       toast.success(`Análise concluída — ${data.meta?.customers_analyzed || 0} clientes analisados`);
+      loadLastExecution();
     } catch (err: any) {
       console.error("Agent error:", err);
       toast.error(err.message || "Erro ao executar agente");
@@ -54,6 +147,9 @@ const AIAgents = () => {
     toast.success("Copiado!");
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const formatCurrency = (val: number | null) =>
+    val !== null ? `R$ ${val.toLocaleString('pt-BR')}` : '—';
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -75,61 +171,79 @@ const AIAgents = () => {
               <Users className="h-4 w-4" />
               Clientes & RFM
             </TabsTrigger>
-            {/* Future agents */}
-            <TabsTrigger value="sales" disabled className="gap-2 opacity-50">
-              Vendas
-            </TabsTrigger>
-            <TabsTrigger value="marketing" disabled className="gap-2 opacity-50">
-              Marketing
-            </TabsTrigger>
-            <TabsTrigger value="inventory" disabled className="gap-2 opacity-50">
-              Estoque
-            </TabsTrigger>
+            <TabsTrigger value="sales" disabled className="gap-2 opacity-50">Vendas</TabsTrigger>
+            <TabsTrigger value="marketing" disabled className="gap-2 opacity-50">Marketing</TabsTrigger>
+            <TabsTrigger value="inventory" disabled className="gap-2 opacity-50">Estoque</TabsTrigger>
           </TabsList>
 
           <TabsContent value="customers" className="mt-4">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Input Panel */}
-              <Card className="lg:col-span-1">
+              <Card className="lg:col-span-1 space-y-0">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Users className="h-5 w-5" />
                     Agente de Clientes
                   </CardTitle>
                   <CardDescription>
-                    Analisa a base RFM e gera plano de reativação com scripts prontos para disparo.
+                    Executa automaticamente toda segunda às 7h. Use o botão para rodar manualmente.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Auto-filled context (read-only) */}
+                  <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> Contexto automático
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground text-xs">Verba</span>
+                        <p className="font-medium">{formatCurrency(autoVerba)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground text-xs">Meta</span>
+                        <p className="font-medium">{formatCurrency(autoMeta)}</p>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Verba = (receita 7d × 0,482) - custos fixos. Meta = R$ 131.400 / 4,4 semanas.
+                    </p>
+                  </div>
+
+                  {/* Novidades — only manual input */}
                   <div className="space-y-2">
-                    <Label htmlFor="novidades">Novidades em estoque</Label>
+                    <Label htmlFor="novidades" className="flex items-center justify-between">
+                      <span>Novidades em estoque</span>
+                      {novidadesSaved && (
+                        <Badge variant="outline" className="text-[10px] text-primary">
+                          <Check className="h-3 w-3 mr-1" /> Salvo
+                        </Badge>
+                      )}
+                    </Label>
                     <Textarea
                       id="novidades"
                       placeholder="Ex: Chegaram tênis ortopédicos Usaflex novos, sandálias Piccadilly conforto..."
                       value={novidades}
-                      onChange={(e) => setNovidades(e.target.value)}
-                      rows={3}
+                      onChange={(e) => {
+                        setNovidades(e.target.value);
+                        setNovidadesSaved(false);
+                      }}
+                      rows={4}
                     />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="verba">Verba da semana (R$)</Label>
-                    <Input
-                      id="verba"
-                      placeholder="Ex: 500"
-                      value={verba}
-                      onChange={(e) => setVerba(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="meta">Meta de faturamento (R$)</Label>
-                    <Input
-                      id="meta"
-                      placeholder="Ex: 15000"
-                      value={metaValue}
-                      onChange={(e) => setMetaValue(e.target.value)}
-                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={handleSaveNovidades}
+                      disabled={isSavingNovidades || !novidades.trim()}
+                    >
+                      {isSavingNovidades ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : (
+                        <Save className="h-3 w-3 mr-1" />
+                      )}
+                      Salvar novidades da semana
+                    </Button>
                   </div>
 
                   <Button
@@ -151,34 +265,49 @@ const AIAgents = () => {
                     )}
                   </Button>
 
-                  {meta && (
+                  {/* Last execution info */}
+                  {lastExecution && (
                     <div className="space-y-2 pt-2 border-t">
-                      <p className="text-xs text-muted-foreground font-medium">Metadados</p>
-                      <div className="flex flex-wrap gap-1">
-                        <Badge variant="outline" className="text-xs">
-                          {meta.customers_analyzed} clientes
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {meta.model}
-                        </Badge>
-                        {meta.tokens_used && (
-                          <Badge variant="outline" className="text-xs">
-                            {meta.tokens_used.input_tokens + meta.tokens_used.output_tokens} tokens
-                          </Badge>
-                        )}
-                      </div>
-                      {meta.segments && (
-                        <div className="text-xs space-y-1 mt-2">
-                          {Object.entries(meta.segments as Record<string, number>)
-                            .sort(([, a], [, b]) => (b as number) - (a as number))
-                            .slice(0, 6)
-                            .map(([seg, count]) => (
-                              <div key={seg} className="flex justify-between">
-                                <span className="text-muted-foreground">{seg}</span>
-                                <span className="font-medium">{count as number}</span>
-                              </div>
-                            ))}
+                      <p className="text-xs text-muted-foreground font-medium">Última execução</p>
+                      <div className="text-xs space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Quando</span>
+                          <span>{new Date(lastExecution.executed_at).toLocaleString('pt-BR')}</span>
                         </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Status</span>
+                          <Badge variant={lastExecution.status === 'success' ? 'default' : 'destructive'} className="text-[10px]">
+                            {lastExecution.status === 'success' ? '✅ Sucesso' : `❌ ${lastExecution.status}`}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {meta && (
+                        <>
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="outline" className="text-xs">
+                              {meta.customers_analyzed} clientes
+                            </Badge>
+                            {meta.tokens_used && (
+                              <Badge variant="outline" className="text-xs">
+                                {(meta.tokens_used.input_tokens || 0) + (meta.tokens_used.output_tokens || 0)} tokens
+                              </Badge>
+                            )}
+                          </div>
+                          {meta.segments && (
+                            <div className="text-xs space-y-1 mt-2">
+                              {Object.entries(meta.segments as Record<string, number>)
+                                .sort(([, a], [, b]) => (b as number) - (a as number))
+                                .slice(0, 6)
+                                .map(([seg, count]) => (
+                                  <div key={seg} className="flex justify-between">
+                                    <span className="text-muted-foreground">{seg}</span>
+                                    <span className="font-medium">{count as number}</span>
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -200,7 +329,7 @@ const AIAgents = () => {
                     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                       <Loader2 className="h-8 w-8 animate-spin mb-4" />
                       <p className="text-sm">Consultando base de dados e gerando análise...</p>
-                      <p className="text-xs mt-1">Isso pode levar até 30 segundos</p>
+                      <p className="text-xs mt-1">Isso pode levar até 60 segundos</p>
                     </div>
                   ) : response ? (
                     <ScrollArea className="h-[600px] pr-4">
@@ -211,8 +340,8 @@ const AIAgents = () => {
                   ) : (
                     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                       <Bot className="h-12 w-12 mb-4 opacity-30" />
-                      <p className="text-sm">Configure o contexto da semana e clique em "Executar Agente"</p>
-                      <p className="text-xs mt-1">O agente irá consultar seus dados reais de clientes e RFM</p>
+                      <p className="text-sm">Nenhuma análise disponível</p>
+                      <p className="text-xs mt-1">Preencha as novidades e clique em "Executar Agente" ou aguarde a execução automática de segunda-feira</p>
                     </div>
                   )}
                 </CardContent>

@@ -6,6 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const ADMIN_PHONE = "5533991955003";
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 5 * 60 * 1000; // 5 minutes
+
 const SYSTEM_PROMPT = `# IDENTIDADE
 Você é o Agente de Clientes da Banana Calçados, uma rede de calçados conforto com duas lojas físicas em Governador Valadares, MG: Loja Pérola (Jardim Pérola) e Loja Centro.
 
@@ -59,24 +63,82 @@ LEADS (nunca compraram)
 # FORMATO DA SUA RESPOSTA
 Sempre estruture sua análise em seções claras conforme o formato solicitado no user prompt. Seja cirúrgico — Matthews não quer relatório, quer ação.`;
 
+async function sendWhatsApp(supabaseUrl: string, supabaseKey: string, phone: string, message: string) {
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ phone, message }),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      console.error('WhatsApp send error:', t);
+    }
+    return res.ok;
+  } catch (err) {
+    console.error('WhatsApp send failed:', err);
+    return false;
+  }
+}
+
+async function callAnthropic(anthropicKey: string, userPrompt: string): Promise<{ text: string; usage: any }> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': anthropicKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8000,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Anthropic API ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  return {
+    text: data.content?.[0]?.text || 'Sem resposta do agente.',
+    usage: data.usage,
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-    
-    if (!anthropicKey) {
-      return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const body = await req.json().catch(() => ({}));
+    const mode = body.mode || 'run_agent';
+
+    // ========== SUNDAY REMINDER MODE ==========
+    if (mode === 'sunday_reminder') {
+      console.log('Sending Sunday reminder...');
+      const msg = `📋 *Lembrete — Novidades da Semana*\n\nOi Matthews! Amanhã às 7h o Agente de Clientes vai rodar automaticamente.\n\nPor favor, acesse o sistema e preencha as *Novidades de Estoque* da semana para que a análise fique completa.\n\n👉 Acesse: Agentes de IA → Novidades da Semana`;
+      await sendWhatsApp(supabaseUrl, supabaseKey, ADMIN_PHONE, msg);
+      return new Response(JSON.stringify({ success: true, message: 'Reminder sent' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const body = await req.json();
-    const { novidades: novidadesOverride } = body;
+    // ========== MAIN AGENT EXECUTION ==========
+    if (!anthropicKey) {
+      throw new Error('ANTHROPIC_API_KEY not configured');
+    }
 
     const now = new Date();
 
@@ -93,23 +155,25 @@ serve(async (req) => {
     let verba = Math.round(revenueLastWeek * 0.482 - custoFixoSemanal);
     verba = Math.max(500, Math.min(7000, verba));
 
-    // 2. META
+    // 2. META DA SEMANA
     const meta = Math.round(131400 / 4.4);
 
-    // 3. NOVIDADES — manual override or from DB
-    let novidades = novidadesOverride;
-    if (!novidades) {
-      const { data: ctxRow } = await supabase
-        .from('agent_weekly_context')
-        .select('value')
-        .eq('key', 'novidades_estoque')
-        .order('week_start', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      novidades = ctxRow?.value || 'Nenhuma novidade informada para esta semana.';
-    }
+    // 3. NOVIDADES FROM DB
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Monday
+    const weekStartStr = weekStart.toISOString().split('T')[0];
 
-    // 4. FETCH CUSTOMERS (45-180 days inactive)
+    const { data: ctxRow } = await supabase
+      .from('agent_weekly_context')
+      .select('value')
+      .eq('key', 'novidades_estoque')
+      .order('week_start', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const novidades = ctxRow?.value || 'Nenhuma novidade informada para esta semana.';
+
+    // 4. FETCH PRIORITY CUSTOMERS (45-180 days inactive)
     const daysAgo45 = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
     const daysAgo180 = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
 
@@ -126,6 +190,7 @@ serve(async (req) => {
 
     if (custErr) throw custErr;
 
+    // Segment summary
     const { data: segCounts } = await supabase
       .from('zoppy_customers')
       .select('rfm_segment')
@@ -191,56 +256,121 @@ ENTREGUE EXATAMENTE NESTE FORMATO:
 ## 💰 POTENCIAL DE RECEITA
 [Estimativa conservadora: se 10% da lista responder e converter]`;
 
-    // 5. CALL ANTHROPIC
-    console.log(`Calling Anthropic with ${priorityCustomers.length} priority customers...`);
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8000,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
+    const inputData = {
+      verba,
+      meta,
+      novidades,
+      customers_count: priorityCustomers.length,
+      segments: segmentSummary,
+      revenue_last_week: revenueLastWeek,
+    };
 
-    if (!anthropicRes.ok) {
-      const errText = await anthropicRes.text();
-      throw new Error(`Anthropic API ${anthropicRes.status}: ${errText}`);
+    // Create execution record
+    const { data: execution, error: execErr } = await supabase
+      .from('agent_executions')
+      .insert({
+        agent_name: 'customers_rfm',
+        input_data: inputData,
+        status: 'running',
+      })
+      .select('id')
+      .single();
+
+    if (execErr) throw execErr;
+    const executionId = execution.id;
+
+    // 5. CALL ANTHROPIC WITH RETRY
+    let aiResult: { text: string; usage: any } | null = null;
+    let lastError = '';
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        console.log(`Anthropic attempt ${attempt}/${MAX_RETRIES}...`);
+        aiResult = await callAnthropic(anthropicKey, userPrompt);
+        break;
+      } catch (err) {
+        lastError = err.message;
+        console.error(`Attempt ${attempt} failed:`, lastError);
+
+        await supabase.from('agent_executions').update({
+          retry_count: attempt,
+          error_message: lastError,
+        }).eq('id', executionId);
+
+        if (attempt < MAX_RETRIES) {
+          console.log(`Waiting ${RETRY_DELAY_MS / 1000}s before retry...`);
+          await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+        }
+      }
     }
 
-    const anthropicData = await anthropicRes.json();
-    const aiResponse = anthropicData.content?.[0]?.text || 'Sem resposta do agente.';
+    if (!aiResult) {
+      // All retries failed
+      await supabase.from('agent_executions').update({
+        status: 'error',
+        error_message: lastError,
+      }).eq('id', executionId);
 
-    // 6. SAVE EXECUTION
-    const inputData = { verba, meta, novidades, customers_count: priorityCustomers.length, segments: segmentSummary, revenue_last_week: revenueLastWeek, tokens: anthropicData.usage };
-    await supabase.from('agent_executions').insert({
-      agent_name: 'customers_rfm',
-      input_data: inputData,
-      output_result: aiResponse,
+      // Log to ai_error_logs
+      await supabase.from('ai_error_logs').insert({
+        agent: 'agent_customers_rfm',
+        error_type: 'api_failure',
+        error_message: lastError,
+        phone: ADMIN_PHONE,
+        status: 'pending',
+      });
+
+      // Notify via WhatsApp
+      await sendWhatsApp(supabaseUrl, supabaseKey, ADMIN_PHONE,
+        `⚠️ *Agente de Clientes não rodou hoje.*\n\nErro após ${MAX_RETRIES} tentativas: ${lastError.substring(0, 200)}\n\nAcesse o sistema para executar manualmente.`);
+
+      return new Response(JSON.stringify({ success: false, error: lastError }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // 6. SAVE RESULT
+    await supabase.from('agent_executions').update({
       status: 'success',
-    });
+      output_result: aiResult.text,
+      input_data: { ...inputData, tokens: aiResult.usage },
+    }).eq('id', executionId);
+
+    // 7. SEND VIA WHATSAPP (truncate for WhatsApp limit)
+    const whatsappSummary = aiResult.text.length > 4000
+      ? aiResult.text.substring(0, 4000) + '\n\n... (resultado completo no sistema)'
+      : aiResult.text;
+
+    await sendWhatsApp(supabaseUrl, supabaseKey, ADMIN_PHONE,
+      `🤖 *Agente de Clientes — Relatório Semanal*\n\n${whatsappSummary}`);
+
+    console.log(`Agent completed. ${priorityCustomers.length} customers analyzed.`);
 
     return new Response(JSON.stringify({
       success: true,
-      response: aiResponse,
+      execution_id: executionId,
+      response: aiResult.text,
       meta: {
         customers_analyzed: priorityCustomers.length,
         segments: segmentSummary,
         verba,
         meta,
-        revenue_last_week: revenueLastWeek,
-        tokens_used: anthropicData.usage,
+        tokens_used: aiResult.usage,
       },
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
-    console.error('Agent error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error', details: error.message }),
+    console.error('Agent cron error:', error);
+
+    // Log error
+    await supabase.from('ai_error_logs').insert({
+      agent: 'agent_customers_rfm',
+      error_type: 'execution_error',
+      error_message: error.message,
+      phone: ADMIN_PHONE,
+      status: 'pending',
+    }).catch(() => {});
+
+    return new Response(JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

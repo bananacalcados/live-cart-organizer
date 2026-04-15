@@ -349,6 +349,72 @@ export type Database = {
           },
         ]
       }
+      agent_executions: {
+        Row: {
+          agent_name: string
+          created_at: string
+          error_message: string | null
+          executed_at: string
+          id: string
+          input_data: Json | null
+          output_result: string | null
+          retry_count: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          agent_name: string
+          created_at?: string
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          input_data?: Json | null
+          output_result?: string | null
+          retry_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_name?: string
+          created_at?: string
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          input_data?: Json | null
+          output_result?: string | null
+          retry_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agent_weekly_context: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          updated_at: string
+          value: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          updated_at?: string
+          value?: string
+          week_start?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       ai_assistance_requests: {
         Row: {
           ai_agent: string
