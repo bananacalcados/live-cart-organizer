@@ -40,14 +40,16 @@ interface ConversationListProps {
   selectedConversationKey?: string | null;
   onBulkFinish?: (phones: string[]) => void;
   onBulkMessage?: (phones: string[]) => void;
-  /** Optional: function to check if a phone has active support tickets */
   hasActiveSupport?: (phone: string) => boolean;
-  /** Optional: whether support filter is active */
   supportFilterActive?: boolean;
-  /** Optional: toggle support filter */
   onSupportFilterToggle?: () => void;
-  /** Optional: count of conversations with active support */
   supportCount?: number;
+  /** Map of phone → tags array for tag filtering */
+  contactTagsMap?: Record<string, string[]>;
+  /** Currently selected tag filters */
+  selectedTagFilters?: string[];
+  /** Callback when tag filters change */
+  onSelectedTagFiltersChange?: (tags: string[]) => void;
 }
 
 const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel: string }[] = [
