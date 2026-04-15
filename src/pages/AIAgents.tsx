@@ -464,6 +464,58 @@ const AIAgents = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* RFM Health Section */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Saúde do RFM</CardTitle>
+            </div>
+            <div className="flex items-center gap-3">
+              {rfmHealth?.lastUpdate && (
+                <span className="text-xs text-muted-foreground">
+                  Último cálculo: {new Date(rfmHealth.lastUpdate).toLocaleString('pt-BR')}
+                </span>
+              )}
+              <Button variant="outline" size="sm" onClick={handleRecalculateRfm} disabled={isRecalculating}>
+                {isRecalculating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                Recalcular agora
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {rfmHealth && Object.keys(rfmHealth.segments).length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Segmento</TableHead>
+                    <TableHead className="text-right">Clientes</TableHead>
+                    <TableHead className="text-right">%</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(rfmHealth.segments)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([seg, count]) => {
+                      const total = Object.values(rfmHealth.segments).reduce((s, v) => s + v, 0);
+                      return (
+                        <TableRow key={seg}>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">{seg}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">{count.toLocaleString('pt-BR')}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">{total > 0 ? ((count / total) * 100).toFixed(1) : 0}%</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhum dado RFM calculado ainda. Clique em "Recalcular agora".</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
