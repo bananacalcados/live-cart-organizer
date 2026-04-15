@@ -235,8 +235,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         // Fetch missing profile pics from Z-API (batch of 20)
         if (phonesWithoutPhotos.length > 0) {
           try {
+            const zapiNum = metaNumbers.find(n => n.provider === 'zapi');
             const resp = await supabase.functions.invoke("zapi-profile-picture", {
-              body: { phones: phonesWithoutPhotos.slice(0, 20) },
+              body: { phones: phonesWithoutPhotos.slice(0, 20), whatsapp_number_id: zapiNum?.id },
             });
             if (resp.data?.photos) {
               const validPhotos: Record<string, string> = {};
@@ -268,8 +269,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       .slice(0, 20);
     if (missingPhones.length === 0) return;
     missingPhones.forEach(p => fetchedPhonesRef.add(p));
+    const zapiNum2 = metaNumbers.find(n => n.provider === 'zapi');
     supabase.functions.invoke("zapi-profile-picture", {
-      body: { phones: missingPhones },
+      body: { phones: missingPhones, whatsapp_number_id: zapiNum2?.id },
     }).then(resp => {
       if (resp.data?.photos) {
         const validPhotos: Record<string, string> = {};
