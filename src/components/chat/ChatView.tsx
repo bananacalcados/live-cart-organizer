@@ -47,6 +47,9 @@ interface ChatViewProps {
   onFinish?: () => void;
   isSending: boolean;
   customerInfoPanel?: React.ReactNode;
+  quotedMessage?: QuotedMessageData | null;
+  onQuoteMessage?: (data: QuotedMessageData) => void;
+  onCancelQuote?: () => void;
 }
 
 const PREDEFINED_TAGS = [
