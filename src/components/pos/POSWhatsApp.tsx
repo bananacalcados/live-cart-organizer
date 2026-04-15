@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon } from "lucide-react";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,7 @@ interface CrmCustomerData {
 }
 
 export function POSWhatsApp({ storeId, initialFilter }: Props) {
+  const currentUserId = useCurrentUserId();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
@@ -683,6 +685,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message_id: metaMessageId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
+        sender_user_id: currentUserId || null,
       } as any);
 
       await supabase
@@ -752,6 +755,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         whatsapp_number_id: sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
+        sender_user_id: currentUserId || null,
       } as any);
       if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
       setQuotedMessage(null);
@@ -815,6 +819,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         whatsapp_number_id: sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
+        sender_user_id: currentUserId || null,
       } as any);
       setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
@@ -997,6 +1002,24 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               className="h-7 text-[10px] bg-white/10 border-white/20 text-white"
             />
           )}
+          {/* Attendant switcher */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+            onClick={() => {
+              setSelectedSellerId(null);
+              setSelectedSellerName(null);
+              sessionStorage.removeItem(sellerKey);
+              sessionStorage.removeItem(sellerNameKey);
+              setShowSellerGate(true);
+              setShowDashboard(false);
+            }}
+            title="Trocar Atendente"
+          >
+            <HeadphonesIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">Trocar</span>
+          </Button>
           {selectedSellerId && (
             <Button
               variant="ghost"

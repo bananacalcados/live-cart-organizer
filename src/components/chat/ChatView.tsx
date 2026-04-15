@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply } from "lucide-react";
 import { QuotedMessagePreview, QuotedMessageData } from "./QuotedMessagePreview";
 import { QuotedMessageBubble } from "./QuotedMessageBubble";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { format, isToday, isYesterday } from "date-fns";
+import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { EmojiPickerButton } from "../EmojiPickerButton";
 import { Message, Conversation } from "./ChatTypes";
@@ -56,6 +56,12 @@ const PREDEFINED_TAGS = [
   "VIP", "Novo", "Recorrente", "Atacado", "Influencer", "Problemático"
 ];
 
+function getDateLabel(date: Date): string {
+  if (isToday(date)) return 'Hoje';
+  if (isYesterday(date)) return 'Ontem';
+  return format(date, "EEEE, d 'de' MMMM", { locale: ptBR });
+}
+
 export function ChatView({
   messages,
   conversation,
@@ -89,8 +95,26 @@ export function ChatView({
   const [editingText, setEditingText] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
 
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load profiles for sender names
+  useEffect(() => {
+    const loadProfiles = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('user_id, display_name');
+      if (data) {
+        const map: Record<string, string> = {};
+        for (const p of data) {
+          if (p.user_id && p.display_name) map[p.user_id] = p.display_name;
+        }
+        setProfilesMap(map);
+      }
+    };
+    loadProfiles();
+  }, []);
 
   const scrollToMessage = useCallback((messageId: string) => {
     const element = document.getElementById(`msg-${messageId}`);
@@ -156,9 +180,7 @@ export function ChatView({
   }, []);
 
   const formatMessageTime = (date: Date) => {
-    if (isToday(date)) return format(date, 'HH:mm', { locale: ptBR });
-    if (isYesterday(date)) return `Ontem ${format(date, 'HH:mm', { locale: ptBR })}`;
-    return format(date, "dd/MM HH:mm", { locale: ptBR });
+    return format(date, 'HH:mm', { locale: ptBR });
   };
 
   const formatRecordingTime = (seconds: number) => {
@@ -176,22 +198,45 @@ export function ChatView({
     const newTags = [...customerTags, trimmed];
     setContactTags(newTags);
     setNewTag("");
-    await supabase
-      .from('chat_contacts')
-      .upsert(
-        { phone: conversation.phone, tags: newTags },
-        { onConflict: 'phone', ignoreDuplicates: false }
-      );
+    
+    try {
+      const { error } = await supabase
+        .from('chat_contacts')
+        .upsert(
+          { phone: conversation.phone, tags: newTags, updated_at: new Date().toISOString() },
+          { onConflict: 'phone', ignoreDuplicates: false }
+        );
+      if (error) {
+        console.error('Erro ao salvar tag:', error);
+        toast.error('Erro ao salvar tag');
+        // Revert optimistic update
+        setContactTags(customerTags.filter(t => t !== trimmed));
+      }
+    } catch (err) {
+      console.error('Erro ao salvar tag:', err);
+      toast.error('Erro ao salvar tag');
+      setContactTags(customerTags.filter(t => t !== trimmed));
+    }
   };
 
   const handleRemoveTag = async (tag: string) => {
     if (!conversation?.phone) return;
     const newTags = customerTags.filter(t => t !== tag);
     setContactTags(newTags);
-    await supabase
-      .from('chat_contacts')
-      .update({ tags: newTags })
-      .eq('phone', conversation.phone);
+    try {
+      const { error } = await supabase
+        .from('chat_contacts')
+        .update({ tags: newTags, updated_at: new Date().toISOString() })
+        .eq('phone', conversation.phone);
+      if (error) {
+        console.error('Erro ao remover tag:', error);
+        toast.error('Erro ao remover tag');
+        setContactTags([...newTags, tag]);
+      }
+    } catch (err) {
+      console.error('Erro ao remover tag:', err);
+      setContactTags([...newTags, tag]);
+    }
   };
 
   const startRecording = useCallback(async () => {
@@ -210,7 +255,6 @@ export function ChatView({
       };
 
       mediaRecorder.onstop = async () => {
-        // Stop all tracks
         stream.getTracks().forEach(t => t.stop());
         if (timerRef.current) {
           clearInterval(timerRef.current);
@@ -226,7 +270,6 @@ export function ChatView({
           return;
         }
 
-        // Upload audio
         const file = new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: ct });
         const url = await uploadMediaToStorage(file);
         
@@ -261,7 +304,6 @@ export function ChatView({
 
   const cancelRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
-      // Clear chunks before stopping so onstop won't upload
       audioChunksRef.current = [];
       mediaRecorderRef.current.stop();
     }
@@ -294,6 +336,16 @@ export function ChatView({
       onSendMedia(url, mediaType);
     }
   }, [onSendMedia]);
+
+  // Helper to check if sender changed from previous message
+  const isSenderChange = useCallback((msg: Message, prevMsg: Message | null): boolean => {
+    if (!prevMsg) return true;
+    if (msg.direction !== prevMsg.direction) return true;
+    if (msg.direction === 'outgoing') {
+      return (msg as any).sender_user_id !== (prevMsg as any).sender_user_id;
+    }
+    return false;
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
@@ -394,8 +446,8 @@ export function ChatView({
 
       {/* Messages */}
       <ScrollArea className="flex-1 bg-[#e5ddd5] dark:bg-[#0b141a]" style={{ minHeight: 0 }}>
-        <div className="space-y-2 p-3 w-full max-w-full overflow-hidden">
-          {messages.map((msg) => {
+        <div className="p-3 w-full max-w-full overflow-hidden">
+          {messages.map((msg, idx) => {
             const isOutgoing = msg.direction === 'outgoing';
             const canDelete = isOutgoing && msg.message_id && onDeleteMessage && (msg.status === 'sent' || msg.status === 'delivered');
             const canEdit = isOutgoing && msg.message_id && onEditMessage && msg.media_type === 'text' && (msg.status === 'sent' || msg.status === 'delivered');
@@ -406,162 +458,202 @@ export function ChatView({
             const quotedMsgId = (msg as any).quoted_message_id;
             const quotedOriginal = quotedMsgId ? messages.find(m => m.message_id === quotedMsgId) : null;
 
+            const prevMsg = idx > 0 ? messages[idx - 1] : null;
+            const msgDate = new Date(msg.created_at);
+            const prevDate = prevMsg ? new Date(prevMsg.created_at) : null;
+            const showDateSeparator = !prevDate || !isSameDay(msgDate, prevDate);
+            const showSenderName = isSenderChange(msg, prevMsg) || showDateSeparator;
+
+            // Determine spacing
+            const sameDirection = prevMsg && msg.direction === prevMsg.direction && !showDateSeparator;
+
+            // Sender name resolution
+            let senderLabel: string | null = null;
+            if (showSenderName) {
+              if (isOutgoing) {
+                const isAuto = msg.message?.startsWith('[AUTO] ');
+                const suid = (msg as any).sender_user_id;
+                senderLabel = suid ? (profilesMap[suid] || 'Atendente') : (isAuto ? 'Auto' : 'Sistema');
+              } else {
+                senderLabel = (msg as any).sender_name || conversation?.customerName || msg.phone || null;
+              }
+            }
+
             return (
-            <div
-              key={msg.id}
-              id={`msg-${msg.message_id}`}
-              className={cn(
-                "flex group transition-colors duration-500",
-                isOutgoing ? 'justify-end' : 'justify-start'
-              )}
-              onTouchStart={() => handleTouchStart(msg)}
-              onTouchEnd={handleTouchEnd}
-              onTouchMove={handleTouchEnd}
-            >
-              <div className={cn("relative max-w-[85%] sm:max-w-[75%]", isOutgoing && "flex items-start gap-1")}>
-                {/* Reply button (hover, desktop) */}
-                {onQuoteMessage && msg.message_id && (
-                  <button
-                    className={cn(
-                      "opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 mt-1 shrink-0",
-                      isOutgoing ? "order-first" : "order-last"
-                    )}
-                    onClick={() => handleReplyToMsg(msg)}
-                    title="Responder"
-                  >
-                    <Reply className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                )}
-                {/* Dropdown menu for outgoing messages */}
-                {isOutgoing && withinWindow && (canDelete || canEdit) && !isEditing && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 mt-1 shrink-0">
-                        <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36">
-                      {canEdit && (
-                        <DropdownMenuItem
-                          onClick={() => { setEditingMsgId(msg.id); setEditingText(msg.message || ''); }}
-                          className="gap-2 text-xs"
-                        >
-                          <Pencil className="h-3 w-3" /> Editar
-                        </DropdownMenuItem>
-                      )}
-                      {canDelete && (
-                        <DropdownMenuItem
-                          onClick={async () => {
-                            if (!confirm('Apagar esta mensagem?')) return;
-                            setActionLoading(true);
-                            try {
-                              await onDeleteMessage!(msg);
-                              toast.success('Mensagem apagada!');
-                            } catch {
-                              toast.error('Erro ao apagar mensagem');
-                            } finally {
-                              setActionLoading(false);
-                            }
-                          }}
-                          className="gap-2 text-xs text-destructive"
-                        >
-                          <Trash2 className="h-3 w-3" /> Apagar
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                {(() => {
-                  const isAuto = msg.message?.startsWith('[AUTO] ');
-                  const displayMsg = isAuto ? msg.message.replace(/^\[AUTO\] /, '') : msg.message;
-                  return (
-                <div
-                  className={cn(
-                    "rounded-lg px-3 py-2 text-sm overflow-hidden",
-                    isOutgoing
-                      ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-foreground'
-                      : 'bg-white dark:bg-[#202c33] text-foreground',
-                    isAuto && 'opacity-80 border border-dashed border-[#2a3942]'
-                  )}
-                >
-                  {isAuto && (
-                    <p className="text-amber-400 text-[10px] mb-0.5">🤖 Automática</p>
-                  )}
-                  {quotedOriginal && (
-                    <QuotedMessageBubble
-                      originalMessage={quotedOriginal.message}
-                      originalDirection={quotedOriginal.direction}
-                      originalSenderName={(quotedOriginal as any).sender_name}
-                      originalMediaType={quotedOriginal.media_type}
-                      contactName={conversation?.customerName}
-                      onClick={() => scrollToMessage(quotedOriginal.message_id || '')}
-                    />
-                  )}
-                  <InstagramReferralCard referral={msg.referral} />
-                  <WhatsAppMediaAttachment
-                    mediaUrl={msg.media_url}
-                    mediaType={msg.media_type}
-                    message={msg.message}
-                    imageClassName="max-w-[200px] max-h-[200px] rounded mb-1 object-cover cursor-pointer"
-                    videoClassName="max-w-full rounded mb-1"
-                    videoStyle={{ maxHeight: 200 }}
-                    audioClassName="w-full mb-1"
-                    pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
-                  />
-                  {isEditing ? (
-                    <div className="space-y-1">
-                      <textarea
-                        value={editingText}
-                        onChange={(e) => setEditingText(e.target.value)}
-                        className="w-full bg-white/80 dark:bg-black/20 rounded border border-input px-2 py-1 text-sm resize-none min-h-[40px]"
-                        autoFocus
-                        rows={2}
-                      />
-                      <div className="flex gap-1 justify-end">
-                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setEditingMsgId(null)}>
-                          <X className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="h-6 px-2 text-xs bg-[#00a884] hover:bg-[#00a884]/90 text-white"
-                          disabled={actionLoading || !editingText.trim()}
-                          onClick={async () => {
-                            setActionLoading(true);
-                            try {
-                              await onEditMessage!(msg, editingText.trim());
-                              setEditingMsgId(null);
-                              toast.success('Mensagem editada!');
-                            } catch {
-                              toast.error('Erro ao editar mensagem');
-                            } finally {
-                              setActionLoading(false);
-                            }
-                          }}
-                        >
-                          Salvar
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    displayMsg && <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{displayMsg}</p>
-                  )}
-                  {msg.status === 'failed' && (msg as any).error_message && (
-                    <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
-                      ⚠️ {(msg as any).error_message}
-                    </div>
-                  )}
-                  {msg.status === 'failed' && !(msg as any).error_message && (
-                    <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
-                      ⚠️ Mensagem não entregue
-                    </div>
-                  )}
-                  <p className="text-[10px] text-muted-foreground text-right mt-1 flex items-center justify-end gap-0.5">
-                    {formatMessageTime(new Date(msg.created_at))}
-                    {isOutgoing && <MessageStatusIcon status={msg.status} />}
-                  </p>
+            <div key={msg.id}>
+              {/* Date separator */}
+              {showDateSeparator && (
+                <div className="flex items-center justify-center my-3">
+                  <span className="bg-[#1a2228] text-[#8696a0] text-[11px] px-3 py-1 rounded-full">
+                    {getDateLabel(msgDate)}
+                  </span>
                 </div>
-                  );
-                })()}
+              )}
+              <div
+                id={`msg-${msg.message_id}`}
+                className={cn(
+                  "flex group transition-colors duration-500",
+                  isOutgoing ? 'justify-end' : 'justify-start',
+                  sameDirection ? 'mt-[2px]' : 'mt-2'
+                )}
+                onTouchStart={() => handleTouchStart(msg)}
+                onTouchEnd={handleTouchEnd}
+                onTouchMove={handleTouchEnd}
+              >
+                <div className={cn("relative max-w-[85%] sm:max-w-[75%]", isOutgoing && "flex items-start gap-1")}>
+                  {/* Reply button (hover, desktop) */}
+                  {onQuoteMessage && msg.message_id && (
+                    <button
+                      className={cn(
+                        "opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 mt-1 shrink-0",
+                        isOutgoing ? "order-first" : "order-last"
+                      )}
+                      onClick={() => handleReplyToMsg(msg)}
+                      title="Responder"
+                    >
+                      <Reply className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  )}
+                  {/* Dropdown menu for outgoing messages */}
+                  {isOutgoing && withinWindow && (canDelete || canEdit) && !isEditing && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 mt-1 shrink-0">
+                          <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-36">
+                        {canEdit && (
+                          <DropdownMenuItem
+                            onClick={() => { setEditingMsgId(msg.id); setEditingText(msg.message || ''); }}
+                            className="gap-2 text-xs"
+                          >
+                            <Pencil className="h-3 w-3" /> Editar
+                          </DropdownMenuItem>
+                        )}
+                        {canDelete && (
+                          <DropdownMenuItem
+                            onClick={async () => {
+                              if (!confirm('Apagar esta mensagem?')) return;
+                              setActionLoading(true);
+                              try {
+                                await onDeleteMessage!(msg);
+                                toast.success('Mensagem apagada!');
+                              } catch {
+                                toast.error('Erro ao apagar mensagem');
+                              } finally {
+                                setActionLoading(false);
+                              }
+                            }}
+                            className="gap-2 text-xs text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" /> Apagar
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  {(() => {
+                    const isAuto = msg.message?.startsWith('[AUTO] ');
+                    const displayMsg = isAuto ? msg.message.replace(/^\[AUTO\] /, '') : msg.message;
+                    return (
+                  <div
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-sm overflow-hidden",
+                      isOutgoing
+                        ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-foreground'
+                        : 'bg-white dark:bg-[#202c33] text-foreground',
+                      isAuto && 'opacity-80 border border-dashed border-[#2a3942]'
+                    )}
+                  >
+                    {/* Sender name */}
+                    {showSenderName && senderLabel && (
+                      <p className={cn(
+                        "text-[11px] font-medium mb-0.5",
+                        isOutgoing ? 'text-[#7c57d1]' : 'text-[#00a884]'
+                      )}>
+                        {senderLabel}
+                      </p>
+                    )}
+                    {isAuto && (
+                      <p className="text-amber-400 text-[10px] mb-0.5">🤖 Automática</p>
+                    )}
+                    {quotedOriginal && (
+                      <QuotedMessageBubble
+                        originalMessage={quotedOriginal.message}
+                        originalDirection={quotedOriginal.direction}
+                        originalSenderName={(quotedOriginal as any).sender_name}
+                        originalMediaType={quotedOriginal.media_type}
+                        contactName={conversation?.customerName}
+                        onClick={() => scrollToMessage(quotedOriginal.message_id || '')}
+                      />
+                    )}
+                    <InstagramReferralCard referral={msg.referral} />
+                    <WhatsAppMediaAttachment
+                      mediaUrl={msg.media_url}
+                      mediaType={msg.media_type}
+                      message={msg.message}
+                      imageClassName="max-w-[200px] max-h-[200px] rounded mb-1 object-cover cursor-pointer"
+                      videoClassName="max-w-full rounded mb-1"
+                      videoStyle={{ maxHeight: 200 }}
+                      audioClassName="w-full mb-1"
+                      pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
+                    />
+                    {isEditing ? (
+                      <div className="space-y-1">
+                        <textarea
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          className="w-full bg-white/80 dark:bg-black/20 rounded border border-input px-2 py-1 text-sm resize-none min-h-[40px]"
+                          autoFocus
+                          rows={2}
+                        />
+                        <div className="flex gap-1 justify-end">
+                          <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setEditingMsgId(null)}>
+                            <X className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="h-6 px-2 text-xs bg-[#00a884] hover:bg-[#00a884]/90 text-white"
+                            disabled={actionLoading || !editingText.trim()}
+                            onClick={async () => {
+                              setActionLoading(true);
+                              try {
+                                await onEditMessage!(msg, editingText.trim());
+                                setEditingMsgId(null);
+                                toast.success('Mensagem editada!');
+                              } catch {
+                                toast.error('Erro ao editar mensagem');
+                              } finally {
+                                setActionLoading(false);
+                              }
+                            }}
+                          >
+                            Salvar
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      displayMsg && <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{displayMsg}</p>
+                    )}
+                    {msg.status === 'failed' && (msg as any).error_message && (
+                      <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                        ⚠️ {(msg as any).error_message}
+                      </div>
+                    )}
+                    {msg.status === 'failed' && !(msg as any).error_message && (
+                      <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                        ⚠️ Mensagem não entregue
+                      </div>
+                    )}
+                    <p className="text-[10px] text-muted-foreground text-right mt-0.5 flex items-center justify-end gap-0.5">
+                      {formatMessageTime(new Date(msg.created_at))}
+                      {isOutgoing && <MessageStatusIcon status={msg.status} />}
+                    </p>
+                  </div>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
             );
