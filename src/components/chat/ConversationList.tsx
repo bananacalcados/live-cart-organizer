@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
