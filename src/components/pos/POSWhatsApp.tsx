@@ -594,6 +594,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     }) || null;
     const conversationChannel = selectedConversation?.channel || null;
 
+    setQuotedMessage(null);
     setSelectedPhone(phone);
     setSelectedConvNumberId(whatsappNumberId ?? null);
     setSelectedConvKey(conversationKey);
